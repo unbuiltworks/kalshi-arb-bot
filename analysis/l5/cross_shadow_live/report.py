@@ -161,8 +161,33 @@ print("LEDGER C -- INCENTIVES (venue-credited only)")
 print("=" * 76)
 inc = [r for r in LED if "incentive" in r["_kind"] or "reward" in r["_kind"]]
 print(f"  rows: {len(inc)}" + ("" if inc else "   (none emitted in this window)"))
-for r in inc[-5:]:
-    print("   ", {k: v for k, v in r.items() if not k.startswith("_")})
+if inc:
+    r = inc[-1]
+    print(f"  latest audit: {r['_ts']}")
+    print("\n  MAKER REBATE  (negative venue commission on our own fills;")
+    print("                 netted into each fill, never a separate payment)")
+    print(f"    credited to us            $ {r.get('maker_rebate_credited_usd')}")
+    print(f"    charged to us             $ {r.get('maker_rebate_charged_usd')}")
+    print(f"    net                       $ {r.get('maker_rebate_net_usd')}"
+          f"   over {r.get('fills_with_a_credit')} fills")
+    print(f"    counterparty side         $ {r.get('counterparty_side_usd_not_ours')}"
+          "   <- the OTHER trader's fee, NEVER our income")
+    print("\n  LIQUIDITY REWARDS  (/v1/incentives/earnings)")
+    print(f"    PAID (credited)           $ {r.get('rewards_paid_usd')}")
+    print(f"    accrued, NOT credited     $ {r.get('rewards_accrued_not_credited_usd')}"
+          "   <- NOT income until credited")
+    print(f"    all statuses              $ {r.get('rewards_total_all_statuses_usd')}")
+    print(f"    by status                   {r.get('rewards_by_status')}")
+    try:
+        credited = (float(r.get("maker_rebate_net_usd") or 0)
+                    + float(r.get("rewards_paid_usd") or 0))
+        print(f"\n  TOTAL VENUE-CREDITED        $ {credited:.4f}")
+    except (TypeError, ValueError):
+        pass
+    print(f"  (formula estimate, NOT a credit, excluded: "
+          f"$ {r.get('estimated_not_a_credit')})")
+    print("  Incentives are additive economics and are NEVER netted into"
+          "\n  Ledger D trading P&L.")
 
 print("\n" + "=" * 76)
 print("LEDGER D -- REALIZED P&L (venue-confirmed settlement only)")

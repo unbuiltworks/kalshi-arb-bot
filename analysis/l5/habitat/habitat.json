@@ -32,25 +32,25 @@
  "pmus_baseline": {
   "coverage": 0.8571,
   "coverage_discounted_score": {
-   "p10": 0.0403,
-   "p25": 0.0533,
-   "p50": 0.0926,
-   "p75": 0.1298,
-   "p90": 0.1704
+   "p10": 0.059,
+   "p25": 0.0921,
+   "p50": 0.1333,
+   "p75": 0.1815,
+   "p90": 0.2028
   },
   "habitat_score_on_observed": {
-   "p10": 0.047,
-   "p25": 0.0621,
-   "p50": 0.108,
-   "p75": 0.1514,
-   "p90": 0.1988
+   "p10": 0.0688,
+   "p25": 0.1075,
+   "p50": 0.1555,
+   "p75": 0.2117,
+   "p90": 0.2366
   },
-  "markets": 14,
+  "markets": 6,
   "p50_score_on_up_biased_features": {
-   "price_span": 0.0991,
-   "share_move_ge_1c": 0.0561,
-   "share_move_ge_2c": 0.0491,
-   "share_move_ge_5c": 0.0121
+   "price_span": 0.1404,
+   "share_move_ge_1c": 0.0726,
+   "share_move_ge_2c": 0.0546,
+   "share_move_ge_5c": 0.0227
   },
   "sampling_limited_anywhere": [
    "price_changes_per_min"
@@ -63,10 +63,10 @@
  "pmus_markets": [
   {
    "coverage": 0.8571,
-   "coverage_discounted_score": 0.0403,
+   "coverage_discounted_score": 0.2028,
    "features_scored": 6,
    "features_total": 7,
-   "habitat_score_on_observed": 0.047,
+   "habitat_score_on_observed": 0.2366,
    "interpretation": {
     "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
     "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
@@ -124,165 +124,9 @@
      "status": "UNKNOWN"
     }
    },
-   "market": "atc-lmx-san-ju-2026-09-13-san",
-   "observations": 98,
-   "observations_per_min": 2.9597,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.1,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.1,
-     "status": "SCORED",
-     "value": 2
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.0662,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.0662,
-     "status": "SCORED",
-     "value": 0.5738
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.0612,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0612,
-     "status": "SCORED",
-     "value": 0.105
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0342,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0342,
-     "status": "SCORED",
-     "value": 0.1959
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0203,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0203,
-     "status": "SCORED",
-     "value": 0.0825
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0,
-     "status": "SCORED",
-     "value": 0.0
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 1986.7,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 202.62,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.1784,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.2082,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "aec-cs2-spo-war-2026-09-13",
-   "observations": 252,
-   "observations_per_min": 3.7899,
+   "market": "aec-lol-dkc-ktc-2026-09-14",
+   "observations": 76,
+   "observations_per_min": 4.0176,
    "per_feature": {
     "bands_visited": {
      "candidate_source": "distinct price bands the observed price touched",
@@ -296,1925 +140,53 @@
     },
     "price_changes_per_min": {
      "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.5229,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.5229,
-     "status": "SCORED",
-     "value": 2.5867
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.1586,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1586,
-     "status": "SCORED",
-     "value": 0.3
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0884,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0884,
-     "status": "SCORED",
-     "value": 0.506
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0832,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0832,
-     "status": "SCORED",
-     "value": 0.3386
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0209,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0209,
-     "status": "SCORED",
-     "value": 0.0598
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 3989.6,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 171.37,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 3.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.043,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.0502,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "asc-nfl-dal-nyg-2026-09-13-pos-3pt5",
-   "observations": 59,
-   "observations_per_min": 1.1157,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.1,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.1,
-     "status": "SCORED",
-     "value": 2
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.0262,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.0262,
-     "status": "SCORED",
-     "value": 0.2269
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.0874,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0874,
-     "status": "SCORED",
-     "value": 0.15
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0331,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0331,
-     "status": "SCORED",
-     "value": 0.1897
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0424,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0424,
-     "status": "SCORED",
-     "value": 0.1724
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0121,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0121,
-     "status": "SCORED",
-     "value": 0.0345
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 3173.0,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 131.59,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.1704,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.1988,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "aec-setkameua-kryyev-dukole-2026-09-14",
-   "observations": 22,
-   "observations_per_min": 4.5722,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.1,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.1,
-     "status": "SCORED",
-     "value": 2
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.5728,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.5728,
-     "status": "SCORED",
-     "value": 3.1176
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.0991,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0991,
-     "status": "SCORED",
-     "value": 0.17
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.1493,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1493,
-     "status": "SCORED",
-     "value": 0.619
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.1882,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1882,
-     "status": "SCORED",
-     "value": 0.4762
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0833,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0833,
-     "status": "SCORED",
-     "value": 0.2381
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 288.7,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 190.79,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.1071,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.1249,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "aec-itfwo-chezhu-yuhwan-2026-09-14",
-   "observations": 156,
-   "observations_per_min": 2.6433,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.375,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.375,
-     "status": "SCORED",
-     "value": 3
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.1554,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.1554,
-     "status": "SCORED",
-     "value": 1.0844
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.1267,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1267,
-     "status": "SCORED",
-     "value": 0.23
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.053,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.053,
-     "status": "SCORED",
-     "value": 0.3032
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0349,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0349,
-     "status": "SCORED",
-     "value": 0.1419
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0045,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0045,
-     "status": "SCORED",
-     "value": 0.0129
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 3541.0,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 147.92,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.0926,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.108,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "atc-lmx-san-ju-2026-09-13-draw",
-   "observations": 79,
-   "observations_per_min": 2.625,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.375,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.375,
-     "status": "SCORED",
-     "value": 3
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.1078,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.1078,
-     "status": "SCORED",
-     "value": 0.8972
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.113,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.113,
-     "status": "SCORED",
-     "value": 0.2
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0381,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0381,
-     "status": "SCORED",
-     "value": 0.2179
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0095,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0095,
-     "status": "SCORED",
-     "value": 0.0385
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0045,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0045,
-     "status": "SCORED",
-     "value": 0.0128
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 1805.7,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 227.51,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.1438,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.1678,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "atc-lmx-san-ju-2026-09-13-ju",
-   "observations": 60,
-   "observations_per_min": 4.74,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.375,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.375,
-     "status": "SCORED",
-     "value": 3
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.3739,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.3739,
-     "status": "SCORED",
-     "value": 1.896
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.1404,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1404,
-     "status": "SCORED",
-     "value": 0.26
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0681,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0681,
-     "status": "SCORED",
-     "value": 0.3898
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0375,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0375,
-     "status": "SCORED",
-     "value": 0.1525
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0119,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0119,
-     "status": "SCORED",
-     "value": 0.0339
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 759.5,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 273.1,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.1298,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.1514,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "aec-setkamemd-salnic-meraur-2026-09-14",
-   "observations": 30,
-   "observations_per_min": 2.303,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.375,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.375,
-     "status": "SCORED",
-     "value": 3
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.1725,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.1725,
-     "status": "SCORED",
-     "value": 1.1514
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.1221,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1221,
-     "status": "SCORED",
-     "value": 0.22
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0783,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0783,
-     "status": "SCORED",
-     "value": 0.4483
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0762,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0762,
-     "status": "SCORED",
-     "value": 0.3103
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0845,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0845,
-     "status": "SCORED",
-     "value": 0.2414
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 781.6,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 202.81,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.0533,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.0621,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "asc-nfl-dal-nyg-2026-09-13-pos-6pt5",
-   "observations": 150,
-   "observations_per_min": 3.699,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.1,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.1,
-     "status": "SCORED",
-     "value": 2
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.0939,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.0939,
-     "status": "SCORED",
-     "value": 0.8138
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.1084,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1084,
-     "status": "SCORED",
-     "value": 0.19
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.034,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.034,
-     "status": "SCORED",
-     "value": 0.1946
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0247,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0247,
-     "status": "SCORED",
-     "value": 0.1007
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0118,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0118,
-     "status": "SCORED",
-     "value": 0.0336
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 2433.1,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 155.75,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.0549,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.064,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "aec-itfwo-junzha-ruwu-2026-09-14",
-   "observations": 29,
-   "observations_per_min": 2.4207,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.0,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.0,
-     "status": "SCORED",
-     "value": 1
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.1768,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.1768,
-     "status": "SCORED",
-     "value": 1.1686
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.0524,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0524,
-     "status": "SCORED",
-     "value": 0.09
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0561,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0561,
-     "status": "SCORED",
-     "value": 0.3214
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0614,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0614,
-     "status": "SCORED",
-     "value": 0.25
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0375,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0375,
-     "status": "SCORED",
-     "value": 0.1071
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 718.8,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 116.69,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.1145,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.1336,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "asc-nfl-dal-nyg-2026-09-13-pos-7pt5",
-   "observations": 53,
-   "observations_per_min": 3.0985,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.375,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.375,
-     "status": "SCORED",
-     "value": 3
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.177,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.177,
-     "status": "SCORED",
-     "value": 1.1692
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.1267,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.1267,
-     "status": "SCORED",
-     "value": 0.23
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0571,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0571,
-     "status": "SCORED",
-     "value": 0.3269
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.052,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.052,
-     "status": "SCORED",
-     "value": 0.2115
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0135,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0135,
-     "status": "SCORED",
-     "value": 0.0385
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 1026.3,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 204.91,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.075,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.0875,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "aec-itfwo-yinzha-xiluo-2026-09-14",
-   "observations": 36,
-   "observations_per_min": 4.1731,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.1,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.1,
-     "status": "SCORED",
-     "value": 2
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.2334,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.2334,
-     "status": "SCORED",
-     "value": 1.3909
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.0728,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0728,
-     "status": "SCORED",
-     "value": 0.125
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0499,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0499,
-     "status": "SCORED",
-     "value": 0.2857
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0491,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0491,
-     "status": "SCORED",
-     "value": 0.2
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.02,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.02,
-     "status": "SCORED",
-     "value": 0.0571
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 517.6,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 218.04,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.0344,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.0402,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "tsc-nfl-dal-nyg-2026-09-13-total-48pt5",
-   "observations": 11,
-   "observations_per_min": 2.3538,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.0,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.0,
-     "status": "SCORED",
-     "value": 1
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.0988,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": false,
-     "score": 0.0988,
-     "status": "SCORED",
-     "value": 0.856
-    },
-    "price_span": {
-     "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.0233,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0233,
-     "status": "SCORED",
-     "value": 0.04
-    },
-    "share_move_ge_1c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0699,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0699,
-     "status": "SCORED",
-     "value": 0.4
-    },
-    "share_move_ge_2c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0491,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0491,
-     "status": "SCORED",
-     "value": 0.2
-    },
-    "share_move_ge_5c": {
-     "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0,
-     "kind": "CAPACITY",
-     "sampling_bias": "UP",
-     "sampling_limited": null,
-     "score": 0.0,
-     "status": "SCORED",
-     "value": 0.0
-    },
-    "tte_p50_s": {
-     "candidate_source": "median seconds to settlement at observation",
-     "sampling_bias": "NONE",
-     "sampling_limited": null,
-     "score": null,
-     "status": "UNKNOWN",
-     "value": null,
-     "why": "the candidate did not supply a usable value"
-    }
-   },
-   "price_series_is": "BBO mid (quotes), not trades",
-   "sampling_limited_features": [],
-   "span_s": 280.4,
-   "uncalibrated_features": [],
-   "uncalibrated_reported_not_scored": {
-    "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 185.95,
-    "contracts_per_min": null,
-    "depth_at_touch_p50": null,
-    "maker_touch_persistence_s": null,
-    "spread_ticks_p50": 1.0,
-    "time_to_completable_opposite_s": null,
-    "trade_through_rate": null,
-    "trades_per_min": null
-   },
-   "unknown_features": [
-    "tte_p50_s"
-   ]
-  },
-  {
-   "coverage": 0.8571,
-   "coverage_discounted_score": 0.2175,
-   "features_scored": 6,
-   "features_total": 7,
-   "habitat_score_on_observed": 0.2537,
-   "interpretation": {
-    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
-    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
-    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
-    "not_profit": "this score does not predict profit and is not calibrated to it",
-    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
-   },
-   "l5_demand_side": {
-    "fills_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.3061,
-       "0.1": 1.3043,
-       "0.25": 1.9626,
-       "0.5": 3.0,
-       "0.75": 6.6667,
-       "0.9": 14.9602,
-       "1.0": 120.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switch_rate": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.25,
-       "0.5": 0.3498,
-       "0.75": 0.5,
-       "0.9": 0.75,
-       "1.0": 1.0
-      }
-     },
-     "status": "UNKNOWN"
-    },
-    "switches_per_min": {
-     "candidate": null,
-     "l5": {
-      "n": 1893,
-      "q": {
-       "0.0": 0.0,
-       "0.1": 0.0,
-       "0.25": 0.4444,
-       "0.5": 1.0,
-       "0.75": 2.093,
-       "0.9": 4.0,
-       "1.0": 60.0
-      }
-     },
-     "status": "UNKNOWN"
-    }
-   },
-   "market": "asc-nfl-dal-nyg-2026-09-13-pos-8pt5",
-   "observations": 10,
-   "observations_per_min": 2.6201,
-   "per_feature": {
-    "bands_visited": {
-     "candidate_source": "distinct price bands the observed price touched",
-     "ecdf_position": 0.375,
-     "kind": "CAPACITY",
-     "sampling_bias": "DOWN",
-     "sampling_limited": null,
-     "score": 0.375,
-     "status": "SCORED",
-     "value": 3
-    },
-    "price_changes_per_min": {
-     "candidate_source": "consecutive observed prices (trade or BBO mid)",
-     "ecdf_position": 0.5014,
+     "ecdf_position": 0.5929,
      "kind": "CAPACITY",
      "sampling_bias": "DOWN",
      "sampling_limited": true,
-     "score": 0.5014,
+     "score": 0.5929,
      "status": "SCORED",
-     "value": 2.3583
+     "value": 3.3305
     },
     "price_span": {
      "candidate_source": "max - min observed price in the window",
-     "ecdf_position": 0.0903,
+     "ecdf_position": 0.1632,
      "kind": "CAPACITY",
      "sampling_bias": "UP",
      "sampling_limited": null,
-     "score": 0.0903,
+     "score": 0.1632,
      "status": "SCORED",
-     "value": 0.155
+     "value": 0.31
     },
     "share_move_ge_1c": {
      "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.1997,
+     "ecdf_position": 0.1432,
      "kind": "CAPACITY",
      "sampling_bias": "UP",
      "sampling_limited": null,
-     "score": 0.1997,
+     "score": 0.1432,
      "status": "SCORED",
-     "value": 0.6667
+     "value": 0.6133
     },
     "share_move_ge_2c": {
      "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.2781,
+     "ecdf_position": 0.0983,
      "kind": "CAPACITY",
      "sampling_bias": "UP",
      "sampling_limited": null,
-     "score": 0.2781,
+     "score": 0.0983,
      "status": "SCORED",
-     "value": 0.5556
+     "value": 0.4
     },
     "share_move_ge_5c": {
      "candidate_source": "|dprice| between consecutive observed prices",
-     "ecdf_position": 0.0778,
+     "ecdf_position": 0.0467,
      "kind": "CAPACITY",
      "sampling_bias": "UP",
      "sampling_limited": null,
-     "score": 0.0778,
+     "score": 0.0467,
      "status": "SCORED",
-     "value": 0.2222
+     "value": 0.1333
     },
     "tte_p50_s": {
      "candidate_source": "median seconds to settlement at observation",
@@ -2230,11 +202,11 @@
    "sampling_limited_features": [
     "price_changes_per_min"
    ],
-   "span_s": 229.0,
+   "span_s": 1135.0,
    "uncalibrated_features": [],
    "uncalibrated_reported_not_scored": {
     "attainable_pair_cost_p50": null,
-    "book_updates_per_min": 198.08,
+    "book_updates_per_min": 286.73,
     "contracts_per_min": null,
     "depth_at_touch_p50": null,
     "maker_touch_persistence_s": null,
@@ -2246,17 +218,797 @@
    "unknown_features": [
     "tte_p50_s"
    ]
+  },
+  {
+   "coverage": 0.8571,
+   "coverage_discounted_score": 0.1815,
+   "features_scored": 6,
+   "features_total": 7,
+   "habitat_score_on_observed": 0.2117,
+   "interpretation": {
+    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
+    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
+    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
+    "not_profit": "this score does not predict profit and is not calibrated to it",
+    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
+   },
+   "l5_demand_side": {
+    "fills_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.3061,
+       "0.1": 1.3043,
+       "0.25": 1.9626,
+       "0.5": 3.0,
+       "0.75": 6.6667,
+       "0.9": 14.9602,
+       "1.0": 120.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switch_rate": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.25,
+       "0.5": 0.3498,
+       "0.75": 0.5,
+       "0.9": 0.75,
+       "1.0": 1.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switches_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.4444,
+       "0.5": 1.0,
+       "0.75": 2.093,
+       "0.9": 4.0,
+       "1.0": 60.0
+      }
+     },
+     "status": "UNKNOWN"
+    }
+   },
+   "market": "aec-itfme-nicpar-gabpen-2026-09-14",
+   "observations": 78,
+   "observations_per_min": 4.8203,
+   "per_feature": {
+    "bands_visited": {
+     "candidate_source": "distinct price bands the observed price touched",
+     "ecdf_position": 0.375,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": null,
+     "score": 0.375,
+     "status": "SCORED",
+     "value": 3
+    },
+    "price_changes_per_min": {
+     "candidate_source": "consecutive observed prices (trade or BBO mid)",
+     "ecdf_position": 0.5877,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": false,
+     "score": 0.5877,
+     "status": "SCORED",
+     "value": 3.2752
+    },
+    "price_span": {
+     "candidate_source": "max - min observed price in the window",
+     "ecdf_position": 0.1518,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.1518,
+     "status": "SCORED",
+     "value": 0.285
+    },
+    "share_move_ge_1c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0726,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0726,
+     "status": "SCORED",
+     "value": 0.4156
+    },
+    "share_move_ge_2c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0606,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0606,
+     "status": "SCORED",
+     "value": 0.2468
+    },
+    "share_move_ge_5c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0227,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0227,
+     "status": "SCORED",
+     "value": 0.0649
+    },
+    "tte_p50_s": {
+     "candidate_source": "median seconds to settlement at observation",
+     "sampling_bias": "NONE",
+     "sampling_limited": null,
+     "score": null,
+     "status": "UNKNOWN",
+     "value": null,
+     "why": "the candidate did not supply a usable value"
+    }
+   },
+   "price_series_is": "BBO mid (quotes), not trades",
+   "sampling_limited_features": [],
+   "span_s": 970.9,
+   "uncalibrated_features": [],
+   "uncalibrated_reported_not_scored": {
+    "attainable_pair_cost_p50": null,
+    "book_updates_per_min": 169.02,
+    "contracts_per_min": null,
+    "depth_at_touch_p50": null,
+    "maker_touch_persistence_s": null,
+    "spread_ticks_p50": 2.0,
+    "time_to_completable_opposite_s": null,
+    "trade_through_rate": null,
+    "trades_per_min": null
+   },
+   "unknown_features": [
+    "tte_p50_s"
+   ]
+  },
+  {
+   "coverage": 0.8571,
+   "coverage_discounted_score": 0.059,
+   "features_scored": 6,
+   "features_total": 7,
+   "habitat_score_on_observed": 0.0688,
+   "interpretation": {
+    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
+    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
+    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
+    "not_profit": "this score does not predict profit and is not calibrated to it",
+    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
+   },
+   "l5_demand_side": {
+    "fills_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.3061,
+       "0.1": 1.3043,
+       "0.25": 1.9626,
+       "0.5": 3.0,
+       "0.75": 6.6667,
+       "0.9": 14.9602,
+       "1.0": 120.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switch_rate": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.25,
+       "0.5": 0.3498,
+       "0.75": 0.5,
+       "0.9": 0.75,
+       "1.0": 1.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switches_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.4444,
+       "0.5": 1.0,
+       "0.75": 2.093,
+       "0.9": 4.0,
+       "1.0": 60.0
+      }
+     },
+     "status": "UNKNOWN"
+    }
+   },
+   "market": "aec-atp-eliyme-sempan-2026-09-14",
+   "observations": 62,
+   "observations_per_min": 3.2775,
+   "per_feature": {
+    "bands_visited": {
+     "candidate_source": "distinct price bands the observed price touched",
+     "ecdf_position": 0.0,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": null,
+     "score": 0.0,
+     "status": "SCORED",
+     "value": 1
+    },
+    "price_changes_per_min": {
+     "candidate_source": "consecutive observed prices (trade or BBO mid)",
+     "ecdf_position": 0.2292,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": false,
+     "score": 0.2292,
+     "status": "SCORED",
+     "value": 1.3745
+    },
+    "price_span": {
+     "candidate_source": "max - min observed price in the window",
+     "ecdf_position": 0.0524,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0524,
+     "status": "SCORED",
+     "value": 0.09
+    },
+    "share_move_ge_1c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0716,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0716,
+     "status": "SCORED",
+     "value": 0.4098
+    },
+    "share_move_ge_2c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0483,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0483,
+     "status": "SCORED",
+     "value": 0.1967
+    },
+    "share_move_ge_5c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0115,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0115,
+     "status": "SCORED",
+     "value": 0.0328
+    },
+    "tte_p50_s": {
+     "candidate_source": "median seconds to settlement at observation",
+     "sampling_bias": "NONE",
+     "sampling_limited": null,
+     "score": null,
+     "status": "UNKNOWN",
+     "value": null,
+     "why": "the candidate did not supply a usable value"
+    }
+   },
+   "price_series_is": "BBO mid (quotes), not trades",
+   "sampling_limited_features": [],
+   "span_s": 1135.0,
+   "uncalibrated_features": [],
+   "uncalibrated_reported_not_scored": {
+    "attainable_pair_cost_p50": null,
+    "book_updates_per_min": 132.42,
+    "contracts_per_min": null,
+    "depth_at_touch_p50": null,
+    "maker_touch_persistence_s": null,
+    "spread_ticks_p50": 1.0,
+    "time_to_completable_opposite_s": null,
+    "trade_through_rate": null,
+    "trades_per_min": null
+   },
+   "unknown_features": [
+    "tte_p50_s"
+   ]
+  },
+  {
+   "coverage": 0.8571,
+   "coverage_discounted_score": 0.2347,
+   "features_scored": 6,
+   "features_total": 7,
+   "habitat_score_on_observed": 0.2738,
+   "interpretation": {
+    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
+    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
+    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
+    "not_profit": "this score does not predict profit and is not calibrated to it",
+    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
+   },
+   "l5_demand_side": {
+    "fills_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.3061,
+       "0.1": 1.3043,
+       "0.25": 1.9626,
+       "0.5": 3.0,
+       "0.75": 6.6667,
+       "0.9": 14.9602,
+       "1.0": 120.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switch_rate": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.25,
+       "0.5": 0.3498,
+       "0.75": 0.5,
+       "0.9": 0.75,
+       "1.0": 1.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switches_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.4444,
+       "0.5": 1.0,
+       "0.75": 2.093,
+       "0.9": 4.0,
+       "1.0": 60.0
+      }
+     },
+     "status": "UNKNOWN"
+    }
+   },
+   "market": "aec-setkamecz-smalib-svimat-2026-09-14",
+   "observations": 19,
+   "observations_per_min": 4.6702,
+   "per_feature": {
+    "bands_visited": {
+     "candidate_source": "distinct price bands the observed price touched",
+     "ecdf_position": 0.375,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": null,
+     "score": 0.375,
+     "status": "SCORED",
+     "value": 3
+    },
+    "price_changes_per_min": {
+     "candidate_source": "consecutive observed prices (trade or BBO mid)",
+     "ecdf_position": 0.6033,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": false,
+     "score": 0.6033,
+     "status": "SCORED",
+     "value": 3.4417
+    },
+    "price_span": {
+     "candidate_source": "max - min observed price in the window",
+     "ecdf_position": 0.1404,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.1404,
+     "status": "SCORED",
+     "value": 0.26
+    },
+    "share_move_ge_1c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.1409,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.1409,
+     "status": "SCORED",
+     "value": 0.6111
+    },
+    "share_move_ge_2c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.1477,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.1477,
+     "status": "SCORED",
+     "value": 0.4444
+    },
+    "share_move_ge_5c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.2354,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.2354,
+     "status": "SCORED",
+     "value": 0.3889
+    },
+    "tte_p50_s": {
+     "candidate_source": "median seconds to settlement at observation",
+     "sampling_bias": "NONE",
+     "sampling_limited": null,
+     "score": null,
+     "status": "UNKNOWN",
+     "value": null,
+     "why": "the candidate did not supply a usable value"
+    }
+   },
+   "price_series_is": "BBO mid (quotes), not trades",
+   "sampling_limited_features": [],
+   "span_s": 244.1,
+   "uncalibrated_features": [],
+   "uncalibrated_reported_not_scored": {
+    "attainable_pair_cost_p50": null,
+    "book_updates_per_min": 321.51,
+    "contracts_per_min": null,
+    "depth_at_touch_p50": null,
+    "maker_touch_persistence_s": null,
+    "spread_ticks_p50": 1.0,
+    "time_to_completable_opposite_s": null,
+    "trade_through_rate": null,
+    "trades_per_min": null
+   },
+   "unknown_features": [
+    "tte_p50_s"
+   ]
+  },
+  {
+   "coverage": 0.8571,
+   "coverage_discounted_score": 0.0921,
+   "features_scored": 6,
+   "features_total": 7,
+   "habitat_score_on_observed": 0.1075,
+   "interpretation": {
+    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
+    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
+    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
+    "not_profit": "this score does not predict profit and is not calibrated to it",
+    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
+   },
+   "l5_demand_side": {
+    "fills_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.3061,
+       "0.1": 1.3043,
+       "0.25": 1.9626,
+       "0.5": 3.0,
+       "0.75": 6.6667,
+       "0.9": 14.9602,
+       "1.0": 120.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switch_rate": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.25,
+       "0.5": 0.3498,
+       "0.75": 0.5,
+       "0.9": 0.75,
+       "1.0": 1.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switches_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.4444,
+       "0.5": 1.0,
+       "0.75": 2.093,
+       "0.9": 4.0,
+       "1.0": 60.0
+      }
+     },
+     "status": "UNKNOWN"
+    }
+   },
+   "market": "aec-itfwo-alemaz-beazel-2026-09-14",
+   "observations": 10,
+   "observations_per_min": 2.5851,
+   "per_feature": {
+    "bands_visited": {
+     "candidate_source": "distinct price bands the observed price touched",
+     "ecdf_position": 0.1,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": null,
+     "score": 0.1,
+     "status": "SCORED",
+     "value": 2
+    },
+    "price_changes_per_min": {
+     "candidate_source": "consecutive observed prices (trade or BBO mid)",
+     "ecdf_position": 0.3495,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": false,
+     "score": 0.3495,
+     "status": "SCORED",
+     "value": 1.8094
+    },
+    "price_span": {
+     "candidate_source": "max - min observed price in the window",
+     "ecdf_position": 0.0437,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0437,
+     "status": "SCORED",
+     "value": 0.075
+    },
+    "share_move_ge_1c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0971,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0971,
+     "status": "SCORED",
+     "value": 0.5556
+    },
+    "share_move_ge_2c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0546,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0546,
+     "status": "SCORED",
+     "value": 0.2222
+    },
+    "share_move_ge_5c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0,
+     "status": "SCORED",
+     "value": 0.0
+    },
+    "tte_p50_s": {
+     "candidate_source": "median seconds to settlement at observation",
+     "sampling_bias": "NONE",
+     "sampling_limited": null,
+     "score": null,
+     "status": "UNKNOWN",
+     "value": null,
+     "why": "the candidate did not supply a usable value"
+    }
+   },
+   "price_series_is": "BBO mid (quotes), not trades",
+   "sampling_limited_features": [],
+   "span_s": 232.1,
+   "uncalibrated_features": [],
+   "uncalibrated_reported_not_scored": {
+    "attainable_pair_cost_p50": null,
+    "book_updates_per_min": 81.69,
+    "contracts_per_min": null,
+    "depth_at_touch_p50": null,
+    "maker_touch_persistence_s": null,
+    "spread_ticks_p50": 1.0,
+    "time_to_completable_opposite_s": null,
+    "trade_through_rate": null,
+    "trades_per_min": null
+   },
+   "unknown_features": [
+    "tte_p50_s"
+   ]
+  },
+  {
+   "coverage": 0.8571,
+   "coverage_discounted_score": 0.1333,
+   "features_scored": 6,
+   "features_total": 7,
+   "habitat_score_on_observed": 0.1555,
+   "interpretation": {
+    "ceiling": "this is a CEILING on habitat adequacy, never an estimate: L5's tape records his fills, which lower-bound what his market supplied",
+    "direction": "BELOW the reference is conclusive habitat deficit; ABOVE it is NOT conclusive sufficiency",
+    "missing_data": "UNKNOWN and UNCALIBRATED features leave the denominator; coverage_discounted_score is the figure to quote when coverage is low",
+    "not_profit": "this score does not predict profit and is not calibrated to it",
+    "sampling_bias": "rate features are biased DOWN by coarse observation and move-magnitude features are biased UP by it. A candidate that scores LOW on the UP-biased features is failing despite a bias in its own favour, which is the stronger reading; a low score on a sampling_limited rate feature is not."
+   },
+   "l5_demand_side": {
+    "fills_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.3061,
+       "0.1": 1.3043,
+       "0.25": 1.9626,
+       "0.5": 3.0,
+       "0.75": 6.6667,
+       "0.9": 14.9602,
+       "1.0": 120.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switch_rate": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.25,
+       "0.5": 0.3498,
+       "0.75": 0.5,
+       "0.9": 0.75,
+       "1.0": 1.0
+      }
+     },
+     "status": "UNKNOWN"
+    },
+    "switches_per_min": {
+     "candidate": null,
+     "l5": {
+      "n": 1893,
+      "q": {
+       "0.0": 0.0,
+       "0.1": 0.0,
+       "0.25": 0.4444,
+       "0.5": 1.0,
+       "0.75": 2.093,
+       "0.9": 4.0,
+       "1.0": 60.0
+      }
+     },
+     "status": "UNKNOWN"
+    }
+   },
+   "market": "aec-wtt-junfei-chichu-2026-09-14",
+   "observations": 34,
+   "observations_per_min": 3.5112,
+   "per_feature": {
+    "bands_visited": {
+     "candidate_source": "distinct price bands the observed price touched",
+     "ecdf_position": 0.5,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": null,
+     "score": 0.5,
+     "status": "SCORED",
+     "value": 4
+    },
+    "price_changes_per_min": {
+     "candidate_source": "consecutive observed prices (trade or BBO mid)",
+     "ecdf_position": 0.0596,
+     "kind": "CAPACITY",
+     "sampling_bias": "DOWN",
+     "sampling_limited": false,
+     "score": 0.0596,
+     "status": "SCORED",
+     "value": 0.5164
+    },
+    "price_span": {
+     "candidate_source": "max - min observed price in the window",
+     "ecdf_position": 0.3036,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.3036,
+     "status": "SCORED",
+     "value": 0.56
+    },
+    "share_move_ge_1c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0159,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0159,
+     "status": "SCORED",
+     "value": 0.0909
+    },
+    "share_move_ge_2c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0223,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0223,
+     "status": "SCORED",
+     "value": 0.0909
+    },
+    "share_move_ge_5c": {
+     "candidate_source": "|dprice| between consecutive observed prices",
+     "ecdf_position": 0.0318,
+     "kind": "CAPACITY",
+     "sampling_bias": "UP",
+     "sampling_limited": null,
+     "score": 0.0318,
+     "status": "SCORED",
+     "value": 0.0909
+    },
+    "tte_p50_s": {
+     "candidate_source": "median seconds to settlement at observation",
+     "sampling_bias": "NONE",
+     "sampling_limited": null,
+     "score": null,
+     "status": "UNKNOWN",
+     "value": null,
+     "why": "the candidate did not supply a usable value"
+    }
+   },
+   "price_series_is": "BBO mid (quotes), not trades",
+   "sampling_limited_features": [],
+   "span_s": 581.0,
+   "uncalibrated_features": [],
+   "uncalibrated_reported_not_scored": {
+    "attainable_pair_cost_p50": null,
+    "book_updates_per_min": 16.11,
+    "contracts_per_min": null,
+    "depth_at_touch_p50": null,
+    "maker_touch_persistence_s": null,
+    "spread_ticks_p50": -36.0,
+    "time_to_completable_opposite_s": null,
+    "trade_through_rate": null,
+    "trades_per_min": null
+   },
+   "unknown_features": [
+    "tte_p50_s"
+   ]
   }
  ],
  "pmus_observation_audit": {
-  "markets_scored": 14,
-  "markets_seen": 18,
+  "markets_scored": 6,
+  "markets_seen": 12,
   "skipped": {
-   "too_short": 4,
-   "unusable": 0
+   "too_short": 5,
+   "unusable": 1
   },
-  "trades_counter_saturated": 14,
-  "xcheck_rows": 356
+  "trades_counter_saturated": 2,
+  "xcheck_rows": 101
  },
  "reference": {
   "grid": [

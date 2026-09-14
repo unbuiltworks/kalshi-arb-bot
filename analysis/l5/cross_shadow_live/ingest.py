@@ -131,6 +131,44 @@ def ingest_ledger(paths):
                 r["fill_reconciliation_agrees"] = (
                     (j.get("fill_reconciliation") or {}).get("venue_vs_ledger")
                     or {}).get("agrees")
+            # An incentive_audit row is ALL nested dicts, so the scalar-only
+            # projection above discarded every number it carries and Ledger C
+            # stayed empty while $12.88 sat credited in the account. Project
+            # the venue-CREDITED figures explicitly and keep the accrued ones
+            # beside them, never summed into one number: a PENDING reward is
+            # not income and a per-fill maker rebate is not a reward.
+            if kind == "incentive_audit":
+                earn = j.get("earnings") or {}
+                fills = j.get("credited_on_fills") or {}
+                r["maker_rebate_credited_usd"] = fills.get("credited_to_us_usd")
+                r["maker_rebate_charged_usd"] = fills.get("charged_to_us_usd")
+                r["maker_rebate_net_usd"] = fills.get("net_to_us_usd")
+                r["fills_with_a_credit"] = fills.get("our_fills_with_a_credit")
+                r["rewards_paid_usd"] = earn.get("credited_usd")
+                r["rewards_accrued_not_credited_usd"] = earn.get(
+                    "accrued_not_credited_usd")
+                r["rewards_total_all_statuses_usd"] = earn.get("total_usd")
+                r["rewards_by_status"] = earn.get("by_status")
+                r["counterparty_side_usd_not_ours"] = fills.get(
+                    "counterparty_side_usd_not_ours")
+                r["estimated_not_a_credit"] = (
+                    j.get("estimated_rebate_on_our_fills") or {}).get(
+                        "rebate_after_per_fill_rounding_usd")
+            # Settlement economics, split the way the owner reads them rather
+            # than as one realized number.
+            if kind == "settlement":
+                r["position_net"] = j.get("position_net")
+                r["resolution"] = j.get("resolution")
+                tr = j.get("trades") or {}
+                r["trades_n"] = tr.get("n")
+                r["trades_busted"] = tr.get("busted")
+                r["trades_uncleared"] = tr.get("uncleared")
+                r["realized_pnl_rows"] = tr.get("realized_pnl_rows")
+                r["realized_pnl_sum"] = tr.get("realized_pnl_sum")
+                r["public_resolved"] = (j.get("public") or {}).get(
+                    "public_resolved")
+                r["settlement_px"] = (j.get("public") or {}).get(
+                    "settlement_px")
             r["_ts"] = ts
             r["_kind"] = kind
             r["_key"] = f"{ts}|{kind}|{j.get('slug')}"
