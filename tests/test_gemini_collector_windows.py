@@ -462,3 +462,25 @@ def test_session_still_writes_canonical_rows_and_no_orders(monkeypatch, capsys):
 
     methods = {m.get("method") for m in ws.sent}
     assert methods == {"SUBSCRIBE", "UNSUBSCRIBE"}
+
+
+def test_digest_separates_sampling_span_from_two_sided_span():
+    """THE FULL-WINDOW DIAGNOSIS DEPENDS ON THIS. `span_s` counts only
+    TWO-SIDED samples, so a window we kept sampling while the book sat
+    one-sided is indistinguishable from one where collection stopped. The
+    ANY-sample span separates genuine venue behaviour from a collector
+    defect, and we must never 'fix' the former."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    # two-sided only to tte 150, but we kept sampling down to tte 2
+    d = C._window_digest("X", meta, _series(150, t0=299.0), [], 148,
+                         [299.0, 2.0])
+    assert d["span_s"] == 149.0            # two-sided span
+    assert d["span_any_s"] == 297.0        # sampling span
+    assert d["tte_last_any"] == 2.0
+    assert d["complete"] is False
+
+
+def test_digest_any_span_absent_is_none_not_zero():
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    d = C._window_digest("X", meta, _series(10), [], 0, None)
+    assert d["tte_last_any"] is None and d["span_any_s"] is None

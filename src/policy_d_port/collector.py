@@ -247,7 +247,9 @@ def _p50(xs: List[float]) -> Optional[float]:
 
 def _window_digest(market: str, meta: Mapping[str, Any],
                    series: List[Any], prints: Any,
-                   one_sided: int) -> Optional[Dict[str, Any]]:
+                   one_sided: int,
+                   any_tte: Optional[List[float]] = None
+                   ) -> Optional[Dict[str, Any]]:
     """Summarise ONE closed window from its in-window canonical observations.
 
     WHY THIS EXISTS: the canonical trajectory rows land on a Railway volume
@@ -287,6 +289,13 @@ def _window_digest(market: str, meta: Mapping[str, Any],
         "depth_p50": _p50(depth),
         # A COMPLETE window spans >= 290 s of its own 0..dur tte range.
         "complete": bool(span >= dur - 10.0),
+        # SAMPLING span, two-sided or not. If tte_last_any is near 0 while
+        # tte_last is high, we WERE still sampling and the BOOK was one-sided
+        # -- genuine venue behaviour, not a collection defect. If both are
+        # high, sampling itself stopped and the cause is ours to find.
+        "tte_first_any": (any_tte[0] if any_tte else None),
+        "tte_last_any": (any_tte[1] if any_tte else None),
+        "span_any_s": (round(any_tte[0] - any_tte[1], 2) if any_tte else None),
     }
 
 
@@ -433,6 +442,11 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
     closed: Dict[str, List[Any]] = {}
     prints_by: Dict[str, List[Any]] = {}
     one_sided_by: Dict[str, int] = {}
+    # SPAN is measured over TWO-SIDED samples only, so a window that keeps
+    # being sampled while the book sits one-sided looks identical to one where
+    # collection stopped. Tracking the first/last tte of ANY in-window sample
+    # separates those two causes, which is the whole FULL-window diagnosis.
+    any_tte: Dict[str, List[float]] = {}
     last_discover = time.monotonic()
     last_health = 0.0
     session_deadline = time.monotonic() + GEMINI_WS_SESSION_SECONDS
@@ -506,7 +520,8 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                         ser = closed.pop(x, None) or []
                         prs = prints_by.pop(x, None) or []
                         d = _window_digest(x, known.get(x) or {}, ser,
-                                           prs, one_sided_by.pop(x, 0))
+                                           prs, one_sided_by.pop(x, 0),
+                                           any_tte.pop(x, None))
                         if d is None:
                             continue
                         for line in _digest_lines(d, ser, prints=prs):
@@ -595,6 +610,11 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                         _e = _m.get("expiry_t")
                         _tte = None if _e is None else _e - now
                         if _tte is not None and 0.0 <= _tte <= _win_dur_s(_m):
+                            _a = any_tte.get(key)
+                            if _a is None:
+                                any_tte[key] = [round(_tte, 2), round(_tte, 2)]
+                            else:
+                                _a[1] = round(_tte, 2)
                             if c is None:
                                 one_sided_by[key] = one_sided_by.get(key, 0) + 1
                             else:
