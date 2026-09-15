@@ -1,0 +1,584 @@
+{
+ "label": "HISTORICAL_ACTION_FILTER_COUNTERFACTUAL",
+ "not_executable_replay": "a historical fill surviving the filter is NOT proof our order would have filled; we held no queue position and no flow is replaced. Justifies a prospective shadow candidate only.",
+ "incentives_excluded": true,
+ "train_windows": 368,
+ "oos_windows": 159,
+ "train_span": [
+  "2026-03-19",
+  "2026-08-30"
+ ],
+ "oos_span": [
+  "2026-08-30",
+  "2026-08-31"
+ ],
+ "preregistered_family": [
+  "L5_CONTROL",
+  "cap_2",
+  "cap_3",
+  "cap_5",
+  "cap_8",
+  "cap_13",
+  "cap_21"
+ ],
+ "selection_rule": "highest total_pnl on TRAIN among the preregistered family, required also to retain >=80% of L5's TRAIN matched quantity. Written before OOS was computed; applied once.",
+ "TRAIN": {
+  "L5_CONTROL": {
+   "windows": 368,
+   "windows_with_settlement": 355,
+   "events_retained": 32872,
+   "spend": 284809.09,
+   "matched_pnl": 9987.09,
+   "residual_pnl": -11184.28,
+   "total_pnl": -1127.92,
+   "return_per_dollar": -0.00396,
+   "matched_qty": 277956.76,
+   "pct_l5_matched_retained": 1.0,
+   "median_pair_cost": 0.958333,
+   "residual_qty": 54900.96,
+   "max_drawdown": -2754.51,
+   "pnl_by_month": {
+    "2026-03": 8.29,
+    "2026-04": 421.24,
+    "2026-08": -1557.44
+   }
+  },
+  "cap_2": {
+   "windows": 368,
+   "windows_with_settlement": 355,
+   "events_retained": 17219,
+   "spend": 184201.71,
+   "matched_pnl": -468.12,
+   "residual_pnl": 1873.28,
+   "total_pnl": 1442.58,
+   "return_per_dollar": 0.007832,
+   "matched_qty": 163489.48,
+   "pct_l5_matched_retained": 0.5882,
+   "median_pair_cost": 0.990492,
+   "residual_qty": 33319.88,
+   "max_drawdown": -816.82,
+   "pnl_by_month": {
+    "2026-03": 90.48,
+    "2026-04": 156.07,
+    "2026-08": 1196.03
+   }
+  },
+  "cap_3": {
+   "windows": 368,
+   "windows_with_settlement": 355,
+   "events_retained": 21197,
+   "spend": 216730.29,
+   "matched_pnl": 521.63,
+   "residual_pnl": 984.81,
+   "total_pnl": 1555.52,
+   "return_per_dollar": 0.007177,
+   "matched_qty": 197906.92,
+   "pct_l5_matched_retained": 0.712,
+   "median_pair_cost": 0.985056,
+   "residual_qty": 34091.17,
+   "max_drawdown": -912.2,
+   "pnl_by_month": {
+    "2026-03": 76.14,
+    "2026-04": 240.09,
+    "2026-08": 1239.28
+   }
+  },
+  "cap_5": {
+   "windows": 368,
+   "windows_with_settlement": 355,
+   "events_retained": 25839,
+   "spend": 250346.37,
+   "matched_pnl": 2509.23,
+   "residual_pnl": -1653.7,
+   "total_pnl": 924.8,
+   "return_per_dollar": 0.003694,
+   "matched_qty": 236308.79,
+   "pct_l5_matched_retained": 0.8502,
+   "median_pair_cost": 0.978814,
+   "residual_qty": 34679.79,
+   "max_drawdown": -886.63,
+   "pnl_by_month": {
+    "2026-03": 51.17,
+    "2026-04": 280.23,
+    "2026-08": 593.39
+   }
+  },
+  "cap_8": {
+   "windows": 368,
+   "windows_with_settlement": 355,
+   "events_retained": 29110,
+   "spend": 269746.96,
+   "matched_pnl": 5106.95,
+   "residual_pnl": -4739.17,
+   "total_pnl": 437.06,
+   "return_per_dollar": 0.00162,
+   "matched_qty": 259313.34,
+   "pct_l5_matched_retained": 0.9329,
+   "median_pair_cost": 0.972259,
+   "residual_qty": 39051.49,
+   "max_drawdown": -1188.71,
+   "pnl_by_month": {
+    "2026-03": 68.11,
+    "2026-04": 411.74,
+    "2026-08": -42.8
+   }
+  },
+  "cap_13": {
+   "windows": 368,
+   "windows_with_settlement": 355,
+   "events_retained": 31309,
+   "spend": 280360.28,
+   "matched_pnl": 7608.25,
+   "residual_pnl": -8059.15,
+   "total_pnl": -381.63,
+   "return_per_dollar": -0.001361,
+   "matched_qty": 271924.15,
+   "pct_l5_matched_retained": 0.9783,
+   "median_pair_cost": 0.964935,
+   "residual_qty": 45500.72,
+   "max_drawdown": -2177.82,
+   "pnl_by_month": {
+    "2026-03": 54.19,
+    "2026-04": 404.06,
+    "2026-08": -839.88
+   }
+  },
+  "cap_21": {
+   "windows": 368,
+   "windows_with_settlement": 355,
+   "events_retained": 32429,
+   "spend": 283975.79,
+   "matched_pnl": 9325.59,
+   "residual_pnl": -10332.25,
+   "total_pnl": -937.39,
+   "return_per_dollar": -0.003301,
+   "matched_qty": 276819.92,
+   "pct_l5_matched_retained": 0.9959,
+   "median_pair_cost": 0.961433,
+   "residual_qty": 51922.31,
+   "max_drawdown": -2683.94,
+   "pnl_by_month": {
+    "2026-03": 12.09,
+    "2026-04": 421.24,
+    "2026-08": -1370.72
+   }
+  }
+ },
+ "OOS": {
+  "L5_CONTROL": {
+   "windows": 159,
+   "windows_with_settlement": 159,
+   "events_retained": 27260,
+   "spend": 248012.61,
+   "matched_pnl": 9145.11,
+   "residual_pnl": -8168.06,
+   "total_pnl": 977.05,
+   "return_per_dollar": 0.00394,
+   "matched_qty": 241639.55,
+   "pct_l5_matched_retained": 1.0,
+   "median_pair_cost": 0.962213,
+   "residual_qty": 50215.88,
+   "max_drawdown": -823.54,
+   "pnl_by_month": {
+    "2026-08": 977.05
+   }
+  },
+  "cap_2": {
+   "windows": 159,
+   "windows_with_settlement": 159,
+   "events_retained": 13307,
+   "spend": 151896.16,
+   "matched_pnl": -278.75,
+   "residual_pnl": 1824.7,
+   "total_pnl": 1545.95,
+   "return_per_dollar": 0.010178,
+   "matched_qty": 133852.16,
+   "pct_l5_matched_retained": 0.5539,
+   "median_pair_cost": 0.998674,
+   "residual_qty": 29354.07,
+   "max_drawdown": -599.12,
+   "pnl_by_month": {
+    "2026-08": 1545.95
+   }
+  },
+  "cap_3": {
+   "windows": 159,
+   "windows_with_settlement": 159,
+   "events_retained": 16645,
+   "spend": 180315.35,
+   "matched_pnl": 595.26,
+   "residual_pnl": 488.6,
+   "total_pnl": 1083.86,
+   "return_per_dollar": 0.006011,
+   "matched_qty": 164250.11,
+   "pct_l5_matched_retained": 0.6797,
+   "median_pair_cost": 0.993662,
+   "residual_qty": 29078.31,
+   "max_drawdown": -493.44,
+   "pnl_by_month": {
+    "2026-08": 1083.86
+   }
+  },
+  "cap_5": {
+   "windows": 159,
+   "windows_with_settlement": 159,
+   "events_retained": 20729,
+   "spend": 211878.91,
+   "matched_pnl": 2384.52,
+   "residual_pnl": -1312.48,
+   "total_pnl": 1072.04,
+   "return_per_dollar": 0.00506,
+   "matched_qty": 199509.65,
+   "pct_l5_matched_retained": 0.8256,
+   "median_pair_cost": 0.985026,
+   "residual_qty": 29937.66,
+   "max_drawdown": -650.26,
+   "pnl_by_month": {
+    "2026-08": 1072.04
+   }
+  },
+  "cap_8": {
+   "windows": 159,
+   "windows_with_settlement": 159,
+   "events_retained": 23908,
+   "spend": 232260.55,
+   "matched_pnl": 5122.69,
+   "residual_pnl": -3704.75,
+   "total_pnl": 1417.93,
+   "return_per_dollar": 0.006105,
+   "matched_qty": 222938.97,
+   "pct_l5_matched_retained": 0.9226,
+   "median_pair_cost": 0.975302,
+   "residual_qty": 36090.35,
+   "max_drawdown": -596.03,
+   "pnl_by_month": {
+    "2026-08": 1417.93
+   }
+  },
+  "cap_13": {
+   "windows": 159,
+   "windows_with_settlement": 159,
+   "events_retained": 26024,
+   "spend": 243788.6,
+   "matched_pnl": 7369.43,
+   "residual_pnl": -5953.71,
+   "total_pnl": 1415.72,
+   "return_per_dollar": 0.005807,
+   "matched_qty": 236305.16,
+   "pct_l5_matched_retained": 0.9779,
+   "median_pair_cost": 0.968737,
+   "residual_qty": 43837.14,
+   "max_drawdown": -651.25,
+   "pnl_by_month": {
+    "2026-08": 1415.72
+   }
+  },
+  "cap_21": {
+   "windows": 159,
+   "windows_with_settlement": 159,
+   "events_retained": 26952,
+   "spend": 247434.6,
+   "matched_pnl": 8498.59,
+   "residual_pnl": -7211.05,
+   "total_pnl": 1287.55,
+   "return_per_dollar": 0.005204,
+   "matched_qty": 240672.09,
+   "pct_l5_matched_retained": 0.996,
+   "median_pair_cost": 0.964678,
+   "residual_qty": 47953.44,
+   "max_drawdown": -711.31,
+   "pnl_by_month": {
+    "2026-08": 1287.55
+   }
+  }
+ },
+ "TRAIN_SPRING": {
+  "L5_CONTROL": {
+   "windows": 214,
+   "windows_with_settlement": 201,
+   "events_retained": 5265,
+   "spend": 28085.24,
+   "matched_pnl": 884.42,
+   "residual_pnl": -524.17,
+   "total_pnl": 429.53,
+   "return_per_dollar": 0.015294,
+   "matched_qty": 27433.31,
+   "pct_l5_matched_retained": 1.0,
+   "median_pair_cost": 0.958333,
+   "residual_qty": 8001.79,
+   "max_drawdown": -224.2,
+   "pnl_by_month": {
+    "2026-03": 8.29,
+    "2026-04": 421.24
+   }
+  },
+  "cap_2": {
+   "windows": 214,
+   "windows_with_settlement": 201,
+   "events_retained": 3721,
+   "spend": 20679.24,
+   "matched_pnl": 418.99,
+   "residual_pnl": -209.87,
+   "total_pnl": 246.54,
+   "return_per_dollar": 0.011922,
+   "matched_qty": 20769.87,
+   "pct_l5_matched_retained": 0.7571,
+   "median_pair_cost": 0.975205,
+   "residual_qty": 4136.27,
+   "max_drawdown": -108.92,
+   "pnl_by_month": {
+    "2026-03": 90.48,
+    "2026-04": 156.07
+   }
+  },
+  "cap_3": {
+   "windows": 214,
+   "windows_with_settlement": 201,
+   "events_retained": 4380,
+   "spend": 23976.55,
+   "matched_pnl": 634.44,
+   "residual_pnl": -367.27,
+   "total_pnl": 316.23,
+   "return_per_dollar": 0.013189,
+   "matched_qty": 24005.89,
+   "pct_l5_matched_retained": 0.8751,
+   "median_pair_cost": 0.966757,
+   "residual_qty": 5458.9,
+   "max_drawdown": -123.3,
+   "pnl_by_month": {
+    "2026-03": 76.14,
+    "2026-04": 240.09
+   }
+  },
+  "cap_5": {
+   "windows": 214,
+   "windows_with_settlement": 201,
+   "events_retained": 4956,
+   "spend": 26635.51,
+   "matched_pnl": 780.41,
+   "residual_pnl": -518.27,
+   "total_pnl": 331.4,
+   "return_per_dollar": 0.012442,
+   "matched_qty": 26271.86,
+   "pct_l5_matched_retained": 0.9577,
+   "median_pair_cost": 0.95921,
+   "residual_qty": 6989.46,
+   "max_drawdown": -179.47,
+   "pnl_by_month": {
+    "2026-03": 51.17,
+    "2026-04": 280.23
+   }
+  },
+  "cap_8": {
+   "windows": 214,
+   "windows_with_settlement": 201,
+   "events_retained": 5185,
+   "spend": 27743.21,
+   "matched_pnl": 839.76,
+   "residual_pnl": -429.18,
+   "total_pnl": 479.85,
+   "return_per_dollar": 0.017296,
+   "matched_qty": 27177.66,
+   "pct_l5_matched_retained": 0.9907,
+   "median_pair_cost": 0.962403,
+   "residual_qty": 7616.45,
+   "max_drawdown": -195.88,
+   "pnl_by_month": {
+    "2026-03": 68.11,
+    "2026-04": 411.74
+   }
+  },
+  "cap_13": {
+   "windows": 214,
+   "windows_with_settlement": 201,
+   "events_retained": 5250,
+   "spend": 28027.52,
+   "matched_pnl": 879.45,
+   "residual_pnl": -490.47,
+   "total_pnl": 458.25,
+   "return_per_dollar": 0.01635,
+   "matched_qty": 27409.31,
+   "pct_l5_matched_retained": 0.9991,
+   "median_pair_cost": 0.958333,
+   "residual_qty": 7920.03,
+   "max_drawdown": -224.2,
+   "pnl_by_month": {
+    "2026-03": 54.19,
+    "2026-04": 404.06
+   }
+  },
+  "cap_21": {
+   "windows": 214,
+   "windows_with_settlement": 201,
+   "events_retained": 5264,
+   "spend": 28081.44,
+   "matched_pnl": 883.44,
+   "residual_pnl": -519.38,
+   "total_pnl": 433.33,
+   "return_per_dollar": 0.015431,
+   "matched_qty": 27433.31,
+   "pct_l5_matched_retained": 1.0,
+   "median_pair_cost": 0.958333,
+   "residual_qty": 7990.28,
+   "max_drawdown": -224.2,
+   "pnl_by_month": {
+    "2026-03": 12.09,
+    "2026-04": 421.24
+   }
+  }
+ },
+ "OOS_AUGUST": {
+  "L5_CONTROL": {
+   "windows": 313,
+   "windows_with_settlement": 313,
+   "events_retained": 54867,
+   "spend": 504736.46,
+   "matched_pnl": 18247.78,
+   "residual_pnl": -18828.18,
+   "total_pnl": -580.4,
+   "return_per_dollar": -0.00115,
+   "matched_qty": 492163.0,
+   "pct_l5_matched_retained": 1.0,
+   "median_pair_cost": 0.961036,
+   "residual_qty": 97115.06,
+   "max_drawdown": -2754.51,
+   "pnl_by_month": {
+    "2026-08": -580.4
+   }
+  },
+  "cap_2": {
+   "windows": 313,
+   "windows_with_settlement": 313,
+   "events_retained": 26805,
+   "spend": 315418.63,
+   "matched_pnl": -1165.86,
+   "residual_pnl": 3907.85,
+   "total_pnl": 2741.98,
+   "return_per_dollar": 0.008693,
+   "matched_qty": 276571.76,
+   "pct_l5_matched_retained": 0.562,
+   "median_pair_cost": 1.001134,
+   "residual_qty": 58537.68,
+   "max_drawdown": -816.82,
+   "pnl_by_month": {
+    "2026-08": 2741.98
+   }
+  },
+  "cap_3": {
+   "windows": 313,
+   "windows_with_settlement": 313,
+   "events_retained": 33462,
+   "spend": 373069.08,
+   "matched_pnl": 482.45,
+   "residual_pnl": 1840.69,
+   "total_pnl": 2323.14,
+   "return_per_dollar": 0.006227,
+   "matched_qty": 338151.14,
+   "pct_l5_matched_retained": 0.6871,
+   "median_pair_cost": 0.995459,
+   "residual_qty": 57710.58,
+   "max_drawdown": -912.2,
+   "pnl_by_month": {
+    "2026-08": 2323.14
+   }
+  },
+  "cap_5": {
+   "windows": 313,
+   "windows_with_settlement": 313,
+   "events_retained": 41612,
+   "spend": 435589.77,
+   "matched_pnl": 4113.34,
+   "residual_pnl": -2447.91,
+   "total_pnl": 1665.43,
+   "return_per_dollar": 0.003823,
+   "matched_qty": 409546.57,
+   "pct_l5_matched_retained": 0.8321,
+   "median_pair_cost": 0.986637,
+   "residual_qty": 57627.99,
+   "max_drawdown": -886.63,
+   "pnl_by_month": {
+    "2026-08": 1665.43
+   }
+  },
+  "cap_8": {
+   "windows": 313,
+   "windows_with_settlement": 313,
+   "events_retained": 47833,
+   "spend": 474264.29,
+   "matched_pnl": 9389.88,
+   "residual_pnl": -8014.74,
+   "total_pnl": 1375.14,
+   "return_per_dollar": 0.0029,
+   "matched_qty": 455074.65,
+   "pct_l5_matched_retained": 0.9246,
+   "median_pair_cost": 0.977141,
+   "residual_qty": 67525.39,
+   "max_drawdown": -1188.71,
+   "pnl_by_month": {
+    "2026-08": 1375.14
+   }
+  },
+  "cap_13": {
+   "windows": 313,
+   "windows_with_settlement": 313,
+   "events_retained": 52083,
+   "spend": 496121.36,
+   "matched_pnl": 14098.23,
+   "residual_pnl": -13522.39,
+   "total_pnl": 575.84,
+   "return_per_dollar": 0.001161,
+   "matched_qty": 480819.99,
+   "pct_l5_matched_retained": 0.977,
+   "median_pair_cost": 0.969233,
+   "residual_qty": 81417.82,
+   "max_drawdown": -2177.82,
+   "pnl_by_month": {
+    "2026-08": 575.84
+   }
+  },
+  "cap_21": {
+   "windows": 313,
+   "windows_with_settlement": 313,
+   "events_retained": 54117,
+   "spend": 503328.95,
+   "matched_pnl": 16940.75,
+   "residual_pnl": -17023.92,
+   "total_pnl": -83.17,
+   "return_per_dollar": -0.000165,
+   "matched_qty": 490058.69,
+   "pct_l5_matched_retained": 0.9957,
+   "median_pair_cost": 0.963709,
+   "residual_qty": 91885.47,
+   "max_drawdown": -2683.94,
+   "pnl_by_month": {
+    "2026-08": -83.17
+   }
+  }
+ },
+ "chosen_on_train_spring": "cap_8",
+ "chosen_on_train": "cap_5",
+ "train_eligible": [
+  "cap_5",
+  "cap_8",
+  "cap_13",
+  "cap_21"
+ ],
+ "OOS_RESULT_OF_CHOSEN": {
+  "windows": 159,
+  "windows_with_settlement": 159,
+  "events_retained": 20729,
+  "spend": 211878.91,
+  "matched_pnl": 2384.52,
+  "residual_pnl": -1312.48,
+  "total_pnl": 1072.04,
+  "return_per_dollar": 0.00506,
+  "matched_qty": 199509.65,
+  "pct_l5_matched_retained": 0.8256,
+  "median_pair_cost": 0.985026,
+  "residual_qty": 29937.66,
+  "max_drawdown": -650.26,
+  "pnl_by_month": {
+   "2026-08": 1072.04
+  }
+ }
+}
