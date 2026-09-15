@@ -117,7 +117,18 @@ def chain_fills_checked(from_block: int, to_block: int,
 
 def activity_fills(limit: int = 500) -> Optional[Dict[str, dict]]:
     """L5's recent fills as the venue publishes them, keyed by the SAME
-    transactionHash the chain uses. None means the feed could not be read."""
+    transactionHash the chain uses. None means the feed could not be read.
+
+    A TRANSACTION IS NOT A FILL. Measured 2026-09-15 over 500 feed rows: 22
+    transactions carried TWO fills each, so keying by hash with `setdefault`
+    silently discarded 22 rows -- 4.4% of the sample. It also made the chain
+    look wrong: a transaction holding 80 @ 0.44 and 80 @ 0.43 was compared
+    against whichever single row arrived first, producing a phantom one-cent
+    disagreement that was entirely on this side.
+
+    Every fill is therefore retained under `fills`, with the aggregate the
+    chain can actually be compared against beside it. The top-level keys stay
+    transaction hashes so the miss test (feed_only) is unchanged."""
     u = f"{DATA}/activity?user={ADDR}&limit={limit}&type=TRADE"
     try:
         with urllib.request.urlopen(urllib.request.Request(u, headers=UA),
@@ -128,11 +139,47 @@ def activity_fills(limit: int = 500) -> Optional[Dict[str, dict]]:
     out: Dict[str, dict] = {}
     for x in rows if isinstance(rows, list) else []:
         tx = x.get("transactionHash")
-        if tx:
-            out.setdefault(tx, {"tx": tx, "ts": x.get("timestamp"),
+        if not tx:
+            continue
+        e = out.setdefault(tx, {"tx": tx, "ts": x.get("timestamp"),
                                 "slug": x.get("slug"), "size": x.get("size"),
-                                "price": x.get("price"), "side": x.get("side")})
+                                "price": x.get("price"), "side": x.get("side"),
+                                "fills": []})
+        e["fills"].append({"price": x.get("price"), "size": x.get("size"),
+                           "outcome": x.get("outcome"), "slug": x.get("slug"),
+                           "side": x.get("side"), "ts": x.get("timestamp")})
+        # earliest timestamp wins, so the window filter sees when the
+        # transaction's first fill was published rather than its last
+        if x.get("timestamp") is not None and (
+                e["ts"] is None or float(x["timestamp"]) < float(e["ts"])):
+            e["ts"] = x.get("timestamp")
+    for e in out.values():
+        e["n_fills"] = len(e["fills"])
+        agg = _agg_fills(e["fills"])
+        e["agg_size"], e["agg_price"] = agg["size"], agg["price"]
     return out
+
+
+def _agg_fills(fills: List[dict]) -> Dict[str, Optional[str]]:
+    """Size-weighted aggregate over a transaction's fills.
+
+    This is the only price comparable against a multi-fill transaction's
+    chain-side aggregate; a single fill's price is a different number.
+    """
+    from decimal import Decimal as _D
+    size = _D("0")
+    notional = _D("0")
+    for f in fills:
+        try:
+            sz, px = _D(str(f["size"])), _D(str(f["price"]))
+        except Exception:                                     # noqa: BLE001
+            continue
+        size += sz
+        notional += sz * px
+    if size <= 0:
+        return {"size": None, "price": None}
+    return {"size": str(size),
+            "price": str((notional / size).quantize(_D("0.000001")))}
 
 
 def cross_validate(chain: Dict[str, dict], feed: Dict[str, dict],
