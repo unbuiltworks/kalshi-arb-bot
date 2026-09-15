@@ -152,3 +152,32 @@ def test_coverage_report_accounts_downtime_per_stream(tmp_path):
     assert r["per_stream"]["a"]["downtime_s"] == 60.0
     assert r["per_stream"]["a"]["coverage_fraction"] == 0.7
     assert r["exits"] == 1 and r["restarts"] == 1
+
+
+# ------------------------------------- a report must know if it was watching
+
+def test_a_report_without_coverage_warns_rather_than_implying_full_uptime(tmp_path):
+    from analysis.l5.exec_shadow import report as R
+    d = tmp_path / "l5-shadow-state"
+    d.mkdir()
+    cov = R._coverage(str(d))
+    assert cov["available"] is False
+    assert "CANNOT be distinguished" in cov["warning"]
+
+
+def test_a_report_reads_coverage_from_the_state_root_above_the_stream(tmp_path):
+    from analysis.l5.exec_shadow import report as R
+    d = tmp_path / "l5-shadow-state"
+    d.mkdir()
+    (tmp_path / "coverage.jsonl").write_text("\n".join([
+        json.dumps({"schema": S.SCHEMA, "kind": "boot", "t": 0.0}),
+        json.dumps({"schema": S.SCHEMA, "kind": "stream_exit",
+                    "stream": "exec_shadow", "t": 100.0}),
+        json.dumps({"schema": S.SCHEMA, "kind": "stream_restart",
+                    "stream": "exec_shadow", "t": 130.0}),
+        json.dumps({"schema": S.SCHEMA, "kind": "heartbeat", "t": 200.0}),
+    ]) + "\n")
+    cov = R._coverage(str(d))
+    assert cov["available"] is True
+    assert cov["exec_shadow"]["downtime_s"] == 30.0
+    assert cov["exits"] == 1 and cov["restarts"] == 1

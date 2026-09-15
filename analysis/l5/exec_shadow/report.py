@@ -173,6 +173,11 @@ def report(out_dir: str) -> Dict[str, Any]:
 
     # did PATIENCE pay? an intent that could not be filled at once, re-checked
     out["patience"] = _patience(evo)
+    # WERE WE WATCHING? An absence of fills and an absence of observation look
+    # identical inside an append-only store, so the coverage accounting is
+    # attached to every report rather than left for a reader to go and find.
+    out["coverage"] = _coverage(out_dir)
+
     out["labels"] = ("book readings, not fills. Deduped by intent_id content "
                      "hash and restricted to intents with a route row, so "
                      "every denominator is the same set. Quantiles, not means. "
@@ -337,6 +342,36 @@ def _vs_edge(vals: Sequence[float], by_venue: Dict[str, dict], venue: str,
                   "above 1 means matching his price is not a preference, it is "
                   "the strategy."),
     }
+
+
+def _coverage(out_dir: str) -> Dict[str, Any]:
+    """The supervisor's coverage markers, read from the state root above us.
+
+    Reported inline because the maker numbers below are the ones most easily
+    misread: "0 evidenced fills" is a finding only if we were present for the
+    window it covers.
+    """
+    root = os.path.dirname(os.path.abspath(out_dir.rstrip("/")))
+    try:
+        from analysis.l5 import coverage as C
+        rep = C.report(root)
+    except Exception as exc:                                  # noqa: BLE001
+        return {"available": False,
+                "reason": f"coverage not readable: {type(exc).__name__}: {exc}",
+                "warning": ("with no coverage record, an absence of fills "
+                            "CANNOT be distinguished from an absence of "
+                            "observation")}
+    if not rep.get("markers"):
+        return {"available": False, "state_root": root,
+                "reason": rep.get("verdict"),
+                "warning": ("with no coverage record, an absence of fills "
+                            "CANNOT be distinguished from an absence of "
+                            "observation")}
+    return {"available": True, "state_root": root,
+            "span_s": rep.get("span_s"), "boots": rep.get("boots"),
+            "exits": rep.get("exits"), "restarts": rep.get("restarts"),
+            "exec_shadow": (rep.get("per_stream") or {}).get("exec_shadow"),
+            "recent_gaps": (rep.get("gaps") or [])[-5:]}
 
 
 def _patience(evo: Sequence[dict]) -> Dict[str, Any]:
