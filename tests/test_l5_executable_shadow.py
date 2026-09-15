@@ -513,3 +513,47 @@ def test_slack_is_a_lower_bound_because_fees_are_excluded():
     by_venue = {"PMUS": {("i1", "PMUS"): {"available_price": "0.44"}}}
     intents = {"i1": {"max_acceptable_price": "0.43"}}
     assert "LOWER bound" in R._slack(by_venue, intents, {})["PMUS"]["basis"]
+
+
+# ------------------------------------- the path L5 actually trades on
+
+def test_maker_reachability_is_measured_on_the_join_not_the_ask():
+    """Crossing pays the spread; L5 is a maker. Measuring only the ask answers
+    'could we reach him by crossing', which is a different question."""
+    from analysis.l5.exec_shadow import report as R
+    evals = [{"schema": "l5_executable_shadow/v1/maker_placement",
+              "intent_id": "i1", "venue": "GEMINI", "price": "0.40",
+              "submittable": True},
+             {"schema": "l5_executable_shadow/v1/maker_placement",
+              "intent_id": "i2", "venue": "GEMINI", "price": "0.55",
+              "submittable": True}]
+    intents = {"i1": {"max_acceptable_price": "0.50"},
+               "i2": {"max_acceptable_price": "0.50"}}
+    out = R._slack_maker(evals, intents)["GEMINI"]
+    assert out["join_at_or_under_ceiling"] == 1
+    assert out["rate_at_or_under"] == 0.5
+    assert out["submittable_rate"] == 1.0
+
+
+def test_a_declined_join_still_contributes_its_distance_to_the_ceiling():
+    """Without best_bid these rows vanished from the slack distribution -- the
+    exact rows the distribution exists to measure."""
+    from analysis.l5.exec_shadow import report as R
+    evals = [{"schema": "l5_executable_shadow/v1/maker_placement",
+              "intent_id": "i1", "venue": "GEMINI", "price": None,
+              "best_bid": "0.58", "submittable": False}]
+    intents = {"i1": {"max_acceptable_price": "0.50"}}
+    out = R._slack_maker(evals, intents)["GEMINI"]
+    assert out["join_at_or_under_ceiling"] == 0
+    assert out["slack_needed"]["n"] == 1
+    assert abs(out["slack_needed"]["p50"] - 0.08) < 1e-6
+
+
+def test_a_join_under_the_ceiling_is_never_reported_as_a_fill():
+    from analysis.l5.exec_shadow import report as R
+    evals = [{"schema": "l5_executable_shadow/v1/maker_placement",
+              "intent_id": "i1", "venue": "GEMINI", "price": "0.40",
+              "submittable": True}]
+    intents = {"i1": {"max_acceptable_price": "0.50"}}
+    out = R._slack_maker(evals, intents)["GEMINI"]
+    assert "never a fill" in out["basis"]

@@ -458,6 +458,30 @@ rate would convert a replication into a different, losing trade.
    after its block while `/activity` publishes **15.90 s** after it, a median
    lead of **15.16 s**, winning **73 of 73**. Against a median intent age at
    decision of 17.6 s, that is roughly **2.4 s** spent instead of 17.6 s.
-3. **Polymarket is roughly twice as reachable as Gemini at zero concession**
-   (45.8 % vs 23.3 %), which is a sharper venue difference than the depth
-   comparison ever was.
+3. ~~**Polymarket is roughly twice as reachable as Gemini at zero
+   concession** (45.8 % vs 23.3 %).~~
+
+> **Correction — that was measured on the ask, and it reverses on the maker
+> path.** Crossing pays the spread, so "the ask was above L5's price" says we
+> could not reach him *by crossing*, not that we could not reach him. L5 is a
+> maker, and a maker rests at the bid:
+>
+> | reachability at zero concession | Polymarket | Gemini |
+> |---|---|---|
+> | **taker** — ask ≤ L5's price | 45.6 % | 22.1 % |
+> | **maker** — join ≤ L5's price | **53.1 %** | **85.5 %** |
+> | maker placement submittable | **24.1 %** (`orderMinSize 5`) | 85.1 % |
+> | evidenced fill among decided | **0.64** | 0.41 |
+>
+> Gemini reaches L5's price nearly **four times** as often by resting as by
+> crossing, because its spread is wide — and the same wide spread is why a
+> quote resting there is less often hit (0.41 vs 0.64). Polymarket's maker path
+> is gated the other way: its join price clears the ceiling more than half the
+> time, but `orderMinSize 5` makes only 24.1 % of placements submittable at
+> all.
+>
+> So neither venue is simply "more reachable". **Gemini can reach the price and
+> struggles to get filled; Polymarket fills better and is size-gated.** The
+> taker-only figure was a real measurement of the wrong path, and the
+> conclusion that latency is the only free lever is unchanged — but the claim
+> that Polymarket is twice as reachable is withdrawn.

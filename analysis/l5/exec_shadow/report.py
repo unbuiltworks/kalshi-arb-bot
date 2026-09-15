@@ -166,6 +166,10 @@ def report(out_dir: str) -> Dict[str, Any]:
     # not a decision. The price gap is, and it is the third item on the
     # measured blocker list.
     out["price_slack"] = _slack(by_venue, intents, routes)
+    # AND THE SAME QUESTION ON THE MAKER PATH, which is where L5's economics
+    # live. Measuring reachability on the ask alone answers "could we CROSS to
+    # L5's price", not "could we reach it at all".
+    out["price_slack_maker"] = _slack_maker(evals, intents)
 
     # did PATIENCE pay? an intent that could not be filled at once, re-checked
     out["patience"] = _patience(evo)
@@ -178,6 +182,69 @@ def report(out_dir: str) -> Dict[str, Any]:
 
 
 SLACK_STEPS = ("0.00", "0.01", "0.02", "0.05", "0.10")
+
+
+def _slack_maker(evals: Sequence[dict], intents: Dict[str, dict]) -> Dict[str, Any]:
+    """Could a MAKER quote have rested at or under L5's own achieved price?
+
+    THE TAKER NUMBER ANSWERS A DIFFERENT QUESTION. Crossing pays the spread, so
+    "the ask was above L5's price" says we could not reach him by crossing --
+    not that we could not reach him. A maker rests at the bid, which on a wide
+    venue sits well below the ask, and L5 is a maker.
+
+    Measured live, the two paths disagree sharply and reverse the venue
+    ranking: Gemini reaches L5's price 22.3% of the time by crossing and 85.5%
+    by resting, because its spread is wide. Reporting the taker figure alone
+    understated both venues and Gemini nearly fourfold.
+
+    A join price under the ceiling is NOT a fill, and a wide spread is exactly
+    where a resting quote is least likely to be hit -- so `submittable` and the
+    evidenced-fill rate are reported beside it and neither is implied by this.
+    """
+    out: Dict[str, Any] = {}
+    rows = [e for e in evals
+            if e.get("schema", "").endswith("/maker_placement")]
+    by: Dict[str, Dict[str, Any]] = {}
+    for m in rows:
+        i = intents.get(m.get("intent_id"))
+        if not i:
+            continue
+        v = by.setdefault(m["venue"], {"n": 0, "within": 0, "submittable": 0,
+                                       "slack": []})
+        v["n"] += 1
+        if m.get("submittable"):
+            v["submittable"] += 1
+        # when the touch is above the ceiling there is no join price, but the
+        # best bid says how far above -- that is the slack, and skipping these
+        # rows emptied the distribution of precisely the cases it measures
+        ref = m.get("price") if m.get("price") is not None else m.get("best_bid")
+        if ref is None:
+            continue
+        try:
+            px = D(str(ref))
+            cap = D(str(i["max_acceptable_price"]))
+        except Exception:                                     # noqa: BLE001
+            continue
+        if px <= cap:
+            v["within"] += 1
+        v["slack"].append(float(px - cap))
+    for venue, v in by.items():
+        out[venue] = {
+            "n": v["n"],
+            "submittable": v["submittable"],
+            "submittable_rate": (round(v["submittable"] / v["n"], 4)
+                                 if v["n"] else None),
+            "join_at_or_under_ceiling": v["within"],
+            "rate_at_or_under": (round(v["within"] / v["n"], 4)
+                                 if v["n"] else None),
+            "slack_needed": q([x for x in v["slack"] if x > 0]),
+            "basis": ("the maker JOIN price against L5's own achieved price. A "
+                      "join under the ceiling is a placement, never a fill -- "
+                      "and a wide spread is where a resting quote is least "
+                      "likely to be hit, so read this with the evidenced-fill "
+                      "rate, not instead of it."),
+        }
+    return out
 
 
 def _slack(by_venue: Dict[str, dict], intents: Dict[str, dict],

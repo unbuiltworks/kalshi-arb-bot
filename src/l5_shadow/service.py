@@ -281,12 +281,17 @@ def maker_plan(intent, terms, rest_levels: Sequence, *, venue: str,
     if terms.tick is None:
         out.update(submittable=False, reason="venue tick unknown")
         return out
+    best_bid = rest_levels[0][0] if rest_levels else None
+    # recorded as a FIELD, not only inside the reason string: when the touch is
+    # above the ceiling the join price is None, and without the bid there is no
+    # way to measure HOW FAR above -- which left the maker-path slack
+    # distribution empty for exactly the rows that needed measuring.
+    out["best_bid"] = None if best_bid is None else str(best_bid)
     px = MK.join_price(rest_levels, tick=terms.tick, ceiling=ceiling)
     if px is None:
         out.update(submittable=False,
                    reason=(f"no bid to join at or under the ceiling {ceiling} "
-                           f"(best bid "
-                           f"{rest_levels[0][0] if rest_levels else None})"))
+                           f"(best bid {best_bid})"))
         return out
     if terms.min_order_size is not None and qty < D(str(terms.min_order_size)):
         out.update(submittable=False, price=str(px),
