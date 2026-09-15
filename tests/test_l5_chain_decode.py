@@ -314,3 +314,70 @@ def test_logs_without_l5_are_not_reported_as_declined():
     lg["topics"][2] = "0x" + "1" * 64
     assert DE.declined({"logs": [lg]}, l5_topic=PAD,
                        exchanges=O.EXCHANGES) == []
+
+
+# ------------------------ the role, which is NOT the topic position
+
+EX_PAD = "0x" + "e111180000d2663c0091e4f400237545b87b996b".rjust(64, "0")
+OTHER_PAD = "0x" + "f0dd3e1579d55b2a26b69242104d902e411fba35".rjust(64, "0")
+
+
+def test_the_counterparty_slot_decides_the_role_not_the_position():
+    """One matchOrders emits two OrderFilled logs, and in the TAKER's own log
+    the counterparty slot holds the EXCHANGE rather than a trader. Two earlier
+    versions read the role straight off the position and both were wrong."""
+    sig, h = "0xsig", "0xhash"
+    assert DE.l5_role([sig, h, PAD, EX_PAD], 2) == "taker"
+    assert DE.l5_role([sig, h, PAD, OTHER_PAD], 2) == "maker"
+    assert DE.l5_role([sig, h, OTHER_PAD, PAD], 3) == "taker"
+
+
+def test_the_same_position_gives_both_roles_depending_on_the_counterparty():
+    """The property that makes position-based mapping impossible."""
+    a = DE.l5_role(["0xs", "0xh", PAD, EX_PAD], 2)
+    b = DE.l5_role(["0xs", "0xh", PAD, OTHER_PAD], 2)
+    assert a != b and {a, b} == {"maker", "taker"}
+
+
+def test_a_log_with_no_counterparty_slot_has_no_role_rather_than_a_guess():
+    assert DE.l5_role(["0xs", "0xh", PAD], 2) is None
+    assert DE.l5_role(["0xs", "0xh", PAD, EX_PAD], 1) is None
+
+
+def test_both_exchange_contracts_count_as_the_taker_marker():
+    ctf = "0x" + "4d97dcd97ec945f40cf65f87097ace5ea0476045".rjust(64, "0")
+    assert DE.l5_role(["0xs", "0xh", PAD, ctf], 2) == "taker"
+    assert len(DE.EXCHANGE_AS_COUNTERPARTY) == 2
+
+
+def _log_with(counterparty, *, pos=2, price_usdc=45_600_000,
+              size_shares=80_000_000, token=7):
+    lg = _log(price_usdc=price_usdc, size_shares=size_shares, token=token,
+              pos=pos)
+    lg["topics"][3 if pos == 2 else 2] = counterparty
+    return lg
+
+
+def test_a_decoded_leg_carries_the_role_from_its_counterparty():
+    mk = DE.decode_log(_log_with(OTHER_PAD), l5_topic=PAD)
+    tk = DE.decode_log(_log_with(EX_PAD), l5_topic=PAD)
+    assert mk["l5_role"] == "maker" and tk["l5_role"] == "taker"
+    # and the price/size decode is untouched by any of this
+    assert mk["price"] == tk["price"] == "0.570000"
+
+
+def test_the_role_travels_with_the_aggregate():
+    legs = DE.decode_receipt({"logs": [
+        _log_with(OTHER_PAD, price_usdc=25_650_000, size_shares=27_000_000),
+        _log_with(OTHER_PAD, price_usdc=50_350_000, size_shares=53_000_000)]},
+        l5_topic=PAD, exchanges=O.EXCHANGES)
+    g = DE.groups(legs)
+    assert len(g) == 1 and g[0]["l5_role"] == "maker"
+
+
+def test_the_role_fix_did_not_touch_price_or_size():
+    """Every role reading so far has been wrong; the promotion gate's G-C4
+    price and size agreement was never affected and still stands."""
+    leg = DE.decode_log(_log(price_usdc=45_600_000, size_shares=80_000_000,
+                             token=7208, pos=3), l5_topic=PAD)
+    assert leg["price"] == "0.570000" and leg["size"] == "80"

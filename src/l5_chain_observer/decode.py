@@ -15,6 +15,10 @@ carrying L5 at topic position 2 held seven data words:
     w2 / w3           = 0.57         <- exactly the feed's price
     w1                               = the CTF token id L5 received
 
+ROLE NOTE: an earlier version of this module mapped topic position to role
+backwards. See ROLE_BY_TOPIC below; it is now validated against the venue's own
+maker_taker flag rather than inferred from one transaction.
+
 Checked across 14 consecutive fills: size agreed 14/14 and price 12/14. Both
 apparent price misses were transactions carrying TWO fills at adjacent prices
 (80 @ 0.44 and 80 @ 0.43), where the disagreement was in how the FEED side was
@@ -54,6 +58,46 @@ MIN_WORDS = 4
 # most serious verdict, about a token transfer. Decoding is now restricted to
 # signatures measured against the feed; everything else is declined by name.
 DECODABLE_EVENTS = ("0xd543adfd",)
+# THE TOPIC LAYOUT, AND THE ROLE IS NOT IN THE POSITION.
+#
+#   OrderFilled(bytes32 indexed orderHash, address indexed maker,
+#               address indexed taker, ...)
+#   topic1 = orderHash   topic2 = the ORDER'S OWNER   topic3 = its counterparty
+#
+# One matchOrders emits TWO of these -- one per maker order, plus one for the
+# taker's own order -- and in the taker's own log the counterparty slot holds
+# THE EXCHANGE CONTRACT rather than a trader. Measured on two single-leg
+# transactions whose roles the venue publishes:
+#
+#   feed says L5 TAKER:  topic2=0x8ec4..  topic3=L5          (the maker's log)
+#                        topic2=L5        topic3=0xe1111800  (L5's own -> TAKER)
+#   feed says L5 MAKER:  topic2=L5        topic3=0xf0dd..    (L5's own -> MAKER)
+#                        topic2=0xf0dd..  topic3=0xe1111800  (theirs  -> taker)
+#
+# So topic2 means "this is whose order it was", not "this side provided
+# liquidity". TWO earlier versions of this file read a role straight off the
+# position -- first {2: taker, 3: maker}, then {2: maker, 3: taker} -- and both
+# were wrong for the same reason: the position was never the role. The first
+# agreed with the venue's own flag on 1 of 60 fills, the second on 568 of 626,
+# and only the rule below can reach the rest.
+#
+# THE RULE: L5 at topic2 with the EXCHANGE at topic3 means he took. L5 at
+# topic2 with a trader at topic3 means he made. L5 at topic3 means he was the
+# counterparty to someone else's resting order, which is also taking.
+EXCHANGE_AS_COUNTERPARTY = {
+    "0xe111180000d2663c0091e4f400237545b87b996b",
+    "0x4d97dcd97ec945f40cf65f87097ace5ea0476045",
+}
+
+
+def l5_role(topics: List[str], pos: int) -> Optional[str]:
+    """maker / taker, from the counterparty slot rather than the position."""
+    if pos == 3:
+        return "taker"          # counterparty to someone else's resting order
+    if pos != 2 or len(topics) < 4:
+        return None
+    other = "0x" + str(topics[3])[26:].lower()
+    return "taker" if other in EXCHANGE_AS_COUNTERPARTY else "maker"
 # defence in depth, independent of the allowlist: a fill has a probability for
 # a price and a countable number of shares. A layout that is not what we think
 # it is produces neither.
@@ -100,6 +144,7 @@ def decode_log(log: Dict[str, Any], *, l5_topic: str) -> Optional[Dict[str, Any]
                       if log.get("logIndex") else None),
         "contract": str(log.get("address") or "").lower(),
         "l5_topic_pos": pos[0],
+        "l5_role": l5_role(topics, pos[0]),
         "event": event,
         "n_words": len(words),
     }
@@ -166,6 +211,7 @@ def aggregate(legs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "token_ids": sorted({l["token_id"] for l in legs}),
         "event": legs[0].get("event"),
         "l5_topic_pos": legs[0].get("l5_topic_pos"),
+        "l5_role": legs[0].get("l5_role"),
         "blocks": sorted({l["block"] for l in legs if l["block"] is not None}),
         "log_indexes": sorted(l["log_index"] for l in legs
                               if l["log_index"] is not None),
@@ -178,17 +224,18 @@ def groups(legs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     SUMMING EVERYTHING WAS WRONG, and the mismatches said so. One live
     transaction (0x15d925d6…) carried:
 
-        event d543adfd  L5@3 (MAKER)  token 7208…  27 + 53 shares @ 0.95
-        event d543adfd  L5@2 (TAKER)  token 2007…  80 shares       @ 0.05
-        event 174b3811  L5@2          token 2007…  80 shares       @ 0.05
+        event d543adfd  L5@3 (TAKER)  token 7208…  27 + 53 shares @ 0.95
+        event d543adfd  L5@2 (MAKER)  token 2007…  80 shares      @ 0.05
+        event 174b3811  L5@2          token 2007…  80 shares      @ 0.05
 
-    The feed reported 80 @ 0.05 -- exactly the taker leg. Summed blindly the
+    The feed reported 80 @ 0.05 -- exactly the maker leg. Summed blindly the
     chain said 240 @ 0.35, a mismatch that was entirely mine.
 
-    So the TOPIC POSITION encodes L5's ROLE (2 taker, 3 maker), a second event
+    So the counterparty slot encodes L5's ROLE (see l5_role), a second event
     type restates the same fill, and legs on different tokens are different
-    trades. Each combination is aggregated separately and the caller decides
-    which one the feed is talking about; nothing is silently merged.
+    trades. Each combination is aggregated separately and
+    the caller decides which one the feed is talking about; nothing is silently
+    merged.
     """
     buckets: Dict[tuple, List[Dict[str, Any]]] = {}
     for l in legs:
