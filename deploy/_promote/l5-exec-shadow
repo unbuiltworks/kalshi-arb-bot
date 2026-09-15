@@ -9,3 +9,4 @@ promote ba7957f0: create the l5-exec-shadow research supervisor service
 promote fef17b6b: chain validator survives transient RPC failures (crashed in prod 15:28:42Z)
 promote 5214a32d: downtime measured from our own heartbeat, not from a stream's events
 promote 107cc0ba: EPOCH-stamped rows, grouped attribution, chain_only classification, reorg retraction
+promote 4256t: P2 economic ledger reported from the service alongside the gate

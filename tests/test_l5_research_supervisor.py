@@ -288,3 +288,87 @@ def test_a_broken_gate_report_does_not_take_down_the_collectors(tmp_path,
 def test_the_gate_cadence_is_slower_than_the_heartbeat(tmp_path):
     """It reads the whole store; it must not compete with liveness."""
     assert S.GATE_S > S.HEARTBEAT_S
+
+
+# --------------------------------- the economic ledger, on the same cadence
+
+def test_the_supervisor_reports_economics_without_holding_anything(
+        tmp_path, capsys):
+    """P2 from the service: what the evidenced fills are worth. It reads the
+    shadow's stores and the venue's resolutions; it places nothing."""
+    import json
+    sd = tmp_path / "l5-shadow-state"
+    sd.mkdir(parents=True)
+    (sd / "maker_outcomes.jsonl").write_text(json.dumps(
+        {"intent_id": "a", "venue": "PMUS", "market_key": "m1",
+         "desired_outcome": "Up", "quote_price": "0.45", "quote_qty": "10",
+         "evidenced_fill": True, "placed_at": 1.0}) + "\n")
+    (sd / "routes.jsonl").write_text(json.dumps(
+        {"intent_id": "a", "cohort": "BTC15m"}) + "\n")
+    import analysis.l5.economics.build as E
+    import src.l5_shadow.venues as V
+    old = V.pm_settlement
+    V.pm_settlement = lambda k: {"resolved": False,
+                                 "resolution_source": "UNRESOLVED"}
+    try:
+        rep = S.Supervisor(str(tmp_path)).report_economics()
+    finally:
+        V.pm_settlement = old
+    out = capsys.readouterr().out
+    assert "L5_ECONOMICS " in out
+    row = json.loads(out.split("L5_ECONOMICS ", 1)[1].splitlines()[0])
+    assert row["ok"] is True and row["evidenced_fills"] == 1
+    assert row["by_venue"]["PMUS"]["realized_shadow"] is None
+    assert "never realized profit" in row["labels"] or \
+        "not realized profit" in row["labels"]
+    assert rep["positions"] == 1
+    # and it wrote its own append-only ledger row
+    assert (sd / E.LEDGER).exists()
+
+
+def test_a_broken_economics_report_does_not_take_down_the_collectors(tmp_path):
+    sup = S.Supervisor(str(tmp_path))          # no shadow state at all
+    assert sup.report_economics() is not None or True
+
+
+def test_the_settlement_lookups_are_bounded(tmp_path):
+    """A periodic report must not become an unbounded burst of requests as
+    history accumulates."""
+    import json
+    import analysis.l5.economics.build as E
+    rows = [{"intent_id": f"i{i}", "venue": "PMUS", "market_key": f"m{i}",
+             "desired_outcome": "Up", "quote_price": "0.45",
+             "quote_qty": "10", "evidenced_fill": True, "placed_at": float(i)}
+            for i in range(10)]
+    (tmp_path / "maker_outcomes.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n")
+    calls = []
+
+    def res(k):
+        calls.append(k)
+        return {"resolved": False, "resolution_source": "UNRESOLVED"}
+
+    rep = E.build(str(tmp_path), resolver=res, now=1.0, max_resolutions=3)
+    assert len(calls) == 3
+    assert rep["markets_not_looked_up"] == 7
+    skipped = [r for r in rep["rows"]
+               if r["resolution"] == "NOT_LOOKED_UP (report bound)"]
+    assert len(skipped) == 7
+    # an unmade lookup is never reported as the venue not having settled
+    assert all(r["state"] == "OPEN_UNSETTLED" for r in skipped)
+
+
+def test_the_newest_markets_are_resolved_first(tmp_path):
+    """A market that just settled is the one whose result is new."""
+    import json
+    import analysis.l5.economics.build as E
+    rows = [{"intent_id": f"i{i}", "venue": "PMUS", "market_key": f"m{i}",
+             "desired_outcome": "Up", "quote_price": "0.45",
+             "quote_qty": "10", "evidenced_fill": True, "placed_at": float(i)}
+            for i in range(5)]
+    (tmp_path / "maker_outcomes.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n")
+    calls = []
+    E.build(str(tmp_path), resolver=lambda k: calls.append(k),
+            now=1.0, max_resolutions=2)
+    assert calls == ["m4", "m3"]

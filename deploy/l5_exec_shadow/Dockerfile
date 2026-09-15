@@ -47,6 +47,9 @@ COPY analysis/l5/chain_observer/validate.py analysis/l5/chain_observer/validate.
 # over the volume's own stores: it promotes nothing and reaches no network.
 COPY analysis/l5/chain_observer/gate.py analysis/l5/chain_observer/gate.py
 COPY analysis/l5/chain_observer/PROMOTION_GATE_PREREGISTERED.md analysis/l5/chain_observer/PROMOTION_GATE_PREREGISTERED.md
+# P2: the economic ledger, reported on the same slow cadence as the gate.
+# Reads the shadow's own stores plus the venue's published resolutions.
+COPY analysis/l5/economics/build.py analysis/l5/economics/build.py
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \

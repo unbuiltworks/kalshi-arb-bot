@@ -309,6 +309,35 @@ class Supervisor:
         }, default=str), flush=True)
         return rep
 
+    def report_economics(self) -> Optional[dict]:
+        """P2: what the evidenced fills are worth, on the gate's cadence.
+
+        A REPORT. It reads the shadow's own stores and the venue's published
+        resolutions; it places nothing and holds nothing. `realized_shadow` is
+        a settled counterfactual and is never realized profit.
+        """
+        out_dir = os.path.join(self.root, "l5-shadow-state")
+        try:
+            from analysis.l5.economics import build as E
+            rep = E.build(out_dir)
+            E.write(out_dir, rep)
+        except Exception as exc:                              # noqa: BLE001
+            print("L5_ECONOMICS " + json.dumps(
+                {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:200]}),
+                flush=True)
+            return None
+        print("L5_ECONOMICS " + json.dumps({
+            "ok": True,
+            "maker_quotes_decided": rep["maker_quotes_decided"],
+            "evidenced_fills": rep["evidenced_fills"],
+            "positions": rep["positions"],
+            "verdicts": rep["census"]["by_venue_verdict"],
+            "by_venue": rep["by_venue"], "by_cohort": rep["by_cohort"],
+            "by_clock": rep["by_clock"],
+            "labels": rep["labels"],
+        }, default=str), flush=True)
+        return rep
+
     def run(self) -> int:
         self.boot()
         signal.signal(signal.SIGTERM, self.stop)
@@ -331,6 +360,7 @@ class Supervisor:
             if now - last_gate >= GATE_S:
                 last_gate = now
                 self.report_gate()
+                self.report_economics()
             time.sleep(2.0)
         self.stop()
         return 0

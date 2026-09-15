@@ -138,6 +138,48 @@ def pm_window(market_key: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def pm_settlement(market_key: str) -> Optional[Dict[str, Any]]:
+    """How a window RESOLVED, or None while it has not.
+
+    Gamma excludes closed markets from /markets unless `closed=true` is
+    passed, so a settled window queried the ordinary way comes back EMPTY --
+    indistinguishable from "no such market" and, if read carelessly, from
+    "unresolved". Both states are asked for explicitly here.
+
+    A resolution is only reported when the venue says `closed` AND one outcome
+    price is at or above 0.99. An unresolved or disputed market returns
+    `resolved: False`, and no P&L may be called realized on it.
+    """
+    for extra in ("&closed=true", ""):
+        m, err = _json(f"{GAMMA}/markets?slug={market_key}{extra}")
+        m = m[0] if isinstance(m, list) and m else m
+        if not isinstance(m, dict):
+            continue
+        outs = m.get("outcomes")
+        outs = json.loads(outs) if isinstance(outs, str) else (outs or [])
+        px = m.get("outcomePrices")
+        px = json.loads(px) if isinstance(px, str) else (px or [])
+        closed = bool(m.get("closed"))
+        won = None
+        if closed and len(px) == len(outs) == 2:
+            try:
+                vals = [float(x) for x in px]
+            except (TypeError, ValueError):
+                vals = []
+            hits = [outs[i] for i, v in enumerate(vals) if v >= 0.99]
+            won = hits[0] if len(hits) == 1 else None
+        return {
+            "market_key": market_key, "closed": closed,
+            "uma_status": m.get("umaResolutionStatus"),
+            "closed_time": m.get("closedTime"),
+            "outcomes": outs, "outcome_prices": px,
+            "resolved": bool(won), "winning_outcome": won,
+            "resolution_source": ("gamma_outcome_prices" if won
+                                  else "UNRESOLVED"),
+        }
+    return None
+
+
 def pm_book(token_id: str) -> Optional[Dict[str, Any]]:
     """FULL CLOB book for one outcome token. Never truncated.
 
