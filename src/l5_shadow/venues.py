@@ -1,10 +1,15 @@
 """Live multi-level books and VENUE-DECLARED terms, for both venues, read-only.
 
-WHY THIS FILE AND NOT THE EXISTING COLLECTORS. Every book reader in this repo
-so far asks for the touch -- the Gemini shadow literally requests
-`?limit_bids=1&limit_asks=1`. That is the reason a single BTC15m observation
-read "depth 1" and the router declined a wanted 10. Measured here 2026-09-15
-13:04Z, the SAME contract's full book was:
+WHY THIS FILE AND NOT THE EXISTING COLLECTORS. Two long-running Gemini shadow
+services ask for the touch alone -- `gemini_l5_shadow_service.py:189` and
+`gemini_l5_shadow_v2.py:1077` both request `?limit_bids=1&limit_asks=1`, which
+measurably hides a MEDIAN 182 shares behind the best price (p95 720).
+
+That truncation is real, but it was NOT the cause of the "depth 1" reading that
+made the router decline a wanted 10: that path read a full, untruncated book
+and saw a genuine 1-share touch. Both facts are measured separately in
+analysis/l5/gemini_depth/. Measured here 2026-09-15 13:04Z, the same contract's
+full book was:
 
     GEMI-BTC15M2609151315-UP   bids 0.72x1, 0.70x500, 0.67x223
                                asks 0.78x500, 0.81x789
@@ -186,8 +191,33 @@ def gemini_symbol_for(market_key: str) -> Optional[str]:
     return c["symbol"] if c else None
 
 
-def gemini_book(symbol: str) -> Optional[Dict[str, Any]]:
-    """FULL Gemini book. Deliberately NOT `?limit_bids=1&limit_asks=1`.
+_FEED = None
+
+
+def gemini_feed():
+    """Lazily-started websocket feed, shared by every caller in the process.
+
+    Started on first use rather than at import, so a module that only needs the
+    fee schedule never opens a socket.
+    """
+    global _FEED
+    if _FEED is None:
+        from src.l5_shadow.gemini_ws import GeminiFeed
+        _FEED = GeminiFeed()
+    return _FEED
+
+
+def prune_gemini_feed(keep: Any) -> None:
+    """Stop following windows that have expired, so sockets do not accumulate."""
+    f = gemini_feed()
+    keep = set(keep or ())
+    for sym in f.watched():
+        if sym not in keep:
+            f.drop(sym)
+
+
+def gemini_book_rest(symbol: str) -> Optional[Dict[str, Any]]:
+    """FULL Gemini book over REST. Deliberately NOT `limit_bids=1`.
 
     Gemini stamps each level rather than the response, so the book's age is
     taken from the newest level. A book with no levels at all carries no
@@ -199,10 +229,38 @@ def gemini_book(symbol: str) -> Optional[Dict[str, Any]]:
     bids, asks = b.get("bids") or [], b.get("asks") or []
     ts = [float(l["timestamp"]) for l in list(bids) + list(asks)
           if isinstance(l, dict) and l.get("timestamp")]
-    return {"venue": "GEMINI", "asset_id": symbol,
+    return {"venue": "GEMINI", "asset_id": symbol, "source": "rest",
             "bids": bids, "asks": asks,
             "source_ts": (max(ts) if ts else None), "observed_at": time.time(),
             "price_key": "price", "size_key": "amount"}
+
+
+def gemini_book(symbol: str, *, prefer_ws: bool = True) -> Optional[Dict[str, Any]]:
+    """The MAINTAINED book when we have it, a fresh REST snapshot otherwise.
+
+    WHY WEBSOCKET FIRST. Measured 2026-09-15 13:33Z: eight consecutive REST
+    calls 0.26-2.0 s apart returned SEVEN different books, and the socket shows
+    why -- a 1-share quote at 0.39 cancelled and re-placed 25 MILLISECONDS
+    apart, at ~35 messages a second. REST is not stale (no cache directive is
+    served and level stamps are ~1 s old); it is a sample of something that
+    moves faster than any polling rate. The maintained book is the venue's own
+    state, with the age of the last applied message attached.
+
+    The fallback is not a formality: a socket that has not yet delivered its
+    `initial` snapshot, or one that hit a sequence gap, reports None rather
+    than a half-built book, and a REST snapshot is then genuinely better than
+    nothing. `source` says which path answered, on every row.
+    """
+    if prefer_ws:
+        try:
+            f = gemini_feed()
+            f.watch(symbol)
+            b = f.book(symbol)
+            if b is not None:
+                return b
+        except Exception:                                     # noqa: BLE001
+            pass          # a broken feed must never take the venue offline
+    return gemini_book_rest(symbol)
 
 
 def gemini_trades(symbol: str, limit: int = 100) -> Optional[List[dict]]:

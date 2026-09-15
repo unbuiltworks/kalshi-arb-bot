@@ -303,9 +303,15 @@ overturn the conclusion the single Gemini snapshot supported.
 ## Gemini is not depth-limited. It is price-limited.
 
 The earlier reading — *"depth 1 against a wanted 10, router declined"* — was a
-reading of the **touch**, taken through a collector that literally requests
-`?limit_bids=1&limit_asks=1`. Read in full, the same kind of contract holds real
+reading of the **touch**. Read in full, the same kind of contract holds real
 size behind the touch. Measured live 13:04Z:
+
+> **Correction.** This paragraph originally added *"taken through a collector
+> that literally requests `?limit_bids=1&limit_asks=1`"*. That attribution was
+> wrong: the path that produced it read a **full, untruncated** book and saw a
+> genuine 1-share touch. The `limit=1` truncation is real, hides a median 182
+> shares, and lives in two *other* services — see
+> `analysis/l5/gemini_depth/INVESTIGATION.md`, which measures both separately.
 
 ```
 GEMI-BTC15M2609151315-UP   bids 0.72x1, 0.70x500, 0.67x223

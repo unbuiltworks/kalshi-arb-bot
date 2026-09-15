@@ -253,7 +253,7 @@ def gemini_ladders(symbol: str, outcome: str) -> Dict[str, Any]:
         how = ("DOWN derived from the UP book: Down ask = 1 - Up bid, "
                "Down bid = 1 - Up ask")
     return {"ok": True, "book": bk, "token": symbol, "take": take, "rest": rest,
-            "construction": how}
+            "source": bk.get("source", "rest"), "construction": how}
 
 
 # ------------------------------------------------------------ maker placement
@@ -367,6 +367,7 @@ def observe_intent(out_dir: str, intent, *, window: Optional[dict],
                 book_source_ts=gl["book"].get("source_ts"),
                 observed_at=gl["book"].get("observed_at"),
                 ladder_construction=gl["construction"], now=now)
+            gev.extra["book_source"] = gl.get("source")
             maker_rows.append(maker_plan(intent, gm_t, gl["rest"],
                                          venue="GEMINI", now=now))
         else:
@@ -417,7 +418,25 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float) -> bool:
         if prints is not None and pend.get("token"):
             prints = [p for p in prints if p.get("asset") == pend["token"]]
     else:
-        prints = V.gemini_trades(pend["symbol"]) if pend.get("symbol") else None
+        prints, src = None, None
+        sym = pend.get("symbol")
+        if sym:
+            # THE SOCKET'S OWN TRADE EVENTS FIRST. `/v1/trades` is a poll of a
+            # capped list, so a burst can push a print off the end before we
+            # ask; the websocket delivers every trade as it happens. It is used
+            # only when the socket's continuous view started before the quote
+            # was placed -- otherwise "we saw nothing" would really mean "we
+            # were not watching", and prints_since returns None to say so.
+            try:
+                bk = V.gemini_feed().watch(sym)
+                prints = bk.prints_since(pend["placed_at"])
+                src = "websocket" if prints is not None else None
+            except Exception:                                 # noqa: BLE001
+                prints = None
+            if prints is None:
+                prints = V.gemini_trades(sym)
+                src = "rest_poll" if prints is not None else None
+        pend["_print_source"] = src
         if prints is not None and pend.get("desired_outcome") == "Down":
             # our Down quote at x rests where an Up ask at 1-x does; an Up
             # print at or ABOVE 1-x is what would have traded against it, so
@@ -432,6 +451,7 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float) -> bool:
         "desired_outcome": pend.get("desired_outcome"),
         "placed_at": pend["placed_at"], "resolved_at": now,
         "quote_price": pend["price"], "quote_qty": pend["qty"],
+        "print_source": pend.get("_print_source"),
         "horizon_s": MAKER_HORIZON_S, **res})
     return True
 
@@ -640,6 +660,15 @@ def main(argv=None) -> int:
                         "GEMINI": _brief(res["evaluations"][1]),
                         "reason": res["reason"][:160],
                     }, default=str), flush=True)
+
+            # sockets follow live windows only; an expired one is dropped so
+            # a long-running service does not accumulate connections.
+            live_syms = []
+            for w in V.live_windows():
+                c = gemini_symbol(w["market_key"])
+                if c:
+                    live_syms.append(c["symbol"])
+            V.prune_gemini_feed(live_syms)
 
             due = [p for p in pending_makers
                    if now - p["placed_at"] >= MAKER_HORIZON_S]
