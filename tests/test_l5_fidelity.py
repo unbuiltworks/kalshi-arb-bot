@@ -82,7 +82,7 @@ def test_the_model_carries_a_version_and_the_record_pins_it():
     st = runner.build_state(cohort="BTC15m", now=100.0, window_end=300.0,
                             fills=_fills(60), book=None)
     rec = runner.predict_and_freeze(d, m, st, now=100.0)
-    assert rec["model_version"] == m.version and m.version.startswith("v0-")
+    assert rec["model_version"] == m.version and m.version.startswith("v0")
     assert rec["prediction"]["model_version"] == m.version
 
 
@@ -108,3 +108,47 @@ def test_the_runner_has_no_order_path():
                   for n in ast.walk(tree) if isinstance(n, ast.Call)}
         for verb in ("place_limit_buy", "place_order", "submit", "cancel", "sign"):
             assert verb not in called, (name, verb)
+
+
+def test_the_key_means_the_same_thing_at_fit_and_at_serve():
+    """v0 fitted last_outcome = s[i-1] while the runner serves the MOST RECENT
+    fill s[i]. Trained on one meaning, queried with another -- and it destroyed
+    the strongest feature: P(next=Up | last=Up) is 0.733 in the data while v0
+    emitted p_up near 0.50 in exactly those states."""
+    fills = []
+    # a deterministic persistent series: Up repeats, Down repeats
+    for i in range(600):
+        o = "Up" if (i // 3) % 2 == 0 else "Down"
+        fills.append({"cid": f"w{i // 60}", "t": i * 2,
+                      "window_end": (i // 60) * 120 + 120,
+                      "outcome": o, "price": 0.45, "size": 10.0})
+    m = FidelityV0.fit(fills, "BTC15m")
+    # Read the states the fixture actually populated rather than guessing a
+    # query: the residual bucket is part of the key, so a hand-picked
+    # resid_rel can land on an unpopulated state and fall back to the base
+    # table -- which is exactly the ~0.5 this test exists to rule out.
+    up_states = {k: v for k, v in m.tables["side"].items() if "|last=Up|" in k}
+    dn_states = {k: v for k, v in m.tables["side"].items() if "|last=Down|" in k}
+    assert up_states and dn_states
+    p_up = lambda t: t.get("Up", 0) / max(1, sum(t.values()))
+    best_up = max(up_states.values(), key=lambda t: sum(t.values()))
+    best_dn = max(dn_states.values(), key=lambda t: sum(t.values()))
+    # persistence must survive into the model rather than washing out to 0.5
+    assert p_up(best_up) > 0.6, p_up(best_up)
+    assert p_up(best_dn) < 0.4, p_up(best_dn)
+
+
+def test_since_is_not_in_the_state_key():
+    """At fit only the COMPLETED gap is known; at serve only the elapsed-so-far.
+    Keying on it trains against a quantity unobservable at prediction time."""
+    from src.l5_fidelity.model import state_key
+    a = state_key(tte=100, since=1.0, resid_rel=0.0, last_outcome="Up", price=0.4)
+    b = state_key(tte=100, since=99.0, resid_rel=0.0, last_outcome="Up", price=0.4)
+    assert a == b
+
+
+def test_a_model_change_gets_a_new_version():
+    fills = [{"cid": "w0", "t": i, "window_end": 1000, "outcome": "Up",
+              "price": 0.4, "size": 5.0} for i in range(100)]
+    m = FidelityV0.fit(fills, "BTC15m")
+    assert m.version.startswith("v0.1-")

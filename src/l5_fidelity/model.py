@@ -30,7 +30,19 @@ from typing import Any, Dict, List, Optional, Sequence
 # PREREGISTERED -- fixed before scoring, never re-chosen afterwards.
 HORIZONS_S = (1.0, 5.0, 15.0, 30.0)
 COHORTS = ("BTC15m", "BTC5m", "ETH5m", "ETH15m")
-MODEL_KIND = "l5_fidelity_v0/conditional_empirical"
+MODEL_KIND = "l5_fidelity_v0_1/conditional_empirical"
+
+# v0 -> v0.1: A TRAIN/SERVE SKEW THAT DESTROYED THE STRONGEST FEATURE.
+# v0 fitted the key with last_outcome = s[i-1] (the fill BEFORE the current
+# one) while the runner serves last_outcome = the MOST RECENT fill, s[i]. The
+# model was therefore trained on one meaning of "last outcome" and queried with
+# another. It matters enormously: on 206,512 OOS BTC15m pairs,
+# P(next=Up | last=Up) = 0.733 and P(next=Up | last=Down) = 0.261 -- AUC 0.736 --
+# and v0 was emitting p_up near 0.50 in exactly those states.
+# `since` is also dropped from the key: at fit time only the COMPLETED gap is
+# known, while at serve time it is the elapsed-so-far. Conditioning on it fit a
+# quantity that cannot be observed at prediction time. It is retained for the
+# TIMING table, where the completed gap is the correct target.
 
 
 def tte_bucket(tte: float) -> str:
@@ -67,7 +79,10 @@ def price_bucket(p: Optional[float]) -> str:
 
 def state_key(*, tte: float, since: Optional[float], resid_rel: Optional[float],
               last_outcome: Optional[str], price: Optional[float]) -> str:
-    return "|".join((tte_bucket(tte), gap_bucket(since), resid_bucket(resid_rel),
+    """The key must mean the SAME THING at fit and at serve. `since` is not in
+    it: only the completed gap is known when fitting, and only the elapsed-so-
+    far when serving, so keying on it trains against an unobservable."""
+    return "|".join((tte_bucket(tte), resid_bucket(resid_rel),
                      f"last={last_outcome or 'none'}", price_bucket(price)))
 
 
@@ -97,12 +112,15 @@ class FidelityV0:
             s.sort(key=lambda x: x["t"])
             up = dn = 0.0
             for i, f in enumerate(s):
-                since = (f["t"] - s[i - 1]["t"]) if i else None
+                # the state at the moment of predicting s[i+1] is the state
+                # AFTER s[i]: the most recent fill is f itself, and the residual
+                # already includes it.
+                if f["outcome"] == "Up": up += f["size"]
+                else: dn += f["size"]
                 tot = up + dn
                 rel = ((up - dn) / tot) if tot else None
-                k = state_key(tte=f["window_end"] - f["t"], since=since,
-                              resid_rel=rel,
-                              last_outcome=(s[i - 1]["outcome"] if i else None),
+                k = state_key(tte=f["window_end"] - f["t"], since=None,
+                              resid_rel=rel, last_outcome=f["outcome"],
                               price=f["price"])
                 if i + 1 < len(s):
                     g = float(s[i + 1]["t"] - f["t"])
@@ -110,8 +128,6 @@ class FidelityV0:
                     nxt = s[i + 1]["outcome"]
                     side[k][nxt] += 1; base_side[nxt] += 1
                     size[k].append(s[i + 1]["size"]); base_size.append(s[i + 1]["size"])
-                if f["outcome"] == "Up": up += f["size"]
-                else: dn += f["size"]
         tables = {
             "gaps": {k: sorted(v) for k, v in gaps.items() if len(v) >= 20},
             "side": {k: dict(v) for k, v in side.items() if sum(v.values()) >= 20},
@@ -126,7 +142,7 @@ class FidelityV0:
                            "n": tables["n_fills"], "w": tables["n_windows"],
                            "states": sorted(tables["gaps"])[:2000]},
                           sort_keys=True).encode()
-        return cls(cohort, tables, f"v0-{hashlib.sha256(blob).hexdigest()[:12]}")
+        return cls(cohort, tables, f"v0.1-{hashlib.sha256(blob).hexdigest()[:12]}")
 
     # ------------------------------------------------------------- predict
     @staticmethod

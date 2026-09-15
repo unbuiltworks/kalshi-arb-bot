@@ -90,3 +90,103 @@ separately; none is pooled into BTC15m for sample size.
 * **OBSERVATION** — canonical + recent populations, reconciled.
 * **FIDELITY** — v0 freezing genuine prospective predictions now.
 * **ADAPTED** — residual saturation cap20/35/50, unchanged, exact-L5 as control.
+
+---
+
+# Update — n=17 resolved, and two real defects found
+
+**EARLY / INSUFFICIENT SAMPLE (n=17).** Store: 19 frozen, 17 resolved, 0 tampered.
+
+## Stage A — ACT/WAIT, model `v0-72378bce8086`
+
+| horizon | actual ACT | mean P(ACT) | Brier | `always_ACT` Brier |
+|---|---|---|---|---|
+| 1 s | **0.000** | 0.363 | **0.135** | 1.000 |
+| 5 s | **0.176** | 0.603 | **0.337** | 0.824 |
+| 15 s | **0.294** | 0.809 | **0.489** | 0.706 |
+| 30 s | **0.529** | 0.911 | **0.394** | 0.471 |
+
+v0 beats `always_ACT` at every horizon — but it is **badly over-confident at
+every horizon**, by 0.36 to 0.51 in probability.
+
+### That over-confidence is my sampling design, not (necessarily) L5
+
+The canonical hazard is fitted on **gaps between consecutive fills** — i.e.
+measured from a fill instant. The accumulator freezes predictions at arbitrary
+wall-clock moments, roughly every 20 s, which land **mid-gap**. For a
+heavy-tailed gap distribution the residual waiting time from a random moment is
+*longer* than a fresh gap: length-biased sampling, the inspection paradox.
+
+So Stage A is currently measuring a fresh-gap model against residual-wait
+observations. **The number is real; the interpretation "L5 is slower than we
+thought" is not available from it.** Stage D agrees: timing error median
+**+15.31 s**, i.e. actual gaps run consistently longer than predicted.
+
+Two admissible fixes, neither applied yet: freeze only at fill instants, or
+condition the hazard on elapsed-since-last-fill. The second requires putting
+`since` back — as a *serve-time* conditioner on the timing table, which is where
+the completed gap is the correct target, and not in the state key.
+
+## Stage B — SIDE (n=11 with a fill)
+
+| predictor | correct |
+|---|---|
+| **v0** | 6/11 = **54.5%** |
+| baseline `repeat_previous_outcome` | 6/11 = **54.5%** |
+| baseline `CHEAPER` | 4/11 = 36.4% |
+
+**v0 does not beat the trivial persistence baseline.** At n=11 that is the only
+statement available — but the canonical analysis below says why.
+
+## Stage C / D
+
+Size error median **+29.00**, mean |error| 34.72 (n=11) — actual clips run far
+larger than the predicted p50. Timing error median **+15.31 s** (n=11).
+
+## Execution economics
+
+Observed fee-bearing 1/11 = 9.1%, against the 1.1% recent BTC15m rate. n=11;
+nothing claimed. Pre-fill state is stored with every prediction, so the
+"does pre-fill state predict fee-bearing execution" test accumulates.
+
+---
+
+# The train/serve skew — a real bug, found and fixed (v0 → v0.1)
+
+On 206,512 chronologically OOS BTC15m consecutive-fill pairs:
+
+| feature | OOS AUC for "next fill is Up" | |
+|---|---|---|
+| **last outcome** | **0.7359** | **USABLE** |
+| **up price** | **0.3955** (0.605 inverted) | **USABLE** |
+| residual (relative) | 0.5063 | NO SIGNAL |
+| TTE | 0.4928 | NO SIGNAL |
+| fills so far | 0.5107 | NO SIGNAL |
+| run length | 0.4950 | NO SIGNAL |
+
+P(next=Up | last=Up) = **0.733**; P(next=Up | last=Down) = **0.261**.
+P(next=Up) falls monotonically with the up price: **0.659** at 0.0–0.1 down to
+**0.339** at 0.9–1.0 — he buys the cheap side.
+
+**v0 was emitting p_up ≈ 0.50 in exactly those states.** The cause:
+`fit` built the key with `last_outcome = s[i-1]` — the fill *before* the current
+one — while the runner serves `last_outcome` = the *most recent* fill, `s[i]`.
+Trained on one meaning, queried with another, and the skew destroyed the single
+strongest feature in the dataset.
+
+Also removed from the key: `since`. At fit only the **completed** gap is known;
+at serve only the **elapsed-so-far**. Keying on it trained against a quantity
+that cannot be observed at prediction time.
+
+**v0.1-e9983c17ff8c** now emits p_up **0.700** for `last=Up` and **0.280** for
+`last=Down`, matching the data's 0.733 / 0.261. Per the versioning rule, v0.1
+scores **prospectively from here**; it takes no credit for v0's 17 predictions,
+which remain in the store scored as v0.
+
+## Revised largest disagreement classes
+
+1. **ACT/WAIT calibration** — now understood as length-biased sampling, fixable
+   in the harness rather than the model.
+2. **Size** — a p50 against a 16× dispersion; needs a distribution, not a point.
+3. **Side** — was the biggest; the mechanism is now identified and fixed, and
+   v0.1 needs prospective evidence before any claim is made for it.
