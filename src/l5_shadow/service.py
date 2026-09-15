@@ -165,6 +165,14 @@ def replay_intent(cohort: str, market_key: str, anchor: dict, state: dict,
         notes=("REPLAY intent: L5's own fill restated. No behavioural model is "
                "involved, so this is an EXECUTION test, not a prediction."),
         extra={"intent_source": "REPLAY",
+               "l5_observed_pair_cost": (
+                   str(state["l5_observed_pair_cost"])
+                   if state.get("l5_observed_pair_cost") is not None else None),
+               "fidelity_predicted_pair_cost": None,
+               "fidelity_pair_cost_note": (
+                   "FIDELITY v0.2 predicts outcome and size bin, not a pair "
+                   "cost. None with a reason rather than a number invented to "
+                   "agree with what we measured"),
                "l5_anchor_price": str(anchor["price"]),
                "l5_anchor_outcome": str(anchor["outcome"]),
                "l5_anchor_size": str(anchor["size"]),
@@ -843,6 +851,13 @@ def _two_sided(intent, window, pm, pm_t, gm_t, cand, *,
     this arm exists to detect.
     """
     opp = TS._flip(intent.desired_outcome)
+    # THE THREE QUANTITIES, carried on every plan and never collapsed.
+    # l5_observed is what he had actually paid as of his own fill; the fidelity
+    # prediction is not yet produced by the frozen v0.2 artifact, and a None
+    # with a reason is the honest form of that -- inventing one would make the
+    # model appear to agree with whatever we measured.
+    l5_pair = (intent.extra or {}).get("l5_observed_pair_cost")
+    fid_pair = (intent.extra or {}).get("fidelity_predicted_pair_cost")
     out: List[Dict[str, Any]] = []
     # ---- Polymarket
     if pm.get("ok") and window and opp:
@@ -850,7 +865,9 @@ def _two_sided(intent, window, pm, pm_t, gm_t, cand, *,
         out.append(TS.two_sided_plan(
             intent, pm_t, own_rest=pm.get("rest"),
             opp_rest=(pm_opp.get("rest") if pm_opp.get("ok") else None),
-            venue="PMUS", now=now))
+            venue="PMUS", now=now,
+            l5_observed_pair_cost=l5_pair,
+            fidelity_predicted_pair_cost=fid_pair))
     else:
         out.append({"venue": "PMUS", "intent_id": intent.id, "arm": "S",
                     "label": TS.LABEL, "planned_at": now,
@@ -864,7 +881,9 @@ def _two_sided(intent, window, pm, pm_t, gm_t, cand, *,
             intent, gm_t,
             own_rest=(g_own.get("rest") if g_own.get("ok") else None) or [],
             opp_rest=(g_opp.get("rest") if g_opp.get("ok") else None),
-            venue="GEMINI", now=now))
+            venue="GEMINI", now=now,
+            l5_observed_pair_cost=l5_pair,
+            fidelity_predicted_pair_cost=fid_pair))
     else:
         out.append({"venue": "GEMINI", "intent_id": intent.id, "arm": "S",
                     "label": TS.LABEL, "planned_at": now,

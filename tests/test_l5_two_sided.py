@@ -51,8 +51,9 @@ def test_a_pair_above_the_target_is_refused_not_repriced():
     edge we are trying to keep."""
     r = _plan([(D("0.50"), D("100"))], [(D("0.49"), D("80"))])
     assert r["admissible"] is False
-    assert "forbidden" in r["reason"]
+    assert "we decline it" in r["reason"]
     assert "0.96" in r["reason"]
+    assert r.get("pair_cost_repriced") is None      # nothing is moved to fit
 
 
 def test_the_target_is_the_spring_discipline_number():
@@ -290,3 +291,88 @@ def test_a_good_pair_is_counted_as_within_the_target():
         {"venue": "PMUS", "market_key": "m", "desired_outcome": "Down",
          "evidenced_fill": True, "quote_qty": "10", "quote_price": "0.50"}])
     assert r["pairs_above_par"] == 0 and r["pairs_within_0_96"] == 1
+
+
+# ---------------- the three quantities, and 0.96 confined to the third
+
+def test_the_ceiling_is_our_policy_and_never_a_definition_of_fidelity():
+    """0.96 sits almost exactly on the MEDIAN of L5's own achieved pair-cost
+    distribution. As a definition of fidelity it would censor half of him."""
+    r = _plan([(D("0.45"), D("100"))], [(D("0.49"), D("80"))])
+    assert r["adapted_executable_pair_ceiling"] == "0.96"
+    assert "NEVER what the behavioural model may predict" in r["ceiling_is"]
+    assert TS.ADAPTED_EXECUTABLE_PAIR_CEILING == D("0.96")
+    assert TS.PAIR_TARGET == TS.ADAPTED_EXECUTABLE_PAIR_CEILING
+
+
+def test_a_pair_we_decline_is_recorded_as_declined_not_as_absent():
+    """Recording our own refusal as 'no pair here' would make our ceiling look
+    like a venue fact, and erase the observations needed to judge the ceiling."""
+    r = _plan([(D("0.50"), D("100"))], [(D("0.49"), D("80"))])
+    assert r["admissible"] is False
+    assert r["available_but_declined"] is True
+    assert r["censored_by"] == "adapted_executable_pair_ceiling"
+    assert r["pair_cost"] == "1.000000"
+    assert "not a claim about L5" in r["reason"]
+
+
+def test_an_admissible_pair_is_not_marked_declined():
+    r = _plan([(D("0.45"), D("100"))], [(D("0.49"), D("80"))])
+    assert r["available_but_declined"] is False
+
+
+def test_the_three_quantities_are_carried_apart():
+    r = TS.two_sided_plan(_intent(), T.gemini_terms(),
+                          own_rest=[(D("0.45"), D("100"))],
+                          opp_rest=[(D("0.49"), D("80"))],
+                          venue="GEMINI", now=1.0,
+                          l5_observed_pair_cost="0.9624",
+                          fidelity_predicted_pair_cost=None)
+    assert r["l5_observed_pair_cost"] == "0.9624"
+    assert r["fidelity_predicted_pair_cost"] is None
+    assert r["adapted_executable_pair_ceiling"] == "0.96"
+
+
+# -------------- formation and economics are separate gates
+
+def test_an_above_par_pair_is_economically_negative_however_it_formed():
+    e = TS.pair_economics("1.43")
+    assert e["pair_economics"] == "ECONOMICALLY_NEGATIVE"
+    assert e["loss_per_share"] == "0.430000"
+    assert e["eligible_for_live_promotion"] is False
+    assert "no rebate and no reward" in e["why"]
+
+
+def test_a_pair_above_our_ceiling_but_under_par_is_not_called_negative():
+    """L5 makes these routinely. They are profitable and we may not execute
+    them — a policy limit, not a statement about him."""
+    e = TS.pair_economics("0.97")
+    assert e["pair_economics"] == "POSITIVE_BUT_ABOVE_OUR_CEILING"
+    assert e["eligible_for_live_promotion"] is False
+    assert "not a statement about L5" in e["why"]
+
+
+def test_only_a_pair_inside_the_ceiling_is_promotion_eligible():
+    e = TS.pair_economics("0.9500")
+    assert e["pair_economics"] == "POSITIVE_AND_EXECUTABLE"
+    assert e["eligible_for_live_promotion"] is True
+    assert e["margin_per_share"] == "0.050000"
+
+
+def test_l5s_own_median_pair_cost_is_outside_our_ceiling():
+    """0.9624 is the median of his achieved distribution and 0.96 is our
+    ceiling. Our policy declines his median trade — which is the whole reason
+    the ceiling may not double as a definition of fidelity."""
+    e = TS.pair_economics("0.9624")
+    assert e["pair_economics"] == "POSITIVE_BUT_ABOVE_OUR_CEILING"
+    assert e["eligible_for_live_promotion"] is False
+
+
+def test_exactly_par_is_not_negative_and_exactly_the_ceiling_is_executable():
+    assert TS.pair_economics("1.00")["pair_economics"] == \
+        "POSITIVE_BUT_ABOVE_OUR_CEILING"
+    assert TS.pair_economics("0.96")["eligible_for_live_promotion"] is True
+
+
+def test_an_unreadable_pair_cost_is_unknown_not_negative():
+    assert TS.pair_economics("abc")["pair_economics"] == "UNKNOWN"

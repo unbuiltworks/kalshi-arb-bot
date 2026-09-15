@@ -48,6 +48,17 @@ def state_after_fill(*, cohort: str, anchor: dict,
     up = sum(f["size"] for f in past if f["outcome"] == "Up")
     dn = sum(f["size"] for f in past if f["outcome"] != "Up")
     tot = up + dn
+    # SPEND, so L5's own running pair cost is observable rather than inferred.
+    # Same `past` list, so no lookahead is introduced: this is what he had paid
+    # as of his own fill, and it is the MEASUREMENT quantity
+    # (l5_observed_pair_cost) that must be kept apart from our execution
+    # ceiling. Without it the only pair-cost number in the system was our
+    # policy's, which is how a policy becomes a definition of fidelity.
+    up_sp = sum(f["size"] * float(f["price"]) for f in past
+                if f["outcome"] == "Up")
+    dn_sp = sum(f["size"] * float(f["price"]) for f in past
+                if f["outcome"] != "Up")
+    l5_pair = ((up_sp / up) + (dn_sp / dn)) if (up > 0 and dn > 0) else None
     return {
         "cohort": cohort,
         # the condition id is what lets a RESTARTED runner find this window's
@@ -63,6 +74,10 @@ def state_after_fill(*, cohort: str, anchor: dict,
         "tte_s": anchor["window_end"] - anchor["t"],
         "n_fills_so_far": len(past),
         "inv_up": up, "inv_dn": dn,
+        "up_spend": up_sp, "dn_spend": dn_sp,
+        # None until he holds BOTH sides: a one-sided position has a cost, not
+        # a pair cost, and reporting 0 would read as the cheapest possible pair
+        "l5_observed_pair_cost": l5_pair,
         "matched_qty": min(up, dn),
         "residual_abs": abs(up - dn),
         "residual_rel": ((up - dn) / tot) if tot else None,

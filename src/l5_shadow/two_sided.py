@@ -49,17 +49,77 @@ from typing import Any, Dict, Optional, Sequence
 
 from src.l5_shadow import maker as MK
 
-# Spring discipline, per CLAUDE.md: "materially cheaper pair completion
-# (roughly <= 0.96)". Near-$1 pair tolerance belongs to later incentive-era L5
-# behaviour and stays locked. This is a POLICY number, not a venue term, and it
-# is only ever used to REFUSE a pair -- never to justify paying more for one.
-PAIR_TARGET = D("0.96")
+# THREE QUANTITIES, AND 0.96 IS ONLY THE THIRD.
+#
+#   l5_observed_pair_cost           what L5 actually achieved. A MEASUREMENT.
+#   fidelity_predicted_pair_cost    what the behavioural model says L5 would
+#                                   TOLERATE in this state. A MODEL OUTPUT.
+#   adapted_executable_pair_ceiling what OUR account may economically execute.
+#                                   A POLICY, currently 0.96, frozen.
+#
+# Conflating them is how a policy number becomes a definition of fidelity: if
+# the ceiling filters what the model is allowed to propose, then every measured
+# "L5 behaviour" is really our own spring rule reflected back, and a model that
+# is right about L5 looks wrong. Measured over 1,610 of L5's own two-sided
+# windows, 0.96 sits almost exactly on the MEDIAN of his achieved distribution
+# -- so as a definition of fidelity it would censor half of him.
+#
+# The ceiling therefore filters EXECUTION and never the model. Both are
+# recorded on every plan, along with what the policy censored.
+ADAPTED_EXECUTABLE_PAIR_CEILING = D("0.96")
+# Kept as the old name so nothing silently changes meaning mid-flight; it is
+# the POLICY, and reading it as anything else is the error above.
+PAIR_TARGET = ADAPTED_EXECUTABLE_PAIR_CEILING
+# A matched pair costing more than this is a guaranteed loss on the matched leg
+# whatever else is true. Formation and economics are SEPARATE GATES: becoming
+# two-sided is not success, and arm R's first live pairs cost a median 1.43.
+PAR = D("1.00")
 LABEL = "MODEL_CANDIDATE/state_driven_two_sided"
+
+
+def pair_economics(pair_cost: Any) -> Dict[str, Any]:
+    """Classify a pair by its ECONOMICS, separately from whether it formed.
+
+    No candidate may call itself successful merely for becoming two-sided. A
+    matched pair above par loses money on the matched leg with certainty, and
+    it is marked economically negative unless some other EVIDENCED component
+    compensates -- which, for a shadow account credited no rebates and no
+    rewards, is nothing.
+    """
+    try:
+        # ONE FORMATTING, so this cannot clobber the caller's. Quantizing in
+        # two places produced "0.950" here and "0.950000" there for the same
+        # number, and whichever wrote last won.
+        c = D(str(pair_cost)).quantize(D("0.000001"))
+    except Exception:                                         # noqa: BLE001
+        return {"pair_economics": "UNKNOWN",
+                "why": "pair cost could not be read"}
+    if c > PAR:
+        return {"pair_economics": "ECONOMICALLY_NEGATIVE", "pair_cost": str(c),
+                "loss_per_share": str((c - PAR).quantize(D("0.000001"))),
+                "why": ("above par: the matched leg loses this much per share "
+                        "with certainty, whatever settles. No evidenced "
+                        "component compensates it -- a shadow account is "
+                        "credited no rebate and no reward"),
+                "eligible_for_live_promotion": False}
+    if c > ADAPTED_EXECUTABLE_PAIR_CEILING:
+        return {"pair_economics": "POSITIVE_BUT_ABOVE_OUR_CEILING",
+                "pair_cost": str(c),
+                "why": ("profitable on the matched leg, but outside what our "
+                        "account is authorised to execute. This is a POLICY "
+                        "limit, not a statement about L5"),
+                "eligible_for_live_promotion": False}
+    return {"pair_economics": "POSITIVE_AND_EXECUTABLE", "pair_cost": str(c),
+            "margin_per_share": str((PAR - c).quantize(D("0.000001"))),
+            "eligible_for_live_promotion": True}
 
 
 def two_sided_plan(intent, terms, *, own_rest: Sequence,
                    opp_rest: Optional[Sequence], venue: str,
-                   now: float, pair_target: D = PAIR_TARGET) -> Dict[str, Any]:
+                   now: float, pair_target: D = PAIR_TARGET,
+                   l5_observed_pair_cost: Any = None,
+                   fidelity_predicted_pair_cost: Any = None
+                   ) -> Dict[str, Any]:
     """Both legs of a fee-safe pair at this instant, or why there is none.
 
     `own_rest` is the bid ladder for the outcome L5 just took; `opp_rest` is the
@@ -73,6 +133,15 @@ def two_sided_plan(intent, terms, *, own_rest: Sequence,
         "own_outcome": intent.desired_outcome,
         "opp_outcome": _flip(intent.desired_outcome),
         "qty": str(intent.incremental_qty),
+        # the three quantities, kept apart on every row
+        "l5_observed_pair_cost": (str(l5_observed_pair_cost)
+                                  if l5_observed_pair_cost is not None else None),
+        "fidelity_predicted_pair_cost": (
+            str(fidelity_predicted_pair_cost)
+            if fidelity_predicted_pair_cost is not None else None),
+        "adapted_executable_pair_ceiling": str(pair_target),
+        "ceiling_is": ("OUR execution policy. It filters what we may trade and "
+                       "NEVER what the behavioural model may predict"),
         "pair_target": str(pair_target),
         "hypothesis": ("both legs may rest BEFORE either fills; the reactive "
                        "arm can only quote the complement after the first "
@@ -102,14 +171,22 @@ def two_sided_plan(intent, terms, *, own_rest: Sequence,
     cost = own["effective"] + opp["effective"]
     out["pair_cost"] = str(cost.quantize(D("0.000001")))
     out["pair_cost_headroom"] = str((pair_target - cost).quantize(D("0.000001")))
+    out.update(pair_economics(cost))
     if cost > pair_target:
         return {**out, "admissible": False,
+                # CENSORED BY POLICY, AND SAID SO. The pair was available and
+                # we declined it. Recording that as "no pair here" would make
+                # our own ceiling look like a venue fact, and would erase
+                # exactly the observations needed to judge the ceiling.
+                "censored_by": "adapted_executable_pair_ceiling",
+                "available_but_declined": True,
                 "reason": (f"the two touches sum to {out['pair_cost']}, above "
-                           f"the fee-safe target {pair_target}. Paying it is "
-                           f"forbidden, so no pair is available here -- a fact "
-                           f"about the venue, not a knob")}
+                           f"OUR executable ceiling {pair_target}. The pair "
+                           f"EXISTS and we decline it; this is our policy, not "
+                           f"the venue's limit and not a claim about L5")}
     return {**out, "admissible": True,
-            "reason": "both legs rest inside the fee-safe pair target",
+            "available_but_declined": False,
+            "reason": "both legs rest inside our executable ceiling",
             "legs": [{"outcome": out["own_outcome"], **own},
                      {"outcome": out["opp_outcome"], **opp}]}
 
