@@ -65,6 +65,7 @@ TRUNC_EVERY_S = 30.0     # the old limit=1 path, for comparison
 ROTATE_EVERY_S = 20.0    # pick up new windows as they open
 SAMPLES = "samples.jsonl"
 PAIRED = "paired.jsonl"
+EVENTS = "events.jsonl"
 
 
 def _ctx() -> ssl.SSLContext:
@@ -200,6 +201,19 @@ def main(argv=None) -> int:
                 if w["window_end"] + 60 < now:
                     feed.drop(sym)
                     watching.pop(sym, None)
+
+        # ---- the RAW event stream, drained every cycle.
+        # Snapshots cannot distinguish an order that rested untouched from one
+        # cancelled and re-placed identically, so flow -- how much NEW eligible
+        # liquidity actually arrived -- is only answerable from the events.
+        for sym, w in list(watching.items()):
+            try:
+                bk = feed.watch(sym)
+                for e in bk.drain_events():
+                    append(a.out_dir, EVENTS, {**e, "cohort": w["cohort"],
+                                               "window_end": w["window_end"]})
+            except Exception:                                 # noqa: BLE001
+                pass
 
         # ---- fast: the maintained book, no network, time-weighted
         for sym, w in list(watching.items()):

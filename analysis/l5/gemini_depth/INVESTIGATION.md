@@ -169,3 +169,91 @@ sharply, and the earlier snapshot burst at 13:31–13:33 Z showed the BTC15m
 touch flickering between 1 and 702 within a single second — behaviour this
 later window did not reproduce. The probe continues across further windows;
 the capacity statement waits for it.
+
+---
+
+# Part 2 — flow, and the metric I got wrong first
+
+## Verdict per candidate explanation
+
+Emitted by `report.py --classify` from the measurements, not written by hand.
+Each carries the numbers and the threshold it was judged against.
+
+| class | verdict | basis |
+|---|---|---|
+| `CACHE_REFRESH_BEHAVIOR` | **RULED_OUT** | no cache directive on any response |
+| `STALE_SNAPSHOT` | **RULED_OUT** | REST age p50 0.52 s; agrees with the maintained book on best price 99.15 % and on size at the touch 100 % |
+| `INCOMPLETE_BOOK` | **PRESENT_IN_LEGACY_COLLECTORS_ONLY** | default == limit=0 == limit=100; `limit=1` hides a median 182 shares, and two services use it |
+| `BEST_LEVEL_ONLY_PARSING` | **WAS_PRESENT_NOW_FIXED** | the ladder evaluator replaced the touch-depth read; a touch-only read would have understated capacity in up to 49.2 % of sampled instants |
+| `GENUINE_BOOK_MOVEMENT` | **PRESENT_AND_DOMINATED_BY_QUOTE_CHURN** | cancel/place volume ratio 0.992–0.994 |
+| `UNKNOWN` | **NOT_NEEDED** | every class has evidence |
+
+## The metric I got wrong, and the correction
+
+My first flow metric summed `place` deltas and called it *unique executable
+liquidity*. On a live BTC5m window it reported **37,805 contracts offered at
+≤ 0.50 in 70 seconds** — against **50 actually traded** and a cancel/place ratio
+of **0.994**.
+
+That is one quote refreshed 159 times. **Gemini's v1 market-data feed carries no
+order id**, so a cancel followed by a place at the same price and size is
+indistinguishable from an order that never moved. Summing placements is not a
+capacity measure and cannot be made into one on this feed.
+
+The corrected decomposition reports what each number can actually support:
+
+| field | meaning |
+|---|---|
+| `standing_eligible_size` | size actually **resting** at an eligible price, replayed from events |
+| `net_new_eligible` | placed − cancelled: what accumulated **on net** |
+| `traded_at_or_under_ceiling` | size that actually **changed hands** |
+| `placed_gross_NOT_A_CAPACITY_MEASURE` | retained only to make the churn visible |
+| `churn_ratio` | cancelled / placed; near 1.0 means refresh, not supply |
+| `accumulation_trade_limited` | resting max + traded — the defensible bound |
+
+## Measured flow, ~152 s per window, at the L5 ceilings actually observed
+
+Ceilings come from the executable shadow's own frozen intents for the same
+cohort, so this answers *capacity through the intent's maximum acceptable
+price* rather than through an invented grid.
+
+**BTC15m** — and this is the whole point of the worked example:
+
+| ceiling | standing p50 | net new | traded | realistic capture | q=20 reachable |
+|---|---|---|---|---|---|
+| 0.11 | **1** | 0 | 0 | **1** | **no** (q=1 only) |
+| 0.14 | 174 | 174 | 0 | 846 | yes |
+| 0.17 | 673 | 674 | 0 | 859 | yes |
+| 0.20 | 675 | 889.5 | 215.5 | 1087.5 | yes |
+| 0.50 | 676 | 889.5 | 215.5 | 1122.5 | yes |
+
+**BTC5m**:
+
+| ceiling | standing p50 | net new | traded | realistic capture |
+|---|---|---|---|---|
+| 0.10 | 10 | 10 | 10 | 60 |
+| 0.50 | 637 | 742 | 60 | 1109 |
+| 0.62 | 637 | 742 | 60 | 1109 |
+
+**Capacity is a function of the ceiling, not a property of the venue.** At a
+0.11 ceiling the book really is one contract; three cents higher it is 846.
+Quoting "Gemini depth" without naming a ceiling is meaningless, and the
+original `depth 1.0 @ 0.66` reading was a true statement about one price, read
+as a statement about a venue.
+
+**Turnover is low.** 215.5 contracts traded on BTC15m and 60 on BTC5m over
+~152 s, against 600–900 resting. Standing size is plentiful; *flow* is thin.
+That is consistent with the executable shadow's maker result — plenty of size
+to join behind, little volume coming through to clear the queue.
+
+## Atomic versus incremental
+
+`accumulation_upper_bound` reports time and VWAP to reach each size by
+acquiring it over several fills. It is **labelled INCREMENTAL and is never
+substituted for atomic capacity**, and the router is untouched: it still
+requires the whole `incremental_qty` to be available at one instant. A quantity
+assembled from several fills over time is a different economic object, and only
+an intent whose semantics permit incremental acquisition may use it.
+
+The simulation is also an explicit **upper bound on speed** — no queue, no
+competing taker — which is why `accumulation_trade_limited` sits beside it.

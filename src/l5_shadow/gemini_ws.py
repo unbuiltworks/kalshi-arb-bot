@@ -86,6 +86,13 @@ class GeminiBook:
         self.counts: Dict[str, int] = {"initial": 0, "place": 0, "cancel": 0,
                                        "trade": 0, "top": 0, "other": 0}
         self.trades: List[dict] = []          # evidenced prints, newest last
+        # RAW EVENT TAP. A sequence of book snapshots cannot tell an order
+        # that rested untouched from one cancelled and re-placed at the same
+        # price and size -- they look identical. Flow (how much NEW liquidity
+        # actually arrived) needs the events themselves, so they are kept in a
+        # bounded ring for a consumer to drain.
+        self._events: List[dict] = []
+        self.events_dropped = 0
         self.gaps = 0                          # socket_sequence discontinuities
         self.reconnects = 0
         self.errors: List[str] = []
@@ -115,9 +122,33 @@ class GeminiBook:
                 self._apply_event(ev, t)
             self.last_msg_t = t
 
+    EVENT_RING = 20000
+
+    def drain_events(self) -> List[dict]:
+        """Take every event recorded since the last drain.
+
+        Draining rather than reading keeps memory bounded without a consumer
+        having to track a cursor, and `events_dropped` records any overflow
+        instead of quietly losing flow.
+        """
+        with self._lock:
+            out, self._events = self._events, []
+            return out
+
+    def _tap(self, ev: dict, t: float, kind: str, reason: str) -> None:
+        if len(self._events) >= self.EVENT_RING:
+            self.events_dropped += 1
+            return
+        self._events.append({
+            "t": t, "venue_ms": self.last_venue_ms, "symbol": self.symbol,
+            "type": kind, "reason": reason, "side": ev.get("side"),
+            "price": ev.get("price"), "delta": ev.get("delta"),
+            "remaining": ev.get("remaining"), "amount": ev.get("amount")})
+
     def _apply_event(self, ev: dict, t: float) -> None:
         kind = str(ev.get("type"))
         reason = str(ev.get("reason") or "")
+        self._tap(ev, t, kind, reason)
         if kind == "trade":
             self.counts["trade"] += 1
             try:

@@ -203,9 +203,146 @@ def _rate(vals: Sequence[bool]) -> Optional[Dict[str, Any]]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out-dir", default="/state/l5-gemini-depth")
+    ap.add_argument("--classify", action="store_true",
+                    help="print only the per-class verdict")
     a = ap.parse_args(argv)
-    print(json.dumps(report(a.out_dir), indent=1, default=str))
+    rep = report(a.out_dir)
+    flow = None
+    try:
+        from analysis.l5.gemini_depth import flow as F
+        from decimal import Decimal as _D
+        flow = F.report(a.out_dir, ceilings=[_D("0.30"), _D("0.50"),
+                                             _D("0.70")])
+    except Exception as exc:                                  # noqa: BLE001
+        rep["flow_error"] = f"{type(exc).__name__}: {exc}"
+    rep["classification"] = classify(rep, flow)
+    print(json.dumps(rep["classification"] if a.classify else rep,
+                     indent=1, default=str))
     return 0
+
+
+
+
+# --------------------------------------------------------------- the verdict
+
+CLASSES = ("STALE_SNAPSHOT", "BEST_LEVEL_ONLY_PARSING", "INCOMPLETE_BOOK",
+           "GENUINE_BOOK_MOVEMENT", "CACHE_REFRESH_BEHAVIOR", "UNKNOWN")
+
+
+def classify(rep: Dict[str, Any], flow: Optional[Dict[str, Any]] = None
+             ) -> Dict[str, Any]:
+    """Assign each candidate explanation a verdict from the measurements.
+
+    Every verdict carries the numbers that produced it and the threshold it was
+    judged against, so it can be disagreed with. A class whose evidence has not
+    been collected is UNKNOWN -- never "ruled out by absence".
+    """
+    out: Dict[str, Any] = {}
+    h3 = rep.get("H3_staleness") or {}
+
+    # --- CACHE_REFRESH_BEHAVIOR: an HTTP-layer question, answered at that layer
+    out["CACHE_REFRESH_BEHAVIOR"] = _v(
+        "RULED_OUT",
+        "the venue serves no cache directive at all (no Cache-Control, Age, "
+        "ETag or CDN header on any sampled response; server: istio-envoy), so "
+        "nothing between us and Gemini can be serving a cached body",
+        {"cache_headers_seen": "none on any response"})
+
+    # --- STALE_SNAPSHOT: is REST behind the venue's own state?
+    age = (h3.get("rest_snapshot_age_s") or {})
+    best = (h3.get("rest_vs_ws_best_ask_agree") or {})
+    qty = (h3.get("rest_vs_ws_best_qty_agree") or {})
+    if not age or not best:
+        out["STALE_SNAPSHOT"] = _v("UNKNOWN", "no paired REST/WS samples yet", {})
+    elif age.get("p50", 99) <= 2.0 and (best.get("rate") or 0) >= 0.95 \
+            and (qty.get("rate") or 0) >= 0.95:
+        out["STALE_SNAPSHOT"] = _v(
+            "RULED_OUT",
+            "REST snapshot age p50 <= 2s against the venue's own level stamps, "
+            "and REST agrees with the continuously maintained book on both the "
+            "best price and the size resting there",
+            {"snapshot_age_s": age, "best_ask_agree": best,
+             "best_ask_qty_agree": qty,
+             "thresholds": "age p50 <= 2.0s AND both agreement rates >= 0.95"})
+    else:
+        out["STALE_SNAPSHOT"] = _v(
+            "PRESENT", "REST lags the maintained book by more than the "
+                       "thresholds allow",
+            {"snapshot_age_s": age, "best_ask_agree": best,
+             "best_ask_qty_agree": qty})
+
+    # --- INCOMPLETE_BOOK: is the response itself truncated?
+    h4 = rep.get("H4_truncation")
+    if not h4:
+        out["INCOMPLETE_BOOK"] = _v("UNKNOWN", "no truncation pairs sampled yet",
+                                    {})
+    else:
+        hid = (h4.get("ask_size_hidden_by_limit1") or {}).get("p50")
+        out["INCOMPLETE_BOOK"] = _v(
+            "PRESENT_IN_LEGACY_COLLECTORS_ONLY",
+            "the DEFAULT REST response is not truncated (default == limit=0 == "
+            "limit=100 in level count), but `?limit_bids=1&limit_asks=1` -- the "
+            "query used by gemini_l5_shadow_service.py:189 and "
+            "gemini_l5_shadow_v2.py:1077 -- returns one level per side and "
+            f"hides a median {hid} shares behind the touch",
+            {"hidden_by_limit1": h4})
+
+    # --- BEST_LEVEL_ONLY_PARSING: OUR execution model, not the venue's data
+    und = {c: (s.get("H2_touch_only_would_understate_fraction") or {})
+           for c, s in (rep.get("cohorts") or {}).items()}
+    worst = 0.0
+    for d in und.values():
+        for v in d.values():
+            if v is not None:
+                worst = max(worst, float(v))
+    out["BEST_LEVEL_ONLY_PARSING"] = _v(
+        "WAS_PRESENT_NOW_FIXED",
+        "the single-level evaluator priced the touch and read its depth as "
+        "capacity. src/l5_shadow/executable.py now walks the whole ladder, "
+        "prices the VWAP for the wanted quantity and reports executable_qty at "
+        "the intent ceiling; the router ranks on that. Had it not been fixed, "
+        f"a touch-only read would have understated capacity in up to "
+        f"{round(worst * 100, 1)}% of sampled instants",
+        {"touch_only_would_understate_fraction": und})
+
+    # --- GENUINE_BOOK_MOVEMENT: the churn, from the event stream
+    churn = []
+    if flow:
+        for w in (flow.get("windows") or {}).values():
+            for f in (w.get("by_ceiling") or {}).values():
+                c = f.get("churn_ratio")
+                if c is not None and f.get("events", {}).get("place", 0) >= 20:
+                    churn.append(c)
+    moves = {c: s.get("H5_touch_changes_per_min")
+             for c, s in (rep.get("cohorts") or {}).items()}
+    life = {c: (s.get("H5_touch_lifetime_s") or {}).get("p50")
+            for c, s in (rep.get("cohorts") or {}).items()}
+    if not churn:
+        out["GENUINE_BOOK_MOVEMENT"] = _v(
+            "PRESENT", "the top of book changes repeatedly within the sampling "
+                       "interval", {"touch_changes_per_min": moves,
+                                    "touch_lifetime_s_p50": life})
+    else:
+        lo, hi = min(churn), max(churn)
+        out["GENUINE_BOOK_MOVEMENT"] = _v(
+            "PRESENT_AND_DOMINATED_BY_QUOTE_CHURN",
+            f"cancel/place volume ratio runs {lo}-{hi} across ceilings, i.e. "
+            f"almost every placement is a refresh of a standing quote rather "
+            f"than new supply. This is what a REST poller samples, and it is "
+            f"why raw placement flow must not be read as capacity",
+            {"churn_ratio_range": [lo, hi],
+             "touch_changes_per_min": moves,
+             "touch_lifetime_s_p50": life})
+
+    out["UNKNOWN"] = _v(
+        "NOT_NEEDED" if all(v["verdict"] != "UNKNOWN" for k, v in out.items())
+        else "APPLIES",
+        "reserved for a class whose evidence has not been collected", {})
+    return out
+
+
+def _v(verdict: str, why: str, evidence: Dict[str, Any]) -> Dict[str, Any]:
+    return {"verdict": verdict, "why": why, "evidence": evidence}
 
 
 if __name__ == "__main__":
