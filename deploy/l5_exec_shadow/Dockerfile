@@ -43,6 +43,10 @@ COPY analysis/l5/gemini_depth/probe.py analysis/l5/gemini_depth/probe.py
 COPY analysis/l5/gemini_depth/report.py analysis/l5/gemini_depth/report.py
 COPY analysis/l5/gemini_depth/flow.py analysis/l5/gemini_depth/flow.py
 COPY analysis/l5/chain_observer/validate.py analysis/l5/chain_observer/validate.py
+# the preregistered gate, reported by the supervisor on a slow cadence. A READ
+# over the volume's own stores: it promotes nothing and reaches no network.
+COPY analysis/l5/chain_observer/gate.py analysis/l5/chain_observer/gate.py
+COPY analysis/l5/chain_observer/PROMOTION_GATE_PREREGISTERED.md analysis/l5/chain_observer/PROMOTION_GATE_PREREGISTERED.md
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \

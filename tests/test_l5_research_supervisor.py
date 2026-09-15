@@ -246,3 +246,45 @@ def test_a_supervisor_wide_gap_blinds_every_stream():
     assert C.observed(rows, "exec_shadow", 150.0, 160.0) is False
     assert C.observed(rows, "gemini_depth", 150.0, 160.0) is False
     assert C.observed(rows, "exec_shadow", 250.0, 260.0) is True
+
+
+# ------------------------------------- the gate is reported, never acted on
+
+def test_the_supervisor_reports_the_gate_without_promoting_anything(
+        tmp_path, capsys):
+    """"Report the exact metrics continuously" -- so the standing is visible
+    as the sample accumulates, not only when someone remembers to ask."""
+    import json
+    from src.l5_chain_observer import observer as O
+    vd = tmp_path / "chainval"
+    vd.mkdir()
+    (vd / "validations.jsonl").write_text(json.dumps(
+        {"ok": True, "agree": 10, "epoch": 3, "feed_only": [],
+         "chain_only": [], "window_utc": [1.0, 2.0]}) + "\n")
+    rep = S.Supervisor(str(tmp_path)).report_gate()
+    out = capsys.readouterr().out
+    assert out.startswith("L5_GATE ")
+    row = json.loads(out.split("L5_GATE ", 1)[1].splitlines()[0])
+    assert row["ok"] is True and row["PROMOTE"] is False
+    assert row["threshold"] == 500
+    assert "does not enable live trading" in row["scope"]
+    assert rep["PROMOTE"] is False
+    # and reporting it changes nothing about the observer
+    assert O.PROMOTED is False
+
+
+def test_a_broken_gate_report_does_not_take_down_the_collectors(tmp_path,
+                                                                capsys):
+    """A reporting bug must not kill the streams it reports on."""
+    import json
+    (tmp_path / "chainval").mkdir()
+    (tmp_path / "chainval" / "validations.jsonl").write_text("{not json\n")
+    sup = S.Supervisor(str(tmp_path))
+    assert sup.report_gate() is not None or True     # must not raise
+    (tmp_path / "chainval" / "validations.jsonl").write_text("")
+    assert sup.report_gate() is not None
+
+
+def test_the_gate_cadence_is_slower_than_the_heartbeat(tmp_path):
+    """It reads the whole store; it must not compete with liveness."""
+    assert S.GATE_S > S.HEARTBEAT_S

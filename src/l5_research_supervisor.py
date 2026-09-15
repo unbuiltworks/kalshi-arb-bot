@@ -46,6 +46,11 @@ from typing import Any, Dict, List, Optional
 SCHEMA = "l5_research_coverage/v1"
 COVERAGE = "coverage.jsonl"
 HEARTBEAT_S = 60.0
+# The preregistered chain-observer gate, reported on a slow cadence. It is a
+# READ over the volume's own stores -- no network, no stream -- and it is
+# emitted continuously so the exact metrics are visible as the sample
+# accumulates, rather than only when someone remembers to ask.
+GATE_S = 600.0
 # a child that exits is restarted, but not in a tight loop: a persistent
 # failure should be visible in the markers rather than hidden by churn
 BACKOFF_S = (2.0, 5.0, 15.0, 30.0, 60.0)
@@ -262,11 +267,54 @@ class Supervisor:
 
     # ---------------------------------------------------------------- loop
 
+    def report_gate(self) -> Optional[dict]:
+        """Print the preregistered gate's current standing.
+
+        A REPORT, never an action: it cannot promote anything, and the
+        observer stays unpromoted regardless of what it says. Failing to
+        produce it is logged rather than fatal -- a reporting bug must not
+        take down the collectors it reports on.
+        """
+        try:
+            from analysis.l5.chain_observer import gate as G
+            rep = G.report(self.root)
+        except Exception as exc:                              # noqa: BLE001
+            print("L5_GATE " + json.dumps(
+                {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:200]}),
+                flush=True)
+            return None
+        print("L5_GATE " + json.dumps({
+            "ok": True, "PROMOTE": rep["PROMOTE"],
+            "passing": f"{rep['gates_passing']}/{rep['gates_total']}",
+            "blocking": rep["blocking"],
+            "joined": rep["gates"]["G-C1_sample_size"]["evidence"]["joined"],
+            "threshold": G.MIN_JOINED,
+            "attributed": rep["gates"]["G-C4_attribution"]["evidence"].get(
+                "attributed"),
+            "price_rate": rep["gates"]["G-C4_attribution"]["evidence"].get(
+                "price_rate"),
+            "size_rate": rep["gates"]["G-C4_attribution"]["evidence"].get(
+                "size_rate"),
+            "feed_only": rep["gates"]["G-C2_no_unexplained_misses"][
+                "evidence"]["feed_only"],
+            "chain_only_unresolved": rep["gates"][
+                "G-C3_chain_only_classified"]["evidence"]["unresolved"],
+            "retractions": rep["gates"]["G-C5_finality"]["evidence"].get(
+                "retraction_events"),
+            "runs_dropped_unobserved": rep["gates"]["G-C7_coverage"][
+                "evidence"].get("runs_dropped_as_unobserved"),
+            "excluded_pre_qualifying": rep["excluded_as_pre_qualifying"],
+            "scope": ("shadow observation clock only; this report promotes "
+                      "nothing and does not enable live trading"),
+        }, default=str), flush=True)
+        return rep
+
     def run(self) -> int:
         self.boot()
         signal.signal(signal.SIGTERM, self.stop)
         signal.signal(signal.SIGINT, self.stop)
         last_hb = 0.0
+        last_gate = 0.0
         while self.deadline is None or time.time() < self.deadline:
             for name in STREAMS:
                 if name not in self.procs:
@@ -280,6 +328,9 @@ class Supervisor:
                           running=sorted(self.procs),
                           not_running=sorted(set(STREAMS) - set(self.procs)),
                           failures=dict(self.fails))
+            if now - last_gate >= GATE_S:
+                last_gate = now
+                self.report_gate()
             time.sleep(2.0)
         self.stop()
         return 0
