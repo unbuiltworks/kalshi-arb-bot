@@ -314,3 +314,50 @@ def test_an_unreadable_resolution_leaves_the_position_open(tmp_path):
          "evidenced_fill": True, "placed_at": 1.0}) + "\n")
     rep = B.build(str(tmp_path), resolver=boom, now=1.0)
     assert rep["rows"][0]["state"] == "OPEN_UNSETTLED"
+
+
+# ------------------------------- the pair rate is the diagnostic, not a zero
+
+def test_a_group_with_no_matched_leg_says_so_rather_than_printing_zero():
+    """The first live report showed matched_pair_pnl 0.00 in every group and
+    a residual of -$91. That had to be INFERRED to mean "every position is
+    one-sided", which is the single most decision-relevant fact in it."""
+    rows = [_one([_fill("Up", 10, "0.45")], RESOLVED_DN)]
+    g = LG.roll_up(rows, by="venue")["PMUS"]
+    assert g["one_sided_positions"] == 1 and g["paired_positions"] == 0
+    assert g["pair_completion_rate"] == 0.0
+    assert "EVERY position is one-sided" in g["note"]
+    assert "directional residual" in g["note"]
+
+
+def test_a_paired_position_is_counted_as_paired():
+    rows = [_one([_fill("Up", 10, "0.45", iid="a"),
+                  _fill("Down", 10, "0.50", iid="b")], RESOLVED_UP)]
+    g = LG.roll_up(rows, by="venue")["PMUS"]
+    assert g["paired_positions"] == 1 and g["one_sided_positions"] == 0
+    assert g["pair_completion_rate"] == 1.0
+    assert "one-sided" not in (g.get("note") or "")
+
+
+def test_a_partly_matched_position_counts_as_paired():
+    rows = [_one([_fill("Up", 20, "0.45", iid="a"),
+                  _fill("Down", 10, "0.50", iid="b")], RESOLVED_UP)]
+    g = LG.roll_up(rows, by="venue")["PMUS"]
+    assert g["paired_positions"] == 1
+
+
+def test_the_report_carries_the_fill_rate_that_explains_the_pair_rate(tmp_path):
+    """Two legs in ONE market is the square of a small number."""
+    import json
+    rows = [{"intent_id": "a", "venue": "PMUS", "market_key": "m1",
+             "desired_outcome": "Up", "quote_price": "0.45",
+             "quote_qty": "10", "evidenced_fill": True, "placed_at": 1.0}]
+    rows += [{"intent_id": f"n{i}", "venue": "PMUS", "market_key": "m1",
+              "desired_outcome": "Up", "quote_price": "0.45",
+              "quote_qty": "10", "evidenced_fill": False, "placed_at": 2.0}
+             for i in range(9)]
+    (tmp_path / "maker_outcomes.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n")
+    rep = B.build(str(tmp_path), resolver=lambda k: OPEN, now=1.0)
+    assert rep["evidenced_fill_rate"] == 0.1
+    assert rep["one_sided_positions"] == 1 and rep["paired_positions"] == 0

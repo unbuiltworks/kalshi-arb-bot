@@ -162,6 +162,14 @@ def build(out_dir: str, *, resolver=None, clock: str = "feed",
         "evidenced_fills": len(fills),
         "positions": len(rows),
         "markets_not_looked_up": unlooked,
+        # a fill rate this low is itself the explanation for the pair rate: two
+        # legs in ONE market is the square of a small number
+        "evidenced_fill_rate": (round(len(fills) / len(outs), 4)
+                                if outs else None),
+        "one_sided_positions": sum(1 for r in rows
+                                   if D(r.get("matched_qty") or "0") <= 0),
+        "paired_positions": sum(1 for r in rows
+                                if D(r.get("matched_qty") or "0") > 0),
         "census": census(outs),
         "by_venue": LG.roll_up(rows, by="venue"),
         "by_cohort": LG.roll_up(rows, by="cohort"),

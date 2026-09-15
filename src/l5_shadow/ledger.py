@@ -150,11 +150,23 @@ def roll_up(rows: Sequence[dict], *, by: str) -> Dict[str, Any]:
         k = str(r.get(by))
         g = out.setdefault(k, {
             "positions": 0, "settled": 0, "open": 0, "fills": 0,
+            "paired_positions": 0, "one_sided_positions": 0,
             "matched_pair_pnl": D("0"), "residual_pnl": D("0"),
             "fees": D("0"), "realized_shadow": D("0"),
             "open_cost_basis": D("0")})
         g["positions"] += 1
         g["fills"] += int(r.get("n_fills") or 0)
+        # THE DIAGNOSTIC THAT MATTERS MOST, and the first live report had to be
+        # inferred from "matched_pair_pnl is 0.00 everywhere". L5 is a paired
+        # inventory trader: the matched leg is the low-variance one that pays
+        # $1 whatever settles. A position with no matched quantity is not a
+        # cheaper version of that -- it is a different, directional bet, and
+        # CLAUDE.md is explicit that residual exposure has no demonstrated
+        # predictive skill. So it is counted, not left to be read off a zero.
+        if D(r.get("matched_qty") or "0") > 0:
+            g["paired_positions"] += 1
+        else:
+            g["one_sided_positions"] += 1
         if r.get("state") == "SETTLED":
             g["settled"] += 1
             g["matched_pair_pnl"] += D(r["matched_pair_pnl"])
@@ -177,7 +189,15 @@ def roll_up(rows: Sequence[dict], *, by: str) -> Dict[str, Any]:
                                    .quantize(D("0.000001")))
         g["maker_rebates_credited"] = ("0" if settled else None)
         g["rewards_credited"] = ("0" if settled else None)
+        g["pair_completion_rate"] = (
+            round(g["paired_positions"] / g["positions"], 4)
+            if g["positions"] else None)
         if not settled:
             g["note"] = ("no settled position in this group: there is no "
                          "result to report, only a cost basis")
+        elif g["paired_positions"] == 0:
+            g["note"] = ("EVERY position is one-sided: there is no matched "
+                         "leg at all, so this entire result is directional "
+                         "residual -- the exposure L5's own record gives no "
+                         "reason to believe has skill")
     return out
