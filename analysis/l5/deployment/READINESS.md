@@ -11,7 +11,7 @@ States: **NOT READY** · **SHADOW** (modelled, no venue evidence) · **VERIFIED*
 | executable shadow | **SHADOW** | **SHADOW** |
 | fill evidence | **NOT READY** | **NOT READY** |
 | accounting | **SHADOW** | **NOT READY** |
-| risk | **VERIFIED** | **NOT READY** |
+| risk | **VERIFIED** | **SHADOW** |
 | bounded live readiness | **NOT READY** | **NOT READY** |
 | realized P&L | **LIVE (negative)** | **NOT READY** |
 
@@ -228,3 +228,65 @@ This is exactly the evidence the Gemini adapter exists to produce, and it is
 **Risk shell — still NOT READY.** No stop, no inventory bound, no deadman. That
 is the last item before any Gemini bounded live probe, and it must not be
 skipped.
+
+
+---
+
+# Update — Gemini risk shell exists (third blocker closed)
+
+**Gemini risk: NOT READY → SHADOW.** A shell now exists; it is not live and is
+not an authorisation to trade.
+
+`src/l5_risk/` holds the risk arithmetic **once**, venue-neutral: guaranteed
+settlement floor, negative-floors-only aggregation, combined loss, and an
+**inclusive** budget boundary. It is arithmetic on contracts and cash — no
+price, no book, no mark — which is what lets it sit in a stop without
+inferring P&L from a valuation.
+
+## It is provably the same arithmetic the executor uses
+
+`tests/test_l5_risk_shell.py` asserts numerical agreement with the live PMUS
+implementation across four inventory shapes, on `combined_loss`, and on the
+inclusive boundary. If either moves, the test fails.
+
+**The PMUS executor is deliberately NOT refactored to import this.** Changing a
+running money path to share code is a production change with no safety benefit;
+the equivalence test gives the same protection without touching it.
+
+Reproduces the documented live case exactly: `min(20.34, 16.06) − 21.5939 =
+−5.5339` — a loss knowable before settlement and invisible to a realized-only
+stop.
+
+## The shell refuses, and names what it hit
+
+`RiskShell` cannot be constructed without real bounds — a non-negative stop, a
+zero inventory cap, a zero spend cap, zero concurrency or a zero deadman all
+raise. A shell that works unconfigured is one that can ship with nobody having
+decided the limits.
+
+Every refusal names its bound: `DAILY STOP`, `DEADMAN`, `INVENTORY CAP`,
+`MARKET SPEND CAP`, `CONCURRENCY`.
+
+The spend bound prices at **the intent's own ceiling**, not the quoted price: a
+bound computed from a hoped-for fill is not a bound.
+
+## GEMINI_PROBE_SHELL — written down, not authorised
+
+`stop −5.00 · max 10 shares · max 5.00 per market · 1 concurrent · deadman 300 s`
+
+Deliberately tiny. The measured Gemini book — ~1 contract deep at the touch,
+6–8c spreads — is the reason the inventory bound is **small**, not a reason to
+widen it. **Gemini is not live and this shell does not make it live.**
+
+## Gemini blockers: all three closed
+
+| blocker | state |
+|---|---|
+| market mapping | **VERIFIED** — exact expiry arithmetic, venue-confirmed |
+| fee economics | **VERIFIED** — vendored from the user-verified schedule |
+| risk shell | **SHADOW** — exists, bounded, tested, not live |
+
+What remains before any Gemini capital moves is **fill evidence**, and the live
+shadow already says what stands in the way: the router returned **NEITHER** on
+a real book for insufficient capacity. Capacity, not fees or mapping, is the
+binding constraint.
