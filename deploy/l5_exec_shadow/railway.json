@@ -1,0 +1,21 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_service": "l5-exec-shadow",
+  "_role": "READ-ONLY continuous dual-venue executable shadow. For every L5 action it observes, it evaluates Polymarket and Gemini through ONE ladder evaluator and records the router's PMUS / GEMINI / BOTH / NEITHER decision with its reason. It produces evidence, never orders.",
+  "_credentials": "NONE. No exchange key, no wallet key, no PMUS_SPRING_* / KALSHI_* / POLYMARKET_* secret. Every call is an unauthenticated GET to a public endpoint (gamma-api, clob, data-api, api.gemini.com). If a value ever appears necessary here, that is a signal to stop, not to add one.",
+  "_volume": "Mount a dedicated volume at /state/l5-exec-shadow. Do NOT reuse /state/l5-fidelity (the prediction store), /state/pmus-spring (the executor) or /data/l5_shadow (the older loop). Pending maker quotes are rebuilt from this volume's own log on boot, so the volume IS the recovery mechanism.",
+  "_pin": "Set RAILWAY_DOCKERFILE_PATH=/deploy/l5_exec_shadow/Dockerfile on the service (deploy/RAILWAY_ISOLATION.md pattern) so a branch push cannot cross-build it.",
+  "_promotion": "watchPatterns point ONLY at deploy/_promote/l5-exec-shadow. Editing source does not deploy this service; appending a promote line to that sentinel does. See deploy/_promote/README.md.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_exec_shadow/Dockerfile",
+    "watchPatterns": ["deploy/_promote/l5-exec-shadow"]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_shadow.service --hours 0 --out-dir /state/l5-exec-shadow",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_restart_note": "ALWAYS, because this is a read-only recorder: a crash must not end the observation series, and there is no money-moving state that a restart could compound. The money-moving probe uses the opposite policy on purpose.",
+  "_not_yet_created": "As of the commit that adds this file the Railway service does NOT exist. Creating it costs money and is the owner's call; everything needed to stand it up in one deliberate act is here."
+}

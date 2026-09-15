@@ -290,3 +290,113 @@ What remains before any Gemini capital moves is **fill evidence**, and the live
 shadow already says what stands in the way: the router returned **NEITHER** on
 a real book for insufficient capacity. Capacity, not fees or mapping, is the
 binding constraint.
+
+
+---
+
+# Update 2026-09-15T13:2xZ — the executable shadow is RUNNING, and the touch was the wrong question
+
+The board's `executable shadow` row moves from a single-snapshot evaluator to a
+**continuous dual-venue stream** (`src/l5_shadow/`), and the first hours of it
+overturn the conclusion the single Gemini snapshot supported.
+
+## Gemini is not depth-limited. It is price-limited.
+
+The earlier reading — *"depth 1 against a wanted 10, router declined"* — was a
+reading of the **touch**, taken through a collector that literally requests
+`?limit_bids=1&limit_asks=1`. Read in full, the same kind of contract holds real
+size behind the touch. Measured live 13:04Z:
+
+```
+GEMI-BTC15M2609151315-UP   bids 0.72x1, 0.70x500, 0.67x223
+                           asks 0.78x500, 0.81x789
+```
+
+Across the first 23 complete intents the Gemini completion rate is **flat at
+0.263 for every candidate size — q=1, 2, 5, 10 and 20 alike**. A venue that
+fails at 10 but succeeds at 1 is size-limited; one whose rate does not move with
+size is not. When Gemini can do the trade at all, it can do 20 as easily as 1.
+**Its binding constraint is price, not depth.**
+
+## The two venues are complementary by size, not substitutes
+
+Polymarket's crypto markets declare `orderMinSize: 5`. So:
+
+| candidate size | Polymarket completion | Gemini completion |
+|---|---|---|
+| q=1 | **0.000** (cannot be submitted at all) | 0.263 |
+| q=2 | **0.000** (cannot be submitted at all) | 0.263 |
+| q=5 | 0.263 | 0.263 |
+| q=10 | 0.263 | 0.263 |
+| q=20 | 0.263 | 0.263 |
+
+This already changed a routing decision in production data: a q=1 MODEL intent
+routed **GEMINI**, not because Gemini was cheaper — it was 2c dearer — but
+because Polymarket could not accept the order.
+
+Since L5 appears to accumulate inventory through repeated small fills, a venue
+that accepts q=1 and q=2 is not a second-best alternative to one that does not.
+
+## Polymarket is systematically cheaper where both can trade
+
+Cross-venue gap on the wanted side: **p50 0.04, p95 0.06, max 0.09**, and
+Polymarket was cheaper in **6 of 6** contested routes. The 0.09 case was a 5m
+window with ~77 s left where Polymarket quoted Up at 0.05 and Gemini at 0.14
+with **no bid at all** — the mapping verified exactly (both expire
+2026-09-15T13:20:00Z), so the divergence is a venue fact. Gemini's 5m book
+degrades badly near expiry.
+
+## Fees, from the venue, per window
+
+Polymarket declares `feeSchedule {"rate": 0.07, "takerOnly": true}` and
+`makerRebatesFeeShareBps 10000` on every market object: **its maker pays no
+fee**. Gemini's maker pays ceil-cent `0.0175*C*P*(1-P)`, and the Sep 2 – Dec 31
+waiver is deliberately not applied. At q=1 Gemini's ceil-cent rounding alone
+costs ~2c/share on a 66c contract (0.0157 → 0.02); by q=10 the two venues' taker
+fees are within 0.0003/share of each other. **Fee asymmetry is a small-size
+effect on the taker side and a structural one on the maker side.**
+
+## Patience is measurable, and it pays sometimes
+
+Of intents re-read at +30/+60/+120 s, **5 of 15 later crossed the ceiling on
+Polymarket and 3 of 15 on Gemini**. An intent that is not executable now is not
+an intent that is never executable, which is the first direct evidence for the
+patience the operating model asserts.
+
+## What is still limiting, and it is not the venues
+
+`l5_observation_lag_s`: **BTC15m p50 25.0 s, p95 29.9 s; BTC5m 133 s.** L5's own
+price is frequently gone by the time we see the action. Several NEITHER routes
+are exactly this: L5 bought at 0.48, and 18 s later both venues were 0.53/0.58.
+The binding constraint on realtime replication is the **observation clock**,
+not venue depth or venue fees.
+
+## Maker evidence: 0 fills, and that is the honest number
+
+19 submittable hypothetical placements, **10 decided, 0 evidenced fills, 1
+evidenced no-fill, 9 undecided for want of any print**. Median queue ahead of us
+at the join price: **277 shares**. Nothing here is counted as a fill, and
+"nobody traded" is reported as undecided rather than as a no-fill.
+
+## Board changes
+
+| Component | Polymarket | Gemini | change |
+|---|---|---|---|
+| executable shadow | **VERIFIED** | **VERIFIED** | continuous stream, both cohorts, one evaluator, live books |
+| fill evidence | **SHADOW** | **SHADOW** | modelled maker outcomes now exist with an evidence test; still 0 evidenced |
+| market mapping | VERIFIED | **VERIFIED** | 5m and 15m both confirmed against the venue clock |
+
+Everything else on the board is unchanged. Promotion gates are now written down
+in `PROMOTION_GATES.md` **before** any of them is green, and no venue is
+promotable today.
+
+## Corrections to this document
+
+* The `market mapping` body section above still described Gemini as NOT READY
+  after the header table had moved it to VERIFIED. The mapping is VERIFIED; the
+  stale paragraph predates the 12:5xZ update and is superseded by it.
+* The `executable shadow` body section describes `src/l5_adapters/evaluate.py`,
+  the single-level evaluator, and its account of the Gemini fee as an
+  "unverified GAP" is superseded twice over: the fee was vendored at 12:5xZ, and
+  the ladder evaluator `src/l5_shadow/executable.py` now carries the routing
+  path.

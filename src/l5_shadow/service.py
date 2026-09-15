@@ -372,6 +372,12 @@ def observe_intent(out_dir: str, intent, *, window: Optional[dict],
     gev.extra["clocks"] = clocks
     ev_rows.append(gev)
 
+    # LIKE WITH LIKE, in one number. Measured 2026-09-15 13:18Z on the same
+    # 5m window (mapping verified: both expire 13:20:00Z exactly), with ~77s
+    # left: Polymarket quoted Up at 0.05 and Gemini at 0.14 with no bid at all.
+    # A 9c divergence near expiry is a venue fact worth a column rather than an
+    # anecdote, so every route row carries the gap and which venue it favours.
+    gap = _venue_gap(ev_rows)
     dec = route(intent, ev_rows, now=now)
     for e in ev_rows:
         append(out_dir, EVALS, {**e.as_dict(), "schema": SCHEMA + "/evaluation"})
@@ -388,6 +394,9 @@ def observe_intent(out_dir: str, intent, *, window: Optional[dict],
                              "desired_outcome": outcome,
                              "incremental_qty": intent.incremental_qty,
                              "max_acceptable_price": intent.max_acceptable_price,
+                             "venue_gap": gap,
+                             "tte_at_book_s": round(
+                                 intent.tte_s - (now - intent.t_utc), 1),
                              "clocks": clocks})
     return {"route": dec.route, "reason": dec.reason, "evaluations": ev_rows,
             "maker": maker_rows, "decision": dec}
@@ -659,6 +668,27 @@ def main(argv=None) -> int:
             break
         time.sleep(POLL_S)
     return 0
+
+
+def _venue_gap(ev_rows: Sequence[AdapterEvaluation]) -> Dict[str, Any]:
+    """Best acquirable price on each venue, and the spread between them.
+
+    Compared on the price actually quoted for the side we want, not on a mid:
+    a mid hides a one-sided book, and a one-sided book is exactly what Gemini
+    showed here.
+    """
+    px = {}
+    for e in ev_rows:
+        px[e.venue] = (D(e.available_price) if e.available_price is not None
+                       else None)
+    a, b = px.get("PMUS"), px.get("GEMINI")
+    if a is None or b is None:
+        return {"PMUS": (str(a) if a is not None else None),
+                "GEMINI": (str(b) if b is not None else None),
+                "gap": None,
+                "reason": "at least one venue quoted no price on this side"}
+    return {"PMUS": str(a), "GEMINI": str(b), "gap": str(abs(a - b)),
+            "cheaper": ("PMUS" if a < b else "GEMINI" if b < a else "tie")}
 
 
 def _brief(ev: AdapterEvaluation) -> Dict[str, Any]:

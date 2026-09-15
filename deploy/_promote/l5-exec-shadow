@@ -1,0 +1,7 @@
+# Promotion trigger for the l5-exec-shadow service.
+#
+# READ-ONLY dual-venue executable shadow. Appending a line here (and pushing)
+# is the ONLY thing that builds it. Editing src/l5_shadow/** does not.
+#
+# The service does not exist yet: it is prepared, not promoted. Creating it is
+# a deliberate, cost-incurring act and belongs to the owner.

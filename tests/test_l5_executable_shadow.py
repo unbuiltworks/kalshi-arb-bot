@@ -326,3 +326,49 @@ def test_the_shadow_imports_no_order_path():
               if m.startswith(("src.pmus_q1_executor", "src.pmus_spring",
                                "src.pmus_l5_continuous"))]
     assert not banned, f"order path reachable from the shadow: {banned}"
+
+
+# ------------------------------------------------------- the deployment shape
+
+def _deploy_text(name):
+    import pathlib
+    return pathlib.Path("deploy/l5_exec_shadow") .joinpath(name).read_text()
+
+
+def test_the_image_copies_every_module_the_service_actually_imports():
+    """A missing COPY is a crash on the first boot, not a lint failure."""
+    df = _deploy_text("Dockerfile")
+    for need in ("src/l5_shadow/", "src/l5_intent/", "src/l5_router/",
+                 "src/l5_fidelity/", "src/l5_adapters/base.py",
+                 "src/l5_adapters/gemini_mapping.py",
+                 "src/polymarket_l5/transfer_backtest.py",
+                 "artifacts/l5_fidelity/"):
+        assert need in df, f"Dockerfile does not COPY {need}"
+
+
+def test_the_image_does_not_carry_an_order_path():
+    """`evaluate.py` imports l5_venue_adapter, which reaches pmus_q1_executor.
+
+    Only COPY directives are scanned: the Dockerfile NAMES these modules in a
+    comment explaining why they are absent, and a test that greps the whole
+    file would fail on the explanation rather than on the shipped contents.
+    """
+    copies = [l for l in _deploy_text("Dockerfile").splitlines()
+              if l.strip().startswith("COPY ")]
+    for banned in ("l5_adapters/evaluate.py", "l5_venue_adapter",
+                   "pmus_q1_executor", "pmus_spring", "pmus_l5_continuous"):
+        hit = [l for l in copies if banned in l]
+        assert not hit, f"read-only image would ship {banned}: {hit}"
+
+
+def test_the_service_deploys_only_from_its_promotion_sentinel():
+    """Editing source must not rebuild it; appending to the sentinel must."""
+    import json
+    cfg = json.loads(_deploy_text("railway.json"))
+    assert cfg["build"]["watchPatterns"] == ["deploy/_promote/l5-exec-shadow"]
+    assert cfg["deploy"]["restartPolicyType"] == "ALWAYS"
+
+
+def test_the_promotion_sentinel_exists():
+    import pathlib
+    assert pathlib.Path("deploy/_promote/l5-exec-shadow").exists()
