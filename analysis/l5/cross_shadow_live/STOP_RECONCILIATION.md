@@ -179,3 +179,45 @@ development branch and was deliberately excluded.
 **Tests:** 3,649 passed / 27 skipped / 1 xfailed on the exact deployed artifact,
 against 3,642 recorded for `3ec9e1cd` — exactly the 7 added accounting tests,
 nothing removed or newly skipped.
+
+
+---
+
+## Post-cutover observation — the settle pass has not completed
+
+**Correcting my own earlier report.** I recorded "settlement polling continues"
+as verified from the code path. It is running, but it has **not demonstrably
+completed a single cycle**, and that should not have been reported as verified.
+
+The boot row gives exact numbers: **70 filled markets, 69 previously closed,
+but only 32 carry a venue-confirmed `realized` row.** So the fix returned
+**~38 markets** to the pending set, not the handful estimated.
+
+`shutdown_settle_pass` iterates **every** pending slug with no batch limit — the
+`SETTLE_AUDIT_BATCH = 5` cap applies only to the campaign loop — and each slug
+is a multi-page venue walk. The first pass began at 12:07:00Z. As of 12:30Z,
+`shutdown_idle`, which logs once per cycle, has logged **zero** times.
+
+Metrics at 12:29Z: **CPU 0, NETWORK_RX 0, NETWORK_TX 0**, memory resident
+0.236 GB. So the process is idle or blocked, **not** grinding through work.
+Which of those it is, is not established here.
+
+### Risk position — unchanged and fail-closed
+
+No order can be placed from `shutdown_idle`. Held inventory
+(`aec-atp-blaell-hirmor-2026-09-13`) is preserved, nothing was force-closed, the
+−$30.00 stop is untouched. The cost is that venue-confirmed realized numbers may
+not be getting recorded: an **accounting delay, not capital movement**.
+
+No rollback. `3ec9e1cd` is precisely the build that under-counts the stop and
+opens new exposure while doing so.
+
+### The targeted remedy, prepared but NOT deployed
+
+Batch the shutdown-path settle loop the way the campaign loop already does, so a
+large pending set drains incrementally across cycles rather than blocking one
+pass. That also makes the loop log progress each cycle — which is how this would
+have surfaced in minutes instead of by inference from a silent log.
+
+This is a second change to a money-path module and is deliberately left for
+explicit authorization.
