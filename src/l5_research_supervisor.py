@@ -364,6 +364,29 @@ class Supervisor:
             default=str), flush=True)
         return rep
 
+    def report_pairs(self) -> Optional[dict]:
+        """P0: pair FORMATION, and the reactive-vs-state-driven comparison.
+
+        The promotion-critical statistic. Reports only; places nothing.
+        """
+        out_dir = os.path.join(self.root, "l5-shadow-state")
+        for name, mod in (("L5_PAIR_FORMATION",
+                           "analysis.l5.pair_formation.study"),
+                          ("L5_ARMS", "analysis.l5.pair_formation.arms")):
+            try:
+                import importlib
+                rep = importlib.import_module(mod).report(out_dir)
+            except Exception as exc:                          # noqa: BLE001
+                print(f"{name} " + json.dumps(
+                    {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:200]}),
+                    flush=True)
+                continue
+            print(f"{name} " + json.dumps(
+                {"ok": True, **{k: v for k, v in rep.items()
+                                if k not in ("rows", "out_dir")}},
+                default=str), flush=True)
+        return None
+
     def run(self) -> int:
         self.boot()
         signal.signal(signal.SIGTERM, self.stop)
@@ -388,6 +411,7 @@ class Supervisor:
                 self.report_gate()
                 self.report_economics()
                 self.report_dual_clock()
+                self.report_pairs()
             time.sleep(2.0)
         self.stop()
         return 0

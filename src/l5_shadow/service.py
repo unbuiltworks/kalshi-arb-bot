@@ -62,6 +62,7 @@ from src.l5_intent.action import DesiredInventoryAction
 from src.l5_router.route import route
 from src.l5_shadow import depth as DEP
 from src.l5_shadow import maker as MK
+from src.l5_shadow import two_sided as TS
 from src.l5_shadow import terms as TERMS
 from src.l5_shadow import venues as V
 from src.l5_shadow.executable import evaluate_executable
@@ -88,6 +89,8 @@ EVALS = "evaluations.jsonl"
 ROUTES = "routes.jsonl"
 MAKER_OUT = "maker_outcomes.jsonl"
 EVOLUTION = "book_evolution.jsonl"
+TWO_SIDED = "two_sided_plans.jsonl"
+TWO_SIDED_OUT = "two_sided_outcomes.jsonl"
 
 
 # --------------------------------------------------------------- durable store
@@ -387,6 +390,13 @@ def observe_intent(out_dir: str, intent, *, window: Optional[dict],
     # left: Polymarket quoted Up at 0.05 and Gemini at 0.14 with no bid at all.
     # A 9c divergence near expiry is a venue fact worth a column rather than an
     # anecdote, so every route row carries the gap and which venue it favours.
+    # ---- ARM S: the state-driven candidate, priced on the SAME instant and
+    # the same frozen intent. Recorded only; arm R still decides the route.
+    two = _two_sided(intent, window, pm, pm_t, gm_t, cand, now=now)
+    for t2 in two:
+        append(out_dir, TWO_SIDED, {"schema": SCHEMA + "/two_sided_plan",
+                                    "cohort": intent.cohort, **t2})
+
     gap = _venue_gap(ev_rows)
     dec = route(intent, ev_rows, now=now)
     for e in ev_rows:
@@ -417,7 +427,7 @@ def observe_intent(out_dir: str, intent, *, window: Optional[dict],
                                  intent.tte_s - (now - intent.t_utc), 1),
                              "clocks": clocks})
     return {"route": dec.route, "reason": dec.reason, "evaluations": ev_rows,
-            "maker": maker_rows, "decision": dec}
+            "maker": maker_rows, "two_sided": two, "decision": dec}
 
 
 # ------------------------------------------------------- deferred resolutions
@@ -478,8 +488,14 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float,
         # for, whatever the source says now
         coverage_complete=(covered and not (boot_t is not None
                                             and pend["placed_at"] < boot_t)))
-    append(out_dir, MAKER_OUT, {
+    # ARM S NEVER LANDS IN ARM R's STORE. The economic ledger reads
+    # maker_outcomes.jsonl as the reactive clone's record; mixing the
+    # state-driven candidate's quotes into it would silently rewrite P2's fill
+    # rate and pair economics with a different policy's results.
+    store = TWO_SIDED_OUT if pend.get("arm") == "S" else MAKER_OUT
+    append(out_dir, store, {
         "schema": SCHEMA + "/maker_outcome", "intent_id": ik, "venue": venue,
+        "arm": pend.get("arm", "R"),
         "market_key": pend.get("market_key"),
         "desired_outcome": pend.get("desired_outcome"),
         "placed_at": pend["placed_at"], "resolved_at": now,
@@ -716,7 +732,8 @@ def main(argv=None) -> int:
                         if not m.get("submittable"):
                             continue
                         pending_makers.append({
-                            **m, "market_key": intent.market_key,
+                            **m, "arm": "R",
+                            "market_key": intent.market_key,
                             "desired_outcome": intent.desired_outcome,
                             "condition_id": (window or {}).get("condition_id"),
                             "token": ((window or {}).get("token_up")
@@ -724,6 +741,30 @@ def main(argv=None) -> int:
                                       else (window or {}).get("token_dn")),
                             "symbol": (gemini_symbol(intent.market_key) or {}
                                        ).get("symbol")})
+                    # ARM S: both legs rest together, and BOTH are decided from
+                    # prints. The complement is the one the reactive arm can
+                    # never have at this instant, and it is the whole
+                    # experiment -- but its own leg is decided too, because a
+                    # pair needs both and scoring only the new half would
+                    # flatter it.
+                    for plan in res.get("two_sided") or []:
+                        if not plan.get("admissible"):
+                            continue
+                        for leg in plan.get("legs") or []:
+                            pending_makers.append({
+                                "arm": "S", "venue": plan["venue"],
+                                "intent_id": f"{intent.id}#S:{leg['outcome']}",
+                                "price": leg["price"], "qty": plan["qty"],
+                                "queue_ahead": leg.get("queue_ahead") or "0",
+                                "placed_at": now,
+                                "market_key": intent.market_key,
+                                "desired_outcome": leg["outcome"],
+                                "condition_id": (window or {}).get("condition_id"),
+                                "token": ((window or {}).get("token_up")
+                                          if leg["outcome"] == "Up"
+                                          else (window or {}).get("token_dn")),
+                                "symbol": (gemini_symbol(intent.market_key)
+                                           or {}).get("symbol")})
                     for dt in EVOLUTION_AT_S:
                         pending_evo.append({
                             "intent_id": intent.id, "market_key": mk,
@@ -786,6 +827,50 @@ def main(argv=None) -> int:
             break
         time.sleep(POLL_S)
     return 0
+
+
+
+def _two_sided(intent, window, pm, pm_t, gm_t, cand, *,
+               now: float) -> List[Dict[str, Any]]:
+    """Both legs of a fee-safe pair at this instant, per venue.
+
+    The complement book is fetched for Polymarket (a separate token per
+    outcome) and derived for Gemini (one contract, the Down side is its
+    inversion), so arm S costs one extra read on PM and none on Gemini.
+
+    Failures are recorded, not dropped: "no complement book" is the finding
+    that the venue cannot host L5's two-sided behaviour, which is exactly what
+    this arm exists to detect.
+    """
+    opp = TS._flip(intent.desired_outcome)
+    out: List[Dict[str, Any]] = []
+    # ---- Polymarket
+    if pm.get("ok") and window and opp:
+        pm_opp = pm_ladders(window, opp)
+        out.append(TS.two_sided_plan(
+            intent, pm_t, own_rest=pm.get("rest"),
+            opp_rest=(pm_opp.get("rest") if pm_opp.get("ok") else None),
+            venue="PMUS", now=now))
+    else:
+        out.append({"venue": "PMUS", "intent_id": intent.id, "arm": "S",
+                    "label": TS.LABEL, "planned_at": now,
+                    "market_key": intent.market_key, "admissible": False,
+                    "reason": "own book unreadable: UNKNOWN, not absent"})
+    # ---- Gemini: one book serves both sides
+    if cand and opp:
+        g_own = gemini_ladders(cand["symbol"], intent.desired_outcome)
+        g_opp = gemini_ladders(cand["symbol"], opp)
+        out.append(TS.two_sided_plan(
+            intent, gm_t,
+            own_rest=(g_own.get("rest") if g_own.get("ok") else None) or [],
+            opp_rest=(g_opp.get("rest") if g_opp.get("ok") else None),
+            venue="GEMINI", now=now))
+    else:
+        out.append({"venue": "GEMINI", "intent_id": intent.id, "arm": "S",
+                    "label": TS.LABEL, "planned_at": now,
+                    "market_key": intent.market_key, "admissible": False,
+                    "reason": "no Gemini candidate for this market"})
+    return out
 
 
 def _venue_gap(ev_rows: Sequence[AdapterEvaluation]) -> Dict[str, Any]:

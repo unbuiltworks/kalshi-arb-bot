@@ -15,3 +15,4 @@ promote paircount: the pair-completion rate is reported rather than inferred fro
 promote vouched: silence over a continuously-observed interval is an evidenced no-fill
 promote armb: the join-price key fix and the rest-side re-reads (batched)
 promote forensics: why the quotes do not fill, decomposed into NO_FLOW / QUEUE_BOUND / PARTIAL
+promote paircore: P0 pair-formation forensics + the reactive vs state-driven arms

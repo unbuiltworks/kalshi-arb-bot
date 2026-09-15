@@ -53,6 +53,10 @@ COPY analysis/l5/economics/build.py analysis/l5/economics/build.py
 # P1: the same frozen intents under both observation clocks. Reads stores
 # already written; the chain observer stays unpromoted.
 COPY analysis/l5/dual_clock/study.py analysis/l5/dual_clock/study.py
+# P0: pair formation -- the promotion-critical statistic -- and the
+# reactive vs state-driven arm comparison.
+COPY analysis/l5/pair_formation/study.py analysis/l5/pair_formation/study.py
+COPY analysis/l5/pair_formation/arms.py analysis/l5/pair_formation/arms.py
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \
