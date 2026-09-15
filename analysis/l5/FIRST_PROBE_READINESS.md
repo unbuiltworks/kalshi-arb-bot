@@ -7,7 +7,7 @@ campaign, which stays latched.
 | # | element | evidence status | sample | blocker |
 |---|---|---|---|---|
 | 1 | **behavior** | REPLAY intents restate L5's own fills exactly; FIDELITY v0.2 model intents exist but hardcode `incremental_qty = 1`, below Polymarket's minimum of 5, so **no MODEL intent is placeable on PM at all** | 257 intents | engine defect, PM-side MODEL is dead until fixed |
-| 2 | **observation** | feed clock live and continuous; chain clock measured **15.16 s ahead** (n=73, ahead 73/73) but **UNPROMOTED** — gate at **5/8**, blocking G-C1 (sample restarting from epoch 3), G-C4 + G-C8 (accumulating). P1 measures what promotion buys: median recovery **13.54 s**, and **90.8 % of intents are still valid at feed time against 100 % under the chain clock** — so the clock rescues about **one intent in ten** from decay | 696 compared, 36 pre-epoch runs excluded | sample time only |
+| 2 | **observation** | feed clock live and continuous; chain clock measured **15.16 s ahead** (n=73, ahead 73/73) but **UNPROMOTED** — gate at **5/8**, blocking G-C1 (sample restarting from epoch 3), G-C4 + G-C8 (accumulating). P1 now has its answer: the clock rescues **one intent in ten** from decay and adds **~9 points of placeability** (54.8 % → 63.5 %), but reachability is **identical** (69.2 % both arms) and it has produced **zero additional evidenced fills** | 788 compared, 104 priced | sample time only |
 | 3 | **placement** | maker join computed against full multi-level books on both venues; reachability PM 53.1 % / Gemini 85.5 % on the maker path | 319 quotes placed | — |
 | 4 | **fill** | **11 evidenced fills from 364 quotes ≈ 3 %**, and **322 of 364 verdicts are UNKNOWN** (260 of them Gemini); vouched silence now resolves to an evidenced no-fill, so this should fall | 11 | the UNKNOWN fraction makes the fill rate itself unmeasured |
 | 5 | **inventory** | **8 positions, all one-sided. Zero matched pairs, ever.** Expected pairs at a 3 % fill rate ≈ 0.06, so this is arithmetic, not a defect | 8 | **primary blocker** |
@@ -38,7 +38,8 @@ executed.
   pairing logic is not the problem — the fill rate is**, and it is now
   decomposed into `NO_FLOW` / `QUEUE_BOUND` / `PARTIAL` so the next move is
   chosen from evidence rather than instinct.
-- Element 2 now has a number attached to the clock question, which it did not
-  before: one intent in ten. That is worth having and is **not** what unblocks
-  element 5 — a faster route to an unpaired position is still an unpaired
-  position.
+- Element 2 now has its answer, not just a number: one intent in ten, nine
+  points of placeability, **no change in reachability and no additional fill**.
+  That is worth having on its own merits and is **not** what unblocks element
+  5 — a faster route to an unpaired position is still an unpaired position.
+  See `DUAL_CLOCK_FINDINGS.md`.
