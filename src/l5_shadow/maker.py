@@ -63,6 +63,60 @@ def join_price(levels: Sequence, *, tick: D, ceiling: D,
     return px if px <= D(str(ceiling)) else None
 
 
+def fill_criteria(*, quote_px: D, quote_qty: D, ahead: D,
+                  later: Sequence[dict]) -> Dict[str, Any]:
+    """Four fill criteria of increasing strength, scored SEPARATELY.
+
+    A trade merely touching our limit is not evidence that WE filled. For a
+    resting BUY at P:
+
+      TOUCH                 some print happened at or below P. Says the price
+                            was reached. Says nothing about our queue position,
+                            and it is the criterion that would let a deep quote
+                            look profitable on liquidity it never had.
+      TRADE_AT_PRICE        volume actually executed AT P. Someone sold into
+                            the level we were resting in -- but possibly only
+                            into the orders ahead of us.
+      TRADE_THROUGH         a print occurred STRICTLY BELOW P. A seller would
+                            hit the better bid first, so the level at P must
+                            have been exhausted to reach it. Direct evidence
+                            the level cleared.
+      VOLUME_AHEAD_CLEARED  cumulative volume at or below P exceeds the size
+                            resting ahead of us AND covers our own quantity.
+                            The queue-accounted criterion, and the strictest.
+
+    Live-readiness uses the strongest supportable one. Reporting a weaker one
+    as a fill is how arm D would look profitable on queue priority we did not
+    possess.
+    """
+    at = [p for p in later if D(str(p["price"])) == quote_px]
+    thru = [p for p in later if D(str(p["price"])) < quote_px]
+    v_at = sum((D(str(p["size"])) for p in at), D("0"))
+    v_thru = sum((D(str(p["size"])) for p in thru), D("0"))
+    v_all = v_at + v_thru
+    got = min(max(D("0"), v_all - ahead), quote_qty)
+    return {
+        "TOUCH": bool(later),
+        "TRADE_AT_PRICE": v_at > 0,
+        "TRADE_THROUGH": v_thru > 0,
+        "VOLUME_AHEAD_CLEARED": bool(quote_qty > 0 and got >= quote_qty),
+        "volume_at_price": str(v_at),
+        "volume_through": str(v_thru),
+        "volume_total": str(v_all),
+        "queue_ahead": str(ahead),
+        "cleared_for_us": str(got),
+        "strongest_satisfied": ("VOLUME_AHEAD_CLEARED"
+                                if (quote_qty > 0 and got >= quote_qty)
+                                else "TRADE_THROUGH" if v_thru > 0
+                                else "TRADE_AT_PRICE" if v_at > 0
+                                else "TOUCH" if later else "NONE"),
+        "labels": ("increasing strength. A fill is counted at "
+                   "VOLUME_AHEAD_CLEARED only; the weaker rows are reported so "
+                   "the difference between them is visible, never so a weaker "
+                   "one can be used as a fill"),
+    }
+
+
 def evidence_for_quote(*, quote_px: Any, quote_qty: Any, ahead: Any,
                        placed_at: float, prints: Optional[Sequence[dict]],
                        observed_until: float,
@@ -109,6 +163,8 @@ def evidence_for_quote(*, quote_px: Any, quote_qty: Any, ahead: Any,
                     "queue_ahead": str(ah), "traded_through": "0",
                     "modelled_fill_qty": "0", "prints_considered": 0,
                     "coverage_complete": True,
+                    "fill_criteria": fill_criteria(
+                        quote_px=q_px, quote_qty=q_qty, ahead=ah, later=[]),
                     "observed_window_s": round(observed_until - placed_at, 3)}
         return {"evidenced_fill": None, "reason":
                 (f"no public print at or below {q_px} in the "
@@ -121,6 +177,8 @@ def evidence_for_quote(*, quote_px: Any, quote_qty: Any, ahead: Any,
                 "observed_window_s": round(observed_until - placed_at, 3)}
     return {
         "evidenced_fill": bool(full),
+        "fill_criteria": fill_criteria(quote_px=q_px, quote_qty=q_qty,
+                                       ahead=ah, later=later),
         "reason": (f"{thru} traded through {q_px} after placement against a "
                    f"queue of {ah} ahead; that clears "
                    f"{got} of our {q_qty}"),

@@ -59,6 +59,8 @@ COPY analysis/l5/pair_formation/study.py analysis/l5/pair_formation/study.py
 COPY analysis/l5/pair_formation/arms.py analysis/l5/pair_formation/arms.py
 # BTC15m arm scoring (R/S/D) on inventory rather than quote fill rate.
 COPY analysis/l5/pair_formation/arm_score.py analysis/l5/pair_formation/arm_score.py
+# the depth frontier: is there a sweet spot, or is deeper just cheaper?
+COPY analysis/l5/pair_formation/frontier.py analysis/l5/pair_formation/frontier.py
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \

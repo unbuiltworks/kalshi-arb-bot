@@ -163,6 +163,14 @@ def plan(state: Dict[str, Any], *, arm: str, terms,
                 "dn_ticks_below": d["ticks_below_touch"],
                 "pair_cost": str(cost.quantize(D("0.000001"))),
                 "within_ceiling_if_it_forms": cost <= ceiling,
+                **({} if cost <= ceiling else {
+                    "research_label": "RESEARCH_INELIGIBLE_FOR_LIVE",
+                    "why_recorded": (
+                        "priced above the live ceiling and RECORDED ANYWAY. "
+                        "Whether it would have filled, and what it would have "
+                        "settled at, are the observations that make the "
+                        "ceiling judgeable; deleting them would make the "
+                        "constraint unfalsifiable")}),
                 **TS.pair_economics(cost)})
     inside = [p for p in pairs if p["within_ceiling_if_it_forms"]]
     return {**base, "quotes": quotes, "pairs": pairs,

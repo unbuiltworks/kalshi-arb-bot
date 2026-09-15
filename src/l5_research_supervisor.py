@@ -374,7 +374,9 @@ class Supervisor:
                            "analysis.l5.pair_formation.study"),
                           ("L5_ARMS", "analysis.l5.pair_formation.arms"),
                           ("L5_ARM_SCORE",
-                           "analysis.l5.pair_formation.arm_score")):
+                           "analysis.l5.pair_formation.arm_score"),
+                          ("L5_FRONTIER",
+                           "analysis.l5.pair_formation.frontier")):
             try:
                 import importlib
                 rep = importlib.import_module(mod).report(out_dir)
