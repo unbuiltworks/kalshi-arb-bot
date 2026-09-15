@@ -517,27 +517,55 @@ def resolve_evolution(out_dir: str, pend: Dict[str, Any], *,
         "ceiling": str(intent_ceiling)}
     w = V.pm_window(pend["market_key"])
     pm = pm_ladders(w, pend["outcome"]) if w else {"ok": False}
-    row["PMUS"] = _evo(pm.get("take") if pm.get("ok") else None, intent_ceiling)
+    row["PMUS"] = _evo(pm.get("take") if pm.get("ok") else None, intent_ceiling,
+                       rest=pm.get("rest") if pm.get("ok") else None)
     cand = gemini_symbol(pend["market_key"])
     gl = gemini_ladders(cand["symbol"], pend["outcome"]) if cand else {"ok": False}
     row["GEMINI"] = _evo(gl.get("take") if gl.get("ok") else None,
-                         intent_ceiling)
+                         intent_ceiling,
+                         rest=gl.get("rest") if gl.get("ok") else None)
     append(out_dir, EVOLUTION, row)
     return True
 
 
-def _evo(levels: Optional[Sequence], ceiling: D) -> Dict[str, Any]:
+def _evo(levels: Optional[Sequence], ceiling: D,
+         *, rest: Optional[Sequence] = None) -> Dict[str, Any]:
+    """The take side decides whether the price came to us. The REST side is
+    recorded alongside it because a maker join needs the bid, and without it
+    these re-reads cannot serve as book snapshots at all.
+
+    That mattered: the dual-clock study can only price its chain-clock arm from
+    a book recorded at that moment, and with only placement-time reads to draw
+    on it could price 72 of 640 rows. These re-reads happen at 30/60/120s after
+    every intent, so recording the bid multiplies the available snapshots
+    roughly fourfold -- for data collected from here on.
+    """
     if levels is None:
         return {"readable": False,
                 "reason": "book unreadable at this instant: UNKNOWN"}
     if not levels:
         return {"readable": True, "best": None, "executable_at_ceiling": "0",
-                "reason": "venue quotes nothing on this side"}
+                "reason": "venue quotes nothing on this side",
+                **_rest_side(rest)}
     inside = sum((D(str(s)) for p, s in levels if D(str(p)) <= ceiling), D("0"))
     return {"readable": True, "best": str(levels[0][0]),
             "best_depth": str(levels[0][1]),
             "executable_at_ceiling": str(inside),
-            "crossed_ceiling": bool(D(str(levels[0][0])) <= ceiling)}
+            "crossed_ceiling": bool(D(str(levels[0][0])) <= ceiling),
+            **_rest_side(rest)}
+
+
+def _rest_side(rest: Optional[Sequence]) -> Dict[str, Any]:
+    """Where a maker would rest, and how much is already there. `None` means
+    the side was not readable -- never that it was empty."""
+    if rest is None:
+        return {"rest_best": None, "rest_readable": False}
+    if not rest:
+        return {"rest_best": None, "rest_readable": True,
+                "rest_reason": "venue quotes no bid on this side"}
+    px = D(str(rest[0][0]))
+    return {"rest_best": str(px), "rest_readable": True,
+            "rest_depth_at_best": str(MK.queue_ahead(rest, px))}
 
 
 # ------------------------------------------------------------------ the runner

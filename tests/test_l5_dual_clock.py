@@ -15,10 +15,13 @@ import analysis.l5.dual_clock.study as DC
 
 def _place(t, *, venue="PMUS", market="m", outcome="Up", join="0.45",
            bid="0.44", ahead="0", submittable=True, iid="i1"):
+    """Shaped like maker_plan's own output. The join price lives under
+    `price` -- reading it as `join_price` is what made the first live
+    placeability comparison come back all zeros."""
     return {"schema": "l5_shadow/maker_placement", "venue": venue,
             "market_key": market, "desired_outcome": outcome,
             "intent_id": iid, "placed_at": t, "submittable": submittable,
-            "join_price": join, "best_bid": bid, "queue_ahead": ahead,
+            "price": join, "best_bid": bid, "queue_ahead": ahead,
             "qty": "10"}
 
 
@@ -210,3 +213,119 @@ def test_the_report_says_the_intent_is_frozen_and_the_observer_unpromoted(
 def test_summarising_nothing_reports_none_not_zero():
     s = DC.summarise([])
     assert s["A_placeable_frac"] is None and s["median_recovery_s"] is None
+
+
+# ------------------------------------- the key is read from the producer
+
+def test_the_join_price_key_matches_what_maker_plan_actually_writes():
+    """Pinned against maker_plan, not against a fixture. Reading this key as
+    `join_price` made A_placeable_frac 0.0 across 319 quotes that had plainly
+    been placed, and the shape stayed plausible because the FAILURE branches
+    legitimately carry no price at all."""
+    from decimal import Decimal as D
+
+    from src.l5_intent.action import DesiredInventoryAction
+    from src.l5_shadow import service as S
+    from src.l5_shadow import terms as T
+
+    intent = DesiredInventoryAction(
+        cohort="BTC15m", market_key="m", source_state_id="s",
+        t_utc=0.0, tte_s=100.0, action="OPEN", desired_outcome="Up",
+        desired_inventory="10", incremental_qty="10",
+        max_acceptable_price="0.50", current_matched="0", residual="0",
+        model_version="test")
+    plan = S.maker_plan(intent, T.gemini_terms(), [(D("0.45"), D("100"))],
+                        venue="GEMINI", now=1.0)
+    assert plan["submittable"] is True
+    assert "price" in plan and plan["price"] == "0.45"
+    assert DC.join_px(plan) == "0.45"
+
+
+def test_a_declined_plan_has_no_price_and_is_not_placeable():
+    from decimal import Decimal as D
+
+    from src.l5_intent.action import DesiredInventoryAction
+    from src.l5_shadow import service as S
+    from src.l5_shadow import terms as T
+
+    intent = DesiredInventoryAction(
+        cohort="BTC15m", market_key="m", source_state_id="s",
+        t_utc=0.0, tte_s=100.0, action="OPEN", desired_outcome="Up",
+        desired_inventory="10", incremental_qty="10",
+        max_acceptable_price="0.30", current_matched="0", residual="0",
+        model_version="test")
+    plan = S.maker_plan(intent, T.gemini_terms(), [(D("0.45"), D("100"))],
+                        venue="GEMINI", now=1.0)
+    assert plan["submittable"] is False
+    assert DC.join_px(plan) is None
+
+
+# ------------------------- the scheduled re-reads are snapshots too
+
+def _evo_row(t, *, market="m", outcome="Up", ceiling="0.50",
+             pm_bid="0.45", pm_depth="100", readable=True):
+    return {"schema": "l5_shadow/book_evolution", "market_key": market,
+            "desired_outcome": outcome, "observed_at": t, "ceiling": ceiling,
+            "PMUS": {"readable": True, "rest_readable": readable,
+                     "rest_best": pm_bid, "rest_depth_at_best": pm_depth},
+            "GEMINI": {"readable": True, "rest_readable": False,
+                       "rest_best": None}}
+
+
+def test_a_scheduled_re_read_can_price_arm_b():
+    """Placement-time reads alone priced 72 of 640 rows. The shadow re-reads
+    both venues at 30/60/120s after every intent, and those are real
+    prospective reads of the rest side."""
+    snaps = DC.evo_snapshots([_evo_row(984.5)], {})
+    assert len(snaps) == 1                      # Gemini's side was unreadable
+    r = DC.compare_one(_route(age=15.9), _place(1000.0), snaps, None)
+    assert r["B_state"] == "PRICED_FROM_A_RECORDED_BOOK"
+    assert r["B_join_price"] == "0.45"
+    assert r["B_queue_ahead"] == "100"
+
+
+def test_an_unreadable_rest_side_is_not_a_snapshot():
+    """Unreadable is not empty, and neither is a book."""
+    assert DC.evo_snapshots([_evo_row(1.0, readable=False)], {}) == []
+
+
+def test_a_bid_above_the_ceiling_is_recorded_but_not_placeable():
+    snaps = DC.evo_snapshots([_evo_row(1.0, ceiling="0.40", pm_bid="0.45")], {})
+    assert len(snaps) == 1
+    assert snaps[0]["submittable"] is False and snaps[0]["price"] is None
+    assert snaps[0]["best_bid"] == "0.45"
+
+
+def test_a_re_read_snapshot_still_may_not_be_later_than_arm_a():
+    """Whatever the source, a book read after arm A is not arm B's book."""
+    snaps = DC.evo_snapshots([_evo_row(1100.0)], {})
+    earlier = [s for s in snaps if s["placed_at"] < 1000.0]
+    r = DC.compare_one(_route(age=15.9), _place(1000.0), earlier, None)
+    assert r["B_state"] == "UNKNOWN_NO_BOOK_AT_THAT_MOMENT"
+
+
+def test_the_evolution_row_records_the_rest_side_the_study_reads():
+    """Pinned against the producer: without rest_best these re-reads cannot
+    serve as snapshots at all, which is why they were unusable before."""
+    from decimal import Decimal as D
+    from src.l5_shadow import service as S
+    row = S._evo([(D("0.55"), D("10"))], D("0.50"),
+                 rest=[(D("0.45"), D("100")), (D("0.45"), D("20"))])
+    assert row["rest_best"] == "0.45"
+    assert row["rest_depth_at_best"] == "120"     # both levels at that price
+    assert row["rest_readable"] is True
+
+
+def test_an_unread_rest_side_is_marked_unreadable_not_empty():
+    from decimal import Decimal as D
+    from src.l5_shadow import service as S
+    row = S._evo([(D("0.55"), D("10"))], D("0.50"), rest=None)
+    assert row["rest_readable"] is False and row["rest_best"] is None
+
+
+def test_a_genuinely_empty_bid_side_is_distinguished_from_an_unread_one():
+    from decimal import Decimal as D
+    from src.l5_shadow import service as S
+    row = S._evo([(D("0.55"), D("10"))], D("0.50"), rest=[])
+    assert row["rest_readable"] is True and row["rest_best"] is None
+    assert "no bid" in row["rest_reason"]

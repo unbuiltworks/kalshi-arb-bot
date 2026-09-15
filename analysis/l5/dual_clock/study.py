@@ -50,6 +50,7 @@ PAIR_TOL_S = 8.0
 EVALS = "evaluations.jsonl"
 ROUTES = "routes.jsonl"
 MAKER_OUT = "maker_outcomes.jsonl"
+EVOLUTION = "book_evolution.jsonl"
 
 
 def _load(path: str) -> List[dict]:
@@ -67,10 +68,66 @@ def _load(path: str) -> List[dict]:
     return out
 
 
+def join_px(place: Optional[dict]) -> Optional[str]:
+    """The price a maker plan would rest at.
+
+    THE KEY IS `price`, AND READING IT AS `join_price` MADE THE WHOLE
+    PLACEABILITY COMPARISON VACUOUS: every row came back unplaceable, so the
+    first live report showed A_placeable_frac 0.0 against 319 quotes that had
+    plainly been placed. The failure branches of `maker_plan` do write a
+    `reason` and no price, which is why the shape looked plausible. The
+    producer's key is read here, and a test pins it against `maker_plan`
+    itself rather than against a fixture I wrote.
+    """
+    if not place:
+        return None
+    return place.get("price")
+
+
 def placements(rows: Sequence[dict]) -> List[dict]:
     """The maker-placement rows: one per (intent, venue) with the book we saw."""
     return [r for r in rows
             if str(r.get("schema", "")).endswith("/maker_placement")]
+
+
+def evo_snapshots(rows: Sequence[dict], ceilings: Dict[str, Any]
+                  ) -> List[dict]:
+    """Book re-reads, reshaped into snapshots arm B can be priced from.
+
+    The shadow re-reads both venues 30/60/120s after every intent. Those are
+    real prospective reads of the rest side, and using them multiplies the
+    snapshots available to arm B -- which mattered, because placement-time
+    reads alone priced 72 of 640 rows.
+
+    A re-read carries no order-size or fee check, so `submittable` here means
+    only "there is a bid at or under the ceiling to join". Arm B's own
+    reachability test is applied on top, exactly as for a placement row.
+    """
+    out = []
+    for r in rows:
+        if not str(r.get("schema", "")).endswith("/book_evolution"):
+            continue
+        t = r.get("observed_at")
+        if t is None:
+            continue
+        ceil = r.get("ceiling")
+        for venue in ("PMUS", "GEMINI"):
+            v = r.get(venue) or {}
+            if not v.get("rest_readable") or v.get("rest_best") is None:
+                continue
+            try:
+                ok = D(str(v["rest_best"])) <= D(str(ceil))
+            except Exception:                                 # noqa: BLE001
+                continue
+            out.append({"venue": venue, "market_key": r.get("market_key"),
+                        "desired_outcome": r.get("desired_outcome"),
+                        "placed_at": float(t),
+                        "submittable": bool(ok),
+                        "price": (str(v["rest_best"]) if ok else None),
+                        "best_bid": str(v["rest_best"]),
+                        "queue_ahead": v.get("rest_depth_at_best") or "0",
+                        "source": "book_evolution re-read"})
+    return out
 
 
 def snapshots(places: Sequence[dict]) -> Dict[tuple, List[dict]]:
@@ -135,9 +192,9 @@ def compare_one(route: dict, place_a: dict, snaps: Sequence[dict],
         "A_age_s": round(age_a, 3), "B_age_s": round(age_b, 3),
         "A_valid_when_observable": _valid(age_a, valid_for_s),
         "B_valid_when_observable": _valid(age_b, valid_for_s),
-        "A_placeable": place_a.get("submittable") is True
-        and place_a.get("join_price") is not None,
-        "A_join_price": place_a.get("join_price"),
+        "A_placeable": (place_a.get("submittable") is True
+                        and join_px(place_a) is not None),
+        "A_join_price": join_px(place_a),
         "A_best_bid": place_a.get("best_bid"),
         "A_queue_ahead": place_a.get("queue_ahead"),
         "pair_error_s": (round(pair_err, 3) if pair_err is not None else None),
@@ -153,8 +210,8 @@ def compare_one(route: dict, place_a: dict, snaps: Sequence[dict],
     row.update(
         B_state="PRICED_FROM_A_RECORDED_BOOK",
         B_placeable=(snap_b.get("submittable") is True
-                     and snap_b.get("join_price") is not None),
-        B_join_price=snap_b.get("join_price"),
+                     and join_px(snap_b) is not None),
+        B_join_price=join_px(snap_b),
         B_best_bid=snap_b.get("best_bid"),
         B_queue_ahead=snap_b.get("queue_ahead"),
         B_book_t=snap_b.get("placed_at"),
@@ -226,7 +283,11 @@ def report(out_dir: str, *, tol_s: float = PAIR_TOL_S) -> Dict[str, Any]:
     for o in _load(os.path.join(out_dir, MAKER_OUT)):
         outs[(o.get("intent_id"), o.get("venue"))] = o
     places = placements(ev)
-    snaps = snapshots(places)
+    evo = evo_snapshots(_load(os.path.join(out_dir, EVOLUTION)), {})
+    # arm B may be priced from EITHER a placement-time read or a scheduled
+    # re-read; both are prospective, and neither knows about the anchor it is
+    # about to be paired with
+    snaps = snapshots(list(places) + evo)
     rows = []
     for p in places:
         r = routes.get(p.get("intent_id"))
@@ -241,7 +302,8 @@ def report(out_dir: str, *, tol_s: float = PAIR_TOL_S) -> Dict[str, Any]:
             r, p, earlier, outs.get((p.get("intent_id"), p.get("venue"))),
             tol_s=tol_s))
     return {"computed_at": time.time(), "out_dir": out_dir,
-            "placements": len(places), "compared": len(rows),
+            "placements": len(places), "evolution_snapshots": len(evo),
+            "compared": len(rows),
             "chain_readable_s": CHAIN_READABLE_S, "pair_tol_s": tol_s,
             **summarise(rows), "rows": rows[-200:],
             "labels": (

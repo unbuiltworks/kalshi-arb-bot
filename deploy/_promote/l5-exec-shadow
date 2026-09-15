@@ -13,3 +13,4 @@ promote 4256t: P2 economic ledger reported from the service alongside the gate
 promote dualclock: P1 dual-clock comparison reported from the service
 promote paircount: the pair-completion rate is reported rather than inferred from a zero
 promote vouched: silence over a continuously-observed interval is an evidenced no-fill
+promote armb: the join-price key fix and the rest-side re-reads (batched)
