@@ -105,6 +105,29 @@ def ablation(tr, te, target) -> List[Dict[str, Any]]:
     return out
 
 
+def control_vs_flow(tr, te, target) -> Dict[str, Any]:
+    """Which family carries the information: L5's own state, or incoming flow?
+
+    H1/H2 predict his own inventory matters. H3 predicts the market's arrival
+    process does and his inventory does not. Fitting each family ALONE, and
+    then each family added to last-side, separates them.
+    """
+    out: Dict[str, Any] = {}
+    fams = {"control_only": list(F.CONTROL_BLOCKS),
+            "flow_only": list(F.FLOW_BLOCKS),
+            "clock_only": list(F.CLOCK_BLOCKS),
+            "last_side_plus_control": ["last_side"] + [b for b in F.CONTROL_BLOCKS
+                                                       if b != "last_side"],
+            "last_side_plus_flow": ["last_side"] + list(F.FLOW_BLOCKS),
+            "everything": list(F.LADDER)}
+    for name, blocks in fams.items():
+        names = F.feature_names(blocks)
+        r = fit_eval(tr, te, names, target)
+        out[name] = {"blocks": " + ".join(blocks), "n_features": len(names),
+                     **r["logit"]}
+    return out
+
+
 def slices(rows, p, y, target) -> Dict[str, Any]:
     def bucket(r):
         return {
@@ -165,6 +188,7 @@ def main(argv=None) -> int:
             "tree_structure": tree.describe(names)[:14],
             "top_coefficients": full["top_coefficients"],
             "ablation": ablation(tr, te, target),
+            "control_vs_flow": control_vs_flow(tr, te, target),
             "calibration": M.calibration(full["_y"], full["_p"]),
             "slices": slices(te, full["_p"], full["_y"], target),
         }

@@ -1,0 +1,603 @@
+{
+ "offsets": {
+  "-0t": {
+   "windows": 12,
+   "null_fills_per_window": {
+    "n": 12,
+    "p10": 56.0,
+    "median": 106.0,
+    "p90": 145.0
+   },
+   "l5_fills_per_window": {
+    "n": 12,
+    "p10": 208.0,
+    "median": 246.0,
+    "p90": 302.0
+   },
+   "null_same_side_persistence": {
+    "n": 12,
+    "p10": 0.4419,
+    "median": 0.5299,
+    "p90": 0.5682
+   },
+   "null_final_pair_cost": {
+    "n": 12,
+    "p10": 0.9644,
+    "median": 0.9859,
+    "p90": 1.0234
+   },
+   "null_final_residual_rel": {
+    "n": 12,
+    "p10": 0.0549,
+    "median": 0.1172,
+    "p90": 0.1321
+   },
+   "null_final_matched_qty": {
+    "n": 12,
+    "p10": 190.0,
+    "median": 460.0,
+    "p90": 680.0
+   },
+   "per_window": [
+    {
+     "slug": "btc-updown-15m-1787274000",
+     "l5_fills": 145,
+     "n_fills": 69,
+     "same_side_persistence": 0.5588,
+     "final": {
+      "side": "Down",
+      "matched_qty": 270.0,
+      "pair_cost": 0.9831058201058201,
+      "residual_qty": 150.0,
+      "residual_rel": 0.21739130434782608
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787290200",
+     "l5_fills": 379,
+     "n_fills": 149,
+     "same_side_persistence": 0.5743,
+     "final": {
+      "side": "Down",
+      "matched_qty": 680.0,
+      "pair_cost": 1.0419607843137255,
+      "residual_qty": 130.0,
+      "residual_rel": 0.087248322147651
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787296500",
+     "l5_fills": 245,
+     "n_fills": 39,
+     "same_side_persistence": 0.4211,
+     "final": {
+      "side": "Down",
+      "matched_qty": 170.0,
+      "pair_cost": 1.0431550802139038,
+      "residual_qty": 50.0,
+      "residual_rel": 0.1282051282051282
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787300100",
+     "l5_fills": 398,
+     "n_fills": 89,
+     "same_side_persistence": 0.5682,
+     "final": {
+      "side": "Down",
+      "matched_qty": 390.0,
+      "pair_cost": 1.0233794871794872,
+      "residual_qty": 110.0,
+      "residual_rel": 0.12359550561797752
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787305500",
+     "l5_fills": 246,
+     "n_fills": 145,
+     "same_side_persistence": 0.5,
+     "final": {
+      "side": "Down",
+      "matched_qty": 640.0,
+      "pair_cost": 0.9734369212962963,
+      "residual_qty": 170.0,
+      "residual_rel": 0.11724137931034483
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787306400",
+     "l5_fills": 268,
+     "n_fills": 91,
+     "same_side_persistence": 0.6222,
+     "final": {
+      "side": "Up",
+      "matched_qty": 430.0,
+      "pair_cost": 0.9644186046511628,
+      "residual_qty": 50.0,
+      "residual_rel": 0.054945054945054944
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787307300",
+     "l5_fills": 236,
+     "n_fills": 87,
+     "same_side_persistence": 0.4419,
+     "final": {
+      "side": "Down",
+      "matched_qty": 390.0,
+      "pair_cost": 0.9756089743589743,
+      "residual_qty": 90.0,
+      "residual_rel": 0.10344827586206896
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787311800",
+     "l5_fills": 238,
+     "n_fills": 56,
+     "same_side_persistence": 0.4909,
+     "final": {
+      "side": "Up",
+      "matched_qty": 190.0,
+      "pair_cost": 0.9738108108108108,
+      "residual_qty": 180.0,
+      "residual_rel": 0.32142857142857145
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787362200",
+     "l5_fills": 281,
+     "n_fills": 140,
+     "same_side_persistence": 0.5612,
+     "final": {
+      "side": "Up",
+      "matched_qty": 690.0,
+      "pair_cost": 0.9297468871198203,
+      "residual_qty": 20.0,
+      "residual_rel": 0.014285714285714285
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787363100",
+     "l5_fills": 208,
+     "n_fills": 159,
+     "same_side_persistence": 0.4684,
+     "final": {
+      "side": "Down",
+      "matched_qty": 720.0,
+      "pair_cost": 0.9928879310344828,
+      "residual_qty": 150.0,
+      "residual_rel": 0.09433962264150944
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787365800",
+     "l5_fills": 302,
+     "n_fills": 118,
+     "same_side_persistence": 0.5299,
+     "final": {
+      "side": "Down",
+      "matched_qty": 540.0,
+      "pair_cost": 0.9859143518518518,
+      "residual_qty": 100.0,
+      "residual_rel": 0.0847457627118644
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787369400",
+     "l5_fills": 220,
+     "n_fills": 106,
+     "same_side_persistence": 0.5048,
+     "final": {
+      "side": "Down",
+      "matched_qty": 460.0,
+      "pair_cost": 0.9881304347826086,
+      "residual_qty": 140.0,
+      "residual_rel": 0.1320754716981132
+     }
+    }
+   ]
+  },
+  "-1t": {
+   "windows": 12,
+   "null_fills_per_window": {
+    "n": 12,
+    "p10": 22.0,
+    "median": 71.0,
+    "p90": 106.0
+   },
+   "l5_fills_per_window": {
+    "n": 12,
+    "p10": 208.0,
+    "median": 246.0,
+    "p90": 302.0
+   },
+   "null_same_side_persistence": {
+    "n": 12,
+    "p10": 0.4286,
+    "median": 0.5522,
+    "p90": 0.5714
+   },
+   "null_final_pair_cost": {
+    "n": 12,
+    "p10": 0.9446,
+    "median": 1.0062,
+    "p90": 1.017
+   },
+   "null_final_residual_rel": {
+    "n": 12,
+    "p10": 0.0141,
+    "median": 0.0755,
+    "p90": 0.1818
+   },
+   "null_final_matched_qty": {
+    "n": 12,
+    "p10": 90.0,
+    "median": 350.0,
+    "p90": 490.0
+   },
+   "per_window": [
+    {
+     "slug": "btc-updown-15m-1787274000",
+     "l5_fills": 145,
+     "n_fills": 38,
+     "same_side_persistence": 0.5946,
+     "final": {
+      "side": "Up",
+      "matched_qty": 130.0,
+      "pair_cost": 1.0075692307692308,
+      "residual_qty": 120.0,
+      "residual_rel": 0.3157894736842105
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787290200",
+     "l5_fills": 379,
+     "n_fills": 106,
+     "same_side_persistence": 0.5905,
+     "final": {
+      "side": "Down",
+      "matched_qty": 490.0,
+      "pair_cost": 1.015327604726101,
+      "residual_qty": 80.0,
+      "residual_rel": 0.07547169811320754
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787296500",
+     "l5_fills": 245,
+     "n_fills": 22,
+     "same_side_persistence": 0.4286,
+     "final": {
+      "side": "Up",
+      "matched_qty": 90.0,
+      "pair_cost": 1.017008547008547,
+      "residual_qty": 40.0,
+      "residual_rel": 0.18181818181818182
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787300100",
+     "l5_fills": 398,
+     "n_fills": 68,
+     "same_side_persistence": 0.5522,
+     "final": {
+      "side": "Down",
+      "matched_qty": 270.0,
+      "pair_cost": 1.0275158084914182,
+      "residual_qty": 140.0,
+      "residual_rel": 0.20588235294117646
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787305500",
+     "l5_fills": 246,
+     "n_fills": 94,
+     "same_side_persistence": 0.5699,
+     "final": {
+      "side": "Up",
+      "matched_qty": 430.0,
+      "pair_cost": 0.9688098495212039,
+      "residual_qty": 80.0,
+      "residual_rel": 0.0851063829787234
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787306400",
+     "l5_fills": 268,
+     "n_fills": 71,
+     "same_side_persistence": 0.5714,
+     "final": {
+      "side": "Up",
+      "matched_qty": 350.0,
+      "pair_cost": 0.9281666666666667,
+      "residual_qty": 10.0,
+      "residual_rel": 0.014084507042253521
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787307300",
+     "l5_fills": 236,
+     "n_fills": 61,
+     "same_side_persistence": 0.4,
+     "final": {
+      "side": "Up",
+      "matched_qty": 300.0,
+      "pair_cost": 1.0061935483870967,
+      "residual_qty": 10.0,
+      "residual_rel": 0.01639344262295082
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787311800",
+     "l5_fills": 238,
+     "n_fills": 13,
+     "same_side_persistence": 0.5,
+     "final": {
+      "side": "Down",
+      "matched_qty": 60.0,
+      "pair_cost": 1.1142380952380952,
+      "residual_qty": 10.0,
+      "residual_rel": 0.07692307692307693
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787362200",
+     "l5_fills": 281,
+     "n_fills": 106,
+     "same_side_persistence": 0.5524,
+     "final": {
+      "side": "Up",
+      "matched_qty": 510.0,
+      "pair_cost": 0.9445811051693405,
+      "residual_qty": 40.0,
+      "residual_rel": 0.03773584905660377
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787363100",
+     "l5_fills": 208,
+     "n_fills": 113,
+     "same_side_persistence": 0.4286,
+     "final": {
+      "side": "Down",
+      "matched_qty": 550.0,
+      "pair_cost": 0.9737836990595611,
+      "residual_qty": 30.0,
+      "residual_rel": 0.02654867256637168
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787365800",
+     "l5_fills": 302,
+     "n_fills": 90,
+     "same_side_persistence": 0.4944,
+     "final": {
+      "side": "Down",
+      "matched_qty": 450.0,
+      "pair_cost": 0.9786666666666667,
+      "residual_qty": 0.0,
+      "residual_rel": 0.0
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787369400",
+     "l5_fills": 220,
+     "n_fills": 65,
+     "same_side_persistence": 0.4375,
+     "final": {
+      "side": "Down",
+      "matched_qty": 310.0,
+      "pair_cost": 0.9991176470588236,
+      "residual_qty": 30.0,
+      "residual_rel": 0.046153846153846156
+     }
+    }
+   ]
+  },
+  "-2t": {
+   "windows": 12,
+   "null_fills_per_window": {
+    "n": 12,
+    "p10": 10.0,
+    "median": 54.0,
+    "p90": 75.0
+   },
+   "l5_fills_per_window": {
+    "n": 12,
+    "p10": 208.0,
+    "median": 246.0,
+    "p90": 302.0
+   },
+   "null_same_side_persistence": {
+    "n": 12,
+    "p10": 0.3614,
+    "median": 0.5273,
+    "p90": 0.5634
+   },
+   "null_final_pair_cost": {
+    "n": 12,
+    "p10": 0.9425,
+    "median": 0.9685,
+    "p90": 1.0011
+   },
+   "null_final_residual_rel": {
+    "n": 12,
+    "p10": 0.0385,
+    "median": 0.12,
+    "p90": 0.2143
+   },
+   "null_final_matched_qty": {
+    "n": 12,
+    "p10": 50.0,
+    "median": 230.0,
+    "p90": 330.0
+   },
+   "per_window": [
+    {
+     "slug": "btc-updown-15m-1787274000",
+     "l5_fills": 145,
+     "n_fills": 20,
+     "same_side_persistence": 0.5263,
+     "final": {
+      "side": "Up",
+      "matched_qty": 70.0,
+      "pair_cost": 1.001098901098901,
+      "residual_qty": 60.0,
+      "residual_rel": 0.3
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787290200",
+     "l5_fills": 379,
+     "n_fills": 77,
+     "same_side_persistence": 0.5921,
+     "final": {
+      "side": "Down",
+      "matched_qty": 360.0,
+      "pair_cost": 0.9861720867208672,
+      "residual_qty": 50.0,
+      "residual_rel": 0.06493506493506493
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787296500",
+     "l5_fills": 245,
+     "n_fills": 10,
+     "same_side_persistence": 0.4444,
+     "final": {
+      "side": "Up",
+      "matched_qty": 50.0,
+      "pair_cost": 1.154,
+      "residual_qty": 0.0,
+      "residual_rel": 0.0
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787300100",
+     "l5_fills": 398,
+     "n_fills": 56,
+     "same_side_persistence": 0.5273,
+     "final": {
+      "side": "Down",
+      "matched_qty": 220.0,
+      "pair_cost": 1.0353208556149733,
+      "residual_qty": 120.0,
+      "residual_rel": 0.21428571428571427
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787305500",
+     "l5_fills": 246,
+     "n_fills": 54,
+     "same_side_persistence": 0.5472,
+     "final": {
+      "side": "Up",
+      "matched_qty": 230.0,
+      "pair_cost": 0.9684712482468443,
+      "residual_qty": 80.0,
+      "residual_rel": 0.14814814814814814
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787306400",
+     "l5_fills": 268,
+     "n_fills": 52,
+     "same_side_persistence": 0.4706,
+     "final": {
+      "side": "Up",
+      "matched_qty": 250.0,
+      "pair_cost": 0.9113925925925926,
+      "residual_qty": 20.0,
+      "residual_rel": 0.038461538461538464
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787307300",
+     "l5_fills": 236,
+     "n_fills": 49,
+     "same_side_persistence": 0.4375,
+     "final": {
+      "side": "Down",
+      "matched_qty": 210.0,
+      "pair_cost": 0.9571428571428572,
+      "residual_qty": 70.0,
+      "residual_rel": 0.14285714285714285
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787311800",
+     "l5_fills": 238,
+     "n_fills": 7,
+     "same_side_persistence": 0.6667,
+     "final": {
+      "side": "Down",
+      "matched_qty": 20.0,
+      "pair_cost": 0.9425,
+      "residual_qty": 30.0,
+      "residual_rel": 0.42857142857142855
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787362200",
+     "l5_fills": 281,
+     "n_fills": 75,
+     "same_side_persistence": 0.5541,
+     "final": {
+      "side": "Up",
+      "matched_qty": 330.0,
+      "pair_cost": 0.9885064935064936,
+      "residual_qty": 90.0,
+      "residual_rel": 0.12
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787363100",
+     "l5_fills": 208,
+     "n_fills": 84,
+     "same_side_persistence": 0.3614,
+     "final": {
+      "side": "Up",
+      "matched_qty": 400.0,
+      "pair_cost": 0.9674090909090909,
+      "residual_qty": 40.0,
+      "residual_rel": 0.047619047619047616
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787365800",
+     "l5_fills": 302,
+     "n_fills": 72,
+     "same_side_persistence": 0.5634,
+     "final": {
+      "side": "Down",
+      "matched_qty": 330.0,
+      "pair_cost": 0.9523543123543123,
+      "residual_qty": 60.0,
+      "residual_rel": 0.08333333333333333
+     }
+    },
+    {
+     "slug": "btc-updown-15m-1787369400",
+     "l5_fills": 220,
+     "n_fills": 45,
+     "same_side_persistence": 0.2955,
+     "final": {
+      "side": "Down",
+      "matched_qty": 210.0,
+      "pair_cost": 0.9623809523809523,
+      "residual_qty": 30.0,
+      "residual_rel": 0.06666666666666667
+     }
+    }
+   ]
+  }
+ },
+ "l5_windows": 12,
+ "l5_reference": {
+  "same_side_persistence": 0.6824,
+  "final_pair_cost_median": 0.9603,
+  "final_residual_rel_median": 0.0979,
+  "source": "527-window canonical set, transaction-aggregated"
+ },
+ "limitation": "book-only data: a level vanishing cannot be separated from a cancel, so these fills are an UPPER bound on what a passive quote would have achieved. The bias favours the null, which is the safe direction for a test meant to refuse a controller."
+}
