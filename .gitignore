@@ -33,3 +33,9 @@ analysis/l5/fidelity/prospective/*.jsonl
 # roles_*.json carries its own tx, block, logIndex and contract, which is the
 # auditable artifact.
 analysis/l5/pair_formation/receipts.jsonl
+
+# Historical-L2 chain backfill + block-time fetch caches. Derived and
+# regenerable from immutable public chain data; the findings and the tables
+# they produce are committed instead.
+analysis/l5/historical_l2/l5_backfill.json
+analysis/l5/historical_l2/block_times.json
