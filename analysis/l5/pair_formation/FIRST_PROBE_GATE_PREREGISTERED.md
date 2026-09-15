@@ -79,11 +79,48 @@ record.
 | rule | all of G-P1…G-P6 satisfied **on one venue's own rows**, with no pooling across venues |
 | why | Polymarket pays a maker nothing and Gemini charges a ceil-cent fee; their pair economics are not the same quantity and a pooled median describes neither |
 
+## G-P8 · The accounting path survives a change of operating state
+
+**Added 2026-09-15, after the gate was first written.** The original document
+says a later change must be a new commit that says what changed and why, so:
+what changed is that a real settlement in the legacy PMUS lane (+$5.1425,
+venue-confirmed) went unrecorded for **31 hours**, and nothing failed loudly.
+The runtime had moved into a different operating state; in that state it
+reported settlements nested inside a `shutdown_idle` envelope, the reader
+selected records by the envelope's own `kind`, matched nothing, and skipped
+them — with its unreadable-record tally still reading **0**, so the loss was
+indistinguishable from there being no settlements.
+
+This adds no threshold to G-P1…G-P7 and cannot make a failing arm pass. It is a
+**precondition on the accounting path**, not evidence about the strategy.
+
+| | |
+|---|---|
+| metric | `src/l5_shadow/preflight.py` → `verdict()` |
+| threshold | **PASS**. Anything else, including an error while checking, blocks the probe |
+
+Four assertions, each of which has a test proving it can fail:
+
+| | assertion | what it forbids |
+|---|---|---|
+| A1 | envelope independence | the same settlement, wrapped in any operating state's envelope, must yield identical economics |
+| A2 | silence is impossible | a record the reader cannot understand must increment a visible tally — the legacy tally read 0 while eight settlements were dropped |
+| A3 | round trip is lossless | quantity is conserved and realized is exactly matched + residual − fees, with no float coercion |
+| A4 | every kind is classified | a record kind that is neither TERMINAL nor NON_TERMINAL **fails the gate**, so a future operating state cannot slip through by being unknown to the file |
+
+A4 reads the emitted kinds from **source**, not from a list kept by hand.
+Adding a new operating state without classifying it breaks this gate rather
+than passing quietly, which is the only part of this that prevents a repeat.
+
+**It asserts only that a terminal record survives a change of operating state.**
+It does not assert the numbers are right, and it never converts shadow
+economics into realized profit.
+
 ---
 
 ## Decision rule
 
-**A venue+arm pair qualifies when G-P1 … G-P7 hold simultaneously, in one
+**A venue+arm pair qualifies when G-P1 … G-P7 hold simultaneously, with G-P8 passing as a precondition, in one
 report, over one continuous sample on that venue under that arm.** No partial
 credit, no pooling, no combining a good pair-cost run with a different good
 residual run.
