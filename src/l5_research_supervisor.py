@@ -338,6 +338,28 @@ class Supervisor:
         }, default=str), flush=True)
         return rep
 
+    def report_dual_clock(self) -> Optional[dict]:
+        """P1: what the 15s recovery buys, on the same frozen intents.
+
+        A REPORT over stores already written. The chain observer stays
+        UNPROMOTED: this measures what promoting it would be worth, and
+        promotes nothing.
+        """
+        out_dir = os.path.join(self.root, "l5-shadow-state")
+        try:
+            from analysis.l5.dual_clock import study as DC
+            rep = DC.report(out_dir)
+        except Exception as exc:                              # noqa: BLE001
+            print("L5_DUAL_CLOCK " + json.dumps(
+                {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:200]}),
+                flush=True)
+            return None
+        print("L5_DUAL_CLOCK " + json.dumps(
+            {"ok": True, **{k: v for k, v in rep.items()
+                            if k not in ("rows", "out_dir")}},
+            default=str), flush=True)
+        return rep
+
     def run(self) -> int:
         self.boot()
         signal.signal(signal.SIGTERM, self.stop)
@@ -361,6 +383,7 @@ class Supervisor:
                 last_gate = now
                 self.report_gate()
                 self.report_economics()
+                self.report_dual_clock()
             time.sleep(2.0)
         self.stop()
         return 0

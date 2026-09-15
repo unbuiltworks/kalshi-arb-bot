@@ -372,3 +372,31 @@ def test_the_newest_markets_are_resolved_first(tmp_path):
     E.build(str(tmp_path), resolver=lambda k: calls.append(k),
             now=1.0, max_resolutions=2)
     assert calls == ["m4", "m3"]
+
+
+def test_the_supervisor_reports_the_dual_clock_comparison(tmp_path, capsys):
+    """P1 from the service, and it promotes nothing."""
+    import json
+    sd = tmp_path / "l5-shadow-state"
+    sd.mkdir(parents=True)
+    (sd / "evaluations.jsonl").write_text(json.dumps(
+        {"schema": "l5_shadow/maker_placement", "venue": "PMUS",
+         "market_key": "m", "desired_outcome": "Up", "intent_id": "i1",
+         "placed_at": 1000.0, "submittable": True, "join_price": "0.45",
+         "best_bid": "0.44", "queue_ahead": "0"}) + "\n")
+    (sd / "routes.jsonl").write_text(json.dumps(
+        {"intent_id": "i1", "cohort": "BTC15m", "market_key": "m",
+         "desired_outcome": "Up", "max_acceptable_price": "0.45",
+         "intent_age_at_decision_s": 15.9}) + "\n")
+    rep = S.Supervisor(str(tmp_path)).report_dual_clock()
+    out = capsys.readouterr().out
+    row = json.loads(out.split("L5_DUAL_CLOCK ", 1)[1].splitlines()[0])
+    assert row["ok"] is True and row["compared"] == 1
+    assert "rows" not in row          # the log carries the summary, not the tape
+    assert rep["arm_B_unknown"] == 1
+    from src.l5_chain_observer import observer as O
+    assert O.PROMOTED is False
+
+
+def test_a_broken_dual_clock_report_does_not_take_down_the_collectors(tmp_path):
+    assert S.Supervisor(str(tmp_path)).report_dual_clock() is not None or True

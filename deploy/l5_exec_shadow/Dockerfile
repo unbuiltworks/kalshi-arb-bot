@@ -50,6 +50,9 @@ COPY analysis/l5/chain_observer/PROMOTION_GATE_PREREGISTERED.md analysis/l5/chai
 # P2: the economic ledger, reported on the same slow cadence as the gate.
 # Reads the shadow's own stores plus the venue's published resolutions.
 COPY analysis/l5/economics/build.py analysis/l5/economics/build.py
+# P1: the same frozen intents under both observation clocks. Reads stores
+# already written; the chain observer stays unpromoted.
+COPY analysis/l5/dual_clock/study.py analysis/l5/dual_clock/study.py
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \

@@ -10,3 +10,4 @@ promote fef17b6b: chain validator survives transient RPC failures (crashed in pr
 promote 5214a32d: downtime measured from our own heartbeat, not from a stream's events
 promote 107cc0ba: EPOCH-stamped rows, grouped attribution, chain_only classification, reorg retraction
 promote 4256t: P2 economic ledger reported from the service alongside the gate
+promote dualclock: P1 dual-clock comparison reported from the service
