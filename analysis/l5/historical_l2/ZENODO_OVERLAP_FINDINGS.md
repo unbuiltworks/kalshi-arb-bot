@@ -119,6 +119,34 @@ rather than acted on: it argues the ladder is too shallow for the horizon it
 is held over. Extending the *observation-only* recording below −4 would test
 it without touching the live grid, and is a decision for the operator.
 
+## 7. Step 4 — pre-first-fill liquidity at the complement price: NO ANSWER
+
+The question was whether liquidity at the price L5 eventually paid on the
+**complement** token already existed before his first fill — R (reactive) and
+S (both sides first) predict different answers.
+
+All **12/12** windows come back
+`PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED`.
+
+**That result is vacuous.** The negative control sweeps the whole 1 ¢ grid at
+the same instant on the same token and finds liquidity at **1,175 of 1,176**
+prices — **99.9 %**. These BTC15m books are quoted continuously across the
+entire grid, so "was there size at price q" returns yes whatever q is.
+
+| | |
+|---|---|
+| complement price OBSERVED | 12/12 = 100 % |
+| **any other price OBSERVED** | **1,175/1,176 = 99.9 %** |
+| verdict | **NON_DISCRIMINATING** |
+
+So this **must not be cited as support for arm S**, or for arm R. It is a
+constant, not a signal. The control now runs on every invocation and downgrades
+the verdict automatically, so the 12/12 headline cannot be quoted without it.
+
+Anonymous depth also cannot answer it in principle: separating R from S needs a
+dataset where we know **which orders are ours**. That is the prospective
+experiment, not this one. No further archives are being hunted for it.
+
 ## 6. Accuracy bounds
 
 - The capture writes a row only when the book **changes**, so an old row is
