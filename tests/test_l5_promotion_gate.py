@@ -56,24 +56,39 @@ def test_the_validator_uses_the_same_confirmation_depth_as_the_gate():
 # ------------------------------------------------------------ the fixtures
 
 def _stamp(row):
-    """Rows the validator writes carry the measurement epoch; fixtures that do
-    not care about it get the qualifying one so the gate sees them at all."""
-    return {"epoch": G.QUALIFYING_EPOCH, **row}
+    """Rows the validator writes carry the measurement epoch and, for runs, the
+    window they compared; fixtures that do not care get defaults so the gate
+    sees them at all."""
+    out = {"epoch": G.QUALIFYING_EPOCH, **row}
+    if "agree" in out or "feed_only" in out or "ok" in out:
+        out.setdefault("window_utc", [1500.0, 1600.0])
+    return out
 
 
-def _root(tmp_path, *, runs=(), attr=(), coverage=None, classified=()):
+_UNMARKED = object()
+
+
+def _root(tmp_path, *, runs=(), attr=(), coverage=_UNMARKED, classified=(),
+          finality=()):
+    """Coverage markers are written by default. G-C7 is a FILTER, so a fixture
+    with no markers counts nothing -- which is correct, and is what
+    `coverage=[]` is for when a test wants to prove it."""
+    if coverage is _UNMARKED:
+        coverage = _good_coverage()
     vd = tmp_path / "chainval"
     vd.mkdir(parents=True, exist_ok=True)
+    with open(vd / "finality.jsonl", "w") as fh:
+        for f in finality:
+            fh.write(json.dumps(_stamp(f)) + "\n")
     for name, rows in (("chain_only_classified.jsonl", classified),
                        ("validations.jsonl", runs),
                        ("attribution.jsonl", attr)):
         with open(vd / name, "w") as fh:
             for r in rows:
                 fh.write(json.dumps(_stamp(r)) + "\n")
-    if coverage is not None:
-        with open(tmp_path / "coverage.jsonl", "w") as fh:
-            for c in coverage:
-                fh.write(json.dumps(c) + "\n")
+    with open(tmp_path / "coverage.jsonl", "w") as fh:
+        for c in coverage:
+            fh.write(json.dumps(c) + "\n")
     return str(tmp_path)
 
 
@@ -102,7 +117,7 @@ def _good_coverage():
 # ------------------------------------------------------- it fails closed
 
 def test_an_empty_state_root_does_not_promote(tmp_path):
-    r = G.report(_root(tmp_path))
+    r = G.report(_root(tmp_path, coverage=[]))
     assert r["PROMOTE"] is False
     assert "G-C1_sample_size" in r["blocking"]
     assert "G-C8_provenance" in r["blocking"]
@@ -110,13 +125,16 @@ def test_an_empty_state_root_does_not_promote(tmp_path):
 
 def test_no_measurement_is_not_a_pass(tmp_path):
     """Every gate with nothing behind it must be blocking, never silent."""
-    r = G.report(_root(tmp_path))
+    r = G.report(_root(tmp_path, coverage=[]))
     for k, v in r["gates"].items():
         if v["pass"] is True:
             # only gates whose evidence is an ABSENCE of bad rows may pass
             # vacuously, and they are named here deliberately
             assert k in ("G-C2_no_unexplained_misses",
                          "G-C3_chain_only_classified",
+                         # G-C5 is an absence condition PLUS a simulation that
+                         # really runs, so it is earned even with no rows
+                         "G-C5_finality",
                          "G-C6_rpc_failure_is_unknown"), k
     # and the one that CAN pass vacuously says so rather than looking earned
     assert r["gates"]["G-C3_chain_only_classified"]["evidence"]["exercised"] \
@@ -229,13 +247,41 @@ def test_an_unconfirmed_transaction_blocks_finality(tmp_path):
     assert g["evidence"]["below_confirmations"] == 5
 
 
-def test_finality_fails_even_when_every_transaction_is_deep_enough(tmp_path):
-    """Depth is only half of G-C5; retraction-on-reorg is not built."""
+def test_the_reorg_simulation_is_run_when_the_report_is_produced(tmp_path):
+    """A gate that trusts a boolean about code it never executed measures
+    nothing. The simulation runs here, every time."""
     r = G.report(_root(tmp_path, attr=_good_attr(5, conf=1000)))
     g = r["gates"]["G-C5_finality"]
     assert g["evidence"]["below_confirmations"] == 0
+    assert g["evidence"]["reorg_simulation"]["passed"] is True
+    assert "chain_retraction" in g["evidence"]["reorg_simulation"]["events"]
+    assert g["pass"] is True
+
+
+def test_a_broken_reorg_simulation_fails_g_c5(tmp_path, monkeypatch):
+    monkeypatch.setattr(G, "_reorg_tested",
+                        lambda: {"passed": False, "events": []})
+    r = G.report(_root(tmp_path, attr=_good_attr(5, conf=1000)))
+    assert r["gates"]["G-C5_finality"]["pass"] is False
+
+
+def test_a_counted_transaction_that_was_later_retracted_fails_g_c5(tmp_path):
+    """The evidence was already used. A retraction after the fact is exactly
+    the case the depth filter cannot catch on its own."""
+    r = G.report(_root(tmp_path, attr=_good_attr(5, conf=1000),
+                       finality=[{"kind": "chain_retraction", "tx": "0x0"}]))
+    g = r["gates"]["G-C5_finality"]
     assert g["pass"] is False
-    assert g["evidence"]["reorg_retraction_implemented"] is False
+    assert g["evidence"]["counted_but_retracted"] == ["0x0"]
+
+
+def test_a_retraction_of_something_never_counted_does_not_fail_the_gate(
+        tmp_path):
+    r = G.report(_root(tmp_path, attr=_good_attr(5, conf=1000),
+                       finality=[{"kind": "chain_retraction",
+                                  "tx": "0xnevercounted"}]))
+    assert r["gates"]["G-C5_finality"]["pass"] is True
+    assert r["gates"]["G-C5_finality"]["evidence"]["retraction_events"] == 1
 
 
 def test_a_transaction_missing_provenance_fails_g_c8(tmp_path):
@@ -247,7 +293,7 @@ def test_a_transaction_missing_provenance_fails_g_c8(tmp_path):
 
 
 def test_coverage_is_unavailable_rather_than_assumed_when_unmarked(tmp_path):
-    r = G.report(_root(tmp_path))
+    r = G.report(_root(tmp_path, coverage=[]))
     g = r["gates"]["G-C7_coverage"]
     assert g["pass"] is False
     assert g["evidence"]["available"] is False
@@ -256,18 +302,17 @@ def test_coverage_is_unavailable_rather_than_assumed_when_unmarked(tmp_path):
 def test_a_stream_still_down_blocks_coverage(tmp_path):
     cov = _good_coverage() + [
         {"kind": "stream_exit", "t": 4000.0, "stream": "chain_validate"}]
+
     r = G.report(_root(tmp_path, coverage=cov))
     assert r["gates"]["G-C7_coverage"]["pass"] is False
 
 
 # --------------------------------------------------- and it is not vacuous
 
-def test_the_gate_can_actually_pass_once_the_unbuilt_parts_exist(
-        tmp_path, monkeypatch):
-    """A gate that cannot be satisfied by any input teaches nothing. With the
-    two unimplemented pieces stubbed, a clean sample promotes -- which is what
-    makes the FAILs above informative rather than structural."""
-    monkeypatch.setattr(G, "_reorg_tested", lambda: True)
+def test_the_gate_can_actually_pass_on_a_clean_sample(tmp_path):
+    """A gate that cannot be satisfied by any input teaches nothing. Nothing
+    is stubbed here any more -- a clean sample promotes on its own, which is
+    what makes the FAILs above informative rather than structural."""
     r = G.report(_root(tmp_path,
                        runs=[{"ok": True, "agree": 500, "feed_only": [],
                               "chain_only": ["0xa"],
@@ -280,8 +325,7 @@ def test_the_gate_can_actually_pass_once_the_unbuilt_parts_exist(
     assert r["gates_passing"] == r["gates_total"] == 8
 
 
-def test_promotion_needs_every_gate_not_a_majority(tmp_path, monkeypatch):
-    monkeypatch.setattr(G, "_reorg_tested", lambda: True)
+def test_promotion_needs_every_gate_not_a_majority(tmp_path):
     r = G.report(_root(tmp_path,
                        runs=[{"ok": True, "agree": 499, "feed_only": [],
                               "chain_only": ["0xa"],
@@ -294,7 +338,7 @@ def test_promotion_needs_every_gate_not_a_majority(tmp_path, monkeypatch):
 
 
 def test_the_report_names_the_preregistration_it_is_measuring(tmp_path):
-    r = G.report(_root(tmp_path))
+    r = G.report(_root(tmp_path, coverage=[]))
     assert r["preregistered"].endswith("PROMOTION_GATE_PREREGISTERED.md")
     assert os.path.exists(DOC)
 

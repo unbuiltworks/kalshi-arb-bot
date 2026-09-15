@@ -17,6 +17,7 @@ from collections import Counter
 from typing import Any, Dict, List, Optional, Sequence
 
 from src.l5_chain_observer import classify as CL
+from src.l5_chain_observer import finality as FN
 
 # --- preregistered thresholds. Do not tune. See the .md.
 MIN_JOINED = 500                 # G-C1
@@ -68,6 +69,12 @@ def report(state_root: str) -> Dict[str, Any]:
                 "why": ("measured by superseded code; see EPOCH in "
                         "validate.py")}
 
+    # G-C7 is not a report, it is a FILTER. A run whose compared window
+    # overlaps any supervisor downtime is dropped before anything is counted:
+    # evidence gathered while we were not watching is not evidence.
+    cov_rows = _coverage_rows(state_root)
+    observed, unobserved = _split_observed(runs, cov_rows)
+    runs = observed
     joined = sum(int(r.get("agree") or 0) for r in runs)
     feed_only = [t for r in runs for t in (r.get("feed_only") or [])]
     chain_only = [t for r in runs for t in (r.get("chain_only") or [])]
@@ -137,15 +144,26 @@ def report(state_root: str) -> Dict[str, Any]:
          "matched_group": dict(Counter(
              json.dumps(a.get("matched_group"), sort_keys=True)
              for a in px if a.get("matched_group")))})
+    reorg = _reorg_tested()
+    fin = _qualifying(_load(os.path.join(vdir, "finality.jsonl")))
+    retracted = {e["tx"] for e in fin if e.get("kind") == "chain_retraction"}
+    counted_but_retracted = sorted(retracted & {a.get("tx") for a in attr})
     g["G-C5_finality"] = _g(
-        not unconfirmed and _reorg_tested(),
+        (not unconfirmed and reorg["passed"]
+         and not counted_but_retracted),
         f"0 counted transactions below {CONFIRMATIONS} confirmations, "
         f"reorg handling tested",
         {"below_confirmations": len(unconfirmed),
          "confirmations_required": CONFIRMATIONS,
-         "reorg_retraction_implemented": _reorg_tested(),
-         "note": ("retraction on reorg is NOT YET IMPLEMENTED; only the "
-                  "confirmation-depth filter is")})
+         "reorg_simulation": reorg,
+         "retraction_events": len(retracted),
+         "reblock_events": sum(1 for e in fin
+                               if e.get("kind") == "chain_reblocked"),
+         "counted_but_retracted": counted_but_retracted[:5],
+         "note": ("the simulation is RUN when this report is produced, not "
+                  "trusted: a block range re-scanned to different content "
+                  "must produce a chain_retraction and remove the fill from "
+                  "countable evidence")})
     g["G-C6_rpc_failure_is_unknown"] = _g(
         not leaked,
         "0 failed passes carrying agreement figures",
@@ -153,7 +171,12 @@ def report(state_root: str) -> Dict[str, Any]:
     g["G-C7_coverage"] = _g(
         cov.get("available") is True and not cov.get("still_down"),
         "counted evidence excludes unobserved intervals",
-        cov)
+        {**cov,
+         "runs_counted": len(runs),
+         "runs_dropped_as_unobserved": len(unobserved),
+         "dropped_windows": [r.get("window_utc") for r in unobserved[:5]],
+         "joined_excluded": sum(int(r.get("agree") or 0)
+                                for r in unobserved)})
     g["G-C8_provenance"] = _g(
         bool(attr) and not no_prov,
         "100% of attributed transactions retain tx/block/logIndex/contract",
@@ -173,9 +196,41 @@ def report(state_root: str) -> Dict[str, Any]:
     }
 
 
-def _reorg_tested() -> bool:
-    """Retraction-on-reorg is not built yet, and saying so is the point."""
-    return False
+def _reorg_tested() -> Dict[str, Any]:
+    """Run the reorg simulation now. A gate that trusts a boolean about code
+    it never executed is not measuring anything."""
+    try:
+        return FN.self_test()
+    except Exception as exc:                                  # noqa: BLE001
+        return {"passed": False, "error": f"{type(exc).__name__}: {exc}"[:160]}
+
+
+def _coverage_rows(state_root: str) -> List[dict]:
+    try:
+        from analysis.l5 import coverage as C
+        return C.load(state_root)
+    except Exception:                                         # noqa: BLE001
+        return []
+
+
+def _split_observed(runs: List[dict], cov_rows: List[dict]):
+    """(counted, dropped). With no markers at all nothing is counted: unknown
+    coverage is not good coverage, and G-C7 fails on its own besides."""
+    if not cov_rows:
+        return [], list(runs)
+    try:
+        from analysis.l5 import coverage as C
+    except Exception:                                         # noqa: BLE001
+        return [], list(runs)
+    keep, drop = [], []
+    for r in runs:
+        w = r.get("window_utc") or []
+        if len(w) != 2:
+            drop.append(r)
+            continue
+        (keep if C.observed(cov_rows, "chain_validate",
+                            float(w[0]), float(w[1])) else drop).append(r)
+    return keep, drop
 
 
 def _coverage(state_root: str) -> Dict[str, Any]:

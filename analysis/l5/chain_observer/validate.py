@@ -35,10 +35,12 @@ import argparse
 import json
 import os
 import time
+from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.l5_chain_observer import classify as CL
 from src.l5_chain_observer import decode as DE
+from src.l5_chain_observer import finality as FN
 from src.l5_chain_observer import observer as O
 
 # a window that ENDS this long ago, so the venue has certainly published it
@@ -67,6 +69,11 @@ OUT = "validations.jsonl"
 EPOCH = 3
 ATTR = "attribution.jsonl"
 CLASSIFIED = "chain_only_classified.jsonl"
+FINALITY = "finality.jsonl"
+FINALITY_STATE = "finality_state.json"
+# re-asking the chain about a provisional transaction costs one receipt each,
+# so the recheck is bounded like the other per-pass RPC work
+RECHECK_PER_PASS = 25
 # Gate G-C5: a chain fill counts as FINAL only this far behind the head. Chosen
 # as a conservative multiple of Polygon's practical reorg depth, fixed in the
 # preregistered gate and not tuned against observations.
@@ -245,6 +252,7 @@ def _one_pass(*, settle_margin_s: float = SETTLE_MARGIN_S,
     attr = _attribute(chain, feed, head=head, out_dir=_ATTR_DIR[0])
     conly = _classify_chain_only(cv.get("chain_only") or [], chain, feed,
                                  window=(lo_ts, hi_ts), out_dir=_ATTR_DIR[0])
+    fin = _track_finality(chain, head=head, out_dir=_ATTR_DIR[0])
     leads = _leads(chain, feed)
     return {
         "ok": True, "t": now, "schema": "l5_chain_validation/v1",
@@ -258,6 +266,7 @@ def _one_pass(*, settle_margin_s: float = SETTLE_MARGIN_S,
         "lead_not_measured_here": leads,
         "attribution": attr,
         "chain_only_classified": conly,
+        "finality": fin,
         "confirmations_required": CONFIRMATIONS,
         "labels": cv["labels"],
     }
@@ -302,6 +311,71 @@ def _classify_chain_only(txs: List[str], chain: Dict[str, dict],
     out["examples"] = [{"tx": r["tx"], "category": r["category"]}
                        for r in rows[:5]]
     return out
+
+
+
+def _track_finality(chain: Dict[str, dict], *, head: int,
+                    out_dir: Optional[str]) -> Dict[str, Any]:
+    """Gate G-C5: follow provisional chain fills until they are deep, and
+    RECORD what happened to the ones that did not make it.
+
+    The depth filter alone says nothing about fills already seen. The whole
+    claim being made for the chain is that it knows before the venue does,
+    which means reading near the head -- so a reorg is a thing that happens to
+    evidence we already hold, and it must leave a marker either way.
+    """
+    st = _finality_state(out_dir)
+    new = FN.observe(st, chain, head)
+    # bound the per-pass RPC cost: the oldest provisional transactions first,
+    # since they are the ones closest to a verdict
+    prov = sorted((r for r in st.values() if r["status"] == "provisional"),
+                  key=lambda r: r["block"])[:RECHECK_PER_PASS]
+    subset = {r["tx"]: r for r in prov}
+    res = FN.recheck(subset, head,
+                     lambda tx: O.rpc("eth_getTransactionReceipt", [tx]))
+    st.update(subset)
+    if out_dir:
+        _write_finality(out_dir, st, new + res["events"])
+    # the append-only file holds every event; the pass summary carries counts
+    # plus the ones that mean something happened
+    notable = [e for e in res["events"] if e["kind"] != "chain_final"]
+    return {k: v for k, v in res.items() if k != "events"} | {
+        "newly_tracked": len(new),
+        "event_counts": dict(Counter(e["kind"] for e in res["events"])),
+        "notable_events": [{"kind": e["kind"], "tx": e["tx"]}
+                           for e in notable[:5]],
+        "tracked_total": len(st),
+        "retracted_txs": FN.retracted(st)[:5],
+    }
+
+
+def _finality_state(out_dir: Optional[str]) -> Dict[str, dict]:
+    """Resume rather than reset: a restart must not forget what was
+    provisional, or a reorg during the gap becomes invisible."""
+    if not out_dir:
+        return {}
+    p = os.path.join(out_dir, FINALITY_STATE)
+    if not os.path.exists(p):
+        return {}
+    try:
+        with open(p) as fh:
+            return json.load(fh) or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_finality(out_dir: str, state: Dict[str, dict],
+                    events: List[dict]) -> None:
+    if events:
+        with open(os.path.join(out_dir, FINALITY), "a") as fh:
+            for e in events:
+                fh.write(json.dumps({**e, "epoch": EPOCH,
+                                     "code": code_version()},
+                                    default=str) + "\n")
+    tmp = os.path.join(out_dir, FINALITY_STATE + ".tmp")
+    with open(tmp, "w") as fh:
+        json.dump(state, fh, default=str)
+    os.replace(tmp, os.path.join(out_dir, FINALITY_STATE))
 
 
 _ATTR_DIR = [None]          # set by main(); keeps one_pass's signature stable
@@ -434,7 +508,7 @@ def main(argv=None) -> int:
               "n_union", "agree", "agreement_rate", "feed_only",
               "promotion_blocker", "feed_reach_s",
               "window_clamped_to_feed_reach", "attribution",
-              "chain_only_classified")},
+              "chain_only_classified", "finality")},
             default=str), flush=True)
         if a.once or (deadline is not None and time.time() >= deadline):
             break

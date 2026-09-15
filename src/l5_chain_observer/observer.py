@@ -97,6 +97,9 @@ def chain_fills(from_block: int, to_block: int,
             if tx:
                 out.setdefault(tx, {"tx": tx,
                                     "block": int(lg["blockNumber"], 16),
+                                    # (block, blockHash) is the identity a
+                                    # reorg changes; the hash alone is not
+                                    "block_hash": lg.get("blockHash"),
                                     "contract": lg.get("address"),
                                     "topic_pos": pos})
     return out

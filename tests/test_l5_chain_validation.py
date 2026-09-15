@@ -407,3 +407,58 @@ def test_a_successful_pass_records_the_commit_that_measured_it(monkeypatch):
 def test_the_epoch_is_an_integer_that_only_moves_deliberately():
     """A bump invalidates the accumulated sample, so it is never incidental."""
     assert isinstance(V.EPOCH, int) and V.EPOCH >= 3
+
+
+# ------------------------------------------- reorg retraction, end to end
+
+def test_a_reorg_retracts_the_fill_and_leaves_a_marker(monkeypatch, tmp_path):
+    """The depth filter stops us ACTING on an unconfirmed fill. It says
+    nothing about the ones already seen, and the chain's whole claimed value
+    is reading near the head, where a reorg takes them back."""
+    import json
+    from src.l5_chain_observer import finality as FN
+    head = 1000
+    chain = {"0xgone": {"tx": "0xgone", "block": 990, "block_hash": "0xA"}}
+    monkeypatch.setattr(O, "rpc", lambda m, p, *a, **k: None)   # no receipt
+    r1 = V._track_finality(chain, head=head, out_dir=str(tmp_path))
+    assert r1["newly_tracked"] == 1 and r1["retracted"] == 1
+    ev = [json.loads(l) for l in
+          open(tmp_path / V.FINALITY).read().splitlines() if l.strip()]
+    kinds = [e["kind"] for e in ev]
+    assert "chain_retraction" in kinds
+    assert all(e["epoch"] == V.EPOCH for e in ev)
+
+    st = V._finality_state(str(tmp_path))
+    assert FN.countable(st) == [] and FN.retracted(st) == ["0xgone"]
+
+
+def test_finality_state_survives_a_restart(monkeypatch, tmp_path):
+    """A restart that forgot what was provisional would make a reorg during
+    the gap invisible."""
+    monkeypatch.setattr(O, "rpc", lambda m, p, *a, **k:
+                        {"blockNumber": 990, "blockHash": "0xA"})
+    V._track_finality({"0x1": {"tx": "0x1", "block": 990,
+                               "block_hash": "0xA"}},
+                      head=1000, out_dir=str(tmp_path))
+    st = V._finality_state(str(tmp_path))
+    assert st["0x1"]["status"] == "provisional"
+    # a later pass, now deep enough, finalises it without re-observing
+    r = V._track_finality({}, head=990 + 64, out_dir=str(tmp_path))
+    assert r["newly_tracked"] == 0 and r["final"] == 1
+    assert V._finality_state(str(tmp_path))["0x1"]["status"] == "final"
+
+
+def test_an_unreadable_receipt_never_invents_a_reorg(monkeypatch, tmp_path):
+    def boom(*a, **k):
+        raise O.RpcError("timeout")
+
+    monkeypatch.setattr(O, "rpc", boom)
+    r = V._track_finality({"0x1": {"tx": "0x1", "block": 990}},
+                          head=1000, out_dir=str(tmp_path))
+    assert r["retracted"] == 0 and r["unreadable"] == 1
+    assert r["provisional"] == 1
+
+
+def test_a_corrupt_finality_state_file_does_not_kill_the_pass(tmp_path):
+    (tmp_path / V.FINALITY_STATE).write_text("{not json")
+    assert V._finality_state(str(tmp_path)) == {}
