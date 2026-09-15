@@ -1,4 +1,53 @@
-# L5_FIDELITY_v0 — first frozen predictions
+# L5_FIDELITY — prospective scoreboard
+
+## v0.1 PROSPECTIVE COLLECTION IS LIVE (2026-09-15T10:49:15Z)
+
+**EARLY / INSUFFICIENT SAMPLE — v0.1 n = 15 frozen, 5 resolved at
+10:54:26Z.** Nothing here supports a conclusion. It is published now to show
+the lineage is genuinely prospective, not to report a score.
+
+The runner's first two digests, verbatim counts:
+
+| at | frozen | resolved | unresolved | tampered | not-prospective | feed lag |
+|---|---|---|---|---|---|---|
+| 10:49:15Z | 1 | 0 | 1 | 0 | 0 | 41.5 s |
+| 10:54:26Z | 15 | 5 | 10 | 0 | 0 | 12.4 s |
+
+So the full freeze → propagate → resolve cycle runs in production, not just the
+freeze. Resolutions are first-writer-wins and seals are re-verified on load.
+
+Observed ACT rate on the 5 resolved, by preregistered horizon — **n = 5, which
+is not a measurement of anything**, recorded only because the horizons were
+fixed in advance and must be reported as fixed:
+
+| horizon | scored | acted |
+|---|---|---|
+| 1 s | 5 | 0 |
+| 5 s | 5 | 0 |
+| 15 s | 5 | 3 |
+| 30 s | 5 | 3 |
+
+`model_version` **v0.1-e9983c17ff8c** · cohort **BTC15m** · 693,916 canonical
+fills / 5,546 windows. Served by the 24/7 runner
+(`l5-fidelity-runner`, deployment `4cf9052f`), read-only, no credentials, no
+order path, storing to a durable volume at `/state/l5-fidelity`.
+
+**v0 and v0.1 are separate lineages and are never merged.** Every v0 row below
+stays exactly as frozen and scored; none is relabelled, re-scored, or carried
+into v0.1. v0.1 scores only forward from 10:49:15Z. The split exists because
+v0 carried a train/serve skew (`last_outcome` keyed off `s[i-1]` at fit and
+`s[i]` at serve); fixing it changes the estimand, so it gets a new version
+rather than a quiet correction.
+
+**Estimand A and B stay separate metrics.** The runner serves **A only**
+(fill-anchored). **B (arbitrary-state) is NOT READY** and reports that reason
+instead of a number: the activity feed's newest row is a median 28.5 s old, so
+a wall-clock freeze cannot observe its own prediction window. B is not
+approximated with A.
+
+---
+
+# L5_FIDELITY_v0 — first frozen predictions (SUPERSEDED LINEAGE, PRESERVED AS-IS)
 
 **EARLY / INSUFFICIENT SAMPLE — n = 4.** Reported now rather than polished
 later, per instruction. Nothing below supports a conclusion; it exists to show
