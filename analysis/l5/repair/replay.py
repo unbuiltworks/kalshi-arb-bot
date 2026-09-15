@@ -101,9 +101,18 @@ class Policy:
                  pair_ceiling: Optional[float] = None,
                  complement_only: bool = False,
                  tte_no_open: Optional[float] = None,
-                 tte_relax: Optional[Sequence[Tuple[float, float]]] = None):
+                 tte_relax: Optional[Sequence[Tuple[float, float]]] = None,
+                 pre_action_cap: bool = False):
         self.name = name
         self.resid_cap = resid_cap
+        # PRODUCTION SEMANTICS. pmus_spring_l5_session.py:3085 refuses when the
+        # residual ALREADY held is >= the cap -- a pre-action test on the
+        # current state -- and it applies ONLY to EXTEND, leaving COMPLETE
+        # allowed and flattening nothing. The default here is the post-action
+        # test (would this fill take me above the cap), which bites one fill
+        # earlier. They are not the same boundary and replaying production
+        # with the wrong one would misattribute every difference at the edge.
+        self.pre_action_cap = pre_action_cap
         self.pair_ceiling = pair_ceiling
         self.complement_only = complement_only
         self.tte_no_open = tte_no_open
@@ -136,8 +145,11 @@ class Policy:
                 return False
             if self.tte_no_open is not None and tte < self.tte_no_open:
                 return False
-            if self.resid_cap is not None and abs(new_resid) > self.resid_cap:
-                return False
+            if self.resid_cap is not None:
+                probe = abs(resid) if self.pre_action_cap else abs(new_resid)
+                if (probe >= self.resid_cap if self.pre_action_cap
+                        else probe > self.resid_cap):
+                    return False
             return True
 
         # a complement fill: gate it on the pair it would actually achieve

@@ -78,3 +78,29 @@ def test_a_window_with_no_redeem_row_is_scored_as_a_loss_not_dropped():
          "outcome_source": "no_redeem_implies_loss"}
     r = R.run_window(w, R.Policy("control"), "C_fee_free")
     assert r["net"] == -4.0 and r["residual_pnl"] == -4.0
+
+
+def test_production_semantics_are_pre_action_and_extend_only():
+    """pmus_spring_l5_session.py:3085 refuses when the residual ALREADY held is
+    >= the cap, and only for EXTEND -- COMPLETE stays allowed and nothing is
+    flattened. The default post-action test bites one fill earlier, so
+    replaying production with it would misattribute differences at the edge."""
+    fills = [(0, 0.40, "Up", 10.0, 4.0),     # residual 0 -> 10
+             (1, 0.40, "Up", 10.0, 4.0),     # residual 10 -> 20
+             (2, 0.40, "Up", 10.0, 4.0),     # residual 20 -> 30
+             (3, 0.60, "Down", 10.0, 6.0)]   # complement: always allowed
+    w = _w(fills)
+    post = R.run_window(w, R.Policy("post", resid_cap=20), "C_fee_free")
+    pre = R.run_window(w, R.Policy("pre", resid_cap=20, pre_action_cap=True),
+                       "C_fee_free")
+    # post-action: refuses the fill that would LAND above 20 -> stops at 20
+    assert post["taken"] == 3 and post["stranded_residual"] == 10.0
+    # pre-action: allows it at residual 20 exactly?  no -- 20 >= 20 blocks
+    assert pre["taken"] == 3 and pre["stranded_residual"] == 10.0
+    # the boundary differs one step lower, where they diverge
+    post15 = R.run_window(w, R.Policy("p", resid_cap=15), "C_fee_free")
+    pre15 = R.run_window(w, R.Policy("p", resid_cap=15, pre_action_cap=True),
+                         "C_fee_free")
+    assert post15["taken"] == 2          # refuses the 10->20 fill (20 > 15)
+    assert pre15["taken"] == 3           # allows it (10 < 15), stops at 20
+    assert pre15["worst_residual"] > post15["worst_residual"]
