@@ -1158,9 +1158,46 @@ def run_incentive_audit(t, log) -> Optional[dict]:
 
 
 def unsettled_slugs() -> list:
-    """Markets this ledger has FILLED in that carry no `settled` row yet.
-    The venue drops a resolved market from positions, so a settled
-    position is invisible to held_market(); the ledger remembers it."""
+    """Markets this ledger has FILLED in whose economic result is NOT yet
+    closed by a VENUE-CONFIRMED number.
+
+    The venue drops a resolved market from positions, so a settled position is
+    invisible to held_market(); the ledger remembers it.
+
+    ONLY A `realized` ROW CLOSES A MARKET HERE, AND THAT IS A FIX.
+
+    This used to close on `kind in ("settled", "realized")`. But
+    pmus_settlement_auditor.append_authoritative_ledger writes `settled`
+    ALWAYS and `realized` ONLY when the venue confirmed a number, while
+    pmus_q1_executor.realized_today sums ONLY `realized`. So a settlement the
+    venue would not put a number on -- SETTLED_REALIZED_UNCONFIRMED -- removed
+    the market from the held set here AND contributed nothing to
+    realized_today there. Its guaranteed-loss floor stopped being charged and
+    no realized number replaced it: the dollars left BOTH terms of
+    combined_loss and were in neither.
+
+    That silently defeated the invariant combined_loss documents for itself --
+    "a market that settles leaves the HELD set and its result enters
+    realized_today in the same transition. Nothing is in both." The transition
+    is implemented by two functions in two modules and they disagreed about
+    what "settles" means.
+
+    MEASURED 2026-09-15 against an independent reconstruction from immutable
+    fills and confirmed cashflows: the executor reported combined_loss
+    -23.2786 while the conservative figure was -31.0612, a -7.7826 gap made
+    entirely of markets with no venue-confirmed terminal state that had
+    stopped being charged. The conservative figure had already breached the
+    unchanged -30.00 stop.
+
+    A market being flat, matched, absent from risk_set, or operationally
+    complete is NOT a terminal accounting state. Only the venue's own number
+    is. Holding the slug here is what keeps its dollars represented, keeps the
+    settlement sweep polling it (pmus_settlement_sweep.pending_slugs reads
+    THIS), and keeps boundary_preflight's `settlements_current` honest.
+
+    This fails CLOSED: a market the venue never confirms stays charged and
+    keeps blocking new campaigns, rather than quietly vanishing from the
+    budget. That is the intended direction."""
     path = base.q1.base.state_dir() / "ledger.jsonl"
     if not path.exists():
         return []
@@ -1182,9 +1219,33 @@ def unsettled_slugs() -> list:
                     filled[slug] = filled.get(slug, 0) + 1
             except (TypeError, ValueError):
                 pass
-        elif kind in ("settled", "realized"):
+        elif kind == "realized":
+            # the venue put a number on it; realized_today() now carries it
             settled.add(slug)
     return [s for s in filled if s not in settled]
+
+
+def unsettled_detail() -> dict:
+    """Why each unsettled market is still open, so "still charged" is legible
+    rather than mysterious. A market with a bare `settled` row is resolved at
+    the venue but carries no confirmed number, and that distinction is exactly
+    what used to be lost."""
+    path = base.q1.base.state_dir() / "ledger.jsonl"
+    bare_settled: set = set()
+    if path.exists():
+        for line in path.read_text().splitlines():
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(row, dict) and row.get("kind") == "settled" \
+                    and row.get("slug"):
+                bare_settled.add(str(row["slug"]))
+    out = {}
+    for s in unsettled_slugs():
+        out[s] = ("SETTLED_REALIZED_UNCONFIRMED" if s in bare_settled
+                  else "NEVER_SETTLED")
+    return out
 
 
 def ledger_settled_backfill(filled, settled_here, unsettled) -> set:
