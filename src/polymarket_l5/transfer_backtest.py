@@ -77,6 +77,31 @@ def maker_fee(price: D, quantity: D = ONE) -> D:
     return _ceil_cent(D("0.0175") * quantity * price * (ONE - price))
 
 
+def taker_fee(price: D, quantity: D = ONE) -> D:
+    """Gemini prediction-market TAKER fee, ceil-cent.
+
+    SOURCE, and it was already in this repository rather than unknown:
+    gemini_maker/completion_frontier.py records the official Gemini
+    prediction-market schedule, USER-VERIFIED 2026-08-31 --
+        maker 0.0175 * C * P * (1-P)   (waived Sep 2 - Dec 31)
+        taker 0.07   * C * P * (1-P)
+        crypto maker rebate 30% of the TAKER formula, on maker fills priced
+        between 20c and 80c, floored per fill to the cent.
+
+    It had simply never been vendored into the VenueAdapter, whose taker_fee
+    returned None marked "not vendored: GAP (unverified)". That made every
+    conservative Gemini evaluation refuse for want of a number this repo
+    already held. Vendored here, next to maker_fee, so the two cannot drift.
+
+    THE WAIVER IS NOT APPLIED. It is time-bounded and promotional, and quietly
+    pricing against a promo would overstate Gemini's economics the moment it
+    lapses. The rebate is likewise NOT netted here -- it is credited, not
+    assumed, exactly as on the other venue."""
+    if quantity < 0 or price < 0 or price > 1:
+        raise ValueError("invalid Gemini fee inputs")
+    return _ceil_cent(D("0.07") * quantity * price * (ONE - price))
+
+
 def pair_edge(yes: D, no: D) -> D:
     """Vendored: ladder.edge @ 80f40c86 — locked edge after both maker fees."""
     return ONE - yes - no - maker_fee(yes) - maker_fee(no)

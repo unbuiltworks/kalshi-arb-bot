@@ -7,8 +7,8 @@ States: **NOT READY** · **SHADOW** (modelled, no venue evidence) · **VERIFIED*
 |---|---|---|
 | L5 observation | **VERIFIED** | **NOT READY** |
 | L5 prediction | **SHADOW** | **SHADOW** |
-| market mapping | **VERIFIED** | **NOT READY** |
-| executable shadow | **SHADOW** | **NOT READY** |
+| market mapping | **VERIFIED** | **VERIFIED** |
+| executable shadow | **SHADOW** | **SHADOW** |
 | fill evidence | **NOT READY** | **NOT READY** |
 | accounting | **SHADOW** | **NOT READY** |
 | risk | **VERIFIED** | **NOT READY** |
@@ -146,3 +146,85 @@ Intent type, adapters, router: yes — they are the execution path. Latency and
 chain-observer work: yes, but it is **done**, and further latency research is
 now deprioritized. FIDELITY v0.2: yes, and it should **accumulate untouched**
 rather than acquire a v0.3.
+
+
+---
+
+# Update 2026-09-15T12:5xZ — Gemini mapping and fee economics are CLOSED
+
+Two of the three Gemini blockers are gone, and one of them was never a blocker.
+
+## Market mapping — NOT READY → VERIFIED
+
+The mapping is exact arithmetic, not name matching. Both venues key a window on
+the same real instant: the Polymarket slug carries the **start**, the Gemini
+ticker carries the **expiry**.
+
+```
+btc-updown-15m-1789470900  ->  expiry 1789471800  ->  GEMI-BTC15M2609151130-UP
+```
+
+**Verified against the venue, not an index.** Measured live:
+`/v1/prediction-markets/events` listed BTC05M but **not** BTC15M, while
+`GEMI-BTC15M2609151245-UP` returned a live two-sided book (0.62 / 0.70). The
+index is incomplete, so existence is established by constructing the symbol and
+asking for its book. A one-sided book is *not* a mapping success — a contract
+that cannot be priced on the side we want is, for routing, indistinguishable
+from absent. A venue that cannot be asked is **unknown, not absent**.
+
+ETH is deliberately unsupported: only BTC is verified, and guessing is worse
+than declining because a wrong mapping routes real capital into the wrong
+contract.
+
+## Fee economics — NOT READY → VERIFIED, and I had this wrong
+
+I reported the Gemini taker fee as an "unverified GAP". **It was never
+unknown — only unvendored.** The official Gemini prediction-market schedule,
+**user-verified 2026-08-31**, has been in this repository the whole time, in
+`gemini_maker/completion_frontier.py`:
+
+```
+maker  0.0175 * C * P * (1-P)      (waived Sep 2 - Dec 31)
+taker  0.07   * C * P * (1-P)
+crypto maker rebate: 30% of the TAKER formula, maker fills priced 20c-80c,
+                     floored per fill to the cent
+```
+
+`GeminiAdapter.taker_fee` returned `None` marked *"not vendored: GAP
+(unverified)"*, which made every conservative Gemini evaluation refuse for want
+of a number we already held. Now vendored next to `maker_fee` so the two cannot
+drift.
+
+**The waiver is deliberately NOT applied**, and neither is the rebate. Pricing
+against a time-bounded promo overstates the venue the moment it lapses, and a
+rebate is credited, not assumed — the same rule already enforced on Polymarket.
+The guard that refuses a null fee is retained and separately tested, so closing
+this gap did not remove the protection.
+
+## Executable shadow — NOT READY → SHADOW, with a live result
+
+The whole chain ran end to end against live books:
+
+| stage | result |
+|---|---|
+| intent | `int-b06b16f442b36d7a`, `btc-updown-15m-1789475400`, ceiling 0.75 |
+| mapping | **exact** → `GEMI-BTC15M2609151245-UP` |
+| price / fee | 0.66 / **0.16** → effective **0.676**, within ceiling ✓ |
+| would_submit | **true** |
+| would_fill | **false** |
+| **route** | **NEITHER** — *"insufficient or unknown capacity for 10 (depth=1.0)"* |
+
+**The binding Gemini constraint is capacity, not fees or mapping.** The book was
+~**1 contract deep** at the touch against a wanted 10, and the router declined
+rather than routing capital into a book that cannot fill it. Observed spreads
+are also wide against Polymarket's typical 1-2c: 0.62/0.70 on the 15m,
+0.93/0.99 on the 5m.
+
+This is exactly the evidence the Gemini adapter exists to produce, and it is
+**not** an argument for forcing capital there.
+
+## Remaining Gemini blocker
+
+**Risk shell — still NOT READY.** No stop, no inventory bound, no deadman. That
+is the last item before any Gemini bounded live probe, and it must not be
+skipped.

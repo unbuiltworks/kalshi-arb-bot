@@ -378,7 +378,12 @@ class GeminiAdapter:
         return _tb().maker_fee(D(str(px)), D(str(qty)))
 
     def taker_fee(self, px: D, qty: D) -> Optional[D]:
-        return None                         # not vendored: GAP (unverified)
+        # Vendored 2026-09-15 from the official schedule this repo already
+        # carried (user-verified 2026-08-31, see transfer_backtest.taker_fee).
+        # It was never unknown -- only unvendored, and returning None here made
+        # every conservative Gemini evaluation refuse for want of a number we
+        # already had.
+        return _tb().taker_fee(D(str(px)), D(str(qty)))
 
     def complement_price(self, surplus_avg: D, opp_ask: D,
                          tick: D) -> tuple[Optional[D], dict]:

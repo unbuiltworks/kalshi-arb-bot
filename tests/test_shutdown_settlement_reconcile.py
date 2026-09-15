@@ -80,6 +80,14 @@ def _pending(monkeypatch, slugs, results):
     monkeypatch.setattr(cont, "unsettled_slugs", lambda: list(slugs))
     monkeypatch.setattr(cont.base.q1, "has_credentials", lambda: True)
     monkeypatch.setattr(cont, "settle_held", lambda t, s: next(seq))
+    # Pin the round-robin cursor. The settle pass is now BOUNDED and rotates,
+    # and that cursor is durable, so without pinning it these tests inherit a
+    # start offset from whatever ran before and the result sequence lands on
+    # the wrong slug. Rotation is correct in production -- order does not
+    # affect the budget, which prices the whole unsettled set -- but a test
+    # that asserts per-slug outcomes has to fix the starting point.
+    monkeypatch.setattr(cont, "load_settle_cursor", lambda: 0)
+    monkeypatch.setattr(cont, "save_settle_cursor", lambda i: None)
 
 
 def test_a_resolved_market_moves_out_of_pending(monkeypatch):
@@ -115,7 +123,12 @@ def test_an_audit_failure_is_an_error_not_a_settlement(monkeypatch):
              [{"status": "AUDIT_UNAVAILABLE", "error": "HTTPError:429"}])
     out = cont.shutdown_settle_pass(object())
     assert out["settled_now"] == []
-    assert out["still_pending"] == [{"slug": "a", "status": "AUDIT_UNAVAILABLE"}]
+    # asserted on the meaningful FIELDS, not on exact dict equality: the record
+    # gained per-market timing when the pass was bounded, and a diagnostic
+    # record must be free to grow without breaking the property under test.
+    assert [ {"slug": r["slug"], "status": r["status"]}
+             for r in out["still_pending"] ] == \
+        [{"slug": "a", "status": "AUDIT_UNAVAILABLE"}]
     assert out["errors"] == ["a:HTTPError:429"]
 
 

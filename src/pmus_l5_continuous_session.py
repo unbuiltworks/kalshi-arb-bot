@@ -1685,6 +1685,60 @@ def pending_qty_reconciliation(slugs, t=None, limit: int = 8) -> list:
     return rows
 
 
+# --------------------------------------------------------------- settle batch
+SETTLE_CURSOR_FILE = "settle_cursor.json"
+
+
+def settle_batch(order: list, cursor: int, batch: int = SETTLE_AUDIT_BATCH
+                 ) -> tuple[list, int]:
+    """Pick the next `batch` markets round-robin, and return the new cursor.
+
+    EXTRACTED FROM THE CAMPAIGN LOOP so both paths share ONE implementation.
+    The shutdown path had no bound at all and walked EVERY pending market in a
+    single pass; when the accounting fix returned ~38 markets to that set the
+    first pass stopped completing, and a settlement loop that never finishes a
+    cycle is a settlement loop that never reports anything.
+
+    Modular indexing, never a concatenated slice: slicing audited the SAME
+    market twice in one pass whenever fewer markets were pending than the
+    batch size. That bug is preserved-as-fixed here rather than reintroduced.
+    """
+    n = len(order)
+    if not n:
+        return [], cursor
+    i = cursor % n
+    take = min(batch, n)
+    return [order[(i + k) % n] for k in range(take)], cursor + take
+
+
+def _cursor_path():
+    return base.q1.base.state_dir() / SETTLE_CURSOR_FILE
+
+
+def load_settle_cursor() -> int:
+    """Durable round-robin position.
+
+    In memory it resets to 0 on every restart, so a process that restarts more
+    often than it can drain the set re-audits the same head forever and the
+    tail is never reached. Progress has to outlive the process."""
+    try:
+        return int(json.loads(_cursor_path().read_text()).get("i", 0))
+    except Exception:                                        # noqa: BLE001
+        return 0
+
+
+def save_settle_cursor(i: int) -> None:
+    """Never raises: failing to persist progress must not stop the drain."""
+    try:
+        p = _cursor_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"i": int(i)}))
+        os.replace(tmp, p)
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
 def shutdown_settle_pass(t=None) -> dict:
     """Reconcile pending settlements while HALTED, and re-price the budget.
 
@@ -1722,24 +1776,55 @@ def shutdown_settle_pass(t=None) -> dict:
             return {**out, "errors": ["no_credentials"]}
     except Exception as exc:            # noqa: BLE001
         return {**out, "errors": [f"credentials:{type(exc).__name__}"]}
-    for slug in pending:
-        rep = settle_held(t, slug)      # read-only; never raises
+    # BOUNDED, ROUND-ROBIN, AND DURABLE. This loop used to walk EVERY pending
+    # market in one pass. That was survivable while the set was ~1; when the
+    # accounting fix correctly returned ~38 markets to it, the first pass
+    # stopped completing and the loop reported nothing at all. One slow or
+    # unreachable market could block every other market behind it forever.
+    cursor = load_settle_cursor()
+    batch, next_cursor = settle_batch(list(pending), cursor)
+    save_settle_cursor(next_cursor)
+    out["pending_total"] = len(pending)
+    out["batch"] = list(batch)
+    out["cursor"] = cursor
+    out["next_cursor"] = next_cursor
+    for slug in batch:
+        t0 = time.time()
+        try:
+            rep = settle_held(t, slug)  # read-only; documented never to raise
+        except Exception as exc:        # noqa: BLE001
+            # ...but if it ever does, ONE market must not take the cycle down.
+            # The market stays pending -- it is NOT dropped, because a failed
+            # audit is not evidence that a market settled.
+            out["errors"].append(f"{slug}:{type(exc).__name__}: {exc}")
+            out["still_pending"].append(
+                {"slug": slug, "status": "AUDIT_RAISED",
+                 "error": f"{type(exc).__name__}: {exc}",
+                 "elapsed_s": round(time.time() - t0, 2)})
+            continue
+        elapsed = round(time.time() - t0, 2)
         if rep.get("settled"):
             out["settled_now"].append(
                 {"slug": slug,
                  "realized_confirmed": rep.get("realized_confirmed"),
                  "realized_usd": rep.get("realized_usd"),
                  "realized_source": rep.get("realized_source"),
-                 "breakdown": rep.get("breakdown")})
+                 "breakdown": rep.get("breakdown"),
+                 "elapsed_s": elapsed})
         else:
             out["still_pending"].append(
-                {"slug": slug, "status": rep.get("status")})
+                {"slug": slug, "status": rep.get("status"),
+                 "elapsed_s": elapsed})
         if rep.get("status") == "AUDIT_UNAVAILABLE":
             out["errors"].append(f"{slug}:{rep.get('error')}")
     # Re-price the budget from what is NOW known, not from what tripped it.
     try:
         realized = base.q1.realized_today()
-        invs = [base.held_inventory_from_ledger(s) for s in unsettled_slugs()]
+        # the FULL unsettled set, never the batch: the budget must price every
+        # open obligation, not the five we happened to audit this cycle.
+        _remaining = unsettled_slugs()
+        invs = [base.held_inventory_from_ledger(s) for s in _remaining]
+        out["pending_after"] = len(_remaining)
         out["realized_today_usd"] = str(realized)
         out["unsettled_floor_usd"] = str(base.unsettled_floor_total(invs))
         out["combined_loss_usd"] = str(base.combined_loss(realized, invs))
@@ -1816,6 +1901,14 @@ def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None,
         _log("shutdown_idle", verdict=verdict,
              held_preserved=(report or {}).get("held_preserved"),
              settlement=settlement,
+             # progress is the point of this line: a cycle that audits nothing
+             # and a cycle that is stuck must not look the same.
+             pending_total=(settlement or {}).get("pending_total"),
+             pending_after=(settlement or {}).get("pending_after"),
+             audited=(settlement or {}).get("batch"),
+             cursor=(settlement or {}).get("cursor"),
+             settled_now=len((settlement or {}).get("settled_now") or []),
+             settle_errors=(settlement or {}).get("errors"),
              migration_close=migration,
              rearm_recheck=gate,
              refusals=refusals,
@@ -3374,14 +3467,13 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     _rest = [s for s in _uns if s in set(held_all)]
                     _order = _absent + _rest
                     if _order:
-                        # modular indexing, never a doubled list: concatenating
-                        # and slicing audited the SAME market twice in one pass
-                        # whenever fewer markets were unsettled than the batch.
-                        _n = len(_order)
-                        _i = _settle_rr["i"] % _n
-                        _settle_rr["i"] += SETTLE_AUDIT_BATCH
-                        _order = [_order[(_i + _k) % _n]
-                                  for _k in range(min(SETTLE_AUDIT_BATCH, _n))]
+                        # the SAME bounded round-robin the shutdown path uses.
+                        # Extracted to settle_batch() so the two cannot drift;
+                        # the modular-indexing fix (never a concatenated slice,
+                        # which audited one market twice per pass when fewer
+                        # markets were pending than the batch) lives there now.
+                        _order, _settle_rr["i"] = settle_batch(
+                            _order, _settle_rr["i"])
                     for slug in _order:
                         audit = settle_held(t, slug)
                         _log("settlement", slug=slug, **audit)

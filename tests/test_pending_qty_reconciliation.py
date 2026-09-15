@@ -132,7 +132,12 @@ def test_the_settle_pass_carries_it_and_survives_its_failure(monkeypatch):
 
     monkeypatch.setattr(C, "pending_qty_reconciliation", boom)
     out = C.shutdown_settle_pass(t=_Sig())
-    assert out["still_pending"] == [{"slug": "cricket", "status": "PENDING"}]
+    # subset, not exact equality: the record gained per-market timing when the
+    # pass was bounded, and the property under test is that the pass SURVIVES
+    # the failure, not the exact shape of its diagnostic row.
+    assert [{"slug": r["slug"], "status": r["status"]}
+            for r in out["still_pending"]] == \
+        [{"slug": "cricket", "status": "PENDING"}]
     assert any("qty_reconciliation" in e for e in out["errors"])
 
     monkeypatch.setattr(C, "pending_qty_reconciliation",

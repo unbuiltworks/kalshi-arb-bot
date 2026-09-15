@@ -134,21 +134,34 @@ def test_both_venues_share_one_evaluation_path():
         assert ev.available_price == "0.57", "both price the same book alike"
 
 
-def test_gemini_taker_fee_is_an_unverified_gap_and_refuses_rather_than_zeroes():
-    """GeminiAdapter.taker_fee returns None -- 'not vendored: GAP
-    (unverified)'. The conservative default must therefore REFUSE to price
-    Gemini, with a reason, rather than substitute a zero fee. A fabricated 0
-    reads as the cheapest possible execution and would make Gemini win every
-    routing decision on an economics we have never confirmed.
+def test_gemini_taker_fee_is_now_vendored_from_the_verified_schedule():
+    """It was never unknown -- only UNVENDORED. The official Gemini schedule
+    (user-verified 2026-08-31) has always been in this repo, in
+    gemini_maker/completion_frontier.py: taker 0.07 * C * P * (1-P). The
+    adapter returned None marked "GAP (unverified)", which made every
+    conservative Gemini evaluation refuse for want of a number we held.
 
-    This is the single blocker on Gemini reaching executable-shadow VERIFIED.
+    The Sep 2 - Dec 31 maker WAIVER is deliberately NOT applied: pricing
+    against a time-bounded promo overstates the venue the moment it lapses.
     """
     ev = evaluate(_intent(), GeminiAdapter(), _book(venue="GEMINI"), now=0.0)
+    assert ev.expected_fee is not None
+    assert "taker" in ev.expected_fee_basis
+    assert ev.effective_cost is not None
+    # 0.07 * 10 * 0.57 * 0.43 = 0.1715 -> ceil-cent 0.18
+    assert ev.expected_fee == "0.18"
+
+
+def test_an_unknown_fee_still_refuses_rather_than_zeroing(monkeypatch):
+    """The guard must survive the gap being closed: if a venue ever cannot
+    price, a fabricated 0 reads as the cheapest possible execution and would
+    win every routing decision on economics we never confirmed."""
+    a = GeminiAdapter()
+    monkeypatch.setattr(type(a), "taker_fee", lambda self, px, qty: None)
+    ev = evaluate(_intent(), a, _book(venue="GEMINI"), now=0.0)
     assert ev.expected_fee is None
     assert "unavailable" in ev.expected_fee_basis
-    assert ev.would_submit is False
-    assert "fee unknown" in ev.would_submit_reason
-    assert ev.effective_cost is None, "no cost may be invented from a null fee"
+    assert ev.would_submit is False and ev.effective_cost is None
 
 
 def test_a_gemini_maker_quote_still_prices_when_explicitly_asked():
@@ -217,3 +230,51 @@ def test_router_refuses_evaluations_of_a_different_intent():
     other = _intent(max_acceptable_price="0.59")
     with pytest.raises(ValueError):
         route(i, [_ev("PMUS", "0.55", "100", intent=other)])
+
+
+# ------------------------------------------------------- gemini market mapping
+
+def test_gemini_mapping_is_exact_arithmetic_on_the_expiry_instant():
+    """Both venues key the window on the same real instant: Polymarket's slug
+    carries the START, Gemini's ticker carries the EXPIRY."""
+    from src.l5_adapters.gemini_mapping import gemini_symbol, parse_window
+    assert parse_window("btc-updown-15m-1789470900") == ("btc", 900, 1789470900)
+    m = gemini_symbol("btc-updown-15m-1789470900")
+    assert m["expiry_epoch"] == 1789470900 + 900
+    assert m["symbol"] == "GEMI-BTC15M2609151130-UP"
+    # 1789470900 is 11:15:00Z, so the 5m window expires 11:20, not 11:25.
+    assert gemini_symbol("btc-updown-5m-1789470900")["symbol"] \
+        == "GEMI-BTC05M2609151120-UP"
+
+
+def test_gemini_mapping_declines_rather_than_guesses():
+    """A wrong mapping routes real capital into the wrong contract, so no name
+    similarity or fuzzy matching exists anywhere in this path."""
+    from src.l5_adapters.gemini_mapping import gemini_symbol
+    assert gemini_symbol("eth-updown-5m-1789470900") is None, "ETH is unverified"
+    assert gemini_symbol("asc-nfl-den-kc-2026-09-14-pos-6pt5") is None
+    assert gemini_symbol("") is None
+
+
+def test_gemini_resolve_asks_the_venue_and_a_one_sided_book_is_not_mapped():
+    """The events index is INCOMPLETE -- measured 2026-09-15, it listed BTC05M
+    but not BTC15M while BTC15M's book was live -- so existence is established
+    by asking for the book. A book that cannot be priced on both sides is, for
+    routing, indistinguishable from absent."""
+    from src.l5_adapters.gemini_mapping import resolve
+    two_sided = lambda s: {"bids": [{"price": "0.62"}], "asks": [{"price": "0.70"}]}
+    m, conf, why = resolve("btc-updown-15m-1789470900", two_sided)
+    assert conf == "exact" and m["top_bid"] == "0.62" and why is None
+
+    one_sided = lambda s: {"bids": [{"price": "0.62"}], "asks": []}
+    m, conf, why = resolve("btc-updown-15m-1789470900", one_sided)
+    assert m is None and conf == "none" and "not two-sided" in why
+
+
+def test_a_venue_that_cannot_be_asked_is_unknown_not_absent():
+    from src.l5_adapters.gemini_mapping import resolve
+    def boom(s):
+        raise TimeoutError("venue unreachable")
+    m, conf, why = resolve("btc-updown-15m-1789470900", boom)
+    assert m is None and conf == "none"
+    assert "unknown, NOT absent" in why
