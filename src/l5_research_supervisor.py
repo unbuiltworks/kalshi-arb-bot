@@ -376,7 +376,12 @@ class Supervisor:
                           ("L5_ARM_SCORE",
                            "analysis.l5.pair_formation.arm_score"),
                           ("L5_FRONTIER",
-                           "analysis.l5.pair_formation.frontier")):
+                           "analysis.l5.pair_formation.frontier"),
+                          # ADDITIVE REPORTING ONLY. The ADAPTED arms read the
+                          # same evidenced-fill stream and write their own
+                          # store; they do not alter R/S/D, which stays frozen.
+                          ("L5_ADAPTED",
+                           "analysis.l5.adapted.collect")):
             try:
                 import importlib
                 rep = importlib.import_module(mod).report(out_dir)
