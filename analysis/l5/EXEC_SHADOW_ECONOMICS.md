@@ -1,9 +1,21 @@
 # P2 — the first economic result, and it is negative for a structural reason
 
-**319 maker quotes decided → 8 evidenced fills → 7 positions → 6 settled.**
+Two readings, 14 minutes apart, so the trend is visible rather than a single
+snapshot:
 
-**`realized_shadow` = −$91.14.** Matched-pair P&L: **$0.00**. Residual P&L:
-**−$90.91**. Fees: $0.23.
+| | 16:46Z | 17:00Z |
+|---|---|---|
+| maker quotes decided | 319 | 364 |
+| evidenced fills | 8 | 11 |
+| positions | 7 | 8 |
+| settled | 6 | 7 |
+| **paired positions** | **0** | **0** |
+| `realized_shadow` | −$91.14 | **−$102.77** |
+| matched-pair P&L | $0.00 | **$0.00** |
+| residual P&L | −$90.91 | −$102.54 |
+| fees | $0.23 | $0.23 |
+
+The loss grows; the matched leg stays exactly zero.
 
 `realized_shadow` is a **settled counterfactual** — evidenced by public prints,
 settled by the venue's own resolution, never submitted, no cash moved. It is
@@ -14,7 +26,8 @@ not realized profit and may not be reported as any.
 ## The number that matters is the zero, not the minus ninety-one
 
 Matched-pair P&L is **exactly $0.00 in every group** — by venue, by cohort, by
-clock. Not small. Zero. **Every one of the 7 positions is one-sided.**
+clock. Not small. Zero. **Every one of the 8 positions is one-sided**, and the
+report now says so in words rather than leaving it to be inferred from a zero.
 
 That is not a bad result from L5's strategy. It is a different strategy:
 
@@ -29,25 +42,42 @@ has **no demonstrated predictive skill**. The shadow is currently composed
 entirely of that exposure, and it lost. The magnitude is meaningless at n=8;
 the **composition** is the finding.
 
-## Why the pairs never complete
+## Why the pairs never complete — it is arithmetic, not a bug
 
-The evidenced fill rate is **8 / 319 = 2.5 %**. A matched pair needs **two**
-evidenced fills, on **opposite sides**, in the **same market**. At a 2.5 % fill
-rate spread over 7 distinct markets, that is roughly the square of a small
-number — and it happened zero times.
+The evidenced fill rate is **≈3 %** (8/319, then 11/364). A matched pair needs
+**two** evidenced fills, on **opposite sides**, in the **same market**. At a 3 %
+fill rate across ~8 markets the expected number of completed pairs is about
+**0.06**. We observed 0. There is nothing to debug in the pairing logic.
+
+So the lever is the fill rate — and a fill rate is not one thing. Every decided
+no-fill is now binned by cause:
+
+| bucket | meaning | can we fix it? |
+|---|---|---|
+| `NO_FLOW` | nothing crossed our price at all | **No.** Not by anything we do to our order |
+| `QUEUE_BOUND` | flow arrived; the size resting ahead absorbed all of it | Only by paying a tick — **62× L5's edge** |
+| `PARTIAL` | the queue cleared but not for our whole size | A smaller quote would have filled |
+
+The obvious response to `QUEUE_BOUND` is to improve the join by one tick. The
+minimum-size study priced that at 62× L5's own measured drag, so even the
+convertible bucket is not obviously worth converting. The report carries that
+caveat with the number so it cannot be read the other way.
 
 The verdict census shows where the quotes go:
 
 | venue | FILLED | NO_FILL | UNKNOWN |
 |---|---|---|---|
-| PMUS | 7 | 13 | 54 |
-| GEMINI | 1 | 14 | 230 |
+| PMUS | 10 | 15 | 62 |
+| GEMINI | 1 | 16 | 260 |
 
-**UNKNOWN dominates, especially on Gemini (230 of 245).** An unknown verdict is
+**UNKNOWN dominates, especially on Gemini (260 of 277).** An unknown verdict is
 a quote whose outcome we could not read — resting across a restart, or prints
 we could not fetch back far enough. It is not a no-fill, and it is not a fill.
 Until that fraction comes down, the fill rate itself is not well measured, and
-neither is anything computed from it.
+neither is anything computed from it. Most of those were a quote that rested a
+full 300 s while the Gemini socket watched continuously and nothing crossed it
+— which **is** an evidenced no-fill, and is now recorded as one. Quotes placed
+before that change keep their UNKNOWN verdict; the effect appears on new ones.
 
 ## Where the loss actually sits
 
