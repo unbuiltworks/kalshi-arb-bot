@@ -1,9 +1,12 @@
 """24/7 FIDELITY runner. READ ONLY -- public endpoints, no credentials, no order path.
 
 ESTIMAND A ONLY. Arbitrary-state WAIT/ACT (estimand B) is deliberately NOT
-served here: the activity feed's newest row is a median 28.5s old (7.6-55.2s,
-measured 2026-09-15 over 12 samples), so a wall-clock freeze cannot observe its
-own prediction window. B needs either a state feed without that lag or a freeze
+served here: L5's fills reach us a MEDIAN 15.0s after the venue stamps them
+(p05 1.5, p95 29.8, max 31.6; n=208, analysis/l5/latency/OBSERVABILITY.md), so a
+wall-clock freeze cannot observe its own prediction window. The earlier 28.5s
+figure came from 12 samples and OVERSTATED it -- the lag is uniform on roughly
+[0, 31s] because the feed is a ~31s batch refresh, and small samples of a
+uniform are badly behaved. B needs either a state feed without that lag or a freeze
 deliberately held back behind it, and neither is built. It is reported NOT READY
 rather than served badly.
 
@@ -206,7 +209,7 @@ def digest(out_dir: str, model: FidelityV0, *, feed_lag_s: Optional[float],
         "fill_anchored": est.get("fill_anchored", 0),
         "arbitrary_state": est.get("arbitrary_state", 0),
         "arbitrary_state_status": ("NOT READY: the activity feed is a median "
-                                   "28.5s behind, so a wall-clock freeze cannot "
+                                   "15s behind (p50, n=208; p95 30s), so a wall-clock freeze cannot "
                                    "observe its own prediction window"),
         "feed_lag_s": feed_lag_s,
         "feed_consecutive_failures": feed_failures,

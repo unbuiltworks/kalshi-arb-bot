@@ -2,7 +2,8 @@
 
 WHY THIS FILE EXISTS. Freezing predictions at wall-clock moments and resolving
 them from this feed cannot measure ACT/WAIT at all. Measured 2026-09-15 over 12
-samples: the newest row the activity feed serves is a MEDIAN 28.5 SECONDS OLD
+samples: L5's fills reach us a MEDIAN 15.0 SECONDS after the venue stamps
+them (p95 29.8s, n=208; the earlier 28.5s came from 12 samples and overstated it)
 (7.6-55.2s), and the age sawtooths -- the signature of batched ingestion, not
 streaming. L5's BTC15m inter-fill median is 2 s. So a 30 s prediction window is
 mostly invisible at resolution time, and the "ACT within 30s = 0.46" seen under
