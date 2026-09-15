@@ -1,5 +1,47 @@
 # L5_FIDELITY — prospective scoreboard
 
+## v0.2 IS FROZEN FOR ACCUMULATION (from 2026-09-15T11:10:01Z)
+
+**v0.2 is verified and is now accumulating. It does not change again for a
+small-n reason.** The rule, so that it binds rather than being re-litigated
+whenever an early score looks unflattering:
+
+- **No change to the model because n is small.** v0 → v0.1 → v0.2 all happened
+  inside a few hours. That was right each time — a train/serve skew, then a
+  version hash that did not identify the model — but each cut resets the
+  prospective sample to zero, and a lineage that keeps resetting never produces
+  evidence.
+- **Early scores are reported, not acted on.** They are labelled
+  EARLY/INSUFFICIENT until the sample is meaningful.
+- **v0.2 is never tuned against its own prospective test set.** Looking at the
+  prospective scores and adjusting the model is how a test set becomes a
+  training set. Any substantive improvement becomes **v0.3** and scores only
+  forward from its own cutover.
+- **What may still change without a new version:** the service, the digest, the
+  store, the scoring instrumentation. None of these is part of the model's
+  content hash, which is exactly why the hash was fixed first.
+
+### Verified in production before the freeze
+
+At boot 2026-09-15T11:20:39Z, from the runner itself:
+
+| check | result |
+|---|---|
+| deployment | `f0ac621e` SUCCESS, then `eb0f1fb3` SUCCESS |
+| content hash matches artifact | **true** (`v0.2-85b4260cc30a`) |
+| a changed parameter changes the version | **true** |
+| size bins sum to 1 / all positive | **true** over all 151 bin sets |
+| true `state_n` vs sampled | **2045 vs 2000**, separately represented |
+| tamper failures | **0** |
+| freeze → resolve cycle | live (25 frozen, 17 resolved at that boot) |
+| v0.1 rows preserved | 52 frozen / 42 resolved, seal `bcd099ae9f7a5b4a` |
+
+**Clean cutover:** v0.1's last freeze (1789470587.14) *precedes* v0.2's first
+(1789470601.60) by 14.5 s, the redeploy gap. The lineages do not overlap, so no
+v0.2 result is built from a v0.1 prediction, and **none of v0.1's 52/42 is
+credited to v0.2**.
+
+
 ## v0.2 — THE VERSION STRING DID NOT IDENTIFY THE MODEL
 
 Found while implementing the size fix, and it is the more serious of the two.
