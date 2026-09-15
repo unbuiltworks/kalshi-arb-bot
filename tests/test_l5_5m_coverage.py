@@ -225,3 +225,26 @@ def test_incentive_audit_never_truncates_reward_rows_silently():
                if isinstance(n, ast.Assign)
                and getattr(n.targets[0], "id", "") == "ROWS_DETAIL_MAX")
     assert cap >= 1000, cap
+
+
+def test_both_horizons_are_enumerated_and_kept_apart():
+    """5m-only was watching the cohort where L5 barely trades. BTC15m is 5,231
+    of 5,500 recent fills and is the only cohort whose density is unchanged
+    from canonical, so the denominator has to cover both horizons."""
+    assert R.HORIZONS == {"5m": 300, "15m": 900}
+    now = 1789420000.0
+    s5 = R.window_start(now, 0, "5m")
+    s15 = R.window_start(now, 0, "15m")
+    assert s5 % 300 == 0 and s15 % 900 == 0
+    assert R.slug("btc", s15, "15m").endswith(f"-updown-15m-{s15}")
+    r = R.sample(asset="btc", start=s15, now=s15 - 60.0,
+                 book={"up_bid": 0.48, "up_ask": 0.52}, inv={},
+                 flow={"l5_fill": False, "buy_qty": 0, "sell_qty": 0},
+                 history=[], horizon="15m")
+    assert r["horizon"] == "15m"
+    assert r["window_end"] == s15 + 900
+    assert r["tte_s"] == 960.0                 # 60s pre-roll + the 900s window
+    d = R.digest("btc", s15, [r], "15m")
+    assert d["horizon"] == "15m" and d["slug"] == R.slug("btc", s15, "15m")
+    # coverage is against the RIGHT window length, not always 300s
+    assert d["coverage"] == 1 * R.SAMPLE_S / (900 + R.PRE_ROLL_S)

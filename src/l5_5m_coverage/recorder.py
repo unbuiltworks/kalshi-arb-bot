@@ -32,7 +32,13 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 SCHEMA = "l5_5m_coverage/v1"
 ASSETS = ("btc", "eth")
-HORIZON = "5m"
+# 2026-09-15: 15m ADDED. The 5m-only recorder was watching the cohort where L5
+# barely trades -- 269 of 5,500 recent fills -- and NOT watching BTC15m, which
+# is 5,231 of them and the only cohort whose density is unchanged from
+# canonical. The denominator has to cover the whole candidate universe, so both
+# horizons are enumerated.
+HORIZONS = {"5m": 300, "15m": 900}
+HORIZON = "5m"                     # default for the single-horizon helpers
 WINDOW_S = 300
 PRE_ROLL_S = 120.0          # capture opens T-120s, per the research spec
 SAMPLE_S = 1.0
@@ -45,15 +51,20 @@ R_NO_HELD = "no inventory held: pair undefined before a first leg exists"
 R_NO_SOURCE_TS = "venue served no timestamp of its own on this payload"
 
 
-def window_start(now: float, k: int = 0) -> int:
-    """The k-th 5m boundary at or after `now`. Windows are at fixed epochs,
-    so they are ENUMERATED, never discovered -- the Gemini late-subscribe
-    defect cannot occur here by construction."""
-    return int(now // WINDOW_S + (1 if now % WINDOW_S else 0) + k) * WINDOW_S
+def window_start(now: float, k: int = 0, horizon: str = HORIZON) -> int:
+    """The k-th boundary at or after `now` for this horizon. Windows are at
+    fixed epochs, so they are ENUMERATED, never discovered -- the Gemini
+    late-subscribe defect cannot occur here by construction."""
+    w = HORIZONS[horizon]
+    return int(now // w + (1 if now % w else 0) + k) * w
 
 
-def slug(asset: str, start: int) -> str:
-    return f"{asset}-updown-{HORIZON}-{start}"
+def slug(asset: str, start: int, horizon: str = HORIZON) -> str:
+    return f"{asset}-updown-{horizon}-{start}"
+
+
+def duration(horizon: str) -> int:
+    return HORIZONS[horizon]
 
 
 def due_at(start: int) -> float:
@@ -140,7 +151,8 @@ def inventory_state(up: float, dn: float, cost_up: float, cost_dn: float,
 def sample(*, asset: str, start: int, now: float, book: Optional[Dict[str, Any]],
            inv: Dict[str, Any], flow: Optional[Dict[str, Any]],
            history: Sequence[Dict[str, Any]],
-           t_source: Optional[float] = None) -> Dict[str, Any]:
+           t_source: Optional[float] = None,
+           horizon: str = HORIZON) -> Dict[str, Any]:
     """One complete market-state observation. L5 doing nothing is a valid
     and REQUIRED observation: it is the CONTINUE class."""
     bs = book_state(book)
@@ -162,8 +174,9 @@ def sample(*, asset: str, start: int, now: float, book: Optional[Dict[str, Any]]
         "t_source": t_source,
         "t_source_reason": (None if t_source is not None else R_NO_SOURCE_TS),
         "source_age_s": (now - t_source) if t_source is not None else None,
-        "window_start": start, "window_end": start + WINDOW_S,
-        "tte_s": start + WINDOW_S - now,
+        "window_start": start, "window_end": start + HORIZONS[horizon],
+        "horizon": horizon,
+        "tte_s": start + HORIZONS[horizon] - now,
         "pre_roll": now < start,
         "mid": mid,
         "delta_attainable_pair_cost": d_pair,
@@ -192,26 +205,29 @@ def sample(*, asset: str, start: int, now: float, book: Optional[Dict[str, Any]]
     return rec
 
 
-def digest(asset: str, start: int, samples: List[Dict[str, Any]]) -> Dict[str, Any]:
+def digest(asset: str, start: int, samples: List[Dict[str, Any]],
+           horizon: str = HORIZON) -> Dict[str, Any]:
     """Per-window coverage, reported so a collection defect is visible in the
     digest rather than reconstructed months later from sparse windows."""
     if not samples:
-        return {"schema": SCHEMA, "asset": asset, "slug": slug(asset, start),
+        return {"schema": SCHEMA, "asset": asset, "horizon": horizon,
+                "slug": slug(asset, start, horizon),
                 "n_samples": 0, "coverage": None,
                 "coverage_reason": "no samples: capture never opened"}
     ts = [s["t"] for s in samples]
     gaps = [b - a for a, b in zip(ts, ts[1:])] or [0.0]
     span = ts[-1] - ts[0]
     return {
-        "schema": SCHEMA, "asset": asset, "slug": slug(asset, start),
+        "schema": SCHEMA, "asset": asset, "horizon": horizon,
+        "slug": slug(asset, start, horizon),
         "n_samples": len(samples),
         "first_sample_utc": ts[0],
         "last_sample_utc": ts[-1],
         "first_sample_lead_s": start - ts[0],      # >0 means we were early
-        "last_sample_tte_s": start + WINDOW_S - ts[-1],
+        "last_sample_tte_s": start + HORIZONS[horizon] - ts[-1],
         "span_s": span,
         "max_gap_s": max(gaps),
-        "coverage": (len(samples) * SAMPLE_S / (WINDOW_S + PRE_ROLL_S)),
+        "coverage": (len(samples) * SAMPLE_S / (HORIZONS[horizon] + PRE_ROLL_S)),
         "two_sided_frac": sum(1 for s in samples if s["two_sided"]) / len(samples),
         "l5_fills": sum(1 for s in samples if s["l5_acted"]),
         "samples_with_unread_l5_feed": sum(1 for s in samples

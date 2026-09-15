@@ -129,26 +129,29 @@ def main(argv=None) -> int:
         # ROLL EVERY ITERATION, never on a discovery tick: that fusion is what
         # cost the Gemini collector 82s of every window.
         for asset in R.ASSETS:
-            for k in (0, 1):
-                st = R.window_start(now, k)
-                if now >= R.due_at(st) and (asset, st) not in open_w:
-                    open_w[(asset, st)] = {"samples": [], "hist": []}
+            for horizon in R.HORIZONS:
+                for k in (0, 1):
+                    st = R.window_start(now, k, horizon)
+                    key = (asset, horizon, st)
+                    if now >= R.due_at(st) and key not in open_w:
+                        open_w[key] = {"samples": [], "hist": []}
         if now - last_fill_poll >= FILL_POLL_S or not fills_cache[1]:
             fills_cache = l5_fills(fill_pages)
             last_fill_poll = now
             consec_fail = 0 if fills_cache[1] else consec_fail + 1
         fills, fills_ok = fills_cache
-        for (asset, st), w in list(open_w.items()):
-            if now > st + R.WINDOW_S:
-                d = R.digest(asset, st, w["samples"])
+        for (asset, horizon, st), w in list(open_w.items()):
+            if now > st + R.HORIZONS[horizon]:
+                d = R.digest(asset, st, w["samples"], horizon)
                 digests.append(d)
                 with open(os.path.join(a.out_dir, "digests.jsonl"), "a") as fh:
                     fh.write(json.dumps(d) + "\n")
-                del open_w[(asset, st)]
+                del open_w[(asset, horizon, st)]
                 continue
-            sl = R.slug(asset, st)
+            sl = R.slug(asset, st, horizon)
             book, src = book_for(sl, meta_cache)
-            recent = [f for f in fills if st - R.PRE_ROLL_S <= f[1] <= st + R.WINDOW_S]
+            recent = [f for f in fills
+                      if st - R.PRE_ROLL_S <= f[1] <= st + R.HORIZONS[horizon]]
             up = sum(f[5] for f in recent if f[3] == "Up" and f[2] == "BUY")
             dn = sum(f[5] for f in recent if f[3] != "Up" and f[2] == "BUY")
             s = R.sample(
@@ -160,7 +163,7 @@ def main(argv=None) -> int:
                        "buy_qty": sum(f[5] for f in recent if f[2] == "BUY"),
                        "sell_qty": sum(f[5] for f in recent if f[2] == "SELL")}
                       if fills_ok else None),
-                history=w["hist"])
+                history=w["hist"], horizon=horizon)
             w["samples"].append(s)
             w["hist"].append({"t": now, "mid": s["mid"],
                               "attainable_pair_cost": s["attainable_pair_cost"]})
