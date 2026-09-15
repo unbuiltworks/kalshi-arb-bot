@@ -70,10 +70,14 @@ SCHEMA = "l5_executable_shadow/v1"
 COHORTS = ("BTC15m", "BTC5m")
 POLL_S = 15.0
 DIGEST_S = 300.0
-# how long a hypothetical maker quote is allowed to rest before we decide from
-# prints. Long enough for a 5m window to actually trade, short enough that the
-# quote is still plausibly ours.
-MAKER_HORIZON_S = 120.0
+# How long a hypothetical maker quote is allowed to rest before we decide it
+# from prints. Raised from 120s to 300s on evidence: at 120s, 43 of 44 decided
+# placements came back UNDECIDED for want of any print crossing the join price,
+# so the horizon was measuring its own shortness rather than the venue. 300s
+# covers a whole 5m window and a third of a 15m one, and a longer observation
+# window only ever adds evidence -- prints before placement are excluded either
+# way, so this cannot manufacture a fill.
+MAKER_HORIZON_S = 300.0
 # book re-reads after an intent, so "the price moved right after" is recorded
 # rather than argued about
 EVOLUTION_AT_S = (30.0, 60.0, 120.0)

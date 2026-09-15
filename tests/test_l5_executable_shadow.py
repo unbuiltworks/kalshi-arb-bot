@@ -317,15 +317,35 @@ def test_walk_levels_reports_the_per_level_shape_of_the_fill():
 # ------------------------------------------------------------ money-safety
 
 def test_the_shadow_imports_no_order_path():
-    """A research service that can import a signer is one edit from trading."""
+    """A research service that can import a signer is one edit from trading.
+
+    IN A FRESH SUBPROCESS, because `sys.modules` is process-global: run inside
+    the full suite, any other test that imports the executor makes this pass or
+    fail for reasons having nothing to do with the shadow. The first version of
+    this test asserted against the whole suite's imports and passed standalone
+    purely by accident of ordering.
+    """
+    import subprocess
     import sys
-    for m in ("src.l5_shadow.service", "src.l5_shadow.venues",
-              "src.l5_shadow.executable", "src.l5_shadow.maker"):
-        __import__(m)
-    banned = [m for m in sys.modules
-              if m.startswith(("src.pmus_q1_executor", "src.pmus_spring",
-                               "src.pmus_l5_continuous"))]
+    code = (
+        "import sys;"
+        "import src.l5_shadow.service;"
+        "import src.l5_shadow.venues;"
+        "import src.l5_shadow.executable;"
+        "import src.l5_shadow.maker;"
+        "from src.l5_shadow import terms;"
+        "terms.gemini_terms();"
+        "print(' '.join(sorted(m for m in sys.modules "
+        "if m.startswith('src.'))))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                         text=True, timeout=120)
+    assert out.returncode == 0, out.stderr[-800:]
+    closure = out.stdout.split()
+    banned = [m for m in closure
+              if m.startswith(("src.pmus_", "src.l5_venue_adapter",
+                               "src.kalshi_", "src.gemini_"))]
     assert not banned, f"order path reachable from the shadow: {banned}"
+    assert "src.l5_shadow.service" in closure      # the probe really ran
 
 
 # ------------------------------------------------------- the deployment shape
@@ -372,3 +392,47 @@ def test_the_service_deploys_only_from_its_promotion_sentinel():
 def test_the_promotion_sentinel_exists():
     import pathlib
     assert pathlib.Path("deploy/_promote/l5-exec-shadow").exists()
+
+
+# ----------------------------------------------------------- what we would hold
+
+def _pair_intent(**kw):
+    base = dict(cohort="BTC15m", market_key="btc-updown-15m-1789470900",
+                source_state_id="s1", t_utc=1.0, tte_s=9.0, action="COMPLETE",
+                desired_outcome="Down", desired_inventory="10",
+                incremental_qty="10", max_acceptable_price="0.70",
+                current_matched="4", residual="6", model_version="test")
+    base.update(kw)
+    return DesiredInventoryAction(**base)
+
+
+def test_resulting_inventory_is_reconstructed_from_the_frozen_state():
+    ev = evaluate_executable(_pair_intent(), _terms(), [(D("0.60"), D("100"))])
+    # up = 4 + 6 = 10, dn = 4 + 0 = 4, then +10 Down -> dn 14
+    assert ev.resulting_matched == "10" and ev.resulting_residual == "-4"
+    inv = ev.extra["resulting_inventory"]
+    assert inv["completes_pair"] is True and inv["reduces_residual"] is True
+    assert inv["matched_delta"] == "6"
+
+
+def test_extending_the_long_side_does_not_complete_a_pair():
+    ev = evaluate_executable(_pair_intent(desired_outcome="Up", action="EXTEND"),
+                             _terms(), [(D("0.60"), D("100"))])
+    inv = ev.extra["resulting_inventory"]
+    assert inv["completes_pair"] is False
+    assert inv["reduces_residual"] is False
+    assert ev.resulting_residual == "16"
+
+
+def test_pair_cost_is_left_none_rather_than_filled_with_half_a_pair():
+    """A pair cost needs the other leg's average, and we hold nothing yet."""
+    ev = evaluate_executable(_pair_intent(), _terms(), [(D("0.60"), D("100"))])
+    assert ev.pair_cost is None
+    assert "not computable from one action" in ev.extra["pair_cost_basis"]
+
+
+def test_resulting_inventory_is_absent_when_the_action_is_not_submittable():
+    ev = evaluate_executable(_pair_intent(max_acceptable_price="0.50"),
+                             _terms(), [(D("0.60"), D("100"))])
+    assert ev.would_submit is False
+    assert "resulting_inventory" not in ev.extra

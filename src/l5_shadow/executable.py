@@ -179,12 +179,51 @@ def evaluate_executable(intent, terms: VenueTerms, levels: Optional[Sequence], *
     ev.would_submit_reason = (
         f"{qty} executable at VWAP {row['vwap']} over {row['levels_used']} "
         f"level(s); all-in {row['effective_cost']} <= ceiling {ceiling}")
+    _resulting_inventory(ev, intent, row)
     ev.would_fill = True
     ev.would_fill_basis = (
         f"{ev.extra['immediately_executable_qty']} resting at acceptable "
         f"prices. UPPER BOUND -- queue position is unobservable from a public "
         f"book, so this is not evidence of a fill.")
     return ev
+
+
+def _resulting_inventory(ev: AdapterEvaluation, intent, row: Dict[str, Any]
+                         ) -> None:
+    """What we would HOLD if this modelled fill happened -- clearly modelled.
+
+    Reconstructed exactly from the intent's own `current_matched` and signed
+    `residual` (up = m + max(r,0), dn = m + max(-r,0)), so it cannot drift from
+    the state the intent was frozen against.
+
+    `pair_cost` stays None on purpose. A pair cost is this leg's price plus the
+    average cost of the inventory it matches against, and a single-action
+    evaluation does not know what the opposite side cost us -- we hold nothing
+    yet. Filling it with this leg's price alone would report half a pair as a
+    whole one, which is the number that decides whether a pair is fee-safe.
+    """
+    m = D(str(intent.current_matched))
+    r = D(str(intent.residual))
+    up, dn = m + max(r, D("0")), m + max(-r, D("0"))
+    got = D(str(row["filled"]))
+    if intent.desired_outcome == "Up":
+        up += got
+    else:
+        dn += got
+    ev.resulting_matched = str(min(up, dn))
+    ev.resulting_residual = str(up - dn)
+    ev.pair_cost = None
+    ev.extra["resulting_inventory"] = {
+        "up": str(up), "dn": str(dn),
+        "matched_delta": str(min(up, dn) - m),
+        "residual_before": str(r), "residual_after": str(up - dn),
+        "reduces_residual": bool(abs(up - dn) < abs(r)),
+        "completes_pair": bool(min(up, dn) > m),
+        "basis": "MODELLED: assumes the whole evaluated quantity fills",
+    }
+    ev.extra["pair_cost_basis"] = (
+        "not computable from one action: a pair cost needs the average cost of "
+        "the inventory this leg matches against, and nothing is held yet")
 
 
 def _score_qty(levels: Sequence, qty: D, ceiling: D, fee_fn,

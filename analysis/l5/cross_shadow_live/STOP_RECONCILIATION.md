@@ -221,3 +221,67 @@ have surfaced in minutes instead of by inference from a silent log.
 
 This is a second change to a money-path module and is deliberately left for
 explicit authorization.
+
+---
+
+# 2026-09-15T13:2xZ — the bounded settlement pass is verified live, and it exposed the next layer
+
+Three consecutive `shutdown_idle` cycles on `pmus-spring-l5-probe`
+(commit `6adcc4c43e67`), read from production logs:
+
+| cycle | cursor → next | batch | pending_total | settled_now |
+|---|---|---|---|---|
+| 12:56:15Z | 0 → 5 | fokus-nemi … burvol-gasdav | 98 | 0 |
+| 13:09:10Z | 5 → 10 | salvas-tremyk … bot-pal | 98 | 0 |
+| 13:21:55Z | 10 → 15 | pitser-kimdmy … norgom-ollwal | 98 | 0 |
+
+**The liveness property holds in production:** the durable cursor advances
+0 → 5 → 10, each batch is a disjoint set of five, and the pass is bounded at
+five of ninety-eight rather than attempting all of them and timing out. That is
+exactly what the batching fix was for, and it is now observed rather than
+asserted.
+
+## And it makes the real blocker visible
+
+`settled_now` is **0 on every cycle**, and every error is one of two things:
+
+```
+HTTP Error 429: Too Many Requests
+activity_walk_short_of_since: ended=max_pages; oldest=2026-09-13T03:18:11
+```
+
+The markets at the head of the queue settled on **2026-09-06**. The activity
+walk exhausts `max_pages` at **2026-09-13** — it cannot reach back far enough
+to see their settlement rows at all. So the oldest pending markets are not slow
+to settle; under this audit path they are **unreachable**, and no amount of
+cursor rotation will reach them.
+
+That is a *pagination horizon* problem, and it is a different defect from the
+unbounded-pass problem that was fixed. The fix worked and uncovered the next
+layer.
+
+## This does not require intervention, and here is why
+
+| quantity | value | across all three cycles |
+|---|---|---|
+| `realized_today_usd` | **-22.6851** | unchanged |
+| `unsettled_floor_usd` | **-19.7544** | unchanged |
+| `combined_loss_usd` | **-42.4395** | unchanged |
+| `combined_budget_usd` | -30.00 | |
+| `budget_permits_normal_operation` | **false** | unchanged |
+
+The unreachable markets are already counted **conservatively**, at their
+guaranteed settlement floor, inside `combined_loss`. The accounting invariant
+is doing its job: an unresolved economic result that cannot be confirmed does
+not disappear — it keeps weighing against the budget, and the budget stays
+closed. A market we cannot audit therefore makes the system *more* restrictive,
+never less.
+
+`migration_close` also refused on every cycle
+(`fresh_executable_quote_and_depth`: ask=None, depth=None), submitted nothing,
+and left the residual holding. Fail-closed, as designed.
+
+**Capital safety needs no action.** The pagination horizon is the next
+executor-side settlement blocker and is recorded here rather than worked on:
+the standing instruction is that the legacy executor stops being the main
+workstream unless capital safety requires intervention, and it does not.
