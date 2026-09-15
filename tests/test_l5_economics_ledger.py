@@ -361,3 +361,58 @@ def test_the_report_carries_the_fill_rate_that_explains_the_pair_rate(tmp_path):
     rep = B.build(str(tmp_path), resolver=lambda k: OPEN, now=1.0)
     assert rep["evidenced_fill_rate"] == 0.1
     assert rep["one_sided_positions"] == 1 and rep["paired_positions"] == 0
+
+
+# --------------------------------- why the quotes do not fill, decomposed
+
+def _out(venue, fill, thru, ahead, qty="10"):
+    return {"venue": venue, "evidenced_fill": fill,
+            "traded_through": thru, "queue_ahead": ahead, "quote_qty": qty}
+
+
+def test_nothing_crossing_our_price_is_not_the_same_as_losing_the_queue():
+    """The distinction decides what to work on. NO_FLOW cannot be fixed by
+    anything we do to our order; QUEUE_BOUND might be, at the cost of a tick."""
+    f = B.forensics([_out("PMUS", False, "0", "50"),
+                     _out("PMUS", False, "30", "50"),
+                     _out("PMUS", False, "55", "50"),
+                     _out("PMUS", True, "100", "50")])
+    assert f["by_venue_cause"] == {"PMUS:NO_FLOW": 1, "PMUS:QUEUE_BOUND": 1,
+                                   "PMUS:PARTIAL": 1, "PMUS:FILLED": 1}
+
+
+def test_flow_exactly_equal_to_the_queue_ahead_is_queue_bound():
+    """We join BEHIND all of it, so the last share ahead of us is still ahead."""
+    f = B.forensics([_out("PMUS", False, "50", "50")])
+    assert f["by_venue_cause"] == {"PMUS:QUEUE_BOUND": 1}
+
+
+def test_undecided_quotes_are_excluded_rather_than_binned():
+    f = B.forensics([_out("PMUS", None, "0", "0"), _out("PMUS", False, "0", "1")])
+    assert f["undecided_excluded"] == 1
+    assert sum(f["by_venue_cause"].values()) == 1
+
+
+def test_the_forensics_names_the_cost_of_buying_queue_position():
+    """A tick is 62x L5's edge, so QUEUE_BOUND is not automatically worth
+    converting -- and the report should not let it read as if it were."""
+    f = B.forensics([])
+    assert "62x" in f["labels"] and "NO_FLOW cannot be fixed" in f["labels"]
+
+
+def test_an_unparseable_row_is_binned_separately_not_silently_dropped():
+    f = B.forensics([{"venue": "PMUS", "evidenced_fill": False,
+                      "traded_through": "abc", "queue_ahead": "0",
+                      "quote_qty": "1"}])
+    assert f["by_venue_cause"] == {"PMUS:UNPARSEABLE": 1}
+
+
+def test_the_forensics_is_carried_in_the_report(tmp_path):
+    import json
+    (tmp_path / "maker_outcomes.jsonl").write_text(json.dumps(
+        {"intent_id": "a", "venue": "PMUS", "market_key": "m",
+         "desired_outcome": "Up", "quote_price": "0.45", "quote_qty": "10",
+         "evidenced_fill": False, "traded_through": "0", "queue_ahead": "50",
+         "placed_at": 1.0}) + "\n")
+    rep = B.build(str(tmp_path), resolver=lambda k: OPEN, now=1.0)
+    assert rep["fill_forensics"]["by_venue_cause"] == {"PMUS:NO_FLOW": 1}

@@ -102,6 +102,62 @@ def maker_fee(venue: str, qty: D, price: D) -> D:
     return fee
 
 
+def forensics(outcomes: Sequence[dict]) -> Dict[str, Any]:
+    """WHY the quotes do not fill -- the binding constraint, decomposed.
+
+    Zero completed pairs out of 7 positions is not a bug: at a 2.5% fill rate,
+    two legs on opposite sides of ONE market is roughly the square of a small
+    number, and zero is what you would predict. So the lever is the fill rate,
+    and a fill rate is not one thing. Every decided no-fill is one of:
+
+      NO_FLOW       nothing crossed our price at all. Being earlier, closer or
+                    larger in the queue changes nothing; the trade we wanted
+                    did not happen.
+      QUEUE_BOUND   flow arrived and the size already resting ahead of us
+                    absorbed all of it. THIS is the one a better queue position
+                    would convert -- and the only way to buy queue position is
+                    to pay a tick, which the minimum-size study measured at
+                    62x L5's own edge. So even here it is not obviously worth
+                    having.
+      PARTIAL       the queue cleared and the flow reached us, but not for our
+                    whole size. A smaller quote would have filled.
+
+    The distinction decides what to work on next, and it costs nothing: every
+    field it needs is already written at resolution.
+    """
+    c: Counter = Counter()
+    unresolved = 0
+    for o in outcomes:
+        if o.get("evidenced_fill") is None:
+            unresolved += 1
+            continue
+        try:
+            thru = D(str(o.get("traded_through") or "0"))
+            ahead = D(str(o.get("queue_ahead") or "0"))
+            qty = D(str(o.get("quote_qty") or "0"))
+        except Exception:                                     # noqa: BLE001
+            c[f"{o.get('venue')}:UNPARSEABLE"] += 1
+            continue
+        if o.get("evidenced_fill") is True:
+            k = "FILLED"
+        elif thru <= 0:
+            k = "NO_FLOW"
+        elif thru <= ahead:
+            k = "QUEUE_BOUND"
+        elif thru < ahead + qty:
+            k = "PARTIAL"
+        else:
+            k = "FILLED_BY_ARITHMETIC_BUT_NOT_FLAGGED"
+        c[f"{o.get('venue')}:{k}"] += 1
+    return {
+        "by_venue_cause": dict(sorted(c.items())),
+        "undecided_excluded": unresolved,
+        "labels": ("only DECIDED quotes appear here. QUEUE_BOUND is the only "
+                   "cause a better queue position would convert, and buying "
+                   "queue position costs a tick -- measured at 62x L5's edge. "
+                   "NO_FLOW cannot be fixed by anything we do to our order.")}
+
+
 def census(outcomes: Sequence[dict]) -> Dict[str, Any]:
     """How the quotes were decided. Printed beside the economics so a small
     number of positions is never read as a small number of chances."""
@@ -171,6 +227,7 @@ def build(out_dir: str, *, resolver=None, clock: str = "feed",
         "paired_positions": sum(1 for r in rows
                                 if D(r.get("matched_qty") or "0") > 0),
         "census": census(outs),
+        "fill_forensics": forensics(outs),
         "by_venue": LG.roll_up(rows, by="venue"),
         "by_cohort": LG.roll_up(rows, by="cohort"),
         "by_clock": LG.roll_up(rows, by="clock"),
