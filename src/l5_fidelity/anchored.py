@@ -48,6 +48,11 @@ def state_after_fill(*, cohort: str, anchor: dict,
     tot = up + dn
     return {
         "cohort": cohort,
+        # the condition id is what lets a RESTARTED runner find this window's
+        # later fills again. Without it an unresolved prediction is orphaned
+        # the moment the process dies, which silently drops every prediction
+        # frozen within MAX_H+margin of a restart.
+        "cid": anchor.get("cid"),
         "anchor_t": anchor["t"],
         "anchor_outcome": anchor["outcome"],
         "anchor_price": anchor["price"],

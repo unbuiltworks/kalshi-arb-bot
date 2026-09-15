@@ -393,3 +393,76 @@ def test_state_n_reports_true_count_not_the_capped_sample():
                   last_outcome="Up", price=0.5)
     assert p["state_n"] >= p["state_n_sampled"]
     assert isinstance(p["state_n_sampled"], int)
+
+
+# ------------------------------------------- v0.2 runtime proofs + durability
+
+def test_self_check_proves_model_identity_at_runtime():
+    """Each of these was broken at some point, so the production process asserts
+    them at boot rather than trusting that the tests describe what shipped."""
+    import pathlib
+    from src.l5_fidelity.service import self_check
+    art = (pathlib.Path(__file__).resolve().parents[1]
+           / "artifacts/l5_fidelity/BTC15m.json.gz")
+    c = self_check(FidelityV0.load(str(art)))
+    assert c["content_hash_matches_artifact"]
+    assert c["param_change_changes_version"]
+    assert c["size_bins_sum_to_one"] and c["size_bins_all_positive"]
+    assert c["state_n_separately_represented"]
+    assert c["state_n_true"] >= c["state_n_sampled"]
+    assert c["all_pass"]
+
+
+def test_lineage_separates_versions_and_detects_a_changed_row(tmp_path):
+    """A lineage's seal_digest is built from content-hash ids, so an edited row
+    fails its seal, is excluded, and the digest moves. That is what makes
+    "v0.1's rows are byte-identical after the v0.2 cutover" checkable rather
+    than merely asserted."""
+    import json
+    from src.l5_fidelity import store
+    from src.l5_fidelity.service import lineage
+    d = str(tmp_path)
+    for v, n in (("v0.1-aaa", 2), ("v0.2-bbb", 3)):
+        for i in range(n):
+            store.freeze(d, model_version=v, cohort="BTC15m",
+                         state={"cid": f"c{i}", "anchor_t": i},
+                         prediction={"x": i}, horizon_s=[1.0], now=1000.0 + i)
+    lg = lineage(d)
+    assert lg["v0.1-aaa"]["frozen"] == 2 and lg["v0.2-bbb"]["frozen"] == 3
+    before = lg["v0.1-aaa"]["seal_digest"]
+
+    p = tmp_path / "predictions.jsonl"
+    rows = [json.loads(x) for x in p.read_text().splitlines()]
+    for r in rows:
+        if r["model_version"] == "v0.1-aaa":
+            r["prediction"]["x"] = 999          # silent edit
+            break
+    p.write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+    after = lineage(d)
+    assert after["v0.1-aaa"]["frozen"] == 1, "the edited row was still counted"
+    assert after["v0.1-aaa"]["seal_digest"] != before
+    assert after["v0.2-bbb"]["seal_digest"] == lg["v0.2-bbb"]["seal_digest"], (
+        "an edit in one lineage must not disturb another")
+
+
+def test_unresolved_predictions_survive_a_restart(tmp_path):
+    """`pending` was in-memory only, so a restart orphaned every prediction
+    frozen within MAX_H+margin of it -- and that loss is correlated with
+    deploys, not random."""
+    from src.l5_fidelity import anchored, store
+    anchor = {"cid": "w1", "t": 1000, "window_end": 1900, "outcome": "Up",
+              "price": 0.5, "size": 10.0}
+    st = anchored.state_after_fill(cohort="BTC15m", anchor=anchor,
+                                   window_fills=[anchor])
+    assert st["cid"] == "w1", "without cid a restart cannot find the window"
+
+    d = str(tmp_path)
+    store.freeze(d, model_version="v0.2-x", cohort="BTC15m", state=st,
+                 prediction={"p": 1}, horizon_s=[1.0], now=1000.0)
+    L = store.load(d)
+    recovered = [p for pid, p in L["predictions"].items()
+                 if not L["outcomes"].get(pid)
+                 and p["model_version"] == "v0.2-x"
+                 and (p.get("state") or {}).get("cid")]
+    assert len(recovered) == 1 and recovered[0]["state"]["cid"] == "w1"

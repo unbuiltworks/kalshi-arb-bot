@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import time
@@ -29,6 +30,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional
 
 from src.l5_fidelity import anchored, store
+from src.l5_fidelity import model as M
 from src.l5_fidelity import window as A
 from src.l5_fidelity.model import COHORTS, HORIZONS_S, FidelityV0
 
@@ -80,6 +82,89 @@ def fetch(cohort: str) -> Optional[List[dict]]:
     return sorted(out, key=lambda f: f["t"])
 
 
+def lineage(out_dir: str) -> Dict[str, Any]:
+    """Per-model-version accounting over the durable store.
+
+    `seal_digest` is a hash over each lineage's prediction ids IN ORDER. The
+    ids are themselves content hashes of the frozen bodies, so if a single byte
+    of a single v0.1 row changed, that row's seal would stop matching (it would
+    be reported tampered and dropped) and this digest would move. A stable
+    digest across a model cutover is therefore evidence the older lineage's
+    rows are byte-identical, not merely that they are still counted.
+    """
+    L = store.load(out_dir)
+    per: Dict[str, Dict[str, Any]] = {}
+    ids: Dict[str, List[str]] = collections.defaultdict(list)
+    for pid, p in sorted(L["predictions"].items(),
+                         key=lambda kv: kv[1]["prediction_utc"]):
+        v = p["model_version"]
+        d = per.setdefault(v, {"frozen": 0, "resolved": 0,
+                               "first_freeze_utc": None,
+                               "last_freeze_utc": None})
+        d["frozen"] += 1
+        if L["outcomes"].get(pid):
+            d["resolved"] += 1
+        t = p["prediction_utc"]
+        if d["first_freeze_utc"] is None:
+            d["first_freeze_utc"] = t
+        d["last_freeze_utc"] = t
+        ids[v].append(pid)
+    for v, d in per.items():
+        d["seal_digest"] = hashlib.sha256(
+            "".join(ids[v]).encode()).hexdigest()[:16]
+    return per
+
+
+def self_check(model: FidelityV0) -> Dict[str, Any]:
+    """Prove the model's identity and shape AT RUNTIME, in production, rather
+    than trusting that what the tests asserted is what got deployed.
+
+    Every check is a property that was actually broken at some point in this
+    program's history, so each one is here because it failed once, not because
+    it seemed prudent.
+    """
+    import copy
+    out: Dict[str, Any] = {}
+
+    # 1. the runtime model hashes to the version it claims. v0.1's hash covered
+    #    the state-key schema and none of the numbers, so an artifact could be
+    #    rebuilt or corrupted and keep its identity.
+    recomputed = M.version_of(model.cohort, model.tables)
+    out["content_hash_matches_artifact"] = (recomputed == model.version)
+    out["runtime_content_hash"] = recomputed
+
+    # 2. and changing a single parameter must move it.
+    t = copy.deepcopy(model.tables)
+    t["base_gaps"][0] = t["base_gaps"][0] + 1e-9
+    out["param_change_changes_version"] = (
+        M.version_of(model.cohort, t) != model.version)
+
+    # 3. size is a distribution: normalised, and strictly positive so one
+    #    surprise cannot score as log(0).
+    bins = [model.tables["base_size_bins"]] + list(
+        model.tables["size_bins"].values())
+    out["size_bins_checked"] = len(bins)
+    out["size_bins_sum_to_one"] = all(
+        abs(sum(b.values()) - 1.0) < 1e-9 for b in bins)
+    out["size_bins_all_positive"] = all(
+        all(v > 0 for v in b.values()) for b in bins)
+
+    # 4. true state n and the capped sample are separately represented. gaps
+    #    and size are subsampled per state while side keeps full counts, so
+    #    reporting len(gaps) understated the evidence behind a state.
+    p = model.predict(tte=400, since=None, resid_rel=0.0,
+                      last_outcome="Up", price=0.45)
+    out["state_n_true"] = p["state_n"]
+    out["state_n_sampled"] = p["state_n_sampled"]
+    out["state_n_separately_represented"] = (
+        p["state_n"] >= p["state_n_sampled"]
+        and "predicted_size_p50" not in p
+        and p.get("predicted_size_bins") is not None)
+    out["all_pass"] = all(v for k, v in out.items()
+                          if isinstance(v, bool))
+    return out
+
+
 def digest(out_dir: str, model: FidelityV0, *, feed_lag_s: Optional[float],
            last_freeze: Optional[float], last_resolve: Optional[float],
            feed_failures: int) -> Dict[str, Any]:
@@ -116,6 +201,7 @@ def digest(out_dir: str, model: FidelityV0, *, feed_lag_s: Optional[float],
         "last_resolution_at": last_resolve,
         "seconds_since_last_freeze": (None if last_freeze is None else round(now - last_freeze, 1)),
         "per_cohort": dict(per_cohort),
+        "per_model_version": lineage(out_dir),
         "per_horizon": per_h,
         "fill_anchored": est.get("fill_anchored", 0),
         "arbitrary_state": est.get("arbitrary_state", 0),
@@ -147,9 +233,30 @@ def main(argv=None) -> int:
     print(f"L5_FIDELITY boot model={model.version} cohort={PRIMARY} "
           f"fills={model.tables['n_fills']} windows={model.tables['n_windows']}",
           flush=True)
+    # PROVE IT IN PRODUCTION, don't assume the tests describe what shipped.
+    print("L5_FIDELITY selfcheck " + json.dumps(self_check(model)), flush=True)
+    print("L5_FIDELITY lineage " + json.dumps(lineage(a.out_dir)), flush=True)
 
+    # RECOVER IN-FLIGHT PREDICTIONS ACROSS A RESTART. `pending` used to live
+    # only in memory, so every prediction frozen within MAX_H + margin of a
+    # restart was orphaned: frozen, never resolved, and counted forever as
+    # unresolved. That is not a neutral leak -- it systematically discards
+    # predictions near restarts, which is exactly when the runner is being
+    # changed, so the dropped sample is not random with respect to the model.
     pending: List[tuple] = []
     seen_anchor: set = set()
+    _L = store.load(a.out_dir)
+    for _pid, _p in sorted(_L["predictions"].items(),
+                           key=lambda kv: kv[1]["prediction_utc"]):
+        if _L["outcomes"].get(_pid) or _p["model_version"] != model.version:
+            continue
+        _cid = (_p.get("state") or {}).get("cid")
+        if not _cid:
+            continue          # frozen before cid was recorded: unrecoverable
+        pending.append((_p, _cid, _p["prediction_utc"]))
+        seen_anchor.add((_cid, _p["state"]["anchor_t"]))
+    print(f"L5_FIDELITY recovered_pending={len(pending)} "
+          f"from a store of {_L['n_predictions']} predictions", flush=True)
     last_freeze = last_resolve = None
     last_digest = 0.0
     feed_failures = 0
