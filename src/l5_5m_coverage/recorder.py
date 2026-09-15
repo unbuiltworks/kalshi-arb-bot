@@ -266,6 +266,22 @@ def run_digest(digests: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         return {"schema": SCHEMA, "windows_captured": 0,
                 "first_sample_utc": None, "last_sample_utc": None,
                 "coverage_reason": "no window captured yet"}
+    # PER-HORIZON, because an aggregate cannot answer "are 15m windows
+    # actually appearing?" -- and that was the question this digest existed to
+    # settle. A collision check rides along: 5m and 15m share an epoch every
+    # 15 minutes, so slug identity is the only thing keeping them apart.
+    by_h: Dict[str, List[Dict[str, Any]]] = {}
+    for d in done:
+        by_h.setdefault(d.get("horizon") or "5m", []).append(d)
+    slugs = [d["slug"] for d in done]
+    per_horizon = {
+        h: {"windows": len(v),
+            "first_sample_lead_s_p50": sorted(x["first_sample_lead_s"] for x in v)[len(v) // 2],
+            "coverage_p50": sorted(x["coverage"] for x in v)[len(v) // 2],
+            "max_gap_s": max(x["max_gap_s"] for x in v),
+            "l5_fills": sum(x["l5_fills"] for x in v),
+            "windows_with_no_l5_action": sum(1 for x in v if not x["l5_fills"])}
+        for h, v in sorted(by_h.items())}
     leads = sorted(d["first_sample_lead_s"] for d in done)
     cov = sorted(d["coverage"] for d in done)
     return {
@@ -288,7 +304,11 @@ def run_digest(digests: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "windows_with_no_l5_action": sum(
             1 for d in done
             if not d["l5_fills"] and not d.get("samples_with_unread_l5_feed")),
+        "per_horizon": per_horizon,
+        "slug_identity_collisions": len(slugs) - len(set(slugs)),
         "labels": ("windows_with_no_l5_action is not a failure: those are the "
                    "CONTINUE examples. A negative first_sample_lead_s IS a "
-                   "failure -- capture opened after the window did."),
+                   "failure -- capture opened after the window did. "
+                   "slug_identity_collisions must stay 0: 5m and 15m share an "
+                   "epoch every 15 minutes and only the slug separates them."),
     }

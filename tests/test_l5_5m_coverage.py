@@ -248,3 +248,25 @@ def test_both_horizons_are_enumerated_and_kept_apart():
     assert d["horizon"] == "15m" and d["slug"] == R.slug("btc", s15, "15m")
     # coverage is against the RIGHT window length, not always 300s
     assert d["coverage"] == 1 * R.SAMPLE_S / (900 + R.PRE_ROLL_S)
+
+
+def test_the_service_digest_breaks_out_by_horizon_and_checks_collisions():
+    """An aggregate cannot answer 'are 15m windows actually appearing?', which
+    is the question the digest exists to settle. And 5m/15m share an epoch
+    every 15 minutes, so slug identity is the only thing keeping them apart."""
+    start = 1789434900                     # divisible by 900: a shared epoch
+    assert start % 300 == 0 and start % 900 == 0
+    mk = lambda h: R.digest("btc", start, [
+        R.sample(asset="btc", start=start, now=start - 120.0 + i,
+                 book={"up_bid": 0.48, "up_ask": 0.52}, inv={},
+                 flow={"l5_fill": False, "buy_qty": 0, "sell_qty": 0},
+                 history=[], horizon=h) for i in range(30)], h)
+    d5, d15 = mk("5m"), mk("15m")
+    assert d5["slug"] != d15["slug"]                   # no identity collision
+    rd = R.run_digest([d5, d15])
+    assert rd["slug_identity_collisions"] == 0
+    assert set(rd["per_horizon"]) == {"5m", "15m"}
+    assert rd["per_horizon"]["15m"]["windows"] == 1
+    assert rd["per_horizon"]["5m"]["windows"] == 1
+    # a genuine duplicate IS reported rather than silently deduped
+    assert R.run_digest([d5, d5])["slug_identity_collisions"] == 1
