@@ -48,9 +48,13 @@ def gaps(rows: Sequence[dict]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for r in rows:
         if r.get("kind") == "coverage_gap":
+            # `__supervisor__` gaps are OUR downtime, measured from our own
+            # heartbeat. A per-stream row gap is not downtime -- a stream that
+            # writes only on events cannot tell our absence from a quiet
+            # market -- so only the supervisor's own gap is recorded as one.
             out.append({"stream": r.get("stream"), "from": r.get("from_utc"),
                         "to": r.get("to_utc"), "gap_s": r.get("gap_s"),
-                        "source": "boot marker"})
+                        "source": "boot marker (supervisor heartbeat)"})
     open_exit: Dict[str, float] = {}
     for r in sorted(rows, key=lambda x: float(x.get("t") or 0)):
         k, st, t = r.get("kind"), r.get("stream"), float(r.get("t") or 0)
@@ -69,12 +73,16 @@ def gaps(rows: Sequence[dict]) -> List[Dict[str, Any]]:
 def observed(rows: Sequence[dict], stream: str, a: float, b: float) -> bool:
     """Was `stream` watching for the WHOLE of [a, b]?
 
-    False if the interval touches any gap. Deliberately strict: a partially
-    observed window cannot support "nothing happened", only "nothing happened
-    while we looked", and the two are different claims.
+    False if the interval touches any gap -- the stream's own exit/restart
+    intervals, AND any `__supervisor__` gap, because when the supervisor was
+    down every stream was down with it.
+
+    Deliberately strict: a partially observed window cannot support "nothing
+    happened", only "nothing happened while we looked", and the two are
+    different claims.
     """
     for g in gaps(rows):
-        if g["stream"] != stream:
+        if g["stream"] not in (stream, "__supervisor__"):
             continue
         lo = g["from"] or 0.0
         hi = g["to"] if g["to"] is not None else float("inf")

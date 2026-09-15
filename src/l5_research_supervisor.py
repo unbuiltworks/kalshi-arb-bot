@@ -116,11 +116,58 @@ class Supervisor:
         print("L5_SUPERVISOR " + json.dumps(rec, default=str), flush=True)
         return rec
 
+    def last_heartbeat(self) -> Optional[float]:
+        """When this supervisor was last demonstrably alive.
+
+        Read from our OWN coverage log, which is written on a fixed cadence
+        regardless of whether any venue did anything. That independence is the
+        point -- see `boot` for why a stream's own store cannot answer this.
+        """
+        path = os.path.join(self.root, COVERAGE)
+        if not os.path.exists(path):
+            return None
+        best = None
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(0, os.SEEK_END)
+                size = fh.tell()
+                fh.seek(max(0, size - 200000))
+                tail = fh.read().decode("utf-8", "replace").splitlines()
+        except OSError:
+            return None
+        for line in reversed(tail):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            if r.get("kind") in ("heartbeat", "shutdown", "boot"):
+                t = r.get("t")
+                if isinstance(t, (int, float)):
+                    best = float(t)
+                    break
+        return best
+
     def boot(self) -> None:
         """Record the gap since each stream last wrote, BEFORE starting them.
 
         This is the only moment the gap is knowable: once a stream restarts it
         begins appending again and the hole closes silently.
+
+        BUT A STREAM'S OWN STORE CANNOT MEASURE DOWNTIME, and reading it as if
+        it could is an error in the opposite direction from the one this whole
+        mechanism exists to prevent. `exec_shadow` writes a row only when L5
+        acts, so its 49.8s "gap" across the 15:35Z redeploy was mostly L5 being
+        quiet -- while `gemini_depth`, which samples at a fixed 2Hz, showed the
+        true 2.3s. Treating the first as downtime would fire coverage_gap
+        markers during quiet markets, and a marker that cries wolf is a marker
+        nobody reads when it matters.
+
+        So downtime comes from OUR OWN heartbeat, which ticks regardless of the
+        venues, and the per-stream figures are reported as what they are: an
+        upper bound that conflates our absence with the market's quiet.
         """
         gaps = {}
         for name, (_mod, sub, fname) in STREAMS.items():
@@ -130,20 +177,32 @@ class Supervisor:
                 "gap_s": (round(self.started_at - last, 1) if last else None),
                 "store": f"{sub}/{fname}",
             }
+        hb = self.last_heartbeat()
+        downtime = (round(self.started_at - hb, 1) if hb else None)
         self.mark("boot", pid=os.getpid(), streams=sorted(STREAMS),
                   since_last_row=gaps,
-                  labels=("gap_s is the time between a stream's newest durable "
-                          "record and this boot. It is NOT idle time: nothing "
-                          "was observed in it, so no conclusion of NO ACTION "
-                          "or NO FILL may be drawn over that interval."))
-        for name, g in gaps.items():
-            if g["gap_s"] and g["gap_s"] > HEARTBEAT_S * 2:
-                self.mark("coverage_gap", stream=name,
-                          from_utc=g["last_row_utc"], to_utc=self.started_at,
-                          gap_s=g["gap_s"],
-                          labels=("NOT WATCHING between these instants. Any "
-                                  "absence of observations here is our absence, "
-                                  "not the market's."))
+                  last_supervisor_signal_utc=hb,
+                  downtime_s=downtime,
+                  labels=("downtime_s is the REAL gap: this boot minus the "
+                          "supervisor's own last heartbeat, which ticks "
+                          "regardless of what the venues did. since_last_row "
+                          "is per stream and is an UPPER BOUND -- a stream "
+                          "that writes only on events (exec_shadow) cannot "
+                          "distinguish our absence from a quiet market, while "
+                          "a fixed-cadence sampler (gemini_depth) can. No "
+                          "conclusion of NO ACTION or NO FILL may be drawn "
+                          "over downtime_s."))
+        # the marker fires on OUR downtime, not on a venue's quiet spell: a
+        # coverage_gap that appears whenever L5 stops trading is noise, and a
+        # marker that cries wolf is one nobody reads when it matters.
+        if downtime and downtime > HEARTBEAT_S * 2:
+            self.mark("coverage_gap", stream="__supervisor__",
+                      from_utc=hb, to_utc=self.started_at, gap_s=downtime,
+                      per_stream_upper_bounds={k: v["gap_s"]
+                                               for k, v in gaps.items()},
+                      labels=("NOT WATCHING between these instants -- measured "
+                              "from our own heartbeat, so this is our absence "
+                              "and not the market's quiet."))
 
     # ------------------------------------------------------------ children
 

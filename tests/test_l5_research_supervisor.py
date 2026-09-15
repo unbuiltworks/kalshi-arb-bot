@@ -76,8 +76,55 @@ def test_the_boot_marker_records_the_gap_since_each_store_last_wrote(tmp_path):
     boot = [r for r in rows if r["kind"] == "boot"][0]
     g = boot["since_last_row"]["exec_shadow"]
     assert g["gap_s"] > 800
-    assert [r for r in rows if r["kind"] == "coverage_gap"], \
-        "a 15-minute hole must produce an explicit coverage_gap marker"
+
+
+# --------------------------- a quiet market is not downtime, either direction
+
+def test_downtime_comes_from_our_heartbeat_not_from_a_streams_events(tmp_path):
+    """exec_shadow writes only when L5 acts, so its row gap conflates our
+    absence with a quiet market. Observed live: a 49.8s exec_shadow "gap"
+    across a redeploy where gemini_depth, a fixed-cadence sampler, showed the
+    true 2.3s."""
+    d = str(tmp_path)
+    now = time.time()
+    _write(d, "coverage.jsonl",
+           [{"schema": S.SCHEMA, "kind": "heartbeat", "t": now - 5.0}])
+    # L5 has not traded for an hour, but we were up the whole time
+    _write(d, "l5-shadow-state/routes.jsonl", [{"decided_at": now - 3600}])
+    S.Supervisor(d).boot()
+    boot = [r for r in C.load(d) if r["kind"] == "boot"][-1]
+    assert boot["downtime_s"] < 30, "we were up; only the venue was quiet"
+    assert boot["since_last_row"]["exec_shadow"]["gap_s"] > 3000
+
+
+def test_a_quiet_market_does_not_fire_a_coverage_gap(tmp_path):
+    """A marker that cries wolf is one nobody reads when it matters."""
+    d = str(tmp_path)
+    now = time.time()
+    _write(d, "coverage.jsonl",
+           [{"schema": S.SCHEMA, "kind": "heartbeat", "t": now - 5.0}])
+    _write(d, "l5-shadow-state/routes.jsonl", [{"decided_at": now - 3600}])
+    S.Supervisor(d).boot()
+    assert not [r for r in C.load(d) if r["kind"] == "coverage_gap"]
+
+
+def test_real_downtime_does_fire_a_coverage_gap(tmp_path):
+    d = str(tmp_path)
+    now = time.time()
+    _write(d, "coverage.jsonl",
+           [{"schema": S.SCHEMA, "kind": "heartbeat", "t": now - 1800.0}])
+    S.Supervisor(d).boot()
+    g = [r for r in C.load(d) if r["kind"] == "coverage_gap"]
+    assert g and g[0]["gap_s"] > 1700
+    assert g[0]["stream"] == "__supervisor__"
+    assert "our absence" in g[0]["labels"]
+
+
+def test_a_first_boot_with_no_heartbeat_history_reports_unknown_downtime(tmp_path):
+    S.Supervisor(str(tmp_path)).boot()
+    boot = [r for r in C.load(str(tmp_path)) if r["kind"] == "boot"][0]
+    assert boot["downtime_s"] is None
+    assert not [r for r in C.load(str(tmp_path)) if r["kind"] == "coverage_gap"]
 
 
 def test_a_store_that_never_wrote_reports_unknown_not_zero(tmp_path):
@@ -190,3 +237,12 @@ def test_a_report_reads_coverage_from_the_state_root_above_the_stream(tmp_path):
     assert cov["available"] is True
     assert cov["exec_shadow"]["downtime_s"] == 30.0
     assert cov["exits"] == 1 and cov["restarts"] == 1
+
+
+def test_a_supervisor_wide_gap_blinds_every_stream():
+    """When the supervisor was down, every stream was down with it."""
+    rows = [{"kind": "coverage_gap", "stream": "__supervisor__",
+             "from_utc": 100.0, "to_utc": 200.0, "gap_s": 100.0}]
+    assert C.observed(rows, "exec_shadow", 150.0, 160.0) is False
+    assert C.observed(rows, "gemini_depth", 150.0, 160.0) is False
+    assert C.observed(rows, "exec_shadow", 250.0, 260.0) is True
