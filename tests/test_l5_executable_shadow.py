@@ -557,3 +557,146 @@ def test_a_join_under_the_ceiling_is_never_reported_as_a_fill():
     intents = {"i1": {"max_acceptable_price": "0.50"}}
     out = R._slack_maker(evals, intents)["GEMINI"]
     assert "never a fill" in out["basis"]
+
+
+# ------------------- vouched silence is evidence; unvouched silence is not
+
+def test_silence_over_a_vouched_interval_is_an_evidenced_no_fill():
+    """230 of 245 Gemini verdicts were UNKNOWN, almost all of them this case:
+    a quote that rested a full 300s while the socket watched continuously and
+    nothing crossed it. That is a no-fill, and calling it unknown throws away
+    the evidence that P4's 200-decided-quotes threshold needs."""
+    from src.l5_shadow import maker as MK
+    r = MK.evidence_for_quote(quote_px="0.45", quote_qty="10", ahead="0",
+                              placed_at=0.0, prints=[], observed_until=300.0,
+                              coverage_complete=True)
+    assert r["evidenced_fill"] is False
+    assert "CONTINUOUSLY" in r["reason"]
+    assert r["coverage_complete"] is True
+
+
+def test_silence_over_an_unvouched_interval_stays_unknown():
+    from src.l5_shadow import maker as MK
+    for cov in (False, None):
+        r = MK.evidence_for_quote(quote_px="0.45", quote_qty="10", ahead="0",
+                                  placed_at=0.0, prints=[],
+                                  observed_until=300.0, coverage_complete=cov)
+        assert r["evidenced_fill"] is None
+        assert "NOT a no-fill" in r["reason"]
+
+
+def test_the_default_is_unknown_so_a_caller_must_prove_coverage():
+    from src.l5_shadow import maker as MK
+    r = MK.evidence_for_quote(quote_px="0.45", quote_qty="10", ahead="0",
+                              placed_at=0.0, prints=[], observed_until=300.0)
+    assert r["evidenced_fill"] is None
+
+
+def test_coverage_can_never_promote_silence_into_a_fill():
+    """The flag has exactly one direction. Nothing about vouching for an
+    interval can manufacture a fill out of no prints."""
+    from src.l5_shadow import maker as MK
+    r = MK.evidence_for_quote(quote_px="0.45", quote_qty="10", ahead="0",
+                              placed_at=0.0, prints=[], observed_until=300.0,
+                              coverage_complete=True)
+    assert r["evidenced_fill"] is not True
+    assert r["modelled_fill_qty"] == "0"
+
+
+def test_unreadable_prints_stay_unknown_however_good_the_coverage_claim():
+    from src.l5_shadow import maker as MK
+    r = MK.evidence_for_quote(quote_px="0.45", quote_qty="10", ahead="0",
+                              placed_at=0.0, prints=None,
+                              observed_until=300.0, coverage_complete=True)
+    assert r["evidenced_fill"] is None
+    assert "UNKNOWN" in r["reason"]
+
+
+def test_a_quote_resting_across_a_restart_is_never_vouched_for(monkeypatch,
+                                                               tmp_path):
+    """Whatever the print source says now, we were not running then."""
+    import src.l5_shadow.service as S
+    import src.l5_shadow.venues as V
+    seen = {}
+
+    def spy(**kw):
+        seen.update(kw)
+        return {"evidenced_fill": None, "reason": "x"}
+
+    monkeypatch.setattr(S.MK, "evidence_for_quote", spy)
+    monkeypatch.setattr(V, "pm_trades", lambda *a, **k: [])
+    S.resolve_maker(str(tmp_path),
+                    {"venue": "PMUS", "intent_id": "i", "price": "0.45",
+                     "qty": "10", "queue_ahead": "0", "placed_at": 100.0,
+                     "condition_id": "c"},
+                    now=400.0, boot_t=200.0)
+    assert seen["coverage_complete"] is False
+
+
+def test_a_short_trades_page_vouches_for_the_interval(monkeypatch, tmp_path):
+    """A page below the limit was not truncated, so it reaches back as far as
+    the market has prints."""
+    import src.l5_shadow.service as S
+    import src.l5_shadow.venues as V
+    seen = {}
+
+    def spy(**kw):
+        seen.update(kw)
+        return {"evidenced_fill": None, "reason": "x"}
+
+    monkeypatch.setattr(S.MK, "evidence_for_quote", spy)
+    monkeypatch.setattr(V, "pm_trades", lambda *a, **k: [
+        {"t": 150.0, "price": "0.9", "size": "1", "asset": "tok"}])
+    S.resolve_maker(str(tmp_path),
+                    {"venue": "PMUS", "intent_id": "i", "price": "0.45",
+                     "qty": "10", "queue_ahead": "0", "placed_at": 100.0,
+                     "condition_id": "c", "token": "tok"},
+                    now=400.0, boot_t=50.0)
+    assert seen["coverage_complete"] is True
+
+
+def test_a_full_trades_page_that_starts_after_the_quote_vouches_for_nothing(
+        monkeypatch, tmp_path):
+    """It may have truncated away exactly the prints that decide the quote."""
+    import src.l5_shadow.service as S
+    import src.l5_shadow.venues as V
+    seen = {}
+
+    def spy(**kw):
+        seen.update(kw)
+        return {"evidenced_fill": None, "reason": "x"}
+
+    monkeypatch.setattr(S.MK, "evidence_for_quote", spy)
+    monkeypatch.setattr(V, "pm_trades", lambda *a, **k: [
+        {"t": 200.0 + i, "price": "0.9", "size": "1", "asset": "other"}
+        for i in range(V.PM_TRADES_LIMIT)])
+    S.resolve_maker(str(tmp_path),
+                    {"venue": "PMUS", "intent_id": "i", "price": "0.45",
+                     "qty": "10", "queue_ahead": "0", "placed_at": 100.0,
+                     "condition_id": "c", "token": "tok"},
+                    now=400.0, boot_t=50.0)
+    assert seen["coverage_complete"] is False
+
+
+def test_coverage_is_judged_before_the_per_token_filter(monkeypatch, tmp_path):
+    """Judging it after would call a market's quiet token 'truncated' whenever
+    the other token was busy."""
+    import src.l5_shadow.service as S
+    import src.l5_shadow.venues as V
+    seen = {}
+
+    def spy(**kw):
+        seen.update(kw)
+        return {"evidenced_fill": None, "reason": "x"}
+
+    monkeypatch.setattr(S.MK, "evidence_for_quote", spy)
+    monkeypatch.setattr(V, "pm_trades", lambda *a, **k: [
+        {"t": 50.0, "price": "0.9", "size": "1", "asset": "other"}]
+        + [{"t": 200.0, "price": "0.9", "size": "1", "asset": "other"}])
+    S.resolve_maker(str(tmp_path),
+                    {"venue": "PMUS", "intent_id": "i", "price": "0.45",
+                     "qty": "10", "queue_ahead": "0", "placed_at": 100.0,
+                     "condition_id": "c", "token": "tok"},
+                    now=400.0, boot_t=50.0)
+    assert seen["prints"] == []              # nothing on our token
+    assert seen["coverage_complete"] is True  # but we watched the whole time

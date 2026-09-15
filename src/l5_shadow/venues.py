@@ -201,7 +201,13 @@ def pm_book(token_id: str) -> Optional[Dict[str, Any]]:
             "price_key": "price", "size_key": "size"}
 
 
-def pm_trades(condition_id: str, limit: int = 100) -> Optional[List[dict]]:
+# the /trades page size, named so the caller can tell a full page (possibly
+# truncated) from a short one (certainly complete)
+PM_TRADES_LIMIT = 100
+
+
+def pm_trades(condition_id: str,
+              limit: int = PM_TRADES_LIMIT) -> Optional[List[dict]]:
     """Public prints for a market -- the ONLY thing that can evidence a fill.
 
     Returned rows are normalised to {t, price, size, side, taker} so the maker

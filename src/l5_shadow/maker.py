@@ -65,12 +65,27 @@ def join_price(levels: Sequence, *, tick: D, ceiling: D,
 
 def evidence_for_quote(*, quote_px: Any, quote_qty: Any, ahead: Any,
                        placed_at: float, prints: Optional[Sequence[dict]],
-                       observed_until: float) -> Dict[str, Any]:
+                       observed_until: float,
+                       coverage_complete: Optional[bool] = None
+                       ) -> Dict[str, Any]:
     """Would this resting BUY have filled, per LATER public prints only?
 
     Prints at or before `placed_at` are excluded: a trade that already happened
     cannot fill an order that did not yet exist. That is the same lookahead
     discipline the prediction store enforces, applied to execution.
+
+    `coverage_complete` IS WHAT TURNS SILENCE INTO EVIDENCE. "Nobody traded"
+    and "we would not have filled" are different facts, and only the second is
+    a finding -- unless we can vouch for having watched the WHOLE interval. The
+    Gemini socket can: `prints_since` returns None rather than an empty list
+    whenever its continuous view began after the quote, so a non-None empty
+    result means we watched from placement to horizon and nothing crossed.
+    That is an evidenced NO-FILL, and calling it UNKNOWN discards real
+    evidence -- which is why 230 of 245 Gemini verdicts were undecided.
+
+    The caller must PROVE coverage; the default is None, and None is unknown.
+    Nothing here can promote silence into a FILL, in any case: this flag can
+    only ever produce a no-fill.
     """
     q_px, q_qty, ah = D(str(quote_px)), D(str(quote_qty)), D(str(ahead))
     if prints is None:
@@ -85,12 +100,24 @@ def evidence_for_quote(*, quote_px: Any, quote_qty: Any, ahead: Any,
     got = min(got, q_qty)
     full = got >= q_qty
     if not later:
+        window = round(observed_until - placed_at, 1)
+        if coverage_complete is True:
+            return {"evidenced_fill": False, "reason":
+                    (f"no public print at or below {q_px} in the {window}s "
+                     f"after placement, over an interval we can vouch for "
+                     f"CONTINUOUSLY: an evidenced no-fill, not an unknown"),
+                    "queue_ahead": str(ah), "traded_through": "0",
+                    "modelled_fill_qty": "0", "prints_considered": 0,
+                    "coverage_complete": True,
+                    "observed_window_s": round(observed_until - placed_at, 3)}
         return {"evidenced_fill": None, "reason":
                 (f"no public print at or below {q_px} in the "
-                 f"{round(observed_until - placed_at, 1)}s observed after "
-                 f"placement; not yet decided, and NOT a no-fill"),
+                 f"{window}s observed after "
+                 f"placement, and the interval is NOT vouched for; not "
+                 f"decided, and NOT a no-fill"),
                 "queue_ahead": str(ah), "traded_through": "0",
                 "modelled_fill_qty": "0", "prints_considered": 0,
+                "coverage_complete": coverage_complete,
                 "observed_window_s": round(observed_until - placed_at, 3)}
     return {
         "evidenced_fill": bool(full),
@@ -101,6 +128,7 @@ def evidence_for_quote(*, quote_px: Any, quote_qty: Any, ahead: Any,
         "traded_through": str(thru),
         "modelled_fill_qty": str(got),
         "prints_considered": len(later),
+        "coverage_complete": coverage_complete,
         "first_cross_t": min(float(p["t"]) for p in later),
         "time_to_fill_s": (round(min(float(p["t"]) for p in later) - placed_at, 3)
                            if full else None),

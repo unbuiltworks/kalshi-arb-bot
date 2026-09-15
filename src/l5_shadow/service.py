@@ -426,9 +426,18 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float,
                   boot_t: Optional[float] = None) -> bool:
     """Decide ONE hypothetical quote from LATER public prints. True if decided."""
     venue, ik = pend["venue"], pend["intent_id"]
+    covered = None
     if venue == "PMUS":
         prints = V.pm_trades(pend["condition_id"]) if pend.get("condition_id") \
             else None
+        if prints is not None:
+            # COVERAGE IS JUDGED ON THE UNFILTERED LIST. /trades returns the
+            # last `limit` prints for the whole market; it reaches back past
+            # our placement either because it was not full, or because its
+            # oldest row predates the quote. Judging it after the per-token
+            # filter would call a market's quiet token "truncated".
+            covered = (len(prints) < V.PM_TRADES_LIMIT
+                       or float(prints[0]["t"]) <= pend["placed_at"])
         if prints is not None and pend.get("token"):
             prints = [p for p in prints if p.get("asset") == pend["token"]]
     else:
@@ -445,11 +454,17 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float,
                 bk = V.gemini_feed().watch(sym)
                 prints = bk.prints_since(pend["placed_at"])
                 src = "websocket" if prints is not None else None
+                # prints_since returns None unless the socket's continuous
+                # view began BEFORE the quote, so a non-None result is itself
+                # the proof that we watched the whole interval
+                covered = prints is not None
             except Exception:                                 # noqa: BLE001
                 prints = None
             if prints is None:
                 prints = V.gemini_trades(sym)
                 src = "rest_poll" if prints is not None else None
+                # a poll of a capped list vouches for nothing
+                covered = False
         pend["_print_source"] = src
         if prints is not None and pend.get("desired_outcome") == "Down":
             # our Down quote at x rests where an Up ask at 1-x does; an Up
@@ -458,7 +473,11 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float,
             prints = [{**p, "price": D("1") - D(str(p["price"]))} for p in prints]
     res = MK.evidence_for_quote(
         quote_px=pend["price"], quote_qty=pend["qty"], ahead=pend["queue_ahead"],
-        placed_at=pend["placed_at"], prints=prints, observed_until=now)
+        placed_at=pend["placed_at"], prints=prints, observed_until=now,
+        # a quote that was resting while we were NOT running cannot be vouched
+        # for, whatever the source says now
+        coverage_complete=(covered and not (boot_t is not None
+                                            and pend["placed_at"] < boot_t)))
     append(out_dir, MAKER_OUT, {
         "schema": SCHEMA + "/maker_outcome", "intent_id": ik, "venue": venue,
         "market_key": pend.get("market_key"),
