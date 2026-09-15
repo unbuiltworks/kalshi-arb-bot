@@ -112,3 +112,38 @@ def test_the_validator_does_not_claim_to_measure_lead():
 
 def test_the_observer_is_not_promoted():
     assert O.PROMOTED is False
+
+
+# --------------------------------- a failed pass is not a dead process
+
+def test_an_rpc_failure_anywhere_in_the_pass_is_a_failed_pass_not_a_crash(
+        monkeypatch):
+    """Observed in production 15:28:42Z: a TimeoutError inside block_at escaped
+    one_pass and killed the process (returncode 1). The supervisor restarted it
+    and recorded the gap, but a collector that dies on every network blip churns
+    coverage holes into the record for nothing."""
+    from src.l5_chain_observer import observer as O
+
+    def boom(*_a, **_k):
+        raise O.RpcError("TimeoutError: The read operation timed out")
+
+    monkeypatch.setattr(V, "block_ts", boom)
+    monkeypatch.setattr(O, "rpc", boom)
+    r = V.one_pass()
+    assert r["ok"] is False
+    assert "TimeoutError" in r["err"]
+    assert "NOT evidence" in r["labels"]
+
+
+def test_a_failed_pass_is_never_mistaken_for_a_pass_that_found_nothing(
+        monkeypatch):
+    from src.l5_chain_observer import observer as O
+
+    def boom(*_a, **_k):
+        raise O.RpcError("boom")
+
+    monkeypatch.setattr(V, "block_ts", boom)
+    monkeypatch.setattr(O, "rpc", boom)
+    r = V.one_pass()
+    # no agreement figures at all -- an unrun pass reports nothing about them
+    assert "agreement_rate" not in r and "feed_only" not in r

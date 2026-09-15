@@ -6,3 +6,4 @@
 # The service does not exist yet: it is prepared, not promoted. Creating it is
 # a deliberate, cost-incurring act and belongs to the owner.
 promote ba7957f0: create the l5-exec-shadow research supervisor service
+promote fef17b6b: chain validator survives transient RPC failures (crashed in prod 15:28:42Z)

@@ -106,6 +106,36 @@ def block_at(target_ts: float, hi_block: int, hi_ts: float, *,
 
 def one_pass(*, settle_margin_s: float = SETTLE_MARGIN_S,
              window_s: float = WINDOW_S) -> Dict[str, Any]:
+    """A pass that could not complete is a FAILED PASS, not a dead process.
+
+    The first version wrapped only the head query. `block_at` also calls the
+    RPC, and a transient `TimeoutError` there escaped and killed the process --
+    observed in production 15:28:42Z, returncode 1. The supervisor restarted it
+    in two seconds and recorded the gap, which is the supervisor working, but a
+    collector that dies on every network blip churns coverage holes into the
+    record for no reason. Every RPC path is now inside the guard.
+    """
+    try:
+        return _one_pass(settle_margin_s=settle_margin_s, window_s=window_s)
+    except Exception as exc:                                  # noqa: BLE001
+        return failed_pass(f"{type(exc).__name__}: {exc}")
+
+
+def failed_pass(err: str, **extra: Any) -> Dict[str, Any]:
+    """The ONE shape a pass that did not run takes.
+
+    Every failure path returns this, so a reader never meets one failed pass
+    carrying the caveat and another without it. It deliberately contains no
+    agreement figures at all: an unrun pass reports nothing about the chain,
+    and a zero here would be indistinguishable from a clean comparison.
+    """
+    return {"ok": False, "t": time.time(), "err": err[:300], **extra,
+            "labels": ("this pass did not run. It is NOT evidence about the "
+                       "chain, and nothing may be concluded from it")}
+
+
+def _one_pass(*, settle_margin_s: float = SETTLE_MARGIN_S,
+              window_s: float = WINDOW_S) -> Dict[str, Any]:
     now = time.time()
     hi_ts = now - settle_margin_s
     lo_ts = hi_ts - window_s
@@ -113,9 +143,9 @@ def one_pass(*, settle_margin_s: float = SETTLE_MARGIN_S,
         head = int(O.rpc("eth_blockNumber", []), 16)
         head_ts = block_ts(head)
     except O.RpcError as e:
-        return {"ok": False, "err": f"head unreadable: {e}", "t": now}
+        return failed_pass(f"head unreadable: {e}")
     if head_ts is None:
-        return {"ok": False, "err": "head block carried no timestamp", "t": now}
+        return failed_pass("head block carried no timestamp")
 
     # the block range must CONTAIN the time window on both sides
     hi_b = block_at(hi_ts, head, head_ts, side="ceil")
@@ -125,11 +155,11 @@ def one_pass(*, settle_margin_s: float = SETTLE_MARGIN_S,
         # THE QUESTION COULD NOT BE PUT. This is never reported as "the chain
         # saw nothing": that conflation is exactly what made an earlier probe
         # claim 0 chain fills against 480 feed fills and call it a success.
-        return {"ok": False, "err": "chain could not be queried on any RPC",
-                "t": now, "blocks": [lo_b, hi_b]}
+        return failed_pass("chain could not be queried on any RPC",
+                           blocks=[lo_b, hi_b])
     feed = O.activity_fills()
     if feed is None:
-        return {"ok": False, "err": "activity feed unreadable", "t": now}
+        return failed_pass("activity feed unreadable")
 
     cv = O.cross_validate(chain, feed, window=(lo_ts, hi_ts))
     leads = _leads(chain, feed)
@@ -184,14 +214,17 @@ def main(argv=None) -> int:
           f"margin={SETTLE_MARGIN_S}s window={WINDOW_S}s. READ ONLY; "
           f"observer.PROMOTED={O.PROMOTED}", flush=True)
     deadline = time.time() + a.hours * 3600 if a.hours else None
+    consecutive_errors = 0
     while True:
         rec = one_pass()
+        consecutive_errors = 0 if rec.get("ok") else consecutive_errors + 1
+        rec["consecutive_errors"] = consecutive_errors
         with open(os.path.join(a.out_dir, OUT), "a") as fh:
             fh.write(json.dumps(rec, default=str) + "\n")
         print("L5_CHAIN_VALIDATE " + json.dumps(
             {k: rec.get(k) for k in
-             ("ok", "err", "n_chain", "n_union", "agree", "agreement_rate",
-              "feed_only", "promotion_blocker")},
+             ("ok", "err", "consecutive_errors", "n_chain", "n_union",
+              "agree", "agreement_rate", "feed_only", "promotion_blocker")},
             default=str), flush=True)
         if a.once or (deadline is not None and time.time() >= deadline):
             break
