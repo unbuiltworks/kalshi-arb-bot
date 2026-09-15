@@ -16,10 +16,12 @@ READ ONLY. No order path anywhere in this module or anything it imports.
 """
 from __future__ import annotations
 
+import math
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from src.l5_fidelity import baselines as B
+from src.l5_fidelity import model as M
 from src.l5_fidelity import store
 from src.l5_fidelity.model import HORIZONS_S, FidelityV0
 
@@ -109,11 +111,26 @@ def resolve_one(out_dir: str, rec: Dict[str, Any],
         dis["outcome"] = {"predicted": p["predicted_outcome"],
                           "actual": nxt["outcome"],
                           "correct": p["predicted_outcome"] == nxt["outcome"]}
-        if p.get("predicted_size_p50") is not None:
-            dis["size_err"] = round(nxt["size"] - p["predicted_size_p50"], 6)
-            lo, hi = p.get("predicted_size_range") or [None, None]
-            dis["size_in_range"] = (lo is not None and hi is not None
-                                    and lo <= nxt["size"] <= hi)
+        # SIZE IS SCORED AS A DISTRIBUTION, not as a point. The recorded
+        # number is the probability mass the model put on the bin L5 actually
+        # landed in, plus its log score; a median-minus-actual "error" on a
+        # distribution running p10=2 to p99=80 measured nothing.
+        szb = p.get("predicted_size_bins")
+        if szb:
+            actual_bin = M.size_bin(float(nxt["size"]))
+            p_on = float(szb.get(actual_bin, 0.0))
+            dis["size"] = {
+                "actual_size": nxt["size"],
+                "actual_bin": actual_bin,
+                "predicted_mode_bin": p.get("predicted_size_mode_bin"),
+                "mode_bin_correct": p.get("predicted_size_mode_bin") == actual_bin,
+                "p_on_actual_bin": round(p_on, 6),
+                "log_score": (round(math.log(p_on), 6) if p_on > 0 else None),
+                "uniform_reference_p": round(1.0 / len(M.SIZE_BIN_LABELS), 6),
+            }
+        if p.get("predicted_size_p50_summary_only") is not None:
+            dis["size_err_summary_only"] = round(
+                nxt["size"] - p["predicted_size_p50_summary_only"], 6)
         if p.get("predicted_next_gap_s_p50") is not None:
             dis["timing_err_s"] = round((nxt["t"] - t0) - p["predicted_next_gap_s_p50"], 6)
     else:

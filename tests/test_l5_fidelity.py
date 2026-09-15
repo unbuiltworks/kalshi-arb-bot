@@ -148,10 +148,19 @@ def test_since_is_not_in_the_state_key():
 
 
 def test_a_model_change_gets_a_new_version():
-    fills = [{"cid": "w0", "t": i, "window_end": 1000, "outcome": "Up",
-              "price": 0.4, "size": 5.0} for i in range(100)]
-    m = FidelityV0.fit(fills, "BTC15m")
-    assert m.version.startswith("v0.1-")
+    """This test used to assert only the version PREFIX, which is how the v0.1
+    hash shipped while covering none of the model's numbers. It now asserts the
+    property its name claims: fit two genuinely different models and the
+    versions must differ."""
+    def fills(size, n=100):
+        return [{"cid": "w0", "t": i, "window_end": 1000, "outcome": "Up",
+                 "price": 0.4, "size": size} for i in range(n)]
+    a = FidelityV0.fit(fills(5.0), "BTC15m")
+    b = FidelityV0.fit(fills(50.0), "BTC15m")
+    assert a.version.startswith("v0.2-") and b.version.startswith("v0.2-")
+    assert a.version != b.version, "different models shared one version"
+    assert FidelityV0.fit(fills(5.0), "BTC15m").version == a.version, (
+        "the same model must be reproducible to the same version")
 
 
 # ---------------------------------------------------------- the two estimands
@@ -278,7 +287,10 @@ def test_the_frozen_artifact_reproduces_the_full_fit():
            / "artifacts/l5_fidelity/BTC15m.json.gz")
     assert art.exists(), "the frozen artifact the service boots from is missing"
     m = FidelityV0.load(str(art))
-    assert m.version.startswith("v0.1-")
+    assert m.version.startswith("v0.2-")
+    from src.l5_fidelity.model import version_of
+    assert version_of(m.cohort, m.tables) == m.version, (
+        "the shipped artifact's version does not match its own contents")
     from src.l5_fidelity.model import ESTIMAND_A
     p = m.predict(tte=400, since=None, resid_rel=0.0, last_outcome="Up",
                   price=0.45, estimand=ESTIMAND_A)
@@ -318,3 +330,66 @@ def test_the_service_has_no_credential_or_order_path():
         assert cred not in src, cred
     for verb in ('method="POST"', 'method="DELETE"', 'method="PUT"'):
         assert verb not in src
+
+
+# ----------------------------------------------------- v0.2: identity + size
+
+def test_version_is_a_content_hash_of_the_whole_model():
+    """v0.1's version covered the state-key schema and none of the numbers, so
+    every distribution could be replaced without the version moving. That made
+    "a model change gets a new version" false. Any change to any number must
+    now change the version."""
+    import copy
+    from src.l5_fidelity.model import version_of
+    m = FidelityV0.fit(_fills(), "BTC15m")
+    v = version_of("BTC15m", m.tables)
+    assert v == m.version and v.startswith("v0.2-")
+
+    for mutate in (
+        lambda t: t["gaps"].__setitem__(next(iter(t["gaps"])), [999.0]),
+        lambda t: t["size"].__setitem__(next(iter(t["size"])), [1.0]),
+        lambda t: t["base_side"].__setitem__("Up", t["base_side"].get("Up", 0) + 1),
+        lambda t: t["base_gaps"].__setitem__(0, t["base_gaps"][0] + 1e-9),
+        lambda t: t["base_size_bins"].__setitem__("<1", 0.123456),
+    ):
+        t = copy.deepcopy(m.tables)
+        mutate(t)
+        assert version_of("BTC15m", t) != v, "a changed model kept its version"
+
+
+def test_size_bins_are_left_closed_right_open_and_preregistered():
+    from src.l5_fidelity.model import SIZE_BIN_EDGES, SIZE_BIN_LABELS, size_bin
+    assert SIZE_BIN_EDGES == (1.0, 3.0, 10.0, 30.0, 60.0)
+    assert len(SIZE_BIN_LABELS) == len(SIZE_BIN_EDGES) + 1
+    for v, exp in [(0.0, "<1"), (0.999, "<1"), (1.0, "1-3"), (2.999, "1-3"),
+                   (3.0, "3-10"), (10.0, "10-30"), (30.0, "30-60"),
+                   (59.999, "30-60"), (60.0, ">=60"), (1e9, ">=60")]:
+        assert size_bin(v) == exp, (v, size_bin(v), exp)
+
+
+def test_size_prediction_is_a_distribution_not_a_median():
+    """The scored size prediction must be a proper distribution over the
+    preregistered bins: normalised, strictly positive everywhere (so one
+    surprise cannot score as log(0)), and the p50 demoted to a summary."""
+    from src.l5_fidelity.model import SIZE_BIN_LABELS
+    m = FidelityV0.fit(_fills(), "BTC15m")
+    p = m.predict(tte=600, since=None, resid_rel=0.0,
+                  last_outcome="Up", price=0.5)
+    b = p["predicted_size_bins"]
+    assert set(b) == set(SIZE_BIN_LABELS)
+    assert abs(sum(b.values()) - 1.0) < 1e-9
+    assert all(v > 0 for v in b.values()), "a zero bin makes log(0) reachable"
+    assert p["predicted_size_mode_bin"] == max(b, key=b.get)
+    assert "predicted_size_p50" not in p, "the median must not look like THE prediction"
+    assert p["predicted_size_p50_summary_only"] is not None
+
+
+def test_state_n_reports_true_count_not_the_capped_sample():
+    """gaps/size are subsampled per state for artifact size while side keeps
+    full counts. Reporting len(gaps) as state_n would understate the evidence;
+    the sampled figure is kept separately rather than discarded."""
+    m = FidelityV0.fit(_fills(), "BTC15m")
+    p = m.predict(tte=600, since=None, resid_rel=0.0,
+                  last_outcome="Up", price=0.5)
+    assert p["state_n"] >= p["state_n_sampled"]
+    assert isinstance(p["state_n_sampled"], int)

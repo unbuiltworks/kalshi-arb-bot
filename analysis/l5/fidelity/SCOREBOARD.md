@@ -1,5 +1,65 @@
 # L5_FIDELITY — prospective scoreboard
 
+## v0.2 — THE VERSION STRING DID NOT IDENTIFY THE MODEL
+
+Found while implementing the size fix, and it is the more serious of the two.
+
+v0.1's version was `sha256({cohort, kind, n_fills, n_windows, first 2000 state
+KEYS})`. That covers the state-key **schema** and **none of the distributions**.
+Demonstrated rather than argued: every gap, every size and every side count in
+the shipped tables was replaced with constants and the version string did not
+move — `v0.1-e9983c17ff8c` before and after.
+
+The entire v0 → v0.1 lineage rule is *"a model change gets a new version, and
+scores only forward from there."* Under that hash the rule was unenforceable: a
+rebuild with different subsampling, a different tape, or a corrupted table would
+have served under an identity it no longer had, and been scored as the same
+model.
+
+**Fixed in v0.2:** the version is a content hash of the whole serialized model.
+A 1e-9 nudge to a single value in `base_gaps` changes it. `test_a_model_change_
+gets_a_new_version` — which previously asserted only the *prefix*, which is how
+this shipped — now fits two genuinely different models and requires the versions
+to differ, and requires the same model to reproduce the same version.
+
+### Size is now a distribution, not a median clip
+
+v0/v0.1 predicted `predicted_size_p50` and scored `next_size − p50`. On a
+distribution running p10 = 2, p50 = 14, p90 = 49, p99 = 80, that point estimate
+cannot be right, and the error is uninformative: the first scored row predicted
+15.1 against an actual 80.0 for a "+64.9 miss" that says nothing about whether
+the model understood the state.
+
+Preregistered bin edges, **fixed before any size score exists**, chosen on the
+canonical population only (which ends 2026-08-31, so live data cannot have
+informed them): **1 / 3 / 10 / 30 / 60**, left-closed and right-open. They
+spread that population 3.7 / 10.6 / 25.3 / 34.1 / 21.6 / 4.6 % — no bin starved,
+none swallowing the mass. Scored by the probability mass on the bin L5 actually
+landed in, with a log score against a 1/6 uniform reference. Bins are
+Laplace-smoothed so one surprise cannot score as log(0). The p50 survives only
+as `predicted_size_p50_summary_only` and is not scored.
+
+### `state_n` was reporting a capped sample as the population
+
+`gaps` and `size` are subsampled to 2,000 per state for artifact size while
+`side` keeps full counts — 83 of 150 states sit exactly at that cap. v0.1
+reported `len(gaps)` as `state_n`, so a state backed by 17,490 observations
+looked like 2,000. v0.2 reports the true count and keeps the sampled figure
+separately as `state_n_sampled`.
+
+### What carried over, and what did not
+
+v0.2 is **derived from the frozen v0.1 artifact, not refitted**: the gap, side
+and size distributions are carried across byte-identical and the build script
+asserts that rather than claiming it. So v0.2 is provably the same fitted model
+in a new representation. v0.1 is preserved as
+`artifacts/l5_fidelity/BTC15m.v0.1.json.gz`, and the 15 rows it froze stay
+exactly as frozen — never relabelled, re-scored, or merged into v0.2.
+
+`v0.1-e9983c17ff8c` → `v0.2-85b4260cc30a`.
+
+---
+
 ## v0.1 PROSPECTIVE COLLECTION IS LIVE (2026-09-15T10:49:15Z)
 
 **EARLY / INSUFFICIENT SAMPLE — v0.1 n = 15 frozen, 5 resolved at

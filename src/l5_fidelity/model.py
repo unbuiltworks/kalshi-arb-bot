@@ -30,7 +30,25 @@ from typing import Any, Dict, List, Optional, Sequence
 # PREREGISTERED -- fixed before scoring, never re-chosen afterwards.
 HORIZONS_S = (1.0, 5.0, 15.0, 30.0)
 COHORTS = ("BTC15m", "BTC5m", "ETH5m", "ETH15m")
-MODEL_KIND = "l5_fidelity_v0_1/conditional_empirical"
+MODEL_KIND = "l5_fidelity_v0_2/conditional_empirical"
+
+# PREREGISTERED SIZE BINS -- fixed HERE, before any size score exists, and not
+# to be re-cut after seeing which edges flatter the model.
+#
+# WHY BINS AND NOT A MEDIAN. v0/v0.1 predicted `predicted_size_p50` and scored
+# `next_size - p50`. On a distribution running p10=2, p50=14, p90=49, p99=80,
+# that point estimate cannot be right and the error is uninformative: the very
+# first scored row predicted 15.1 against an actual 80.0 for a "+64.9 miss"
+# that says nothing about whether the model understood the state. A size
+# prediction is a DISTRIBUTION; it is scored as one, with the probability mass
+# the model put on the bin L5 actually landed in.
+#
+# The edges are round decade-ish numbers chosen on the CANONICAL population
+# only (which ends 2026-08-31, so live scoring cannot have informed them), and
+# they spread that population 3.7 / 10.6 / 25.3 / 34.1 / 21.6 / 4.6 per cent --
+# no bin starved, none swallowing the mass.
+SIZE_BIN_EDGES = (1.0, 3.0, 10.0, 30.0, 60.0)
+SIZE_BIN_LABELS = ("<1", "1-3", "3-10", "10-30", "30-60", ">=60")
 
 # TWO ESTIMANDS, NEVER MIXED. Scoring one model against the other's sampling is
 # what produced a predicted 0.93 against an actual 0.46 ACT-within-30s.
@@ -104,6 +122,42 @@ def state_key(*, tte: float, since: Optional[float], resid_rel: Optional[float],
                      f"last={last_outcome or 'none'}", price_bucket(price)))
 
 
+def size_bin(v: float) -> str:
+    """Which preregistered bin a size falls in. Edges are right-open."""
+    return SIZE_BIN_LABELS[bisect.bisect_right(SIZE_BIN_EDGES, v)]
+
+
+def size_hist(values: Sequence[float]) -> Dict[str, float]:
+    """Empirical probability over the preregistered bins.
+
+    Laplace-smoothed by one pseudo-count per bin so a bin unseen in a state is
+    improbable rather than IMPOSSIBLE. Without it a single surprise observation
+    scores as log(0) and one live row could dominate the whole scoreboard.
+    """
+    c = collections.Counter(size_bin(float(v)) for v in values)
+    tot = len(values) + len(SIZE_BIN_LABELS)
+    return {b: (c[b] + 1) / tot for b in SIZE_BIN_LABELS}
+
+
+def version_of(cohort: str, tables: Dict[str, Any]) -> str:
+    """Version string = CONTENT HASH OF THE WHOLE MODEL.
+
+    v0.1 hashed only {cohort, kind, n_fills, n_windows, first 2000 state KEYS}.
+    That covered the state-key SCHEMA and none of the distributions, so every
+    gap, every size and every side count in the tables could be replaced and
+    the version string would not move -- verified by doing exactly that. The
+    whole v0 -> v0.1 lineage discipline rests on "a model change gets a new
+    version", and under that hash the guarantee was simply false.
+
+    Hashing the serialized tables makes it true: any change to any number in
+    the model changes the version, so a rebuilt, re-subsampled or corrupted
+    artifact can never be served under an identity it no longer has.
+    """
+    blob = json.dumps({"cohort": cohort, "kind": MODEL_KIND, "tables": tables},
+                      sort_keys=True, separators=(",", ":")).encode()
+    return f"v0.2-{hashlib.sha256(blob).hexdigest()[:12]}"
+
+
 class FidelityV0:
     """Conditional empirical tables. Deliberately simple: v0 exists to START
     prospective scoring, not to be the final model."""
@@ -150,17 +204,15 @@ class FidelityV0:
             "gaps": {k: sorted(v) for k, v in gaps.items() if len(v) >= 20},
             "side": {k: dict(v) for k, v in side.items() if sum(v.values()) >= 20},
             "size": {k: sorted(v) for k, v in size.items() if len(v) >= 20},
+            "size_bins": {k: size_hist(v) for k, v in size.items() if len(v) >= 20},
             "base_gaps": sorted(base_gaps),
             "base_side": dict(base_side),
             "base_size": sorted(base_size),
+            "base_size_bins": size_hist(base_size),
             "n_fills": len(fills),
             "n_windows": len(by_window),
         }
-        blob = json.dumps({"cohort": cohort, "kind": MODEL_KIND,
-                           "n": tables["n_fills"], "w": tables["n_windows"],
-                           "states": sorted(tables["gaps"])[:2000]},
-                          sort_keys=True).encode()
-        return cls(cohort, tables, f"v0.1-{hashlib.sha256(blob).hexdigest()[:12]}")
+        return cls(cohort, tables, version_of(cohort, tables))
 
     # ------------------------------------------------------------- predict
     @staticmethod
@@ -201,6 +253,14 @@ class FidelityV0:
         g = g or self.tables["base_gaps"]
         sd = self.tables["side"].get(k) or self.tables["base_side"]
         sz = self.tables["size"].get(k) or self.tables["base_size"]
+        szb = (self.tables.get("size_bins", {}).get(k)
+               or self.tables.get("base_size_bins")
+               or size_hist(sz))
+        # TRUE state n, not the length of a capped sample. `gaps`/`size` are
+        # subsampled per state for artifact size while `side` keeps full
+        # counts, so len(g) understates the evidence behind a state and must
+        # not be reported as if it were the population.
+        state_n_true = sum(self.tables["side"].get(k, {}).values()) or None
         tot = sum(sd.values()) or 1
         p_up = sd.get("Up", 0) / tot
         def q(v, p): return v[min(len(v) - 1, int(p * len(v)))] if v else None
@@ -228,12 +288,18 @@ class FidelityV0:
             "cohort": self.cohort,
             "state_key": k,
             "lookup_tier": tier,
-            "state_n": len(g),
+            "state_n_sampled": len(g),
+            "state_n": state_n_true if state_n_true else len(g),
             "p_act_within": pact,
             "predicted_outcome": ("Up" if p_up >= 0.5 else "Down"),
             "p_outcome_up": round(p_up, 6),
-            "predicted_size_p50": q(sz, .5),
-            "predicted_size_range": [q(sz, .25), q(sz, .75)],
+            # THE size prediction is the distribution. p50/IQR are kept as
+            # human-readable summaries and are NOT what gets scored.
+            "predicted_size_bins": szb,
+            "predicted_size_mode_bin": max(szb, key=szb.get),
+            "size_bin_edges": list(SIZE_BIN_EDGES),
+            "predicted_size_p50_summary_only": q(sz, .5),
+            "predicted_size_range_summary_only": [q(sz, .25), q(sz, .75)],
             "predicted_next_gap_s_p50": q(g, .5),
             "predicted_next_gap_s_range": [q(g, .25), q(g, .75)],
         }
