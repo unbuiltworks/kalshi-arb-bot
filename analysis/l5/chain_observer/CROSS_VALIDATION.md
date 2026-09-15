@@ -100,3 +100,29 @@ arrival, so it no longer pretends to.
 **Three clean passes is not a promotion test.** The gate is continuous and
 accumulating; promotion needs a long run of clean settled windows, and the
 decision is the owner's.
+
+---
+
+## Running record
+
+| | |
+|---|---|
+| settled-window passes | **11** |
+| clean (`feed_only` empty, no blocker) | **10** |
+| the one failure | the pre-fix pass, root-caused to the validator's own block bounds |
+| agreement rate | 0.953 – 0.990 |
+| fills per 15-min window | 106 – 193 |
+
+**A gap in the series, disclosed:** the container this runs in was reclaimed and
+restarted at **14:27:14 Z**, which killed the validator (and the depth probe)
+while the durable JSONL survived on disk. Nothing noticed until a process
+listing happened to be run. Restarted at 14:35 Z, appending to the same store,
+so the series continues with a ~9 minute hole rather than restarting.
+
+`tools/supervise_l5_research.sh` now restores every stream in one idempotent
+command. **It does not solve the underlying problem** — a container that dies
+while nobody is looking stays dead — and the durable fix is the prepared
+Railway service under `deploy/l5_exec_shadow/`, which is deliberately not
+created because that costs money and is the owner's call.
+
+Ten clean passes is still not a promotion test. `observer.PROMOTED` stays False.
