@@ -422,7 +422,8 @@ def observe_intent(out_dir: str, intent, *, window: Optional[dict],
 
 # ------------------------------------------------------- deferred resolutions
 
-def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float) -> bool:
+def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float,
+                  boot_t: Optional[float] = None) -> bool:
     """Decide ONE hypothetical quote from LATER public prints. True if decided."""
     venue, ik = pend["venue"], pend["intent_id"]
     if venue == "PMUS":
@@ -465,6 +466,16 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float) -> bool:
         "placed_at": pend["placed_at"], "resolved_at": now,
         "quote_price": pend["price"], "quote_qty": pend["qty"],
         "print_source": pend.get("_print_source"),
+        # A QUOTE PLACED BEFORE THIS BOOT WAS RESTING WHILE WE WERE NOT
+        # WATCHING. Its verdict is decided from prints fetched now, which may
+        # not reach back across the gap, so an "undecided" here means we were
+        # absent -- never that nothing traded. Flagged on the row so no reader
+        # has to infer it.
+        "resolved_across_restart": bool(boot_t is not None
+                                        and pend["placed_at"] < boot_t),
+        "observation_gap_before_placement": (
+            None if boot_t is None or pend["placed_at"] >= boot_t
+            else round(boot_t - pend["placed_at"], 1)),
         "horizon_s": MAKER_HORIZON_S, **res})
     return True
 
@@ -583,10 +594,20 @@ def main(argv=None) -> int:
           "exists for that cohort; cohorts are never pooled. REPLAY intents "
           "cover every cohort and need no model.", flush=True)
 
+    boot_t = time.time()
     pending_makers, _ = recover_pending(a.out_dir)
     pending_evo: List[Dict[str, Any]] = []
-    print(f"L5_SHADOW recovered pending_maker_quotes={len(pending_makers)}",
-          flush=True)
+    # the oldest recovered quote says how far back this boot is reaching, and
+    # every one of them was resting while nobody was watching
+    _oldest = min((p.get("placed_at") or boot_t) for p in pending_makers) \
+        if pending_makers else None
+    print("L5_SHADOW " + json.dumps({
+        "kind": "boot", "recovered_pending_maker_quotes": len(pending_makers),
+        "oldest_pending_placed_at": _oldest,
+        "oldest_pending_age_s": (round(boot_t - _oldest, 1) if _oldest else None),
+        "labels": ("recovered quotes were resting across a restart; their "
+                   "outcomes carry resolved_across_restart so an undecided "
+                   "verdict is never read as a no-fill")}), flush=True)
 
     seen_anchor: set = set()
     seen_intent: set = set()
@@ -690,7 +711,7 @@ def main(argv=None) -> int:
             due = [p for p in pending_makers
                    if now - p["placed_at"] >= MAKER_HORIZON_S]
             for p in due:
-                resolve_maker(a.out_dir, p, now=now)
+                resolve_maker(a.out_dir, p, now=now, boot_t=boot_t)
                 pending_makers.remove(p)
             due_evo = [p for p in pending_evo if now >= p["due"]]
             for p in due_evo:

@@ -1,0 +1,238 @@
+"""ONE process that owns every L5 research stream, and accounts for its own gaps.
+
+WHY A SUPERVISOR AND NOT THREE SERVICES. Three collectors is three things to
+deploy, three restart policies and three ways to be quietly dead. One process
+owns them, so there is one deployment, one volume and one place that knows
+whether we were watching.
+
+THE PROBLEM THIS EXISTS TO SOLVE, and it is not "processes crash". On
+2026-09-15 the container was reclaimed at 14:27:14Z. Two collectors died with
+it, their durable JSONL survived, and nothing noticed for nine minutes. The
+stores then contained a stretch of time with no observations in it -- which is
+INDISTINGUISHABLE, to every reader downstream, from a stretch of time in which
+L5 did nothing and no quote filled.
+
+So the contract here is not uptime. It is that DOWNTIME IS RECORDED AS
+DOWNTIME:
+
+    boot            every start, with the gap since each stream last wrote
+    coverage_gap    an explicit, durable "we were not watching from A to B"
+    stream_exit     a child died, with its exit code
+    stream_restart  and when it came back
+    heartbeat       so a silent store can be distinguished from a stopped one
+
+An analysis that finds no fills in a window must be able to ask whether anyone
+was looking, and `analysis/l5/coverage.py` answers from these markers.
+
+RESUME, NEVER RESET. Every stream is started against the SAME out-dir it used
+before, so its append-only store continues. Nothing here truncates, rotates or
+rewrites a store.
+
+READ ONLY, STRUCTURALLY. This module imports no executor, no signer and no
+credential reader, and the image it ships in copies none. A test asserts the
+import closure; there is no order verb anywhere in it.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from typing import Any, Dict, List, Optional
+
+SCHEMA = "l5_research_coverage/v1"
+COVERAGE = "coverage.jsonl"
+HEARTBEAT_S = 60.0
+# a child that exits is restarted, but not in a tight loop: a persistent
+# failure should be visible in the markers rather than hidden by churn
+BACKOFF_S = (2.0, 5.0, 15.0, 30.0, 60.0)
+
+# name -> (module, state subdirectory, the file whose last row dates the stream)
+STREAMS: Dict[str, tuple] = {
+    "exec_shadow": ("src.l5_shadow.service", "l5-shadow-state", "routes.jsonl"),
+    "gemini_depth": ("analysis.l5.gemini_depth.probe", "gemdepth",
+                     "samples.jsonl"),
+    "chain_validate": ("analysis.l5.chain_observer.validate", "chainval",
+                       "validations.jsonl"),
+}
+
+
+def _last_row_time(path: str) -> Optional[float]:
+    """Timestamp of the newest record in an append-only store, or None.
+
+    Read from the file's own last line rather than from its mtime: mtime moves
+    when anything touches the file, while the row is what an analysis actually
+    sees, and the gap has to be measured in the same units the analysis reads.
+    """
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            back = min(size, 65536)
+            fh.seek(size - back)
+            tail = fh.read().decode("utf-8", "replace").strip().splitlines()
+    except OSError:
+        return None
+    for line in reversed(tail):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        for k in ("t", "observed_at", "decided_at", "evaluated_at",
+                  "resolved_at"):
+            v = r.get(k)
+            if isinstance(v, (int, float)):
+                return float(v)
+    return None
+
+
+class Supervisor:
+    def __init__(self, state_root: str, *, hours: float = 0.0) -> None:
+        self.root = state_root
+        self.deadline = (time.time() + hours * 3600) if hours else None
+        self.procs: Dict[str, subprocess.Popen] = {}
+        self.fails: Dict[str, int] = {n: 0 for n in STREAMS}
+        self.next_try: Dict[str, float] = {n: 0.0 for n in STREAMS}
+        self.started_at = time.time()
+        os.makedirs(self.root, exist_ok=True)
+
+    # ------------------------------------------------------------- markers
+
+    def mark(self, kind: str, **fields: Any) -> Dict[str, Any]:
+        rec = {"schema": SCHEMA, "kind": kind, "t": time.time(), **fields}
+        try:
+            with open(os.path.join(self.root, COVERAGE), "a") as fh:
+                fh.write(json.dumps(rec, default=str) + "\n")
+        except OSError:
+            pass                      # a marker we cannot write is still logged
+        print("L5_SUPERVISOR " + json.dumps(rec, default=str), flush=True)
+        return rec
+
+    def boot(self) -> None:
+        """Record the gap since each stream last wrote, BEFORE starting them.
+
+        This is the only moment the gap is knowable: once a stream restarts it
+        begins appending again and the hole closes silently.
+        """
+        gaps = {}
+        for name, (_mod, sub, fname) in STREAMS.items():
+            last = _last_row_time(os.path.join(self.root, sub, fname))
+            gaps[name] = {
+                "last_row_utc": last,
+                "gap_s": (round(self.started_at - last, 1) if last else None),
+                "store": f"{sub}/{fname}",
+            }
+        self.mark("boot", pid=os.getpid(), streams=sorted(STREAMS),
+                  since_last_row=gaps,
+                  labels=("gap_s is the time between a stream's newest durable "
+                          "record and this boot. It is NOT idle time: nothing "
+                          "was observed in it, so no conclusion of NO ACTION "
+                          "or NO FILL may be drawn over that interval."))
+        for name, g in gaps.items():
+            if g["gap_s"] and g["gap_s"] > HEARTBEAT_S * 2:
+                self.mark("coverage_gap", stream=name,
+                          from_utc=g["last_row_utc"], to_utc=self.started_at,
+                          gap_s=g["gap_s"],
+                          labels=("NOT WATCHING between these instants. Any "
+                                  "absence of observations here is our absence, "
+                                  "not the market's."))
+
+    # ------------------------------------------------------------ children
+
+    def _cmd(self, name: str) -> List[str]:
+        mod, sub, _f = STREAMS[name]
+        return [sys.executable, "-m", mod, "--out-dir",
+                os.path.join(self.root, sub)]
+
+    def start(self, name: str) -> None:
+        if time.time() < self.next_try[name]:
+            return
+        _mod, sub, _f = STREAMS[name]
+        os.makedirs(os.path.join(self.root, sub), exist_ok=True)
+        try:
+            p = subprocess.Popen(self._cmd(name), stdout=sys.stdout,
+                                 stderr=subprocess.STDOUT)
+        except Exception as exc:                              # noqa: BLE001
+            self.mark("stream_start_failed", stream=name,
+                      err=f"{type(exc).__name__}: {exc}")
+            self.fails[name] += 1
+            self.next_try[name] = time.time() + self._backoff(name)
+            return
+        self.procs[name] = p
+        self.mark("stream_restart" if self.fails[name] else "stream_start",
+                  stream=name, pid=p.pid, out_dir=os.path.join(self.root, sub),
+                  consecutive_failures=self.fails[name],
+                  labels="resumed against the existing store; nothing reset")
+
+    def _backoff(self, name: str) -> float:
+        i = min(self.fails[name], len(BACKOFF_S)) - 1
+        return BACKOFF_S[max(0, i)]
+
+    def reap(self) -> None:
+        for name in list(self.procs):
+            p = self.procs[name]
+            rc = p.poll()
+            if rc is None:
+                continue
+            self.procs.pop(name, None)
+            self.fails[name] += 1
+            self.next_try[name] = time.time() + self._backoff(name)
+            self.mark("stream_exit", stream=name, pid=p.pid, returncode=rc,
+                      consecutive_failures=self.fails[name],
+                      labels=("this stream stopped observing at this instant; "
+                              "the interval until stream_restart is a coverage "
+                              "gap"))
+
+    def stop(self, *_a: Any) -> None:
+        self.mark("shutdown", labels=("supervisor asked to stop; children are "
+                                      "terminated and the gap starts here"))
+        for name, p in list(self.procs.items()):
+            try:
+                p.terminate()
+            except Exception:                                 # noqa: BLE001
+                pass
+        raise SystemExit(0)
+
+    # ---------------------------------------------------------------- loop
+
+    def run(self) -> int:
+        self.boot()
+        signal.signal(signal.SIGTERM, self.stop)
+        signal.signal(signal.SIGINT, self.stop)
+        last_hb = 0.0
+        while self.deadline is None or time.time() < self.deadline:
+            for name in STREAMS:
+                if name not in self.procs:
+                    self.start(name)
+            self.reap()
+            now = time.time()
+            if now - last_hb >= HEARTBEAT_S:
+                last_hb = now
+                self.mark("heartbeat",
+                          uptime_s=round(now - self.started_at, 1),
+                          running=sorted(self.procs),
+                          not_running=sorted(set(STREAMS) - set(self.procs)),
+                          failures=dict(self.fails))
+            time.sleep(2.0)
+        self.stop()
+        return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--state-root", default="/state/l5-research")
+    ap.add_argument("--hours", type=float, default=0.0)
+    a = ap.parse_args(argv)
+    return Supervisor(a.state_root, hours=a.hours).run()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
