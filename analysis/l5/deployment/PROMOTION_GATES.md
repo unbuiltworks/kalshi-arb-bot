@@ -97,6 +97,8 @@ correctly CLOSED. That is the accounting working, not the engine failing.**
 | G6.4 | deadman / cancellation | an unattended order is cancelled within the shell's deadman window; proven by test, not by intention | shell tests |
 | G6.5 | one market, one outstanding order, maker-first | enforced by the shell for the learning stage | shell |
 | G6.6 | fail closed on unknown | unknown depth, unknown fee, unknown settlement -> refuse | evaluator + router + shell |
+| G6.7 | **intent validity enforced** | an intent older than `valid_for_s` is declined by the router BEFORE any venue is ranked; default 30 s, set from the measurement that only 17.1 % of L5's intents survive 30 s | `l5_intent/action.py`, `l5_router/route.py` |
+| G6.8 | **age budget reported** | every routing decision records `intent_age_at_decision_s`; a cohort whose median age at decision exceeds its validity may not be promoted | shadow route rows |
 
 ---
 

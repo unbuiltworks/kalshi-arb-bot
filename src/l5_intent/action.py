@@ -28,7 +28,19 @@ from dataclasses import asdict, dataclass, field
 from decimal import Decimal as D
 from typing import Any, Mapping, Optional
 
-SCHEMA = "l5_desired_inventory_action/v1"
+SCHEMA = "l5_desired_inventory_action/v2"
+
+# HOW LONG AN INTENT STAYS AN INTENT, measured rather than chosen.
+# On L5's own fills (REPLAY intents), only 17.1% were still authorized by his
+# next action 30 seconds later: 36 side flips against 12 survivors. Even at
+# 300s only 25.6% survived. An intent is therefore a statement about a moment,
+# and one acted on much later is acquiring inventory the trader had stopped
+# wanting at that price.
+#
+# 30s is the shortest horizon we measured, and at that horizon the intent is
+# ALREADY mostly gone, so this is a ceiling on validity and not a comfortable
+# one. It is deliberately not tuned to make more intents executable.
+DEFAULT_VALID_FOR_S = 30.0
 
 # The four things the behavioural model can want. COMPLETE buys the opposite
 # side to close a pair; SWITCH changes which side is being accumulated.
@@ -65,6 +77,10 @@ class DesiredInventoryAction:
     model_version: str
     confidence: Optional[float] = None
     horizon_s: Optional[float] = None
+    # seconds after `t_utc` during which this intent may still be acted on.
+    # Part of the hashed identity, not an annotation: an intent that is valid
+    # for 30s and one valid for 300s are different economic instructions.
+    valid_for_s: float = DEFAULT_VALID_FOR_S
     notes: Optional[str] = None
     extra: dict = field(default_factory=dict)
 
@@ -80,6 +96,22 @@ class DesiredInventoryAction:
         if D(self.incremental_qty) <= 0:
             raise ValueError("incremental_qty must be positive; an intent to "
                              "do nothing is not an intent")
+        if self.valid_for_s <= 0:
+            raise ValueError("valid_for_s must be positive; an intent that is "
+                             "never valid cannot be acted on")
+
+    def age_s(self, now: float) -> float:
+        return now - self.t_utc
+
+    def expired(self, now: float) -> bool:
+        """Has this intent outlived the behaviour that produced it?
+
+        Measured from `t_utc` -- the moment the ENGINE formed the intent, which
+        for a fill-anchored intent is L5's own event time. Measuring from when
+        we happened to observe it would hide the feed lag inside the validity
+        window and make every intent look fresh.
+        """
+        return self.age_s(now) > self.valid_for_s
 
     @property
     def id(self) -> str:

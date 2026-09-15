@@ -98,6 +98,23 @@ def route(intent, evaluations: Sequence[Any], *,
     if evaluations and intent.id not in ids:
         raise ValueError("evaluations do not belong to this intent")
 
+    # AN EXPIRED INTENT IS NOT ROUTED AT ALL, before any venue is considered.
+    # Measured on L5's own fills, only 17.1% of intents were still authorized
+    # by his next action 30 seconds later. Routing a stale one acquires
+    # inventory the behaviour no longer wants, and it would do so on whichever
+    # venue happened to look cheapest -- a worse outcome than declining.
+    if hasattr(intent, "expired") and intent.expired(t):
+        return RoutingDecision(
+            intent_id=intent.id, decided_at=t, route="NEITHER",
+            reason=(f"intent expired: {round(intent.age_s(t), 1)}s old against "
+                    f"a validity of {intent.valid_for_s}s. It is a statement "
+                    f"about a moment that has passed, not a cheaper venue "
+                    f"problem."),
+            ranked=[], declined=[{"venue": e.venue, "reason": "intent expired"}
+                                 for e in evaluations],
+            extra={"expired": True, "age_s": round(intent.age_s(t), 3),
+                   "valid_for_s": intent.valid_for_s})
+
     qty = D(intent.incremental_qty)
     ranked, declined = [], []
     for ev in evaluations:

@@ -183,20 +183,38 @@ def _patience(evo: Sequence[dict]) -> Dict[str, Any]:
         k = r.get("intent_id")
         s = per.setdefault(k, {"PMUS": False, "GEMINI": False, "checks": 0})
         s["checks"] += 1
+        # a re-read inside the intent's own validity is the only one where a
+        # price coming to us is still the trade the engine asked for
+        age = r.get("since_intent_s")
+        valid = r.get("valid_for_s")
+        live = (age is not None and valid is not None and age <= float(valid))
         for v in ("PMUS", "GEMINI"):
             if (r.get(v) or {}).get("crossed_ceiling"):
                 s[v] = True
+                if live:
+                    s[f"{v}_within_validity"] = True
     if not per:
         return {"intents_rechecked": 0}
+    within = {"PMUS": 0, "GEMINI": 0}
+    for s in per.values():
+        for v in ("PMUS", "GEMINI"):
+            if s.get(f"{v}_within_validity"):
+                within[v] += 1
     return {
         "intents_rechecked": len(per),
         "checks": sum(s["checks"] for s in per.values()),
         "crossed_ceiling_later_PMUS": sum(1 for s in per.values() if s["PMUS"]),
         "crossed_ceiling_later_GEMINI": sum(1 for s in per.values()
                                             if s["GEMINI"]),
+        "crossed_WHILE_STILL_AUTHORIZED_PMUS": within["PMUS"],
+        "crossed_WHILE_STILL_AUTHORIZED_GEMINI": within["GEMINI"],
         "note": ("'crossed later' means the venue's best price on the wanted "
                  "side reached the intent's ceiling at some later re-read. It "
-                 "is not a fill and does not account for queue."),
+                 "is not a fill and does not account for queue. The "
+                 "WHILE_STILL_AUTHORIZED counts restrict that to re-reads "
+                 "inside the intent's own validity window -- a price that "
+                 "comes to us after the intent has expired is not patience "
+                 "paying off, it is a different trade."),
     }
 
 

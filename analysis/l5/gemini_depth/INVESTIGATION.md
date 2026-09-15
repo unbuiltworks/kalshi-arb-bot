@@ -314,6 +314,16 @@ needing a UI-specific mechanism. Labelled inference, not measurement.
 
 # Part 4 — capacity, across 7 windows (supersedes the 2-window interim)
 
+> **These figures move with sample size, and they have moved DOWN.** At 10
+> windows / 4,281 samples / 27 min the same statistics read: BTC15m no-ask
+> **6.4 %** (was 1.7 %), q=20 fillable **91.6 %** (was 97.9 %), touch ≤ 1 share
+> **13.8 %**; BTC5m no-ask **27.4 %** (was 21.2 %), q=20 fillable **67.4 %**
+> (was 73.3 %). The qualitative conclusion is unchanged and the direction is
+> worth stating plainly: the early windows were the flattering ones. Treat
+> `report.py` on the live store as the source of truth, not any table frozen
+> here.
+
+
 3,131 time-weighted samples over 1,213 s, 7 windows, **0 socket gaps, 0
 reconnects**. The Part 1 table was two windows and it was not representative —
 these numbers supersede it.
@@ -368,3 +378,56 @@ Not Gemini's depth. In order:
 
 Gemini's ability to supply size on BTC15m, at 97.9 % for q=20, is not on that
 list.
+
+---
+
+# Part 5 — what changed in the engine as a result
+
+The investigation was asked for because Gemini capacity looked like the
+blocker. It is not, so the engine changes are where the blocker actually is.
+
+## 1. The data path (done, Part 1)
+
+`gemini_book()` reads the maintained websocket book first, REST as fallback,
+`source` recorded on every row. Book age p50 **0.52 s → 0.042 s**. Live
+confirmation: the shadow's last 40 Gemini evaluations all read `websocket`.
+
+## 2. The execution model (done, Part 1)
+
+The ladder evaluator replaced the touch-depth read. Live proof from the running
+stream: **72 of 342** evaluations have `executable_qty` above touch depth, and
+on Gemini specifically **touch 50 → 678 executable at the ceiling**, touch 500
+→ 776. That is the execution-model error, closed and observable.
+
+## 3. Intent validity (new)
+
+`DesiredInventoryAction` now carries `valid_for_s`, default **30 s**, and the
+router declines an expired intent **before any venue is ranked**:
+
+```
+route: NEITHER
+reason: intent expired: 44.0s old against a validity of 30.0s. It is a
+        statement about a moment that has passed, not a cheaper venue problem.
+```
+
+The default is set from the measurement, not chosen: only 17.1 % of L5's own
+intents survive 30 s. It is a *ceiling* on validity and an uncomfortable one —
+at 30 s the intent is already mostly gone.
+
+Age is measured from `t_utc`, the moment the engine formed the intent, which
+for a fill-anchored intent is **L5's own event time**. Measuring from when we
+observed it would hide the feed lag inside the validity window and make every
+intent look fresh.
+
+`valid_for_s` is part of the hashed identity: an intent valid for 30 s and one
+valid for 300 s are different instructions, not the same instruction annotated.
+
+## 4. The age budget is now visible
+
+Every routing decision records `intent_age_at_decision_s`. First live rows show
+**9.6 s of a 30 s budget already spent** before we could price anything, on a
+fast BTC15m observation. On BTC5m, where observation lag runs ~133 s, intents
+will expire before they are priceable — and the router will say so rather than
+trading them.
+
+Two new promotion gates (G6.7, G6.8) pin both.

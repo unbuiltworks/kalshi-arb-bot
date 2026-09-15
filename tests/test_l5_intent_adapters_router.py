@@ -15,6 +15,19 @@ from src.l5_router import route
 from src.l5_venue_adapter import GeminiAdapter, NormalizedBook, PMUSAdapter
 
 
+def _route(intent, evaluations, **kw):
+    """Route with `now` pinned to the intent's own timestamp.
+
+    These tests are about ranking, capacity and the NEITHER path. The fixture
+    uses a fixed past `t_utc`, so against wall-clock `now` every intent here
+    would be expired and the router would correctly decline before ranking
+    anything -- which would test expiry over and over instead of what each test
+    is named for. Expiry has its own tests below.
+    """
+    kw.setdefault("now", intent.t_utc)
+    return route(intent, evaluations, **kw)
+
+
 def _intent(**kw):
     base = dict(cohort="BTC15m", market_key="btc-updown-15m-1789470900",
                 source_state_id="s1", t_utc=1789470900.0, tte_s=600.0,
@@ -184,7 +197,7 @@ def _ev(venue, eff, depth, ok=True, wf=True, intent=None):
 
 def test_router_may_choose_neither():
     i = _intent()
-    d = route(i, [_ev("PMUS", "0.90", "100", ok=False),
+    d = _route(i, [_ev("PMUS", "0.90", "100", ok=False),
                   _ev("GEMINI", "0.95", "100", ok=False)])
     assert d.route == "NEITHER"
     assert len(d.declined) == 2
@@ -192,20 +205,20 @@ def test_router_may_choose_neither():
 
 def test_router_ranks_on_effective_cost():
     i = _intent()
-    assert route(i, [_ev("PMUS", "0.58", "100"),
+    assert _route(i, [_ev("PMUS", "0.58", "100"),
                      _ev("GEMINI", "0.55", "100")]).route == "GEMINI"
 
 
 def test_unknown_depth_fails_closed():
     """None must not read as 'enough'."""
     i = _intent()
-    assert route(i, [_ev("PMUS", "0.55", None)]).route == "NEITHER"
+    assert _route(i, [_ev("PMUS", "0.55", None)]).route == "NEITHER"
 
 
 def test_capacity_is_a_constraint_not_a_tiebreak():
     """A venue that cannot supply the quantity does not win on price."""
     i = _intent()
-    d = route(i, [_ev("PMUS", "0.58", "100"), _ev("GEMINI", "0.50", "1")])
+    d = _route(i, [_ev("PMUS", "0.58", "100"), _ev("GEMINI", "0.50", "1")])
     assert d.route == "PMUS"
 
 
@@ -213,7 +226,7 @@ def test_would_fill_only_breaks_ties():
     """would_fill is an upper bound; ranking on it would prefer whichever venue
     displays more size."""
     i = _intent()
-    d = route(i, [_ev("PMUS", "0.55", "100", wf=False),
+    d = _route(i, [_ev("PMUS", "0.55", "100", wf=False),
                   _ev("GEMINI", "0.58", "100", wf=True)])
     assert d.route == "PMUS"
 
@@ -221,15 +234,15 @@ def test_would_fill_only_breaks_ties():
 def test_both_is_opt_in_only():
     i = _intent()
     evs = [_ev("PMUS", "0.58", "100"), _ev("GEMINI", "0.55", "100")]
-    assert route(i, evs).route == "GEMINI"
-    assert route(i, evs, allow_both=True).route == "BOTH"
+    assert _route(i, evs).route == "GEMINI"
+    assert _route(i, evs, allow_both=True).route == "BOTH"
 
 
 def test_router_refuses_evaluations_of_a_different_intent():
     i = _intent()
     other = _intent(max_acceptable_price="0.59")
     with pytest.raises(ValueError):
-        route(i, [_ev("PMUS", "0.55", "100", intent=other)])
+        _route(i, [_ev("PMUS", "0.55", "100", intent=other)])
 
 
 # ------------------------------------------------------- gemini market mapping

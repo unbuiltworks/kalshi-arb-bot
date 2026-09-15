@@ -19,13 +19,13 @@ from src.l5_shadow import service as SVC
 from src.l5_shadow.executable import VenueTerms, evaluate_executable, walk_levels
 
 
-def _intent(qty="10", ceiling="0.70", outcome="Up"):
+def _intent(qty="10", ceiling="0.70", outcome="Up", **kw):
     return DesiredInventoryAction(
         cohort="BTC15m", market_key="btc-updown-15m-1789470900",
         source_state_id="s1", t_utc=1789470910.0, tte_s=890.0,
         action="OPEN", desired_outcome=outcome, desired_inventory=qty,
         incremental_qty=qty, max_acceptable_price=ceiling,
-        current_matched="0", residual="0", model_version="test")
+        current_matched="0", residual="0", model_version="test", **kw)
 
 
 def _terms(*, taker=lambda p, q: D("0"), maker=None, minsz=None, tick="0.01"):
@@ -151,16 +151,60 @@ def test_router_uses_executable_depth_rather_than_the_touch():
     i = _intent(qty="10", ceiling="0.70")
     thin_touch = evaluate_executable(
         i, _terms(), [(D("0.66"), D("1")), (D("0.68"), D("499"))])
-    d = route(i, [thin_touch])
+    # `now` pinned to the intent's own time: this test is about capacity, and
+    # against wall-clock the fixture's fixed t_utc would expire first.
+    d = route(i, [thin_touch], now=i.t_utc)
     assert d.route == "TEST", d.declined
 
 
 def test_router_still_fails_closed_when_capacity_is_unknown():
-    ev = AdapterEvaluation(venue="X", intent_id=_intent().id,
+    i = _intent()
+    ev = AdapterEvaluation(venue="X", intent_id=i.id,
                            market_key="m", evaluated_at=0.0,
                            would_submit=True, within_ceiling=True,
                            effective_cost="0.50")
-    assert route(_intent(), [ev]).route == "NEITHER"
+    assert route(i, [ev], now=i.t_utc).route == "NEITHER"
+
+
+# ------------------------------------------------- an intent is a moment
+
+def test_an_expired_intent_is_declined_before_any_venue_is_considered():
+    """83% of L5's intents are no longer authorized 30 seconds later."""
+    i = _intent(qty="10", ceiling="0.70")
+    fine = evaluate_executable(i, _terms(), [(D("0.60"), D("5000"))])
+    assert route(i, [fine], now=i.t_utc).route == "TEST"
+    stale = route(i, [fine], now=i.t_utc + i.valid_for_s + 1)
+    assert stale.route == "NEITHER"
+    assert "expired" in stale.reason
+    assert stale.extra["expired"] is True
+    assert stale.ranked == []          # no venue was ranked at all
+
+
+def test_an_intent_at_exactly_its_validity_is_still_live():
+    i = _intent(qty="10", ceiling="0.70")
+    fine = evaluate_executable(i, _terms(), [(D("0.60"), D("5000"))])
+    assert route(i, [fine], now=i.t_utc + i.valid_for_s).route == "TEST"
+
+
+def test_age_is_measured_from_the_engine_time_not_from_observation():
+    """Measuring from when we noticed would hide the feed lag inside the
+    validity window and make every intent look fresh."""
+    i = _intent()
+    assert i.age_s(i.t_utc + 20.0) == 20.0
+    assert i.expired(i.t_utc + 20.0) is False
+    assert i.expired(i.t_utc + 40.0) is True
+
+
+def test_an_intent_that_is_never_valid_is_refused_at_construction():
+    with pytest.raises(ValueError):
+        _intent(valid_for_s=0.0)
+
+
+def test_validity_is_part_of_the_intents_identity():
+    """Valid for 30s and valid for 300s are different instructions."""
+    a = _intent(valid_for_s=30.0)
+    b = _intent(valid_for_s=300.0)
+    assert a.id != b.id
 
 
 # ----------------------------------------------------------------- the maker

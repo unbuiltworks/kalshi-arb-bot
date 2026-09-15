@@ -400,6 +400,14 @@ def observe_intent(out_dir: str, intent, *, window: Optional[dict],
                              "incremental_qty": intent.incremental_qty,
                              "max_acceptable_price": intent.max_acceptable_price,
                              "venue_gap": gap,
+                             # how old the intent already was when we could
+                             # first price it. With a ~15s observation lag
+                             # against a 30s validity, this is most of the
+                             # budget spent before we start.
+                             "intent_age_at_decision_s": round(
+                                 intent.age_s(now), 2),
+                             "intent_valid_for_s": intent.valid_for_s,
+                             "intent_expired": intent.expired(now),
                              "tte_at_book_s": round(
                                  intent.tte_s - (now - intent.t_utc), 1),
                              "clocks": clocks})
@@ -468,6 +476,9 @@ def resolve_evolution(out_dir: str, pend: Dict[str, Any], *,
         "schema": SCHEMA + "/book_evolution", "intent_id": pend["intent_id"],
         "market_key": pend["market_key"], "desired_outcome": pend["outcome"],
         "since_intent_s": round(now - pend["t0"], 1), "observed_at": now,
+        # carried so the patience statistic can separate "the price came to us"
+        # from "the price came to us after the intent had expired"
+        "valid_for_s": pend.get("valid_for_s"),
         "ceiling": str(intent_ceiling)}
     w = V.pm_window(pend["market_key"])
     pm = pm_ladders(w, pend["outcome"]) if w else {"ok": False}
@@ -645,6 +656,7 @@ def main(argv=None) -> int:
                             "intent_id": intent.id, "market_key": mk,
                             "outcome": intent.desired_outcome,
                             "ceiling": intent.max_acceptable_price,
+                            "valid_for_s": intent.valid_for_s,
                             "t0": now, "due": now + dt})
                     print("L5_SHADOW " + json.dumps({
                         "kind": "intent", "cohort": cohort,
