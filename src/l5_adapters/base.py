@@ -55,7 +55,12 @@ class AdapterEvaluation:
 
     # --- what the venue was showing
     available_price: Optional[str] = None         # best price on the wanted side
-    available_depth: Optional[str] = None
+    available_depth: Optional[str] = None         # size at the TOUCH only
+    # size resting at every price we would ACCEPT, from the full ladder. A
+    # venue 1 deep at the touch with 500 one tick behind it is size-limited at
+    # the touch and not at the ceiling, and reporting only `available_depth`
+    # reports the second as the first.
+    executable_qty: Optional[str] = None
     spread: Optional[str] = None
     book_age_s: Optional[float] = None
 

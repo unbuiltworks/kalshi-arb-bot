@@ -60,15 +60,24 @@ def _eligible(ev) -> tuple[bool, Optional[str]]:
 
 
 def _capacity_ok(ev, qty: D) -> bool:
-    """Unknown depth is NOT treated as sufficient.
+    """Unknown capacity is NOT treated as sufficient.
 
-    An adapter that cannot see depth reports None, and None must not read as
+    `executable_qty` -- size resting at every price we would accept, read off
+    the FULL ladder -- is preferred when the adapter supplies it, because touch
+    depth is the wrong question: a book 1 deep at the best price with 500 one
+    tick behind it can supply 10 comfortably, and ranking on the touch declines
+    a venue that could have filled us. Adapters that only see the touch still
+    fall back to it.
+
+    An adapter that can see neither reports None, and None must not read as
     'enough'. Failing closed on unknown capacity is the difference between a
     venue that can fill us and one we merely cannot see failing to."""
-    if ev.available_depth is None:
+    have = ev.executable_qty if getattr(ev, "executable_qty", None) is not None \
+        else ev.available_depth
+    if have is None:
         return False
     try:
-        return D(str(ev.available_depth)) >= qty
+        return D(str(have)) >= qty
     except Exception:                                        # noqa: BLE001
         return False
 
@@ -99,14 +108,17 @@ def route(intent, evaluations: Sequence[Any], *,
         if not _capacity_ok(ev, qty):
             declined.append({
                 "venue": ev.venue,
-                "reason": (f"insufficient or unknown capacity for {qty} "
-                           f"(depth={ev.available_depth})")})
+                "reason": (
+                    f"insufficient or unknown capacity for {qty} "
+                    f"(touch depth={ev.available_depth}, executable at ceiling="
+                    f"{getattr(ev, 'executable_qty', None)})")})
             continue
         ranked.append({
             "venue": ev.venue,
             "effective_cost": ev.effective_cost,
             "would_fill": ev.would_fill,
             "depth": ev.available_depth,
+            "executable_qty": getattr(ev, "executable_qty", None),
             "fee_basis": ev.expected_fee_basis,
         })
 

@@ -70,18 +70,25 @@ def gemini_symbol(market_key: str) -> Optional[dict]:
             "basis": "exact: same asset, same expiry instant"}
 
 
-def resolve(market_key: str, fetch_book: Callable[[str], Any]
+def resolve(market_key: str, fetch_book: Callable[[str], Any], *,
+            want_side: Optional[str] = None
             ) -> Tuple[Optional[dict], str, Optional[str]]:
     """(mapping, confidence, reason). Asks the venue; never guesses.
 
     confidence is one of:
-      exact    the constructed symbol returned a two-sided book
+      exact    the constructed symbol returned a book we can price on
       none     no candidate, or the venue does not list / does not quote it
 
-    A one-sided or empty book is NOT a mapping success. A contract that exists
-    but cannot be priced on the side we want is, for routing purposes,
-    indistinguishable from one that does not exist -- and calling it `exact`
-    would let the router pick a venue it cannot actually trade on.
+    An empty book is never a mapping success. A ONE-SIDED book depends on which
+    side we need, and `want_side` says: buying `Up` needs asks, buying `Down`
+    means selling Up and so needs bids. Measured 2026-09-15 13:04Z,
+    GEMI-BTC05M2609151305-UP had FOUR bid levels and no asks at all -- Down was
+    freely executable there while Up was not, and requiring two-sidedness
+    reported that contract as absent.
+
+    With `want_side` omitted the stricter two-sided test is kept, because a
+    caller that has not said which side it needs must not be handed a book it
+    may be unable to trade on.
     """
     cand = gemini_symbol(market_key)
     if cand is None:
@@ -97,9 +104,25 @@ def resolve(market_key: str, fetch_book: Callable[[str], Any]
     if not isinstance(book, dict):
         return None, "none", f"{cand['symbol']}: unreadable book response"
     bids, asks = book.get("bids") or [], book.get("asks") or []
-    if not bids or not asks:
+    if not bids and not asks:
         return None, "none", (
-            f"{cand['symbol']}: exists but is not two-sided "
-            f"(bids={len(bids)}, asks={len(asks)}); unpriceable is not mapped")
-    return ({**cand, "top_bid": bids[0].get("price"),
-             "top_ask": asks[0].get("price")}, "exact", None)
+            f"{cand['symbol']}: exists but quotes nothing at all "
+            f"(bids=0, asks=0); unpriceable is not mapped")
+    need = {"Up": "asks", "Down": "bids"}.get(str(want_side or ""))
+    if need is None:
+        if not bids or not asks:
+            return None, "none", (
+                f"{cand['symbol']}: exists but is not two-sided "
+                f"(bids={len(bids)}, asks={len(asks)}); unpriceable is not mapped")
+    elif not (asks if need == "asks" else bids):
+        return None, "none", (
+            f"{cand['symbol']}: exists but quotes no {need}, so {want_side} "
+            f"cannot be bought here (bids={len(bids)}, asks={len(asks)})")
+    # a side we did not require may legitimately be empty, so neither top is
+    # assumed to exist: an IndexError here would turn a priceable contract into
+    # an unreachable one.
+    return ({**cand,
+             "top_bid": (bids[0].get("price") if bids else None),
+             "top_ask": (asks[0].get("price") if asks else None),
+             "n_bid_levels": len(bids), "n_ask_levels": len(asks)},
+            "exact", None)
