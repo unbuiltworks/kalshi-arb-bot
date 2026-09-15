@@ -144,6 +144,20 @@ def _one_episode(first: dict, key: Tuple[Any, Any], *, intents, outs,
                                   "residual_qty": str(first.get("quote_qty"))},
     }
 
+    # --- DID A COMPLEMENT ACTUALLY FILL? Asked FIRST, and from the fills
+    # themselves rather than by walking the intent chain.
+    #
+    # Walking the chain first was wrong and the service caught it by
+    # disagreeing with itself: this module reported 0 paired while the arm
+    # comparison, reading the same store, reported 2. A complement reached via
+    # an intent whose placement row could not be joined was being filed as
+    # DATA_UNKNOWN -- a SUCCESS misclassified as an unexplained failure, which
+    # is the worst direction for a diagnostic to be wrong in.
+    comp = _complement_fill(outs, venue, market, want, after=t0)
+    if comp is not None:
+        return _paired(ep, first, comp)
+
+    # --- no complement filled. Now explain why, by walking the chain.
     # --- did L5 himself go the other way in this market, after our fill?
     # Anchored on L5's OWN event clock, taken from the intent that produced our
     # fill. Deriving it from our placement time instead would move the boundary
@@ -169,8 +183,14 @@ def _one_episode(first: dict, key: Tuple[Any, Any], *, intents, outs,
                              "qty": nxt.get("incremental_qty"),
                              "action": nxt.get("action"),
                              "id": nxt.get("id")}
-    ep["t_first_fill_to_opposite_intent_s"] = round(
-        float(nxt.get("t_utc") or 0) - t0, 1)
+    # ON L5's OWN CLOCK, BOTH ENDS. Differencing his event time against our
+    # placement time mixed two clocks and produced medians of -172s -- the
+    # complement intent "arriving" three minutes before the fill it follows.
+    # Our placement is ~15s of observation lag plus a 300s resolution horizon
+    # after his event, so the two are not comparable and never were.
+    ep["l5_first_to_opposite_intent_s"] = (
+        round(float(nxt.get("t_utc") or 0) - t_event0, 1)
+        if t_event0 else None)
 
     r = routes.get(nxt.get("id")) or {}
     if r.get("intent_expired") is True:
@@ -193,8 +213,12 @@ def _one_episode(first: dict, key: Tuple[Any, Any], *, intents, outs,
                                 "reason": p.get("reason"),
                                 "placed_at": p.get("placed_at")}
     if p.get("placed_at") is not None:
+        # OUR clock at both ends is impossible here (an intent has no placement
+        # time of its own), so this is explicitly the cross-clock latency from
+        # L5's event to our quote: observation lag plus our own cycle.
         ep["t_opposite_intent_to_quote_s"] = round(
             float(p["placed_at"]) - float(nxt.get("t_utc") or 0), 1)
+        ep["t_opposite_intent_to_quote_s_is_cross_clock"] = True
 
     if p.get("submittable") is not True:
         return _fail(ep, *_why_unsubmittable(p, evos, market, want))
@@ -258,6 +282,26 @@ def _why_unsubmittable(p: dict, evos, market, want) -> Tuple[str, str]:
     return ("OPPOSITE_PRICE_UNREACHABLE",
             f"a bid existed at {p.get('best_bid')} but above what the pair "
             f"economics allow; paying it is forbidden: {p.get('reason')}")
+
+
+def _complement_fill(outs: Sequence[dict], venue, market, want,
+                     *, after: float) -> Optional[dict]:
+    """The earliest evidenced fill on the opposite side of this market.
+
+    Keyed on the FILL, not on the intent that produced it: matched inventory is
+    matched inventory regardless of which intent got us there, and an episode
+    that ends two-sided is a success even if we cannot reconstruct the path.
+    """
+    best = None
+    for o in outs:
+        if (o.get("venue") != venue or o.get("market_key") != market
+                or str(o.get("desired_outcome")) != want
+                or o.get("evidenced_fill") is not True
+                or o.get("placed_at") is None):
+            continue
+        if best is None or float(o["placed_at"]) < float(best["placed_at"]):
+            best = o
+    return best
 
 
 def _outcome_for(outs: Sequence[dict], intent_id, venue) -> Optional[dict]:
@@ -335,8 +379,8 @@ def summarise(eps: Sequence[dict]) -> Dict[str, Any]:
         "causes": dict(Counter(e.get("cause") for e in eps if e.get("cause"))),
         "by_venue_cohort": {k: dict(v) for k, v in sorted(by.items())},
         "transfer_failures": sum(1 for e in eps if e.get("transfer_failure")),
-        "t_first_fill_to_opposite_intent_s": dist(
-            "t_first_fill_to_opposite_intent_s"),
+        "l5_first_to_opposite_intent_s": dist(
+            "l5_first_to_opposite_intent_s"),
         "t_opposite_intent_to_quote_s": dist("t_opposite_intent_to_quote_s"),
         "residual_duration_s": dist("residual_duration_s"),
         "effective_pair_cost": ({"n": len(costs),

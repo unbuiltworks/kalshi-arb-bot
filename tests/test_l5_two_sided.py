@@ -258,3 +258,35 @@ def test_a_plan_that_could_not_be_priced_contributes_no_cost():
                          "reason": "the venue cannot host a two-sided pair"}])
     assert a["GEMINI"]["pair_cost_all_priced"] is None
     assert a["GEMINI"]["priced_pairs"] == 0
+
+
+def test_forming_a_pair_is_not_the_same_as_forming_a_good_one():
+    """Arm R's first two live pairs came in at a median 1.43 — a guaranteed
+    43c-per-share loss on the matched leg. It has no pair-cost constraint at
+    all: each leg is quoted against its own ceiling, never against the sum."""
+    r = A.arm_pairs([
+        {"venue": "PMUS", "market_key": "m", "desired_outcome": "Up",
+         "evidenced_fill": True, "quote_qty": "10", "quote_price": "0.50"},
+        {"venue": "PMUS", "market_key": "m", "desired_outcome": "Down",
+         "evidenced_fill": True, "quote_qty": "10", "quote_price": "0.93"}])
+    assert r["paired"] == 1
+    assert r["median_effective_pair_cost"] == "1.43"
+    assert r["pairs_above_par"] == 1 and r["pairs_within_0_96"] == 0
+    assert "guaranteed loss" in r["pair_quality_note"]
+
+
+def test_a_rate_bought_with_above_par_pairs_is_not_called_an_improvement():
+    v = A._verdict({"pair_rate": 0.1, "pairs_above_par": 0},
+                   {"pair_rate": 0.5, "pairs_above_par": 9})
+    assert v["supports_continuous_inventory_hypothesis"] is True
+    assert v["arm_S_pairs_above_par"] == 9
+    assert "not an improvement" in v["note"]
+
+
+def test_a_good_pair_is_counted_as_within_the_target():
+    r = A.arm_pairs([
+        {"venue": "PMUS", "market_key": "m", "desired_outcome": "Up",
+         "evidenced_fill": True, "quote_qty": "10", "quote_price": "0.45"},
+        {"venue": "PMUS", "market_key": "m", "desired_outcome": "Down",
+         "evidenced_fill": True, "quote_qty": "10", "quote_price": "0.50"}])
+    assert r["pairs_above_par"] == 0 and r["pairs_within_0_96"] == 1

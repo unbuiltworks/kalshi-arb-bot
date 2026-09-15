@@ -16,3 +16,4 @@ promote vouched: silence over a continuously-observed interval is an evidenced n
 promote armb: the join-price key fix and the rest-side re-reads (batched)
 promote forensics: why the quotes do not fill, decomposed into NO_FLOW / QUEUE_BOUND / PARTIAL
 promote paircore: P0 pair-formation forensics + the reactive vs state-driven arms
+promote pairfix: the paired-detection and cross-clock defects the service caught

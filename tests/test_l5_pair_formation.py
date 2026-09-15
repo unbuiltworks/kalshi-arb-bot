@@ -289,3 +289,94 @@ def test_the_report_forbids_the_easy_answers():
     for banned in ("widening price", "crossing the spread",
                    "extending an expired intent", "more residual risk"):
         assert banned in r["labels"]
+
+
+# ------------------- the two defects the service caught by disagreeing
+
+def test_a_complement_that_filled_is_a_pair_even_with_no_joinable_intent(
+        tmp_path):
+    """The defect: walking the intent chain FIRST filed a complement reached
+    via an unjoinable intent as DATA_UNKNOWN. A SUCCESS misclassified as an
+    unexplained failure — the worst direction for a diagnostic to be wrong in,
+    and how this module came to report 0 paired while the arm comparison, on
+    the same store, reported 2."""
+    e = _one(tmp_path,
+             intents=[_intent("a", "Up")], routes=[_route("a")],
+             outcomes=[_out("a", "Up", True, t=110.0, price="0.45"),
+                       # no intent row, no placement row, no route for "ghost"
+                       _out("ghost", "Down", True, t=160.0, price="0.50")])
+    assert e["paired"] is True and e["cause"] is None
+    assert e["effective_pair_cost"] == "0.950000"
+
+
+def test_the_earliest_complement_fill_is_the_one_that_pairs(tmp_path):
+    e = _one(tmp_path,
+             intents=[_intent("a", "Up")], routes=[_route("a")],
+             outcomes=[_out("a", "Up", True, t=110.0, price="0.45"),
+                       _out("x", "Down", True, t=300.0, price="0.90"),
+                       _out("y", "Down", True, t=160.0, price="0.50")])
+    assert e["effective_pair_cost"] == "0.950000"
+    assert e["residual_duration_s"] == 50.0
+
+
+def test_a_complement_fill_in_another_market_does_not_pair(tmp_path):
+    """It opens its own episode instead — a fill in another window is another
+    window's first leg, never this one's complement."""
+    eps = P.episodes(_root(tmp_path, intents=[_intent("a", "Up")],
+                           routes=[_route("a")],
+                           outcomes=[_out("a", "Up", True),
+                                     _out("b", "Down", True, market="other")]))
+    assert {e["market_key"] for e in eps} == {"m", "other"}
+    assert all(e["paired"] is False for e in eps)
+
+
+def test_a_complement_fill_on_the_other_venue_does_not_pair(tmp_path):
+    """Inventory is per venue. Up on Polymarket and Down on Gemini is two
+    directional bets, not a matched pair."""
+    eps = P.episodes(_root(
+        tmp_path, intents=[_intent("a", "Up")], routes=[_route("a")],
+        outcomes=[_out("a", "Up", True, venue="PMUS"),
+                  _out("b", "Down", True, venue="GEMINI")]))
+    pm = [e for e in eps if e["venue"] == "PMUS"][0]
+    assert pm["paired"] is False
+
+
+def test_the_complement_timing_is_on_l5s_clock_at_both_ends(tmp_path):
+    """The defect: differencing L5's event time against OUR placement time
+    produced medians of -172s — a complement intent 'arriving' three minutes
+    before the fill it follows. Our placement is ~15s of observation lag plus
+    a 300s horizon after his event, so the two were never comparable."""
+    e = _one(tmp_path,
+             intents=[_intent("a", "Up", t=1000.0),
+                      _intent("b", "Down", t=1054.0)],
+             routes=[_route("a"), _route("b")],
+             outcomes=[_out("a", "Up", True, t=1315.0)])
+    assert e["l5_first_to_opposite_intent_s"] == 54.0
+    assert "t_first_fill_to_opposite_intent_s" not in e
+
+
+def test_the_cross_clock_latency_is_labelled_as_cross_clock(tmp_path):
+    e = _one(tmp_path,
+             intents=[_intent("a", "Up", t=1000.0),
+                      _intent("b", "Down", t=1054.0)],
+             routes=[_route("a"), _route("b")],
+             places=[_place("b", "Down", t=1070.0)],
+             outcomes=[_out("a", "Up", True, t=1315.0)])
+    assert e["t_opposite_intent_to_quote_s"] == 16.0
+    assert e["t_opposite_intent_to_quote_s_is_cross_clock"] is True
+
+
+def test_the_forensics_and_the_arm_comparison_agree_about_what_a_pair_is(
+        tmp_path):
+    """They read the same store and disagreed once. They must not again."""
+    import analysis.l5.pair_formation.arms as A
+    outcomes = [_out("a", "Up", True, t=110.0, price="0.45"),
+                _out("b", "Down", True, t=160.0, price="0.50"),
+                _out("c", "Up", True, market="solo", t=200.0)]
+    root = _root(tmp_path, intents=[_intent("a", "Up")], routes=[_route("a")],
+                 outcomes=outcomes)
+    eps = P.episodes(root)
+    forensic_paired = sum(1 for e in eps if e.get("paired"))
+    arm = A.arm_pairs(outcomes)
+    assert forensic_paired == arm["paired"] == 1
+    assert len(eps) == arm["markets_with_a_fill"] == 2

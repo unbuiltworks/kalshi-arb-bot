@@ -138,11 +138,25 @@ def arm_pairs(outcomes: Sequence[dict]) -> Dict[str, Any]:
         else:
             one_sided += 1
     cs = sorted(costs)
+    # FORMING A PAIR IS NOT THE SAME AS FORMING A GOOD ONE, and the first live
+    # reading made that concrete: arm R's two accidental pairs came in at a
+    # median 1.43 -- a guaranteed 43c-per-share loss on the matched leg. The
+    # reactive arm has NO pair-cost constraint: each leg is quoted against its
+    # own ceiling and never against the sum, so an early cheap leg and a late
+    # expensive one are booked as a "pair". Arm S cannot do this by
+    # construction, and the difference is half the point of the comparison.
+    above_par = sum(1 for x in cs if x > D("1"))
     return {"markets_with_a_fill": len(by), "paired": paired,
             "one_sided": one_sided,
             "pair_rate": (round(paired / len(by), 4) if by else None),
             "median_effective_pair_cost": (str(cs[len(cs) // 2])
-                                           if cs else None)}
+                                           if cs else None),
+            "pairs_above_par": above_par,
+            "pairs_within_0_96": sum(1 for x in cs if x <= D("0.96")),
+            "pair_quality_note": (
+                f"{above_par} of {len(cs)} formed pairs cost MORE THAN $1: a "
+                f"guaranteed loss on the matched leg. A pair rate without a "
+                f"pair cost beside it is not a result" if cs else None)}
 
 
 def report(out_dir: str) -> Dict[str, Any]:
@@ -177,6 +191,10 @@ def _verdict(R: Dict[str, Any], S: Dict[str, Any]) -> Dict[str, Any]:
     return {"decided": True,
             "arm_R_pair_rate": rp, "arm_S_pair_rate": sp,
             "delta": round(sp - rp, 4),
+            "arm_R_pairs_above_par": R.get("pairs_above_par"),
+            "arm_S_pairs_above_par": S.get("pairs_above_par"),
+            "note": ("a higher pair rate bought with above-par pairs is not an "
+                     "improvement; compare the costs alongside the rates"),
             "supports_continuous_inventory_hypothesis": sp > rp,
             "why": ("the hypothesis predicts S > R. S <= R REFUTES it, and "
                     "that outcome is reported as plainly as the other")}
