@@ -20,3 +20,4 @@ promote pairfix: the paired-detection and cross-clock defects the service caught
 promote contin: the continuous BTC15m desired-inventory candidate, arms R/S/D
 promote frontier: queue realism (4 fill criteria) + the depth frontier, R/S/D frozen
 promote adapted: the frozen ADAPTED arms cap5/cap8/cap13, additive to R/S/D
+promote adapted2: ship the ADAPTED modules that the narrow COPY list omitted

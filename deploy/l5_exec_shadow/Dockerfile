@@ -61,6 +61,11 @@ COPY analysis/l5/pair_formation/arms.py analysis/l5/pair_formation/arms.py
 COPY analysis/l5/pair_formation/arm_score.py analysis/l5/pair_formation/arm_score.py
 # the depth frontier: is there a sweet spot, or is deeper just cheaper?
 COPY analysis/l5/pair_formation/frontier.py analysis/l5/pair_formation/frontier.py
+# ADAPTED: the frozen bounded-residual arms cap5/cap8/cap13. Reporting only --
+# these read the same evidenced-fill stream and write their own store. They
+# carry no order verb and no credential, so the read-only closure is unchanged.
+COPY analysis/l5/adapted/collect.py analysis/l5/adapted/collect.py
+COPY analysis/l5/adapted/prospective.py analysis/l5/adapted/prospective.py
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \
