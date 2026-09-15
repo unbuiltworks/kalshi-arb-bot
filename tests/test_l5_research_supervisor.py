@@ -47,10 +47,19 @@ def test_the_image_ships_no_order_path():
         assert not [l for l in copies if banned in l], banned
 
 
-def test_the_service_restarts_always_and_deploys_only_by_promotion():
+def test_the_railway_json_declares_that_it_configures_nothing():
+    """It does not. Railway REFUSES Config as Code now -- setting
+    railwayConfigFile returns 'Config as Code is deprecated'. The file was
+    silently inert when the service was created, so restartPolicyType ALWAYS
+    and the promotion watchPattern were NOT in effect on the first two
+    deployments. They are set through the API instead, and this test exists so
+    the file cannot quietly start looking authoritative again."""
     import pathlib
     cfg = json.loads(
         pathlib.Path("deploy/l5_exec_shadow/railway.json").read_text())
+    assert "_NOT_READ_BY_RAILWAY" in cfg
+    assert "DEPRECATED" in cfg["_NOT_READ_BY_RAILWAY"]
+    # the intended settings are still recorded, as the documentation they are
     assert cfg["deploy"]["restartPolicyType"] == "ALWAYS"
     assert cfg["build"]["watchPatterns"] == ["deploy/_promote/l5-exec-shadow"]
     assert "/state/l5-research" in cfg["deploy"]["startCommand"]

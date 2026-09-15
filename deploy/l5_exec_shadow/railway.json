@@ -1,5 +1,14 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
+  "_NOT_READ_BY_RAILWAY": "Config as Code (railway.json / railway.toml) is DEPRECATED and Railway now REFUSES it: setting railwayConfigFile returns 'Config as Code is deprecated. Use Infrastructure as Code (.railway/railway.ts) instead.' This file is therefore DOCUMENTATION ONLY -- it configures nothing. It was silently doing nothing when the service was created, which meant restartPolicyType ALWAYS and the promotion watchPattern were NOT in effect on the first two deployments. Both are now set through the Railway API and the API is the source of truth; verify with get-service-config, never by reading this file.",
+  "_live_config_verified_2026-09-15T15:2xZ": {
+    "restartPolicyType": "ALWAYS",
+    "watchPatterns": ["deploy/_promote/l5-exec-shadow"],
+    "dockerfilePath": "deploy/l5_exec_shadow/Dockerfile",
+    "startCommand": "python3 -m src.l5_research_supervisor --state-root /state/l5-research",
+    "volumeMount": "/state/l5-research",
+    "branch": "claude/l5-execution-instrumentation-io6nzi"
+  },
   "_service": "l5-exec-shadow",
   "_role": "ONE read-only research supervisor owning every L5 research stream: the dual-venue executable shadow (with prospective maker-fill evidence), the Gemini websocket/book evidence probe, and the chain-observer settled-window validator. It produces evidence and records its own downtime; it never produces an order.",
   "_credentials": "NONE, and none may be added. No exchange key, no wallet key, no PMUS_SPRING_* / KALSHI_* / POLYMARKET_* secret. Every call is an unauthenticated GET or the public Gemini market-data websocket. The image copies no signer, no executor and no credential reader; if a value ever looks necessary here, that is a signal to stop.",
