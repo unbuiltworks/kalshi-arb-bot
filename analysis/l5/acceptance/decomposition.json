@@ -1,0 +1,251 @@
+{
+ "windows": 503,
+ "events_contributing": 57769,
+ "total_pair_movement_summed": -13.405413,
+ "mean_movement_per_window": -0.026651,
+ "all_windows_reconcile": true,
+ "by": {
+  "class": [
+   {
+    "bucket": "MATCH_EXPANSION_IMPROVING",
+    "n_events": 15767,
+    "total_contribution": -80.865954,
+    "share_of_total": 6.0323,
+    "mean_per_event": -0.00512881
+   },
+   {
+    "bucket": "RESIDUAL_EXTENSION",
+    "n_events": 29458,
+    "total_contribution": -22.691264,
+    "share_of_total": 1.6927,
+    "mean_per_event": -0.00077029
+   },
+   {
+    "bucket": "MATCH_EXPANSION_WORSENING",
+    "n_events": 12544,
+    "total_contribution": 90.151804,
+    "share_of_total": -6.725,
+    "mean_per_event": 0.00718685
+   }
+  ],
+  "tte": [
+   {
+    "bucket": "300-600s",
+    "n_events": 21450,
+    "total_contribution": -7.25924,
+    "share_of_total": 0.5415,
+    "mean_per_event": -0.00033843
+   },
+   {
+    "bucket": "120-300s",
+    "n_events": 13902,
+    "total_contribution": -4.346648,
+    "share_of_total": 0.3242,
+    "mean_per_event": -0.00031266
+   },
+   {
+    "bucket": "<120s",
+    "n_events": 6977,
+    "total_contribution": -1.936453,
+    "share_of_total": 0.1445,
+    "mean_per_event": -0.00027755
+   },
+   {
+    "bucket": "600s+",
+    "n_events": 15440,
+    "total_contribution": 0.136927,
+    "share_of_total": -0.0102,
+    "mean_per_event": 8.87e-06
+   }
+  ],
+  "decile": [
+   {
+    "bucket": "d4",
+    "n_events": 5938,
+    "total_contribution": -2.592425,
+    "share_of_total": 0.1934,
+    "mean_per_event": -0.00043658
+   },
+   {
+    "bucket": "d9",
+    "n_events": 6038,
+    "total_contribution": -2.585262,
+    "share_of_total": 0.1929,
+    "mean_per_event": -0.00042817
+   },
+   {
+    "bucket": "d6",
+    "n_events": 6069,
+    "total_contribution": -2.419645,
+    "share_of_total": 0.1805,
+    "mean_per_event": -0.00039869
+   },
+   {
+    "bucket": "d5",
+    "n_events": 5914,
+    "total_contribution": -1.987879,
+    "share_of_total": 0.1483,
+    "mean_per_event": -0.00033613
+   },
+   {
+    "bucket": "d7",
+    "n_events": 6027,
+    "total_contribution": -1.789136,
+    "share_of_total": 0.1335,
+    "mean_per_event": -0.00029685
+   },
+   {
+    "bucket": "d3",
+    "n_events": 5920,
+    "total_contribution": -1.718175,
+    "share_of_total": 0.1282,
+    "mean_per_event": -0.00029023
+   },
+   {
+    "bucket": "d10",
+    "n_events": 6285,
+    "total_contribution": -1.255713,
+    "share_of_total": 0.0937,
+    "mean_per_event": -0.0001998
+   },
+   {
+    "bucket": "d8",
+    "n_events": 5977,
+    "total_contribution": -0.989853,
+    "share_of_total": 0.0738,
+    "mean_per_event": -0.00016561
+   },
+   {
+    "bucket": "d2",
+    "n_events": 5715,
+    "total_contribution": 0.331869,
+    "share_of_total": -0.0248,
+    "mean_per_event": 5.807e-05
+   },
+   {
+    "bucket": "d1",
+    "n_events": 3886,
+    "total_contribution": 1.600806,
+    "share_of_total": -0.1194,
+    "mean_per_event": 0.00041194
+   }
+  ],
+  "side": [
+   {
+    "bucket": "Down",
+    "n_events": 29001,
+    "total_contribution": -8.473662,
+    "share_of_total": 0.6321,
+    "mean_per_event": -0.00029219
+   },
+   {
+    "bucket": "Up",
+    "n_events": 28768,
+    "total_contribution": -4.931752,
+    "share_of_total": 0.3679,
+    "mean_per_event": -0.00017143
+   }
+  ],
+  "probability": [
+   {
+    "bucket": "<0.20",
+    "n_events": 16340,
+    "total_contribution": -64.358679,
+    "share_of_total": 4.8009,
+    "mean_per_event": -0.00393872
+   },
+   {
+    "bucket": "0.20-0.40",
+    "n_events": 13454,
+    "total_contribution": -58.392897,
+    "share_of_total": 4.3559,
+    "mean_per_event": -0.00434019
+   },
+   {
+    "bucket": "0.40-0.60",
+    "n_events": 9966,
+    "total_contribution": 1.190716,
+    "share_of_total": -0.0888,
+    "mean_per_event": 0.00011948
+   },
+   {
+    "bucket": ">=0.80",
+    "n_events": 7663,
+    "total_contribution": 53.359121,
+    "share_of_total": -3.9804,
+    "mean_per_event": 0.00696322
+   },
+   {
+    "bucket": "0.60-0.80",
+    "n_events": 10346,
+    "total_contribution": 54.796326,
+    "share_of_total": -4.0876,
+    "mean_per_event": 0.00529638
+   }
+  ],
+  "run_len": [
+   {
+    "bucket": "8+",
+    "n_events": 8479,
+    "total_contribution": -12.824813,
+    "share_of_total": 0.9567,
+    "mean_per_event": -0.00151254
+   },
+   {
+    "bucket": "4-7",
+    "n_events": 13071,
+    "total_contribution": -10.957842,
+    "share_of_total": 0.8174,
+    "mean_per_event": -0.00083833
+   },
+   {
+    "bucket": "2-3",
+    "n_events": 17793,
+    "total_contribution": -4.512356,
+    "share_of_total": 0.3366,
+    "mean_per_event": -0.0002536
+   },
+   {
+    "bucket": "1",
+    "n_events": 18426,
+    "total_contribution": 14.889598,
+    "share_of_total": -1.1107,
+    "mean_per_event": 0.00080808
+   }
+  ],
+  "switch": [
+   {
+    "bucket": "continuation",
+    "n_events": 39343,
+    "total_contribution": -28.295011,
+    "share_of_total": 2.1107,
+    "mean_per_event": -0.00071919
+   },
+   {
+    "bucket": "first_after_SWITCH",
+    "n_events": 18426,
+    "total_contribution": 14.889598,
+    "share_of_total": -1.1107,
+    "mean_per_event": 0.00080808
+   }
+  ]
+ },
+ "class_census": {
+  "MATCH_CREATION": {
+   "events": 506,
+   "share": 0.0084
+  },
+  "MATCH_EXPANSION_IMPROVING": {
+   "events": 15767,
+   "share": 0.2622
+  },
+  "MATCH_EXPANSION_WORSENING": {
+   "events": 12544,
+   "share": 0.2086
+  },
+  "RESIDUAL_EXTENSION": {
+   "events": 31315,
+   "share": 0.5208
+  }
+ }
+}
