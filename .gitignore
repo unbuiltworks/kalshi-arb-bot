@@ -26,3 +26,10 @@ data/policy_d_port/tape_*.jsonl
 # prospective FIDELITY rows are runtime research state, not source code.
 # The v0 snapshots already committed stay committed; nothing is rewritten.
 analysis/l5/fidelity/prospective/*.jsonl
+
+# Chain receipt fetch cache. Derived and regenerable: immutable public receipts,
+# re-fetchable from any archive node, and it churns while a study is running.
+# The tx-level PROVENANCE is not here -- every row of the committed
+# roles_*.json carries its own tx, block, logIndex and contract, which is the
+# auditable artifact.
+analysis/l5/pair_formation/receipts.jsonl
