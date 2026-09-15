@@ -260,6 +260,21 @@ def run_ws(out: str, stop: threading.Event) -> None:
                                 "asset": ev.get("asset_id"),
                                 "cid": ev.get("market"),
                                 "identity_bearing": False,
+                                # the payload is what makes RECONSTRUCTION
+                                # testable: if an L5 fill of size S at price P
+                                # leaves a matching print here, the fast
+                                # anonymous stream may carry his action even
+                                # though it never carries his name.
+                                "price_changes": ev.get("price_changes"),
+                                # last_trade_price events carry the SAME
+                                # transaction_hash that /activity and /trades
+                                # key on. That is an exact join between a
+                                # ~50ms anonymous print and a ~20s named one,
+                                # so it has to be captured in full.
+                                "tx": ev.get("transaction_hash"),
+                                "price": ev.get("price"),
+                                "size": ev.get("size"),
+                                "side": ev.get("side"),
                             })
             except Exception as e:
                 emit(out, {"kind": "err", "surface": "clob_ws",

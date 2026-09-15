@@ -28,6 +28,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence
 
 from src.l5_fidelity import baselines as B
+from src.l5_fidelity import clocks as C
 from src.l5_fidelity import model as M
 from src.l5_fidelity import store
 from src.l5_fidelity.model import ESTIMAND_A, HORIZONS_S, FidelityV0
@@ -71,6 +72,24 @@ def state_after_fill(*, cohort: str, anchor: dict,
 
 def freeze_anchored(out_dir: str, model: FidelityV0, state: Dict[str, Any],
                     *, now: Optional[float] = None) -> Dict[str, Any]:
+    """The frozen row carries all three clocks, because the two questions we
+    ultimately ask of it are answered from different ones (see clocks.py):
+
+      EVENT-TIME FIDELITY     did the model describe L5's eventual action from
+                              contemporaneous state? Answered on the EVENT
+                              clock. Feed latency does not touch it -- the
+                              state contains only fills at or before the
+                              anchor's own timestamp, and the outcome is the
+                              next fill in event order.
+
+      REALTIME REPLICABILITY  could we have known in time to do anything?
+                              Answered on the OBSERVATION clock. If the anchor
+                              only became visible to us L seconds after it
+                              happened, then every horizon h <= L was already
+                              in the past when we learned of it.
+
+    Conflating them is how a model that describes L5 perfectly gets mistaken
+    for one we could trade."""
     p = model.predict(tte=state["tte_s"], since=None,
                       resid_rel=state["residual_rel"],
                       last_outcome=state["anchor_outcome"],
@@ -86,6 +105,10 @@ def freeze_anchored(out_dir: str, model: FidelityV0, state: Dict[str, Any],
         "historical_cadence": B.historical_rate(
             p["p_act_within"][str(min(HORIZONS_S))]),
     }
+    t_obs = time.time() if now is None else now
+    state = {**state, "clocks": C.stamp(event_ts=state["anchor_t"],
+                                        observed_at=t_obs, source="data-api"),
+             "observation_lag_s": round(t_obs - state["anchor_t"], 3)}
     return store.freeze(out_dir, model_version=model.version,
                         cohort=model.cohort, state=state,
                         prediction={**p, "baselines": base},
@@ -129,6 +152,29 @@ def resolve_anchored(out_dir: str, rec: Dict[str, Any],
     dis: Dict[str, Any] = {"estimand": ESTIMAND_A, "act": {}, "outcome": None,
                            "size": None, "timing_err_s": None,
                            "scored": prospective}
+
+    # REALTIME REPLICABILITY -- a SEPARATE question from whether the model was
+    # right, and computed from a different clock. The anchor became visible to
+    # us `lag` seconds after it happened; a predicted action within horizon h
+    # was therefore already in the past when we learned of the anchor unless
+    # h > lag. This is not a defect in the model and must never be netted
+    # against event-time fidelity -- a model can describe L5 perfectly and
+    # still be unreplicable, and that is exactly the situation to be able to
+    # state plainly.
+    lag = (rec.get("state") or {}).get("observation_lag_s")
+    if lag is not None:
+        dis["replicability"] = {
+            "observation_lag_s": lag,
+            "per_horizon": {str(h): {"knowable_in_time": bool(h > lag),
+                                     "slack_s": round(h - lag, 3)}
+                            for h in HORIZONS_S},
+            "any_horizon_knowable": any(h > lag for h in HORIZONS_S),
+            "labels": ("REALTIME REPLICABILITY ONLY. Event-time fidelity is "
+                       "scored separately in `act`/`outcome`/`size` and is "
+                       "unaffected by this: those are statements about L5's "
+                       "behaviour in event time, which feed latency does not "
+                       "alter."),
+        }
     for h in HORIZONS_S:
         k = str(h)
         pv = p["p_act_within"][k]

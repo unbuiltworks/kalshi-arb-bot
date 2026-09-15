@@ -1,6 +1,8 @@
 """The experiment is only meaningful if a prediction cannot move after the fact."""
 import tempfile
 
+import pytest
+
 from src.l5_fidelity import runner, store
 from src.l5_fidelity.model import HORIZONS_S, FidelityV0
 
@@ -466,3 +468,72 @@ def test_unresolved_predictions_survive_a_restart(tmp_path):
                  and p["model_version"] == "v0.2-x"
                  and (p.get("state") or {}).get("cid")]
     assert len(recovered) == 1 and recovered[0]["state"]["cid"] == "w1"
+
+
+# ------------------------------------------------- three clocks / look-ahead
+
+def test_observable_at_defaults_to_the_observation_clock():
+    """Filtering by the EVENT clock admits actions we could not yet see. That
+    is the look-ahead bug, so the safe clock must be the default rather than
+    something a caller remembers to pass."""
+    from src.l5_fidelity import clocks as C
+    a = [C.stamp(event_ts=100.0, observed_at=130.0)]
+    assert C.observable_at(a, 110.0) == []
+    assert len(C.observable_at(a, 110.0, clock=C.L5_EVENT_CLOCK)) == 1
+    assert len(C.observable_at(a, 130.0)) == 1
+
+
+def test_lookahead_raises_rather_than_warns():
+    """A contaminated state does not announce itself in the output -- it just
+    looks like a better model -- so the only safe failure mode is loud."""
+    from src.l5_fidelity import clocks as C
+    a = [C.stamp(event_ts=100.0, observed_at=130.0)]
+    C.assert_no_lookahead(130.0, a)              # observable: fine
+    with pytest.raises(C.LookaheadError):
+        C.assert_no_lookahead(110.0, a)
+
+
+def test_skew_report_is_quantiles_and_flags_negative_lag():
+    from src.l5_fidelity import clocks as C
+    obs = [C.stamp(event_ts=0, observed_at=x) for x in (-2, 5, 10, 28, 55)]
+    r = C.skew_report(obs)
+    assert r["n"] == 5 and r["p50"] == 10.0 and r["max"] == 55.0
+    assert r["negative_n"] == 1, "a clock ahead of the venue must be visible"
+
+
+def test_replicability_is_scored_separately_from_fidelity(tmp_path):
+    """A model can describe L5 perfectly and still be unreplicable, so the two
+    are computed from different clocks and never netted against each other.
+    At a 20 s observation lag only the 30 s horizon has any slack left."""
+    from src.l5_fidelity import anchored
+    anchor = {"cid": "w1", "t": 1000, "window_end": 1900, "outcome": "Up",
+              "price": 0.5, "size": 10.0}
+    # AFTER the seal, or the prospectivity check correctly excludes it. That
+    # exclusion is itself a consequence of the lag -- at a 20 s observation lag
+    # the successor usually already exists by the time we freeze -- but it is a
+    # DIFFERENT effect from replicability and this test isolates the latter.
+    nxt = {"cid": "w1", "t": 1025, "window_end": 1900, "outcome": "Up",
+           "price": 0.52, "size": 12.0}
+    st = anchored.state_after_fill(cohort="BTC15m", anchor=anchor,
+                                   window_fills=[anchor])
+    st = {**st, "observation_lag_s": 20.0}       # seen 20 s after it happened
+    rec = {"prediction_id": "x", "state": st, "prediction_utc": 1020.0,
+           "prediction": {"p_act_within": {str(h): 0.5 for h in HORIZONS_S},
+                          "predicted_outcome": "Up",
+                          "predicted_size_bins": {"10-30": 1.0},
+                          "predicted_size_mode_bin": "10-30",
+                          "predicted_next_gap_s_p50": 3.0}}
+    out = anchored.resolve_anchored(str(tmp_path), rec, [anchor, nxt],
+                                    now=1400.0)
+    rep = out["disagreement"]["replicability"]
+    assert rep["observation_lag_s"] == 20.0
+    per = rep["per_horizon"]
+    assert per["1.0"]["knowable_in_time"] is False
+    assert per["15.0"]["knowable_in_time"] is False
+    assert per["30.0"]["knowable_in_time"] is True
+    assert per["30.0"]["slack_s"] == 10.0
+    # event-time fidelity is still scored, and is untouched by the lag
+    assert out["disagreement"]["scored"] is True
+    assert out["disagreement"]["act"]["30.0"]["actual"] is True
+    assert out["disagreement"]["act"]["15.0"]["actual"] is False
+    assert out["disagreement"]["outcome"]["correct"] is True
