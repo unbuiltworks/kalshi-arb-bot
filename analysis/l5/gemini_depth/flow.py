@@ -231,6 +231,62 @@ def q_str(q: D) -> str:
     return str(q)
 
 
+def authorization_persistence(intents: Sequence[dict], *,
+                              horizons_s: Sequence[float] = (30, 60, 120, 300)
+                              ) -> Dict[str, Any]:
+    """Would a LATER L5 intent still have authorized a slow accumulation?
+
+    Incremental acquisition takes time, and an intent is a statement about one
+    moment. If L5 wanted Up at <= 0.62 and thirty seconds later wanted Down, a
+    purchase still being assembled was no longer authorized -- the fill would
+    be ours, not a replication of L5.
+
+    For each intent, the next intent in the SAME market at least `h` seconds
+    later is checked for two things: same desired side, and a ceiling no lower
+    than the original. Both must hold for the accumulation to have remained
+    authorized, and a market with no later intent is reported as UNKNOWN rather
+    than counted either way.
+    """
+    by_market: Dict[str, List[dict]] = defaultdict(list)
+    for i in intents:
+        by_market[str(i.get("market_key"))].append(i)
+    for v in by_market.values():
+        v.sort(key=lambda r: float(r.get("t_utc") or 0))
+
+    out: Dict[str, Any] = {}
+    for h in horizons_s:
+        same_side = opposite = cheaper_ceiling = no_later = 0
+        for rows in by_market.values():
+            for k, cur in enumerate(rows):
+                t0 = float(cur.get("t_utc") or 0)
+                later = next((r for r in rows[k + 1:]
+                              if float(r.get("t_utc") or 0) >= t0 + h), None)
+                if later is None:
+                    no_later += 1
+                    continue
+                if later.get("desired_outcome") != cur.get("desired_outcome"):
+                    opposite += 1
+                elif (_d(later.get("max_acceptable_price"))
+                      or D("0")) < (_d(cur.get("max_acceptable_price"))
+                                    or D("0")):
+                    cheaper_ceiling += 1
+                else:
+                    same_side += 1
+        decided = same_side + opposite + cheaper_ceiling
+        out[str(h)] = {
+            "still_authorized": same_side,
+            "side_flipped": opposite,
+            "ceiling_fell_below": cheaper_ceiling,
+            "no_later_intent_UNKNOWN": no_later,
+            "still_authorized_rate": (round(same_side / decided, 4)
+                                      if decided else None),
+            "basis": ("the next intent in the same market at least this many "
+                      "seconds later; markets with no later intent are UNKNOWN "
+                      "and excluded from the rate"),
+        }
+    return out
+
+
 def report(out_dir: str, *, ceilings: Sequence[D],
            shadow_dir: Optional[str] = None) -> Dict[str, Any]:
     ev = load(os.path.join(out_dir, "events.jsonl"))
@@ -254,6 +310,19 @@ def report(out_dir: str, *, ceilings: Sequence[D],
                            "l5_ceilings_seen": {k: sorted(set(v))[:12]
                                                 for k, v in live_ceilings.items()},
                            "windows": {}}
+    if shadow_dir:
+        ints = load(os.path.join(shadow_dir, "intents.jsonl"))
+        # SPLIT BY SOURCE, because they answer different questions. REPLAY
+        # intents restate L5's OWN fills, so a side flip there is L5 changing
+        # his mind. MODEL intents are our prediction, so a flip there is the
+        # model alternating and says nothing about L5. Pooling them would let
+        # model churn masquerade as trader behaviour.
+        out["authorization_persistence"] = {
+            src: authorization_persistence(
+                [i for i in ints
+                 if (i.get("extra") or {}).get("intent_source") == src])
+            for src in ("REPLAY", "MODEL")}
+        out["authorization_persistence"]["ALL"] = authorization_persistence(ints)
     for sym, rows in sorted(by_sym.items()):
         cohort = rows[0].get("cohort")
         cs = list(ceilings)

@@ -257,3 +257,114 @@ an intent whose semantics permit incremental acquisition may use it.
 
 The simulation is also an explicit **upper bound on speed** — no queue, no
 competing taker — which is why `accumulation_trade_limited` sits beside it.
+
+---
+
+# Part 3 — the finding that limits incremental accumulation, and it is not Gemini
+
+Incremental acquisition takes time, and an intent is a statement about **one
+moment**. So: would a *later* L5 intent still have authorized a purchase that
+was still being assembled?
+
+For each intent, the next intent in the **same market** at least *h* seconds
+later must agree on two things — same desired side, and a ceiling no lower than
+the original. Markets with no later intent are UNKNOWN and excluded from the
+rate rather than counted either way.
+
+| source | h | still authorized | side flipped | ceiling fell | rate |
+|---|---|---|---|---|---|
+| **REPLAY** (L5's own fills) | 30 s | 12 | **36** | 22 | **0.171** |
+| REPLAY | 60 s | 15 | 39 | 14 | 0.221 |
+| REPLAY | 120 s | 15 | 32 | 15 | 0.242 |
+| REPLAY | 300 s | 11 | 23 | 9 | 0.256 |
+| MODEL (our prediction) | 30 s | 11 | 35 | 22 | 0.162 |
+
+REPLAY and MODEL are split deliberately: a side flip in REPLAY is **L5 changing
+his mind**, while a flip in MODEL is only our model alternating. Pooling them
+would let model churn masquerade as trader behaviour. They come out almost
+identical — 0.171 against 0.162 at 30 s — so the alternation is L5's, and the
+model is tracking it.
+
+**About 83 % of L5's intents are no longer authorized 30 seconds later**, mostly
+because he has flipped side. Even at 300 s only a quarter survive.
+
+## What that means
+
+1. **Incremental accumulation over tens of seconds is not a safe substitute for
+   atomic execution in this replication.** Inventory assembled slowly is
+   inventory L5 had already stopped wanting at that price — it would be our
+   position, not a reproduction of his.
+2. It independently justifies keeping the router atomic. The incremental
+   numbers stay a measurement, not a policy.
+3. **The binding constraint is time, not Gemini.** A ~15 s observation lag
+   against an intent that decays within 30 s leaves very little room, and no
+   amount of venue depth widens it.
+
+## On the Gemini UI (item 5), stated as inference
+
+Not directly determinable — there is no UI automation here and none was added.
+But it does not need to be: REST agrees with the continuously maintained book
+on the best price 99.15 % of the time and on the size resting there 100 % of
+the time, so any UI reading either source is showing the same book we are. The
+owner's observation is **fully explained by the measured churn** — a cancel and
+re-place 25 ms apart, 0.992–0.994 of placement volume being refresh — without
+needing a UI-specific mechanism. Labelled inference, not measurement.
+
+---
+
+# Part 4 — capacity, across 7 windows (supersedes the 2-window interim)
+
+3,131 time-weighted samples over 1,213 s, 7 windows, **0 socket gaps, 0
+reconnects**. The Part 1 table was two windows and it was not representative —
+these numbers supersede it.
+
+| | BTC15m (n=1479) | BTC5m (n=1491) |
+|---|---|---|
+| no ask side at all | **1.7 %** | **21.2 %** |
+| whole ask side ≤ 1 share | 1.7 % | 21.2 % |
+| **touch size ≤ 1 share** | **12.8 %** | 0.0 % |
+| fillable q=1, 2 | **98.3 %** | 78.8 % |
+| fillable q=5, 10 | **97.9 %** | 78.8 % |
+| fillable q=20 | **97.9 %** | **73.3 %** |
+| touch changes / min | 21.6 | 18.0 |
+| touch lifetime p50 | **3.6 s** | 4.4 s |
+| touch-only read understates q=20 | 12.4 % | **28.9 %** |
+
+## The conclusion, and it is two conclusions
+
+**The distribution is bimodal by cohort. Averaging them would hide the finding.**
+
+**BTC15m — Gemini is not capacity-limited.** q=20 is executable **97.9 %** of
+the time, and the rate is flat from q=1 to q=20: when it can trade at all it can
+trade 20 as easily as 1. The binding constraint is **price**, exactly as the
+ceiling table in Part 2 shows — at a 0.11 ceiling the book is one contract, at
+0.14 it is 846.
+
+**BTC5m — Gemini is genuinely unavailable a fifth of the time.** 21.2 % of
+samples have **no ask side at all**: not thin, absent. q=20 is executable only
+73.3 % of the time. This cohort cannot be relied on for a timely Up
+acquisition, and that is a venue fact, not an artifact.
+
+**The original observation was real.** On BTC15m the touch holds ≤ 1 share
+**12.8 %** of the time — so `depth 1.0 @ 0.66` was a true reading of a
+recurring state. It was only wrong as a statement about the venue's capacity,
+because 12.4 % of the time a touch-only read understates what q=20 could have
+taken. Both halves of that matter: the reading was honest, the inference was not.
+
+**And the touch is fast.** Lifetime p50 **3.6 s** on BTC15m, changing 21.6
+times a minute. Against a ~15 s observation lag, the book we act on is several
+touch-generations newer than the action we are reacting to.
+
+## Where the blocker actually is
+
+Not Gemini's depth. In order:
+
+1. **Intent decay** — 83 % of L5's intents are no longer authorized 30 s later
+   (Part 3).
+2. **Observation lag** — p50 ~15 s on BTC15m, ~133 s on BTC5m.
+3. **Price** — capacity at a 0.11 ceiling is one contract; this is a *pricing*
+   constraint that looks like a depth constraint.
+4. **BTC5m availability** — 21.2 % no-ask.
+
+Gemini's ability to supply size on BTC15m, at 97.9 % for q=20, is not on that
+list.

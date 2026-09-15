@@ -154,3 +154,54 @@ def test_high_churn_is_reported_as_churn_dominated_movement():
         "churn_ratio": 0.99, "events": {"place": 500}}}}}}
     v = R.classify({}, flow)["GENUINE_BOOK_MOVEMENT"]["verdict"]
     assert v == "PRESENT_AND_DOMINATED_BY_QUOTE_CHURN"
+
+
+# ------------------------------------------------- does the intent still hold
+
+def _intent(market, t, outcome, ceiling, src="REPLAY"):
+    return {"market_key": market, "t_utc": t, "desired_outcome": outcome,
+            "max_acceptable_price": ceiling, "extra": {"intent_source": src}}
+
+
+def test_a_later_intent_on_the_same_side_at_the_same_ceiling_still_authorizes():
+    rows = [_intent("m", 0, "Up", "0.60"), _intent("m", 40, "Up", "0.60")]
+    r = F.authorization_persistence(rows, horizons_s=(30,))["30"]
+    assert r["still_authorized"] == 1 and r["still_authorized_rate"] == 1.0
+
+
+def test_a_side_flip_withdraws_authorization():
+    rows = [_intent("m", 0, "Up", "0.60"), _intent("m", 40, "Down", "0.60")]
+    r = F.authorization_persistence(rows, horizons_s=(30,))["30"]
+    assert r["side_flipped"] == 1 and r["still_authorized"] == 0
+
+
+def test_a_lower_later_ceiling_withdraws_authorization():
+    rows = [_intent("m", 0, "Up", "0.60"), _intent("m", 40, "Up", "0.50")]
+    r = F.authorization_persistence(rows, horizons_s=(30,))["30"]
+    assert r["ceiling_fell_below"] == 1 and r["still_authorized"] == 0
+
+
+def test_a_higher_later_ceiling_still_authorizes():
+    rows = [_intent("m", 0, "Up", "0.60"), _intent("m", 40, "Up", "0.70")]
+    assert F.authorization_persistence(
+        rows, horizons_s=(30,))["30"]["still_authorized"] == 1
+
+
+def test_no_later_intent_is_unknown_and_excluded_from_the_rate():
+    rows = [_intent("m", 0, "Up", "0.60")]
+    r = F.authorization_persistence(rows, horizons_s=(30,))["30"]
+    assert r["no_later_intent_UNKNOWN"] == 1
+    assert r["still_authorized_rate"] is None
+
+
+def test_an_intent_inside_the_horizon_does_not_count_as_the_later_one():
+    """A follow-up 5s later says nothing about surviving 30s."""
+    rows = [_intent("m", 0, "Up", "0.60"), _intent("m", 5, "Down", "0.60")]
+    r = F.authorization_persistence(rows, horizons_s=(30,))["30"]
+    assert r["side_flipped"] == 0 and r["no_later_intent_UNKNOWN"] == 2
+
+
+def test_markets_are_never_crossed():
+    rows = [_intent("m1", 0, "Up", "0.60"), _intent("m2", 40, "Down", "0.60")]
+    r = F.authorization_persistence(rows, horizons_s=(30,))["30"]
+    assert r["side_flipped"] == 0 and r["no_later_intent_UNKNOWN"] == 2
