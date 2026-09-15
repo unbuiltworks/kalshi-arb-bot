@@ -186,11 +186,50 @@ def _cohort(rows: Sequence[dict]) -> Dict[str, Any]:
         "H5_touch_changes_per_min": (round(changes / (span / 60.0), 2)
                                      if span > 0 else None),
         "H5_touch_lifetime_s": q(held),
+        "by_tte_band": _tte_bands(rows),
         "cum_within_offset_of_touch": {
             o: q([float(a["cum_at_offset"][o]) for a in ask
                   if a.get("cum_at_offset", {}).get(o) is not None])
             for o in ("0", "0.01", "0.02", "0.05")},
     }
+
+
+# seconds to expiry. A 5m and a 15m window are different animals near the end,
+# and pooling them hides the one regime a taker most needs to know about.
+TTE_BANDS = ((0, 60), (60, 180), (180, 600), (600, 10 ** 9))
+
+
+def _tte_bands(rows: Sequence[dict]) -> Dict[str, Any]:
+    """Capacity by time to expiry, because the end of a window is its own venue.
+
+    Reported per band rather than averaged: a book that is deep with ten
+    minutes left and absent in the last minute has no meaningful "average"
+    depth, and the last minute is when a late COMPLETE would have to execute.
+    """
+    out: Dict[str, Any] = {}
+    for lo, hi in TTE_BANDS:
+        sel = [r for r in rows
+               if r.get("tte_s") is not None and lo <= float(r["tte_s"]) < hi
+               and r.get("ask")]
+        label = f"{lo}-{hi}s" if hi < 10 ** 9 else f"{lo}s+"
+        if not sel:
+            out[label] = {"n": 0}
+            continue
+        ask = [r["ask"] for r in sel]
+        out[label] = {
+            "n": len(ask),
+            "no_ask_side": round(sum(1 for a in ask if a["levels"] == 0)
+                                 / len(ask), 4),
+            "fillable": {qq: round(sum(1 for a in ask
+                                       if a["by_qty"].get(qq, {}).get("complete"))
+                                   / len(ask), 4) for qq in QTY},
+            "best_ask_qty_p50": (q([float(a["best_qty"]) for a in ask
+                                    if a["best_qty"] is not None]) or {}
+                                 ).get("p50"),
+            "total_ask_p50": (q([float(a["total"]) for a in ask]) or {}
+                              ).get("p50"),
+        }
+    return out
 
 
 def _rate(vals: Sequence[bool]) -> Optional[Dict[str, Any]]:

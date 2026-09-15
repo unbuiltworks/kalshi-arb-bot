@@ -5,10 +5,9 @@ displayed order book. That is a claim about our *data path*, not about the
 venue, and it had to be settled before any Gemini capacity conclusion could
 stand.
 
-**Status: INTERIM.** Numbers below are from the first minutes of a probe that
-is still running across further windows. The two mechanism findings (H3, H4)
-are settled; the capacity distribution is not, and no capacity conclusion is
-drawn here.
+**Status: FINAL for capacity** (see Part 6, 15 windows / 8,186 samples / 48 min).
+Parts 1–4 are kept as written, including the two interim capacity tables that
+Part 6 supersedes — the revisions are the record.
 
 ---
 
@@ -431,3 +430,92 @@ will expire before they are priceable — and the router will say so rather than
 trading them.
 
 Two new promotion gates (G6.7, G6.8) pin both.
+
+
+---
+
+# Part 6 — FINAL capacity statement: it is time-to-expiry, not cohort
+
+15 windows, **8,186 time-weighted samples**, 2,881 s, **0 socket gaps, 0
+reconnects**. This supersedes the 2-window and 7-window tables above.
+
+I said earlier the distribution was "bimodal by cohort". **That was the wrong
+cut.** Split by time to expiry instead and one mechanism explains most of it:
+
+| cohort | band | n | share | q=20 fillable | no ask side |
+|---|---|---|---|---|---|
+| BTC15m | **excl. last 60 s** | 3448 | 90.2 % | **99.25 %** | **0.00 %** |
+| BTC15m | last 60 s | 374 | 9.8 % | 37.17 % | **46.26 %** |
+| BTC5m | **excl. last 60 s** | 2759 | 70.6 % | **88.66 %** | 7.43 % |
+| BTC5m | last 60 s | 1151 | 29.4 % | 45.18 % | **51.69 %** |
+
+**Gemini withdraws in the final minute, on both cohorts.** Roughly half of all
+samples inside the last 60 s have *no ask side at all* — 46.3 % on BTC15m and
+51.7 % on BTC5m. That is one venue behaviour, not two cohort personalities.
+
+**Most of the apparent cohort gap is composition.** A 5-minute window spends
+~20 % of its life inside the last minute against a 15-minute window's ~6.7 %,
+and the observed sample shares (29.4 % vs 9.8 %) track that. Outside the final
+minute a real but much smaller cohort difference remains: **99.25 % vs
+88.66 %** at q=20.
+
+### Full-window figures, for completeness
+
+| | BTC15m (n=3822) | BTC5m (n=3910) |
+|---|---|---|
+| no ask side at all | 4.5 % | 20.5 % |
+| touch ≤ 1 share | **15.2 %** | 0.0 % |
+| fillable q=1 / q=5 / q=20 | 95.5 / 93.2 / **93.2 %** | 79.5 / 79.5 / **75.9 %** |
+| best ask size p05 / p50 / p95 | 1 / **500** / 720 | 10 / 50 / 1081 |
+| total ask size p50 | 722 | 620 |
+| touch lifetime p50 | **2.1 s** | 4.3 s |
+| touch changes / min | 29.2 | 17.8 |
+| touch-only read understates q=20 | 12.9 % | **27.3 %** |
+
+### The conclusion
+
+**Gemini is not capacity-limited for L5-sized orders outside the final minute.**
+At q=20 it is executable **99.25 %** of the time on BTC15m and **88.66 %** on
+BTC5m, and on BTC15m the completion rate is flat from q=1 to q=20 — when it can
+trade at all it can trade 20 as easily as 1.
+
+**Inside the final minute it is unreliable on both cohorts** and roughly half
+the time cannot be bought at all. A late COMPLETE is the action that would need
+that window, so this is a real constraint on one specific L5 behaviour rather
+than on the venue generally.
+
+**The original observation stands and was never the problem.** The BTC15m touch
+holds ≤ 1 share **15.2 %** of the time — `depth 1.0 @ 0.66` was a true reading
+of a recurring state — and a touch-only read would understate q=20 capacity
+12.9 % of the time on BTC15m and 27.3 % on BTC5m. Honest reading, wrong
+inference; both are now fixed and measured.
+
+## Reconciling with the executable shadow
+
+The shadow reads Gemini over the websocket **144 of 155 evaluations (92.9 %)**
+since cutover — the remainder are REST fallbacks while a new window's socket
+delivers its `initial`, which is the fallback working as designed. Maintained
+book age **p50 0.069 s** against REST's 0.52 s.
+
+Its route distribution is **not** contradicted by 99 % Gemini fillability,
+because fillability is not eligibility. Gemini loses on **price**, not size:
+it is at or under L5's own achieved price only **23.3 %** of the time against
+Polymarket's 45.8 %, and every declined Gemini route in the sample was a price
+decline, never a capacity one.
+
+## Maker evidence at the 300 s horizon
+
+Raising the horizon from 120 s did what it was meant to — it converted
+"undecided for want of any print" into decisions:
+
+| | evidenced fill | evidenced no-fill | undecided |
+|---|---|---|---|
+| at 300 s (n=221) | **25** | 24 | 172 |
+| Gemini | 11 | 16 | 146 |
+| Polymarket | 14 | 8 | 26 |
+
+Among **decided** placements the evidenced-fill rate is **0.64 on Polymarket
+and 0.41 on Gemini**, both above the G4.4 threshold of 0.20 — but on 22 and 27
+decided placements against a gate requiring **200 per venue**. Early, and
+labelled early. 64 of these are now decided from the socket's own `trade`
+events rather than a polled list.
