@@ -1,9 +1,11 @@
 # How late can we see L5? — measured, per surface
 
-**Status: OBSERVABILITY_LIMIT confirmed for realtime side/timing fidelity, at
-~15 s median rather than the ~28.5 s previously carried.** Historical and
-out-of-sample behavioural modelling is unaffected. The limit is a property of
-*publication*, not of consensus, and one untested route remains open.
+**Status: OBSERVABILITY_LIMIT confirmed at ~15 s median for every
+Polymarket-published surface — but NOT a hard limit on observing L5. Reading
+Polygon directly lands at ~3.8 s and beat the feed on 10 of 10 observations.**
+Historical and out-of-sample behavioural modelling is unaffected. The limit is a
+property of *publication*, not of consensus — which is exactly why a different
+source escapes it.
 
 Measured 2026-09-15, 9-minute simultaneous run, five public surfaces,
 `analysis/l5/latency/probe.py` → `report.py`. Read-only, no credentials.
@@ -93,11 +95,26 @@ block carrying it lands ~3 s later. Yet the print is not published for ~15 s.
 
 **About twelve of those fifteen seconds are publication delay, not consensus.**
 
-That is a real opening: reading Polygon directly should see an L5 fill ~3 s after
-the match rather than ~15 s. `analysis/l5/latency/chainwatch.py` measures it.
-**No claim is made here** — the first observation puts chain detection at 6.4 s
-after the block, but that is dominated by the scan loop's own cadence rather than
-by chain availability, and n = 1.
+That is a real opening, and it was measured rather than assumed.
+`analysis/l5/latency/chainwatch.py`, n = 10 joined observations:
+
+| | value |
+|---|---|
+| chain detection after block | p50 **0.87 s** (min −0.20, max 7.54) |
+| chain earlier than `/activity` by | p50 **19.59 s** (min 2.15, max 34.09) |
+| chain won | **10 / 10** |
+
+Adding the measured ~2.9 s from match to block, total observability via the
+chain is **≈ 3.8 s against ~15 s**, and it beat the feed on every observation.
+At that lag the 5 s, 15 s and 30 s horizons all become knowable in time and only
+h = 1 s stays out of reach.
+
+Caveats stated rather than smoothed: the chain figures are bounded by the scan
+loop's own 0.4 s cadence, so the true floor is lower; and the −0.20 s is
+detection slightly ahead of the block's *declared* timestamp — a proposer-clock
+artifact, not time travel, which does imply the real chain lag is near zero.
+
+**This is a route, not a deployment.** Nothing has been built on it.
 
 ## What this does and does not invalidate
 

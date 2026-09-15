@@ -65,24 +65,26 @@ meaningful share of the total.
 
 Reading Polygon directly, instead of waiting for Polymarket to publish:
 
-| | chain detect | `/activity` | chain earlier by |
-|---|---|---|---|
-| block 93844627 | 2.51 s | 28.88 s | **26.37 s** |
-| block 93844698 | 1.06 s | 11.27 s | **10.21 s** |
-| block 93844703 | −0.20 s | 33.89 s | **34.09 s** |
+**n = 10 joined observations. The chain won every one.**
 
-Chain detection lands **0–2.5 s after the block** against `/activity`'s 11–34 s.
+| | value |
+|---|---|
+| chain detection after block | p50 **0.87 s** (min −0.20, max 7.54) |
+| chain earlier than `/activity` by | p50 **19.59 s** (min 2.15, max 34.09) |
+| chain won | **10 / 10** |
+
 L5's address sits in an **indexed topic** of the exchange fill event, so it is
-directly filterable, and keyless public RPCs resolve it in p50 0.24 s.
+directly filterable, and keyless public RPCs resolve it in p50 0.24 s. Adding the
+measured ~2.9 s from match to block, total observability via the chain is
+**≈ 3.8 s against ~15 s** — roughly 4× better, and it beat the feed on every
+single observation.
 
-**n = 3 joined observations. This is promising, not established.** Two caveats
-stated rather than smoothed over: the chain figures are bounded by the scan
-loop's own 0.4 s cadence, so the true floor is lower than measured; and the
-−0.20 s is detection slightly *ahead* of the block's declared timestamp, which
-is a proposer-clock/skew artifact, not time travel — it does mean the real chain
+Two caveats stated rather than smoothed over: the chain figures are bounded by
+the scan loop's own 0.4 s cadence, so the true floor is lower than measured; and
+the −0.20 s is detection slightly *ahead* of the block's declared timestamp,
+which is a proposer-clock artifact, not time travel — it does mean the real chain
 lag is near zero.
 
-If this holds at larger n it moves the observability limit from ~15 s to ~3 s,
-which would make the 5 s, 15 s and 30 s horizons knowable in time where today
-only 13.5 %, 52.4 % and 95.2 % of anchors are. **That is a source change. It
-runs from Railway unchanged.**
+At a ~3.8 s lag the 5 s, 15 s and 30 s horizons all become knowable in time,
+where today only 13.5 %, 52.4 % and 95.2 % of anchors are, and only h = 1 s stays
+out of reach. **That is a source change. It runs from Railway unchanged.**
