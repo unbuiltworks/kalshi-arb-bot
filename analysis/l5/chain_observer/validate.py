@@ -1,11 +1,14 @@
 """The promotion test for L5_CHAIN_OBSERVER: does it agree, not just arrive first.
 
-WHY THIS IS THE GATE. The chain carried the same fill a median 19.6 s earlier
-than /activity and won 10 of 10 observations, and observation lag is the second
-item on the measured blocker list -- median intent age at decision is 17.6 s of
-a 30 s validity, so 59 % of an intent's life is already gone when we can first
-price it. A ~4 s route instead of a ~15 s one would roughly triple the usable
-life of every intent.
+WHY THIS IS THE GATE. Observation lag is the second item on the measured
+blocker list: median intent age at decision is 17.6 s of a 30 s validity, so
+59% of an intent's life is gone before we can price anything.
+
+Measured over n=73 joined fills, the chain is readable 0.37 s after its block
+(p95 1.65 s) while /activity publishes 15.90 s after it (p95 30.08 s) -- a
+median lead of 15.16 s, winning 73 of 73. (An earlier note said 19.6 s from a
+10-observation sample; the larger series says 15.16 s.) On the chain route that
+17.6 s of spent budget would be roughly 2.4 s.
 
 None of which matters if the two sources disagree about WHAT happened. A faster
 feed that misses fills is worse than a slow one, because a missed fill is
@@ -154,7 +157,7 @@ def _leads(chain: Dict[str, dict], feed: Dict[str, dict]) -> Dict[str, Any]:
     The observational lead is a different measurement entirely: poll both
     surfaces and record when each FIRST carried a given transaction. That is
     what analysis/l5/latency/chainwatch.py does, and it measured the chain
-    ~19.6s ahead over 10 of 10 joined observations. A settled-window
+    15.16s ahead over 73 of 73 joined fills. A settled-window
     reconciliation like this one runs every couple of minutes and structurally
     cannot see first-arrival, so it does not try.
     """
@@ -165,7 +168,8 @@ def _leads(chain: Dict[str, dict], feed: Dict[str, dict]) -> Dict[str, Any]:
         "why": ("the activity feed's timestamp IS the chain block timestamp, "
                 "so differencing them is zero by construction and is not a "
                 "lead. Observational lead belongs to the first-seen probe "
-                "(analysis/l5/latency/chainwatch.py), which measured ~19.6s."),
+                "(analysis/l5/latency/chainwatch.py), which measures 15.16s "
+                "median over n=73."),
     }
 
 

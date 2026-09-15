@@ -452,9 +452,12 @@ rate would convert a replication into a different, losing trade.
    above is a measurement, never a proposal.
 2. **Reducing observation lag is the only lever that grows the addressable
    set** without touching the economics — it moves intents into the 45.8 %
-   rather than paying to reach them. This is why the chain route
-   (~19.6 s earlier, cross-validation clean so far) is the priority over any
-   venue work.
+   rather than paying to reach them. This is why the chain route is the
+   priority over any venue work. Re-measured over n=73 joined fills (the
+   earlier 19.6 s came from 10 observations): the chain is readable **0.37 s**
+   after its block while `/activity` publishes **15.90 s** after it, a median
+   lead of **15.16 s**, winning **73 of 73**. Against a median intent age at
+   decision of 17.6 s, that is roughly **2.4 s** spent instead of 17.6 s.
 3. **Polymarket is roughly twice as reachable as Gemini at zero concession**
    (45.8 % vs 23.3 %), which is a sharper venue difference than the depth
    comparison ever was.

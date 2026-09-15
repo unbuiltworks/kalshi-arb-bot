@@ -9,9 +9,27 @@ verb.
 
 Observation lag is **second on the measured blocker list**. Median intent age
 at decision is **17.6 s against a 30 s validity** — 59 % of an intent's life is
-already spent before we can price anything. The chain carried the same fill
-~19.6 s earlier than `/activity` and won 10 of 10 joined observations. A ~4 s
-route instead of a ~15 s one would roughly triple usable intent life.
+already spent before we can price anything. The chain carried the same fill a median
+**15.16 s** earlier than `/activity` (n=73, p95 29.06) and won **73 of 73**.
+
+> **Correction.** Earlier text in this repository put the chain lead at
+> **19.6 s** from a 10-observation sample. Re-derived over the full recorded
+> series (`analysis/l5/latency/chainwatch.jsonl`, n=73 joined fills) the median
+> lead is **15.16 s** (p05 3.91, p95 29.06, min 0.79, max 34.09), and the chain
+> won **73 of 73** — not 10 of 10. The decomposition is the useful part:
+>
+> | | p50 | p95 |
+> |---|---|---|
+> | chain detected after its block | **0.37 s** | 1.65 s |
+> | activity feed published after the block | **15.90 s** | 30.08 s |
+>
+> This measurement is sound where the validator's was not: both sides are our
+> OWN wall-clock first-sightings, so it measures when each surface could be
+> READ, not two representations of one event clock.
+
+The chain route is effectively **block + 0.37 s**. Against a median intent age
+at decision of 17.6 s of a 30 s validity, that would leave roughly **2.4 s**
+spent instead of 17.6 s — not a marginal gain.
 
 None of which counts if the two sources disagree about **what happened**. A
 faster feed that misses fills is worse than a slow one, because a missed fill
@@ -64,7 +82,8 @@ against itself and the answer is zero by construction.
 
 Removed and replaced with a function that says so. Observational lead — when
 each surface could first be *read* — belongs to the first-seen probe
-(`analysis/l5/latency/chainwatch.py`), which measured ~19.6 s. A settled-window
+(`analysis/l5/latency/chainwatch.py`), which measures 15.16 s median over
+n=73. A settled-window
 reconciliation runs every two minutes and structurally cannot see first
 arrival, so it no longer pretends to.
 
