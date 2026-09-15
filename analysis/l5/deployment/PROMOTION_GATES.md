@@ -54,6 +54,8 @@ while it does.
 | G3.2 | capacity distribution per venue | `executable_qty` quantiles; the q=1/2/5/10/20 completion rate | `report.ladder_complete_rate` |
 | G3.3 | venue minimums respected | 0 intents counted executable below a declared `orderMinSize` | evaluator gate |
 | G3.4 | cross-venue divergence quantified | gap quantiles and which venue is cheaper, per cohort and TTE band | `report.cross_venue_gap` |
+| G3.5 | **zero-concession executable rate** | the share of intents executable at or under L5's own achieved price, per venue. Measured today: Polymarket 45.8 %, Gemini 23.3 % | `report.price_slack` |
+| G3.6 | **no ceiling widening** | the ceiling policy at promotion is the same one the evidence was gathered under. A cent of concession costs 62.9x L5's per-dollar edge, so raising the executable rate by loosening the ceiling is a different strategy, not a readier one | `price_slack.vs_l5_edge` |
 
 ---
 

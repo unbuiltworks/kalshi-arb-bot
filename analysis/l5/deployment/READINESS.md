@@ -406,3 +406,55 @@ promotable today.
   "unverified GAP" is superseded twice over: the fee was vendored at 12:5xZ, and
   the ladder evaluator `src/l5_shadow/executable.py` now carries the routing
   path.
+
+
+---
+
+# Update 2026-09-15T14:2xZ — the price gap, measured against L5's own edge
+
+The executable shadow answered "could we match L5's price" with NEITHER most of
+the time. True, but not a decision. This is the decision.
+
+## How far above L5's own achieved price the market was, when we could first look
+
+| | Polymarket | Gemini |
+|---|---|---|
+| already **at or under** L5's price | **45.8 %** | 23.3 % |
+| executable at +1c | 57.3 % | 29.4 % |
+| executable at +2c | 63.0 % | 33.8 % |
+| executable at +5c | 80.6 % | 59.7 % |
+| executable at +10c | 92.5 % | 81.6 % |
+| median slack when above | 4c | 6c |
+
+n = 227 / 228 evaluations. Measured on the quoted touch, **excluding fees**, so
+every figure is a *lower* bound on the concession really required.
+
+## And here is why "we'd only need a cent" is not a small ask
+
+L5's measured trading drag is **0.037 % per dollar**. At the median intent
+price of **0.43**:
+
+| concession | cost, as a multiple of L5's ENTIRE per-dollar edge |
+|---|---|
+| **1 cent** | **62.9×** |
+| median slack on Polymarket (4c) | **251×** |
+| median slack on Gemini (6c) | **377×** |
+
+One cent is not a rounding error against this strategy — it is the strategy,
+sixty-three times over. So the 45.8 % of intents where Polymarket was *already*
+at or under L5's price are not a starting point to be widened; **they are the
+entire addressable set**, and loosening the ceiling to raise the executable
+rate would convert a replication into a different, losing trade.
+
+## What that implies for the engine, concretely
+
+1. **Do not widen the ceiling.** Every documented "executable at +Xc" line
+   above is a measurement, never a proposal.
+2. **Reducing observation lag is the only lever that grows the addressable
+   set** without touching the economics — it moves intents into the 45.8 %
+   rather than paying to reach them. This is why the chain route
+   (~19.6 s earlier, cross-validation clean so far) is the priority over any
+   venue work.
+3. **Polymarket is roughly twice as reachable as Gemini at zero concession**
+   (45.8 % vs 23.3 %), which is a sharper venue difference than the depth
+   comparison ever was.

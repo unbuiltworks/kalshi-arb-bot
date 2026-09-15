@@ -480,3 +480,36 @@ def test_resulting_inventory_is_absent_when_the_action_is_not_submittable():
                              _terms(), [(D("0.60"), D("100"))])
     assert ev.would_submit is False
     assert "resulting_inventory" not in ev.extra
+
+
+# ------------------------------------------------ what a cent actually costs
+
+def test_price_slack_is_measured_against_l5s_own_achieved_price():
+    from analysis.l5.exec_shadow import report as R
+    by_venue = {"PMUS": {("i1", "PMUS"): {"available_price": "0.47"},
+                         ("i2", "PMUS"): {"available_price": "0.40"}}}
+    intents = {"i1": {"max_acceptable_price": "0.43"},
+               "i2": {"max_acceptable_price": "0.43"}}
+    out = R._slack(by_venue, intents, {})["PMUS"]
+    assert out["already_at_or_under_ceiling"] == 1
+    assert out["rate_at_or_under"] == 0.5
+    assert out["cumulative_executable_at_slack"]["0.05"] == 1.0
+    assert out["cumulative_executable_at_slack"]["0.02"] == 0.5
+
+
+def test_a_cent_is_reported_as_a_multiple_of_l5s_edge_not_as_a_cent():
+    """1c on a 43c contract is ~63x L5's whole per-dollar edge. The absolute
+    number is misleadingly reassuring; the multiple is not."""
+    from analysis.l5.exec_shadow import report as R
+    by_venue = {"PMUS": {("i1", "PMUS"): {"available_price": "0.47"}}}
+    intents = {"i1": {"max_acceptable_price": "0.43"}}
+    e = R._slack(by_venue, intents, {})["PMUS"]["vs_l5_edge"]
+    assert e["one_cent_as_multiple_of_l5_edge"] > 50
+    assert e["l5_drag_per_dollar"] == 0.00037
+
+
+def test_slack_is_a_lower_bound_because_fees_are_excluded():
+    from analysis.l5.exec_shadow import report as R
+    by_venue = {"PMUS": {("i1", "PMUS"): {"available_price": "0.44"}}}
+    intents = {"i1": {"max_acceptable_price": "0.43"}}
+    assert "LOWER bound" in R._slack(by_venue, intents, {})["PMUS"]["basis"]

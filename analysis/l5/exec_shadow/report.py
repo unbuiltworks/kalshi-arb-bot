@@ -161,6 +161,12 @@ def report(out_dir: str) -> Dict[str, Any]:
                    "a venue-confirmed fill and is never realized P&L."),
     }
 
+    # HOW MUCH WORSE THAN L5 WOULD WE HAVE HAD TO DO, to trade at all?
+    # "NEITHER" is a true answer to "could we match L5's own price", but it is
+    # not a decision. The price gap is, and it is the third item on the
+    # measured blocker list.
+    out["price_slack"] = _slack(by_venue, intents, routes)
+
     # did PATIENCE pay? an intent that could not be filled at once, re-checked
     out["patience"] = _patience(evo)
     out["labels"] = ("book readings, not fills. Deduped by intent_id content "
@@ -169,6 +175,101 @@ def report(out_dir: str) -> Dict[str, Any]:
                      "A slightly NEGATIVE book_age_s is venue-vs-local clock "
                      "skew (tens of ms), not a book from the future.")
     return out
+
+
+SLACK_STEPS = ("0.00", "0.01", "0.02", "0.05", "0.10")
+
+
+def _slack(by_venue: Dict[str, dict], intents: Dict[str, dict],
+           routes: Dict[str, dict]) -> Dict[str, Any]:
+    """Cents above the intent ceiling at which each venue's touch sat.
+
+    The ceiling is L5's own achieved price on the wanted side, so this is
+    literally "how far above what L5 paid was the market when we could first
+    look". Positive slack means we could not match him; the DISTRIBUTION of
+    that slack says whether the gap is a cent or a dime, and a cent is a
+    business decision while a dime is not.
+
+    Measured on the quoted touch, NOT on the all-in cost, and the two differ by
+    the fee -- so the slack below is a LOWER BOUND on what it would really take.
+    """
+    out: Dict[str, Any] = {}
+    for venue, rows in by_venue.items():
+        vals: List[float] = []
+        for (iid, _v), e in rows.items():
+            i = intents.get(iid)
+            if not i or e.get("available_price") is None:
+                continue
+            try:
+                px = D(str(e["available_price"]))
+                cap = D(str(i["max_acceptable_price"]))
+            except Exception:                                 # noqa: BLE001
+                continue
+            vals.append(float(px - cap))
+        if not vals:
+            out[venue] = {"n": 0}
+            continue
+        inside = [v for v in vals if v <= 0]
+        out[venue] = {
+            "n": len(vals),
+            "already_at_or_under_ceiling": len(inside),
+            "rate_at_or_under": round(len(inside) / len(vals), 4),
+            "slack_needed": q([v for v in vals if v > 0]),
+            "cumulative_executable_at_slack": {
+                st: round(sum(1 for v in vals if v <= float(st)) / len(vals), 4)
+                for st in SLACK_STEPS},
+            "basis": ("quoted touch minus the intent ceiling (L5's own achieved "
+                      "price on the wanted side). Positive means the market was "
+                      "above what L5 paid. Fees are NOT included, so this is a "
+                      "LOWER bound on the concession required."),
+            "vs_l5_edge": _vs_edge(vals, by_venue, venue, intents),
+        }
+    return out
+
+
+# L5's measured trading drag, from his own receipts: -0.037% per dollar. It is
+# the yardstick that decides whether a price concession is affordable, and it
+# is tiny.
+L5_DRAG_PER_DOLLAR = 0.00037
+
+
+def _vs_edge(vals: Sequence[float], by_venue: Dict[str, dict], venue: str,
+             intents: Dict[str, dict]) -> Dict[str, Any]:
+    """A cent sounds small. Against L5's edge it is not, and that is the point.
+
+    L5's measured trading drag is 0.037% per dollar. On a 50c contract one cent
+    of price concession is 2% of notional -- roughly FIFTY-FOUR TIMES his whole
+    edge. So "we would only need a cent" is not a small ask; it is the strategy
+    gone. Expressed here as multiples rather than left for the reader to work
+    out, because the absolute number is misleadingly reassuring.
+    """
+    ceilings = []
+    for (iid, _v), _e in (by_venue.get(venue) or {}).items():
+        i = intents.get(iid)
+        if i:
+            try:
+                ceilings.append(float(i["max_acceptable_price"]))
+            except Exception:                                 # noqa: BLE001
+                continue
+    if not ceilings:
+        return {"n": 0}
+    med_px = sorted(ceilings)[len(ceilings) // 2]
+    pos = [v for v in vals if v > 0]
+    med_slack = sorted(pos)[len(pos) // 2] if pos else 0.0
+    def mult(cents):
+        return (round((cents / med_px) / L5_DRAG_PER_DOLLAR, 1)
+                if med_px > 0 else None)
+    return {
+        "l5_drag_per_dollar": L5_DRAG_PER_DOLLAR,
+        "median_intent_price": round(med_px, 4),
+        "median_slack_needed": round(med_slack, 4),
+        "one_cent_as_multiple_of_l5_edge": mult(0.01),
+        "median_slack_as_multiple_of_l5_edge": mult(med_slack),
+        "reads": ("a concession of one cent at the median intent price costs "
+                  "this many times L5's entire per-dollar edge. A number well "
+                  "above 1 means matching his price is not a preference, it is "
+                  "the strategy."),
+    }
 
 
 def _patience(evo: Sequence[dict]) -> Dict[str, Any]:
