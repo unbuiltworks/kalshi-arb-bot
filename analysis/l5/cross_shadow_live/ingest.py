@@ -133,6 +133,62 @@ def _parse_entry(entries, idx):
     return None
 
 
+def _nested_settlement_row(sn, parent, entry):
+    """One settled_now[] entry -> a ledger row, keyed so it cannot duplicate.
+
+    KEYED ON THE VENUE'S OWN settlement_key, not on the log timestamp. The same
+    settlement is reported once per cycle it lands in, and overlapping log pulls
+    re-read the same cycles, so a timestamp key would append the same settlement
+    again on every poll.
+
+    The five streams stay SEPARATE and nothing is summed. `realized_confirmed`
+    is carried through untouched: everything observed so far is
+    SETTLED_REALIZED_UNCONFIRMED and must stay OUT of any net, exactly as
+    honwon-yanhou is held out.
+    """
+    b = sn.get("breakdown") or {}
+    inc = b.get("incentives") or {}
+    key = b.get("settlement_key") or entry.get("timestamp")
+    r = {
+        "kind": "settlement",
+        "_kind": "settlement_nested",
+        "_ts": entry.get("timestamp"),
+        "_key": f"{key}|settlement|{sn.get('slug')}",
+        "_source": "nested in %s" % (parent.get("kind") or "?"),
+        "commit": parent.get("commit"),
+        "slug": sn.get("slug"),
+        "status": b.get("settlement_status"),
+        "settled": True,
+        "realized_confirmed": bool(sn.get("realized_confirmed")),
+        "realized_usd": sn.get("realized_usd"),
+        "realized_source": sn.get("realized_source"),
+        "settled_by": b.get("settled_by"),
+        # 1. matched-pair economics
+        "matched_pairs": b.get("matched_pairs"),
+        "matched_pair_cost": b.get("matched_pair_cost"),
+        "matched_contribution_usd": b.get("matched_contribution_usd"),
+        # 2. residual / directional, kept apart from (1)
+        "directional_residual": b.get("directional_residual"),
+        "residual_contribution_usd": b.get("residual_contribution_usd"),
+        # 3. fees
+        "fees_usd": b.get("fees_usd"),
+        # 4. credited incentives only -- a PENDING reward is not income
+        "incentives_credited_usd": inc.get("credited_to_us_usd"),
+        "incentives_charged_usd": inc.get("charged_to_us_usd"),
+        "incentives_net_usd": inc.get("net_to_us_usd"),
+        "fills_with_a_credit": inc.get("our_fills_with_a_credit"),
+        # 5. the venue's own realized, which is what "realized" may mean
+        "realized_usd_venue": b.get("realized_usd_venue"),
+        "maker_fills": b.get("maker_fills"),
+        "taker_fills": b.get("taker_fills"),
+        "cost_basis_usd": b.get("cost_basis_usd"),
+        "labels": ("nested settlement; the five streams are kept separate and "
+                   "never summed. Counts toward the net ONLY when "
+                   "realized_confirmed is true."),
+    }
+    return {r["_key"]: r}
+
+
 def ingest_ledger(paths):
     """Venue-side facts, kept in a SEPARATE store from the shadow cohort.
 
@@ -215,6 +271,23 @@ def ingest_ledger(paths):
             r["_kind"] = kind
             r["_key"] = f"{ts}|{kind}|{j.get('slug')}"
             rows[r["_key"]] = r
+        # A SETTLEMENT NESTED INSIDE ANOTHER ROW IS STILL A SETTLEMENT.
+        # In shutdown mode the probe stops emitting standalone kind=settlement
+        # lines and reports each one inside shutdown_idle.settlement
+        # .settled_now[] instead. The kind test above sees "shutdown_idle",
+        # matches nothing, and `continue`s -- so eight markets settled between
+        # 16:30Z and 16:53Z on 2026-09-15 and NONE of them reached the ledger,
+        # with unparsed staying 0 so nothing was reported either. That is the
+        # same class of silent loss as the 80 KiB split-fragment bug, arriving
+        # by a different route.
+        for idx in range(len(entries)):
+            j = _parse_entry(entries, idx)
+            if not isinstance(j, dict):
+                continue
+            for sn in ((j.get("settlement") or {}).get("settled_now") or []):
+                if not isinstance(sn, dict) or not sn.get("slug"):
+                    continue
+                rows.update(_nested_settlement_row(sn, j, entries[idx]))
     with open(LEDGER, "w") as fh:
         for k in sorted(rows):
             fh.write(json.dumps(rows[k], separators=(",", ":")) + "\n")
