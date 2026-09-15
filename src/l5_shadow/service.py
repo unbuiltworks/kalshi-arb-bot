@@ -63,6 +63,8 @@ from src.l5_router.route import route
 from src.l5_shadow import depth as DEP
 from src.l5_shadow import maker as MK
 from src.l5_shadow import two_sided as TS
+from src.l5_shadow import inventory_policy as IP
+from src.l5_shadow import cohorts as CO
 from src.l5_shadow import terms as TERMS
 from src.l5_shadow import venues as V
 from src.l5_shadow.executable import evaluate_executable
@@ -91,6 +93,8 @@ MAKER_OUT = "maker_outcomes.jsonl"
 EVOLUTION = "book_evolution.jsonl"
 TWO_SIDED = "two_sided_plans.jsonl"
 TWO_SIDED_OUT = "two_sided_outcomes.jsonl"
+INVENTORY = "inventory_plans.jsonl"
+INVENTORY_OUT = "inventory_outcomes.jsonl"
 
 
 # --------------------------------------------------------------- durable store
@@ -500,7 +504,8 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float,
     # maker_outcomes.jsonl as the reactive clone's record; mixing the
     # state-driven candidate's quotes into it would silently rewrite P2's fill
     # rate and pair economics with a different policy's results.
-    store = TWO_SIDED_OUT if pend.get("arm") == "S" else MAKER_OUT
+    store = {"S": TWO_SIDED_OUT, "D": INVENTORY_OUT,
+             "SC": INVENTORY_OUT}.get(pend.get("arm"), MAKER_OUT)
     append(out_dir, store, {
         "schema": SCHEMA + "/maker_outcome", "intent_id": ik, "venue": venue,
         "arm": pend.get("arm", "R"),
@@ -519,7 +524,12 @@ def resolve_maker(out_dir: str, pend: Dict[str, Any], *, now: float,
         "observation_gap_before_placement": (
             None if boot_t is None or pend["placed_at"] >= boot_t
             else round(boot_t - pend["placed_at"], 1)),
-        "horizon_s": MAKER_HORIZON_S, **res})
+        "horizon_s": (None if pend.get("arm") in ("S", "D")
+                      else MAKER_HORIZON_S),
+        "cohort": pend.get("cohort"),
+        "ticks_below_touch": pend.get("ticks_below_touch"),
+        "cancel_reason": pend.get("cancel_reason"),
+        "rested_s": pend.get("rested_s"), **res})
     return True
 
 
@@ -667,6 +677,12 @@ def main(argv=None) -> int:
 
     boot_t = time.time()
     pending_makers, _ = recover_pending(a.out_dir)
+    # the continuous candidate's own state: quotes still resting, what we
+    # believe we hold, and which (venue, market, arm, side, price) already has
+    # a quote so nothing is re-placed or repriced
+    pending_inv: List[Dict[str, Any]] = []
+    placed_inv: set = set()
+    inv_state: Dict[str, Dict[str, str]] = {}
     pending_evo: List[Dict[str, Any]] = []
     # the oldest recovered quote says how far back this boot is reaching, and
     # every one of them was resting while nobody was watching
@@ -804,6 +820,68 @@ def main(argv=None) -> int:
                     live_syms.append(c["symbol"])
             V.prune_gemini_feed(live_syms)
 
+            # ---- THE CONTINUOUS CANDIDATE, on every live BTC15m window and
+            # NOT gated on an L5 fill. It runs whether or not L5 has traded,
+            # because a policy that starts when he fills cannot hold the other
+            # side in time: 54.3% of his complements are done inside our lag.
+            for w in (V.live_windows() or []):
+                if not CO.is_maker_cohort(w.get("cohort")):
+                    continue
+                mkw = w["market_key"]
+                if mkw not in windows_cache:
+                    ww = V.pm_window(mkw)
+                    if ww:
+                        windows_cache[mkw] = ww
+                tte = float(w.get("window_end") or 0) - now
+                inv = inv_state.setdefault(mkw, {"up": "0", "dn": "0"})
+                plans = observe_inventory(
+                    a.out_dir, window=windows_cache.get(mkw),
+                    cohort=w["cohort"], market_key=mkw, tte_s=tte,
+                    inv=inv, now=now)
+                for pl in plans:
+                    for q in pl.get("quotes") or []:
+                        key = (pl["venue"], mkw, pl["arm"], q["outcome"],
+                               q["price"])
+                        if key in placed_inv:
+                            continue      # never re-place or reprice
+                        placed_inv.add(key)
+                        ww = windows_cache.get(mkw) or {}
+                        pending_inv.append({
+                            "arm": pl["arm"], "venue": pl["venue"],
+                            "intent_id": f"{mkw}#{pl['arm']}:{q['outcome']}"
+                                         f"@{q['price']}",
+                            "price": q["price"], "qty": q["qty"],
+                            "queue_ahead": q.get("queue_ahead") or "0",
+                            "placed_at": now, "market_key": mkw,
+                            "cohort": w["cohort"],
+                            "desired_outcome": q["outcome"],
+                            "window_end": w.get("window_end"),
+                            "ticks_below_touch": q.get("ticks_below_touch"),
+                            "condition_id": ww.get("condition_id"),
+                            "token": (ww.get("token_up")
+                                      if q["outcome"] == "Up"
+                                      else ww.get("token_dn")),
+                            "symbol": (gemini_symbol(mkw) or {}).get("symbol")})
+
+            # ---- inventory quotes rest for their FULL predetermined life.
+            # Not MAKER_HORIZON_S: a fixed horizon was an artefact of quoting
+            # after an L5 fill, and it would truncate exactly the long rest
+            # this candidate exists to test.
+            inv_due = []
+            for q in list(pending_inv):
+                st = {"tte_s": float(q.get("window_end") or 0) - now,
+                      "inv_up": inv_state.get(q["market_key"], {}).get("up"),
+                      "inv_dn": inv_state.get(q["market_key"], {}).get("dn"),
+                      "window_closed": now >= float(q.get("window_end") or 0)}
+                why = IP.should_cancel(q, st)
+                if why:
+                    q["cancel_reason"] = why
+                    q["rested_s"] = round(now - q["placed_at"], 1)
+                    inv_due.append(q)
+            for q in inv_due:
+                resolve_maker(a.out_dir, q, now=now, boot_t=boot_t)
+                pending_inv.remove(q)
+
             due = [p for p in pending_makers
                    if now - p["placed_at"] >= MAKER_HORIZON_S]
             for p in due:
@@ -836,6 +914,59 @@ def main(argv=None) -> int:
         time.sleep(POLL_S)
     return 0
 
+
+
+
+def observe_inventory(out_dir: str, *, window: dict, cohort: str,
+                      market_key: str, tte_s: float, inv: Dict[str, Any],
+                      now: float) -> List[Dict[str, Any]]:
+    """The continuous candidate: quote BOTH sides from market state alone.
+
+    NOT TRIGGERED BY AN L5 FILL. It runs on every live BTC15m window on every
+    cycle, which is the whole point: 54.3% of L5's complements are already done
+    inside our 15.16s observation lag, so a policy that starts when he fills
+    can never hold the other side in time.
+
+    BTC15m only. The other cohorts are a predominantly-TAKER regime and running
+    a maker-inventory candidate there would imitate nothing.
+    """
+    if not CO.is_maker_cohort(cohort):
+        return []
+    state = {"market_key": market_key, "cohort": cohort, "tte_s": tte_s,
+             "inv_up": inv.get("up", "0"), "inv_dn": inv.get("dn", "0")}
+    out = []
+    for venue, terms, ladders in _venue_books(window, market_key):
+        if terms is None:
+            continue
+        up_rest, dn_rest = ladders
+        for arm in ("S", "D"):
+            pl = IP.plan(state, arm=arm, terms=terms, up_rest=up_rest,
+                         dn_rest=dn_rest, now=now)
+            pl["venue"] = venue
+            append(out_dir, INVENTORY,
+                   {"schema": SCHEMA + "/inventory_plan", **pl})
+            out.append(pl)
+    return out
+
+
+def _venue_books(window: Optional[dict], market_key: str):
+    """(venue, terms, (up_bids, dn_bids)) for both venues. None means the book
+    was unreadable, which the policy treats as UNKNOWN rather than empty."""
+    rows = []
+    if window:
+        up = pm_ladders(window, "Up")
+        dn = pm_ladders(window, "Down")
+        rows.append(("PMUS", TERMS.pm_terms(window),
+                     (up.get("rest") if up.get("ok") else None,
+                      dn.get("rest") if dn.get("ok") else None)))
+    cand = gemini_symbol(market_key)
+    if cand:
+        gu = gemini_ladders(cand["symbol"], "Up")
+        gd = gemini_ladders(cand["symbol"], "Down")
+        rows.append(("GEMINI", TERMS.gemini_terms(),
+                     (gu.get("rest") if gu.get("ok") else None,
+                      gd.get("rest") if gd.get("ok") else None)))
+    return rows
 
 
 def _two_sided(intent, window, pm, pm_t, gm_t, cand, *,

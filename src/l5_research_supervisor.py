@@ -372,7 +372,9 @@ class Supervisor:
         out_dir = os.path.join(self.root, "l5-shadow-state")
         for name, mod in (("L5_PAIR_FORMATION",
                            "analysis.l5.pair_formation.study"),
-                          ("L5_ARMS", "analysis.l5.pair_formation.arms")):
+                          ("L5_ARMS", "analysis.l5.pair_formation.arms"),
+                          ("L5_ARM_SCORE",
+                           "analysis.l5.pair_formation.arm_score")):
             try:
                 import importlib
                 rep = importlib.import_module(mod).report(out_dir)

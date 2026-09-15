@@ -17,3 +17,4 @@ promote armb: the join-price key fix and the rest-side re-reads (batched)
 promote forensics: why the quotes do not fill, decomposed into NO_FLOW / QUEUE_BOUND / PARTIAL
 promote paircore: P0 pair-formation forensics + the reactive vs state-driven arms
 promote pairfix: the paired-detection and cross-clock defects the service caught
+promote contin: the continuous BTC15m desired-inventory candidate, arms R/S/D
