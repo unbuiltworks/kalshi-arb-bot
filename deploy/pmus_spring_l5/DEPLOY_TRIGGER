@@ -34,3 +34,64 @@
 #
 # ROLLBACK: deployment a3b6ec92-9cb1-45af-99c9-a1f202c0c3fe serving
 # d108c54a614afba0df05f97a25a9ca0be5bb891b.
+
+# CUTOVER 2026-09-15T11:57Z -- P0 SAFETY: ACCOUNTING INVARIANT. This one DOES
+# change money-moving behaviour, deliberately, in the FAIL-CLOSED direction:
+# it is expected to stop the probe opening new exposure.
+#
+# PRE-DEPLOY STATE, read 2026-09-15T11:54:33Z: serving 3ec9e1cd996c, uptime
+# 42,685s, 261 sessions, held 1 (aec-atp-blaell-hirmor-2026-09-13), status
+# CAMPAIGN_RESUMING:SPRING_RESIDUAL_HOLD, no HALT. Last published
+# combined_loss -23.2786 against the unchanged -30.00 stop.
+#
+# ROLLBACK REFERENCE: deployment e926e286-ebaa-4842-b101-d9567bdc5e9a serving
+# 3ec9e1cd996c6fdb9cd03310da4611e9a828989f.
+#   BUT READ THIS BEFORE USING IT. That build UNDER-COUNTS the daily stop by
+#   $7.78 and will open new exposure while doing so. Rolling back to make the
+#   service look healthy is the one response this cutover exists to prevent.
+#   If the new build misbehaves, FAIL CLOSED instead (PMUS_SPRING_SHUTDOWN).
+#
+# WHY. unsettled_slugs() closed a market on `kind in ("settled","realized")`,
+# but pmus_settlement_auditor writes `settled` ALWAYS and `realized` ONLY when
+# the venue confirmed a number, while pmus_q1_executor.realized_today sums ONLY
+# `realized`. A settlement the venue would not number therefore removed the
+# market's guaranteed-loss floor from combined_loss AND contributed nothing
+# back: the dollars left both terms and were in neither. Because
+# pmus_settlement_sweep.pending_slugs() reads the same set, those markets also
+# stopped being POLLED -- which is why UNCONFIRMED -> CONFIRMED has happened
+# zero times and nicpar-gabpen was audited once, 2026-09-14T11:53:58Z, never
+# again.
+#
+# MEASURED: executor -23.2786 vs an independent conservative reconstruction
+# from immutable fills and confirmed cashflows of -31.0612. Difference -7.7826,
+# made entirely of cribuc-biaand (-4.0686), andfen-ryaseg (-2.1404),
+# kanpet-zijcui (-0.9976) and nicpar-gabpen (-0.5760) -- four markets with no
+# venue-confirmed terminal state that had stopped being charged. The
+# conservative figure has ALREADY BREACHED the unchanged -30.00 stop.
+#
+# THE DIFF IS ONE PREDICATE AND ONE READ-ONLY REPORTER. Code-only, docstrings
+# excluded:
+#     -  elif kind in ('settled', 'realized'):
+#     +  elif kind == 'realized':
+#     +  def unsettled_detail() -> dict:   (pure read; no mutation, no order)
+# Nothing else is bundled. Verified by AST-stripped diff against 3ec9e1cd.
+#
+# EXPECTED BEHAVIOUR AFTER CUTOVER, and it is the POINT, not a regression:
+#   * the four markets return to unsettled_slugs(), so combined_loss charges
+#     their floors and reconciles with the conservative figure;
+#   * combined_budget_tripped() becomes true -> risk-reduction-only: no new
+#     OPEN/EXTEND, COMPLETE only where reduces_risk_only() holds under the
+#     <=1.00 pair ceiling, otherwise hold to settlement;
+#   * boot check combined_loss_above_stop FAILS -> rearm_refused -> the
+#     container HOLDS HALTED rather than exiting, so Railway does not read it
+#     as a crash and does not roll back;
+#   * pending_slugs() resumes polling them until a venue-confirmed terminal
+#     cashflow exists.
+#
+# NO P&L IS MANUFACTURED for an unconfirmed settlement. The fix refuses to STOP
+# CHARGING; it never invents a number.
+#
+# UNCHANGED: the -30.00 daily stop, residual cap 6, pair ceiling, size, band,
+# admission, concurrency, maker-only, NO TAKER, timing, cancellation, entry
+# logic, action selection. No position is force-closed. Existing exposure is
+# still managed through permitted risk-reducing and settlement paths.
