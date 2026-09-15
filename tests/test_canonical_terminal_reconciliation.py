@@ -204,8 +204,27 @@ def test_the_fixed_prefix_is_gone():
 
 
 def test_the_sweep_rotates():
+    """The campaign sweep must rotate through the unsettled set rather than
+    re-auditing a fixed head.
+
+    It now does so through the SHARED settle_batch() helper, which the shutdown
+    path also uses -- so this asserts the rotation cursor and the shared call,
+    and then checks the rotation BEHAVIOURALLY rather than trusting that a
+    constant appears in the source."""
     body = _sweep_body()
-    assert "_settle_rr" in body and "SETTLE_AUDIT_BATCH" in body
+    assert "_settle_rr" in body, "the rotation cursor is gone"
+    assert "settle_batch(" in body, "the sweep no longer uses the shared batcher"
+
+    order, cursor, seen, batches = [f"m{i}" for i in range(12)], 0, set(), []
+    for _ in range(3):
+        batch, cursor = cont.settle_batch(order, cursor)
+        assert len(batch) == cont.SETTLE_AUDIT_BATCH
+        batches.append(batch)
+        seen |= set(batch)
+    # 12 markets, batch 5: three cycles wrap, so the property is FULL COVERAGE,
+    # not 15 distinct markets -- there are only 12 to see.
+    assert seen == set(order), "the sweep did not reach every unsettled market"
+    assert batches[0] != batches[1], "the sweep re-audited a fixed head"
 
 
 def test_markets_the_risk_set_charges_but_the_scheduler_drops_go_first():

@@ -95,3 +95,51 @@
 # admission, concurrency, maker-only, NO TAKER, timing, cancellation, entry
 # logic, action selection. No position is force-closed. Existing exposure is
 # still managed through permitted risk-reducing and settlement paths.
+
+# CUTOVER 2026-09-15T13:0xZ -- SETTLEMENT LIVENESS. Strictly settlement/
+# accounting liveness. No trading-policy change of any kind.
+#
+# PRE-DEPLOY STATE: serving 54d1c75da707 (deployment 72f2aebd), HALTED on the
+# pre-existing PMUS_SPRING_SHUTDOWN latch since 12:07:00Z, held 1
+# (aec-atp-blaell-hirmor-2026-09-13), 0 open orders. The latch is NOT cleared
+# by this cutover and must not be.
+#
+# ROLLBACK REFERENCE: deployment 72f2aebd-7678-4f2c-a2e2-4f30adf612eb serving
+# 54d1c75da707db699f290c6367f6ee6b6ad764d3. That build is SAFE (it carries the
+# accounting fix) but its shutdown settle pass does not complete, so rolling
+# back restores a probe that reports no settlement progress at all.
+#
+# WHY. shutdown_settle_pass walked EVERY pending market in one unbounded pass.
+# Fine at ~1 market; the accounting fix correctly returned ~38 to that set (70
+# filled, only 32 with a venue-confirmed `realized` row) and the first pass
+# stopped completing -- 23+ minutes with zero shutdown_idle rows, CPU 0,
+# network 0. One slow market blocked every market behind it.
+#
+# THE FIX REUSES THE CAMPAIGN LOOP'S OWN MECHANISM rather than adding a second
+# settlement implementation: the bounded round-robin is extracted to
+# settle_batch() and BOTH paths call it, carrying that loop's modular-indexing
+# fix (never a concatenated slice, which double-audited one market per pass
+# when fewer markets were pending than the batch).
+#
+#   * bounded to SETTLE_AUDIT_BATCH (5) per cycle;
+#   * cursor is DURABLE -- in memory it resets to 0 each restart, so a process
+#     restarting faster than it drains re-audits the head forever;
+#   * per-market try/except + elapsed_s, so ONE hang cannot take a cycle down;
+#   * a failed audit leaves the market PENDING: a failed audit is not evidence
+#     that a market settled;
+#   * the budget is re-priced over the FULL unsettled set, never the batch;
+#   * every cycle logs pending_total/pending_after/audited/cursor/settled_now/
+#     settle_errors -- a stuck cycle and an idle one must not look the same.
+#
+# SCOPE, verified by AST-stripped diff vs 54d1c75d: 61 functional lines, and
+# ZERO occurrences of place_order, submit_order, cancel_order, daily_loss_stop,
+# residual_cap, max_actions, pair_ceiling, SPRING_BAND or entry_ok. The Gemini
+# fee/mapping work on the development branch is deliberately NOT included.
+#
+# UNCHANGED: the -30.00 stop, restart ALWAYS, the deadman/shutdown latch,
+# risk-reduction lanes, crash recovery, position limits, order logic, the L5
+# model and the router. shutdown mode remains structurally incapable of
+# OPEN/EXTEND/submission, and held inventory stays preserved.
+#
+# Tests: 3940 passed / 27 skipped / 1 xfailed on this artifact; 17 new tests
+# pin every required property.
