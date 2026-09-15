@@ -143,9 +143,24 @@ rather than a quiet correction.
 
 **Estimand A and B stay separate metrics.** The runner serves **A only**
 (fill-anchored). **B (arbitrary-state) is NOT READY** and reports that reason
-instead of a number: the activity feed's newest row is a median 28.5 s old, so
-a wall-clock freeze cannot observe its own prediction window. B is not
-approximated with A.
+instead of a number: a wall-clock freeze cannot observe its own prediction
+window. B is not approximated with A.
+
+> **Correction, 2026-09-15.** This paragraph said *28.5 s*. That figure came
+> from twelve samples and overstated the lag. Measured over n=208 the feed is a
+> **median 15.0 s** behind (p95 29.8 s), independently reproduced at
+> **p50 14.8 s** by the executable shadow's own observation clock over 50
+> BTC15m intents. **The conclusion is unchanged**: L5's BTC15m inter-fill
+> median is 2 s, so a 30 s window is still mostly invisible at resolution time
+> and B stays NOT READY. Only the number was wrong.
+>
+> `deploy/l5_fidelity/Dockerfile` and `railway.json` still carry the superseded
+> 28.5 s in their prose. They are **deliberately not edited yet**: that
+> service's Railway `watchPatterns` still point at `deploy/l5_fidelity/**`, so
+> touching them rebuilds and restarts the runner, and v0.2 is mid-experiment
+> and is to accumulate untouched. The stale text is a comment, not behaviour —
+> the runner's own `service.py` and `anchored.py` carry the corrected figure —
+> and it gets fixed at the next deliberate promotion of that service.
 
 ---
 
