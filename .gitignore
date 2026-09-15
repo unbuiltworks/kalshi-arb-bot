@@ -22,3 +22,7 @@ data/l5/raw/activity_gap.jsonl
 # on claude/polymarket-l5-historical-analysis-2ih9ui (6524704b), where the
 # 2026-09-04 and 2026-09-05 tapes are committed in their .gz form.
 data/policy_d_port/tape_*.jsonl
+
+# prospective FIDELITY rows are runtime research state, not source code.
+# The v0 snapshots already committed stay committed; nothing is rewritten.
+analysis/l5/fidelity/prospective/*.jsonl

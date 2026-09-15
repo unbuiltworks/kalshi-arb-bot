@@ -32,6 +32,24 @@ HORIZONS_S = (1.0, 5.0, 15.0, 30.0)
 COHORTS = ("BTC15m", "BTC5m", "ETH5m", "ETH15m")
 MODEL_KIND = "l5_fidelity_v0_1/conditional_empirical"
 
+# TWO ESTIMANDS, NEVER MIXED. Scoring one model against the other's sampling is
+# what produced a predicted 0.93 against an actual 0.46 ACT-within-30s.
+#
+#   A  FILL_ANCHORED   P(next action within h | state immediately after a fill)
+#      This is the fresh-gap CDF and it is directly comparable to the canonical
+#      inter-fill training distribution.
+#
+#   B  ARBITRARY_STATE P(acts within h | no action for elapsed t, state)
+#      A RESIDUAL waiting time, not a fresh gap. It is the conditional survival
+#      1 - S(t+h)/S(t), never the unconditioned CDF. Freezing at ordinary
+#      recorder timestamps and scoring with A's distribution is exactly the
+#      length-biased error being corrected here.
+#
+# WAIT is one of the main reverse-engineering questions, so B is the one we
+# ultimately need; A is the clean anchor and is operational first.
+ESTIMAND_A = "fill_anchored"
+ESTIMAND_B = "arbitrary_state"
+
 # v0 -> v0.1: A TRAIN/SERVE SKEW THAT DESTROYED THE STRONGEST FEATURE.
 # v0 fitted the key with last_outcome = s[i-1] (the fill BEFORE the current
 # one) while the runner serves last_outcome = the MOST RECENT fill, s[i]. The
@@ -147,13 +165,35 @@ class FidelityV0:
     # ------------------------------------------------------------- predict
     @staticmethod
     def _p_within(sorted_gaps: Sequence[float], h: float) -> float:
+        """ESTIMAND A: the fresh-gap CDF, valid only from a fill instant."""
         if not sorted_gaps:
             return 0.0
         return bisect.bisect_right(sorted_gaps, h) / len(sorted_gaps)
 
+    @staticmethod
+    def _p_within_given_elapsed(sorted_gaps: Sequence[float], h: float,
+                                elapsed: float) -> Optional[float]:
+        """ESTIMAND B: P(T <= elapsed+h | T > elapsed) = 1 - S(elapsed+h)/S(elapsed).
+
+        Returns None -- never a number -- when no training gap survived past
+        `elapsed`, because the conditional is genuinely undefined there and a
+        fabricated 1.0 would read as certainty.
+        """
+        n = len(sorted_gaps)
+        if n == 0:
+            return None
+        n_gt_t = n - bisect.bisect_right(sorted_gaps, elapsed)
+        if n_gt_t == 0:
+            return None
+        n_gt_th = n - bisect.bisect_right(sorted_gaps, elapsed + h)
+        return 1.0 - (n_gt_th / n_gt_t)
+
     def predict(self, *, tte: float, since: Optional[float],
                 resid_rel: Optional[float], last_outcome: Optional[str],
-                price: Optional[float]) -> Dict[str, Any]:
+                price: Optional[float],
+                estimand: str = ESTIMAND_A,
+                elapsed_s: Optional[float] = None) -> Dict[str, Any]:
+        """estimand A ignores `elapsed_s`; estimand B REQUIRES it."""
         k = state_key(tte=tte, since=since, resid_rel=resid_rel,
                       last_outcome=last_outcome, price=price)
         g = self.tables["gaps"].get(k)
@@ -164,14 +204,32 @@ class FidelityV0:
         tot = sum(sd.values()) or 1
         p_up = sd.get("Up", 0) / tot
         def q(v, p): return v[min(len(v) - 1, int(p * len(v)))] if v else None
+        if estimand == ESTIMAND_A:
+            pact = {str(h): round(self._p_within(g, h), 6) for h in HORIZONS_S}
+            pact_reason = None
+        elif estimand == ESTIMAND_B:
+            if elapsed_s is None:
+                raise ValueError("estimand B requires elapsed_s")
+            raw = {str(h): self._p_within_given_elapsed(g, h, elapsed_s)
+                   for h in HORIZONS_S}
+            pact = {k: (round(v, 6) if v is not None else None)
+                    for k, v in raw.items()}
+            pact_reason = (None if all(v is not None for v in raw.values()) else
+                           f"no training gap survived past elapsed={elapsed_s:.1f}s "
+                           f"in this state: the conditional is undefined")
+        else:
+            raise ValueError(estimand)
         return {
+            "estimand": estimand,
+            "elapsed_s": elapsed_s,
+            "p_act_within_reason": pact_reason,
             "model_version": self.version,
             "model_kind": MODEL_KIND,
             "cohort": self.cohort,
             "state_key": k,
             "lookup_tier": tier,
             "state_n": len(g),
-            "p_act_within": {str(h): round(self._p_within(g, h), 6) for h in HORIZONS_S},
+            "p_act_within": pact,
             "predicted_outcome": ("Up" if p_up >= 0.5 else "Down"),
             "p_outcome_up": round(p_up, 6),
             "predicted_size_p50": q(sz, .5),
@@ -179,6 +237,25 @@ class FidelityV0:
             "predicted_next_gap_s_p50": q(g, .5),
             "predicted_next_gap_s_range": [q(g, .25), q(g, .75)],
         }
+
+
+    # ------------------------------------------------------------ artifact
+    def save(self, path: str) -> str:
+        """Freeze the fitted tables. The 24/7 runner loads THIS, not the 163 MB
+        raw tape: the model is frozen and versioned, so shipping the tape to
+        re-derive it every boot would be both slow and a chance to drift."""
+        import gzip
+        with gzip.open(path, "wt") as fh:
+            json.dump({"cohort": self.cohort, "version": self.version,
+                       "tables": self.tables}, fh)
+        return path
+
+    @classmethod
+    def load(cls, path: str) -> "FidelityV0":
+        import gzip
+        with gzip.open(path, "rt") as fh:
+            d = json.load(fh)
+        return cls(d["cohort"], d["tables"], d["version"])
 
 
 def fit_all(fills_by_cohort: Dict[str, List[dict]]) -> Dict[str, FidelityV0]:
