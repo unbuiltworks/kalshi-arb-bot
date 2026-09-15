@@ -24,6 +24,15 @@ Chain-attributed roles, cross-checked against the venue's own flag at
 **BTC5m** — 322 attributed sequences: **taker → taker, 322 / 322 (100 %)**.
 Chain and feed agree 644 / 644.
 
+**ETH15m** — 13 attributed sequences: **taker → taker, 13 / 13**. Chain and feed
+agree 26 / 26. The module declines to call 13 sequences a reading, and so do I;
+it is consistent with the feed's own 0 / 117 maker fills for this cohort, which
+is the stronger evidence. (ETH5m attribution still running.)
+
+So **every cohort so far outside BTC15m is taker on both legs**, on both the
+chain and the venue's own flag, with no exceptions in 335 attributed
+sequences.
+
 ---
 
 ## What this changes
@@ -74,7 +83,7 @@ horizons was testing the wrong thing.
 ## Provenance
 
 - `analysis/l5/pair_formation/roles.py`, cohort reports `roles_btc15m.json`,
-  `roles_btc5m.json` (ETH cohorts in progress)
+  `roles_btc5m.json`, `roles_eth15m.json` (ETH5m in progress)
 - roles from the Polygon CTF Exchange `OrderFilled` counterparty slot, validated
   against the venue's published `maker_taker` at 1,270/1,270
 - every row keeps tx, block, logIndex, contract and the node that served it
