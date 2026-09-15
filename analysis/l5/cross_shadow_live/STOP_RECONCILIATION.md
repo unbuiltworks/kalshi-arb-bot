@@ -140,3 +140,42 @@ closed, so nothing is double-counted.
 Full suite **3,895 passed**, and notably **no existing test broke** — the old
 behaviour was never pinned by a test, which is how it survived. It is pinned
 now, from both ends, in `tests/test_pmus_accounting_invariant.py`.
+
+---
+
+## Cutover record — 2026-09-15T12:04Z
+
+| | |
+|---|---|
+| old SHA | `3ec9e1cd996c6fdb9cd03310da4611e9a828989f` |
+| new SHA | `54d1c75da707db699f290c6367f6ee6b6ad764d3` |
+| old deployment (rollback ref) | `e926e286-ebaa-4842-b101-d9567bdc5e9a` |
+| new deployment | `72f2aebd-7678-4f2c-a2e2-4f30adf612eb` |
+| production branch | `feature/l5-transfer-backtest` |
+| trigger | `deploy/pmus_spring_l5/DEPLOY_TRIGGER` (the service's only watch pattern) |
+
+**Pre-deploy state, read 11:54:33Z:** serving `3ec9e1cd996c`, uptime 42,685 s,
+261 sessions, held 1 (`aec-atp-blaell-hirmor-2026-09-13`),
+`CAMPAIGN_RESUMING:SPRING_RESIDUAL_HOLD`, no HALT, last published
+`combined_loss −23.2786` against the unchanged −30.00 stop.
+
+**The rollback reference is recorded but carries a warning.** `3ec9e1cd`
+under-counts the stop by $7.78 and opens new exposure while doing so. Restoring
+it to make the service look healthy is the single response this cutover exists
+to prevent. If the new build misbehaves, fail closed instead.
+
+**Scope.** The complete functional change, verified by an AST-stripped,
+docstring-excluded diff against `3ec9e1cd`:
+
+```
+-  elif kind in ('settled', 'realized'):
++  elif kind == 'realized':
++  def unsettled_detail() -> dict:     # pure read; no mutation, no order path
+```
+
+Nothing else. The fidelity, latency and chain-observer work stays on the
+development branch and was deliberately excluded.
+
+**Tests:** 3,649 passed / 27 skipped / 1 xfailed on the exact deployed artifact,
+against 3,642 recorded for `3ec9e1cd` — exactly the 7 added accounting tests,
+nothing removed or newly skipped.
