@@ -106,3 +106,48 @@ watching, and that is when conbra-andpet was traded.
   settlement row; conbra-andpet is PENDING and stays out of every net.
 - The +$1.11 implied by the matched pair is modelled, not filled-and-settled.
 - The market count is a floor; one log window was truncated.
+
+---
+
+## Settlement of conbra-andpet — 2026-09-16T11:09:59Z
+
+Venue-confirmed resolved, account flat, **realized UNCONFIRMED**.
+
+```
+settlement_status   SETTLED_REALIZED_UNCONFIRMED
+settled_by          venue_market_resolved_account_flat
+settlement_key      flat_at_resolution:2026-09-16T11:09:59.068761617Z
+realized_confirmed  false  ("unconfirmed: a trade lacks the venue's realizedPnl")
+realized_usd_venue  null
+public_settlement_px 0.0000   MARKET_STATUS_RESOLVED / MARKET_STATE_EXPIRED
+venue_qty 40.8800 == ledger_qty 40.88     position_net 0
+```
+
+Three streams, kept separate and never summed:
+
+| stream | value | label |
+|---|---|---|
+| matched pair | **$1.1105** | **DERIVED arithmetic** — 20.44 pairs at cost 0.94567 against $19.3295 basis |
+| directional residual | `null` | residual was 0.00; nothing to attribute |
+| incentives | **$0.1200** | venue-CREDITED (`commissionNotionalCollected`, our side, 9 fills) |
+
+Fees: `venue_unreported`. Maker fills 10, taker 0.
+
+**The $1.1105 is NOT realized profit.** The venue supplied no `realizedPnl`, so
+this market is `SETTLED_REALIZED_UNCONFIRMED` and is held OUT of every net,
+exactly as honwon-yanhou is. The $0.1200 is genuinely credited and is still kept
+apart from trading P&L.
+
+**R1 cohort, venue-confirmed realized: −$0.0916** across the five markets that
+did confirm (meiguo-junzha −0.0214, zavmyk-honser −0.0306, lacvic-qiasun
+−0.0264, koryev-semser +0.0318, liszaa-elekor −0.0450). conbra-andpet is not in
+that figure.
+
+**The legacy net is unchanged at −$44.4898 across 54 markets.** The cohort
+stamping added in `bb710516` is what keeps these apart: 1,142 rows
+`pmus-legacy`, 120 rows `r1-probe`, and the $19.33 market cannot reach the
+legacy total.
+
+That the position happened to settle above its cost does not make the breach
+smaller. $19.33 was committed against a $0.05 authorization; the outcome was
+luck, not control.
