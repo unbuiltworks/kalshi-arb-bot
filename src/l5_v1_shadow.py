@@ -268,8 +268,18 @@ def observe(*, model: Mapping[str, Any],
             our_inventory: float, spent_usd: float = 0.0,
             tte_s: float = 1e9, k: float = RISK_SCALE_K,
             envelope: Mapping[str, Any] = ENVELOPE_A,
-            held_avg_cost: Optional[float] = None) -> dict:
-    """One state -> one row. A WAIT is a row too, with its reason."""
+            held_avg_cost: Optional[float] = None,
+            last_rel: str = "open", last_size: str = "q<5") -> dict:
+    """One state -> one row. A WAIT is a row too, with its reason.
+
+    `last_rel`/`last_size` DEFAULT TO THE OLD FROZEN VALUES ON PURPOSE. This
+    function used to accept neither and the v2 lookup therefore ran on
+    (open, q<5) on every row, reaching 40 of 988 full keys -- 202 of 69,646 L5
+    transitions, 0.29% of the evidence. Threading them through is the fix, but
+    the defaults are the previous behaviour exactly, so the V1 shadow already
+    running as the control is not altered by this change; V1.1 supplies real
+    context and V1 does not.
+    """
     bid = book.get("bid")
     last_price = float(bid) if bid is not None else 0.0
 
@@ -282,7 +292,8 @@ def observe(*, model: Mapping[str, Any],
 
     fid = fidelity_decision(model, fidelity_art, last_price=last_price,
                             tte_s=tte_s, residual_l5_units=resid_l5,
-                            inventory_l5_units=resid_l5)
+                            inventory_l5_units=resid_l5,
+                            last_rel=last_rel, last_size=last_size)
     touch = {"touch": bid, **dict(book)}
     adp = adapted_action(fid, k=k, our_inventory=our_inventory, book=touch,
                          envelope=envelope, spent_usd=spent_usd)

@@ -101,7 +101,19 @@ model. Diagnosis in `analysis/l5/v1_shadow/ACT_VS_WAIT.md`. In short:
   (`gap<2s` / `gap2-10` / `gap10-30` / `gap>30`) — the inter-action gap. V1
   does not consult it.
 
-Do **not** change the controller on this yet.
+**Built, not deployed.** `src/l5_v1_1_shadow.py` puts ACT/WAIT in front of the
+transition model as a separate stage, fixes the context defect (full-key
+coverage **8.2% → 99.9%**, Stage-2 relation accuracy **0.546 → 0.688** against a
+0.514 majority baseline), and scores timing separately. Chronological OOS beats
+every baseline at every horizon; cadence carries most of the signal; the value
+is at SHORT horizons because L5 acts within 120s 96% of the time once active.
+Evidence: `analysis/l5/act_wait/FINDINGS.md`. The V1 shadow keeps running
+unchanged as the control. V1.1 is **not deployed yet**.
+
+Known gap, only for OPEN: we have no negatives for markets L5 declined to
+enter, so `p_act` at `last_rel=open` is unvalidated (PR-AUC 0.21 vs 0.72 for
+extend/complete). The smallest honest fix is persisting the recorder's existing
+live universe snapshot — additive, read-only, not built, not authorized.
 
 ## Scaling hypothesis — frequency and breadth, not size
 
