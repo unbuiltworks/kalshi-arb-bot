@@ -181,13 +181,13 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "36f2eb58e3159491c23c8aab69feb421beb6e98d",
+        "sha": "2e3b4ae59997663b4d56f6ff83790b000d49ae99",
         "why": ("The committed HALT latch, the live mandate when one exists, "
                 "and the arming records. Data and prose, never code: HALT's "
                 "presence halts and live_mandate.json's absence is the safe "
                 "state. Shipped as a directory so granting or revoking an "
                 "authorization is a reviewed commit rather than a Dockerfile "
-                "edit. RE-PINNED 2026-09-16 for live_mandate.json ITSELF -- the first time this pin covers an actual AUTHORIZATION rather than a record of one. That is the directory doing its job: granting the authorization is a reviewed commit, and the gate makes it one. Earlier pins today covered ARMING_BLOCKED_3_..., B3_PERSISTED_RUNG_INTERSECTION_... and CP1_EXPLICIT_SIZING_..., after the B3 record's "
+                "edit. RE-PINNED 2026-09-16 for the ACTIVATION: the HALT latch is REMOVED from this tree and live_mandate.json remains. This pin now covers an ARMED authorization, which is the strongest reason the directory is gated at all -- both granting spend and lifting the halt are reviewed commits. Re-committing HALT is likewise a commit, and stops the probe on the next boot. Previously pinned for live_mandate.json ITSELF -- the first time this pin covers an actual AUTHORIZATION rather than a record of one. That is the directory doing its job: granting the authorization is a reviewed commit, and the gate makes it one. Earlier pins today covered ARMING_BLOCKED_3_..., B3_PERSISTED_RUNG_INTERSECTION_... and CP1_EXPLICIT_SIZING_..., after the B3 record's "
                 "steps 6-7 production verification. The chain: "
                 "ARMING_BLOCKED_3_... reported that durable state would "
                 "re-apply R3L over the pinned CP1; "

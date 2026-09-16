@@ -229,3 +229,43 @@ deploy and why the owner asked for it.
 
             Full suite 4951 passed / 0 failed; lineage ACCEPTANCE true against
             a2fab7c6 with FORBIDDEN_CLASSES still containing SIZING.
+
+2026-09-16  OWNER "final CP1 activation": REMOVE HALT. THIS DEPLOY ARMS THE
+            PROBE. It is the first entry in this log that does.
+
+            Every prior entry today said "STILL DISARMED, STILL HALTED". This
+            one does not. analysis/l5/authorization/HALT is removed from the
+            tree and live_mandate.json remains, so the container will come up
+            ARMED under the mandate rather than entering safe_shutdown.
+
+            THE AUTHORIZED ENVELOPE, verified at runtime on the halted build
+            immediately before removal (deployment 3dc110e7, commit
+            78ac58e6b76d, 20:51:54Z): $5.00/market = min(rung, mandate),
+            $15.00 total, 3 residual units, 1 concurrent market, 3 total
+            markets, -$6.00 daily realized-loss stop, mandate expiring
+            2026-09-17T20:36:35Z, CP1 sizing 0.10/0.125, and after_restore
+            resolving the volume's stale R3L to effective_rung CP1 with
+            no_dimension_loosened true. Account flat, zero open orders,
+            refusals 0 at 20:56:58Z.
+
+            REMOVING HALT DOES NOT WIDEN ANYTHING. Orders are still admitted
+            one at a time against the immutable mandate at the wire, by
+            economic effect rather than by stage name. min(rung, mandate)
+            still means a stale rung cannot raise the envelope. B3 still means
+            durable state can only tighten the pin. The mandate is re-read on
+            every campaign pass and expires in 24h, so an unattended process
+            stops itself.
+
+            TO STOP IT: commit analysis/l5/authorization/HALT and deploy. The
+            latch is read before armed(), so it halts on the next boot. That
+            is a commit, not a platform API call, which is the whole reason it
+            lives here.
+
+            The security test that asserted HALT.exists() was RESTATED, not
+            removed, under the same authorization -- it is now a consistency
+            invariant requiring a valid unexpired l5-r1-probe mandate whenever
+            HALT is absent, with all seven adversarial cases green. Absence of
+            HALT is never authorization on its own.
+
+            Full suite 4959 passed / 0 failed; lineage ACCEPTANCE true against
+            a2fab7c6, FORBIDDEN_CLASSES still containing SIZING.
