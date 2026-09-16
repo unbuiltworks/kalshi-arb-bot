@@ -269,3 +269,34 @@ deploy and why the owner asked for it.
 
             Full suite 4959 passed / 0 failed; lineage ACCEPTANCE true against
             a2fab7c6, FORBIDDEN_CLASSES still containing SIZING.
+
+2026-09-16  HALT RE-COMMITTED after the first live activation. THIS DEPLOY
+            DISARMS THE PROBE AGAIN.
+
+            The previous entry armed it. It ran for 23 seconds: ARMED 21:13:02Z,
+            SIX maker orders submitted on aec-dota2-yes-tm-2026-09-16 at qty
+            0.22 each (exactly the authorized CP1 size), ZERO fills, all six
+            no_fill_cancelled, $0.00 spent, account flat. Then the wire guard
+            refused a second market -- MandateRefusal
+            max_concurrent_markets_exhausted, markets_open 1, max_markets 1 --
+            and the campaign ended CAMPAIGN_STOP:HALT, never auto-restarted.
+
+            THE DISCREPANCY. consumption() counts a market OPEN from the moment
+            an order is ADMITTED, not filled. Six admitted-but-unfilled orders
+            made markets_open 1, so the next market was refused; and an unfilled
+            market never settles, so it never leaves the open set. The
+            three-market probe cannot advance past the first market it touches.
+
+            WHY THIS DEPLOY IS NEEDED EVEN THOUGH NOTHING IS RUNNING. The HALT
+            commit alone produced a SKIPPED deployment, because this directory
+            is the service's only watchPattern. The SERVING IMAGE was still the
+            armed one with no HALT in it. The campaign had stopped itself and
+            restartPolicyType is NEVER, so nothing was trading -- but any
+            redeploy or restart of that image would have armed it again. This
+            deploy puts the halt into the image, where shutdown_requested()
+            reads it before armed().
+
+            live_mandate.json is deliberately LEFT IN PLACE and still valid
+            until 2026-09-17T20:36:35Z. HALT alone stops the probe; keeping the
+            mandate means the owner's next decision does not need a new
+            authorization, only a decision about the open-market accounting.
