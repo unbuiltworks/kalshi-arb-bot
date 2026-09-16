@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
 PREFIX = "L5_V1_1_SHADOW "
@@ -63,7 +64,10 @@ def cumulative(evs: List[dict]) -> dict:
         "stage1_waits": wait,
         "stage1_wait_rate": round(wait / obs, 4) if obs else None,
         # health, because an empty window is not a quiet market
-        "restarts_in_window": len(starts),
+        # A FIRST BOOT IS NOT A RESTART. Reporting it as one makes a healthy
+        # window look like an M0 validity failure.
+        "shadow_start_events": len(starts),
+        "restarts_in_window": max(0, len(starts) - 1),
         "act_artifact_missing": len(missing),
         "no_status_events": len(nostatus),
         "labels": ("SHADOW ONLY. Proposals are not orders, not fills, not "
@@ -100,4 +104,8 @@ def main(argv: List[str]) -> int:
 
 
 if __name__ == "__main__":
+    # Run as a script, sys.path[0] is THIS directory, so `analysis...` is not
+    # importable. Put the repo root on the path so the CLI works the same way
+    # the tests exercise it.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
     raise SystemExit(main(sys.argv))
