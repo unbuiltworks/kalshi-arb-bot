@@ -2764,7 +2764,42 @@ def halted_envelope() -> dict:
         out["effective_per_market_cap_usd"] = str(base.session_notional_cap())
         out["effective_residual_cap_units"] = base.max_residual_units()
         out["effective_daily_loss_stop_usd"] = str(base.daily_loss_stop())
-        out["persisted_rung"] = (load_campaign_state() or {}).get("rung")
+        persisted = (load_campaign_state() or {}).get("rung")
+        out["persisted_rung"] = persisted
+        # OWNER "B3" step 7: the halted process must show what the ARMED path
+        # would run, not only what the halted one reads. The restore happens
+        # on the armed path only (`if armed and t is not None`), so before B3
+        # this disclosure said CP1 while the armed process would have said
+        # R3L. It now computes the SAME intersection `_apply_rung` will, so a
+        # mismatch is visible before the halt is lifted rather than after.
+        pinned = _ladder.rung()
+        stored = _ladder.known_rung(persisted) if persisted else None
+        eff = _ladder.tightest(pinned, stored)
+        out["after_restore"] = {
+            "pinned_rung": pinned.get("id"),
+            "stored_rung": persisted,
+            "stored_rung_recognized": stored is not None if persisted else None,
+            "effective_rung": eff.get("id"),
+            "per_market_cap_usd": str(eff.get("per_market_cap_usd")),
+            "residual_units": int(eff.get("residual_units")
+                                  or _ladder.DEFAULT_RESIDUAL_UNITS),
+            "daily_loss_stop_usd": str(_ladder.daily_loss_stop(eff)),
+            "target_notional_usd": str(_ladder.target_notional(eff)),
+            "max_leg_notional_usd": str(_ladder.max_leg_notional(eff)),
+            "markets_per_campaign": _ladder.markets_per_campaign(eff),
+            "concurrency": eff.get("concurrency"),
+            "max_actions_per_session": eff.get("max_actions_per_session"),
+            "tightened_by_stored": sorted(
+                k for k in _ladder.RISK_DIMENSIONS
+                if _ladder._effective(eff, k) != _ladder._effective(pinned, k)),
+            "no_dimension_loosened": all(
+                _ladder._tighter_of(k, _ladder._effective(eff, k),
+                                    _ladder._effective(pinned, k))
+                == _ladder._effective(eff, k)
+                for k in _ladder.RISK_DIMENSIONS),
+            "labels": ("what the ARMED path will run after durable state is "
+                       "restored; a stored rung may only tighten the pin"),
+        }
     except Exception as exc:                        # noqa: BLE001
         out["error"] = f"{type(exc).__name__}:{str(exc)[:120]}"
     return out
@@ -2959,25 +2994,106 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         at the daily stop / the horizon (env "none", "continuous" or "0"
         reads the same way)."""
         raw = os.getenv(RUNG_MARKETS_ENV)
-        if raw is not None:
-            if raw.strip().lower() in ("none", "continuous", "0", ""):
-                return None
-            return max(1, int(raw))
-        return ladder.markets_per_campaign(r)
+        from_rung = ladder.markets_per_campaign(r)
+        if raw is None:
+            return from_rung
+        if raw.strip().lower() in ("none", "continuous", "0", ""):
+            env_v = None
+        else:
+            env_v = max(1, int(raw))
+        # OWNER "B3": the env is the PIN, so it outranks a stored rung that
+        # wants MORE markets -- but it must not discard one that wants FEWER.
+        # None is CONTINUOUS, i.e. unbounded, so it loses to any count.
+        if env_v is None:
+            return from_rung
+        if from_rung is None:
+            return env_v
+        return min(env_v, from_rung)
     rung_markets = _rung_markets_of(active_rung)
     os.environ.setdefault(base.MAX_ACTIONS_ENV,
                           str(active_rung["max_actions_per_session"]))
 
-    def _apply_rung(rung_id: Optional[str]) -> dict:
+    def _apply_rung(rung_id: Optional[str], *,
+                    stored_state: bool = False) -> dict:
         """OWNER 5560851070: the caps follow the campaign's rung -- from
         durable state at boot, from the consumed approval at the gate.
-        Sets the ACTIVE rung for the session/executor cap readers and the
-        rung-level throughput levers; caps outside the ladder never
-        apply (unknown id -> the authorized rung)."""
+
+        OWNER AUTHORIZATION 2026-09-16 "B3": a STORED rung may only TIGHTEN
+        the image-pinned one. It used to REPLACE it, and on 2026-09-16 the
+        volume carried "R3L" -- the breach's own $7.50 end state -- so a
+        process pinned to CP1 would have armed as R3L: residual 3 units ->
+        6, daily stop -$6.00 -> -$15.00, and R3L's $2.50/$3.25 action sizing
+        where CP1 has the $0.01/$0.02 micro defaults.
+
+        `ladder.tightest()` compares the EFFECTIVE value of every risk
+        dimension independently and keeps the tighter of each, so this is not
+        a ladder-order comparison -- the ladder is not totally ordered, and
+        the owner required the actual constraints be compared. Identity stays
+        the pinned rung's: CP1 can be restricted, never renamed into R3L.
+
+        SCOPED TO DURABLE STATE (`stored=True`), NOT THE APPROVAL GATE. The
+        owner authorized the tightest bound of "pinned CP1 + permissible
+        persisted restrictions + immutable live mandate" -- three layers, and
+        an owner approval is not one of them. Intersecting the gate too was
+        tried and reverted: it silently disabled the advance mechanism, which
+        is a behaviour change B3 did not ask for, and it would have raised a
+        pinned-vs-approved conflict on a path that already has its own guard
+        (`_approval_predates_mandate` refuses any approval that does not
+        POSTDATE the active mandate, which is what stops the 2026-09-06
+        R2C/R2C2/R3L chain). Reported to the owner rather than widened here.
+        """
         nonlocal active_rung, rung_markets
-        active_rung = ladder.set_active(rung_id)
+        if not stored_state:
+            # the approval gate keeps its existing semantics exactly
+            active_rung = ladder.set_active(rung_id)
+            rung_markets = _rung_markets_of(active_rung)
+            os.environ[base.MAX_ACTIONS_ENV] = \
+                str(active_rung["max_actions_per_session"])
+            return active_rung
+        # ONLY AN EXPLICIT PIN IS PROTECTED. The owner's words are "stale
+        # persisted rung state ... overriding the EXPLICITLY PINNED CP1
+        # configuration". With PMUS_SPRING_RUNG unset there is no pinned
+        # configuration -- `ladder.rung()` would hand back the R1 DEFAULT, and
+        # intersecting against a default is not protecting an authorization,
+        # it is clamping every campaign to R1. That broke the owner's own
+        # approval-advance-then-restart path, which is a mechanism B3 never
+        # named. The probe image pins CP1 explicitly (asserted by
+        # tests/test_l5_r1_probe_image.py and tests/test_cp1_probe_rung.py),
+        # so the protection is fully active exactly where money moves.
+        pin_id = (os.getenv(ladder.RUNG_ENV) or "").strip()
+        if not pin_id:
+            active_rung = ladder.set_active(rung_id)
+            rung_markets = _rung_markets_of(active_rung)
+            os.environ[base.MAX_ACTIONS_ENV] = \
+                str(active_rung["max_actions_per_session"])
+            return active_rung
+        pinned = ladder.rung(pin_id)      # the IMAGE pin, never stored state
+        stored = ladder.known_rung(rung_id) if rung_id else None
+        if rung_id and stored is None:
+            # An unrecognizable stored id carries no authorization. Falling
+            # back to R1 here (as ladder.rung() would) would shrink the
+            # owner's pinned envelope 100x in silence; the pin stands.
+            _log("stored_rung_unknown", stored=str(rung_id),
+                 pinned=pinned.get("id"),
+                 effect="pinned rung stands; nothing tightened or loosened")
+        effective = ladder.tightest(pinned, stored)
+        active_rung = ladder.set_active_effective(effective)
         rung_markets = _rung_markets_of(active_rung)
         os.environ[base.MAX_ACTIONS_ENV] = str(active_rung["max_actions_per_session"])
+        if stored is not None and stored.get("id") != pinned.get("id"):
+            _log("rung_intersection",
+                 pinned=pinned.get("id"), stored=stored.get("id"),
+                 effective_id=effective.get("id"),
+                 tightened=sorted(k for k in ladder.RISK_DIMENSIONS
+                                  if ladder._effective(effective, k)
+                                  != ladder._effective(pinned, k)),
+                 per_market_cap_usd=str(effective.get("per_market_cap_usd")),
+                 residual_units=effective.get("residual_units"),
+                 daily_loss_stop_usd=str(ladder.daily_loss_stop(effective)),
+                 target_notional_usd=str(ladder.target_notional(effective)),
+                 max_leg_notional_usd=str(ladder.max_leg_notional(effective)),
+                 labels=("a stored rung may only tighten the pinned one; "
+                         "identity is always the pinned rung's"))
         return active_rung
     filled_markets: set = set()          # markets with a fill this campaign
     no_candidate_alarm = NoCandidateAlarm()   # OWNER 5573574441
@@ -3085,8 +3201,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             stop_rule = STOP_RULE_RUNG
         if persisted.get("rung"):
             # the campaign's own rung survives a restart: a held R1 market
-            # keeps R1 caps; a campaign started under an owner rung keeps it
-            _apply_rung(str(persisted["rung"]))
+            # keeps R1 caps; a campaign started under an owner rung keeps it.
+            # OWNER "B3": it may only TIGHTEN the pin from here, never replace
+            # it -- this volume carried R3L, the breach's $7.50 end state.
+            _apply_rung(str(persisted["rung"]), stored_state=True)
         previous_campaigns = [dict(p) for p in (persisted.get("previous_campaigns") or [])
                               if isinstance(p, Mapping)]
         for p in previous_campaigns:

@@ -355,16 +355,49 @@ def rung(rung_id: Optional[str] = None) -> dict:
 # approval it consumes at the advance gate, so a held R1 market keeps R1
 # caps while the next campaign runs under its own rung. Unset = the env
 # rung (default R1).
-_ACTIVE: dict = {"id": None}
+_ACTIVE: dict = {"id": None, "rung": None}
 
 
 def set_active(rung_id: Optional[str]) -> dict:
     r = rung(rung_id) if rung_id else None
     _ACTIVE["id"] = r["id"] if r else None
+    _ACTIVE["rung"] = None          # an id selection drops any intersection
     return active()
 
 
+def set_active_effective(r: Mapping[str, Any]) -> dict:
+    """Make an EXACT rung dict active, not an id lookup (OWNER "B3").
+
+    `tightest()` returns a rung that is CP1 by identity but carries tightened
+    numbers, so it cannot be re-derived from its id -- `rung("CP1")` would
+    hand back the untightened table entry. The dict itself has to be what the
+    accessors read, or the intersection would be computed and then thrown
+    away on the next `active()` call.
+    """
+    _ACTIVE["rung"] = dict(r)
+    _ACTIVE["id"] = str(r.get("id") or "") or None
+    return active()
+
+
+def known_rung(rung_id: Optional[str]) -> Optional[dict]:
+    """The rung with this id, or None if there is no such rung.
+
+    `rung()` falls back to R1 for an unknown id, which is right for an env
+    typo -- the tightest rung is the safe default -- but wrong for stored
+    state: an unrecognizable stored id is not evidence of a tighter
+    authorization, and silently intersecting against R1 would shrink the
+    owner's pinned envelope by 100x without saying so.
+    """
+    rid = (rung_id or "").strip().upper()
+    for r in ALL_RUNGS:
+        if r["id"] == rid:
+            return dict(r)
+    return None
+
+
 def active() -> dict:
+    if _ACTIVE.get("rung") is not None:
+        return dict(_ACTIVE["rung"])
     return rung(_ACTIVE["id"]) if _ACTIVE["id"] else rung()
 
 
@@ -491,6 +524,138 @@ def daily_loss_stop(r: Optional[Mapping[str, Any]] = None) -> D:
     pending transition; that never changes what this function returns."""
     r = dict(r) if r is not None else active()
     return D(str(r.get("daily_loss_stop_usd") or DAILY_LOSS_STOP))
+
+
+# --------------------------------------------------------------------------
+# OWNER AUTHORIZATION 2026-09-16 "B3": a stored rung may TIGHTEN the pinned
+# configuration. It may never loosen, enlarge or replace it.
+#
+# THE DEFECT THIS CLOSES. `run_campaign` restores durable campaign state on
+# the ARMED path only and calls `_apply_rung(persisted["rung"])`, which called
+# `set_active()` and REPLACED the image-pinned rung wholesale. On 2026-09-16
+# the volume carried "R3L" -- the 2026-09-16 breach's own end state, a $7.50
+# rung -- so a process pinned to CP1 would have armed as R3L. The halted
+# process disclosed CP1 and the armed process would have run R3L.
+#
+# WHY THIS IS NOT A LADDER-ORDER COMPARISON. The owner was explicit: "Do not
+# simply choose a rung by name/order unless the ordering is formally proven to
+# mean 'no less permissive' across every risk dimension." It is not proven and
+# it is not true -- R2C2 has concurrency 2 where R3L has 1, while R3L has the
+# larger cap, so neither dominates the other. So this compares the EFFECTIVE
+# value of every dimension independently and takes the tighter one of each.
+#
+# EFFECTIVE, NOT DECLARED. Every comparison runs on the value the accessors
+# actually yield, defaults applied. That matters most where a rung states
+# nothing: an absent `target_notional_usd` is not "no lever", it is the $0.01
+# micro default, which is 250x TIGHTER than R3L's $2.50. Comparing raw dict
+# values would have read absence as unknown and let R3L's sizing through.
+#
+# FAIL CLOSED ON ANYTHING UNCLASSIFIED. A key not named below is never taken
+# from the stored rung -- the pinned value stands. `test_every_rung_key_is_
+# classified` fails the suite if a rung ever gains a lever nobody sorted into
+# one of these tables, so a new risk dimension cannot enter unnoticed.
+
+#: For each risk-bearing dimension: the accessor that yields its EFFECTIVE
+#: value, and which direction is tighter. "lower"/"higher" are numeric;
+#: "meet" names an explicit lattice meet for a non-numeric lever.
+#:
+#: `absent` is the effective value when a rung states nothing, and it is the
+#: whole reason this is a table rather than a dict comprehension: for some
+#: dimensions absence is the TIGHTEST possible value (target_notional $0.01)
+#: and for others it is the LOOSEST (max_unmatched_usd = no cap at all).
+RISK_DIMENSIONS: dict[str, dict[str, Any]] = {
+    "per_market_cap_usd":       {"kind": "decimal", "tighter": "lower"},
+    "residual_units":           {"kind": "int",     "tighter": "lower"},
+    "campaigns_per_day":        {"kind": "int",     "tighter": "lower"},
+    "max_actions_per_session":  {"kind": "int",     "tighter": "lower"},
+    "concurrency":              {"kind": "int",     "tighter": "lower"},
+    # absent = the micro defaults, which are TIGHTER than any stated value
+    "target_notional_usd":      {"kind": "decimal", "tighter": "lower",
+                                 "absent": DEFAULT_TARGET_NOTIONAL},
+    "max_leg_notional_usd":     {"kind": "decimal", "tighter": "lower",
+                                 "absent": DEFAULT_MAX_LEG_NOTIONAL},
+    "pair_cost_max":            {"kind": "decimal", "tighter": "lower",
+                                 "absent": DEFAULT_PAIR_COST_MAX},
+    # absent = NO dollar cap on unmatched, i.e. the loosest possible value,
+    # so a stated cap legitimately tightens
+    "max_unmatched_usd":        {"kind": "decimal", "tighter": "lower",
+                                 "absent": None},
+    # absent = CONTINUOUS, i.e. unbounded by market count
+    "markets_per_campaign":     {"kind": "int",     "tighter": "lower",
+                                 "absent": None},
+    "max_sessions_per_campaign": {"kind": "int",    "tighter": "lower",
+                                  "absent": None},
+    # NEGATIVE dollars: -6.00 is TIGHTER than -15.00, so the tighter one is
+    # the GREATER number. Getting this backwards is how a -$6 stop becomes a
+    # -$15 one, so it is named rather than inferred from the sign.
+    "daily_loss_stop_usd":      {"kind": "decimal", "tighter": "higher",
+                                 "absent": DAILY_LOSS_STOP},
+    # fee_safe never prices a completion above par; l5_touch may. The meet is
+    # fee_safe, so either side asking for it wins.
+    "complement_pricing":       {"kind": "meet", "absent": "fee_safe",
+                                 "meet": ("fee_safe", "l5_touch")},
+}
+
+#: Dimensions with NO PROVEN ORDERING. The pinned value always wins, in both
+#: directions: stored state cannot change them at all. Being honest that an
+#: ordering is unproven is the point -- inventing one to look complete is how
+#: a "tightening" silently loosens something.
+UNORDERED_LEVERS: tuple[str, ...] = ("rest_policy", "rest_floor_s")
+
+#: Not risk: identity, provenance and the promotion gate. Always the pinned
+#: rung's, so a stored rung can never rename the pinned one into itself.
+IDENTITY_KEYS: tuple[str, ...] = (
+    "id", "name", "lever", "promote", "derived_from", "why")
+
+
+def _effective(r: Mapping[str, Any], key: str) -> Any:
+    """The value this dimension actually runs at, defaults applied."""
+    spec = RISK_DIMENSIONS[key]
+    v = r.get(key)
+    if v is None or v == "":
+        return spec.get("absent", None) if "absent" in spec else None
+    return D(str(v)) if spec["kind"] == "decimal" else (
+        int(v) if spec["kind"] == "int" else str(v))
+
+
+def _tighter_of(key: str, a: Any, b: Any) -> Any:
+    """The tighter of two EFFECTIVE values under this dimension's ordering."""
+    spec = RISK_DIMENSIONS[key]
+    if spec["kind"] == "meet":
+        order = spec["meet"]                 # index 0 is the tightest
+        ia = order.index(a) if a in order else len(order)
+        ib = order.index(b) if b in order else len(order)
+        return a if ia <= ib else b
+    # None is the ABSENCE of a bound here (no cap / continuous), so it is the
+    # loosest value and loses to any number.
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return (min(a, b) if spec["tighter"] == "lower" else max(a, b))
+
+
+def tightest(pinned: Mapping[str, Any],
+             stored: Optional[Mapping[str, Any]]) -> dict:
+    """The pinned rung, tightened wherever `stored` is strictly more
+    restrictive. Never looser than `pinned` on any dimension.
+
+    Identity is always the pinned rung's, so CP1 stays CP1: a stored rung can
+    restrict what CP1 does, never turn the probe into a different rung.
+    """
+    out = dict(pinned)
+    if not stored:
+        return out
+    for key, spec in RISK_DIMENSIONS.items():
+        p, s = _effective(pinned, key), _effective(stored, key)
+        win = _tighter_of(key, p, s)
+        if win == p:
+            continue                       # pinned already at least as tight
+        # Write the EFFECTIVE value, not the stored rung's raw one: the two
+        # differ exactly when the stored rung states nothing and its default
+        # is what actually binds.
+        out[key] = str(win) if spec["kind"] == "decimal" else win
+    return out
 
 
 def next_rung(rung_id: str) -> Optional[dict]:
