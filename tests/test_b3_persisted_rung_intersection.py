@@ -94,17 +94,28 @@ def test_the_production_pair_keeps_every_authorized_cp1_limit():
 def test_no_r3l_leg_behaviour_leaks_into_cp1():
     """The owner named these two explicitly.
 
-    CP1 states NEITHER lever, and absence here is not "no lever" -- it is the
-    $0.01/$0.02 micro default, which is 250x and 162x TIGHTER than R3L's
-    $2.50/$3.25. Comparing raw dict values would have read CP1's absence as
-    unknown and let R3L's sizing through; comparing EFFECTIVE values keeps it
-    out. This is the concrete reason the table stores an `absent` value.
+    RESTATED 2026-09-16 (OWNER "CP1 explicit sizing fix"), not relaxed. It
+    asserted the $0.01/$0.02 micro defaults CP1 used to INHERIT -- correct
+    while CP1 named neither lever. CP1 now states $0.10/$0.125, so the
+    expected values moved; the property did not. What is under test is that
+    R3L's $2.50/$3.25 cannot reach CP1, and that is asserted against
+    whatever CP1 itself declares rather than against a literal, so this
+    keeps working the next time the authorized size changes.
+
+    The EFFECTIVE comparison is still the load-bearing part: when a rung
+    states nothing, its effective sizing is the micro default, and comparing
+    raw dict values would read absence as unknown and let R3L's through.
     """
-    eff = ld.tightest(ld.rung("CP1"), ld.rung("R3L"))
-    assert ld.target_notional(eff) == D("0.01")
-    assert ld.max_leg_notional(eff) == D("0.02")
-    assert ld.target_notional(eff) == ld.target_notional(ld.rung("CP1"))
-    assert ld.max_leg_notional(eff) == ld.max_leg_notional(ld.rung("CP1"))
+    cp1 = ld.rung("CP1")
+    eff = ld.tightest(cp1, ld.rung("R3L"))
+    assert ld.target_notional(eff) == ld.target_notional(cp1)
+    assert ld.max_leg_notional(eff) == ld.max_leg_notional(cp1)
+    # R3L's own sizing, explicitly excluded by the authorization
+    assert ld.target_notional(eff) < ld.target_notional(ld.rung("R3L"))
+    assert ld.max_leg_notional(eff) < ld.max_leg_notional(ld.rung("R3L"))
+    # and a rung that states NOTHING still resolves to the micro default,
+    # which is what made this test meaningful in the first place
+    assert ld.target_notional(ld.rung("R1")) == ld.DEFAULT_TARGET_NOTIONAL
     # and it really is what the order-sizing function would use
     q_eff = mx.choose_micro_quantity(D("0.45"), D("0.01"),
                                      ld.target_notional(eff),
@@ -113,7 +124,10 @@ def test_no_r3l_leg_behaviour_leaks_into_cp1():
                                      ld.target_notional(ld.rung("R3L")),
                                      ld.max_leg_notional(ld.rung("R3L")))
     assert q_eff < q_r3l
-    assert q_eff * D("0.45") <= D("0.02")
+    # bounded by CP1's OWN declared per-leg maximum, not by a literal, so
+    # this keeps testing the real property across future authorized sizes
+    assert q_eff * D("0.45") <= ld.max_leg_notional(cp1)
+    assert q_eff * D("0.55") <= ld.max_leg_notional(cp1)
 
 
 @pytest.mark.parametrize("dim,pin,store,expect", [
@@ -266,9 +280,10 @@ def test_pinned_cp1_with_persisted_r3l_arms_as_cp1(monkeypatch, tmp_path):
     assert rep["rung"]["concurrency"] == 1
     assert rep["rung"]["markets_allowed"] == 3
     assert rep["rung"]["worst_case_usd"] == "15.00"
-    # no R3L leg behaviour
-    assert rep["rung"]["per_action_target_usd"] == "0.01"
-    assert rep["rung"]["per_leg_max_usd"] == "0.02"
+    # no R3L leg behaviour. CP1's own stated sizing since the 2026-09-16
+    # sizing authorization; it was the inherited "0.01"/"0.02" before that.
+    assert rep["rung"]["per_action_target_usd"] == "0.10"
+    assert rep["rung"]["per_leg_max_usd"] == "0.125"
     # and the SESSION layer -- the thing that actually sizes an order -- saw
     # the same numbers, not just the report.
     # NON-EMPTY IS PART OF THE ASSERTION: a `for s in seen` over an empty list
@@ -277,7 +292,7 @@ def test_pinned_cp1_with_persisted_r3l_arms_as_cp1(monkeypatch, tmp_path):
     assert seen, "no session ran -- the armed restore path was never exercised"
     for s in seen:
         assert s == {"cap": "5.00", "residual": 3, "stop": "-6.00",
-                     "target": "0.01", "leg": "0.02", "rung": "CP1"}, s
+                     "target": "0.10", "leg": "0.125", "rung": "CP1"}, s
 
 
 def test_the_defect_would_have_been_caught_here(monkeypatch, tmp_path):
@@ -354,7 +369,7 @@ def test_the_intersection_survives_a_restart(monkeypatch, tmp_path):
     assert rep2["rung"]["daily_loss_stop_usd"] == "-6.00"
     assert seen2, "no session ran after the restart"
     for s in seen2:
-        assert s["target"] == "0.01" and s["leg"] == "0.02"
+        assert s["target"] == "0.10" and s["leg"] == "0.125"
 
 
 def test_a_stale_r3l_survives_many_restarts_without_ever_winning(

@@ -121,6 +121,34 @@ OWNER_RUNGS: tuple[dict, ...] = (
      "per_market_cap_usd": "5.00", "residual_units": 3, "markets_per_campaign": 3,
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
      "daily_loss_stop_usd": "-6.00",
+     # OWNER AUTHORIZATION 2026-09-16 "CP1 explicit sizing fix". STATED, not
+     # inherited. CP1 previously named neither lever, and absence is not "no
+     # lever" -- it is DEFAULT_TARGET_NOTIONAL $0.01 / DEFAULT_MAX_LEG_NOTIONAL
+     # $0.02, so the probe sized at $0.0090 per action and ~$0.054 per market
+     # against a $5.00 authorization: the cap was raised but the spend was not.
+     #
+     # DERIVED, NOT PICKED, from the frozen historical evidence. L5's own
+     # per-fill median is 8.84-25.0 contracts by price band (l5_behavior.json
+     # q5, 71,982 buy fills) and $1.88-$23.55 (l5_analysis_stats.json q1);
+     # scaled by the authorized k=0.00619 that is 0.055-0.155 contracts and
+     # $0.012-$0.146, with p75 reaching $0.285. These values put our action
+     # INSIDE that k-scaled distribution rather than outside it.
+     #
+     # SMALLEST PRACTICAL, as the owner required -- not the largest that fits.
+     # $0.10/$0.125 yields 0.11-0.22 contracts (11-22 lots of the 0.01 venue
+     # minimum), which is the floor at which a PARTIAL fill and a queue
+     # position are observable at all; 2 lots under the micro default are not.
+     # Larger candidates were computed and rejected: $0.25/$0.40 reaches 27.5x
+     # the micro regime but pushes the worst-case residual overshoot to $0.64.
+     #
+     # WHY max_leg ABOVE target: max_leg bounds the WORST binary leg, which is
+     # max(p, 1-p) >= 0.5, so a target reachable at mid prices needs headroom
+     # or choose_micro_quantity Halts MICRO_MIN_LOT_EXCEEDS_MAX at the tails.
+     # target > max_leg Halts MICRO_BAD_NOTIONAL_BOUNDS, so the order matters.
+     #
+     # NOT R3L's $2.50/$3.25. Those are 25x and 26x these and are explicitly
+     # excluded; B3's intersection keeps them out even if R3L is on the volume.
+     "target_notional_usd": "0.10", "max_leg_notional_usd": "0.125",
      "lever": "caps", "promote": None,
      "derived_from": "OWNER live authorization 2026-09-16: max_spend_per_market "
                      "$5.00, max_residual $3.00, max_total_spend $15.00, "
