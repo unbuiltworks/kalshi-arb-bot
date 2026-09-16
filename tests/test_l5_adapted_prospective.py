@@ -107,3 +107,55 @@ def test_a_withheld_side_takes_no_fills(tmp_path):
     assert got["cap5"]["fills_taken"] == 5
     assert got["cap8"]["fills_taken"] == 8
     assert got["cap5"]["two_sided_evidenced"] is False   # one-sided window
+
+
+# ------------------------------------------------- settlement must actually happen
+
+def _fill_row(side, i, qty="10", px="0.45"):
+    return {"schema": "x/maker_outcome", "venue": "PMUS",
+            "market_key": "btc-updown-15m-1", "desired_outcome": side,
+            "evidenced_fill": True, "resolved_at": i, "intent_id": f"i{i}",
+            "quote_price": px, "filled_qty": qty,
+            "fill_criteria": {"strongest_satisfied": "VOLUME_AHEAD_CLEARED"}}
+
+
+def test_a_resolved_window_books_matched_and_residual(tmp_path, monkeypatch):
+    """Without this the arms could never clear A-2/A-3/A-6 and the experiment
+    would sit at INSUFFICIENT_EVIDENCE for ever."""
+    rows = [_fill_row("Up", 0), _fill_row("Up", 1), _fill_row("Down", 2)]
+    (tmp_path / "maker_outcomes.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows))
+    import src.l5_shadow.venues as V
+    monkeypatch.setattr(V, "pm_settlement", lambda k: {
+        "resolved": True, "winning_outcome": "Up",
+        "resolution_source": "gamma_outcome_prices"})
+    got = {r["arm"]: r for r in C.build(str(tmp_path))}
+    c = got["control"]
+    assert c["settled"] is True
+    assert c["winning_outcome"] == "Up"
+    # 10 matched pairs at 0.45+0.45, plus a 10-share Up residual that won
+    assert c["matched_pnl"] == pytest.approx(10 * (1 - 0.90))
+    assert c["residual_pnl"] == pytest.approx(10 * (1 - 0.45))
+    assert c["total_pnl"] == pytest.approx(c["matched_pnl"] + c["residual_pnl"])
+
+
+def test_an_unresolved_window_books_nothing(tmp_path, monkeypatch):
+    (tmp_path / "maker_outcomes.jsonl").write_text(json.dumps(_fill_row("Up", 0)))
+    import src.l5_shadow.venues as V
+    monkeypatch.setattr(V, "pm_settlement", lambda k: {"resolved": False})
+    got = {r["arm"]: r for r in C.build(str(tmp_path))}
+    assert got["control"]["settled"] is False
+    assert got["control"]["total_pnl"] is None
+
+
+def test_a_losing_residual_is_booked_as_a_loss(tmp_path, monkeypatch):
+    rows = [_fill_row("Up", 0), _fill_row("Up", 1), _fill_row("Down", 2)]
+    (tmp_path / "maker_outcomes.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows))
+    import src.l5_shadow.venues as V
+    monkeypatch.setattr(V, "pm_settlement", lambda k: {
+        "resolved": True, "winning_outcome": "Down",
+        "resolution_source": "gamma_outcome_prices"})
+    c = {r["arm"]: r for r in C.build(str(tmp_path))}["control"]
+    assert c["residual_pnl"] == pytest.approx(10 * (0 - 0.45))   # it lost
+    assert c["matched_pnl"] == pytest.approx(10 * (1 - 0.90))    # unaffected

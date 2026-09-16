@@ -29,8 +29,10 @@ from decimal import Decimal as D
 from typing import Any, Dict, List, Optional, Sequence
 
 from src.l5_shadow import adapted_policy as AP
+from src.l5_shadow import ledger as LG
 
 STRICT = "VOLUME_AHEAD_CLEARED"
+RESOLUTIONS = "adapted_resolutions.json"
 SOURCES = ("maker_outcomes.jsonl", "two_sided_outcomes.jsonl",
            "inventory_outcomes.jsonl")
 OUT = "adapted_windows.jsonl"
@@ -65,6 +67,41 @@ def _rows(out_dir: str) -> List[dict]:
     return rows
 
 
+def _resolutions(out_dir: str, keys: Sequence[str]) -> Dict[str, Any]:
+    """Venue resolutions, cached. A window settles once and never changes.
+
+    Uses the service's own pm_settlement, which reports `resolved` only when the
+    venue says closed AND an outcome price is at or above 0.99 -- a disputed or
+    unresolved market comes back unresolved, and no P&L is booked on it.
+    """
+    path = os.path.join(out_dir, RESOLUTIONS)
+    cache: Dict[str, Any] = {}
+    if os.path.exists(path):
+        try:
+            cache = json.load(open(path))
+        except ValueError:
+            cache = {}
+    fresh = False
+    for k in keys:
+        if cache.get(k, {}).get("resolved"):
+            continue                      # settled once, never re-asked
+        try:
+            from src.l5_shadow import venues as V
+            r = V.pm_settlement(k)
+        except Exception:                                     # noqa: BLE001
+            r = None
+        if r is not None:
+            cache[k] = r
+            fresh = True
+    if fresh:
+        try:
+            with open(path, "w") as fh:
+                json.dump(cache, fh, default=str)
+        except OSError:
+            pass
+    return cache
+
+
 def build(out_dir: str, *, cohort_prefix: str = "btc-updown-15m") -> List[dict]:
     """One settled row per (window, arm, venue), plus an uncapped control."""
     by_win: Dict[tuple, List[dict]] = defaultdict(list)
@@ -74,6 +111,7 @@ def build(out_dir: str, *, cohort_prefix: str = "btc-updown-15m") -> List[dict]:
             continue
         by_win[(mk, r.get("venue"))].append(r)
 
+    res = _resolutions(out_dir, sorted({mk for mk, _ in by_win}))
     out: List[dict] = []
     for (mk, venue), rs in sorted(by_win.items()):
         undecided = sum(1 for r in rs if r.get("evidenced_fill") is None)
@@ -108,12 +146,28 @@ def build(out_dir: str, *, cohort_prefix: str = "btc-updown-15m") -> List[dict]:
                                          if e["normalized_imbalance"] else None),
                 "settled": False, "matched_pnl": None, "residual_pnl": None,
                 "total_pnl": None, "fees": 0.0,
+                "resolution": (res.get(mk) or {}).get("resolution_source"),
                 "hindsight_fills": sum(1 for r in fills
                                        if r.get("hindsight") is True),
                 "labels": ("strict VOLUME_AHEAD_CLEARED fills only; shadow "
                            "inventory, never venue-confirmed and never "
                            "realized profit"),
             }
+            r = res.get(mk)
+            if r and r.get("resolved") and (up > 0 or dn > 0):
+                pos = {"venue": venue, "cohort": "BTC15m", "market_key": mk,
+                       "clock": "venue", "n_fills": taken, "intent_ids": [],
+                       "up_qty": up, "dn_qty": dn,
+                       "up_cost": D(str(st["up_cost"])),
+                       "dn_cost": D(str(st["dn_cost"])), "fees": D("0")}
+                sett = LG.settle(pos, r)
+                if sett.get("state") == "SETTLED":
+                    row["settled"] = True
+                    row["matched_pnl"] = float(sett["matched_pair_pnl"])
+                    row["residual_pnl"] = float(sett["residual_pnl"])
+                    row["total_pnl"] = float(sett["realized_shadow"])
+                    row["fees"] = float(sett["fees_charged"])
+                    row["winning_outcome"] = sett.get("winning_outcome")
             out.append(row)
     return out
 
