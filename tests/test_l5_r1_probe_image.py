@@ -77,7 +77,20 @@ def test_the_dropped_copies_are_exactly_the_two_legacy_ones():
     dropped = legacy - got
     assert all(("apply_complete_reject_retry" in d or
                 "pmus_r5ft_ledger_repair" in d) for d in dropped), dropped
-    assert not (got - legacy), "the R1 image must not add files of its own"
+    # THE R1 IMAGE MAY ADD, BUT ONLY WHAT IS NAMED HERE. Parity with the
+    # legacy image was the right rule while R1 was a strict subset of it. Since
+    # 2026-09-16 R1 also ships its own AUTHORIZATION -- the HALT latch and the
+    # (absent) live_mandate.json -- which the legacy service, halted on its own
+    # env latch and building from a different branch, does not take.
+    #
+    # The exception is enumerated rather than relaxed: anything else the R1
+    # image starts copying still fails here, which is the property this test
+    # exists for.
+    ALLOWED_R1_ADDITIONS = {
+        "COPY analysis/l5/authorization/ analysis/l5/authorization/",
+    }
+    assert not (got - legacy - ALLOWED_R1_ADDITIONS), (
+        "the R1 image must not add files of its own beyond its authorization")
 
 
 # ------------------------------------------------- the manifest
@@ -126,10 +139,21 @@ def test_every_deploy_of_this_service_is_recorded_with_its_authorisation():
     assert "OWNER" in body and "DISARMED" in body
     # it is a log, not a switch anyone may flip: it must say so
     assert "Do not touch it" in body
-    # and it must never carry an arming value
-    for name in ("PMUS_SPRING_LIVE", "PMUS_SPRING_ARM",
-                 "PMUS_SPRING_SESSION_ID", "PMUS_SPRING_GATE_EVIDENCE"):
-        assert f"{name}=" not in body
+    # AND IT MUST NEVER CARRY AN ARMING VALUE.
+    #
+    # Sharpened 2026-09-16: this used to forbid the variable NAMES followed by
+    # "=", which also rejected `PMUS_SPRING_LIVE=NO` -- a DISARMING value, in
+    # the log entry recording the emergency halt. Forbidding the record of a
+    # stop is backwards, so the check now tests what actually arms.
+    import re as _re
+    assert not _re.search(r"PMUS_SPRING_LIVE\s*=\s*YES", body, _re.I), \
+        "the log carries an arming value for PMUS_SPRING_LIVE"
+    for name in ("PMUS_SPRING_ARM", "PMUS_SPRING_SESSION_ID",
+                 "PMUS_SPRING_GATE_EVIDENCE"):
+        # an assignment with a non-empty token is a real id; naming the
+        # variable in prose is not
+        assert not _re.search(rf"{name}\s*=\s*\S", body), \
+            f"the log carries a value for {name}"
 
 
 def test_restart_is_never():

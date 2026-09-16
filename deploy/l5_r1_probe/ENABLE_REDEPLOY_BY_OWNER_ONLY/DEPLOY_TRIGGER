@@ -40,3 +40,23 @@ deploy and why the owner asked for it.
             rewrites NO source, runs no sed, and keeps the image's own
             SERVICE_ROLE guard. It must be REMOVED once the owner restores a
             variable path; it is a stop, not a configuration.
+
+2026-09-16  OWNER: rebuild the live execution envelope as an immutable
+            per-authorization MANDATE, and replace the emergency runtime
+            override with a durable fail-closed mechanism.
+
+            This deploy ships the image that can halt itself from a committed
+            file. analysis/l5/authorization/HALT is COPYed in and read by
+            shutdown_requested() before armed() is consulted, so the service
+            comes back HALTED with no platform API involved. The authorization
+            to spend is a second, separate file -- live_mandate.json -- and it
+            is deliberately ABSENT, so even an un-halted process has no
+            envelope and refuses every order at the wire.
+
+            NO ARMING VALUE IS SET BY THIS DEPLOY. The probe comes back halted
+            and unauthorized, which is the state the owner asked for.
+
+            Once this build is verified SHUTDOWN_VERIFIED from the FILE, the
+            emergency startCommand set on 2026-09-16 is removed and the service
+            redeployed from the snapshot, so the running system is the reviewed
+            artifact again rather than the artifact plus a runtime override.

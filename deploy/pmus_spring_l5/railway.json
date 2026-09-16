@@ -36,6 +36,7 @@
       "analysis/l5/l5_action_model_v2.json",
       "analysis/l5/l5_fidelity_pass.json",
       "src/l5_fidelity_gate.py",
+      "src/pmus_live_mandate.py",
       "analysis/l5/l5_fidelity_gate.json",
       "analysis/l5/venue_maintenance_windows.json",
       "analysis/l5/l5_cadence_behavioral_unit.json",

@@ -104,6 +104,8 @@ def test_campaign_applies_the_approved_rung_at_the_gate_and_restores_it(
     approvals = tmp_path / "approvals.json"
     approvals.write_text(json.dumps({"approvals": [{
         "campaign_id": "R2C-RUN-TEST", "approved_by": "owner",
+        # approvals must POSTDATE the mandate they continue (2026-09-16)
+        "approved_utc": "2026-06-01T00:00:00Z",
         "rung": "R2C", "stop_rule": "rung_markets"}]}))
     monkeypatch.setattr(cont, "CAMPAIGN_APPROVALS_FILE", approvals)
     cont.save_campaign_state({

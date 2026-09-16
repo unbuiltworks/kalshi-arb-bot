@@ -49,6 +49,7 @@ from src import pmus_incentive_audit as incentives
 from src import pmus_spring_l5_session as base
 from src import pmus_l5_persistence_v2 as pv2
 from src import pmus_l5_ramp_ladder as ladder
+from src import pmus_live_mandate as mandate
 from src.polymarket_l5.action_model import state_key
 
 CAMPAIGN_SECONDS_ENV = "PMUS_SPRING_CAMPAIGN_SECONDS"
@@ -2005,9 +2006,33 @@ def _idle_migration_close(t):
 
 SHUTDOWN_ENV = "PMUS_SPRING_SHUTDOWN"
 
+#: A HALT THAT LIVES IN THE REPOSITORY, not in a runtime override.
+#:
+#: On 2026-09-16 the probe had to be stopped and the only lever that worked was
+#: a Railway `startCommand` exporting PMUS_SPRING_SHUTDOWN -- the same class of
+#: runtime override that condemned the legacy probe, reached for because
+#: set-variables was unavailable and `redeploy` had no snapshot. That is not a
+#: safety mechanism, it is a lucky escape.
+#:
+#: This file is COPYed into the image. Its presence halts the service. It is
+#: reviewed in a diff, it survives every restart and redeploy, it cannot be
+#: cleared by anything with less authority than a commit, and it needs no
+#: platform API to be reachable at the moment somebody needs to stop trading.
+HALT_FILE = Path("analysis/l5/authorization/HALT")
+
 
 def shutdown_requested() -> bool:
-    return os.getenv(SHUTDOWN_ENV, "").strip().upper() in ("1", "YES", "TRUE")
+    """True if EITHER the committed latch or the env latch says stop.
+
+    Two independent sources, OR'd, because the point is that no single
+    unavailable mechanism can leave the system unable to stop.
+    """
+    if os.getenv(SHUTDOWN_ENV, "").strip().upper() in ("1", "YES", "TRUE"):
+        return True
+    try:
+        return HALT_FILE.exists()
+    except OSError:
+        return True            # cannot tell = halted
 
 
 def safe_shutdown(t=None) -> dict:
@@ -2330,18 +2355,72 @@ def load_campaign_approvals(path: Optional[Path] = None) -> list:
 
 
 def approved_continuation(current_id: str, previous_ids: list,
-                          approvals: Optional[list] = None) -> Optional[dict]:
-    """The first owner approval this durable state has not run yet, if
-    any. An approval is consumed by running it (its id is persisted as
-    the campaign id and later in previous_campaigns), so a redeploy can
-    never re-run one."""
+                          approvals: Optional[list] = None,
+                          active_mandate=None) -> Optional[dict]:
+    """The first owner approval this durable state has not run yet, if any.
+
+    UNDER A LIVE MANDATE THERE IS NO SUCH THING. On 2026-09-16 this function
+    handed the campaign three approvals dated 2026-09-06 -- R2C, R2C2, R3L --
+    after market #1 settled, and `_apply_rung` then raised the per-market
+    envelope from $0.05 to $7.50. Each approval was genuine when written; none
+    of them was an authorization to run THAT DAY'S campaign.
+
+    A mandate is the authorization and it names how many markets it covers.
+    Continuing past it is not continuation, it is a second authorization the
+    owner never gave, so it is refused outright and the refusal is LOGGED
+    rather than silently returning None. A further market needs a new mandate,
+    which means a human.
+
+    The wire guard refuses the spend regardless -- this is the second of two
+    independent layers, not the load-bearing one.
+    """
+    if active_mandate is None:
+        active_mandate, _why = mandate.load_mandate()
     done = {current_id, *previous_ids}
     for a in (load_campaign_approvals() if approvals is None else approvals):
         if a["campaign_id"] in done:
             continue
         if a.get("stop_rule") not in (STOP_RULE_RUNG, STOP_RULE_EVIDENCE):
             continue
+        if active_mandate is not None:
+            why = _approval_predates_mandate(a, active_mandate)
+            if why:
+                _log("campaign_continuation_refused_by_mandate",
+                     approval=a.get("campaign_id"),
+                     authorization_id=active_mandate.authorization_id,
+                     authorized_at=active_mandate.authorized_at, reason=why)
+                continue
         return dict(a)
+    return None
+
+
+def _approval_predates_mandate(approval: Mapping[str, Any], m) -> Optional[str]:
+    """Why this approval cannot continue the campaign this mandate authorized.
+
+    THE RULE: an approval may only continue a mandate it POSTDATES. R2C, R2C2
+    and R3L were approved on 2026-09-06 and were handed to a campaign the owner
+    authorized on 2026-09-16 with a much smaller envelope; each was a genuine
+    decision about a different, earlier run.
+
+    AN UNDATED APPROVAL IS REFUSED. "We could not tell when this was approved,
+    so we assumed it was recent" is the same failure wearing a different hat.
+
+    This bounds which approvals may run. It does NOT let one change a limit:
+    the mandate is immutable, `session_notional_cap()` prefers it over any
+    rung, and the wire guard refuses the spend regardless of what the campaign
+    believes its caps to be.
+    """
+    raw = approval.get("approved_utc") or (approval.get("approval") or {}).get(
+        "approved_utc")
+    if not raw:
+        return "approval_undated"
+    try:
+        when = mandate._parse_ts(str(raw))
+        auth = mandate._parse_ts(m.authorized_at)
+    except Exception:                                    # noqa: BLE001
+        return f"approval_date_unreadable:{raw}"
+    if when < auth:
+        return f"approval_predates_authorization:{raw}<{m.authorized_at}"
     return None
 
 
@@ -2669,6 +2748,19 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 "status": rep["verdict"], "shutdown": rep,
                 "realized_pnl": None, "sessions": [], "selections": 0}
     armed = base.armed()
+    # SAFETY MUST NOT DEPEND ON SOMEBODY READING A MESSAGE. The mandate is
+    # re-read on every pass and it carries an expiry, so an unattended
+    # process stops itself when its authorization runs out. On 2026-09-16 the
+    # only thing standing between a running campaign and eleven markets was a
+    # 20-minute chat reminder that stopped being re-armed; an authorization
+    # that expires needs nobody to be awake.
+    def _mandate_still_valid() -> tuple:
+        m_, why_ = mandate.load_mandate()
+        if m_ is None:
+            return False, ("mandate_absent:" + str(why_))
+        if m_.expired():
+            return False, "mandate_expired:" + m_.expiry
+        return True, None
     try:
         model = pv2.load_v2()
     except Exception as exc:      # noqa: BLE001 - reported, never guessed
@@ -2693,10 +2785,31 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         if reason:
             return {**report, "status": "DURABLE_STATE_REQUIRED",
                     "reason": reason}
+        # ARMED IS NOT AUTHORIZED. The dual key says a human turned this on;
+        # the mandate says what they turned it on FOR. Without one there is no
+        # envelope to enforce, and "no envelope" has to mean "no orders"
+        # rather than a default -- a default is how $0.05 became $7.50.
+        active_mandate, why = mandate.load_mandate()
+        if active_mandate is None:
+            _log("mandate_absent", reason=why)
+            return {**report, "status": "NO_MANDATE", "reason": why}
+        if active_mandate.expired():
+            _log("mandate_expired", expiry=active_mandate.expiry)
+            return {**report, "status": "MANDATE_EXPIRED",
+                    "expiry": active_mandate.expiry}
+        report["mandate"] = active_mandate.as_json()
+        _log("mandate_active", **active_mandate.as_json())
         # the real transport only when the real session runs; a scripted
         # session runner (tests) gets whatever it was handed
         if t is None and session_runner is base.run_session:
             t = base.Transport()
+        # THE WIRE, NOT THE CALL SITES. Every order in this codebase becomes
+        # POST /v1/orders, so wrapping the transport puts the envelope there:
+        # a retry, a resumed session, an acceptance probe or an executor
+        # written next year inherits it instead of having to remember it.
+        if t is not None and not mandate.is_guarded(t):
+            t = mandate.guard(t, active_mandate, base.q1.state_dir(),
+                              realized_today=base.q1.realized_today, log=_log)
         if t is not None:
             sweep = sweep_orphan_orders(t)
             _log("orphan_sweep", **sweep)
@@ -3165,6 +3278,21 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             ladder.max_sessions_per_campaign(default=MAX_SESSIONS_PER_CAMPAIGN) + resumes:
         try:
             now = wall()
+            # RE-CHECKED EVERY PASS, NOT ONCE AT BOOT. An authorization that
+            # was valid when the process started is not evidence that it is
+            # valid now, and the committed HALT latch must be able to stop a
+            # campaign that is already running without anyone reaching the
+            # platform API.
+            if armed:
+                if shutdown_requested():
+                    _log("halt_latch_observed_mid_campaign")
+                    status = "HALTED:LATCH"
+                    break
+                ok_, why_ = _mandate_still_valid()
+                if not ok_:
+                    _log("mandate_no_longer_valid", reason=why_)
+                    status = f"HALTED:{why_}"
+                    break
             if now - _hb["t"] >= HEARTBEAT_S:
                 # the heartbeat reads only values this cycle already has --
                 # it must never consume the campaign clock, or observing

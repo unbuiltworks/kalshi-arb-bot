@@ -127,6 +127,13 @@ COPY analysis/l5/venue_maintenance_windows.json analysis/l5/venue_maintenance_wi
 COPY analysis/l5/l5_cadence_behavioral_unit.json analysis/l5/l5_cadence_behavioral_unit.json
 # OWNER campaign approvals (evidence continuation): read at the advance gate
 COPY analysis/l5/l5_campaign_approvals.json analysis/l5/l5_campaign_approvals.json
+# THE AUTHORIZATION, AND THE HALT, TRAVEL WITH THE IMAGE.
+# A directory rather than two named files, so granting or revoking an
+# authorization is a reviewed commit and never a Dockerfile edit. HALT present
+# = the service enters safe_shutdown before armed() is consulted.
+# live_mandate.json ABSENT = no mandate = no orders, which is the safe state.
+COPY analysis/l5/authorization/ analysis/l5/authorization/
+COPY src/pmus_live_mandate.py src/pmus_live_mandate.py
 RUN touch src/__init__.py
 
 # PMUS_SPRING_RUNG_MARKETS=1 is the CAMPAIGN'S MARKET ALLOWANCE and it lives

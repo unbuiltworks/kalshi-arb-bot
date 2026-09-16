@@ -9,9 +9,9 @@ def test_the_acceptance_condition_holds_on_the_current_tree():
     assert v["absent_from_reviewed"] == []
 
 
-def test_all_four_deltas_are_disclosed_and_none_is_execution_class():
+def test_every_disclosed_delta_is_named_and_none_is_execution_class():
     v = L.verify()
-    assert len(v["differing"]) == 4
+    assert len(v["differing"]) == 5
     for f in v["differing"]:
         assert f in L.ALLOWED, f
         assert L.ALLOWED[f]["class"] not in L.FORBIDDEN_CLASSES, f
@@ -40,7 +40,7 @@ def test_the_scope_is_the_image_copy_set_not_the_branch():
     """The branch carries thousands of unrelated lines; only what the image
     COPIes can affect the probe."""
     srcs = L.copy_sources()
-    assert len(srcs) == 36
+    assert len(srcs) == 38
     assert all(not s.startswith("tests/") for s in srcs)
 
 

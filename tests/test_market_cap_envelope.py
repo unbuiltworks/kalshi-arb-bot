@@ -16,9 +16,14 @@ These six tests are the owner's acceptance list, one per numbered item.
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal as D
 
 import pytest
+
+#: This whole file is ABOUT the concrete per-market envelope, so the suite's
+#: permissive stand-in mandate must never be what decides its assertions.
+pytestmark = pytest.mark.real_mandate_env
 
 from src import pmus_spring_l5_session as base
 
@@ -59,13 +64,28 @@ def _terminal(ledger, oid, price, filled):
 # the membership rule itself
 
 def test_every_money_moving_buy_stage_is_in_the_counter():
+    """RESTATED 2026-09-16, the second correction this file has needed.
+
+    This test used to assert that `spring_complete_*` returns False, with the
+    comment "a COMPLETE reduces the position it completes; it is bounded by the
+    <=1.00 pair invariant, not by the surplus-spend envelope". I wrote that
+    while building the P0 envelope correction, and it is the bug in test form:
+    the exemption it pinned is what let aec-itfme-conbra-andpet spend $19.3295
+    against a counter that read $7.4476.
+
+    Both halves of the reasoning were wrong. A COMPLETE is a BUY of the
+    complement -- cash leaves the account. And `<= 1.00` bounds the PRICE PER
+    PAIR, never the DOLLAR VOLUME: 20.44 pairs at a pair cost of 0.9457 honour
+    that invariant at every step and cost nineteen dollars.
+
+    The test's NAME was already right -- "every money-moving BUY stage". Only
+    the answer was wrong, so the answer is what changed.
+    """
     for stage in ("spring_open_1", "spring_extend_2", "micro_first_leg",
-                  base.FLAT_PROBE_STAGE):
+                  base.FLAT_PROBE_STAGE,
+                  "spring_complete_1", "spring_complete_4_retry1",
+                  "a_stage_nobody_has_invented_yet", "", None):
         assert base.counts_against_market_cap(stage) is True, stage
-    # a COMPLETE reduces the position it completes; it is bounded by the
-    # <=1.00 pair invariant, not by the surplus-spend envelope
-    for stage in ("spring_complete_1", "spring_complete_4_retry1", "", None):
-        assert base.counts_against_market_cap(stage) is False, stage
 
 
 # --------------------------------------------------------------------------
@@ -287,6 +307,10 @@ def test_6b_the_correction_adds_no_order_verb_and_no_new_size(ledger):
     src = open(base.__file__, encoding="utf-8").read()
     for name in ("counts_against_market_cap", "cap_admits"):
         body = src.split(f"def {name}")[1].split("\ndef ")[0]
+        # DOCSTRINGS ARE PROSE, NOT AN ORDER PATH. The scan is for executable
+        # verbs; `counts_against_market_cap` now explains in its docstring why
+        # every *submitted* order counts, and that sentence is not a call.
+        code = re.sub(r'"""(?:.|\n)*?"""', "", body)
         for verb in ("place_limit_buy", "place_order", "submit", "cancel",
                      "post_only", "tick", "qty ="):
-            assert verb not in body, (name, verb)
+            assert verb not in code, (name, verb)

@@ -14,6 +14,22 @@ from src import pmus_spring_probe_readiness as ready
 SLUG = "atc-lal-rso-cel-2026-09-03-rso"
 
 
+def _settles_in(hours: float = 2.0) -> str:
+    """A settlement time RELATIVE TO NOW, never a date written into the file.
+
+    This fixture used to hardcode endDate "2026-09-16T09:30:00Z". That is a
+    time bomb: on 2026-09-16 the real clock passed it and six tests here began
+    failing with `strict_evidence_too_close_to_settlement:-7525.4s` and
+    `strict_evidence_from_future` -- a market that had already settled. The
+    gates being exercised are about time-to-settlement and evidence freshness,
+    so the fixture has to move with the clock or it stops testing them and
+    starts testing the calendar.
+    """
+    import datetime
+    return (datetime.datetime.now(datetime.timezone.utc)
+            + datetime.timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _row(matched=3, floor=3, status="READY_FOR_REVIEW",
          cat_completions=None, cat_markets=2, fee_safe=None, **over):
     cat_completions = matched if cat_completions is None else cat_completions
@@ -45,7 +61,7 @@ def _row(matched=3, floor=3, status="READY_FOR_REVIEW",
         "collector_gaps": 0,
         "market_state": {"active": True, "archived": False, "closed": False,
                          "status": "MARKET_STATUS_OPEN",
-                         "endDate": "2026-09-16T09:30:00Z"},
+                         "endDate": _settles_in()},
         "probe_entry_action": {"decision": "quote", "relation": "open",
                                "side": "YES", "target_price": "0.5000"},
     }

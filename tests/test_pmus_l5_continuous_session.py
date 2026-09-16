@@ -1972,7 +1972,7 @@ def test_owner_approved_evidence_continuation_starts_only_after_flat_preflight(
     monkeypatch.setattr(cont, "status_has_trades", lambda: True)
     approvals = tmp_path / "approvals.json"
     approvals.write_text(json.dumps({"approvals": [{
-        "campaign_id": "R1-EVIDENCE-CONTINUATION-TEST", "approved_by": "owner",
+        "campaign_id": "R1-EVIDENCE-CONTINUATION-TEST", "approved_by": "owner", "approved_utc": "2026-06-01T00:00:00Z",
         "rung": "R1", "stop_rule": "frozen_evidence_minimums"}]}))
     monkeypatch.setattr(cont, "CAMPAIGN_APPROVALS_FILE", approvals)
     cont.save_campaign_state({

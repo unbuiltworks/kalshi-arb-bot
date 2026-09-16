@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import inspect
 import itertools
+
+import pytest
 from decimal import Decimal as D
 
 from src import pmus_spring_l5_session as spring
@@ -245,6 +247,7 @@ def test_candidate_gate_thin_flow_and_off_distribution():
         "v2_off_distribution"
 
 
+@pytest.mark.real_mandate_env
 def test_cumulative_cap_blocks_new_spend(monkeypatch, tmp_path):
     _arm(monkeypatch, tmp_path)
     _script_proposals(monkeypatch, ["extend"])
@@ -341,8 +344,24 @@ def test_sequence_uses_behavioral_states_at_penny_sizing(monkeypatch,
     assert "flat" not in states[1] and "flat" not in states[2]
 
 
-def test_spring_cumulative_counter_counts_open_extend_not_complete(
+@pytest.mark.real_mandate_env
+def test_spring_cumulative_counter_counts_every_money_moving_stage(
         monkeypatch, tmp_path):
+    """REWRITTEN 2026-09-16. This test used to be called
+    `..._counts_open_extend_not_complete` and it pinned the exemption that cost
+    $19.33: `spring_complete_*` was excluded from the per-market counter on the
+    reasoning that a complement reduces the position it completes.
+
+    A COMPLETE on this venue is a BUY of the complement -- cash leaves the
+    account regardless of what it does to directional risk -- and the `<= 1.00`
+    pair invariant that was supposed to bound it bounds the PRICE PER PAIR, not
+    the DOLLAR VOLUME. aec-itfme-conbra-andpet satisfied that invariant at
+    every step and spent nineteen dollars.
+
+    The test is restated rather than deleted because the counter still matters
+    and still needs pinning; what changed is the answer. The $0.0184 the
+    complete row contributes is now IN the total.
+    """
     import json as _json
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
     slug = SLUG
@@ -352,7 +371,7 @@ def test_spring_cumulative_counter_counts_open_extend_not_complete(
         {"kind": "submitted", "stage": "spring_extend_2", "slug": slug,
          "price": "0.50", "qty": "0.02"},
         {"kind": "submitted", "stage": "spring_complete_3", "slug": slug,
-         "price": "0.46", "qty": "0.04"},              # excluded
+         "price": "0.46", "qty": "0.04"},              # NOW COUNTED: $0.0184
         {"kind": "submitted", "stage": "micro_first_leg", "slug": slug,
          "price": "0.48", "qty": "0.02", "micro": True},  # shared cap
         {"kind": "submitted", "stage": "spring_open_1", "slug": "other",
@@ -360,13 +379,16 @@ def test_spring_cumulative_counter_counts_open_extend_not_complete(
     ]
     (tmp_path / "ledger.jsonl").write_text(
         "\n".join(_json.dumps(r) for r in rows) + "\n")
-    assert spring.spring_cumulative_notional(slug) == D("0.0296")
+    # 0.0100 + 0.0100 + 0.0184 + 0.0096, and the other market stays out
+    assert spring.spring_cumulative_notional(slug) == D("0.0480")
     # unparseable row counts as the full cap — fail closed
     (tmp_path / "ledger.jsonl").write_text(
         '{"kind": "submitted", "stage": "spring_open_1", '
         f'"slug": "{slug}", "price": "x", "qty": "0.02"}}\n')
+    # "count it as the whole envelope" means the ACTIVE envelope: with a
+    # mandate that is the mandate's number, without one the rung default
     assert spring.spring_cumulative_notional(slug) == \
-        spring.SESSION_NOTIONAL_CAP
+        spring.session_notional_cap()
 
 
 def test_spring_complement_price_exposes_both_bounds():

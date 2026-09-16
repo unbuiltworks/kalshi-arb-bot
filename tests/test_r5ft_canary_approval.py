@@ -7,6 +7,8 @@ carry the two things this particular decision is contested on: that R5FT
 is R5F honouring its own 2026-09-07 approval text, and that CLAUDE.md
 separately locks near-$1 pair tolerance.
 """
+
+import pytest
 from src import pmus_l5_continuous_session as cont
 from src import pmus_l5_ramp_ladder as ladder
 

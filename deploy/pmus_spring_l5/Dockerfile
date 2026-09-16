@@ -91,6 +91,9 @@ COPY src/pmus_l5_fidelity_live.py src/pmus_l5_fidelity_live.py
 # OWNER 5554127702 #4: prebuilt evidence-driven ramp ladder (inert: R1
 # unless PMUS_SPRING_RUNG is set by the owner; worst cases logged at boot)
 COPY src/pmus_l5_ramp_ladder.py src/pmus_l5_ramp_ladder.py
+# import closure only: pmus_l5_continuous_session imports the mandate guard.
+# Adding the file does NOT deploy this service -- it stays HALTED.
+COPY src/pmus_live_mandate.py src/pmus_live_mandate.py
 COPY analysis/l5/l5_fidelity_pass.json analysis/l5/l5_fidelity_pass.json
 # strict-evidence composer read at admission time
 # (PMUS_SPRING_EVIDENCE_STATUS_PATH) plus its closure. Read-only status

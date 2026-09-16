@@ -594,22 +594,29 @@ def spring_proposal(model: Mapping[str, Any], inv: Inventory, skey: str,
 
 
 def counts_against_market_cap(stage: Any) -> bool:
-    """Does a submission at this stage consume the per-market envelope?
+    """EVERY submitted order counts. The stage name is not consulted.
 
-    OWNER 2026-09-16: the complement-acceptance probe used to sit OUTSIDE the
-    cap. That was written when the rung was R5F -- $0.01 against a $7.50
-    envelope is noise. At R1's $0.05 the same order is 20% of the envelope,
-    and "max $0.05 per market" has to mean $0.05 INCLUDING it. There is now
-    one counter and this predicate is its only membership rule, named once so
-    the cap, the reconciler and the probe cannot drift apart.
+    THIS FUNCTION USED TO BE AN ALLOW-LIST AND IT COST $19.33 ON 2026-09-16.
+    It admitted `spring_open*`, `spring_extend*`, `micro_first_leg` and the
+    flat probe, and excluded `spring_complete_*` on the reasoning that a
+    complement "REDUCES the position it completes rather than adding surplus
+    spend, and the matched pair is separately bounded by the <=1.00
+    invariant".
 
-    COMPLETE legs still do not count, and that is not an oversight: a
-    complement REDUCES the position it completes rather than adding surplus
-    spend, and the matched pair is separately bounded by the <=1.00 invariant.
+    Both halves of that were wrong. A COMPLETE on this venue is a BUY of the
+    complement -- cash leaves the account, whatever it does to directional
+    risk. And the `<= 1.00` pair invariant bounds the PRICE PER PAIR, not the
+    DOLLAR VOLUME: aec-itfme-conbra-andpet bought 20.44 pairs at a pair cost of
+    0.9457, satisfied that invariant at every step, and spent nineteen dollars
+    against a counter that read $7.4476.
+
+    A `kind == "submitted"` row IS an order that can move cash, so the
+    predicate is now the identity of that fact rather than a list of names
+    somebody has to remember to extend. It is kept as a named function only so
+    the call sites and their tests still read clearly; no stage, present or
+    future, can make it False.
     """
-    s = str(stage or "")
-    return (s.startswith("spring_open") or s.startswith("spring_extend")
-            or s == "micro_first_leg" or s == FLAT_PROBE_STAGE)
+    return True
 
 
 def cap_admits(slug: str, proposed_notional: Any,
@@ -929,7 +936,24 @@ SAFETY_SHELL_VERSION = "R1/cap0.05/residual3/conc1/maker-only/fee-safe0.98/rest3
 # durable state / the consumed owner approval); the constants above are
 # the R1 values and stay the defaults.
 def session_notional_cap() -> D:
-    return micro.per_market_first_leg_cap()
+    """The per-market envelope: the MANDATE's when one is active.
+
+    The rung table is a default, and on 2026-09-16 a stale approval moved that
+    default from $0.05 to $7.50 while the live authorization still said $0.05.
+    An authorization outranks a default, so when a mandate is loadable its
+    number wins and the rung cannot raise it. With no mandate this falls back
+    to the rung, but with no mandate the wire guard refuses every order anyway.
+    """
+    from src import pmus_live_mandate as _mandate
+    rung = micro.per_market_first_leg_cap()
+    m, _why = _mandate.load_mandate()
+    if m is None:
+        return rung
+    # THE TIGHTEST OF THE TWO, not simply the mandate. A stale rung must never
+    # RAISE the envelope -- that is the 2026-09-16 failure, $0.05 -> $7.50 --
+    # but a deliberately tight rung under a roomier authorization should still
+    # bind. min() is the only rule with both properties.
+    return min(rung, D(str(m.max_spend_per_market)))
 
 
 def max_residual_units() -> int:

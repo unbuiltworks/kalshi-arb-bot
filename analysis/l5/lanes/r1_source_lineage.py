@@ -35,9 +35,49 @@ DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 #
 # EXECUTION / DECISION / SIZING / SUBMISSION are never acceptable classes here.
 ALLOWED: Dict[str, Dict[str, str]] = {
+    "src/pmus_l5_continuous_session.py": {
+        "class": "RISK_BOUND_TIGHTENING",
+        "sha": "758ba95b16648594760e629e018e1ac281c58a92",
+        "why": ("CHANGED 2026-09-16 after the R1 canary traded 11+ markets on "
+                "a one-market authorization. Four deltas, all restricting: "
+                "(a) arming now REQUIRES a valid unexpired mandate naming this "
+                "service, and refuses with NO_MANDATE otherwise; (b) the "
+                "transport is wrapped by the mandate guard, so every "
+                "POST /v1/orders is admitted against the envelope at the wire "
+                "rather than at a call site; (c) approved_continuation refuses "
+                "any approval that does not POSTDATE the active mandate, which "
+                "is what let three 2026-09-06 approvals continue a 2026-09-16 "
+                "campaign, and an undated approval is refused; (d) the halt "
+                "latch and the mandate's expiry are re-read on EVERY campaign "
+                "pass, not once at boot, so an unattended process stops itself "
+                "when its authorization runs out. No order verb, size, price, "
+                "cap, band or admission threshold is loosened by any of it."),
+    },
+    "src/pmus_live_mandate.py": {
+        "class": "RISK_BOUND_TIGHTENING",
+        "sha": "959de8e7c7f5cc5990e1dd7f142b91ee7008c438",
+        "why": ("ADDED 2026-09-16 after the R1 canary spent $19.3295 against a "
+                "$0.05 authorization across 11+ markets. The immutable "
+                "per-authorization mandate and the transport guard that "
+                "enforces it. It can only REFUSE: no order verb, no transport "
+                "of its own, no sizing, no pricing -- it wraps a transport and "
+                "raises MandateRefusal before POST /v1/orders. Enforcement "
+                "moved to the wire precisely because the old rule was an "
+                "allow-list of stage names that forgot spring_complete_*."),
+    },
+    "analysis/l5/authorization/": {
+        "class": "DOCUMENTATION",
+        "sha": "e5ddef9792e0f53425e7857f6e35496a5760623d",
+        "why": ("ADDED 2026-09-16. The committed HALT latch and the (currently "
+                "ABSENT) live_mandate.json. Data and prose, never code: HALT's "
+                "presence halts, live_mandate.json's absence is the safe "
+                "state. Shipped as a directory so granting or revoking an "
+                "authorization is a reviewed commit rather than a Dockerfile "
+                "edit. The R1 probe ships HALTED with no mandate."),
+    },
     "src/pmus_spring_l5_session.py": {
         "class": "RISK_BOUND_TIGHTENING",
-        "sha": "084f5c5394ca23423902bc739d0d0a8ddbcc7a06",
+        "sha": "621ffeeb80e81a744ad58f4e97efca008f3745a6",
         "why": ("TWO deltas, and the class names the more consequential one. "
                 "(a) OBSERVABILITY: inside a block commented 'never let "
                 "observability trade', publishes tte_s as null instead of the "
@@ -126,15 +166,22 @@ def verify(head: str = "HEAD", reviewed: str = REVIEWED) -> Dict[str, Any]:
             identical.append(src)
         else:
             differing.append(src)
+    # A FILE ADDED TO THE COPY SET IS A DELTA TOO. It is absent from the
+    # reviewed artifact, so it cannot be compared -- which makes disclosure
+    # MORE important, not less. An addition is accepted on exactly the same
+    # terms as a change: named in ALLOWED, given a non-execution class, and
+    # pinned to the blob that was reviewed. Anything else still fails.
+    added = [f for f in absent if f in ALLOWED]
+    absent = [f for f in absent if f not in ALLOWED]
     undisclosed = [f for f in differing if f not in ALLOWED]
-    bad_class = [f for f in differing
+    bad_class = [f for f in differing + added
                  if f in ALLOWED and ALLOWED[f]["class"] in FORBIDDEN_CLASSES]
     # CONTENT, not filename. An allow-listed file whose blob is not the one the
     # review covered is drift, and drift fails exactly like an undisclosed
     # delta -- otherwise one accepted change licenses every later change to
     # the same file, which is the rubber stamp this is here to prevent.
     drift = []
-    for f in differing:
+    for f in differing + added:
         pinned = str((ALLOWED.get(f) or {}).get("sha") or "")
         actual = _blob_sha(head, f)
         if not pinned or not actual or pinned != actual:
@@ -150,14 +197,16 @@ def verify(head: str = "HEAD", reviewed: str = REVIEWED) -> Dict[str, Any]:
         "identical": len(identical),
         "differing": differing,
         "absent_from_reviewed": absent,
+        "added_and_disclosed": added,
         "undisclosed": undisclosed,
         "forbidden_class": bad_class,
         "content_drift": drift,
-        "deltas": {f: ALLOWED[f] for f in differing if f in ALLOWED},
+        "deltas": {f: ALLOWED[f] for f in differing + added if f in ALLOWED},
         "ACCEPTANCE": ok,
         "why": ("every differing file is on the allow-list with a "
                 "non-execution class AND its blob is the exact one reviewed; "
-                "no COPYed file is missing from the reviewed artifact" if ok
+                "every COPYed file absent from the reviewed artifact is a "
+                "disclosed, classified, pinned ADDITION" if ok
                 else "an undisclosed, execution-class or drifted delta is "
                      "present"),
     }
