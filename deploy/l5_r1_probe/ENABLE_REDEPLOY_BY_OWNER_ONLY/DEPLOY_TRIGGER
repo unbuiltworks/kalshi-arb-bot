@@ -131,3 +131,34 @@ deploy and why the owner asked for it.
             A build is needed because this directory is the service's sole
             watchPattern; the push carrying the artifact produced a SKIPPED
             deployment, as designed.
+
+2026-09-16  OWNER "B3", step 5: deploy the artifact in which a stored rung can
+            only TIGHTEN the pin. STILL DISARMED, STILL HALTED, STILL NO
+            MANDATE.
+
+            A2 step 8 found that durable state on this service's volume
+            carries rung "R3L" -- the 2026-09-16 breach's own $7.50 end state
+            -- and that run_campaign's ARMED restore would have applied it
+            over the image-pinned CP1. The halted process disclosed CP1; the
+            armed process would have run R3L. The owner authorized the fix.
+
+            What changes at runtime: _apply_rung now intersects durable state
+            with the pin dimension by dimension on EFFECTIVE values, keeping
+            the tighter of each, and identity stays the pinned rung's. With
+            this volume's R3L that means residual stays 3 units (not 6), the
+            daily stop stays -$6.00 (not -$15.00), and the $0.01/$0.02 micro
+            action sizing stays (not R3L's $2.50/$3.25). Nothing is loosened
+            on any dimension; a genuinely tighter stored rung can still
+            tighten. min(rung, mandate) and GuardedTransport are untouched.
+
+            halted_envelope() now also discloses `after_restore` -- what the
+            ARMED path would run -- so a pin/stored mismatch is visible BEFORE
+            the halt is lifted rather than after. That is step 7's read.
+
+            Why it changes nothing about arming: analysis/l5/authorization/
+            ships with HALT present and live_mandate.json ABSENT, exactly as
+            before. No arming value is set by this deploy.
+
+            Full suite 4931 passed / 0 failed on the exact artifact promoted
+            here; lineage ACCEPTANCE true against the re-baselined ced188ca
+            with FORBIDDEN_CLASSES unchanged and still containing SIZING.

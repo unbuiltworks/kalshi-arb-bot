@@ -35,13 +35,30 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: SIZING -- a forbidden one. The other routes were to mislabel it, or to drop
 #: SIZING from FORBIDDEN_CLASSES and weaken the gate permanently for every
 #: future change. The owner reviewed the artifact and advanced the baseline.
-REVIEWED = "f3247262"
+#:
+#: ADVANCED AGAIN 2026-09-16 for OWNER AUTHORIZATION "B3", on the same terms
+#: and for the same reason. B3 changes src/pmus_l5_ramp_ladder.py (the
+#: dimension table and `tightest()`) and src/pmus_l5_continuous_session.py
+#: (`_apply_rung` intersects durable state instead of obeying it), both in the
+#: image COPY set, and both honestly SIZING/safety-state. The owner reviewed
+#: the change, authorized it explicitly, and required the baseline be moved
+#: "truthfully ... to the resulting exact green artifact" -- which is this
+#: commit, the one the 4931-test suite passed on. FORBIDDEN_CLASSES is
+#: untouched and still contains SIZING; a future sizing change still fails
+#: this gate and still needs its own review.
+REVIEWED = "ced188ca"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
 #: below; those files are now PART of REVIEWED and no longer differ. The
 #: mechanism's own self-tests run against this baseline, so advancing the
 #: production one does not leave the gate untested.
+#:
+#: This is the ORIGINAL R1 review, deliberately NOT advanced to f3247262 when
+#: B3 moved the production baseline. Keeping the oldest one is what keeps the
+#: self-tests meaningful: PRIOR_DELTAS still differs from it, so the drift and
+#: unpinned-delta tests still have something real to catch. Re-pointing it at
+#: each new baseline would leave them asserting against an empty delta set.
 PREVIOUS_REVIEWED = "6adcc4c4"
 DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 
@@ -155,19 +172,21 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "087703201cc5dec401c703563439973494c20ba3",
+        "sha": "1cc17a50458d494a797ed4f266bdc6e289abfa0d",
         "why": ("The committed HALT latch, the live mandate when one exists, "
                 "and the arming records. Data and prose, never code: HALT's "
                 "presence halts and live_mandate.json's absence is the safe "
                 "state. Shipped as a directory so granting or revoking an "
                 "authorization is a reviewed commit rather than a Dockerfile "
                 "edit. RE-PINNED 2026-09-16 for "
-                "ARMING_BLOCKED_3_PERSISTED_RUNG_2026-09-16.md, the record "
-                "that A2 step 8 failed because durable state would re-apply "
-                "R3L. The gate caught that commit, which is the pin working: "
-                "a prose record still has to be looked at before it rides "
-                "into the image. HALT is still present and live_mandate.json "
-                "is still absent in this tree."),
+                "B3_PERSISTED_RUNG_INTERSECTION_2026-09-16.md, the record of "
+                "the authorized fix for the A2 step 8 failure (durable state "
+                "would have re-applied R3L over the pinned CP1). The previous "
+                "pin covered ARMING_BLOCKED_3_..., which reported that "
+                "failure. The gate caught both commits, which is the pin "
+                "working: a prose record still has to be looked at before it "
+                "rides into the image. HALT is still present and "
+                "live_mandate.json is still absent in this tree."),
     },
 }
 
