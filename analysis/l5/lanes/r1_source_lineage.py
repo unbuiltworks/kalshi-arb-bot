@@ -208,8 +208,31 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "bca93f22a70a323068e28ac109931f14644e9ba6",
-        "why": ("RE-PINNED 2026-09-16 for the concurrency-accounting fix. This "
+        "sha": "34e17e6c9459aab48040d536fbbdbcc381181b7c",
+        "why": ("RE-PINNED 2026-09-16 for the SECOND CP1 ACTIVATION. HALT "
+                "is REMOVED from this tree and live_mandate.json remains, "
+                "so this pin covers an ARMED authorization -- the strongest "
+                "reason the directory is gated at all. The pin has now "
+                "covered it halted, armed, halted, and armed again in one "
+                "day; each transition is a reviewed commit, which is the "
+                "mechanism working rather than being noisy. Removing HALT "
+                "does not authorize trading: orders additionally require "
+                "the mandate, and the halt/authorization consistency test "
+                "enforces that the absence of HALT is never on its own an "
+                "authorization. Previously pinned for the "
+                "concurrency-accounting fix, which added "
+                "CONCURRENCY_ACCOUNTING_2026-09-16.md and "
+                "FINDING_REFUSAL_CLASSIFICATION_2026-09-16.md. "
+                "WHY THIS ENTRY IS ALWAYS EXERCISED: it is a "
+                "DIRECTORY, and verify() compares `git show <rev>:<path>`, "
+                "whose first line echoes the revision string itself. So it "
+                "reads as differing even when its tree sha is identical, "
+                "and the pin is therefore checked on every single run. That "
+                "is the right outcome for the directory that grants spend, "
+                "but it is an accident of how git prints a tree rather than "
+                "a designed property, and it is recorded here so nobody "
+                "later 'fixes' it without knowing what it was doing. "
+                "The committed HALT latch, the live mandate when one exists, "
                 "tree adds CONCURRENCY_ACCOUNTING_2026-09-16.md and "
                 "FINDING_REFUSAL_CLASSIFICATION_2026-09-16.md -- both "
                 "records -- and HALT is still present with "
