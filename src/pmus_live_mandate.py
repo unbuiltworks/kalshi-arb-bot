@@ -365,16 +365,78 @@ def consumption(state_dir: Path, authorization_id: str) -> dict:
                 charge = (proposed * got / q) if got < q else proposed
         per_market[slug] = per_market.get(slug, D("0")) + charge
 
+    # ------------------------------------------------------------------
+    # CONCURRENCY vs TOTAL: two different counters, and conflating them is
+    # what the 2026-09-16 CP1 probe exposed (OWNER AUTHORIZATION, "fix
+    # zero-exposure market concurrency accounting").
+    #
+    # `markets_open` used to be "committed AND not settled". A market with six
+    # admitted orders, ZERO fills, every order cancelled and no inventory then
+    # counted against max_concurrent_markets forever -- because a market with
+    # nothing in it never settles, so it could never leave the set. The live
+    # probe hit exactly that: six maker attempts at qty 0.22 filled nothing,
+    # market 1 stayed "open" permanently, market 2 was refused
+    # max_concurrent_markets_exhausted, and the campaign stopped.
+    #
+    # THE INVARIANT NOW: a market is concurrently OPEN while it can still lose
+    # money there -- it has a live or unresolved order, or it has fills that
+    # have not settled. Zero live orders AND zero fills AND no exposure means
+    # it is eligible to leave the CONCURRENCY set.
+    #
+    # WHAT DELIBERATELY DID NOT CHANGE:
+    #   * `markets_touched` / `n_markets_touched` still count every market
+    #     that was ever committed, settled or not, filled or not. A zero-fill
+    #     attempt still consumes one of max_total_markets. Releasing it from
+    #     BOTH counters would turn a 3-market authorization into unlimited
+    #     market scanning, which is a far worse failure than the one being
+    #     fixed.
+    #   * The CHARGE arithmetic above. A terminal order with filled_qty 0
+    #     already released its reservation and a fill is still permanent.
+    #   * The durable ledger. Nothing is deleted; every commit, link and
+    #     terminal row stays exactly where it was. This is a different READING
+    #     of the same rows, which is why the audit trail is untouched.
+    #
+    # FAIL-CLOSED ON ANYTHING UNRESOLVED. An order with no terminal row, or a
+    # commit that never got linked to an order id at all, counts as OPEN. We
+    # do not know that it is dead, and "we never found out" must never free
+    # concurrency -- that is the same rule the charge path uses when it charges
+    # an unconfirmed submission in full.
+    live_or_unknown: set[str] = set()
+    for cid, c in commits.items():
+        oid = links.get(cid) or ""
+        if not oid or terminal.get(oid) is None:
+            live_or_unknown.add(str(c.get("slug") or ""))
+
+    filled_qty: dict[str, D] = {}
+    for slug, rows in fills.items():
+        filled_qty[str(slug)] = sum(
+            (_dec(r.get("qty")) or D("0")) for r in rows)
+
+    def _concurrently_open(slug: str) -> bool:
+        if slug in settled:
+            return False                     # reconciled: it is finished
+        if slug in live_or_unknown:
+            return True                      # a live or unresolved order
+        # ANY fill, not just an unmatched one. A fully MATCHED position still
+        # carries money to settlement, so residual == 0 does not mean flat.
+        return (filled_qty.get(slug) or D("0")) > 0
+
+    open_markets = sorted(s for s in per_market if _concurrently_open(s))
+
     return {
         "readable": ok and unknown == 0,
         "per_market": {k: str(v) for k, v in per_market.items()},
         "total": str(sum(per_market.values(), D("0"))),
         "markets_touched": sorted(per_market),
-        "markets_open": sorted(s for s in per_market if s not in settled),
+        "markets_open": open_markets,
         "n_markets_touched": len(per_market),
-        "n_markets_open": len([s for s in per_market if s not in settled]),
+        "n_markets_open": len(open_markets),
         "residual_usd": {k: str(v) for k, v in _residuals(fills).items()},
+        "filled_qty": {k: str(v) for k, v in filled_qty.items()},
         "commits": len(commits), "unreadable_commits": unknown,
+        "open_basis": ("a live or unresolved order, or unsettled fills; "
+                       "zero-fill fully-terminal markets release CONCURRENCY "
+                       "but still count toward markets_touched"),
     }
 
 
