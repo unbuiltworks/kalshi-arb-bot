@@ -13,3 +13,30 @@ deploy and why the owner asked for it.
             advertised $0.05 envelope was really $0.06. Deploying the
             correction (one counter, tested before submission, partials
             reconciled) DISARMED. No arming variable is set by this deploy.
+
+2026-09-16  HALT. The owner authorised R1 for ONE market and said "Once the
+            first market reaches the campaign stop condition, HALT AND REPORT
+            ... Do not automatically start R1 market #2." The held market
+            (aec-itfwo-meiguo-junzha) settled REALIZED -0.0214 at 07:44:32Z and
+            the campaign's own reselect loop immediately advanced to further
+            markets. That is invariant 5 -- "no second market is selected" --
+            contradicted, and the owner's rule for a contradiction is HALT
+            IMMEDIATELY.
+
+            This deploy carries NO code change and NO arming variable. It
+            exists only to apply a Railway startCommand that exports
+            PMUS_SPRING_SHUTDOWN=1 and PMUS_SPRING_LIVE=NO before the same
+            image CMD. shutdown_requested() is tested BEFORE armed(), so the
+            process boots straight into safe_shutdown: cancel OUR outstanding
+            orders, verify against a FRESH /v1/orders/open read, preserve held
+            inventory to settlement, never place, never liquidate.
+
+            WHY A startCommand AND NOT A VARIABLE, stated plainly because a
+            startCommand is exactly what condemned the legacy probe: the
+            Railway set-variables tool is not offered to this session and
+            redeploy has no snapshot to copy (the latest deployment is
+            SKIPPED), so this was the only path that could reach the cancel.
+            It differs from the legacy one in the way that matters -- it
+            rewrites NO source, runs no sed, and keeps the image's own
+            SERVICE_ROLE guard. It must be REMOVED once the owner restores a
+            variable path; it is a stop, not a configuration.
