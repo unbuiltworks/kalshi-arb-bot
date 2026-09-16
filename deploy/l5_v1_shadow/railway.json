@@ -1,0 +1,29 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "L5_CONTINUOUS_INVENTORY_V1 -- SHADOW ONLY. Cannot trade by construction, not by flag: the image ships no executor, no transport, no fill ledger and no order verb, and the service carries NO API CREDENTIALS. Envelope A ($3 residual / $30 exposure / $6 daily stop) is the basis the risk scale k=0.00619 is DERIVED from; it is NOT an authorization for $30 of live exposure.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_v1_shadow/Dockerfile",
+    "watchPatterns": [
+      "src/l5_v1_shadow.py",
+      "src/l5_v1_shadow_runner.py",
+      "analysis/l5/live_v1/risk_scale.py",
+      "deploy/l5_v1_shadow/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "sh -c 'test \"$PMUS_SERVICE_ROLE\" = l5-v1-shadow || { echo SERVICE_ROLE_MISMATCH; exit 64; }; exec python3 -m src.l5_v1_shadow_runner'",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "_source_watch_reference": [
+    "src/l5_v1_shadow.py",
+    "src/l5_v1_shadow_runner.py",
+    "src/pmus_l5_fidelity_live.py",
+    "src/pmus_l5_persistence_v2.py",
+    "src/polymarket_l5/**",
+    "analysis/l5/l5_action_model_v2.json",
+    "analysis/l5/l5_fidelity_pass.json",
+    "analysis/l5/live_v1/risk_scale.py"
+  ]
+}
