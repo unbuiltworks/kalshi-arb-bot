@@ -97,13 +97,16 @@ def test_order_size_below_the_venue_minimum_is_refused():
 
 
 def test_credentials_are_checked_for_presence_and_never_read(monkeypatch):
-    monkeypatch.setenv("PMUS_API_KEY", "super-secret-value")
-    monkeypatch.setenv("PMUS_API_SECRET", "another-secret")
-    monkeypatch.setenv("PMUS_ACCOUNT_ID", "acct")
+    for i, name in enumerate(P.CREDENTIAL_ENV):
+        monkeypatch.setenv(name, f"super-secret-value-{i}")
     g = P.credentials_present()
     assert g["state"] == "PASS"
-    assert "super-secret-value" not in json.dumps(g)
-    assert "another-secret" not in json.dumps(g)
+    blob = json.dumps(g)
+    assert "super-secret-value" not in blob
+    # the NAMES are reported (they must be, to say what is missing); the
+    # VALUES never are
+    for name in P.CREDENTIAL_ENV:
+        assert name in blob
 
 
 # ---------------------------------------------------------------- accounting

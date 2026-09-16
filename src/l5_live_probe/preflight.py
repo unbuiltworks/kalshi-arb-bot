@@ -28,8 +28,11 @@ from src.l5_risk import shell as RISK
 LABEL = "LIVE_PROBE_PREFLIGHT/economic_measurement"
 
 # Credential NAMES only. This module never reads, prints, copies or logs a
-# value -- presence is the whole check.
-CREDENTIAL_ENV = ("PMUS_API_KEY", "PMUS_API_SECRET", "PMUS_ACCOUNT_ID")
+# value -- presence is the whole check. These are the names
+# src/polymarket_probe.py actually passes to the PolymarketUS client; the
+# earlier PMUS_API_* guesses were names nothing reads, so the check would have
+# been asking about variables that do not exist.
+CREDENTIAL_ENV = ("POLYMARKET_KEY_ID", "POLYMARKET_SECRET_KEY")
 
 # Order verbs that must not appear anywhere in this package.
 ORDER_VERBS = ("place_order", "submit_order", "cancel_order", "amend_order",
@@ -177,13 +180,31 @@ def risk_bounds(*, realized: Any = "0", floors: Sequence[Any] = (),
                         {"max_inventory_shares": sh.max_inventory_shares,
                          "max_market_spend": sh.max_market_spend}))
     else:
-        v = sh.allows(intent=intent, realized=realized, floors=floors,
-                      current_inventory=current_inventory,
-                      market_spent=market_spent, open_markets=open_markets,
-                      last_heartbeat_age_s=last_heartbeat_age_s)
+        # the shell's method is check(); allows() does not exist. This branch
+        # only runs when an intent is supplied, so the wrong name sat latent
+        # through every envelope-unset run.
+        v = sh.check(intent=intent, realized=realized, floors=floors,
+                     current_inventory=current_inventory,
+                     market_spent=market_spent, open_markets=open_markets,
+                     last_heartbeat_age_s=last_heartbeat_age_s)
         out.append(gate("RESIDUAL_EXPOSURE_LIMIT", v.allowed,
                         None if v.allowed else v.reason, v.detail))
     return out
+
+
+def venue_access(market: Optional[Dict[str, Any]],
+                 access: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """THE MARKET MUST BE ON THE VENUE THE CREDENTIALS SIGN FOR.
+
+    Without this, MARKET_ELIGIBILITY and CREDENTIALS_PRESENT can both pass while
+    being true about different venues -- which is exactly what happened: the
+    BTC15m rows come from Polymarket international and carry `venue: "PMUS"`,
+    while the credentials authenticate to Polymarket US.
+    """
+    from src.l5_live_probe import venue_access as VA
+    c = VA.consistency(market, access)
+    return gate("VENUE_ACCESS", c.get("ok"),
+                None if c.get("ok") else c.get("why"), c)
 
 
 def settlement_accounting_path(src_dir: str = "src/l5_shadow") -> Dict[str, Any]:
@@ -245,6 +266,7 @@ def verdict(*, expected_sha: Optional[str] = None,
             market: Optional[Dict[str, Any]] = None,
             size: Optional[Dict[str, Any]] = None,
             minimums: Optional[Dict[str, Any]] = None,
+            access: Optional[Dict[str, Any]] = None,
             risk: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Every gate, then one answer. ANY non-PASS blocks."""
     checks: List[Dict[str, Any]] = [
@@ -252,6 +274,7 @@ def verdict(*, expected_sha: Optional[str] = None,
         credentials_present(),
         venue_connectivity(connectivity),
         market_eligibility(market),
+        venue_access(market, access),
         order_size_constraints(size, minimums),
         settlement_accounting_path(),
         pmus_separation(),
