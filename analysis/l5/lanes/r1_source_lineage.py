@@ -20,7 +20,29 @@ import subprocess
 from typing import Any, Dict, List
 
 LABEL = "R1_SOURCE_LINEAGE"
-REVIEWED = "6adcc4c4"
+#: OWNER AUTHORIZATION 2026-09-16 "A2". The baseline advanced from the R1
+#: review to the CP1 candidate artifact, which contains ONLY the explicitly
+#: authorized Option A changes: the CP1 rung, the image's rung and market
+#: allowance, and the read-only halted_envelope disclosure.
+#:
+#: THIS IS NOT A WEAKENING. FORBIDDEN_CLASSES is unchanged and still contains
+#: SIZING. Disclosure is unchanged. A future sizing change still fails this
+#: gate and still needs its own review. What moved is only WHICH artifact the
+#: COPY set is compared against.
+#:
+#: WHY IT HAD TO MOVE: src/pmus_l5_ramp_ladder.py is in the image COPY set and
+#: the authorized change raises a per-market cap, so its honest class is
+#: SIZING -- a forbidden one. The other routes were to mislabel it, or to drop
+#: SIZING from FORBIDDEN_CLASSES and weaken the gate permanently for every
+#: future change. The owner reviewed the artifact and advanced the baseline.
+REVIEWED = "f3247262"
+
+#: The superseded baseline, kept so the provenance is legible HERE and not only
+#: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
+#: below; those files are now PART of REVIEWED and no longer differ. The
+#: mechanism's own self-tests run against this baseline, so advancing the
+#: production one does not leave the gate untested.
+PREVIOUS_REVIEWED = "6adcc4c4"
 DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 
 # Each entry: why this file may differ, the class it must fall in, and the
@@ -34,7 +56,11 @@ DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 # verify() fails as CONTENT_DRIFT until the pin is refreshed with a new reason.
 #
 # EXECUTION / DECISION / SIZING / SUBMISSION are never acceptable classes here.
-ALLOWED: Dict[str, Dict[str, str]] = {
+#: PROVENANCE ONLY -- the deltas reviewed against PREVIOUS_REVIEWED. They are
+#: now inside REVIEWED and no longer differ from it. Kept verbatim, with
+#: their reviewed blob ids, so the record of what was accepted and why does
+#: not vanish when the baseline moves.
+PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
     "src/pmus_l5_continuous_session.py": {
         "class": "RISK_BOUND_TIGHTENING",
         "sha": "758ba95b16648594760e629e018e1ac281c58a92",
@@ -121,6 +147,24 @@ ALLOWED: Dict[str, Dict[str, str]] = {
                 "diff touches none of them, so gating behaviour is unchanged."),
     },
 }
+
+#: NOTHING in the image COPY set may differ from REVIEWED except what is
+#: disclosed here. The authorization directory is the one legitimate mover:
+#: granting or revoking an authorization IS a change to it, by design, and the
+#: pin is re-taken each time so it cannot become a rubber stamp.
+ALLOWED: Dict[str, Dict[str, str]] = {
+    "analysis/l5/authorization/": {
+        "class": "DOCUMENTATION",
+        "sha": "4048d4d769b6ef5e1bf04ee79b969a3fe4e8b202",
+        "why": ("The committed HALT latch, the live mandate when one exists, "
+                "and the arming records. Data and prose, never code: HALT's "
+                "presence halts and live_mandate.json's absence is the safe "
+                "state. Shipped as a directory so granting or revoking an "
+                "authorization is a reviewed commit rather than a Dockerfile "
+                "edit."),
+    },
+}
+
 
 FORBIDDEN_CLASSES = ("EXECUTION", "DECISION", "SIZING", "SUBMISSION")
 

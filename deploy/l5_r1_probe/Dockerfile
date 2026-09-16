@@ -138,8 +138,10 @@ COPY analysis/l5/authorization/ analysis/l5/authorization/
 COPY src/pmus_live_mandate.py src/pmus_live_mandate.py
 RUN touch src/__init__.py
 
-# PMUS_SPRING_RUNG_MARKETS=1 is the CAMPAIGN'S MARKET ALLOWANCE and it lives
-# here deliberately, after a failed deploy taught the lesson.
+# PMUS_SPRING_RUNG_MARKETS is the CAMPAIGN'S MARKET ALLOWANCE and it lives
+# here deliberately, after a failed deploy taught the lesson. (Its value was
+# 1 until OWNER 2026-09-16 Option A authorized three markets; the lesson
+# below is about WHERE it lives, not what it is set to.)
 #
 # WHY IT IS NEEDED AT ALL: durable state persists the R5F campaign, whose
 # markets_per_campaign is CONTINUOUS. A campaign booting without an allowance

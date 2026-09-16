@@ -10,20 +10,41 @@ def test_the_acceptance_condition_holds_on_the_current_tree():
 
 
 def test_every_disclosed_delta_is_named_and_none_is_execution_class():
+    """Against the CURRENT baseline (OWNER A2, REVIEWED advanced to the CP1
+    candidate) the only legitimate mover is the authorization directory --
+    granting or revoking an authorization IS a change to it."""
     v = L.verify()
-    assert len(v["differing"]) == 5
+    assert v["differing"] == ["analysis/l5/authorization/"], v["differing"]
     for f in v["differing"]:
         assert f in L.ALLOWED, f
         assert L.ALLOWED[f]["class"] not in L.FORBIDDEN_CLASSES, f
 
 
+def test_the_gate_still_forbids_sizing_and_the_prior_review_is_preserved():
+    """A2 advanced the baseline; it did NOT weaken the gate. Both halves are
+    asserted, because 'we reviewed it' must not become 'we removed the check'."""
+    assert "SIZING" in L.FORBIDDEN_CLASSES
+    assert set(L.FORBIDDEN_CLASSES) == {"EXECUTION", "DECISION", "SIZING",
+                                        "SUBMISSION"}
+    assert L.PREVIOUS_REVIEWED == "6adcc4c4"
+    assert L.REVIEWED != L.PREVIOUS_REVIEWED
+    # every delta accepted under the old baseline is still on the record
+    assert set(L.PRIOR_DELTAS) >= {
+        "src/pmus_l5_continuous_session.py", "src/pmus_live_mandate.py",
+        "src/pmus_spring_l5_session.py", "src/l5_decision_observability.py",
+        "src/pmus_incentive_audit.py", "analysis/l5/venue_maintenance_windows.json"}
+    for f, meta in L.PRIOR_DELTAS.items():
+        assert meta["class"] not in L.FORBIDDEN_CLASSES, f
+        assert len(str(meta.get("sha") or "")) == 40, f
+
+
 def test_an_undisclosed_delta_fails_acceptance(monkeypatch):
     """The check must be capable of failing, or it proves nothing. Drop one
     file from the allow-list and acceptance must go False."""
-    trimmed = {k: v for k, v in L.ALLOWED.items()
+    trimmed = {k: v for k, v in L.PRIOR_DELTAS.items()
                if k != "src/pmus_spring_l5_session.py"}
     monkeypatch.setattr(L, "ALLOWED", trimmed)
-    v = L.verify()
+    v = L.verify(reviewed=L.PREVIOUS_REVIEWED)
     assert v["ACCEPTANCE"] is False
     assert "src/pmus_spring_l5_session.py" in v["undisclosed"]
 
@@ -33,7 +54,7 @@ def test_an_execution_class_delta_fails_acceptance(monkeypatch):
     relabelled["src/pmus_spring_l5_session.py"] = {
         "class": "EXECUTION", "why": "hypothetical"}
     monkeypatch.setattr(L, "ALLOWED", relabelled)
-    assert L.verify()["ACCEPTANCE"] is False
+    assert L.verify(reviewed=L.PREVIOUS_REVIEWED)["ACCEPTANCE"] is False
 
 
 def test_the_scope_is_the_image_copy_set_not_the_branch():
@@ -57,22 +78,28 @@ def test_every_allow_listed_delta_pins_the_exact_reviewed_blob():
 def test_editing_an_allow_listed_file_again_fails_until_re_reviewed(monkeypatch):
     """The whole point of the pin. A filename allow-list would silently accept
     this; the content check must not."""
-    drifted = {k: dict(v) for k, v in L.ALLOWED.items()}
-    drifted["src/pmus_spring_l5_session.py"]["sha"] = "0" * 40
+    drifted = {k: dict(v) for k, v in L.PRIOR_DELTAS.items()}
+    drifted["src/pmus_spring_l5_session.py"] = {
+        **drifted["src/pmus_spring_l5_session.py"], "sha": "0" * 40}
     monkeypatch.setattr(L, "ALLOWED", drifted)
-    v = L.verify()
+    v = L.verify(reviewed=L.PREVIOUS_REVIEWED)
     assert v["ACCEPTANCE"] is False
-    assert [d["file"] for d in v["content_drift"]] == \
-        ["src/pmus_spring_l5_session.py"]
-    assert v["content_drift"][0]["reason"] == \
+    # Measured against the SUPERSEDED baseline, the authorized CP1 changes
+    # legitimately drift too, so the deliberately-broken pin is one of several.
+    # The property under test is that the pin CATCHES it -- membership, not
+    # exclusivity. Asserting exclusivity here would be asserting that no other
+    # authorized change exists, which is a different and false claim.
+    drift = {d["file"]: d["reason"] for d in v["content_drift"]}
+    assert "src/pmus_spring_l5_session.py" in drift, sorted(drift)
+    assert drift["src/pmus_spring_l5_session.py"] == \
         "content differs from the reviewed blob"
 
 
 def test_an_unpinned_delta_fails_rather_than_defaulting_open(monkeypatch):
-    unpinned = {k: dict(v) for k, v in L.ALLOWED.items()}
+    unpinned = {k: dict(v) for k, v in L.PRIOR_DELTAS.items()}
     unpinned["src/pmus_incentive_audit.py"]["sha"] = ""
     monkeypatch.setattr(L, "ALLOWED", unpinned)
-    v = L.verify()
+    v = L.verify(reviewed=L.PREVIOUS_REVIEWED)
     assert v["ACCEPTANCE"] is False
     assert v["content_drift"][0]["reason"] == "no reviewed blob pinned"
 
@@ -85,7 +112,10 @@ def test_pin_shas_is_never_called_by_verify():
 
 
 def test_the_risk_bound_delta_is_declared_and_is_not_an_execution_class():
-    meta = L.ALLOWED["src/pmus_spring_l5_session.py"]
+    """Now in PRIOR_DELTAS: the file stopped DIFFERING when A2 advanced the
+    baseline to include it, but the reviewed record of what it was and why
+    must survive that move -- the point of preserving the prior deltas."""
+    meta = L.PRIOR_DELTAS["src/pmus_spring_l5_session.py"]
     assert meta["class"] == "RISK_BOUND_TIGHTENING"
     assert meta["class"] not in L.FORBIDDEN_CLASSES
     for token in ("cap_admits", "counts_against_market_cap",

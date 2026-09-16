@@ -88,14 +88,49 @@ def test_retiring_the_label_gate_did_not_drop_the_guarantee_it_carried():
 
 def test_the_real_lineage_check_rejects_an_edit_to_an_allow_listed_file():
     """End to end against the real module, not the fixture: content drift in a
-    reviewed file must fail, or the allow-list is a rubber stamp."""
+    reviewed file must fail, or the allow-list is a rubber stamp.
+
+    RESTATED 2026-09-16 (OWNER "A2"), not weakened. It drifted
+    src/pmus_spring_l5_session.py, which was the right file while the baseline
+    was 6adcc4c4. A2 advanced the baseline to the CP1 candidate, so that file
+    is now PART of the reviewed artifact and no longer differs -- it moved to
+    PRIOR_DELTAS, where its reviewed blob and reason are preserved verbatim.
+    Hard-coding a filename here was the accident; the property is that a
+    reviewed file which drifts must FAIL, whichever file currently carries a
+    delta. So the victim is taken from the real verdict.
+    """
     from analysis.l5.lanes import r1_source_lineage as L
+    victim = next((f for f in L.verify()["differing"] if f in L.ALLOWED), None)
+    assert victim, ("nothing on the allow-list currently differs, so drifting "
+                    "it would prove nothing -- restate this test")
     drifted = {k: dict(v) for k, v in L.ALLOWED.items()}
+    drifted[victim]["sha"] = "0" * 40
+    real = L.ALLOWED
+    try:
+        L.ALLOWED = drifted
+        v = L.verify()
+        assert v["ACCEPTANCE"] is False
+        assert [d["file"] for d in v["content_drift"]] == [victim], v
+    finally:
+        L.ALLOWED = real
+
+
+def test_the_superseded_baseline_still_exercises_the_same_gate():
+    """A2 moved the baseline forward. The mechanism must remain testable
+    against the one it superseded, or advancing a baseline is also a way to
+    stop the gate being tested."""
+    from analysis.l5.lanes import r1_source_lineage as L
+    assert L.PREVIOUS_REVIEWED and L.PREVIOUS_REVIEWED != L.REVIEWED
+    assert "src/pmus_spring_l5_session.py" in L.PRIOR_DELTAS
+    drifted = {k: dict(v) for k, v in L.PRIOR_DELTAS.items()}
     drifted["src/pmus_spring_l5_session.py"]["sha"] = "0" * 40
     real = L.ALLOWED
     try:
         L.ALLOWED = drifted
-        assert L.verify()["ACCEPTANCE"] is False
+        v = L.verify(reviewed=L.PREVIOUS_REVIEWED)
+        assert v["ACCEPTANCE"] is False
+        assert "src/pmus_spring_l5_session.py" in \
+            {d["file"] for d in v["content_drift"]}
     finally:
         L.ALLOWED = real
 
