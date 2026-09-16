@@ -155,13 +155,19 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "4048d4d769b6ef5e1bf04ee79b969a3fe4e8b202",
+        "sha": "087703201cc5dec401c703563439973494c20ba3",
         "why": ("The committed HALT latch, the live mandate when one exists, "
                 "and the arming records. Data and prose, never code: HALT's "
                 "presence halts and live_mandate.json's absence is the safe "
                 "state. Shipped as a directory so granting or revoking an "
                 "authorization is a reviewed commit rather than a Dockerfile "
-                "edit."),
+                "edit. RE-PINNED 2026-09-16 for "
+                "ARMING_BLOCKED_3_PERSISTED_RUNG_2026-09-16.md, the record "
+                "that A2 step 8 failed because durable state would re-apply "
+                "R3L. The gate caught that commit, which is the pin working: "
+                "a prose record still has to be looked at before it rides "
+                "into the image. HALT is still present and live_mandate.json "
+                "is still absent in this tree."),
     },
 }
 
