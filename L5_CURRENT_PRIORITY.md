@@ -184,6 +184,19 @@ incentives are accrued, never income.
 - **Legacy PMUS** `pmus-spring-l5-probe` (`d84d9a68-…`): stays **HALTED**. Do
   not clear the latch. Its startCommand rewrites source with `sed -i` at boot,
   so the running code is not the reviewed artifact.
+- **Grok incentive findings — PRESERVED, DEFERRED, do not start now.**
+  `analysis/l5/grok_review/ADJUDICATION.md` (committed 2026-09-15) holds the
+  audited incentive record and is the input to a later
+  **pre-August / August / post-August** analysis. Owner instruction 2026-09-16:
+  preserve it, but do not let that work interrupt the prospective V1.1 run.
+  Headline, carried here so it is not rediscovered: over 2026-04-21 → 08-31 the
+  public record shows MAKER_REBATE 110 / TAKER_REBATE 73 / REWARD 20, totalling
+  $35,228.32 / $7,525.73 / $28,797.69 — **~94 bp of turnover, ~82% of L5's total
+  economics and ~4.6× its trading P&L**. The "incentives ended 2026-08-31" claim
+  was a cache artefact and is **false**. Incentive rows are their own on-chain
+  transfers with no market or motif linkage, so they cannot be attributed to a
+  specific trade. None of this is realized profit for us and none of it unlocks
+  mature incentive-era behaviour; it stays separate from trading P&L.
 - **Gemini**: P1, collecting, untouched.
 - **Polymarket.com**: observation/reference only.
 - No generic arbitrage, no R/S/D or cap5/8/13 revivals, no new rung strategies.
