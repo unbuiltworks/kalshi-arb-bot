@@ -781,3 +781,48 @@ about profit, nothing about whether a better PMUS market exists (14 markets over
 scored because the workstream has returned no observation stream. The
 per-venue observation spec and the still-required per-fill schema are in
 `analysis/l5/habitat/HABITAT_SCORE.md` §7.
+
+## ADAPTED_RESIDUAL_CAP_PROSPECTIVE_V0 = FAIL (finalised)
+
+The frozen cap5/cap8/cap13 experiment reached its 20th two-sided PMUS window at
+00:17:30Z and returned **FAIL** on every arm. A-1, A-4, A-5 and A-7 pass; all
+three arms fail A-2, A-3 and A-6. No threshold was changed and no cap3/cap4
+rerun was attempted. Gemini formed 0 two-sided windows and never qualified.
+
+| arm | matched | residual | total | matched % | maxDD |
+|---|---|---|---|---|---|
+| cap5 | +106.01 | -110.09 | **-4.09** | 0.7085 | -163.30 |
+| cap8 | +67.78 | -330.26 | **-262.49** | 0.8130 | -397.60 |
+| cap13 | -34.18 | -798.25 | **-832.43** | 0.9643 | -955.67 |
+
+**FAILURE_MODE = BROAD_LEAKAGE.** 25 of 38 settled windows lose on residual;
+top1 0.1024, top3 0.2929, top5 0.4468 of a -454.57 loss pool. PMUS alone is
+BROAD_LEAKAGE at top1 0.174; GEMINI alone is MIXED at 0.2273, and GEMINI forms
+matched inventory in **0 of 17** windows, so pooling it dilutes every share.
+
+**The residual is a pure directional bet.** Its sign is determined entirely by
+whether the leftover side won — 38 of 38 settled windows, no exceptions — and
+that bet wins only **0.3421** of the time (PMUS 0.2381). A fair coin is 0.50.
+The side a resting maker accumulates is the side that is becoming wrong.
+
+**No observable risk state removes most of the damage.** Across 17 counterfactual
+probes the largest share of residual LOSS removed is 0.3989, and that is
+ORACLE_FLAT_AFTER_MATCH, which no policy can run; the best runnable probe
+removes 0.3680. **0 of 17 probes raise the residual win rate to 0.50.** Residual
+control changes how much of the bet you carry, never that it is adversely
+selected.
+
+**The edge and the risk are the same act.** The oracle keeps 53% of matched
+QUANTITY but only **14.5%** of matched P&L (+16.33 of +112.75): the profitable
+pairs are completed by the very extensions that build the residual. This
+reproduces prospectively what the historical P1 decomposition already found —
+residual extension carried the whole pair-cost improvement (-22.69) while match
+expansion was net harmful (+9.29).
+
+Incentives are excluded from all of the above. Retrospective L5 incentive
+forensics remains closed as UNATTRIBUTABLE.
+
+Three defects in the first run of the decomposition were found and corrected
+before these numbers were read; see the header of
+`analysis/l5/adapted/failure.py`. The FAILURE_MODE verdict is unaffected by
+them — it is computed from the baseline, which no probe touches.
