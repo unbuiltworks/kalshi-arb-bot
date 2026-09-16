@@ -204,3 +204,28 @@ deploy and why the owner asked for it.
             Full suite 4949 passed / 0 failed; lineage ACCEPTANCE true against
             the re-baselined a2fab7c6 with FORBIDDEN_CLASSES still containing
             SIZING.
+
+2026-09-16  OWNER activation sequence: ship the fresh 24h live mandate. STILL
+            HALTED. This deploy does NOT arm the probe.
+
+            analysis/l5/authorization/live_mandate.json now exists and is
+            COPYed into the image, carrying exactly the authorized envelope:
+            $5.00/market, $15.00 total, $3.00 residual, 1 concurrent market,
+            3 total markets, -$6.00 daily realized-loss stop, service
+            l5-r1-probe, expiry 2026-09-17T20:36:35Z.
+
+            THE HALT LATCH IS STILL PRESENT AND STILL WINS. shutdown_requested()
+            is read BEFORE armed() is consulted, so the container will come up
+            SHUTDOWN_VERIFIED exactly as it has all day -- but its
+            effective_envelope will now show mandate_loaded true, which is the
+            "verify again" step of the owner's sequence. Arming takes a further
+            deploy that removes HALT, and that is a separate authorised entry
+            in this log.
+
+            Lineage re-pinned to cover the mandate itself. This is the first
+            time the pin covers an actual AUTHORIZATION rather than a record of
+            one, which is the authorization directory doing its job: granting
+            an authorization is a reviewed commit, and the gate makes it one.
+
+            Full suite 4951 passed / 0 failed; lineage ACCEPTANCE true against
+            a2fab7c6 with FORBIDDEN_CLASSES still containing SIZING.

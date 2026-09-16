@@ -181,13 +181,13 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "060050ea3aebb4f84ada88d8e663532f8bfaf86f",
+        "sha": "36f2eb58e3159491c23c8aab69feb421beb6e98d",
         "why": ("The committed HALT latch, the live mandate when one exists, "
                 "and the arming records. Data and prose, never code: HALT's "
                 "presence halts and live_mandate.json's absence is the safe "
                 "state. Shipped as a directory so granting or revoking an "
                 "authorization is a reviewed commit rather than a Dockerfile "
-                "edit. RE-PINNED 2026-09-16 for CP1_EXPLICIT_SIZING_..., after the B3 record's "
+                "edit. RE-PINNED 2026-09-16 for live_mandate.json ITSELF -- the first time this pin covers an actual AUTHORIZATION rather than a record of one. That is the directory doing its job: granting the authorization is a reviewed commit, and the gate makes it one. Earlier pins today covered ARMING_BLOCKED_3_..., B3_PERSISTED_RUNG_INTERSECTION_... and CP1_EXPLICIT_SIZING_..., after the B3 record's "
                 "steps 6-7 production verification. The chain: "
                 "ARMING_BLOCKED_3_... reported that durable state would "
                 "re-apply R3L over the pinned CP1; "
