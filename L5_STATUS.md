@@ -1,90 +1,101 @@
-# L5 Canonical Pipeline — Status (2026-09-02)
+# L5 Canonical Pipeline — Status
 
 Subject: Polymarket trader `l5zn1bwom8etsk`
-(`0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68`). Research only: every code
-path here is public-data GET-only; nothing trades, authenticates for
-orders, or touches live services.
+(`0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68`).
 
-## Current Live Transfer / Handoff (2026-09-02, for fresh sessions)
+**This repository now contains a money-moving path.** It is HALTED and
+unauthorized (see below). The research/replay paths remain public-data
+GET-only; the live path is `l5-r1-probe` and is gated by a committed HALT file
+and a committed mandate whose absence is the safe state.
 
-Exact state to re-establish from GitHub alone. Labels are strict:
-HISTORICAL (source data), SHADOW/MODELED (never realized), LIVE
-submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
+Everything from "Consolidation lineage" onward is preserved historical
+evidence and is not rewritten. Only this handoff section tracks current state.
 
-* **Probe branch**: `feature/gemini-l5-dynamic-q1-v1policy`, current head
-  `f62697224278447233846f28eebda4d9a9fff3b4` (prior verified base
-  `dda0c040761ac0665cbd19da3e6ad4d34a534e60`). Frozen v1 model
-  `a846e6bc96fc8079` (Mar 27+ regime; ex-ante gate PASSED 2026-09-01,
-  clustered log-prob CI [+0.021, +0.099]).
-* **LIVE probes to date** (q=1, BTC-5m, operator-run in Docker from
-  `dda0c040`):
-  - #1: order accepted, no fill, $0. Account flat after.
-  - #2: NO filled @0.50 (submitted→filled authoritative), v1 said EXTEND,
-    q=1 cap → one-sided hold; YES settled (authoritative settlement);
-    **REALIZED −$0.51**. Account flat after.
-  - #3: order accepted, no fill, $0. Account flat after.
-  - **Cumulative realized live trading: −$0.51.** Nothing else is
-    realized; every other economic figure in this repo is HISTORICAL or
-    MODELED.
-* **Bounded-extension HISTORICAL result** (`extension_study.py`,
-  `l5-canonical@496b62ab`): after "one-sided + next relation EXTEND",
-  L5 later complements 74.8% of the time (median 60 s) — but with median
-  interim imbalance ~$72 (p90 $281), far above any q=1 budget; modeled
-  q=1 counterfactuals: hold P(loss) 44.2%, forced completion 33.7%.
-* **Simplified next configuration at `f6269722`** (implemented, tested,
-  DISARMED): BTC-5m only, q=1, one campaign/session,
-  `FORCED_COMPLETION_RISK_OVERLAY` (`GEMINI_L5_FORCED_COMPLETION=1`):
-  180 s first-leg maker rest, then immediately after the first
-  authoritative fill post the fee-safe opposite-side complement
-  preserving ≥1¢ completed-pair edge computed from the ACTUAL execution
-  price, kept working maker-only until the TTE stop; no same-side
-  extension exists; frozen-v1 decisions are still recomputed and logged
-  every re-evaluation (`v1_pure_decision`) but never suppress the
-  complement — an explicit transfer/risk overlay, NOT validated L5
-  behavior. All shell safety semantics inherited (durable exact IDs,
-  exec-price accounting, exact-inactive proof, residual fail-closed,
-  `settlement_required`, `realized_pnl=None` until settlement).
-  **692 tests pass** on the probe branch.
-* **Arming**: operator-side only (dual-key envs + Docker on the
-  credentialed host). **Nothing is currently armed**; this research
-  environment holds no exchange credentials by design.
+## Current Live Transfer / Handoff (2026-09-16, for fresh sessions)
 
-### Always-on architecture (added 2026-09-02, probe branch @ post-d0f19dd8)
+Labels are strict: HISTORICAL (source data), SHADOW/MODELED (never realized),
+LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 
-The one-off probes are superseded by a durable supervisor on
-`feature/gemini-l5-dynamic-q1-v1policy`:
+> **The old R1→R2→R3 rung/campaign program is RETIRED.** The remaining blocker
+> is NOT an owner arming decision. Do not clear a latch or set a dual key to
+> "unblock" anything. Read `L5_CURRENT_PRIORITY.md` first.
 
-* `src/gemini_l5_transfer_supervisor.py` — continuous loop, **SHADOW
-  (mutation-free, public-data) by default**, `mode` stamped on every emit
-  and ledger row. Shadow follows the exact live decision path (selector →
-  v1 flat gate → TRANSFER_INITIALIZER → 180 s rest → forced complement at
-  the fee-safe bound) with THEORETICAL fills detected from the public
-  trade tape. LIVE mode delegates single campaigns to the proven dynamic
-  owner (operator dual-key arming unchanged; the supervisor never arms).
-  Hard bounds: BTC-05M, q=1, one campaign at a time, residual cap 1,
-  campaigns/day cap (default 6), **daily realized-loss stop $1**
-  (authoritative settlement only), persistent HALT on any
-  unresolved/ambiguous settlement, owner exception, or loss stop —
-  survives restarts, operator-cleared only. Durable state root:
-  state.json / campaigns.jsonl / heartbeat.json / daily summaries.
-  One-command report: `... gemini_l5_transfer_supervisor status`.
-* `src/gemini_l5_settlement_audit.py` — settlement authority
-  (`positions/settled` rows only), now with **local exact-identity
-  filtering** (`contractMetadata.eventTicker` precedence) after the
-  live-observed bug where the endpoint returned mixed events; ambiguous
-  rows fail closed as `AMBIGUOUS_SETTLEMENT_IDENTITY`.
-  `available_usd` / `positions=[]` are never settlement proof.
-* Service staging (NOT deployed): `deploy/l5_supervisor/Dockerfile` +
-  `l5-supervisor.service` (systemd template; arming envs deliberately
-  absent).
+### P0: Polymarket US sports
 
-**Probe #4 (`v1probe-20260902-04`, BTC05M2609021210) current state**:
-LIVE submitted → filled 1 YES + 1 NO (`MATCHED_V1_COMPLETION`, maker
-turnover 0.97, logged fees 0.02, residual 0) → **settlement NOT yet
-source-confirmed**: the +$0.03 balance move and `positions=[]` are NOT
-proof; realization awaits exact-identity `positions/settled` rows via the
-corrected auditor. Cumulative REALIZED live trading remains **−$0.51**
-(probe #2) until then.
+**Live executor — HALTED and unauthorized.** `l5-r1-probe` (`6111a5d4-…`),
+deployment `e0e89ca7`, commit `9fc7f32d6c66`, `SHUTDOWN_VERIFIED`, zero open
+orders, account flat. `analysis/l5/authorization/HALT` is present and COPYed
+into the image (read before `armed()`); `analysis/l5/authorization/
+live_mandate.json` is **absent**, so `run_campaign` returns `NO_MANDATE` and
+the transport guard refuses every `POST /v1/orders`. The `PMUS_SPRING_*` dual
+key is still set on the service and is **no longer sufficient on its own**.
+
+**2026-09-16 authorization breach — occurred, fixed, tested.** Authorized for
+ONE market at $0.05; traded 11+ markets and committed **$19.3295** to one.
+Causes: (a) the campaign chain continued on approvals dated 2026-09-06, raising
+the per-market envelope to $7.50; (b) `counts_against_market_cap()` was a
+stage-name allow-list that excluded `spring_complete_*`, a BUY of the
+complement. Replaced by an immutable per-authorization mandate enforced at the
+transport by economic effect (`src/pmus_live_mandate.py`), with consumption
+read from the durable ledger. Continuation, settlement, restart, resume,
+`advance_gate` and historical rung approvals cannot enlarge or replace it.
+Records: `analysis/l5/live_probe/R1_CANARY_BREACH_2026-09-16.md`,
+`analysis/l5/live_probe/EXECUTION_ARCHITECTURE.md`. Tests:
+`tests/test_live_mandate_{adversarial,ledger_invariant,deployment}.py` —
+preserve all three.
+
+**V1 continuous-inventory SHADOW — RUNNING, unchanged.** `l5-v1-shadow`
+(`8a7bc9f4-…`), deployment `17d027dd`, commit `76061d06`. No credentials, no
+transport, no order verb, no executor in the image. ~46 sports markets/cycle,
+~49k rows. k = 0.00619, Envelope A. Not to be tuned during this sample. Both
+the naive and the `residual / k` L5-equivalent state lookups are retained; the
+lift changes the answer on 98% of rows.
+
+**ACT vs WAIT is the current fidelity question.** V1 proposes on ~79.5% of
+rows; every WAIT is a risk cap, never the model. The model's relation
+vocabulary is `{open, complete, extend}` — no wait/hold/none token exists in
+the artifact — so `P(act) = 1` by construction. Separately, `observe()` never
+passes `last_rel`/`last_size`, so lookups are frozen at `(open, q<5)`, reaching
+202 of 69,646 transitions (0.29%). Waiting IS in the artifact, as
+`cadence_modal` gap buckets, which V1 does not consult. Full diagnosis:
+`analysis/l5/v1_shadow/ACT_VS_WAIT.md`. **Controller unchanged pending a
+decision.**
+
+### Scaling
+
+763,966 unique historical fills. The continuous-inventory shape is already
+present in the early **2026-03-19 → 04-19** regime (~218 fills/day, ~$1,139
+notional/day, ~$128.69 median window notional, ~28 fills/window, ~10-share
+typical fill, ~$32.90 median peak residual). Across the later 87× capital
+increase, median fill size moved ~1.4× while fills/day moved ~44.5× and
+markets/day ~24×. **Working hypothesis — supported by that comparison, not a
+universal rule — L5 scaled by frequency and breadth, not size.** Direction:
+one controller → explicit bankroll envelope → many eligible markets → more
+repetitions as realized evidence earns expansion.
+
+**No live scaling authorization currently exists.** Candidate envelopes are
+recorded unranked and unarmed.
+
+### Realized accounting (cohorts never merge)
+
+* **R1 cohort**: venue-confirmed realized **−$0.0916** across five markets
+  (meiguo-junzha −0.0214, zavmyk-honser −0.0306, lacvic-qiasun −0.0264,
+  koryev-semser +0.0318, liszaa-elekor −0.0450).
+* `aec-itfme-conbra-andpet-2026-09-16`: **SETTLED_REALIZED_UNCONFIRMED**
+  (the venue supplied no `realizedPnl`), venue_qty 40.88 == ledger 40.88,
+  position_net 0. Held OUT of every net. Its ~$1.1105 matched-pair figure is
+  **derived arithmetic, not realized profit**; its $0.1200 incentive is
+  venue-credited and stays separate from trading P&L.
+* **Legacy PMUS cohort**: **−$44.4898** across 54 markets / 34 venue-confirmed.
+* Earlier BTC-5m q=1 live probes: cumulative realized **−$0.51** (HISTORICAL).
+
+### Other services
+
+* **Legacy PMUS** `pmus-spring-l5-probe` (`d84d9a68-…`): **HALTED, do not clear
+  the latch.** Its Railway startCommand rewrites source with `sed -i` at boot,
+  so the running code is not the reviewed artifact even when the hash matches.
+* **Gemini**: P1, collecting, untouched.
+* **Polymarket.com**: observation/reference only.
 
 ## Consolidation lineage (Phase 1 audit result)
 

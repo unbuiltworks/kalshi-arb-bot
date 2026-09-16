@@ -1,96 +1,156 @@
 # L5 CURRENT PRIORITY
 
-This is the operational north star for L5 work. Read this together with `L5_STATUS.md` before starting material L5 work. `L5_STATUS.md` preserves evidence/history; this file states what we are doing now. Update this file only when the operational state materially changes. Never rewrite historical evidence to fit current priorities.
+Operational north star, as of **2026-09-16**. Read with `L5_STATUS.md`, which
+preserves evidence and history; this file states what we are doing now. Never
+rewrite historical evidence to fit current priorities.
 
-## Objective
+> **If you are a fresh session:** the remaining blocker is **not** an owner
+> arming decision. The old R1→R2→R3 rung/campaign program is **retired**. Do not
+> resurrect it. Do not clear a latch or set a dual key to "unblock" anything.
 
-Get the L5-adapted engine producing safe, executable, realized positive economics. Do not create new strategy workstreams unless current evidence requires one.
+## Destination
 
-## P0 — Polymarket US Sports
+One continuously operating L5-style engine, not a sequence of experimental rungs:
 
-Polymarket US sports is the shortest current path to a bounded live L5-adapted probe.
+**L5 observation → FIDELITY desired inventory → explicit ADAPTED bankroll/risk
+scaling → Polymarket US sports execution → transport-level mandate → venue
+reconciliation → settlement → realized accounting**, looping across many
+eligible markets.
 
-Current state:
-- Continuous L5-style inventory engine: RUNNING, currently halted/disarmed for money movement.
-- Authenticated sports collection: RUNNING.
-- Shadow decisions: RUNNING.
-- Money-moving execution path: EXISTS.
-- Settlement/accounting: VENUE-CONFIRMED on prior real-money activity.
-- Strict spring evidence (2026-09-16T01:41:44Z): the **category bar is MET**. MLB carries 7 completions across 7 distinct markets by independent recount, and the recorder's own `spring_category_evidence` reports `completions_60m 10 / distinct_markets_60m 10 / bar_met true`. It arrived through the existing pipeline with no policy or evidence-standard change.
-- Across all 75 watch rows: 13 completions, **0 at <=0.96**, 13 at <=0.98, cheapest 0.9750. The <=0.96 discipline is still met **zero** times.
-- Remaining Lane A blockers are **owner decisions only**: clear the shutdown latch; set the dual key; decide whether 0.98 is acceptable for a first bounded probe or the probe waits for <=0.96.
-- `spring_le_096_completions` is a legacy compatibility name and actually counts <=0.98 completions. It MUST NOT be interpreted as evidence of true <=0.96 completion. DONE: `analysis/l5/lanes/lane_a_readiness.py` never reads that field, recounts from `spring_pair_costs`, and publishes <=0.96 and <=0.98 as separate explicit counts; a test feeds the field set to 3 beside three 0.9800 costs and pins the <=0.96 count at zero.
-- RESOLVED, neither number changed: there is no inconsistency. `q1_size` is a BEHAVIORAL unit (one L5 size unit = one venue-minimum contract); the executable size is derived separately by `choose_micro_quantity` under the rung's bounds. The venue reports `minimumTradeQty 0.01` on live sports, so a 0.27 touch executes as **0.02 contracts for $0.0054** against the $0.05 per-market cap -- nine entries of headroom. $0.27 is a price, not a spend. The $0.05 envelope is neither obsolete nor blocking.
-- Do not arm, clear shutdown latches, or relax economics/category thresholds merely to obtain a trade.
+Stop expanding infrastructure unless it is required to reach that.
 
-Shortest path:
+## P0 — Polymarket US sports
 
-**collect continuously -> second independent same-category market -> exact deployed-artifact preflight -> explicit bounded live-probe decision**
+### Live money executor: HALTED, and unauthorized
 
-Steps 1-3 are complete. The arming preflight is prepared and not executed at `analysis/l5/lanes/lane_a_readiness.py::arming_preflight`; it relaxes nothing, arms nothing, and treats any gate it cannot establish as a blocker. Only step 4 remains.
+`l5-r1-probe` (`6111a5d4-…`), deployment `e0e89ca7`, commit `9fc7f32d6c66`:
+`SHUTDOWN_VERIFIED`, zero open orders, account flat.
 
-## P1 — Gemini Crypto 5m/15m + Sports
+Three independent reasons it cannot trade, two of them in the repository:
 
-Current state:
-- Crypto 5m/15m collection: RUNNING.
-- Continuous-inventory queue shadow: RUNNING; do not reduce Gemini evidence to old R/S/D pair experiments.
-- Strict queue opportunities/completions exist in the queue-aware work; venue is not disqualified by failed R/S/D or cap5/8/13 arms.
-- Gemini canary/order transport: EXISTS in repository work but is not the currently deployed execution path.
-- Venue-confirmed settlement accounting: MISSING; theoretical/mid-proxy settlement is not realized P&L.
-- Gemini sports collection: MISSING/not established in the current lane audit.
+1. `analysis/l5/authorization/HALT` exists and is COPYed into the image;
+   `shutdown_requested()` is read **before** `armed()`.
+2. `analysis/l5/authorization/live_mandate.json` is **absent** → `NO_MANDATE`
+   → `GuardedTransport` refuses every `POST /v1/orders`.
+3. Spending is admitted at the **wire** against an immutable mandate, by
+   economic effect rather than by action name.
 
-Next priority for Gemini: keep shadow collection running and establish venue-confirmed settlement/accounting before treating a live probe as capable of producing realized results. Do not tune a new strategy to compensate for this infrastructure gap.
+The service's `PMUS_SPRING_*` dual key is still set and **is no longer
+sufficient on its own**. Do not read it as arming.
 
-## Reference Venue
+### The 2026-09-16 authorization breach — happened, fixed, tested
 
-**Polymarket.com is the L5 observation/reference venue, not an execution destination for this project.**
+Authorized for **one market at $0.05**; it traded **11+ markets** and committed
+**$19.3295** to one. Two causes, both now structural failures rather than
+judgement calls:
 
-L5's public Polymarket.com crypto activity is used to infer sequential behavior and test fidelity. Absence of BTC/ETH 5m/15m instruments on Polymarket US is known and is not a blocker to the intended sports-transfer program.
+- the campaign chain continued on owner approvals dated **2026-09-06**
+  (R2C/R2C2/R3L), lifting the per-market envelope $0.05 → $7.50;
+- `counts_against_market_cap()` was an **allow-list of stage names** that
+  excluded `spring_complete_*`, which on this venue is a BUY of the complement.
 
-## Frozen Evidence
+Fixed by `src/pmus_live_mandate.py`: an immutable per-authorization mandate
+(`authorization_id`, `authorized_at`, `service`, `strategy`,
+`strategy_version`, `max_markets`, `max_total_markets`, `max_spend_per_market`,
+`max_total_spend`, `max_residual`, `max_daily_realized_loss`, `expiry` — all
+required), enforced at the transport, with consumption read from the durable
+ledger. Continuation, settlement, restart, resume, `advance_gate` and
+historical rung approvals **cannot enlarge or replace it**. An approval must
+postdate the mandate; undated is refused.
 
-- R/S/D prospective experiment: FROZEN / FAILED. Do not rescue or retune it without a materially new hypothesis.
-- `ADAPTED_RESIDUAL_CAP_PROSPECTIVE_V0` cap5/cap8/cap13: FROZEN / FAIL. Run caps alone did not qualify prospectively; do not rerun cap3/cap4 or alter its preregistered thresholds after the result.
-- Legacy losing PMUS executor/accounting state: HALTED. Do not restart or clear its latch merely to create activity.
+Evidence: `analysis/l5/live_probe/R1_CANARY_BREACH_2026-09-16.md`,
+`analysis/l5/live_probe/EXECUTION_ARCHITECTURE.md`.
+Tests: `tests/test_live_mandate_adversarial.py` (replays the breach step by
+step), `tests/test_live_mandate_ledger_invariant.py` (accepted notional ≤
+authorized envelope at every prefix, measured independently from the ledger,
+with a control proving the pre-incident rule violates it),
+`tests/test_live_mandate_deployment.py`. **Preserve all three.**
 
-These failures falsify specific implementations. They do not establish that L5-style transfer to sports or Gemini as a venue is impossible.
+### Automatic rung progression is RETIRED
 
-## Critical L5 Findings To Preserve
+No R4/R5. No automatic R1→R2→R3. A market beyond `max_total_markets` requires a
+**new explicit authorization**, which means a human and a commit.
 
-- 0.96 is a trajectory/economic destination in the historical evidence, not an established L5 entry threshold. L5 often forms two-sided inventory nearer ~$0.99 and improves economics through subsequent accumulation.
-- The analytical OPEN/EXTEND/SWITCH/COMPLETE vocabulary is our ontology, not proven L5 internal logic.
-- Historical matched edge and residual exposure are tightly coupled; prospective residual-cap work showed broad residual leakage. Do not hide directional residual risk behind pair-profit reporting.
-- Incentives/rebates must remain separately accounted and attributable. Estimated or unattributable incentives cannot rescue a shadow gate.
+### V1 continuous-inventory SHADOW: RUNNING, unchanged
 
-## Anti-Drift Rule
+`l5-v1-shadow` (`8a7bc9f4-…`), deployment `17d027dd`, commit `76061d06`. No
+credentials, no transport, no order verb, no executor in the image. ~46 sports
+markets/cycle, ~49k observation rows. **Leave it running. Do not tune k, the
+pair target, thresholds, the model or Envelope A during this sample.**
 
-Before starting work, ask:
+Both state lookups are preserved on every row — naive inventory state and the
+corrected `residual / k` L5-equivalent state — because the lift changes the
+answer on **98%** of rows and we keep measuring that.
 
-**Does this directly move P0 Polymarket US sports toward its bounded live probe, move P1 Gemini toward executable/settleable validation, or materially improve fidelity to observed L5 behavior needed for those lanes?**
+### ACT vs WAIT is the current fidelity question
 
-If no, it is probably not the priority.
+V1 proposes on ~79.5% of observed rows; every WAIT is a risk cap, never the
+model. Diagnosis in `analysis/l5/v1_shadow/ACT_VS_WAIT.md`. In short:
 
-Do not let Polymarket.com execution/access, generic arbitrage, legacy PMUS accounting, old Gemini experiments, infrastructure cleanup, or unrelated strategy ideas displace P0 unless new evidence changes the priority.
+- **The model cannot say WAIT.** Its relation vocabulary is
+  `{open, complete, extend}`; no wait/hold/none/noop token exists anywhere in
+  the artifact. It is a *transition* model over 69,646 L5 **fills** — "given L5
+  just acted, what next?" — so `P(act) = 1` by construction. This is the root
+  cause, and it is a **missing-NO-ACTION-training-states** problem.
+- **A separate implementation defect**: `observe()` never passes
+  `last_rel`/`last_size`, so every lookup uses the defaults `(open, q<5)`,
+  reaching **40 of 988** full keys and **202 of 69,646** transitions — 0.29% of
+  L5's evidence. This degrades *which* action is predicted; it does not cause
+  the over-action.
+- Waiting **is** represented in the artifact, as `cadence_modal`
+  (`gap<2s` / `gap2-10` / `gap10-30` / `gap>30`) — the inter-action gap. V1
+  does not consult it.
 
-## Profit / Status Discipline
+Do **not** change the controller on this yet.
 
-Use the status chain:
+## Scaling hypothesis — frequency and breadth, not size
 
-**historical replay -> shadow -> live probe -> submitted -> filled -> settled -> realized**
+From 763,966 unique historical fills. L5's continuous-inventory shape is
+already present in the early **2026-03-19 → 04-19** regime: ~218 fills/day,
+~$1,139 notional/day, ~$128.69 median window notional, ~28 fills/window,
+~10-share typical fill, ~$32.90 median peak residual.
 
-Never call shadow inventory, theoretical fills, modeled pair edge, mid-proxy settlement, estimated rebates/rewards, or mark-to-market gains realized profit.
+Across the later 87× capital increase, median fill size moved only ~1.4× while
+fills/day moved ~44.5× and markets/day ~24×.
 
-For live economics account separately for:
-1. matched-pair economics
-2. directional residual P&L
-3. spread capture
-4. maker rebates
-5. liquidity rewards
-6. fees
-7. settlement/redemption cashflows
+**Working hypothesis, supported by that historical comparison and not a
+universal rule:** L5 scaled primarily by frequency and breadth. Production
+direction: *one L5 controller → explicit bankroll envelope → many eligible
+markets → more repetitions as realized evidence earns expansion.* Favour more
+eligible markets before materially larger orders.
 
-## Standing Start/Finish Instruction
+**No live scaling authorization currently exists.** Candidate envelopes are in
+`analysis/l5/v1_shadow/ACT_VS_WAIT.md`; they are unranked and unarmed.
 
-At the beginning of every material L5 task, read `L5_CURRENT_PRIORITY.md` and `L5_STATUS.md` and establish current GitHub/deployment state rather than assuming an old conversation reflects production.
+## Accounting
 
-At the end of material work, update `L5_CURRENT_PRIORITY.md` only if the operational state actually changed. Preserve source provenance and historical evidence.
+`historical → shadow → submitted → filled → settled → realized`, kept separate.
+Cohorts stay separate (`_cohort` is stamped per service on every ledger row).
+
+- R1 cohort venue-confirmed realized: **−$0.0916** across five markets.
+- Legacy PMUS cohort: **−$44.4898** across 54 markets. The two never merge.
+- `aec-itfme-conbra-andpet-2026-09-16` is **SETTLED_REALIZED_UNCONFIRMED** and
+  stays out of every net. Its ~$1.1105 matched-pair figure is **derived
+  arithmetic, not realized profit**; its $0.1200 incentive is venue-credited
+  and stays separate from trading P&L.
+
+Rebates, rewards and incentives remain separate and attributable. Pending
+incentives are accrued, never income.
+
+## Everything else
+
+- **Legacy PMUS** `pmus-spring-l5-probe` (`d84d9a68-…`): stays **HALTED**. Do
+  not clear the latch. Its startCommand rewrites source with `sed -i` at boot,
+  so the running code is not the reviewed artifact.
+- **Gemini**: P1, collecting, untouched.
+- **Polymarket.com**: observation/reference only.
+- No generic arbitrage, no R/S/D or cap5/8/13 revivals, no new rung strategies.
+
+## What would actually move us forward
+
+A. V1 ACT/WAIT — done, diagnosed; controller unchanged pending a decision.
+B. Deployed mandate boundary — verified on commit `9fc7f32d`.
+C. Smallest shape-preserving continuous envelope — candidates offered, owner
+   chooses.
+D. Open question: whether a single $0.05 plumbing regression adds anything the
+   adversarial and ledger-prefix tests do not already establish.
