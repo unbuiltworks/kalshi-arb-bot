@@ -199,6 +199,9 @@ def preorder_preflight(*, rows, serving_artifact: Optional[str] = None,
                        latch_set: Optional[bool] = None,
                        dual_key_set: Optional[bool] = None,
                        settlement_confirmed_markets: Optional[int] = None,
+                       start_command: Optional[str] = None,
+                       rearm_rung: Optional[str] = None,
+                       dual_key_vars_unset: Optional[bool] = None,
                        entry_price: Any = "0.27") -> Dict[str, Any]:
     """Rerun against CURRENT venue state immediately before any order.
 
@@ -244,6 +247,44 @@ def preorder_preflight(*, rows, serving_artifact: Optional[str] = None,
                    else (None if evidence_sha256.startswith(EVIDENCE_SHA256_PREFIX)
                          else "frozen evidence has changed"),
                    {"expected_prefix": EVIDENCE_SHA256_PREFIX}))
+
+    # RUNTIME IDENTITY. The Railway startCommand OVERRIDES the image CMD, and
+    # on this service it runs `sed -i` against src/pmus_l5_continuous_session.py
+    # at boot to rewrite REARM_RUNG from "R5F" to "R5FT". A container whose
+    # source is patched at boot is NOT the artifact that was reviewed, however
+    # well the commit hash matches -- the hash describes the image, not what
+    # runs. Verifying 6adcc4c43e67 and stopping there would have missed it.
+    gates.append(g("RUNTIME_IS_UNMUTATED_ARTIFACT",
+                   None if start_command is None else
+                   not any(tok in start_command for tok in ("sed -i", "sed -e",
+                                                            "patch ", "> src/")),
+                   "start command not supplied" if start_command is None else
+                   (None if not any(tok in start_command
+                                    for tok in ("sed -i", "sed -e", "patch ",
+                                                "> src/"))
+                    else "the start command MUTATES SOURCE at boot; the running "
+                         "code is not the reviewed artifact"),
+                   {"start_command": start_command}))
+    # The re-arm gate's expected rung. R5F/R5FT are the FIDELITY program at
+    # $7.50/$30.00 per market; a service whose re-arm check expects one of them
+    # is not configured for this R1 probe.
+    gates.append(g("REARM_RUNG_EXPECTS_R1",
+                   None if rearm_rung is None else rearm_rung == REQUIRED_RUNG,
+                   "rearm rung not supplied" if rearm_rung is None else
+                   (None if rearm_rung == REQUIRED_RUNG else
+                    f"REARM_RUNG is {rearm_rung}, not {REQUIRED_RUNG}"),
+                   {"rearm_rung": rearm_rung, "required": REQUIRED_RUNG}))
+    # Any of these present as a SERVICE VARIABLE can arm the moment the latch
+    # clears, because armed() reads exactly them and the latch is the only
+    # thing currently holding it.
+    gates.append(g("DUAL_KEY_VARS_PROVEN_UNSET",
+                   None if dual_key_vars_unset is None else dual_key_vars_unset,
+                   "cannot establish that PMUS_SPRING_LIVE/_ARM/_SESSION_ID are "
+                   "unset; if they already hold arming values, clearing the "
+                   "latch ALONE arms the session"
+                   if dual_key_vars_unset is None else
+                   (None if dual_key_vars_unset else
+                    "dual-key variables hold arming values")))
 
     owner = {"SHUTDOWN_LATCH_CLEARED", "DUAL_KEY_ARMED"}
     non_owner_blockers = [x for x in gates

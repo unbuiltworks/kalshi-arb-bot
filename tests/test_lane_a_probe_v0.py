@@ -109,9 +109,21 @@ def test_all_gates_green_and_owner_gates_open_permits_an_order():
                              active_rung="R1", markets_allowed=1,
                              evidence_sha256=F.snapshot()["sha256"],
                              budget_permits=True, latch_set=False,
-                             dual_key_set=True, settlement_confirmed_markets=34)
+                             dual_key_set=True, settlement_confirmed_markets=34,
+                             start_command="exec python3 -m src.x",
+                             rearm_rung="R1", dual_key_vars_unset=True)
     assert r["ORDER_PERMITTED"] is True
     assert r["NO_ORDER_REASON"] is None
+
+
+def test_omitting_any_new_gate_fails_closed():
+    """Adding a gate must not be satisfiable by silence."""
+    r = P.preorder_preflight(rows=_rows(), serving_artifact=P.SERVING_ARTIFACT,
+                             active_rung="R1", markets_allowed=1,
+                             evidence_sha256=F.snapshot()["sha256"],
+                             budget_permits=True, latch_set=False,
+                             dual_key_set=True, settlement_confirmed_markets=34)
+    assert r["ORDER_PERMITTED"] is False
 
 
 def test_the_module_contains_no_order_verb():
@@ -171,3 +183,61 @@ def test_neither_owner_gate_is_cleared_by_this_module():
     assert a["neither_cleared_here"] is True
     assert a["both_required"] is True
     assert "WARNING" in "".join(a["SHUTDOWN_LATCH_CLEARED"].keys())
+
+
+# ------------------------------------------------- runtime identity
+
+def test_a_start_command_that_mutates_source_blocks_the_order():
+    """The commit hash describes the IMAGE, not what runs. This service's
+    Railway startCommand overrides the image CMD and seds the source at boot."""
+    sc = ('sh -c \'sed -i "s/^REARM_RUNG = \\"R5F\\"$/REARM_RUNG = \\"R5FT\\"/" '
+          'src/pmus_l5_continuous_session.py && exec python3 -m '
+          'src.pmus_l5_continuous_session\'')
+    r = P.preorder_preflight(rows=_rows(), serving_artifact=P.SERVING_ARTIFACT,
+                             active_rung="R1", markets_allowed=1,
+                             evidence_sha256=F.snapshot()["sha256"],
+                             budget_permits=True, latch_set=False,
+                             dual_key_set=True, settlement_confirmed_markets=34,
+                             start_command=sc, rearm_rung="R1",
+                             dual_key_vars_unset=True)
+    assert r["ORDER_PERMITTED"] is False
+    assert "RUNTIME_IS_UNMUTATED_ARTIFACT" in [
+        b["gate"] for b in r["non_owner_blockers"]]
+
+
+def test_a_clean_start_command_passes_the_runtime_gate():
+    r = P.preorder_preflight(rows=_rows(), serving_artifact=P.SERVING_ARTIFACT,
+                             active_rung="R1", markets_allowed=1,
+                             evidence_sha256=F.snapshot()["sha256"],
+                             budget_permits=True, latch_set=False,
+                             dual_key_set=True, settlement_confirmed_markets=34,
+                             start_command="exec python3 -m src.x",
+                             rearm_rung="R1", dual_key_vars_unset=True)
+    assert r["ORDER_PERMITTED"] is True
+
+
+def test_a_fidelity_rearm_rung_blocks_the_order():
+    for bad in ("R5F", "R5FT", "R2C"):
+        r = P.preorder_preflight(rows=_rows(),
+                                 serving_artifact=P.SERVING_ARTIFACT,
+                                 active_rung="R1", markets_allowed=1,
+                                 evidence_sha256=F.snapshot()["sha256"],
+                                 budget_permits=True, latch_set=False,
+                                 dual_key_set=True,
+                                 settlement_confirmed_markets=34,
+                                 start_command="exec python3 -m src.x",
+                                 rearm_rung=bad, dual_key_vars_unset=True)
+        assert r["ORDER_PERMITTED"] is False, bad
+
+
+def test_unprovable_dual_key_vars_block_the_order():
+    """If PMUS_SPRING_LIVE/_ARM/_SESSION_ID already hold arming values,
+    clearing the latch ALONE arms the session."""
+    r = P.preorder_preflight(rows=_rows(), serving_artifact=P.SERVING_ARTIFACT,
+                             active_rung="R1", markets_allowed=1,
+                             evidence_sha256=F.snapshot()["sha256"],
+                             budget_permits=True, latch_set=False,
+                             dual_key_set=True, settlement_confirmed_markets=34,
+                             start_command="exec python3 -m src.x",
+                             rearm_rung="R1", dual_key_vars_unset=None)
+    assert r["ORDER_PERMITTED"] is False
