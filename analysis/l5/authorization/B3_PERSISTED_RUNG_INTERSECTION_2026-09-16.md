@@ -108,3 +108,69 @@ The halted process now computes the SAME intersection the armed path will, so
 a pin/stored mismatch is visible **before** the halt is lifted rather than
 after. Before B3 this disclosure said CP1 while the armed process would have
 run R3L.
+
+---
+
+## Steps 6–7 verified in production (2026-09-16T20:06:40Z)
+
+Deployment `4cfa8e0f-0f62-42a6-91b7-a4cf6d3e97b0`, SUCCESS at 20:06:44Z.
+
+**Step 6 — serving SHA matches what was tested.** The container logs
+`commit: f1f65e78a7f2`, which is the pushed HEAD
+`f1f65e78a7f26ff018ace3998942204865308b8f`.
+
+**Step 7 — the halted disclosure sees persisted R3L and calculates
+CP1-compatible effective limits**, verbatim from the halted container:
+
+```json
+"persisted_rung": "R3L",
+"after_restore": {
+  "pinned_rung": "CP1", "stored_rung": "R3L", "stored_rung_recognized": true,
+  "effective_rung": "CP1",
+  "per_market_cap_usd": "5.00",   "residual_units": 3,
+  "daily_loss_stop_usd": "-6.00", "target_notional_usd": "0.01",
+  "max_leg_notional_usd": "0.02", "markets_per_campaign": 3,
+  "concurrency": 1, "max_actions_per_session": 6,
+  "tightened_by_stored": [], "no_dimension_loosened": true
+}
+```
+
+Every value matches the block preregistered in the watch before the deploy
+landed. The three limits R3L would have changed — residual 6 units, a −$15.00
+stop, and $2.50/$3.25 action sizing — are all held at CP1's. The A2 step 8
+blocker is **resolved**.
+
+Account state in the same record: `SHUTDOWN_VERIFIED`, `sweep.seen 0`,
+`still_open_ours []`, `foreign_open []`, `held_preserved []`.
+
+## Steps 8–10 NOT taken — a separate blocker
+
+**CP1 cannot reach its own $5.00 cap.** CP1 states no `target_notional_usd`
+and no `max_leg_notional_usd`, so it inherits `DEFAULT_TARGET_NOTIONAL $0.01`
+and `DEFAULT_MAX_LEG_NOTIONAL $0.02`. `market_micro_spec()` reads those and
+`choose_micro_quantity()` turns them into the submitted quantity
+(`qty = spec["qty"]`, `pmus_spring_l5_session.py:3500` OPEN/EXTEND and `:3714`
+COMPLETE).
+
+| price | qty | entry $ | × 6 actions | vs the $5.00 cap |
+|---|---|---|---|---|
+| 0.25 | 0.02 | $0.0050 | $0.0300 | 0.60% |
+| 0.45 | 0.02 | $0.0090 | $0.0540 | **1.08%** |
+| 0.90 | 0.01 | $0.0090 | $0.0540 | 1.08% |
+
+With `max_actions_per_session: 6` the binding constraint is 6 × micro size
+≈ **$0.054/market**, ~93× below the authorized $5.00; reaching the cap would
+take ~555 actions. Option A raised the *cap* but not the *spend*, so arming
+would run the ~$0.05-class canary the owner already declined (blocker-1
+Option C: "a different experiment from the one authorized ... will not meet
+the objective").
+
+This is **not** a B3 defect — B3's intersection correctly keeps R3L's
+$2.50/$3.25 out, which is what the owner required. It surfaced *because* B3
+had to establish what each lever does when a rung omits it.
+
+Reported to the owner at ~20:10Z. The remedy — giving CP1 explicit
+`target_notional_usd` / `max_leg_notional_usd` sized to the authorized
+envelope — is a further SIZING change and is **not authorized**. Not taken.
+
+**HALT present. No `live_mandate.json`. Nothing armed.**
