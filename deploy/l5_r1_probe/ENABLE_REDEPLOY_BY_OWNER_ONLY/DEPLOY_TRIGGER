@@ -393,3 +393,43 @@ deploy and why the owner asked for it.
             mechanism.
 
             Record: analysis/l5/authorization/ACTIVATION_2_2026-09-16.md.
+
+--------------------------------------------------------------------------
+2026-09-16T22:24Z — HALT after a COMPLETED probe. The authorization was spent.
+
+            NOT a defect response. The three-market CP1 probe ran its FULL
+            authorized envelope and stopped itself at the boundary:
+
+              ARMED      22:14:33Z, deployment 9bd90901, commit 84974f38ad7f
+              SUBMITTED  13 post-only maker orders across 3 markets
+              FILLED     0
+              SETTLED    nothing from this probe
+              REALIZED   NONE. $0.00 moved. Inventory 0/0, residual 0, spent 0.
+
+            At 22:18:35Z it selected a FOURTH market and the wire guard refused
+            (MandateRefusal:max_total_markets_exhausted, 3 of 3).
+            CAMPAIGN_STOP:HALT at 22:18:45Z; the process exited and
+            restartPolicyType is NEVER.
+
+            WHY DEPLOY A HALT AT ALL. The campaign will not auto-restart, but
+            the SERVING IMAGE carries no HALT and the mandate is valid until
+            2026-09-17T20:36:35Z. A redeploy or restart could re-quote on an
+            already-touched market. A bounded money-moving session must not
+            automatically repeat after a completed probe, so this closes that
+            door. Halting is the fail-closed direction.
+
+            RE-ARMING NEEDS A NEW OWNER AUTHORIZATION. The three-market
+            allowance is SPENT. Reusing this mandate would be a second probe
+            under a consumed authorization, not a reuse.
+
+            THE FIX IS PROVEN BOTH WAYS BY THIS ONE RUN. The campaign advanced
+            across three markets, which it could not do before. And it STOPPED
+            at three, because markets_touched kept its claim. Release the
+            concurrency slot, keep the total -- both halves, live.
+
+            ZERO FILLS IS THE RESULT, NOT A FAULT. The authorized sizing
+            reached the wire correctly every time; the $0.125 per-leg bound
+            binds on the more expensive complement leg. Per the authorization,
+            no fill was forced and the controller was not touched.
+
+            Record: analysis/l5/authorization/PROBE_COMPLETE_2026-09-16.md.
