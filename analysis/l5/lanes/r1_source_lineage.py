@@ -55,7 +55,34 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: commit, the one the 4931-test suite passed on. FORBIDDEN_CLASSES is
 #: untouched and still contains SIZING; a future sizing change still fails
 #: this gate and still needs its own review.
-REVIEWED = "a2fab7c6"
+#: ADVANCED 2026-09-16 for OWNER AUTHORIZATION "fix zero-exposure market
+#: concurrency accounting", on the same terms as every advance above, and this
+#: one deserves the plainest statement of what moved: the changed file is
+#: src/pmus_live_mandate.py -- THE WIRE GUARD ITSELF, the most safety-critical
+#: file in the COPY set. Nothing in this repository is a stronger reason to
+#: look before advancing.
+#:
+#: WHAT CHANGED, exactly: `consumption()` computes `markets_open` as "a live or
+#: unresolved order, or unsettled fills" instead of "committed AND not
+#: settled". The live probe filled nothing on six orders, and a market with
+#: nothing in it never settles, so it held max_concurrent_markets=1 forever.
+#: `markets_touched` is deliberately unchanged, the durable ledger is
+#: untouched, and unresolved state still counts as OPEN.
+#:
+#: WHY THE BASELINE HAD TO MOVE RATHER THAN THE ALLOW-LIST GROW: this file's
+#: honest class is SUBMISSION -- `consumption()` feeds `admit()`, which decides
+#: whether POST /v1/orders happens at all. SUBMISSION is forbidden, so
+#: allow-listing it would mean either mislabeling the change or dropping
+#: SUBMISSION from FORBIDDEN_CLASSES and weakening the gate permanently for
+#: every future change to the guard. The owner reviewed this change and
+#: authorized it explicitly; advancing the baseline is the route that keeps
+#: the gate's strength intact. FORBIDDEN_CLASSES is UNCHANGED and still
+#: contains all four classes. A future change to the wire guard fails this
+#: gate exactly as this one did, and still needs its own review.
+#:
+#: This is a REVIEW gate, not a boot gate. Advancing it grants nothing: HALT
+#: still halts and the mandate is still the only authorization to spend.
+REVIEWED = "33589cd2"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
@@ -181,8 +208,23 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "6550c3bb397ea5474ea6bf0282737e161d24ac18",
-        "why": ("The committed HALT latch, the live mandate when one exists, "
+        "sha": "bca93f22a70a323068e28ac109931f14644e9ba6",
+        "why": ("RE-PINNED 2026-09-16 for the concurrency-accounting fix. This "
+                "tree adds CONCURRENCY_ACCOUNTING_2026-09-16.md and "
+                "FINDING_REFUSAL_CLASSIFICATION_2026-09-16.md -- both "
+                "records -- and HALT is still present with "
+                "live_mandate.json beside it: the HALTED state the owner "
+                "required be deployed and verified BEFORE any "
+                "re-activation. WHY THIS ENTRY IS ALWAYS EXERCISED: it is a "
+                "DIRECTORY, and verify() compares `git show <rev>:<path>`, "
+                "whose first line echoes the revision string itself. So it "
+                "reads as differing even when its tree sha is identical, "
+                "and the pin is therefore checked on every single run. That "
+                "is the right outcome for the directory that grants spend, "
+                "but it is an accident of how git prints a tree rather than "
+                "a designed property, and it is recorded here so nobody "
+                "later 'fixes' it without knowing what it was doing. "
+                "The committed HALT latch, the live mandate when one exists, "
                 "and the arming records. Data and prose, never code: HALT's "
                 "presence halts and live_mandate.json's absence is the safe "
                 "state. Shipped as a directory so granting or revoking an "
