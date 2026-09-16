@@ -34,8 +34,20 @@ confirmation; the honest answer has a real caveat in it.
   from the image, which does not pin PMUS_SPRING_RUNG; and not from Railway
   config, which the Dockerfile records as unreadable on this service.
 
-NO DEPLOYMENT IS REQUIRED. Serving artifact 6adcc4c43e67 already carries
-PMUS_SPRING_RUNG_MARKETS=1 in its image ENV, byte-identical to HEAD.
+THE TARGET SERVICE MOVED, AND THE PIN HAD TO MOVE WITH IT. This module was
+written against `pmus-spring-l5-probe` / artifact 6adcc4c43e67. OWNER DECISION
+2026-09-16 P0 then put that service permanently out of scope -- it stays HALTED
+and its latch is not to be cleared -- so the probe runs on the isolated
+`l5-r1-probe` service instead. That service can never serve 6adcc4c43e67: it is
+a different Dockerfile producing a different image.
+
+Re-anchoring an identity pin is exactly the move that turns a safety check into
+a rubber stamp, so the guarantee is not dropped, it is RELOCATED. The pin said
+"the runtime is the artifact that was reviewed". For the R1 service that claim
+is carried by SOURCE_LINEAGE_ACCEPTED, which recomputes the image's whole COPY
+set against 6adcc4c4 blob-by-blob and fails on any undisclosed delta or any
+delta of class EXECUTION/DECISION/SIZING/SUBMISSION. The pin alone was weaker
+than what replaces it.
 """
 from __future__ import annotations
 
@@ -45,11 +57,25 @@ from typing import Any, Dict, List, Optional
 LABEL = "LANE_A_EXECUTION_MEASUREMENT_PROBE_V0"
 SCOPE = "EXECUTION_AND_ACCOUNTING_MEASUREMENT_ONLY"
 
-# Pinned. A mismatch on either is a STOP, never a warning.
+# Pinned. A mismatch on any of these is a STOP, never a warning.
 EVIDENCE_SHA256_PREFIX = "43da9ac5"
-SERVING_ARTIFACT = "6adcc4c43e67"
 REQUIRED_RUNG = "R1"
 REQUIRED_MARKETS_ALLOWED = 1
+
+# SERVICE-SCOPED artifact identity. Both entries are kept: the legacy one so a
+# reader can see what the pin used to name and confirm it was not quietly
+# repointed at nothing, and the R1 one because that is what now serves.
+LEGACY_SERVICE = "pmus-spring-l5-probe"
+LEGACY_SERVING_ARTIFACT = "6adcc4c43e67"    # HALTED, latched, OUT OF SCOPE
+R1_SERVICE = "l5-r1-probe"
+R1_SERVING_ARTIFACT = "f8b8fae2712b"
+TARGET_SERVICE = R1_SERVICE
+SERVING_ARTIFACT = R1_SERVING_ARTIFACT
+
+# REARM_RUNG as it stands in UNMUTATED repo source. The legacy service's
+# Railway startCommand rewrote it to "R5FT" with `sed -i` at boot, which is the
+# whole reason a re-arm-rung gate exists at all.
+SOURCE_REARM_RUNG = "R5F"
 
 # Read, never written. Named so a reader can confirm it is untouched.
 DEPLOYED_PAIR_TARGET = D("0.98")
@@ -82,30 +108,31 @@ def owner_gate_actions() -> Dict[str, Any]:
     """Exactly what the owner does, and exactly what it can reach."""
     return {
         "SHUTDOWN_LATCH_CLEARED": {
-            "action": ("unset PMUS_SPRING_SHUTDOWN on service "
-                       "d84d9a68-2e5b-4f74-9694-5f422417c74f, or set it to any "
-                       "value outside {1, YES, TRUE}"),
+            "action": ("NOTHING TO DO, AND NOTHING TO TOUCH. The probe no "
+                       "longer runs on the legacy service, so there is no latch "
+                       "to clear: PMUS_SPRING_SHUTDOWN was never set on "
+                       "l5-r1-probe (6111a5d4-a2d9-4762-a057-31f02d07586f) and "
+                       "the container proves it by running the campaign loop "
+                       "instead of shutdown_idle."),
+            "legacy_service_latch": (
+                "pmus-spring-l5-probe (d84d9a68-2e5b-4f74-9694-5f422417c74f) "
+                "KEEPS its PMUS_SPRING_SHUTDOWN latch. OWNER DECISION 2026-09-16 "
+                "P0 supersedes the earlier authorization to clear it. DO NOT "
+                "CLEAR THAT LATCH."),
             "read_as": 'os.getenv("PMUS_SPRING_SHUTDOWN","").strip().upper() '
                        'in ("1","YES","TRUE")',
-            "effect_if_cleared_alone": (
-                "the process leaves shutdown_idle and runs the campaign loop in "
-                "mode SHADOW. armed() is still False, so NO order can be placed."),
-            "cannot_activate": [
-                "any PMUS_Q1_*, PMUS_MICRO_*, PMUS_HANDOFF_*, PMUS_SUPERVISOR_* "
-                "or PMUS_SHADOW_TARGET_* path -- all disjoint key names",
-                "any order path, because shutdown is tested before armed()",
-            ],
-            "CAN_activate_WARNING": (
-                "leaving shutdown runs _apply_rung() from DURABLE STATE. If a "
-                "persisted campaign carries R5F, the PER-MARKET CAP becomes "
-                "$7.50 (150x) and markets_per_campaign CONTINUOUS; R5FT is "
-                "$30.00. The image's RUNG_MARKETS=1 bounds the COUNT, not the "
-                "CAP. ACTIVE_RUNG_IS_R1 must be confirmed from the container's "
-                "own log BEFORE the dual key is set."),
-            "ordering": "clear the latch FIRST, confirm the rung, THEN arm",
+            "why_the_move_removes_the_R5F_hazard": (
+                "the hazard was _apply_rung() reading DURABLE STATE on "
+                "/state/pmus-spring, where a persisted R5F/R5FT campaign carries "
+                "a $7.50/$30.00 per-market cap. l5-r1-probe mounts its own empty "
+                "volume at /state/l5-r1-probe and its first campaign_start reads "
+                "previous_campaigns: [], so there is no campaign to inherit. "
+                "ACTIVE_RUNG_IS_R1 is still read from the container's own log."),
         },
         "DUAL_KEY_ARMED": {
-            "action": ["PMUS_SPRING_LIVE=YES",
+            "action": ["on service 6111a5d4-a2d9-4762-a057-31f02d07586f "
+                       "(l5-r1-probe) ONLY:",
+                       "PMUS_SPRING_LIVE=YES",
                        "PMUS_SPRING_SESSION_ID=<session id>",
                        "PMUS_SPRING_ARM=<the same session id, byte-identical>",
                        "PMUS_SPRING_GATE_EVIDENCE=<the exact market slug>"],
@@ -119,8 +146,20 @@ def owner_gate_actions() -> Dict[str, Any]:
             "effect_if_armed_without_clearing_latch": (
                 "NONE -- shutdown is tested first and the process never reaches "
                 "armed()"),
+            "also_required_before_a_candidate_exists": (
+                "PMUS_SPRING_EVIDENCE_STATUS_URL is UNSET on l5-r1-probe, so the "
+                "strict-evidence gate reports status_unavailable and the funnel "
+                "sees universe_rows: 0. The probe cannot select a market until "
+                "the owner points it at a status source; that is an additional "
+                "owner action, not a defect."),
+            "restart_policy_consequence": (
+                "restartPolicyType is NEVER, so setting these variables "
+                "redeploys the service once and the probe gets exactly one "
+                "process. It does not relaunch itself after a crash or after "
+                "the first market completes."),
         },
-        "both_required": True,
+        "both_required": False,
+        "only_dual_key_remains": True,
         "neither_cleared_here": True,
     }
 
@@ -168,7 +207,8 @@ def stop_conditions() -> List[Dict[str, str]]:
                     "read; the VENUE is authoritative",
          "action": "STOP, cancel, latch, report"},
         {"id": "ARTIFACT_OR_CONFIG_MISMATCH",
-         "trigger": f"serving artifact != {SERVING_ARTIFACT}, active rung != "
+         "trigger": f"serving artifact != {SERVING_ARTIFACT} on "
+                    f"{TARGET_SERVICE}, active rung != "
                     f"{REQUIRED_RUNG}, markets_allowed != "
                     f"{REQUIRED_MARKETS_ALLOWED}, or evidence sha != "
                     f"{EVIDENCE_SHA256_PREFIX}...",
@@ -201,6 +241,8 @@ def preorder_preflight(*, rows, serving_artifact: Optional[str] = None,
                        settlement_confirmed_markets: Optional[int] = None,
                        start_command: Optional[str] = None,
                        rearm_rung: Optional[str] = None,
+                       rearm_gate_enabled: Optional[bool] = None,
+                       lineage: Optional[Dict[str, Any]] = None,
                        dual_key_vars_unset: Optional[bool] = None,
                        entry_price: Any = "0.27") -> Dict[str, Any]:
     """Rerun against CURRENT venue state immediately before any order.
@@ -265,15 +307,53 @@ def preorder_preflight(*, rows, serving_artifact: Optional[str] = None,
                     else "the start command MUTATES SOURCE at boot; the running "
                          "code is not the reviewed artifact"),
                    {"start_command": start_command}))
-    # The re-arm gate's expected rung. R5F/R5FT are the FIDELITY program at
-    # $7.50/$30.00 per market; a service whose re-arm check expects one of them
-    # is not configured for this R1 probe.
-    gates.append(g("REARM_RUNG_EXPECTS_R1",
-                   None if rearm_rung is None else rearm_rung == REQUIRED_RUNG,
+    # THE PREVIOUS VERSION OF THIS GATE WAS UNSATISFIABLE, and is corrected
+    # here. It compared the running REARM_RUNG against REQUIRED_RUNG ("R1"),
+    # but REARM_RUNG is "R5F" in every unmutated build of this repo -- so the
+    # gate blocked the correct artifact and the sed-mutated one identically and
+    # had no discriminating power at all. The two real questions are:
+    #
+    #   (a) has the constant been MUTATED? "R5FT" is precisely what the legacy
+    #       boot `sed -i` produced, so anything other than SOURCE_REARM_RUNG is
+    #       a rewritten runtime. This gate KEEPS that failure and gains the
+    #       ability to pass the clean artifact.
+    #   (b) can it RAISE the rung? Only if boot_assertions() runs, and that
+    #       needs PMUS_SPRING_REARM_GATE set. Unset, REARM_RUNG is inert. Set,
+    #       with REARM_RUNG != the active rung, the boot logs rearm_refused and
+    #       HOLDS HALTED -- fail-closed, but the probe would then never submit,
+    #       so it still blocks here rather than being found at arming time.
+    _rearm_mutated = (rearm_rung is not None and rearm_rung != SOURCE_REARM_RUNG)
+    _rearm_would_refuse = bool(rearm_gate_enabled) and rearm_rung != active_rung
+    gates.append(g("REARM_RUNG_UNMUTATED_AND_INERT",
+                   None if rearm_rung is None else
+                   (not _rearm_mutated and not _rearm_would_refuse),
                    "rearm rung not supplied" if rearm_rung is None else
-                   (None if rearm_rung == REQUIRED_RUNG else
-                    f"REARM_RUNG is {rearm_rung}, not {REQUIRED_RUNG}"),
-                   {"rearm_rung": rearm_rung, "required": REQUIRED_RUNG}))
+                   (f"REARM_RUNG is {rearm_rung}, not the unmutated "
+                    f"{SOURCE_REARM_RUNG}; the running source has been "
+                    f"rewritten" if _rearm_mutated else
+                    (f"PMUS_SPRING_REARM_GATE is enabled and REARM_RUNG "
+                     f"{rearm_rung} != active rung {active_rung}; boot would "
+                     f"log rearm_refused and hold halted"
+                     if _rearm_would_refuse else None)),
+                   {"rearm_rung": rearm_rung,
+                    "unmutated_value": SOURCE_REARM_RUNG,
+                    "rearm_gate_enabled": bool(rearm_gate_enabled),
+                    "inert": not bool(rearm_gate_enabled),
+                    "active_rung": active_rung}))
+    # What the artifact pin used to assert, recomputed rather than asserted.
+    gates.append(g("SOURCE_LINEAGE_ACCEPTED",
+                   None if lineage is None else bool(lineage.get("ACCEPTANCE")),
+                   "source lineage not supplied" if lineage is None else
+                   (None if lineage.get("ACCEPTANCE") else
+                    "the image COPY set differs from the reviewed artifact in "
+                    "an undisclosed or execution-class file"),
+                   None if lineage is None else
+                   {"reviewed_artifact": lineage.get("reviewed_artifact"),
+                    "copy_sources": lineage.get("copy_sources"),
+                    "identical": lineage.get("identical"),
+                    "differing": lineage.get("differing"),
+                    "undisclosed": lineage.get("undisclosed"),
+                    "forbidden_class": lineage.get("forbidden_class")}))
     # Any of these present as a SERVICE VARIABLE can arm the moment the latch
     # clears, because armed() reads exactly them and the latch is the only
     # thing currently holding it.
