@@ -381,7 +381,12 @@ class Supervisor:
                           # same evidenced-fill stream and write their own
                           # store; they do not alter R/S/D, which stays frozen.
                           ("L5_ADAPTED",
-                           "analysis.l5.adapted.collect")):
+                           "analysis.l5.adapted.collect"),
+                          # the FAILED experiment's decomposition. Diagnostic
+                          # counterfactuals over the frozen sample; no arm, no
+                          # threshold selected, nothing deployed from it.
+                          ("L5_ADAPTED_FAILURE",
+                           "analysis.l5.adapted.failure")):
             try:
                 import importlib
                 rep = importlib.import_module(mod).report(out_dir)

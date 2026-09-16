@@ -66,6 +66,7 @@ COPY analysis/l5/pair_formation/frontier.py analysis/l5/pair_formation/frontier.
 # carry no order verb and no credential, so the read-only closure is unchanged.
 COPY analysis/l5/adapted/collect.py analysis/l5/adapted/collect.py
 COPY analysis/l5/adapted/prospective.py analysis/l5/adapted/prospective.py
+COPY analysis/l5/adapted/failure.py analysis/l5/adapted/failure.py
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \
