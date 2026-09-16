@@ -298,9 +298,27 @@ def test_10_concurrent_submissions_cannot_exceed_the_mandate(tmp_path):
     ({"PMUS_LIVE_MANDATE": json.dumps({"authorization_id": "x"})},
      "mandate_missing_fields"),
 ])
-def test_an_unusable_mandate_is_no_mandate(bad, reason):
+def test_an_unusable_mandate_is_no_mandate(bad, reason, monkeypatch, tmp_path):
+    """DECOUPLED FROM REPO STATE 2026-09-16.
+
+    The `{}` case means "nothing is configured at all". `load_mandate` falls
+    back to DEFAULT_MANDATE_FILE when the env var is absent, so this case was
+    silently asserting that the repository ships no committed mandate -- true
+    until the owner authorized one, and then this went red for a reason that
+    has nothing to do with what it is testing.
+
+    Pointing the default at a path that does not exist tests the MECHANISM:
+    no env var and no file is no mandate, whatever the repo happens to carry.
+    """
+    monkeypatch.setattr(M, "DEFAULT_MANDATE_FILE", str(tmp_path / "absent.json"))
     m, why = M.load_mandate(env=bad)
     assert m is None and why.startswith(reason)
+
+
+def test_the_committed_default_path_is_still_what_production_reads():
+    """Guards the decoupling above: the test may repoint DEFAULT_MANDATE_FILE,
+    but production must still read the committed authorization directory."""
+    assert M.DEFAULT_MANDATE_FILE == "analysis/l5/authorization/live_mandate.json"
 
 
 def test_an_expired_mandate_cannot_spend(tmp_path):
