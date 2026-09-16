@@ -39,7 +39,6 @@ import os
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from src import l5_v1_shadow as V1
-from src.polymarket_l5 import action_model as am
 
 SCHEMA = "l5_v1_1_shadow/v1"
 LABEL = ("SHADOW ONLY -- no transport, no credentials, no order verb. Stage 1 "
@@ -47,6 +46,28 @@ LABEL = ("SHADOW ONLY -- no transport, no credentials, no order verb. Stage 1 "
          "the frozen v2 transition artifact, unchanged.")
 ACT_ARTIFACT = "analysis/l5/act_wait/l5_act_wait_v1.json"
 DEFAULT_HORIZON_S = 10
+
+#: The recorder's /status handoff carries NO settlement time, so time to
+#: expiry is NOT OBSERVABLE on this tape. V1 has always run at this
+#: sentinel, which buckets to the widest TTE band; V1.1 uses the SAME one,
+#: so the per-row control differs only where it is meant to. Consequence,
+#: stated rather than discovered later: the TTE dimension of the state key
+#: is CONSTANT in shadow, and the historical OOS TTE slices are not
+#: exercised prospectively.
+UNKNOWN_TTE_S = 1e9
+
+#: What V1 passes -- which is to say, what it never passed at all.
+V1_FROZEN_REL, V1_FROZEN_SIZE = "open", "q<5"
+
+#: How V1.1's decision differs from the V1 control's, ON THE SAME OBSERVATION.
+#: Kept separate from V1's own `divergence`, which means something else
+#: entirely (desired vs executable: model / risk cap / venue quantization).
+#: The two causes are attributed apart because they are independent changes and
+#: the whole point of the prospective run is to tell them apart.
+VS_SAME = "SAME"
+VS_STAGE1_SUPPRESSED = "STAGE1_SUPPRESSED"     # Stage 1 vetoed an act V1 took
+VS_CONTEXT_DECLINED = "CONTEXT_DECLINED"       # real context -> Stage 2 declined
+VS_CONTEXT_ENABLED = "CONTEXT_ENABLED"         # real context -> Stage 2 acted
 
 GAP_BUCKETS = (("gap<2s", 2.0), ("gap2-10", 10.0), ("gap10-30", 30.0),
                ("gap>30", float("inf")))
@@ -126,15 +147,29 @@ def _size_bucket(q: float) -> str:
     return "q>40"
 
 
-def _state_key(last_price: float, tte_s: float, residual_l5: float) -> str:
-    return am.state_key(last_price, tte_s, residual_l5)
-
-
 def _rate(counts: Optional[Sequence[int]], prior: float) -> float:
     if not counts:
         return prior
     n = counts[0] + counts[1]
     return (counts[1] + ALPHA * prior) / (n + ALPHA)
+
+
+
+def _stage2_tier(model: Mapping[str, Any], fid_row: Mapping[str, Any]) -> str:
+    """full / base / marginal for a Stage-2 lookup.
+
+    `pv2.v2_dist` reports only `backed_off`, which merges base and marginal.
+    The prospective analogue of the 8.2% -> 99.9% coverage table needs all
+    three, and deriving it here avoids touching the deployed loader.
+    """
+    if fid_row.get("backed_off") is False:
+        return "full"
+    key = str(fid_row.get("lookup_state") or "")
+    base_state = "|".join(key.split("|")[:3])
+    try:
+        return "base" if (model.get("base") or {}).get(base_state) else "marginal"
+    except (AttributeError, TypeError):
+        return "marginal"
 
 
 def act_probability(art: Optional[Mapping[str, Any]], *, state: str,
@@ -211,8 +246,8 @@ def observe(*, model: Mapping[str, Any], fidelity_art: Optional[Mapping[str, Any
             act_art: Optional[Mapping[str, Any]], slug: str, now: float,
             book: Mapping[str, Any], our_inventory: float,
             ctx: SequentialContext, spent_usd: float = 0.0,
-            k: float = V1.RISK_SCALE_K, tte_s: Optional[float] = None,
-            envelope: Optional[Mapping[str, Any]] = None,
+            k: float = V1.RISK_SCALE_K, tte_s: float = UNKNOWN_TTE_S,
+            envelope: Mapping[str, Any] = V1.ENVELOPE_A,
             held_avg_cost: Optional[Any] = None,
             horizon_s: int = DEFAULT_HORIZON_S,
             l5_acted: Optional[bool] = None) -> dict:
@@ -232,9 +267,12 @@ def observe(*, model: Mapping[str, Any], fidelity_art: Optional[Mapping[str, Any
                      held_avg_cost=held_avg_cost,
                      last_rel=last_rel, last_size=last_size)
 
-    resid_l5 = (our_inventory / k) if k else 0.0
-    state = _state_key(float(book.get("bid") or 0.0),
-                       float(tte_s if tte_s is not None else 0.0), resid_l5)
+    # STAGE 1 KEYS OFF THE STATE STAGE 2 ACTUALLY USED. Recomputing it here
+    # invites drift between the two stages -- an earlier revision passed
+    # tte_s=0.0 to this call and 1e9 to V1, so the two silently looked up
+    # different TTE buckets. Reading V1's own emitted key makes agreement
+    # structural instead of a coincidence of two matching literals.
+    state = row["state_l5_units"]
 
     act = act_probability(act_art, state=state, last_rel=last_rel,
                           last_size=last_size, since_last_s=since,
@@ -252,12 +290,36 @@ def observe(*, model: Mapping[str, Any], fidelity_art: Optional[Mapping[str, Any
 
     # STAGE 1 GATES STAGE 2, NEVER THE REVERSE. A risk cap can still veto an
     # ACT, and that stays attributed to risk -- the two reasons never merge.
-    v1_action = row.get("action")
+    # THE CONTROL, COMPUTED AS THE CONTROL. `row` above is Stage 2 run WITH the
+    # corrected context, so reading its action as `v1_would_have` would report
+    # V1.1's own answer and silently fold the context fix into the baseline.
+    # V1 is what V1 does: the frozen (open, q<5) defaults, same observation.
+    if (last_rel, last_size) == (V1_FROZEN_REL, V1_FROZEN_SIZE):
+        v1_row = row                       # identical call; don't pay for it twice
+    else:
+        v1_row = V1.observe(model=model, fidelity_art=fidelity_art, slug=slug,
+                            now=now, book=book, our_inventory=our_inventory,
+                            spent_usd=spent_usd, k=k, tte_s=tte_s,
+                            envelope=envelope, held_avg_cost=held_avg_cost,
+                            last_rel=V1_FROZEN_REL, last_size=V1_FROZEN_SIZE)
+    v1_action = v1_row.get("action")
     if act_decision == "WAIT":
         final, final_reason = "WAIT", act_reason
     else:
         final = v1_action
         final_reason = row.get("wait_reason")
+
+    # WHY the two controllers differ, attributed to the change responsible.
+    # Stage 1 can only ever suppress; anything V1.1 proposes that V1 did not is
+    # the corrected context reaching evidence the frozen lookup could not.
+    if final == v1_action:
+        vs_v1, vs_reason = VS_SAME, None
+    elif act_decision == "WAIT":
+        vs_v1, vs_reason = VS_STAGE1_SUPPRESSED, act_reason
+    elif final == "PROPOSE":
+        vs_v1, vs_reason = VS_CONTEXT_ENABLED, f"{last_rel}|{last_size}"
+    else:
+        vs_v1, vs_reason = VS_CONTEXT_DECLINED, final_reason
 
     return {
         "schema": SCHEMA, "labels": LABEL, "slug": slug, "t": now,
@@ -287,9 +349,17 @@ def observe(*, model: Mapping[str, Any], fidelity_art: Optional[Mapping[str, Any
         "economics": row.get("economics"),
         "divergence": (row.get("adapted") or {}).get("divergence"),
         "divergence_reason": (row.get("adapted") or {}).get("divergence_reason"),
-        # --- the final decision and the prospective label
+        # --- the final decision, the CONTROL, and the prospective label
         "action": final, "wait_reason": final_reason,
         "v1_would_have": v1_action,
+        "v1_wait_reason": v1_row.get("wait_reason"),
+        "v1_qty": ((v1_row.get("adapted") or {}).get("proposed") or {}).get("qty"),
+        "v11_qty": ((row.get("adapted") or {}).get("proposed") or {}).get("qty"),
+        # Stage-2 coverage, prospectively -- the running analogue of the
+        # historical 8.2% -> 99.9% full-key table, measured rather than assumed.
+        "stage2_tier": _stage2_tier(model, row.get("fidelity") or {}),
+        "v1_stage2_tier": _stage2_tier(model, v1_row.get("fidelity") or {}),
+        "vs_v1": vs_v1, "vs_v1_reason": vs_reason,
         "l5_acted_subsequently": l5_acted,
     }
 
@@ -316,6 +386,10 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict:
         "last_rel_distribution": count(r.get("last_rel") for r in rows),
         "predicted_gap": count(r.get("predicted_gap") for r in rows),
         "divergence": count(r.get("divergence") for r in rows),
+        # the V1-vs-V1.1 comparison, kept apart from the field above
+        "vs_v1": count(r.get("vs_v1") for r in rows),
+        "stage2_tier": count(r.get("stage2_tier") for r in rows),
+        "v1_stage2_tier": count(r.get("v1_stage2_tier") for r in rows),
         "wait_reasons": count(r.get("wait_reason") for r in rows if r.get("wait_reason")),
         "labels": LABEL,
     }

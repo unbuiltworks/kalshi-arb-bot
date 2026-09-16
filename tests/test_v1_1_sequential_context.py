@@ -164,3 +164,93 @@ def test_timing_returns_a_distribution_not_just_a_label():
     assert t["available"] and t["modal_gap"] in dict(V11.GAP_BUCKETS)
     assert abs(sum(t["dist"].values()) - 1.0) < 0.02
     assert t["tier"] in ("full", "base", "marginal")
+
+
+# --------------------------------------------------------------------------
+# the CONTROL has to actually be the control
+#
+# These four pin defects found while wiring the prospective runner. Each one
+# would have produced a plausible-looking JSONL that answered the wrong
+# question, which is the failure mode worth testing for.
+
+def _obs(**kw):
+    from src import pmus_l5_fidelity_live as F
+    base = dict(model=pv2.load_v2(), fidelity_art=F.load(),
+                act_art=V11.load_act_artifact(), slug="m", now=1000.0,
+                book=dict(BOOK), our_inventory=0.0)
+    base.update(kw)
+    return V11.observe(**base)
+
+
+def test_v1_would_have_is_computed_at_the_frozen_defaults_not_from_our_row():
+    """THE CONTAMINATED CONTROL. Stage 2 is called WITH the corrected context,
+    so reading that row's action as `v1_would_have` reports V1.1's own answer
+    and folds the context fix into the baseline it is measured against. The
+    control must be a real V1 call at (open, q<5) on the same observation."""
+    ctx = V11.SequentialContext()
+    ctx.record("m", "complete", 30.0, 900.0)          # far from the defaults
+    r = _obs(ctx=ctx)
+    assert (r["last_rel"], r["last_size"]) == ("complete", "q15-40")
+    # the control looked somewhere else, and the row says where
+    assert r["v1_stage2_tier"] in ("full", "base", "marginal")
+    assert "v1_would_have" in r and "v1_qty" in r
+    src = open(V11.__file__, encoding="utf-8").read()
+    assert 'v1_action = v1_row.get("action")' in src
+    assert 'v1_action = row.get("action")' not in src   # the bug, by its text
+
+
+def test_the_control_call_is_skipped_only_when_it_would_be_identical():
+    """At boot the context IS (open, q<5), so a second call would return the
+    same row; anywhere else it must be paid for."""
+    r = _obs(ctx=V11.SequentialContext())
+    assert (r["last_rel"], r["last_size"]) == (V11.V1_FROZEN_REL,
+                                               V11.V1_FROZEN_SIZE)
+    assert r["v1_would_have"] == r["action"] or r["act_decision"] == "WAIT"
+    assert r["stage2_tier"] == r["v1_stage2_tier"]     # same lookup, same tier
+
+
+def test_stage_one_and_stage_two_look_up_the_same_state():
+    """An earlier revision passed tte_s=0.0 to the Stage-1 key and 1e9 to
+    Stage 2, so the two stages silently keyed off different TTE buckets."""
+    r = _obs(ctx=V11.SequentialContext())
+    assert r["state_l5_units"].split("|")[1] == "tte>10m"
+    src = open(V11.__file__, encoding="utf-8").read()
+    assert 'state = row["state_l5_units"]' in src       # read, never recomputed
+
+
+def test_observe_survives_a_tape_that_carries_no_settlement_time():
+    """The recorder's /status handoff has no endDate. Forwarding tte_s=None
+    bypassed V1's own default and crashed in state_key on None < int."""
+    import inspect
+    sig = inspect.signature(V11.observe)
+    assert sig.parameters["tte_s"].default == V11.UNKNOWN_TTE_S == 1e9
+    assert sig.parameters["envelope"].default is V1.ENVELOPE_A   # not None
+    assert _obs(ctx=V11.SequentialContext())["action"] in ("PROPOSE", "WAIT")
+
+
+def test_divergence_from_v1_is_attributed_to_the_change_responsible():
+    """Two independent changes can move the decision. Merging them would make
+    the prospective sample unable to say which one did."""
+    assert len({V11.VS_SAME, V11.VS_STAGE1_SUPPRESSED,
+                V11.VS_CONTEXT_DECLINED, V11.VS_CONTEXT_ENABLED}) == 4
+    r = _obs(ctx=V11.SequentialContext())
+    assert r["vs_v1"] in (V11.VS_SAME, V11.VS_STAGE1_SUPPRESSED,
+                          V11.VS_CONTEXT_DECLINED, V11.VS_CONTEXT_ENABLED)
+    if r["vs_v1"] == V11.VS_SAME:
+        assert r["action"] == r["v1_would_have"]
+    # and it is NOT V1's own field, which means desired-vs-executable
+    assert r["divergence"] in ("NONE", "MODEL_DISAGREEMENT",
+                               "RISK_CAP_FORCED", "VENUE_QUANTIZATION_FORCED")
+    assert r["vs_v1"] != r["divergence"] or r["vs_v1"] == V11.VS_SAME
+
+
+def test_stage2_tier_separates_base_from_marginal():
+    """`v2_dist` reports only `backed_off`, merging the two. The prospective
+    analogue of the 8.2% -> 99.9% coverage table needs all three."""
+    m = pv2.load_v2()
+    assert V11._stage2_tier(m, {"backed_off": False}) == "full"
+    known = next(iter(m["base"]))
+    assert V11._stage2_tier(m, {"backed_off": True,
+                                "lookup_state": known + "|open|q<5"}) == "base"
+    assert V11._stage2_tier(m, {"backed_off": True,
+                                "lookup_state": "nope|nope|nope|open|q<5"}) == "marginal"
