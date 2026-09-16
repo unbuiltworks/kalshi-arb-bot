@@ -172,21 +172,22 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "1cc17a50458d494a797ed4f266bdc6e289abfa0d",
+        "sha": "adee233e4bc8fac733470a468bb4e4e1362cc4da",
         "why": ("The committed HALT latch, the live mandate when one exists, "
                 "and the arming records. Data and prose, never code: HALT's "
                 "presence halts and live_mandate.json's absence is the safe "
                 "state. Shipped as a directory so granting or revoking an "
                 "authorization is a reviewed commit rather than a Dockerfile "
-                "edit. RE-PINNED 2026-09-16 for "
-                "B3_PERSISTED_RUNG_INTERSECTION_2026-09-16.md, the record of "
-                "the authorized fix for the A2 step 8 failure (durable state "
-                "would have re-applied R3L over the pinned CP1). The previous "
-                "pin covered ARMING_BLOCKED_3_..., which reported that "
-                "failure. The gate caught both commits, which is the pin "
-                "working: a prose record still has to be looked at before it "
-                "rides into the image. HALT is still present and "
-                "live_mandate.json is still absent in this tree."),
+                "edit. RE-PINNED 2026-09-16, third time today, for the B3 record's "
+                "steps 6-7 production verification. The chain: "
+                "ARMING_BLOCKED_3_... reported that durable state would "
+                "re-apply R3L over the pinned CP1; "
+                "B3_PERSISTED_RUNG_INTERSECTION_... records the authorized "
+                "fix and now its verified-in-production result. The gate "
+                "caught every one of those commits, which is the pin working "
+                "rather than the pin being noisy: a prose record still has to "
+                "be looked at before it rides into the image. HALT is still "
+                "present and live_mandate.json is still absent in this tree."),
     },
 }
 
