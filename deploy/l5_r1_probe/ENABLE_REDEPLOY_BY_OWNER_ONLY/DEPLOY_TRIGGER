@@ -60,3 +60,47 @@ deploy and why the owner asked for it.
             emergency startCommand set on 2026-09-16 is removed and the service
             redeployed from the snapshot, so the running system is the reviewed
             artifact again rather than the artifact plus a runtime override.
+
+2026-09-16  OWNER: remove the emergency Railway startCommand now that the
+            durable mechanism exists.
+
+            The service's startCommand is back to the plain image CMD -- the
+            SERVICE_ROLE guard and nothing else. It no longer exports
+            PMUS_SPRING_SHUTDOWN or PMUS_SPRING_LIVE, so the running system is
+            the reviewed artifact again rather than the artifact plus a runtime
+            override.
+
+            THIS DEPLOY IS THE PROOF. If the container still comes up
+            SHUTDOWN_VERIFIED after this, the halt is coming from the committed
+            analysis/l5/authorization/HALT file alone, which is the property the
+            override was standing in for. If it were to come up ARMED instead,
+            that would be the mechanism failing in the one direction that
+            matters and would be reported immediately.
+
+            Still no arming value and still no live_mandate.json: the probe
+            stays halted AND unauthorized. A build is needed here only because
+            this directory is the service's sole watchPattern and `redeploy`
+            has no snapshot to copy after an ordinary push produces a SKIPPED
+            deployment.
+
+2026-09-16  OWNER: remove the emergency Railway startCommand now that the
+            durable mechanism exists.
+
+            The service's startCommand is back to the plain image CMD -- the
+            SERVICE_ROLE guard and nothing else. It no longer exports
+            PMUS_SPRING_SHUTDOWN or PMUS_SPRING_LIVE, so the running system is
+            the reviewed artifact again rather than the artifact plus a runtime
+            override.
+
+            THIS DEPLOY IS THE PROOF. If the container still comes up
+            SHUTDOWN_VERIFIED after this, the halt is coming from the committed
+            analysis/l5/authorization/HALT file alone, which is the property the
+            override was standing in for. Coming up ARMED would be the mechanism
+            failing in the one direction that matters, and would be reported
+            immediately.
+
+            Still no arming value and still no live_mandate.json: the probe
+            stays halted AND unauthorized. A build is needed here only because
+            this directory is the service's sole watchPattern and redeploy has
+            no snapshot to copy after an ordinary push produces a SKIPPED
+            deployment.
