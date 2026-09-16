@@ -71,3 +71,84 @@ def test_no_threshold_is_selected_anywhere():
     src = (F.__doc__ or "") + open(F.__file__).read()
     assert "tunes nothing" in src
     assert len(F.MAX_RESIDUAL_USD) > 1 and len(F.TTE_STOPS) > 1
+
+
+def test_tte_is_measured_from_placement_not_from_the_fill_verdict():
+    """`resolved_at` is the wall-clock of the VERDICT, which lands at or after
+    the window closes. Reading it as the fill time made tte <= 0 for every fill,
+    which silently turned all three TTE stops into the oracle."""
+    mk = "btc-updown-15m-1000"      # window ends at 1000 + 900 = 1900
+    f = _f("Up", 0)
+    f["placed_at"] = 1600           # 300s before expiry
+    f["resolved_at"] = 1950         # verdict decided AFTER expiry
+    w = F.walk([f], arm="control", mk=mk)
+    assert w["creations"][0]["tte_s"] == 300
+
+
+def test_residual_loss_removed_is_a_fraction_of_the_loss_not_of_the_net():
+    """The net is losses plus wins. Dividing by it can exceed 1, which reads as
+    'more than all of the loss removed' -- a quantity that cannot exist."""
+    base = [{"settled": True, "residual_pnl": -100.0, "residual_qty": 10.0},
+            {"settled": True, "residual_pnl": +90.0, "residual_qty": 10.0}]
+    s = F._split(base)
+    assert s["residual_loss"] == -100.0 and s["residual_gain"] == 90.0
+    assert s["residual_win_rate"] == 0.5
+    # halving the loss is 0.5 removed, whatever the net (-10) happens to be
+    cf = [{"settled": True, "residual_pnl": -50.0, "residual_qty": 5.0}]
+    assert 1 - (F._split(cf)["residual_loss"] / s["residual_loss"]) == 0.5
+
+
+def _store(tmp_path, fills, *, winner="Down"):
+    """A minimal out_dir: evidenced fills plus a PRE-RESOLVED settlement cache,
+    so report() needs no network."""
+    with open(tmp_path / "maker_outcomes.jsonl", "w") as fh:
+        for f in fills:
+            fh.write(json.dumps(f) + "\n")
+    with open(tmp_path / "adapted_resolutions.json", "w") as fh:
+        json.dump({"btc-updown-15m-1000": {"resolved": True,
+                                           "winning_outcome": winner,
+                                           "market_key": "btc-updown-15m-1000"}},
+                  fh)
+    return str(tmp_path)
+
+
+def test_two_probes_accepting_the_same_fills_are_reported_as_duplicates(
+        tmp_path, monkeypatch):
+    """A mislabelled or vacuous threshold must not be counted twice as
+    independent evidence. The TTE bug did exactly that: three stops and the
+    oracle were one probe wearing four names."""
+    out = _store(tmp_path, [_f("Up", 0), _f("Down", 1), _f("Up", 2)])
+    same = F._acc_oracle
+    monkeypatch.setattr(F, "DIAGNOSTICS",
+                        {"PROBE_A": same, "PROBE_B": same,
+                         "PROBE_C": lambda r, s: True})
+    d = F.report(out)["diagnostics"]
+    assert d["PROBE_A"]["identical_to"] is None
+    assert d["PROBE_B"]["identical_to"] == "PROBE_A"
+    assert d["PROBE_C"]["identical_to"] is None     # accepts strictly more
+
+
+def test_the_real_tte_stops_are_no_longer_one_probe_in_four_names(tmp_path):
+    """With tte read from placement, a fill 500s out and one 60s out are
+    separated by the 300s stop -- which the verdict-clock version could not do."""
+    a, b = _f("Up", 0), _f("Down", 1)
+    c, d_ = _f("Up", 2), _f("Up", 3)
+    a["placed_at"], b["placed_at"] = 1100, 1200      # window ends 1900
+    c["placed_at"], d_["placed_at"] = 1400, 1840     # 500s out, 60s out
+    fills = [a, b, c, d_]
+    kept = {s: F.walk(fills, arm="control", mk="btc-updown-15m-1000",
+                      accept=F._acc_tte(s))["fills_taken"]
+            for s in (600.0, 300.0, 120.0)}
+    assert kept[600.0] < kept[300.0] <= kept[120.0]
+
+
+def test_a_venue_that_never_forms_a_pair_is_flagged_as_inert():
+    rows = [{"venue": "GEMINI", "settled": True, "matched_qty": 0.0,
+             "residual_qty": 50.0, "matched_pnl": 0.0, "residual_pnl": -42.5,
+             "residual_side": "Up", "winning_outcome": "Down"},
+            {"venue": "PMUS", "settled": True, "matched_qty": 90.0,
+             "residual_qty": 10.0, "matched_pnl": 5.0, "residual_pnl": -1.0,
+             "residual_side": "Up", "winning_outcome": "Down"}]
+    bv = F._by_venue(rows)
+    assert bv["GEMINI"]["windows_with_matched_inventory"] == 0
+    assert bv["PMUS"]["windows_with_matched_inventory"] == 1

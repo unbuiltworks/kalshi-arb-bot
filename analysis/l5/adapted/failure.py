@@ -26,6 +26,28 @@ ORACLE_FLAT_AFTER_MATCH is deliberately unrealistic: once meaningful two-sided
 inventory exists it forbids any action that increases absolute residual. It is
 an UPPER BOUND on the matched edge available under perfect residual control,
 not a policy anyone could run.
+
+THREE DEFECTS IN THE FIRST RUN OF THIS INSTRUMENT, corrected here. None changed
+a threshold; all three changed what the output MEANT.
+
+1. TTE read `resolved_at`, the wall-clock at which a quote's fill verdict was
+   decided -- which lands at or after the window closes. Every tte was <= 0, so
+   all three stops blocked everything and collapsed into one probe wearing four
+   names alongside the oracle. It now reads `placed_at`: the action being
+   filtered is the PLACEMENT, so that is both the correct semantic and the only
+   clock that varies within a window.
+
+2. `residual_loss_removed` divided by the NET residual P&L. The net is losses
+   plus wins, so the ratio exceeded 1 and printed "171% of the loss removed" --
+   not a quantity that can exist. Loss and gain are now carried separately and
+   the fraction is taken against the loss alone.
+
+3. Nothing distinguished risk control from a directional re-roll. Residual P&L
+   here is a PURE directional bet -- its sign is determined entirely by whether
+   the side left over won -- so a probe that changes which side accumulates can
+   post a large gain while reducing no risk at all. Every probe now reports the
+   residual win rate and the surviving exposure beside the P&L, and identical
+   probes are fingerprinted rather than counted twice as agreeing evidence.
 """
 from __future__ import annotations
 
@@ -100,7 +122,14 @@ def walk(fills: Sequence[dict], *, arm: str, mk: str,
         n_dn = dn + (q if side == "Down" else 0)
         a_resid = n_up - n_dn
         grows = abs(a_resid) > abs(b_resid)
-        t = r.get("resolved_at")
+        # TIME-TO-EXPIRY IS MEASURED AT THE DECISION, NOT AT THE VERDICT.
+        # `resolved_at` is the wall-clock at which the quote's fill verdict was
+        # DECIDED, which is at or after the window closes -- reading it here made
+        # tte <= 0 for every fill, so every TTE stop blocked everything and the
+        # three thresholds collapsed onto each other and onto the oracle. The
+        # action being filtered is the PLACEMENT, so `placed_at` is both the
+        # correct semantic and the only one that varies.
+        t = r.get("placed_at")
         tte = ((end - t) if (end is not None and t is not None) else None)
         state = {
             "grows_residual": grows,
@@ -265,6 +294,41 @@ def _concentration(losses: Sequence[float]) -> Dict[str, Any]:
             "median_losing_window": round(-neg[len(neg) // 2], 4)}
 
 
+def _split(rows: Sequence[dict]) -> Dict[str, Any]:
+    """Residual P&L is a NET of two large opposing quantities. Reporting only
+    the net hides whether a probe removed losses or merely re-rolled the
+    direction, so loss and gain are always carried separately."""
+    s = [r for r in rows if r["settled"]]
+    loss = sum(r["residual_pnl"] for r in s if r["residual_pnl"] < 0)
+    gain = sum(r["residual_pnl"] for r in s if r["residual_pnl"] > 0)
+    nl = sum(1 for r in s if r["residual_pnl"] < 0)
+    nw = sum(1 for r in s if r["residual_pnl"] > 0)
+    return {"residual_loss": round(loss, 4), "residual_gain": round(gain, 4),
+            "n_losing": nl, "n_winning": nw,
+            "residual_win_rate": (round(nw / (nw + nl), 4) if (nw + nl) else None),
+            "residual_qty": round(sum(r["residual_qty"] for r in rows), 2)}
+
+
+def _by_venue(rows: Sequence[dict]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for v in sorted({r["venue"] for r in rows}):
+        rs = [r for r in rows if r["venue"] == v]
+        s = [r for r in rs if r["settled"]]
+        losses = [r["residual_pnl"] for r in s]
+        out[v] = {"windows": len(rs), "settled": len(s),
+                  "matched_pnl": round(sum(r["matched_pnl"] for r in s), 4),
+                  "residual_pnl": round(sum(r["residual_pnl"] for r in s), 4),
+                  "FAILURE_MODE": classify(losses),
+                  "concentration": _concentration(losses),
+                  **_split(rs),
+                  # a probe that only acts after two-sided inventory exists is
+                  # INERT on a venue that never forms a pair; say so rather than
+                  # letting those windows dilute every share reported above.
+                  "windows_with_matched_inventory":
+                      sum(1 for r in rs if r["matched_qty"] > 0)}
+    return out
+
+
 def report(out_dir: str, *, arm: str = "cap5") -> Dict[str, Any]:
     ev = events(out_dir)
     res = _resolutions(out_dir, sorted({mk for mk, _ in ev}))
@@ -294,23 +358,43 @@ def report(out_dir: str, *, arm: str = "cap5") -> Dict[str, Any]:
     b_match = sum(r["matched_pnl"] for r in settled)
     b_resid = sum(r["residual_pnl"] for r in settled)
     losses = [r["residual_pnl"] for r in settled]
+    b_split = _split(base)
+    b_loss = b_split["residual_loss"]
     diag: Dict[str, Any] = {}
+    prints: Dict[tuple, str] = {}
     for name, acc in DIAGNOSTICS.items():
-        rows = []
+        rows, taken = [], []
         for (mk, venue), fills in sorted(ev.items()):
             w = walk(fills, arm=arm, mk=mk, accept=acc)
             rows.append(settle_walk(w, res.get(mk), venue, mk))
+            taken.append((mk, venue, w["fills_taken"]))
         s = [r for r in rows if r["settled"]]
         m = sum(r["matched_pnl"] for r in s)
         rr = sum(r["residual_pnl"] for r in s)
+        sp = _split(rows)
+        # TWO PROBES THAT ACCEPT THE SAME FILLS ARE ONE PROBE. Reporting them as
+        # independent evidence is how a mislabelled or vacuous threshold gets
+        # read as confirmation; the fingerprint names the duplicate instead.
+        fp = tuple(taken)
+        dup = prints.get(fp)
+        prints.setdefault(fp, name)
         diag[name] = {
             "matched_pnl": round(m, 4), "residual_pnl": round(rr, 4),
             "total_pnl": round(m + rr, 4),
             "matched_edge_retained": (round(m / b_match, 4)
                                       if b_match else None),
-            "residual_loss_removed": (round(1 - (rr / b_resid), 4)
-                                      if b_resid else None),
+            # a TRUE fraction of the LOSS removed, against the loss alone and
+            # never against the net -- the net is losses plus wins, so dividing
+            # by it produced "171% of the loss removed", which is not a
+            # quantity that can exist.
+            "residual_loss_removed": (round(1 - (sp["residual_loss"] / b_loss), 4)
+                                      if b_loss else None),
+            "residual_gain_kept": (round(sp["residual_gain"]
+                                         / b_split["residual_gain"], 4)
+                                   if b_split["residual_gain"] else None),
+            **sp,
             "matched_qty": round(sum(r["matched_qty"] for r in rows), 2),
+            "identical_to": dup,
         }
     return {
         "label": LABEL, "verdict": "FAIL", "arm": arm,
@@ -323,6 +407,12 @@ def report(out_dir: str, *, arm: str = "cap5") -> Dict[str, Any]:
         "flat_residual_windows": sum(1 for x in losses if x == 0),
         "FAILURE_MODE": classify(losses),
         "concentration": _concentration(losses),
+        "baseline_split": b_split,
+        "by_venue": _by_venue(base),
+        "residual_sign_is_pure_direction": all(
+            (r["residual_pnl"] < 0)
+            == (r.get("residual_side") != r.get("winning_outcome"))
+            for r in settled if r["residual_qty"] > 0),
         "window_rows": sorted(base, key=lambda r: (r["residual_pnl"]
                                                    if r["residual_pnl"]
                                                    is not None else 0)),
