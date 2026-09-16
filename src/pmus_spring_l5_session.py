@@ -593,12 +593,51 @@ def spring_proposal(model: Mapping[str, Any], inv: Inventory, skey: str,
     return prop
 
 
+def counts_against_market_cap(stage: Any) -> bool:
+    """Does a submission at this stage consume the per-market envelope?
+
+    OWNER 2026-09-16: the complement-acceptance probe used to sit OUTSIDE the
+    cap. That was written when the rung was R5F -- $0.01 against a $7.50
+    envelope is noise. At R1's $0.05 the same order is 20% of the envelope,
+    and "max $0.05 per market" has to mean $0.05 INCLUDING it. There is now
+    one counter and this predicate is its only membership rule, named once so
+    the cap, the reconciler and the probe cannot drift apart.
+
+    COMPLETE legs still do not count, and that is not an oversight: a
+    complement REDUCES the position it completes rather than adding surplus
+    spend, and the matched pair is separately bounded by the <=1.00 invariant.
+    """
+    s = str(stage or "")
+    return (s.startswith("spring_open") or s.startswith("spring_extend")
+            or s == "micro_first_leg" or s == FLAT_PROBE_STAGE)
+
+
+def cap_admits(slug: str, proposed_notional: Any,
+               already_spent: Optional[D] = None) -> dict:
+    """THE pre-submission budget test: already_spent + proposed <= cap.
+
+    Both money-moving call sites go through here so there is one comparison
+    against one counter. It returns the numbers that produced the verdict, not
+    a bare bool, because a refusal nobody can audit is a refusal nobody
+    believes."""
+    spent = (spring_cumulative_notional(slug) if already_spent is None
+             else D(str(already_spent)))
+    cap = session_notional_cap()
+    proposed = D(str(proposed_notional))
+    return {"admits": bool(spent + proposed <= cap),
+            "already_spent": str(spent), "proposed_notional": str(proposed),
+            "cap": str(cap), "remaining_before": str(cap - spent),
+            "remaining_after": str(cap - spent - proposed),
+            "counter": "spring_cumulative_notional (one market, all "
+                       "money-moving BUY stages incl. complement acceptance)"}
+
+
 def spring_cumulative_notional(slug: str) -> D:
     """Durable <=\\$0.05 cumulative SURPLUS-SPEND cap across invocations
     (issue #167 comment 5520710312 item 5): sums this market's submitted
-    spring OPEN/EXTEND rows AND micro first-leg rows from the campaign
-    ledger — completion legs are excluded, and an unparseable row counts
-    as the full cap (fail closed)."""
+    spring OPEN/EXTEND rows, micro first-leg rows AND the complement-
+    acceptance probe from the campaign ledger — completion legs are
+    excluded, and an unparseable row counts as the full cap (fail closed)."""
     # OWNER 5552475548 item 3: exposure is what FILLED, not what was
     # submitted. A submission counts only until it has a terminal row
     # (authoritative filled quantity, 0 included); a submission the venue
@@ -618,9 +657,7 @@ def spring_cumulative_notional(slug: str) -> D:
             continue
         kind = row.get("kind")
         stage = str(row.get("stage", ""))
-        if kind == "submitted" and (stage.startswith("spring_open")
-                                    or stage.startswith("spring_extend")
-                                    or stage == "micro_first_leg"):
+        if kind == "submitted" and counts_against_market_cap(stage):
             # a submission without an order id can never be reconciled:
             # it keeps its own key and counts in full, fail closed
             submitted[str(row.get("order_id") or f"row{i}")] = row
@@ -1406,6 +1443,16 @@ def prove_complement_when_flat(t, slug: str, *, clock=time.monotonic,
 
     px = D(str(plan["px"]))
     qty = D(str(spec["minimum_trade_qty"]))
+    # OWNER 2026-09-16: this order is INSIDE the per-market envelope. The test
+    # is the same one the session uses, against the same counter, and it runs
+    # BEFORE the submission rather than being reconciled after it.
+    budget = cap_admits(slug, px * qty)
+    proof["cap_check"] = budget
+    if not budget["admits"]:
+        return _skip("market_cap_exhausted:"
+                     f"spent={budget['already_spent']}+"
+                     f"proposed={budget['proposed_notional']}>"
+                     f"cap={budget['cap']}")
     try:
         oid = micro.place_limit_buy(t, slug, plan["side"], px, qty,
                                     FLAT_PROBE_STAGE, post_only=True)
@@ -1417,6 +1464,14 @@ def prove_complement_when_flat(t, slug: str, *, clock=time.monotonic,
     proof["submitted"] = {"side": plan["side"], "px": str(px),
                           "wire_px": plan["wire_px"], "qty": str(qty),
                           "post_only": True}
+    # Written IMMEDIATELY after the venue accepted the order and before we
+    # wait on it: until a terminal row exists this counts at full notional,
+    # so a crash here cannot leak budget.
+    q1.ledger_append({"kind": "submitted", "spring": True, "slug": slug,
+                      "order_id": oid, "stage": FLAT_PROBE_STAGE,
+                      "side": plan["side"], "price": str(px), "qty": str(qty),
+                      "relation": None, "l5_action": False,
+                      "labels": FLAT_PROBE_LABEL})
 
     start = clock()
     got, end_reason, observed = D("0"), "rest_bound", None
@@ -1454,17 +1509,37 @@ def prove_complement_when_flat(t, slug: str, *, clock=time.monotonic,
         "labels": FLAT_PROBE_LABEL})
     if not proven:
         proof["reason"] = end_reason
+    # The AUTHORITATIVE outcome row, written on every exit path including a
+    # zero fill. This is what converts the submission above from "counts at
+    # full notional" to "counts at what actually filled", so a partial fill
+    # returns the unspent remainder to the market's budget.
+    q1.ledger_append({"kind": "order_terminal", "spring": True, "slug": slug,
+                      "order_id": oid, "stage": FLAT_PROBE_STAGE,
+                      "filled_qty": str(got), "price": str(px),
+                      "rest_s": round(clock() - start, 3),
+                      "end_reason": end_reason})
     # A fill leaves a real, venue-minimum position. It is small but it is
     # NOT nothing, so it is written to the durable ledger with its probe
     # provenance intact rather than quietly dropped -- the settlement
     # auditor and the venue-vs-ledger reconciliation must both see it.
+    #
+    # KIND IS `filled`, NOT `order_filled`, AND THAT IS THE POINT. The old
+    # bespoke kind was read by nothing: ledger_qty_total() counts `filled`
+    # rows, so an acceptance fill was invisible to the venue-vs-ledger
+    # quantity check and to the settlement repair that asserts on it. A real
+    # position the accounting cannot see is exactly the shape of a silent
+    # break. The L5 BEHAVIOURAL inventory still ignores this stage on
+    # purpose -- held_inventory_from_ledger() keys on `spring_` and is
+    # deliberately untouched, because the probe is not an L5 decision and
+    # feeding it into the state lookup would change what the model does.
     if got > 0:
-        q1.ledger_append({"kind": "order_filled", "spring": True,
+        q1.ledger_append({"kind": "filled", "spring": True,
                           "slug": slug, "order_id": oid,
                           "stage": FLAT_PROBE_STAGE, "side": plan["side"],
-                          "px": str(px), "qty": str(got),
+                          "price": str(px), "qty": str(got),
                           "relation": None, "l5_action": False,
                           "labels": FLAT_PROBE_LABEL})
+    proof["cap_after"] = str(spring_cumulative_notional(slug))
     save_complement_proof(proof)
     return proof
 
@@ -2109,8 +2184,13 @@ def reconcile_submissions(t: Transport, slug: str, limit: int = 50) -> dict:
             continue
         if not isinstance(row, dict) or row.get("slug") != slug:
             continue
-        if row.get("kind") == "submitted" and \
-                str(row.get("stage", "")).startswith("spring_"):
+        _stg = str(row.get("stage", ""))
+        # the acceptance probe writes its own terminal row on every exit path,
+        # so this only matters when a crash lands between submit and terminal
+        # -- but then its submission counts at FULL notional forever, which
+        # would silently retire the market. Reconcile it like any other.
+        if row.get("kind") == "submitted" and (
+                _stg.startswith("spring_") or _stg == FLAT_PROBE_STAGE):
             submitted[str(row.get("order_id"))] = row
         elif row.get("kind") == "order_terminal":
             terminal.add(str(row.get("order_id")))
@@ -3317,9 +3397,17 @@ def _run_session_body(t: Optional[Transport] = None,
                         break
 
             if relation in ("open", "extend"):
-                # spend caps: session + durable cumulative, before sizing
-                if cum + (inv.spent() - prior_spent) + \
-                        spec["entry_notional"] > session_notional_cap():
+                # spend caps: session + durable cumulative, before sizing.
+                # `cum` was read from the ledger at session start, so it
+                # already carries any complement-acceptance spend this market
+                # incurred before the session -- this path therefore receives
+                # only the REMAINING budget, and HOLDs/STOPs rather than
+                # exceeding it.
+                _budget = cap_admits(
+                    slug, spec["entry_notional"],
+                    already_spent=cum + (inv.spent() - prior_spent))
+                report["decisions"][-1]["cap_check"] = _budget
+                if not _budget["admits"]:
                     relation = "complete" if inv.residual != 0 else "stop"
                     report["decisions"][-1]["divergence"] = \
                         f"safety_adaptation:spend_cap->{relation}"

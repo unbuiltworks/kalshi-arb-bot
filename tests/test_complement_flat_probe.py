@@ -88,17 +88,29 @@ class _Q1:
         self.cancelled.append(oid)
         return True
 
+    path = None
+
     def ledger_append(self, row):
         self.rows.append(row)
+        if self.path is not None:
+            with open(self.path, "a", encoding="utf-8") as sink:
+                sink.write(json.dumps(row, separators=(",", ":"),
+                                      default=str) + "\n")
 
 
 @pytest.fixture
 def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(base, "complement_proof_path",
                         lambda: tmp_path / "proof.json")
+    # The probe now tests the per-market cap BEFORE it submits, and that test
+    # reads the durable ledger. Point the state dir at tmp_path and let the
+    # fake ledger write THROUGH to it, so the cap sees exactly the rows the
+    # probe wrote rather than a stub that can never disagree with it.
+    monkeypatch.setenv("PMUS_Q1_STATE_DIR", str(tmp_path))
 
     def _install(states, fill=None):
         m, q = _Micro(states), _Q1(states)
+        q.path = tmp_path / "ledger.jsonl"
         monkeypatch.setattr(base.micro, "market_micro_spec",
                             m.market_micro_spec)
         monkeypatch.setattr(base.micro, "place_limit_buy", m.place_limit_buy)
@@ -190,11 +202,16 @@ def test_a_probe_fill_is_recorded_with_its_provenance_and_is_not_an_l5_action(
                                             sleep=lambda _s: None,
                                             wall=lambda: 100.0)
     assert proof["proven"] is True and proof["filled_qty"] == "0.01"
-    rows = [r for r in q.rows if r.get("kind") == "order_filled"]
+    # kind is `filled`, not the old bespoke `order_filled`: ledger_qty_total()
+    # counts `filled` rows, so the old kind made an acceptance position
+    # invisible to the venue-vs-ledger quantity check.
+    rows = [r for r in q.rows if r.get("kind") == "filled"]
     assert len(rows) == 1
     assert rows[0]["l5_action"] is False
     assert rows[0]["relation"] is None
     assert rows[0]["stage"] == base.FLAT_PROBE_STAGE
+    assert rows[0]["price"] == "0.39" and rows[0]["qty"] == "0.01"
+    assert not [r for r in q.rows if r.get("kind") == "order_filled"]
 
 
 def test_the_probe_never_touches_the_behavioural_fidelity_artifact():

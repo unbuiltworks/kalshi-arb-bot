@@ -23,24 +23,47 @@ LABEL = "R1_SOURCE_LINEAGE"
 REVIEWED = "6adcc4c4"
 DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 
-# Each entry: why this file may differ, and the class it must fall in.
+# Each entry: why this file may differ, the class it must fall in, and the
+# EXACT blob the review covered.
+#
+# THE `sha` FIELD IS WHAT STOPS THIS BECOMING A RUBBER STAMP (OWNER 2026-09-16).
+# A filename allow-list says "this file may differ" and then accepts ANY future
+# content in it -- one reviewed delta silently licenses every later one. Pinning
+# the reviewed blob means the accepted executable COPY set is identical except
+# for deltas someone actually looked at: edit an allow-listed file again and
+# verify() fails as CONTENT_DRIFT until the pin is refreshed with a new reason.
+#
 # EXECUTION / DECISION / SIZING / SUBMISSION are never acceptable classes here.
 ALLOWED: Dict[str, Dict[str, str]] = {
     "src/pmus_spring_l5_session.py": {
-        "class": "OBSERVABILITY",
-        "why": ("one hunk inside a block commented 'never let observability "
-                "trade': publishes tte_s as null instead of the 1e9 "
-                "SPORTS_TTE_DEFAULT_S sentinel when a market has no settlement "
-                "clock. The decision path still buckets on the sentinel; only "
-                "the emitted observation changes."),
+        "class": "RISK_BOUND_TIGHTENING",
+        "sha": "084f5c5394ca23423902bc739d0d0a8ddbcc7a06",
+        "why": ("TWO deltas, and the class names the more consequential one. "
+                "(a) OBSERVABILITY: inside a block commented 'never let "
+                "observability trade', publishes tte_s as null instead of the "
+                "1e9 SPORTS_TTE_DEFAULT_S sentinel; the decision path still "
+                "buckets on the sentinel. (b) RISK_BOUND_TIGHTENING (OWNER "
+                "2026-09-16 P0): the complement-acceptance probe now counts "
+                "against the one per-market notional envelope and is tested "
+                "against it BEFORE submission (counts_against_market_cap, "
+                "cap_admits), and its ledger rows changed to the canonical "
+                "submitted/order_terminal/filled shapes so a partial fill "
+                "reconciles and ledger_qty_total can see the position. "
+                "This GATES a submission, which is why it is not filed as "
+                "OBSERVABILITY -- but it can only ever REFUSE one. It computes "
+                "no price, no size and no side, contains no order verb, and "
+                "leaves held_inventory_from_ledger untouched so no L5 decision "
+                "input moves. Pinned by tests/test_market_cap_envelope.py."),
     },
     "src/l5_decision_observability.py": {
+        "sha": "2f977868027299fe532ff05c99a561604df99079",
         "class": "OBSERVABILITY",
         "why": ("adds two reason constants and two emitted keys "
                 "(tte_s_reason, book_implied_pair_cost_reason). Output only -- "
                 "this module has no decision path."),
     },
     "src/pmus_incentive_audit.py": {
+        "sha": "74354635ef6f97c36748770412a567adeccaebe4",
         "class": "ACCOUNTING_REPORTING",
         "why": ("rows_detail truncation cap raised 50 -> 2000 and any residual "
                 "truncation is now REPORTED. A payout that cannot be attributed "
@@ -48,6 +71,7 @@ ALLOWED: Dict[str, Dict[str, str]] = {
                 "fee or rebate arithmetic changes."),
     },
     "analysis/l5/venue_maintenance_windows.json": {
+        "sha": "f7204c60fe5d7890380c2cb43a81394686cf95d4",
         "class": "DOCUMENTATION",
         "why": ("descriptive fields added to one incident record (resolution, "
                 "orders_count_correction 10->14, withdrawn_evidence, "
@@ -74,6 +98,23 @@ def _blob(rev: str, path: str):
     return r.stdout if r.returncode == 0 else None
 
 
+def _blob_sha(rev: str, path: str) -> str:
+    """Git's own object id for the file at that revision. Cheap, stable, and
+    it is the same identity git uses, so nothing here has to hash bytes."""
+    r = subprocess.run(["git", "rev-parse", f"{rev}:{path}"],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def pin_shas(head: str = "HEAD") -> Dict[str, str]:
+    """The blob ids to paste into ALLOWED[...]['sha'] after a review.
+
+    Deliberately NOT called by verify(): a pin that refreshes itself is not a
+    pin. Refreshing one is a human act, and the reason string is expected to
+    change with it."""
+    return {f: _blob_sha(head, f) for f in ALLOWED}
+
+
 def verify(head: str = "HEAD", reviewed: str = REVIEWED) -> Dict[str, Any]:
     """Recompute the delta over the image's COPY set and classify every file."""
     differing, absent, identical = [], [], []
@@ -88,18 +129,35 @@ def verify(head: str = "HEAD", reviewed: str = REVIEWED) -> Dict[str, Any]:
     undisclosed = [f for f in differing if f not in ALLOWED]
     bad_class = [f for f in differing
                  if f in ALLOWED and ALLOWED[f]["class"] in FORBIDDEN_CLASSES]
+    # CONTENT, not filename. An allow-listed file whose blob is not the one the
+    # review covered is drift, and drift fails exactly like an undisclosed
+    # delta -- otherwise one accepted change licenses every later change to
+    # the same file, which is the rubber stamp this is here to prevent.
+    drift = []
+    for f in differing:
+        pinned = str((ALLOWED.get(f) or {}).get("sha") or "")
+        actual = _blob_sha(head, f)
+        if not pinned or not actual or pinned != actual:
+            drift.append({"file": f, "pinned": pinned or None,
+                          "actual": actual or None,
+                          "reason": ("no reviewed blob pinned" if not pinned
+                                     else "content differs from the reviewed "
+                                          "blob")})
+    ok = not undisclosed and not bad_class and not absent and not drift
     return {
-        "label": LABEL, "reviewed_artifact": reviewed,
+        "label": LABEL, "reviewed_artifact": reviewed, "head": head,
         "copy_sources": len(identical) + len(differing) + len(absent),
         "identical": len(identical),
         "differing": differing,
         "absent_from_reviewed": absent,
         "undisclosed": undisclosed,
         "forbidden_class": bad_class,
+        "content_drift": drift,
         "deltas": {f: ALLOWED[f] for f in differing if f in ALLOWED},
-        "ACCEPTANCE": (not undisclosed and not bad_class and not absent),
-        "why": ("every differing file is on the allow-list with a non-execution "
-                "class, and no COPYed file is missing from the reviewed artifact"
-                if (not undisclosed and not bad_class and not absent)
-                else "an undisclosed or execution-class delta is present"),
+        "ACCEPTANCE": ok,
+        "why": ("every differing file is on the allow-list with a "
+                "non-execution class AND its blob is the exact one reviewed; "
+                "no COPYed file is missing from the reviewed artifact" if ok
+                else "an undisclosed, execution-class or drifted delta is "
+                     "present"),
     }

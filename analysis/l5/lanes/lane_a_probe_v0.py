@@ -68,9 +68,29 @@ REQUIRED_MARKETS_ALLOWED = 1
 LEGACY_SERVICE = "pmus-spring-l5-probe"
 LEGACY_SERVING_ARTIFACT = "6adcc4c43e67"    # HALTED, latched, OUT OF SCOPE
 R1_SERVICE = "l5-r1-probe"
-R1_SERVING_ARTIFACT = "f8b8fae2712b"
 TARGET_SERVICE = R1_SERVICE
-SERVING_ARTIFACT = R1_SERVING_ARTIFACT
+
+# THE COMMIT-LABEL GATE IS RETIRED (OWNER 2026-09-16 P0), and this is the
+# reasoning, because "we removed a gate" deserves more than a changelog line.
+#
+# It churned. A Railway variable change rebuilds from branch HEAD and cannot be
+# pinned to a commit, so the label moved on every deploy and the pin was stale
+# within minutes of being set -- twice. A gate that fails for a reason nobody
+# acts on is a gate people learn to wave through, which is worse than not
+# having it.
+#
+# It also never checked what it claimed. A commit id says which tree the
+# builder was handed; it says nothing about whether the executable content
+# changed. Both times the label moved, all 36 COPY-set blobs were byte-
+# identical -- the pin was red while the thing it was protecting was perfect.
+#
+# SOURCE_LINEAGE_ACCEPTED asks the real question directly: is the image's COPY
+# set identical to the reviewed artifact except for deltas someone reviewed,
+# and is each of those deltas still the exact blob that was reviewed? That is
+# strictly stronger, and it does not rubber-stamp an arbitrary future commit:
+# any edit to an allow-listed file fails as CONTENT_DRIFT until re-reviewed.
+SERVING_ARTIFACT = None
+ARTIFACT_GATE = "SOURCE_LINEAGE_ACCEPTED"
 
 # REARM_RUNG as it stands in UNMUTATED repo source. The legacy service's
 # Railway startCommand rewrote it to "R5FT" with `sed -i` at boot, which is the
@@ -207,8 +227,9 @@ def stop_conditions() -> List[Dict[str, str]]:
                     "read; the VENUE is authoritative",
          "action": "STOP, cancel, latch, report"},
         {"id": "ARTIFACT_OR_CONFIG_MISMATCH",
-         "trigger": f"serving artifact != {SERVING_ARTIFACT} on "
-                    f"{TARGET_SERVICE}, active rung != "
+         "trigger": f"{ARTIFACT_GATE} not accepted on "
+                    f"{TARGET_SERVICE} (an undisclosed, execution-class or "
+                    f"drifted delta in the image's COPY set), active rung != "
                     f"{REQUIRED_RUNG}, markets_allowed != "
                     f"{REQUIRED_MARKETS_ALLOWED}, or evidence sha != "
                     f"{EVIDENCE_SHA256_PREFIX}...",
@@ -253,11 +274,13 @@ def preorder_preflight(*, rows, serving_artifact: Optional[str] = None,
     """
     from analysis.l5.lanes import lane_a_readiness as R
     v = R.arming_preflight(
-        rows=rows, entry_price=entry_price, serving_artifact=serving_artifact,
-        expected_artifact=SERVING_ARTIFACT, budget_permits=budget_permits,
+        rows=rows, entry_price=entry_price, budget_permits=budget_permits,
         latch_set=latch_set, dual_key_set=dual_key_set,
         settlement_confirmed_markets=settlement_confirmed_markets)
-    gates = list(v["gates"])
+    # The commit-label gate is retired; SOURCE_LINEAGE_ACCEPTED replaces it.
+    # The serving commit is still REPORTED, because "which tree built this" is
+    # worth knowing even when it is not a pass/fail condition.
+    gates = [g for g in v["gates"] if g["gate"] != "SERVING_ARTIFACT"]
 
     def g(name, ok, blocker, detail=None):
         return {"gate": name,

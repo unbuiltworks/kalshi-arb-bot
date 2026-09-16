@@ -15,12 +15,12 @@ LINEAGE_OK = {"label": "R1_SOURCE_LINEAGE", "reviewed_artifact": "6adcc4c4",
               "copy_sources": 36, "identical": 32,
               "differing": ["src/pmus_spring_l5_session.py"],
               "absent_from_reviewed": [], "undisclosed": [],
-              "forbidden_class": [], "ACCEPTANCE": True}
+              "forbidden_class": [], "content_drift": [], "ACCEPTANCE": True}
 
 
 def _green(**over):
     """Every gate satisfiable, so a test can break exactly one of them."""
-    kw = dict(rows=_rows(), serving_artifact=P.SERVING_ARTIFACT,
+    kw = dict(rows=_rows(), serving_artifact="anycommit",
               active_rung="R1", markets_allowed=1,
               evidence_sha256=F.snapshot()["sha256"],
               budget_permits=True, latch_set=False, dual_key_set=True,
@@ -45,28 +45,59 @@ def test_the_deployed_pair_target_is_not_modified():
     assert P.SCOPE == "EXECUTION_AND_ACCOUNTING_MEASUREMENT_ONLY"
 
 
-def test_evidence_and_artifact_are_pinned():
+def test_evidence_is_pinned_and_the_commit_label_gate_is_retired():
     assert F.snapshot()["sha256"].startswith(P.EVIDENCE_SHA256_PREFIX)
-    # SERVICE-SCOPED. The probe target moved to the isolated R1 service, so the
-    # pin names that artifact -- and the legacy one is still recorded, so a
-    # reader can see the pin was repointed at a real image and not at nothing.
     assert P.TARGET_SERVICE == "l5-r1-probe"
-    assert P.SERVING_ARTIFACT == P.R1_SERVING_ARTIFACT == "f8b8fae2712b"
+    # RETIRED (OWNER 2026-09-16 P0). A Railway variable change rebuilds from
+    # branch HEAD and cannot be pinned to a commit, so the label moved on every
+    # deploy while all 36 COPY-set blobs stayed identical -- the pin went red
+    # while the thing it protected was perfect. Content verification replaces
+    # it. The legacy artifact stays named so the history is readable.
+    assert P.SERVING_ARTIFACT is None
+    assert P.ARTIFACT_GATE == "SOURCE_LINEAGE_ACCEPTED"
     assert P.LEGACY_SERVING_ARTIFACT == "6adcc4c43e67"
     assert P.LEGACY_SERVICE == "pmus-spring-l5-probe"
 
 
-def test_moving_the_pin_did_not_drop_the_guarantee_it_carried():
-    """A repointed identity pin is worthless unless something recomputes it.
-    SOURCE_LINEAGE_ACCEPTED is that something, and it must be able to FAIL."""
+def test_no_commit_label_can_pass_or_fail_the_preflight_on_its_own():
+    """The retired gate must be gone, not merely defaulted. Any serving commit
+    is accepted BY LABEL; only the content check adjudicates."""
+    for label in ("f8b8fae2712b", "ec6bb71b47b0", "deadbeef", ""):
+        r = _green(serving_artifact=label)
+        assert r["non_owner_blockers"] == [], label
+    assert "SERVING_ARTIFACT" not in {g["gate"] for g in _green()["gates"]}
+
+
+def test_retiring_the_label_gate_did_not_drop_the_guarantee_it_carried():
+    """Removing a gate is only defensible if what replaces it can FAIL."""
     assert _green()["ORDER_PERMITTED"] is True
-    bad = dict(LINEAGE_OK, ACCEPTANCE=False,
-               undisclosed=["src/pmus_micro_executor.py"])
-    r = _green(lineage=bad)
-    assert r["ORDER_PERMITTED"] is False
-    assert "SOURCE_LINEAGE_ACCEPTED" in _blockers(r)
+    for bad in (dict(LINEAGE_OK, ACCEPTANCE=False,
+                     undisclosed=["src/pmus_micro_executor.py"]),
+                dict(LINEAGE_OK, ACCEPTANCE=False,
+                     forbidden_class=["src/pmus_micro_executor.py"]),
+                dict(LINEAGE_OK, ACCEPTANCE=False,
+                     content_drift=[{"file": "src/pmus_spring_l5_session.py",
+                                     "reason": "content differs from the "
+                                               "reviewed blob"}])):
+        r = _green(lineage=bad)
+        assert r["ORDER_PERMITTED"] is False
+        assert "SOURCE_LINEAGE_ACCEPTED" in _blockers(r)
     # and silence must not satisfy it
     assert "SOURCE_LINEAGE_ACCEPTED" in _blockers(_green(lineage=None))
+
+
+def test_the_real_lineage_check_rejects_an_edit_to_an_allow_listed_file():
+    """End to end against the real module, not the fixture: content drift in a
+    reviewed file must fail, or the allow-list is a rubber stamp."""
+    from analysis.l5.lanes import r1_source_lineage as L
+    drifted = {k: dict(v) for k, v in L.ALLOWED.items()}
+    drifted["src/pmus_spring_l5_session.py"]["sha"] = "0" * 40
+    real = L.ALLOWED
+    try:
+        L.ALLOWED = drifted
+        assert L.verify()["ACCEPTANCE"] is False
+    finally:
+        L.ALLOWED = real
 
 
 def test_the_real_r1_image_lineage_accepts_against_the_reviewed_artifact():
@@ -124,7 +155,7 @@ def test_changed_frozen_evidence_blocks_the_order():
 
 def test_any_non_owner_gate_failing_means_no_order():
     """And it must be distinguishable from merely waiting on the owner."""
-    r = _green(serving_artifact="WRONGSHA")
+    r = _green(active_rung="R5F")
     assert r["ORDER_PERMITTED"] is False
     assert r["NO_ORDER_REASON"] == "a non-owner gate is not PASS"
 
