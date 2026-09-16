@@ -16,15 +16,18 @@ Current state:
 - Shadow decisions: RUNNING.
 - Money-moving execution path: EXISTS.
 - Settlement/accounting: VENUE-CONFIRMED on prior real-money activity.
-- Strict spring evidence: 3 SPRING_MATCHED completions on 1 distinct market, all at pair cost 0.9800.
-- Required next independent evidence: a second distinct same-category market through the existing evidence pipeline.
-- `spring_le_096_completions` is a legacy compatibility name and actually counts <=0.98 completions. It MUST NOT be interpreted as evidence of true <=0.96 completion. Report <=0.96 and <=0.98 separately.
-- Resolve the apparent q1 order near ~$0.27 versus existing $0.05 cumulative-notional/market envelope inconsistency without changing either merely to make preflight pass.
+- Strict spring evidence (2026-09-16T01:41:44Z): the **category bar is MET**. MLB carries 7 completions across 7 distinct markets by independent recount, and the recorder's own `spring_category_evidence` reports `completions_60m 10 / distinct_markets_60m 10 / bar_met true`. It arrived through the existing pipeline with no policy or evidence-standard change.
+- Across all 75 watch rows: 13 completions, **0 at <=0.96**, 13 at <=0.98, cheapest 0.9750. The <=0.96 discipline is still met **zero** times.
+- Remaining Lane A blockers are **owner decisions only**: clear the shutdown latch; set the dual key; decide whether 0.98 is acceptable for a first bounded probe or the probe waits for <=0.96.
+- `spring_le_096_completions` is a legacy compatibility name and actually counts <=0.98 completions. It MUST NOT be interpreted as evidence of true <=0.96 completion. DONE: `analysis/l5/lanes/lane_a_readiness.py` never reads that field, recounts from `spring_pair_costs`, and publishes <=0.96 and <=0.98 as separate explicit counts; a test feeds the field set to 3 beside three 0.9800 costs and pins the <=0.96 count at zero.
+- RESOLVED, neither number changed: there is no inconsistency. `q1_size` is a BEHAVIORAL unit (one L5 size unit = one venue-minimum contract); the executable size is derived separately by `choose_micro_quantity` under the rung's bounds. The venue reports `minimumTradeQty 0.01` on live sports, so a 0.27 touch executes as **0.02 contracts for $0.0054** against the $0.05 per-market cap -- nine entries of headroom. $0.27 is a price, not a spend. The $0.05 envelope is neither obsolete nor blocking.
 - Do not arm, clear shutdown latches, or relax economics/category thresholds merely to obtain a trade.
 
 Shortest path:
 
 **collect continuously -> second independent same-category market -> exact deployed-artifact preflight -> explicit bounded live-probe decision**
+
+Steps 1-3 are complete. The arming preflight is prepared and not executed at `analysis/l5/lanes/lane_a_readiness.py::arming_preflight`; it relaxes nothing, arms nothing, and treats any gate it cannot establish as a blocker. Only step 4 remains.
 
 ## P1 — Gemini Crypto 5m/15m + Sports
 
