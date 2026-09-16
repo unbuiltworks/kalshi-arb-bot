@@ -154,9 +154,12 @@ def test_3_a_filled_acceptance_order_is_visible_to_the_quantity_reconciler(
     """ledger_qty_total() is what the venue-vs-ledger check and the settlement
     repair assert on, and it counts `filled` rows. The old bespoke
     `order_filled` kind made a real position invisible to both."""
+    # NOT monkeypatched: the counter reads pmus_q1_executor.state_dir() and the
+    # auditor reads pmus_q1_executor_v4.state_dir(). Different modules, both
+    # driven by PMUS_Q1_STATE_DIR -- patching one to the other would hide a
+    # divergence between them, which is the kind of thing this test exists for.
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor.q1, "state_dir", base.q1.base.state_dir,
-                        raising=False)
+    assert auditor.q1.state_dir() == base.q1.base.state_dir()
 
     monkeypatch.setattr(base.q1, "outcome_bbo",
                         lambda t, s, side: {"bid": D("0.39"), "ask": D("0.42")})

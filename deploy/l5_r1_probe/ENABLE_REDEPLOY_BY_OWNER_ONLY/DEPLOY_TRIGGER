@@ -1,0 +1,15 @@
+This directory is the l5-r1-probe service's ONLY build trigger.
+
+The service's Railway watchPatterns are
+deploy/l5_r1_probe/ENABLE_REDEPLOY_BY_OWNER_ONLY/** and nothing else, so an
+ordinary push to the branch produces a SKIPPED deployment and the running
+probe is left alone. Touching a file in here is what asks for a build.
+
+Do not touch it to "refresh" anything. Each line below records one authorised
+deploy and why the owner asked for it.
+
+2026-09-16  OWNER P0: the complement-acceptance probe placed a money-moving
+            BUY that the per-market notional counter did not see, so the
+            advertised $0.05 envelope was really $0.06. Deploying the
+            correction (one counter, tested before submission, partials
+            reconciled) DISARMED. No arming variable is set by this deploy.

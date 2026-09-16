@@ -99,12 +99,37 @@ def test_the_manifest_cannot_bypass_the_role_guard():
     assert "sed " not in start
 
 
-def test_redeploy_is_owner_gated_and_the_gate_does_not_exist():
+def test_an_ordinary_push_cannot_deploy_this_service():
+    """THE property, restated (OWNER 2026-09-16 P0 authorised a deploy).
+
+    It used to assert the trigger directory did not EXIST, which was right
+    while nothing was authorised to deploy -- but "the switch is missing" and
+    "the switch is not being flipped" are different properties, and only the
+    second one survives an authorised deploy. What must stay true is that the
+    build trigger is exactly this one directory, so a push touching source,
+    tests or analysis leaves the running probe alone.
+    """
     m = json.loads(open(MANIFEST).read())
-    pats = m["build"]["watchPatterns"]
-    assert pats == ["deploy/l5_r1_probe/ENABLE_REDEPLOY_BY_OWNER_ONLY/**"]
-    assert not os.path.exists(os.path.join(os.path.dirname(DF),
-                                           "ENABLE_REDEPLOY_BY_OWNER_ONLY"))
+    assert m["build"]["watchPatterns"] == [
+        "deploy/l5_r1_probe/ENABLE_REDEPLOY_BY_OWNER_ONLY/**"]
+
+
+def test_every_deploy_of_this_service_is_recorded_with_its_authorisation():
+    """If the switch exists it must carry the log, or "owner only" is a
+    directory name rather than a control."""
+    d = os.path.join(os.path.dirname(DF), "ENABLE_REDEPLOY_BY_OWNER_ONLY")
+    if not os.path.exists(d):
+        return                      # no deploy has been authorised yet
+    trigger = os.path.join(d, "DEPLOY_TRIGGER")
+    assert os.path.exists(trigger), "the trigger directory has no log"
+    body = open(trigger, encoding="utf-8").read()
+    assert "OWNER" in body and "DISARMED" in body
+    # it is a log, not a switch anyone may flip: it must say so
+    assert "Do not touch it" in body
+    # and it must never carry an arming value
+    for name in ("PMUS_SPRING_LIVE", "PMUS_SPRING_ARM",
+                 "PMUS_SPRING_SESSION_ID", "PMUS_SPRING_GATE_EVIDENCE"):
+        assert f"{name}=" not in body
 
 
 def test_restart_is_never():

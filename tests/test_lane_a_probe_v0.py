@@ -319,3 +319,13 @@ def test_unprovable_dual_key_vars_block_the_order():
     r = _green(dual_key_vars_unset=None)
     assert r["ORDER_PERMITTED"] is False
     assert "DUAL_KEY_VARS_PROVEN_UNSET" in _blockers(r)
+
+
+def test_the_serving_commit_is_reported_even_though_it_no_longer_gates():
+    """Retiring a gate should not lose the fact it carried. Which tree built
+    the running image stays in the record."""
+    r = _green(serving_artifact="ec6bb71b47b0")
+    assert r["serving_artifact"] == "ec6bb71b47b0"
+    assert r["artifact_gate"] == "SOURCE_LINEAGE_ACCEPTED"
+    assert r["target_service"] == "l5-r1-probe"
+    assert r["non_owner_blockers"] == []

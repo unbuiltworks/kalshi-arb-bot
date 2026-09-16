@@ -396,6 +396,12 @@ def preorder_preflight(*, rows, serving_artifact: Optional[str] = None,
                       if x["state"] != "PASS" and x["gate"] in owner]
     return {
         "label": LABEL, "scope": SCOPE,
+        "target_service": TARGET_SERVICE,
+        # REPORTED, NOT GATED. Which tree built the running image is worth
+        # knowing in the record; it is no longer a pass/fail condition,
+        # because ARTIFACT_GATE checks the content instead.
+        "serving_artifact": serving_artifact,
+        "artifact_gate": ARTIFACT_GATE,
         "pair_target": str(DEPLOYED_PAIR_TARGET),
         "pair_target_modified": PAIR_TARGET_MODIFIED,
         "envelope": ENVELOPE,
