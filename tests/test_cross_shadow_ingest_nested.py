@@ -58,7 +58,7 @@ def _ledger(tmp_path, monkeypatch):
 def test_a_settlement_nested_in_shutdown_idle_reaches_the_ledger(
         tmp_path, monkeypatch):
     _ledger(tmp_path, monkeypatch)
-    before, after, unparsed = ING.ingest_ledger(
+    before, after, unparsed, _ = ING.ingest_ledger(
         [_dump(tmp_path, _idle("2026-09-15T16:30:51Z"))])
     assert (before, after) == (0, 1)
     assert unparsed == []
@@ -72,9 +72,9 @@ def test_the_same_settlement_re_reported_never_duplicates(
     a = _dump(tmp_path, _idle("2026-09-15T16:30:51Z"), "a.json")
     b = _dump(tmp_path, _idle("2026-09-15T16:41:56Z"), "b.json")
     ING.ingest_ledger([a])
-    before, after, _ = ING.ingest_ledger([b])
+    before, after, _, _ = ING.ingest_ledger([b])
     assert (before, after) == (1, 1)
-    before, after, _ = ING.ingest_ledger([a, b])
+    before, after, _, _ = ING.ingest_ledger([a, b])
     assert (before, after) == (1, 1)
 
 
@@ -124,7 +124,7 @@ def test_a_standalone_settlement_line_still_ingests(tmp_path, monkeypatch):
                        "message": "PMUS_L5_CAMPAIGN " + json.dumps(
                            {"kind": "settlement", "slug": "s", "settled": False,
                             "realized_confirmed": False})}]}
-    before, after, _ = ING.ingest_ledger([_dump(tmp_path, doc)])
+    before, after, _, _ = ING.ingest_ledger([_dump(tmp_path, doc)])
     assert (before, after) == (0, 1)
 
 
@@ -133,5 +133,5 @@ def test_a_row_with_no_nested_settlement_adds_nothing(tmp_path, monkeypatch):
     doc = {"deploy": [{"timestamp": "T", "message": "PMUS_L5_CAMPAIGN " +
                        json.dumps({"kind": "shutdown_idle",
                                    "settlement": {"settled_now": []}})}]}
-    before, after, _ = ING.ingest_ledger([_dump(tmp_path, doc)])
+    before, after, _, _ = ING.ingest_ledger([_dump(tmp_path, doc)])
     assert (before, after) == (0, 0)

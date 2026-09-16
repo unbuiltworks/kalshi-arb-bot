@@ -91,6 +91,57 @@ def ingest(paths):
             fh.write(json.dumps(rows[oid], separators=(",", ":")) + "\n")
     return before, len(rows)
 
+# TWO DIFFERENT PROBES WRITE THE SAME LOG VOCABULARY, and until now the ledger
+# could not tell them apart. The dump glob below is service-agnostic, and both
+# the legacy PMUS probe and the isolated R1 measurement probe emit
+# `PMUS_L5_CAMPAIGN {...}` with kinds session_end / incentive_audit /
+# settlement. So R1 canary rows landed in the same store as the legacy cohort
+# with nothing on them to say so. The settlement net was not wrong yet -- R1
+# has not settled -- but the moment it does, its settlement row would be
+# absorbed into the legacy -$44.4898 without a trace. The owner's standing rule
+# is that these cohorts must not blur, so every row now carries the service it
+# came from and the net is scoped by it.
+LEGACY_PMUS_SERVICE = "d84d9a68-2e5b-4f74-9694-5f422417c74f"
+R1_PROBE_SERVICE = "6111a5d4-a2d9-4762-a057-31f02d07586f"
+COHORT_BY_SERVICE = {
+    LEGACY_PMUS_SERVICE: "pmus-legacy",
+    R1_PROBE_SERVICE: "r1-probe",
+}
+# An unrecognised service is NOT quietly filed under the legacy cohort. A row
+# we cannot attribute is marked as such, so it can be excluded from a net
+# rather than silently joining one.
+UNATTRIBUTED = "unattributed"
+
+
+def _provenance(doc):
+    sid = str(doc.get("serviceId") or "")
+    return {"_cohort": COHORT_BY_SERVICE.get(sid, UNATTRIBUTED),
+            "_service": sid or None,
+            "_deployment": doc.get("deploymentId")}
+
+
+def _assign(rows, row, collisions):
+    """Store a row, refusing to let one cohort overwrite another's key.
+
+    `_key` is deliberately NOT re-keyed on cohort: 1,163 existing rows are
+    addressed by the current scheme and re-keying them would duplicate every
+    one. But the nested-settlement key is the venue's own settlement_key, which
+    is stable per market, so if two cohorts ever touched the same market the
+    later ingest would silently replace the earlier row. Suffixing only on an
+    actual cross-cohort clash keeps existing keys untouched and makes that loss
+    impossible.
+    """
+    k = row["_key"]
+    prev = rows.get(k)
+    if prev is not None:
+        pc, nc = prev.get("_cohort"), row.get("_cohort")
+        if pc is not None and nc is not None and pc != nc:
+            collisions.append((k, pc, nc))
+            k = f"{k}|{nc}"
+            row = {**row, "_key": k}
+    rows[k] = row
+
+
 LEDGER = os.path.join(SCR, "ledger.jsonl")
 LEDGER_KINDS = ("settlement", "settled", "realized", "session_end",
                 "incentive", "incentives", "reward", "rewards",
@@ -133,7 +184,7 @@ def _parse_entry(entries, idx):
     return None
 
 
-def _nested_settlement_row(sn, parent, entry):
+def _nested_settlement_row(sn, parent, entry, prov=None):
     """One settled_now[] entry -> a ledger row, keyed so it cannot duplicate.
 
     KEYED ON THE VENUE'S OWN settlement_key, not on the log timestamp. The same
@@ -186,7 +237,8 @@ def _nested_settlement_row(sn, parent, entry):
                    "never summed. Counts toward the net ONLY when "
                    "realized_confirmed is true."),
     }
-    return {r["_key"]: r}
+    r.update(prov or {})
+    return r
 
 
 def ingest_ledger(paths):
@@ -198,6 +250,7 @@ def ingest_ledger(paths):
     """
     rows = {}
     unparsed = []
+    collisions = []
     if os.path.exists(LEDGER):
         for line in open(LEDGER):
             if line.strip():
@@ -209,6 +262,7 @@ def ingest_ledger(paths):
             doc = json.load(open(path))
         except Exception:
             continue
+        prov = _provenance(doc)
         entries = doc.get("deploy") or []
         for idx, entry in enumerate(entries):
             ts, msg = entry.get("timestamp"), entry.get("message", "")
@@ -270,7 +324,8 @@ def ingest_ledger(paths):
             r["_ts"] = ts
             r["_kind"] = kind
             r["_key"] = f"{ts}|{kind}|{j.get('slug')}"
-            rows[r["_key"]] = r
+            r.update(prov)
+            _assign(rows, r, collisions)
         # A SETTLEMENT NESTED INSIDE ANOTHER ROW IS STILL A SETTLEMENT.
         # In shutdown mode the probe stops emitting standalone kind=settlement
         # lines and reports each one inside shutdown_idle.settlement
@@ -287,11 +342,12 @@ def ingest_ledger(paths):
             for sn in ((j.get("settlement") or {}).get("settled_now") or []):
                 if not isinstance(sn, dict) or not sn.get("slug"):
                     continue
-                rows.update(_nested_settlement_row(sn, j, entries[idx]))
+                _assign(rows, _nested_settlement_row(sn, j, entries[idx], prov),
+                        collisions)
     with open(LEDGER, "w") as fh:
         for k in sorted(rows):
             fh.write(json.dumps(rows[k], separators=(",", ":")) + "\n")
-    return before, len(rows), unparsed
+    return before, len(rows), unparsed, collisions
 
 
 if __name__ == "__main__":
@@ -299,9 +355,19 @@ if __name__ == "__main__":
         "/root/.claude/projects/-home-user-kalshi-arb-bot/*/tool-results/"
         "mcp-Railway-get-logs-*.txt"))
     b, a = ingest(paths)
-    lb, la, unparsed = ingest_ledger(paths)
+    lb, la, unparsed, collisions = ingest_ledger(paths)
     print(f"cohort: {b} -> {a} observations (+{a-b}) from {len(paths)} dump(s)")
     print(f"ledger: {lb} -> {la} venue/outcome rows (+{la-lb})")
+    by_cohort = {}
+    for line in open(LEDGER):
+        if line.strip():
+            r = json.loads(line)
+            by_cohort[r.get("_cohort")] = by_cohort.get(r.get("_cohort"), 0) + 1
+    print("  cohorts: " + ", ".join(f"{c}={n}" for c, n in
+                                    sorted(by_cohort.items(), key=lambda x: str(x[0]))))
+    if collisions:
+        print(f"  WARNING {len(collisions)} cross-cohort key collision(s); kept "
+              f"both. First: {collisions[0]}")
     if unparsed:
         # loud on purpose: an unreadable settlement must never be mistaken for
         # a settlement that did not occur

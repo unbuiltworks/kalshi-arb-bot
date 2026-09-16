@@ -198,6 +198,31 @@ for r in sorted(setl, key=lambda x: x["_ts"]):
     by_slug[r.get("slug")] = r
 if not by_slug:
     print("  no settlement rows yet")
+
+# SCOPED BY COHORT, NEVER ONE MERGED NUMBER. The legacy PMUS probe and the
+# isolated R1 measurement probe write the same log vocabulary into the same
+# store, so an unscoped sum would quietly fold the R1 canary's settlement into
+# the legacy net the moment it lands. Rows ingested before provenance existed
+# carry _cohort=None and are printed under "unrecorded" rather than assumed.
+nets = {}
+for r in by_slug.values():
+    c = r.get("_cohort") or "unrecorded-provenance"
+    n = nets.setdefault(c, {"markets": 0, "confirmed_usd": 0.0, "unconfirmed": 0})
+    n["markets"] += 1
+    if r.get("realized_confirmed"):
+        try:
+            n["confirmed_usd"] += float(r.get("realized_usd") or 0)
+        except (TypeError, ValueError):
+            pass
+    else:
+        n["unconfirmed"] += 1
+print("  NET BY COHORT (separate ledgers; never added together):")
+for c, n in sorted(nets.items()):
+    print(f"      {c}: {n['markets']} market(s), "
+          f"venue-confirmed realized ${n['confirmed_usd']:.4f}, "
+          f"{n['unconfirmed']} SETTLED_REALIZED_UNCONFIRMED held out")
+print()
+
 for slug, r in sorted(by_slug.items()):
     tag = "  <- IN COHORT" if slug in markets else ""
     print(f"  {slug}{tag}")
