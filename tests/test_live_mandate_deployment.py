@@ -30,13 +30,122 @@ AUTH_DIR = Path("analysis/l5/authorization")
 # --------------------------------------------------------------------------
 # the halt
 
+#: THE ACTIVATION INVARIANT (OWNER AUTHORIZATION 2026-09-16, "final CP1
+#: activation"). Expressed as a function so the real repository state and the
+#: adversarial cases below are checked by the SAME rule -- a rule that only
+#: the live tree exercises is a rule nobody has tested.
+#:
+#: ABSENCE OF HALT IS NEVER AUTHORIZATION. That is the whole point. Halted is
+#: always safe; un-halted is safe only when a committed, parseable, unexpired
+#: mandate for exactly this service is there to authorize it.
+ACTIVATION_SERVICE = "l5-r1-probe"
+
+
+def activation_authorized(auth_dir: Path, now=None) -> tuple[bool, str]:
+    """(is_this_tree_allowed_to_be_un_halted, reason)."""
+    if (auth_dir / "HALT").exists():
+        return True, "halted"                    # always a safe state
+    f = auth_dir / "live_mandate.json"
+    if not f.exists():
+        return False, "no_halt_and_no_mandate"
+    try:
+        raw = f.read_text(encoding="utf-8")
+    except OSError as exc:
+        return False, f"mandate_unreadable:{type(exc).__name__}"
+    m, why = M.parse_mandate(raw)
+    if m is None:
+        return False, f"mandate_unusable:{why}"
+    if m.service != ACTIVATION_SERVICE:
+        return False, f"mandate_wrong_service:{m.service}"
+    if m.expired(now or datetime.now(timezone.utc)):
+        return False, f"mandate_expired:{m.expiry}"
+    return True, "activated_under_a_valid_mandate"
+
+
 @pytest.mark.real_halt_latch
-def test_the_repo_is_currently_halted():
-    """This is a state assertion, not a style one. If someone removes the HALT
+def test_the_halt_and_the_authorization_are_consistent():
+    """RESTATED 2026-09-16 under explicit owner authorization. The guard is
+    KEPT and made stronger -- not deleted, skipped, xfailed or weakened.
+
+    It asserted `HALT.exists()` unconditionally: "if someone removes the HALT
     file, this test is where they are told that they just re-enabled a service
-    that traded eleven unauthorized markets."""
-    assert (AUTH_DIR / "HALT").exists()
-    assert cs.shutdown_requested() is True
+    that traded eleven unauthorized markets." That was right while nothing was
+    authorized, and it firing the moment HALT was removed is exactly what it
+    was for -- it did fire, and the removal stopped until the owner authorized
+    this change specifically.
+
+    What replaces it is a CONSISTENCY invariant, which is strictly more
+    protection than the original. The original only said the file exists; it
+    would have passed again for anyone who re-added HALT regardless of whether
+    any authorization existed, and said nothing at all about the mandate. This
+    one ties the two together in the dangerous direction: un-halting REQUIRES
+    a committed, parseable, unexpired mandate naming exactly this service.
+
+    Removing HALT with no mandate, a malformed mandate, an expired mandate, or
+    a mandate for another service all still fail right here.
+    """
+    ok, why = activation_authorized(AUTH_DIR)
+    assert ok, f"HALT removed without a valid authorization: {why}"
+    # and the runtime must agree with the file state, in both directions
+    halted = (AUTH_DIR / "HALT").exists()
+    assert cs.shutdown_requested() is halted
+
+
+@pytest.mark.parametrize("halt,mandate_body,expect_ok,expect_reason", [
+    # HALT present -- always halted, whatever the mandate says
+    (True, None, True, "halted"),
+    (True, "valid", True, "halted"),
+    # HALT absent -- the mandate is the only thing that can authorize it
+    (False, None, False, "no_halt_and_no_mandate"),
+    (False, "malformed", False, "mandate_unusable"),
+    (False, "expired", False, "mandate_expired"),
+    (False, "wrong_service", False, "mandate_wrong_service"),
+    (False, "valid", True, "activated_under_a_valid_mandate"),
+])
+def test_the_activation_invariant_adversarially(
+        tmp_path, halt, mandate_body, expect_ok, expect_reason):
+    """The seven cases the owner enumerated, against the same rule the live
+    tree is checked with. Run in a temp dir so they test the RULE rather than
+    whatever the repository happens to carry today."""
+    now = datetime(2026, 9, 16, 21, 0, tzinfo=timezone.utc)
+    base = {
+        "authorization_id": "OWNER-2026-09-16-CP1-CONTINUOUS-PROBE",
+        "authorized_at": "2026-09-16T20:36:35Z",
+        "service": ACTIVATION_SERVICE, "strategy": "pmus-l5-continuous-v1",
+        "strategy_version": "CP1", "max_markets": 1, "max_total_markets": 3,
+        "max_spend_per_market": "5.00", "max_total_spend": "15.00",
+        "max_residual": "3.00", "max_daily_realized_loss": "6.00",
+        "expiry": "2026-09-17T20:36:35Z",
+    }
+    if halt:
+        (tmp_path / "HALT").write_text("stop")
+    if mandate_body == "valid":
+        (tmp_path / "live_mandate.json").write_text(json.dumps(base))
+    elif mandate_body == "malformed":
+        (tmp_path / "live_mandate.json").write_text("{not json at all")
+    elif mandate_body == "expired":
+        (tmp_path / "live_mandate.json").write_text(
+            json.dumps(dict(base, expiry="2026-09-16T00:00:00Z")))
+    elif mandate_body == "wrong_service":
+        (tmp_path / "live_mandate.json").write_text(
+            json.dumps(dict(base, service="some-other-service")))
+
+    ok, why = activation_authorized(tmp_path, now=now)
+    assert ok is expect_ok, f"{halt=} {mandate_body=} -> {ok} ({why})"
+    assert why.startswith(expect_reason), why
+
+
+def test_absence_of_halt_is_never_authorization_on_its_own():
+    """Stated as its own test because it is the sentence the owner wrote, and
+    because it is the one way this invariant could be quietly inverted."""
+    import inspect
+    src = inspect.getsource(activation_authorized)
+    assert "no_halt_and_no_mandate" in src
+    # an empty directory -- no HALT, no mandate -- must never be authorized
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        ok, why = activation_authorized(Path(d))
+        assert ok is False and why == "no_halt_and_no_mandate"
 
 
 def test_the_halt_file_alone_halts_with_no_environment_variable(monkeypatch, tmp_path):
