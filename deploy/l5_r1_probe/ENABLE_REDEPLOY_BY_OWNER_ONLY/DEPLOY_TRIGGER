@@ -300,3 +300,51 @@ deploy and why the owner asked for it.
             until 2026-09-17T20:36:35Z. HALT alone stops the probe; keeping the
             mandate means the owner's next decision does not need a new
             authorization, only a decision about the open-market accounting.
+
+--------------------------------------------------------------------------
+2026-09-16T22:04Z — DEPLOY THE CONCURRENCY FIX, STILL HALTED
+
+            OWNER AUTHORIZATION: "fix zero-exposure market concurrency
+            accounting ... Keep HALT deployed while making/testing this change.
+            Then deploy the exact green artifact HALTED, verify serving SHA,
+            flat account, zero open orders, CP1 envelope and mandate, and only
+            then restore the already-authorized three-market CP1 probe."
+
+            This deploy is the middle step: the FIX goes into the image, and
+            the image stays HALTED. analysis/l5/authorization/HALT is present
+            in this tree, so shutdown_requested() returns True before armed()
+            is consulted and the process idles. Nothing here arms anything.
+
+            WHAT THE FIX IS. consumption() computed markets_open as "committed
+            AND not settled". The probe filled nothing on six orders, and a
+            market with nothing in it never settles, so market 1 held the only
+            concurrency slot permanently. A market is now concurrently OPEN
+            while it has a live or unresolved order, or unsettled fills. Zero
+            live orders AND zero fills releases the slot; nothing else does,
+            and anything unresolved still counts as OPEN.
+
+            markets_touched does NOT move. A zero-fill attempt still spends one
+            of max_total_markets=3. Releasing it from both counters would turn
+            a three-market authorization into unlimited market scanning.
+
+            The durable ledger is untouched. No commit, link or terminal row is
+            deleted; this is a different reading of the same rows.
+
+            UNCHANGED: GuardedTransport, the immutable mandate, min(rung,
+            mandate), CP1/B3 tightening, sizing 0.10/0.125, k 0.00619,
+            $5/market, $15 campaign, 3 contracts/$3 residual, -$6 daily stop,
+            max_concurrent_markets=1, max_total_markets=3.
+
+            live_mandate.json is again left in place, valid to
+            2026-09-17T20:36:35Z. It will be re-validated at activation time
+            rather than assumed.
+
+            Artifact: the 4987-test green commit. Lineage REVIEWED advanced to
+            it with FORBIDDEN_CLASSES untouched; ACCEPTANCE true.
+
+            Reported separately, not changed: MandateRefusal reaches
+            CAMPAIGN_STOP:HALT via the generic except-Exception path. The label
+            says "crash" where the truth is "correctly declined", but the only
+            alternative the semantics offer (SPRING_SAFE_REFUSAL) is in no
+            stop-set and would let the campaign continue past an exhausted
+            envelope. Record: FINDING_REFUSAL_CLASSIFICATION_2026-09-16.md.
