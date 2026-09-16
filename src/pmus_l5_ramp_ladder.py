@@ -96,6 +96,36 @@ RUNGS: tuple[dict, ...] = (
 # worst case) are unchanged. Outside the L5-order ladder above; never
 # promoted to or from automatically.
 OWNER_RUNGS: tuple[dict, ...] = (
+    # OWNER AUTHORIZATION 2026-09-16 "Option A". The ONLY purpose of this rung
+    # is to make the existing min(rung, mandate) architecture capable of
+    # exercising the separately authorized live mandate. It is NOT a ladder
+    # position, NOTHING promotes to or from it (`promote: None`), and it is
+    # deliberately in OWNER_RUNGS rather than RUNGS so the auto-ladder's lever
+    # order is untouched.
+    #
+    # WHY residual_units STAYS 3 AND IS NOT AN APPROXIMATION OF $3.00.
+    # The owner required that a contract count must never be able to exceed the
+    # mandate's $3.00 economic residual ceiling. A prediction-market contract
+    # settles at $0 or $1, so its cost basis is at most $1.00 and THREE
+    # unmatched contracts carry at most $3.00 of economic exposure -- the bound
+    # holds at every price, by the instrument's definition, not by a price
+    # assumption. The transport's $3.00 `max_residual` remains the authoritative
+    # economic ceiling; this unit count can only ever bind EARLIER, never later.
+    #
+    # Every other lever is R1's, unchanged: 3 markets, 1 concurrent, 6 actions
+    # per session, maker-only, fee-safe completion, HOLD-to-settlement.
+    # Worst case per campaign $5.00 x 3 = $15.00, which is exactly the
+    # authorized max_total_spend; the daily stop is the authorized $6.00.
+    {"id": "CP1", "name": "bounded continuous live probe, 3 markets "
+                          "(OWNER 2026-09-16 Option A)",
+     "per_market_cap_usd": "5.00", "residual_units": 3, "markets_per_campaign": 3,
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
+     "daily_loss_stop_usd": "-6.00",
+     "lever": "caps", "promote": None,
+     "derived_from": "OWNER live authorization 2026-09-16: max_spend_per_market "
+                     "$5.00, max_residual $3.00, max_total_spend $15.00, "
+                     "max_markets 1, max_total_markets 3, daily stop $6.00, "
+                     "24h expiry, k 0.00619 unchanged"},
     {"id": "R2C", "name": "caps: $0.15 per market, residual 6 units (OWNER 5560851070)",
      "per_market_cap_usd": "0.15", "residual_units": 6, "markets_per_campaign": 6,
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,

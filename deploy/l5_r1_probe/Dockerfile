@@ -23,10 +23,12 @@
 # reviewed source, and a measurement probe that adapts less is easier to
 # reconcile, not harder. Both paths remain maker/post-only either way.
 #
-# R1 IS PINNED IN THE IMAGE, not left to a service variable, because a service
-# variable overrides image ENV and the legacy service demonstrates how that
-# goes wrong. PMUS_SPRING_RUNG=R1 and PMUS_SPRING_RUNG_MARKETS=1 are both here,
-# in the repo, in the image, and under test.
+# THE RUNG IS PINNED IN THE IMAGE, not left to a service variable, because a
+# service variable overrides image ENV and the legacy service demonstrates how
+# that goes wrong. PMUS_SPRING_RUNG=CP1 and PMUS_SPRING_RUNG_MARKETS=3 are both
+# here, in the repo, in the image, and under test.
+# (OWNER 2026-09-16 Option A: was R1/1. CP1's $5.00 cap is what lets
+# min(rung, mandate) reach the authorized envelope; min() is untouched.)
 #
 # ARMING: this image sets NO PMUS_SPRING_LIVE / _ARM / _SESSION_ID. On a fresh
 # service that namespace is empty, so armed() is False by construction and the
@@ -161,8 +163,18 @@ RUN touch src/__init__.py
 # Every value the probe's envelope depends on, pinned in the image.
 ENV PMUS_SERVICE_ROLE=l5-r1-probe \
     PMUS_Q1_STATE_DIR=/state/l5-r1-probe \
-    PMUS_SPRING_RUNG=R1 \
-    PMUS_SPRING_RUNG_MARKETS=1 \
+    # OWNER 2026-09-16 Option A: CP1 is the bounded-probe rung whose
+    # $5.00 cap lets min(rung, mandate) reach the authorized envelope.
+    # min() is untouched -- the mandate still caps, and CP1 cannot
+    # enlarge it. Unknown ids still fall back to R1.
+    PMUS_SPRING_RUNG=CP1 \
+    # OWNER 2026-09-16 Option A authorized max_total_markets 3, and CP1's
+    # markets_per_campaign is 3. This env override would otherwise pin the
+    # campaign to ONE market and silently under-run the authorization. The
+    # variable itself stays (durable R5F state must never boot without an
+    # allowance); only its value is aligned to what was authorized. The
+    # mandate's max_total_markets still binds at the wire regardless.
+    PMUS_SPRING_RUNG_MARKETS=3 \
     PMUS_SPRING_MAX_ACTIONS=6 \
     PYTHONUNBUFFERED=1
 

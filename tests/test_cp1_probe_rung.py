@@ -1,0 +1,173 @@
+"""CP1 exists to let min(rung, mandate) REACH the authorized envelope -- never
+to enlarge it.
+
+Owner authorization 2026-09-16 "Option A": max_spend_per_market $5.00,
+max_residual $3.00, max_total_spend $15.00, max_markets 1, max_total_markets 3,
+max_daily_realized_loss $6.00, 24h expiry, k 0.00619 unchanged.
+"""
+from __future__ import annotations
+
+import json
+from decimal import Decimal as D
+
+import pytest
+
+from src import pmus_l5_ramp_ladder as ladder
+from src import pmus_live_mandate as M
+
+pytestmark = pytest.mark.real_mandate_env
+
+AUTHORIZED = {
+    "authorization_id": "TEST", "authorized_at": "2026-09-16T18:00:00Z",
+    "service": "l5-r1-probe", "strategy": "l5_continuous_inventory",
+    "strategy_version": "v1.1", "max_markets": 1, "max_total_markets": 3,
+    "max_spend_per_market": "5.00", "max_total_spend": "15.00",
+    "max_residual": "3.00", "max_daily_realized_loss": "6.00",
+    "expiry": "2026-09-17T18:00:00Z",
+}
+
+
+def _mandate(tmp_path, **over):
+    f = tmp_path / "live_mandate.json"
+    f.write_text(json.dumps({**AUTHORIZED, **over}))
+    m, why = M.load_mandate({"PMUS_LIVE_MANDATE_FILE": str(f)})
+    assert m is not None, why
+    return m
+
+
+def _effective(rung_id: str, mandate) -> D:
+    """The production rule, reproduced exactly: min(rung, mandate)."""
+    rung = D(str(ladder.rung(rung_id)["per_market_cap_usd"]))
+    return min(rung, D(str(mandate.max_spend_per_market)))
+
+
+# --------------------------------------------------------------------------
+# 5. the effective cap is min($5 rung, $5 mandate) = $5
+
+def test_effective_per_market_cap_is_five_dollars(tmp_path):
+    assert _effective("CP1", _mandate(tmp_path)) == D("5.00")
+
+
+# --------------------------------------------------------------------------
+# 6. HOSTILE: a tighter MANDATE wins
+
+@pytest.mark.parametrize("tighter", ["0.05", "0.50", "1.00", "4.99"])
+def test_a_tighter_mandate_always_wins_over_cp1(tmp_path, tighter):
+    m = _mandate(tmp_path, max_spend_per_market=tighter)
+    assert _effective("CP1", m) == D(tighter)
+
+
+# --------------------------------------------------------------------------
+# 7. HOSTILE: a tighter RUNG wins
+
+@pytest.mark.parametrize("rid,cap", [("R1", "0.05"), ("R2C", "0.15"),
+                                     ("R2C2", "0.15")])
+def test_a_tighter_rung_always_wins_over_the_mandate(tmp_path, rid, cap):
+    assert _effective(rid, _mandate(tmp_path)) == D(cap)
+
+
+# --------------------------------------------------------------------------
+# 4. CP1 can never ENLARGE any mandate limit
+
+def test_cp1_can_never_enlarge_the_per_market_cap(tmp_path):
+    """Swept against every rung in the table: the effective cap is never above
+    the mandate's, whatever rung is active."""
+    m = _mandate(tmp_path)
+    ceiling = D(str(m.max_spend_per_market))
+    for r in ladder.ALL_RUNGS:
+        assert _effective(r["id"], m) <= ceiling, r["id"]
+
+
+def test_cp1_residual_units_cannot_exceed_the_mandate_dollar_ceiling():
+    """A contract settles at $0 or $1, so its cost basis is at most $1.00.
+    THREE unmatched contracts therefore carry at most $3.00 of economic
+    exposure -- at every price, by the instrument's definition rather than by
+    a price assumption. The count can only ever bind EARLIER than the $3.00
+    transport ceiling, never later."""
+    units = ladder.rung("CP1")["residual_units"]
+    assert units == 3
+    assert D(units) * D("1.00") <= D(AUTHORIZED["max_residual"])
+
+
+def test_cp1_worst_case_matches_the_authorized_envelope():
+    wc = ladder.worst_case(ladder.rung("CP1"))
+    assert wc["per_market_usd"] == "5.00"
+    assert wc["per_campaign_usd"] == "15.00"          # == max_total_spend
+    assert wc["max_concurrent_open_exposure_usd"] == "5.00"   # concurrency 1
+    assert wc["daily_loss_stop_usd"] == "-6.00"
+
+
+def test_cp1_matches_every_authorized_limit():
+    r = ladder.rung("CP1")
+    assert r["per_market_cap_usd"] == "5.00"
+    assert r["concurrency"] == 1                       # max_markets
+    assert r["markets_per_campaign"] == 3              # max_total_markets
+    assert r["daily_loss_stop_usd"] == "-6.00"
+    assert r["max_actions_per_session"] == 6           # R1's, unchanged
+
+
+# --------------------------------------------------------------------------
+# the things the authorization forbade
+
+def test_cp1_cannot_be_promoted_to_or_from():
+    """No automatic rung progression is resurrected."""
+    assert ladder.rung("CP1")["promote"] is None
+    for r in ladder.ALL_RUNGS:
+        crit = r.get("promote") or {}
+        assert "CP1" not in json.dumps(crit)
+
+
+def test_cp1_is_off_the_auto_ladder_and_leaves_its_lever_order_intact():
+    assert "CP1" not in [r["id"] for r in ladder.RUNGS]
+    assert "CP1" in [r["id"] for r in ladder.ALL_RUNGS]
+    assert [r["lever"] for r in ladder.RUNGS] == [
+        "baseline", "windows_per_day", "actions_per_window", "size", "concurrency"]
+
+
+def test_no_seven_fifty_rung_was_selected():
+    """Option B was explicitly rejected by the owner."""
+    import re
+    df = open("deploy/l5_r1_probe/Dockerfile", encoding="utf-8").read()
+    # scan the ENV ASSIGNMENT, not prose -- the file also discusses the rung in
+    # comments, and the first pass of this test matched one of those instead.
+    env = [l.strip() for l in df.splitlines()
+           if l.strip().startswith("PMUS_SPRING_RUNG=")]
+    assert env == ["PMUS_SPRING_RUNG=CP1 \\"], env
+    # Option B stays rejected. Checked on the ASSIGNED rung itself rather than
+    # by scanning the file for rung ids -- the surrounding comments legitimately
+    # mention R5F, and a substring scan reads that explanation as a violation.
+    assigned = env[0].split("=", 1)[1].rstrip(" \\")
+    assert assigned == "CP1"
+    assert ladder.rung(assigned)["per_market_cap_usd"] == "5.00"
+    seven_fifty = {r["id"] for r in ladder.ALL_RUNGS
+                   if r["per_market_cap_usd"] == "7.50"}
+    assert seven_fifty and assigned not in seven_fifty, seven_fifty
+
+
+def test_the_campaign_market_allowance_matches_the_authorized_three():
+    """PMUS_SPRING_RUNG_MARKETS overrides the rung, so a stale 1 would silently
+    run a one-market probe under a three-market authorization."""
+    df = open("deploy/l5_r1_probe/Dockerfile", encoding="utf-8").read()
+    env = [l.strip() for l in df.splitlines()
+           if l.strip().startswith("PMUS_SPRING_RUNG_MARKETS=")]
+    assert env == ["PMUS_SPRING_RUNG_MARKETS=3 \\"], env
+    assert ladder.rung("CP1")["markets_per_campaign"] == 3
+
+
+def test_the_min_rule_itself_is_still_in_the_source():
+    """min(rung, mandate) is the safety property; CP1 must not have weakened
+    it into "the mandate wins"."""
+    import re
+    src = open("src/pmus_spring_l5_session.py", encoding="utf-8").read()
+    body = src[src.index("def session_notional_cap"):]
+    body = body[:body.index("\ndef ", 1)]
+    code = re.sub(r'"""(?:.|\n)*?"""', "", body)
+    assert "min(rung," in code.replace(" ", "") or "min(rung," in code
+
+
+def test_guarded_transport_is_untouched_by_this_change():
+    """The authorization forbade modifying or weakening GuardedTransport."""
+    import subprocess
+    out = subprocess.run(["git", "diff", "HEAD", "--", "src/pmus_live_mandate.py"],
+                         capture_output=True, text=True).stdout
+    assert out.strip() == "", "pmus_live_mandate.py must not change"

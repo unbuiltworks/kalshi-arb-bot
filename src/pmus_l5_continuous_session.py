@@ -2718,6 +2718,58 @@ def _has_inventory(report: Mapping[str, Any]) -> bool:
         return bool(report.get("actions"))
 
 
+def halted_envelope() -> dict:
+    """The effective limits, computed on the HALTED path so they can be
+    verified BEFORE the halt is lifted.
+
+    Step 8 of the owner's activation procedure is "verify the runtime reads the
+    new mandate and all limits above" -- and until this existed that step could
+    not be performed: `_rung_report()` is built further down `run_campaign`,
+    after the shutdown branch has already returned, so a halted process
+    disclosed no envelope at all.
+
+    Read-only and inert. It computes nothing new and enforces nothing: every
+    number comes from the same accessor the armed path uses. It never raises,
+    because the halted process must stay up -- exiting reads as a crash and
+    rolls back to the previous, possibly armed, build.
+
+    `persisted_rung` is reported because a campaign's rung survives a restart
+    and is re-applied ON ARMING (`_apply_rung(persisted["rung"])`). A stale one
+    can only ever make the envelope TIGHTER via min(), never larger, but it can
+    silently make the probe run at a size the owner did not authorize -- so it
+    is surfaced before arming rather than discovered afterwards.
+    """
+    out: dict = {"labels": "read-only disclosure; enforces nothing"}
+    try:
+        from src import pmus_l5_ramp_ladder as _ladder
+        from src import pmus_live_mandate as _mandate
+        r = _ladder.active()
+        out["active_rung"] = r.get("id")
+        out["rung_per_market_cap_usd"] = str(r.get("per_market_cap_usd"))
+        m, why = _mandate.load_mandate()
+        out["mandate_loaded"] = m is not None
+        out["mandate_refusal"] = why
+        if m is not None:
+            out["mandate"] = {
+                "authorization_id": m.authorization_id,
+                "expiry": str(m.expiry),
+                "max_spend_per_market": str(m.max_spend_per_market),
+                "max_total_spend": str(m.max_total_spend),
+                "max_residual": str(m.max_residual),
+                "max_markets": m.max_markets,
+                "max_total_markets": m.max_total_markets,
+                "max_daily_realized_loss": str(m.max_daily_realized_loss),
+            }
+        # THE NUMBERS THAT ACTUALLY BIND
+        out["effective_per_market_cap_usd"] = str(base.session_notional_cap())
+        out["effective_residual_cap_units"] = base.max_residual_units()
+        out["effective_daily_loss_stop_usd"] = str(base.daily_loss_stop())
+        out["persisted_rung"] = (load_campaign_state() or {}).get("rung")
+    except Exception as exc:                        # noqa: BLE001
+        out["error"] = f"{type(exc).__name__}:{str(exc)[:120]}"
+    return out
+
+
 def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                  wall=time.time, campaign_s: Optional[float] = None,
                  session_runner=None) -> dict:
@@ -2742,6 +2794,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             except Exception:                      # noqa: BLE001
                 t = None
         rep = safe_shutdown(t)
+        # step 8 of the activation procedure is performed HERE, before the halt
+        # is ever lifted -- see halted_envelope().
+        rep["effective_envelope"] = halted_envelope()
         _log("safe_shutdown", **rep)
         shutdown_idle(sleep, rep, t)       # never returns in production
         return {"campaign": "pmus-l5-continuous-v1", "mode": "SHUTDOWN",
