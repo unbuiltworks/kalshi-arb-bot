@@ -206,12 +206,40 @@ Every evaluation emits a row, WAIT included: `p_act`, `act_threshold`,
 `l5_acted_subsequently` for prospective comparison.
 
 `v1_would_have` on every row is the control: V1 and V1.1 scored on the same
-observations, so the comparison needs no second deployment to be meaningful —
-though keeping the V1 service running remains the cleaner control and costs
-nothing.
+observations, so the comparison needs no clock alignment. It is a **real V1
+call at the frozen `(open, q<5)` defaults**, not a re-read of the Stage-2 row
+computed with the corrected context — that shortcut would have folded the
+context fix into its own baseline, and the prospective coverage split would
+have come out identically zero by construction. The V1 service also keeps
+running, which costs nothing and is the cleaner per-service control.
 
-**Not deployed yet.** Deploying V1.1 SHADOW is the next step and needs no
-authorization beyond the usual shadow rules; it moves no money.
+`vs_v1` attributes each disagreement to the change responsible, because two
+independent changes can move the decision and a merged count could not say
+which one did: `STAGE1_SUPPRESSED` (Stage 1 vetoed an act V1 took),
+`CONTEXT_ENABLED` / `CONTEXT_DECLINED` (the corrected lookup reached different
+evidence), `SAME`. It is kept apart from V1's own `divergence`, which means
+something else entirely — desired vs executable (model / risk cap / venue).
+
+### What this tape cannot answer, said before the numbers arrive
+
+**L5 does not trade these markets.** L5 is on Polymarket.com; this shadow runs
+on Polymarket US sports. So `l5_acted_subsequently` is emitted as **null with a
+reason**, never guessed, and the prospective run splits the seven questions in
+two:
+
+| | |
+|---|---|
+| **Answerable here** | proposal-rate reduction; lookup-tier fractions; desired inventory trajectories V1 vs V1.1; MODEL / RISK_CAP / VENUE divergence attribution |
+| **Not answerable here** | whether L5 acted after an ACT; whether a WAIT was right; Stage-2 accuracy against L5. These need L5 in the same markets, and are answered by the chronological OOS in §3 |
+
+A second limit, found while wiring the runner: the recorder's `/status` handoff
+carries **no settlement time**, so TTE is not observable either. V1 has always
+run at the `1e9` sentinel and V1.1 uses the same one, so the control differs
+only where it is meant to — but the TTE dimension of the state key is
+**constant in shadow**, and the §3 TTE slices are not exercised prospectively.
+
+**DEPLOYED 2026-09-16** as `l5-v1-1-shadow`, beside the unchanged V1 control.
+No credentials, no transport, no mandate, no money.
 
 ## 7. Envelopes stay unarmed
 

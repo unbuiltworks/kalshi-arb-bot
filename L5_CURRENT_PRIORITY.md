@@ -73,10 +73,16 @@ No R4/R5. No automatic R1→R2→R3. A market beyond `max_total_markets` require
 
 ### V1 continuous-inventory SHADOW: RUNNING, unchanged
 
-`l5-v1-shadow` (`8a7bc9f4-…`), deployment `17d027dd`, commit `76061d06`. No
+`l5-v1-shadow` (`8a7bc9f4-…`), deployment `50817f1e`, commit `e429d7a5`. No
 credentials, no transport, no order verb, no executor in the image. ~46 sports
-markets/cycle, ~49k observation rows. **Leave it running. Do not tune k, the
-pair target, thresholds, the model or Envelope A during this sample.**
+markets/cycle. **Leave it running. Do not tune k, the pair target,
+thresholds, the model or Envelope A during this sample.**
+
+It rebuilt at `e429d7a5` because that commit threaded `last_rel`/`last_size`
+through `V1.observe`. The defaults are the previous behaviour exactly and a
+fixture pins that, so the control's *decisions* are unchanged — but the process
+restarted, so its theoretical inventory walk restarts from flat at 12:58Z. The
+observation history on its volume is intact.
 
 Both state lookups are preserved on every row — naive inventory state and the
 corrected `residual / k` L5-equivalent state — because the lift changes the
@@ -101,19 +107,43 @@ model. Diagnosis in `analysis/l5/v1_shadow/ACT_VS_WAIT.md`. In short:
   (`gap<2s` / `gap2-10` / `gap10-30` / `gap>30`) — the inter-action gap. V1
   does not consult it.
 
-**Built, not deployed.** `src/l5_v1_1_shadow.py` puts ACT/WAIT in front of the
-transition model as a separate stage, fixes the context defect (full-key
-coverage **8.2% → 99.9%**, Stage-2 relation accuracy **0.546 → 0.688** against a
-0.514 majority baseline), and scores timing separately. Chronological OOS beats
-every baseline at every horizon; cadence carries most of the signal; the value
-is at SHORT horizons because L5 acts within 120s 96% of the time once active.
-Evidence: `analysis/l5/act_wait/FINDINGS.md`. The V1 shadow keeps running
-unchanged as the control. V1.1 is **not deployed yet**.
+### V1.1 SHADOW: DEPLOYED 2026-09-16, prospective sample collecting
+
+`l5-v1-1-shadow` (`8597d731-…`), commit `c6c54783`. Same recorder handoff, same
+volume pattern, no credentials, no transport, no order verb, no mandate — it
+could not spend if it were told to. `src/l5_v1_1_shadow.py` puts ACT/WAIT in
+front of the transition model as a separate stage, fixes the context defect
+(full-key coverage **8.2% → 99.9%**, Stage-2 relation accuracy **0.546 →
+0.688** against a 0.514 majority baseline), and scores timing separately.
+Chronological OOS beats every baseline at every horizon; cadence carries most
+of the signal; the value is at SHORT horizons because L5 acts within 120s 96%
+of the time once active. Evidence: `analysis/l5/act_wait/FINDINGS.md`.
+
+**H = 10s is preregistered** from that OOS and is not to be re-chosen from
+prospective data while the first sample is collecting. Neither is k, the pair
+target, the thresholds, the model, or any candidate envelope.
+
+The V1 service keeps running as the control, and every V1.1 row *also* carries
+`v1_would_have` — a real V1 call at the frozen `(open, q<5)` defaults on the
+same observation, so the comparison is per-row and needs no clock alignment.
+`vs_v1` attributes each disagreement to the change responsible: Stage-1
+suppression and the corrected context are independent and are counted apart.
+
+**Two limits of this tape, stated up front rather than discovered in the
+numbers.** L5 trades Polymarket.com and this is Polymarket US sports, so
+"did L5 act next" is **not observable** here — it is emitted as null with a
+reason. And the recorder's `/status` carries no settlement time, so TTE is
+constant in shadow. Between them, four of the seven prospective questions are
+answerable here (proposal rate, lookup tiers, inventory trajectories,
+divergence attribution) and three are not (was the ACT right, was the WAIT
+right, Stage-2 accuracy vs L5) — those are answered by the chronological OOS.
 
 Known gap, only for OPEN: we have no negatives for markets L5 declined to
 enter, so `p_act` at `last_rel=open` is unvalidated (PR-AUC 0.21 vs 0.72 for
-extend/complete). The smallest honest fix is persisting the recorder's existing
-live universe snapshot — additive, read-only, not built, not authorized.
+extend/complete). The collector for it is now **running**: V1.1 persists the
+recorder's eligible universe every cycle to `universe.jsonl` with the
+recorder's own timestamp beside our receipt time. Collection only — it labels
+nothing entered or declined and infers no negative.
 
 ## Scaling hypothesis — frequency and breadth, not size
 
