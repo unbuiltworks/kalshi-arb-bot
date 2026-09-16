@@ -111,3 +111,65 @@ def test_context_advances_only_on_a_decided_action(loaded):
     for r in rows:
         if r["action"] == "WAIT" and ctx.since(r["slug"], 2000.0) is None:
             assert (r["last_rel"], r["last_size"]) == ("open", "q<5")
+
+
+# --------------------------------------------------------------------------
+# TTE: captured, and deliberately not used
+#
+# The venue serves no settlement timestamp for live sports and the nearest
+# thing, market_state.endDate, reaches only the bounded spring_watch subset.
+# Feeding it now would give a MIXED tte population, part measured and part
+# sentinel, which is worse for a comparison than a uniform sentinel.
+
+SW_STATUS = {"t": "2026-09-16T13:30:00Z",
+             "spring_watch": [{"slug": "sw", "bid": 0.44, "ask": 0.46,
+                               "market_state": {"endDate": "2026-09-16T15:00:00Z"}}],
+             "top_markets": [{"slug": "tm", "bid": 0.61, "ask": 0.63}]}
+
+
+def test_end_date_is_read_only_where_the_recorder_actually_supplies_it():
+    ms = R.market_states(SW_STATUS)
+    assert set(ms) == {"sw"}, "only spring_watch rows carry market_state"
+    assert R.end_date_tte_s(ms["sw"], 1758030000.0) is not None
+    assert R.end_date_tte_s(ms.get("tm"), 1758030000.0) is None
+
+
+def test_an_absent_or_unparseable_end_date_is_none_never_a_guess():
+    for bad in (None, {}, {"endDate": None}, {"endDate": ""},
+                {"endDate": "not-a-date"}, {"endDate": 12345}):
+        assert R.end_date_tte_s(bad, 1000.0) is None
+
+
+def test_the_captured_tte_never_reaches_the_state_key(loaded):
+    """The sample must run on the uniform sentinel. A tte that moved the state
+    key would silently change the semantics of a sample already in flight."""
+    model, art, act = loaded
+    books = {"sw": {"bid": 0.44, "ask": 0.46}, "tm": {"bid": 0.61, "ask": 0.63}}
+    ms = R.market_states(SW_STATUS)
+    rows = R.cycle(model, art, act, books, ShadowBook(),
+                   V11.SequentialContext(), 1758030000.0, ms)
+    by = {r["slug"]: r for r in rows}
+    assert by["sw"]["observed_end_date_tte_s"] is not None
+    assert by["tm"]["observed_end_date_tte_s"] is None
+    # both markets keyed on the SAME sentinel bucket regardless
+    assert by["sw"]["state_l5_units"].split("|")[1] == "tte>10m"
+    assert by["tm"]["state_l5_units"].split("|")[1] == "tte>10m"
+    assert "NOT fed to the state key" in by["sw"]["tte_provenance"]
+
+
+def test_the_v1_control_runner_is_not_touched_by_the_tte_capture():
+    """Widening books_from_status would change what the control sees AND
+    rebuild it mid-sample. The extraction lives on the V1.1 side for exactly
+    that reason."""
+    import inspect
+
+    from src import l5_v1_shadow_runner as V1R
+    assert "market_state" not in inspect.getsource(V1R.books_from_status)
+    assert "market_state" in inspect.getsource(R.market_states)
+
+
+def test_the_cycle_line_carries_its_own_clock_and_market_count():
+    """The maturity reader must not have to infer a clock from the log
+    transport, and distinct markets is a coverage floor."""
+    src = open(R.__file__, encoding="utf-8").read()
+    assert "t=now" in src and "distinct_markets=len(seen)" in src

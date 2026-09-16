@@ -73,10 +73,23 @@ def cumulative(evs: List[dict]) -> dict:
 
 
 def main(argv: List[str]) -> int:
+    from analysis.l5.v1_1_shadow import maturity as M
     text = (open(argv[1], encoding="utf-8").read() if len(argv) > 1
             else sys.stdin.read())
     evs = list(events(text))
+    cyc = [e for e in evs if e.get("kind") == "cycle"
+           and isinstance(e.get("t"), (int, float))]
     out: Dict[str, Any] = {"cumulative": cumulative(evs)}
+    # MATURITY IS EVALUATED, NEVER ASSERTED. The criterion is preregistered in
+    # MATURITY.md and a failing test is a result, not a reason to relax it.
+    out["maturity"] = M.assess(
+        cyc,
+        restarts=sum(1 for e in evs if e.get("kind") == "shadow_start") - 1
+        if any(e.get("kind") == "shadow_start" for e in evs) else 0,
+        act_artifact_missing=sum(1 for e in evs
+                                 if e.get("kind") == "act_artifact_missing"),
+        no_status=sum(1 for e in evs if e.get("kind") == "no_status"),
+        distinct_markets=(cyc[-1].get("distinct_markets") if cyc else None))
     sums = [e for e in evs if e.get("kind") == "summary"]
     out["summaries_in_window"] = len(sums)
     if sums:

@@ -61,6 +61,59 @@ HORIZON_S = int(os.getenv("L5_V1_1_HORIZON_S", "10"))
 L5_NOT_OBSERVABLE = ("not_observable: L5 trades Polymarket.com, this tape is "
                      "Polymarket US sports; no L5 fills exist in these markets")
 
+#: TTE IS CAPTURED HERE AND DELIBERATELY NOT USED.
+#: The venue serves NO settlement timestamp for live sports -- the recorder says
+#: so in its own source -- and the nearest thing, `market_state.endDate`, is
+#: fetched per-slug over only the bounded spring_watch subset, so it is present
+#: for a minority of the universe and its fidelity to actual resolution is
+#: unverified. Feeding it now would give a MIXED tte population, part measured
+#: and part sentinel, which is worse for a comparison than a uniform sentinel.
+#: So it is recorded on the row as an observation and never reaches the state
+#: key: this sample stays clean, and the NEXT one starts with the evidence to
+#: decide whether endDate is a usable proxy at all.
+TTE_CAPTURED_NOT_USED = ("observed endDate, recorded only; NOT fed to the state "
+                         "key -- this sample runs on the uniform sentinel")
+
+
+def market_states(status: Mapping[str, Any]) -> Dict[str, dict]:
+    """slug -> the recorder's `market_state`, read from the RAW status document.
+
+    Deliberately not taken from `books_from_status`: widening that would change
+    what the V1 control sees and rebuild it mid-sample, and the control must not
+    move. Only `spring_watch` rows carry this -- the recorder fetches endDate
+    per-slug over a bounded subset -- so most markets have no entry and get
+    None, which is the honest answer.
+    """
+    out: Dict[str, dict] = {}
+    for key in ("spring_watch", "top_markets", "markets"):
+        rows = status.get(key)
+        if not isinstance(rows, list):
+            continue
+        for r in rows:
+            if not isinstance(r, Mapping):
+                continue
+            slug, ms = r.get("slug") or r.get("market_slug"), r.get("market_state")
+            if slug and isinstance(ms, Mapping):
+                out[str(slug)] = dict(ms)
+    return out
+
+
+def end_date_tte_s(ms: Optional[Mapping[str, Any]], now: float) -> Optional[float]:
+    """Seconds to the venue's scheduled endDate, when the recorder supplied one.
+
+    Returns None rather than a guess whenever the field is absent or
+    unparseable -- an absent measurement must never read as a measured value.
+    """
+    end = (ms or {}).get("endDate") if isinstance(ms, Mapping) else None
+    if not end:
+        return None
+    try:
+        from datetime import datetime
+        t = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+        return round(t.timestamp() - now, 1)
+    except (ValueError, TypeError, OSError):
+        return None
+
 
 def state_dir() -> Path:
     return Path(os.getenv(STATE_DIR_ENV, "/state/l5-v1-1-shadow"))
@@ -73,7 +126,8 @@ def _log(kind: str, **kw: Any) -> None:
 
 
 def persist_universe(sink: Path, status: Mapping[str, Any],
-                     books: Mapping[str, dict], now: float) -> int:
+                     books: Mapping[str, dict], now: float,
+                     mstates: Optional[Mapping[str, dict]] = None) -> int:
     """One row per market per cycle: what was on offer, and when.
 
     PROVENANCE IS THE POINT. Each row keeps the recorder's own status timestamp
@@ -91,6 +145,8 @@ def persist_universe(sink: Path, status: Mapping[str, Any],
                 "slug": slug,
                 "bid": b.get("bid"), "ask": b.get("ask"),
                 "bid_qty": b.get("bid_qty"), "ask_qty": b.get("ask_qty"),
+                "observed_end_date_tte_s": end_date_tte_s(
+                    (mstates or {}).get(slug), now),
                 "source": "pmus-ws-evidence-recorder /status",
                 "labels": ("read-only observation of the eligible universe; "
                            "NOT a decision, NOT an inferred negative"),
@@ -99,7 +155,8 @@ def persist_universe(sink: Path, status: Mapping[str, Any],
 
 
 def cycle(model, art, act_art, books: Mapping[str, dict], sb: ShadowBook,
-          ctx: V11.SequentialContext, now: float) -> List[dict]:
+          ctx: V11.SequentialContext, now: float,
+          mstates: Optional[Mapping[str, dict]] = None) -> List[dict]:
     rows = []
     for slug, book in books.items():
         sb.mark(slug, book)
@@ -110,6 +167,9 @@ def cycle(model, art, act_art, books: Mapping[str, dict], sb: ShadowBook,
                           ctx=ctx, held_avg_cost=sb.cost.get(slug),
                           horizon_s=HORIZON_S, l5_acted=None)
         row["l5_observability"] = L5_NOT_OBSERVABLE
+        row["observed_end_date_tte_s"] = end_date_tte_s(
+            (mstates or {}).get(slug), now)
+        row["tte_provenance"] = TTE_CAPTURED_NOT_USED
         # A THEORETICAL fill is what lets the trajectory walk; it is labelled on
         # the row, never netted, never called P&L, never compared to a ledger.
         prop = (row.get("adapted") or {}).get("proposed")
@@ -151,6 +211,7 @@ def main() -> int:
         _log("act_artifact_missing", effect="every row will WAIT at stage 1")
 
     sb, ctx = ShadowBook(), V11.SequentialContext()
+    seen: set = set()
     cycles, rows_total, uni_total = 0, 0, 0
     recent: List[dict] = []
     while True:
@@ -161,9 +222,10 @@ def main() -> int:
             time.sleep(POLL_S)
             continue
         books = books_from_status(status)
+        mstates = market_states(status)
         now = time.time()
-        uni_total += persist_universe(universe, status, books, now)
-        rows = cycle(model, art, act_art, books, sb, ctx, now)
+        uni_total += persist_universe(universe, status, books, now, mstates)
+        rows = cycle(model, art, act_art, books, sb, ctx, now, mstates)
         if rows:
             with sink.open("a", encoding="utf-8") as fh:
                 for r in rows:
@@ -171,8 +233,15 @@ def main() -> int:
                                         default=str) + "\n")
             rows_total += len(rows)
             recent = (recent + rows)[-5000:]
-        _log("cycle", cycles=cycles, markets=len(books), rows=len(rows),
+        seen.update(books)
+        # `t` and the cumulative market count are on the line so the maturity
+        # reader is self-contained and never has to infer a clock from the
+        # log transport.
+        _log("cycle", cycles=cycles, t=now, markets=len(books), rows=len(rows),
+             distinct_markets=len(seen),
              rows_total=rows_total, universe_rows_total=uni_total,
+             tte_observed=sum(1 for r in rows
+                              if r.get("observed_end_date_tte_s") is not None),
              proposed=sum(1 for r in rows if r["action"] == "PROPOSE"),
              stage1_wait=sum(1 for r in rows if r["act_decision"] == "WAIT"),
              v1_would_have=sum(1 for r in rows if r["v1_would_have"] == "PROPOSE"))

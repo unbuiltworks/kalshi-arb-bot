@@ -345,6 +345,10 @@ def observe(*, model: Mapping[str, Any], fidelity_art: Optional[Mapping[str, Any
         "conditional_action_probs": (row.get("fidelity") or {}).get("relation_probs"),
         "desired_inventory_l5": (row.get("fidelity") or {}).get("desired_inventory_l5"),
         "scaled_desired_inventory": (row.get("adapted") or {}).get("scaled_desired_inventory"),
+        "our_inventory": row.get("our_inventory"),
+        # exposure, so the distribution and the cap-hit fraction are measurable
+        # from the row rather than reconstructed from the runner's book
+        "spent_usd": spent_usd,
         "fidelity": row.get("fidelity"), "adapted": row.get("adapted"),
         "economics": row.get("economics"),
         "divergence": (row.get("adapted") or {}).get("divergence"),
@@ -364,32 +368,110 @@ def observe(*, model: Mapping[str, Any], fidelity_art: Optional[Mapping[str, Any
     }
 
 
+def _q(vals: Sequence[Any], qs=(0.1, 0.5, 0.9)) -> Optional[dict]:
+    """Quantiles without numpy. None when nothing numeric is present, so an
+    absent measure never reads as a measured zero."""
+    xs = sorted(float(v) for v in vals if isinstance(v, (int, float)))
+    if not xs:
+        return None
+    out = {"n": len(xs), "min": round(xs[0], 6), "max": round(xs[-1], 6),
+           "mean": round(sum(xs) / len(xs), 6)}
+    for q in qs:
+        i = min(len(xs) - 1, max(0, int(round(q * (len(xs) - 1)))))
+        out[f"p{int(q * 100)}"] = round(xs[i], 6)
+    return out
+
+
+def _hist(vals: Sequence[Any], lo=0.0, hi=1.0, bins=10) -> dict:
+    """Fixed-edge histogram, so two checkpoints are comparable bin for bin."""
+    h = {f"{lo + i * (hi - lo) / bins:.1f}-{lo + (i + 1) * (hi - lo) / bins:.1f}": 0
+         for i in range(bins)}
+    keys = list(h)
+    for v in vals:
+        if not isinstance(v, (int, float)):
+            continue
+        i = min(bins - 1, max(0, int((float(v) - lo) / (hi - lo) * bins)))
+        h[keys[i]] += 1
+    return h
+
+
 def summarize(rows: Sequence[Mapping[str, Any]]) -> dict:
+    """Every measure the maturity criterion tracks, kept separate.
+
+    WAIT rows are counted everywhere on purpose: scoring only the states where
+    the controller trades is how a policy that almost never trades scores
+    perfectly. Nothing here is P&L and nothing here is realized.
+    """
     n = len(rows) or 1
     acts = [r for r in rows if r.get("action") == "PROPOSE"]
     stage1_wait = [r for r in rows if r.get("act_decision") == "WAIT"]
     v1_acts = [r for r in rows if r.get("v1_would_have") == "PROPOSE"]
+    ts = [float(r["t"]) for r in rows if isinstance(r.get("t"), (int, float))]
+
     def count(vals):
         d: Dict[str, int] = {}
         for v in vals:
             d[str(v)] = d.get(str(v), 0) + 1
         return dict(sorted(d.items(), key=lambda kv: -kv[1]))
+
+    def frac(pred):
+        return round(sum(1 for r in rows if pred(r)) / n, 4)
+
+    def rr(r, *path):
+        cur: Any = r
+        for k in path:
+            cur = (cur or {}).get(k) if isinstance(cur, Mapping) else None
+        return cur
+
     return {
         "n": len(rows),
+        "distinct_markets": len({r.get("slug") for r in rows}),
+        "elapsed_s": round(max(ts) - min(ts), 1) if len(ts) > 1 else 0.0,
+        # --- the two rates the maturity criterion is defined on
         "proposed": len(acts), "propose_rate": round(len(acts) / n, 4),
-        "stage1_wait": len(stage1_wait),
-        "stage1_wait_rate": round(len(stage1_wait) / n, 4),
         "v1_would_have_proposed": len(v1_acts),
         "v1_propose_rate": round(len(v1_acts) / n, 4),
+        "stage1_wait": len(stage1_wait),
+        "stage1_wait_rate": round(len(stage1_wait) / n, 4),
+        # --- lookup reach, both controllers, the prospective coverage table
         "act_tiers": count(r.get("act_tier") for r in rows),
-        "stage2_backed_off": sum(1 for r in rows if r.get("lookup_tier_stage2")),
-        "last_rel_distribution": count(r.get("last_rel") for r in rows),
-        "predicted_gap": count(r.get("predicted_gap") for r in rows),
-        "divergence": count(r.get("divergence") for r in rows),
-        # the V1-vs-V1.1 comparison, kept apart from the field above
-        "vs_v1": count(r.get("vs_v1") for r in rows),
         "stage2_tier": count(r.get("stage2_tier") for r in rows),
         "v1_stage2_tier": count(r.get("v1_stage2_tier") for r in rows),
-        "wait_reasons": count(r.get("wait_reason") for r in rows if r.get("wait_reason")),
+        "stage2_backed_off": sum(1 for r in rows if r.get("lookup_tier_stage2")),
+        # --- stage 1
+        "p_act": _q([r.get("p_act") for r in rows], (0.1, 0.25, 0.5, 0.75, 0.9)),
+        "p_act_hist": _hist([r.get("p_act") for r in rows]),
+        "act_reasons": count(r.get("act_reason") for r in rows
+                             if r.get("act_reason")),
+        "act_thresholds": count(r.get("act_threshold") for r in rows),
+        # --- stage 3
+        "predicted_gap": count(r.get("predicted_gap") for r in rows),
+        "last_rel_distribution": count(r.get("last_rel") for r in rows),
+        # --- desired vs executable: V1's own field, unchanged meaning
+        "divergence": count(r.get("divergence") for r in rows),
+        "divergence_reasons": count(r.get("divergence_reason") for r in rows
+                                    if r.get("divergence_reason")),
+        "risk_cap_rate": frac(lambda r: r.get("divergence") == "RISK_CAP_FORCED"),
+        "venue_quant_rate": frac(
+            lambda r: r.get("divergence") == "VENUE_QUANTIZATION_FORCED"),
+        "model_disagreement_rate": frac(
+            lambda r: r.get("divergence") == "MODEL_DISAGREEMENT"),
+        "residual_cap_rate": frac(
+            lambda r: r.get("divergence_reason") == "residual_ceiling"),
+        "exposure_cap_rate": frac(
+            lambda r: r.get("divergence_reason") == "exposure_ceiling"),
+        # --- inventory, residual, exposure
+        "desired_inventory_l5": _q([rr(r, "fidelity", "desired_inventory_l5")
+                                    for r in rows]),
+        "scaled_desired_inventory": _q([r.get("scaled_desired_inventory")
+                                        for r in rows]),
+        "residual_l5_equivalent": _q([r.get("residual_l5_equivalent")
+                                      for r in rows]),
+        "our_inventory": _q([r.get("our_inventory") for r in rows]),
+        "spent_usd": _q([r.get("spent_usd") for r in rows]),
+        # --- V1 vs V1.1, attributed to the change responsible
+        "vs_v1": count(r.get("vs_v1") for r in rows),
+        "wait_reasons": count(r.get("wait_reason") for r in rows
+                              if r.get("wait_reason")),
         "labels": LABEL,
     }
