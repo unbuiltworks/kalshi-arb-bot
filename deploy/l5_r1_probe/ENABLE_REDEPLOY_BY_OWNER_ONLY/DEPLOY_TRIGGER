@@ -162,3 +162,45 @@ deploy and why the owner asked for it.
             Full suite 4931 passed / 0 failed on the exact artifact promoted
             here; lineage ACCEPTANCE true against the re-baselined ced188ca
             with FORBIDDEN_CLASSES unchanged and still containing SIZING.
+
+2026-09-16  OWNER "CP1 explicit sizing fix": deploy the artifact in which CP1
+            STATES its own action size. STILL DISARMED, STILL HALTED, STILL NO
+            MANDATE.
+
+            B3's deploy verified the intersection but also made visible that
+            CP1 named neither target_notional_usd nor max_leg_notional_usd, so
+            it inherited the $0.01/$0.02 micro defaults and would have sized at
+            $0.0090 per action -- ~$0.054 per market against a $5.00
+            authorization. Option A had raised the cap but not the spend. The
+            owner authorized stating the two values explicitly.
+
+            What changes at runtime: target_notional_usd $0.10 and
+            max_leg_notional_usd $0.125, derived from L5's own frozen per-fill
+            distribution scaled by the authorized k=0.00619 (L5 median 8.84-25.0
+            contracts by band -> 0.055-0.155 scaled; ours is 0.11-0.22, inside
+            that range). At $0.45 an action becomes qty 0.22 / entry $0.0990,
+            11x the micro regime and 11-22 lots of the venue minimum, which is
+            the floor at which a partial fill and a queue position are
+            observable. Worst-case six actions $0.7488 = 15% of the $5.00 cap,
+            bounded analytically by max_leg rather than by sampling. One action
+            is 2.5% of the envelope. The residual ceiling binds at 13-27 actions
+            while the cap needs 41-50, so the controller decides, not the cap.
+
+            NOT R3L's $2.50/$3.25 -- those are 25x and 26x larger and B3's
+            intersection keeps them out even with R3L on the volume. Every
+            other dimension is unchanged: $5.00/market, 3 residual units,
+            $15.00 campaign, concurrency 1, 3 markets, -$6.00 daily stop,
+            k unchanged.
+
+            DISCLOSED: worst-case residual moves $3.02 -> $3.22, because both
+            the decision gate and the wire guard test the residual ALREADY HELD,
+            so one action may cross the 3-contract ceiling. Pre-existing; only
+            its magnitude scales with size. Self-limiting past $3.00.
+
+            Why it changes nothing about arming: analysis/l5/authorization/
+            ships with HALT present and live_mandate.json ABSENT, exactly as
+            before. No arming value is set by this deploy.
+
+            Full suite 4949 passed / 0 failed; lineage ACCEPTANCE true against
+            the re-baselined a2fab7c6 with FORBIDDEN_CLASSES still containing
+            SIZING.

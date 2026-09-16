@@ -36,7 +36,16 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: SIZING from FORBIDDEN_CLASSES and weaken the gate permanently for every
 #: future change. The owner reviewed the artifact and advanced the baseline.
 #:
-#: ADVANCED AGAIN 2026-09-16 for OWNER AUTHORIZATION "B3", on the same terms
+#: ADVANCED A THIRD TIME 2026-09-16 for OWNER AUTHORIZATION "CP1 explicit
+#: sizing fix": CP1 now STATES target_notional_usd $0.10 and max_leg_notional_usd
+#: $0.125 instead of inheriting the $0.01/$0.02 micro defaults, which had the
+#: probe sizing at $0.0090 per action under a $5.00 authorization. That is
+#: src/pmus_l5_ramp_ladder.py again, in the image COPY set, and honestly
+#: SIZING. Same terms as every advance below: the owner reviewed it, authorized
+#: it explicitly, and required the baseline move to the exact green artifact.
+#: FORBIDDEN_CLASSES is STILL untouched and still contains SIZING.
+#:
+#: ADVANCED 2026-09-16 for OWNER AUTHORIZATION "B3", on the same terms
 #: and for the same reason. B3 changes src/pmus_l5_ramp_ladder.py (the
 #: dimension table and `tightest()`) and src/pmus_l5_continuous_session.py
 #: (`_apply_rung` intersects durable state instead of obeying it), both in the
@@ -46,7 +55,7 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: commit, the one the 4931-test suite passed on. FORBIDDEN_CLASSES is
 #: untouched and still contains SIZING; a future sizing change still fails
 #: this gate and still needs its own review.
-REVIEWED = "ced188ca"
+REVIEWED = "a2fab7c6"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
@@ -172,13 +181,13 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "adee233e4bc8fac733470a468bb4e4e1362cc4da",
+        "sha": "060050ea3aebb4f84ada88d8e663532f8bfaf86f",
         "why": ("The committed HALT latch, the live mandate when one exists, "
                 "and the arming records. Data and prose, never code: HALT's "
                 "presence halts and live_mandate.json's absence is the safe "
                 "state. Shipped as a directory so granting or revoking an "
                 "authorization is a reviewed commit rather than a Dockerfile "
-                "edit. RE-PINNED 2026-09-16, third time today, for the B3 record's "
+                "edit. RE-PINNED 2026-09-16 for CP1_EXPLICIT_SIZING_..., after the B3 record's "
                 "steps 6-7 production verification. The chain: "
                 "ARMING_BLOCKED_3_... reported that durable state would "
                 "re-apply R3L over the pinned CP1; "
