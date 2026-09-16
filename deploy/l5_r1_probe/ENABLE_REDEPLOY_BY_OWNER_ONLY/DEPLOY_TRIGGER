@@ -348,3 +348,48 @@ deploy and why the owner asked for it.
             alternative the semantics offer (SPRING_SAFE_REFUSAL) is in no
             stop-set and would let the campaign continue past an exhausted
             envelope. Record: FINDING_REFUSAL_CLASSIFICATION_2026-09-16.md.
+
+--------------------------------------------------------------------------
+2026-09-16T22:14Z — ACTIVATE: restore the three-market CP1 probe
+
+            OWNER AUTHORIZATION: "...and only then restore the
+            already-authorized three-market CP1 probe. The existing mandate may
+            be reused only if it remains valid, unexpired, exact, and accepted
+            at activation time. Otherwise stop rather than silently
+            replacing/extending it."
+
+            HALT is REMOVED from this tree; live_mandate.json remains. Removing
+            HALT does not authorize trading -- it un-halts the process. Orders
+            additionally require the mandate, and the halt/authorization
+            consistency invariant enforces that in both directions.
+
+            VERIFIED ON THE SERVING IMAGE BEFORE LIFTING (5a8df1229edd,
+            deployment 73e1b4bf, SUCCESS 22:05:58Z): SHUTDOWN_VERIFIED,
+            sweep.seen 0, still_open_ours [], foreign_open [], held_preserved
+            [], rung CP1 at $5.00, residual 3 units, stop -$6.00, after-restore
+            pinned CP1 / stored CP1 / effective CP1 with tightened_by_stored []
+            and no_dimension_loosened true, sizing 0.10 / 0.125, markets 3,
+            concurrency 1, actions 6, realized today -$0.0916 against -$6.00.
+
+            MANDATE REUSED, NOT REPLACED. Re-validated at activation time
+            against the real validator: loaded with refusal null, service
+            exactly l5-r1-probe, expired() false with 22h29m remaining to
+            2026-09-17T20:36:35Z, and a dry admit() returns admits true.
+
+            TWO MARKETS REMAIN, NOT THREE. The state volume survived, so the
+            six commits from 21:13Z are still on disk and
+            aec-dota2-yes-tm-2026-09-16 still counts against
+            max_total_markets=3. That is the fix behaving as specified: a
+            zero-fill attempt releases CONCURRENCY and keeps its claim on the
+            TOTAL. Spend so far is $0.00, so the full $15.00 campaign and $5.00
+            per-market envelopes remain.
+
+            FOR THIS RUN: do not force fills; do not modify the controller
+            because the first orders fail to fill; do not change sizing, model,
+            ACT/WAIT threshold, k, rung, mandate or risk limits. Report
+            ARMED -> SUBMITTED -> FILLED -> SETTLED -> REALIZED, and call
+            nothing realized before the venue confirms it. Any new material
+            discrepancy: HALT and report rather than modify another safety
+            mechanism.
+
+            Record: analysis/l5/authorization/ACTIVATION_2_2026-09-16.md.
