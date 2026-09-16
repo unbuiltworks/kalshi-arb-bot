@@ -104,3 +104,30 @@ deploy and why the owner asked for it.
             this directory is the service's sole watchPattern and redeploy has
             no snapshot to copy after an ordinary push produces a SKIPPED
             deployment.
+
+2026-09-16  OWNER "Option A" + "A2", step 6: promote the CP1 candidate
+            artifact. STILL DISARMED, STILL HALTED, STILL NO MANDATE.
+
+            The owner authorized one bounded rung whose limits are compatible
+            with the already-authorized live mandate, then advanced the
+            lineage baseline to the artifact that carries it. This deploy
+            makes that tested artifact the SERVING one, so steps 7-9 can be
+            performed against what will actually run rather than against a
+            build that predates the rung.
+
+            What it changes at runtime: the active rung becomes CP1
+            (per-market cap $5.00, residual 3 units, 3 markets, concurrency 1,
+            daily stop -$6.00, max 6 actions) and the campaign's market
+            allowance becomes 3. min(rung, mandate) is untouched -- CP1 cannot
+            enlarge a mandate, and with NO mandate present the wire guard
+            still refuses every order.
+
+            Why it changes nothing about arming: analysis/l5/authorization/
+            ships with HALT present and live_mandate.json ABSENT, exactly as
+            before. The container will come up SHUTDOWN_VERIFIED and log its
+            effective_envelope from the halted path, which is what steps 8 and
+            11 read. No arming value is set by this deploy.
+
+            A build is needed because this directory is the service's sole
+            watchPattern; the push carrying the artifact produced a SKIPPED
+            deployment, as designed.
