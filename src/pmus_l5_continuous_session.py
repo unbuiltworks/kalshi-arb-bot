@@ -3643,8 +3643,22 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         if _iv.matched > 0 and _au is not None and _ad is not None:
                             _m += _iv.matched * (_au + _ad)
                         _n += base.unmatched_usd(_iv)
+                    # OWNER 2026-09-17 P0: read the pending-settlement set
+                    # from the MANDATE's own consumption, so the audit and the
+                    # admission gate cannot hold different opinions about which
+                    # markets still occupy a slot -- that disagreement is the
+                    # defect being repaired.
+                    _sp: list = []
+                    try:
+                        _am = active_mandate
+                        if _am is not None:
+                            _sp = list(mandate.consumption(
+                                base.q1.state_dir(), _am.authorization_id
+                            ).get("markets_pending_settlement") or [])
+                    except Exception:                   # noqa: BLE001
+                        _sp = []                        # fail closed: alarm on
                     _rs = rsa.snapshot(
-                        _unsettled, held_all,
+                        _unsettled, held_all, settlement_pending=_sp,
                         combined_loss_usd=str(_combined_now()[0]),
                         daily_loss_stop_usd=str(base.daily_loss_stop()),
                         acquisition_slots_in_use=len(acquiring),
@@ -3654,7 +3668,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         portfolio_worst_case_usd=str(_n),
                         daily_realized_pnl_usd=str(base.q1.realized_today()))
                     for _a in rsa.detect(_risk_prev["held"], held_all,
-                                         _unsettled):
+                                         _unsettled, settlement_pending=_sp):
                         _emit_alarm(_a, "risk_set_alarm")
                     if rsa.changed(_risk_prev["snapshot"], _rs):
                         _log("risk_set", **_rs)

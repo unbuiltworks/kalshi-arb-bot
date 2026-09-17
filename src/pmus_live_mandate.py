@@ -275,6 +275,15 @@ def _price(v: Any) -> Optional[D]:
 
 COMMIT_KIND = "mandate_commit"
 LINK_KIND = "mandate_order"
+#: OWNER 2026-09-17 P0 "FIX SETTLED-PENDING FULLY-MATCHED CONCURRENCY
+#: DEADLOCK". The one fact consumption() cannot obtain for itself: whether the
+#: VENUE agrees with our ledger about this market. Everything else in the
+#: release invariant is recomputed here from rows we already read; this row
+#: carries only the reconciliation proof, written by the session that held the
+#: transport. It is evidence, never an instruction -- a row asserting release
+#: is ignored unless this module independently re-derives the same matched,
+#: zero-residual state at read time.
+FLAT_ATTEST_KIND = "matched_flat_attested"
 
 
 def _ledger_path(state_dir: Path) -> Path:
@@ -328,6 +337,7 @@ def consumption(state_dir: Path, authorization_id: str) -> dict:
     terminal: dict[str, dict] = {}
     settled: set[str] = set()
     fills: dict[str, list[dict]] = {}
+    attested: dict[str, dict] = {}
     for r in rows:
         k = r.get("kind")
         if k == COMMIT_KIND and r.get("authorization_id") == authorization_id:
@@ -341,6 +351,10 @@ def consumption(state_dir: Path, authorization_id: str) -> dict:
                 settled.add(str(r["slug"]))
         elif k == "filled":
             fills.setdefault(str(r.get("slug")), []).append(r)
+        elif k == FLAT_ATTEST_KIND:
+            # LAST one wins: a later attestation describes a later state.
+            if r.get("slug"):
+                attested[str(r["slug"])] = r
 
     per_market: dict[str, D] = {}
     unknown = 0
@@ -412,14 +426,78 @@ def consumption(state_dir: Path, authorization_id: str) -> dict:
         filled_qty[str(slug)] = sum(
             (_dec(r.get("qty")) or D("0")) for r in rows)
 
+    sides = _sides(fills)
+
+    def _settlement_pending_only(slug: str) -> tuple[bool, str]:
+        """OWNER 2026-09-17 P0: may this market leave the CONCURRENCY set --
+        and only that set -- while it waits for settlement?
+
+        THE DISTINCTION BEING DRAWN is economic/risk exposure versus
+        settlement/accounting obligation. They were one set, so a fully
+        matched position with nothing left to lose and nothing left to do
+        held the single risk-bearing slot until the venue got round to
+        resolving it. On 2026-09-17 that stopped the cohort after one market:
+        the scheduler released a matched market with residual 0 (correctly --
+        there was no work left), the mandate did not (it saw fills), the
+        campaign selected a second market, admission refused it
+        max_concurrent_markets_exhausted, and the session HALTed.
+
+        WHAT DOES NOT CHANGE, and this is the whole safety argument: the
+        market stays in `markets_touched` so it still consumes one of
+        max_total_markets; it stays in the durable ledger; it stays unsettled
+        and therefore un-realized; it stays in the risk-bearing set that
+        prices the daily stop. Only the ACQUISITION slot is freed.
+
+        EVERY CLAUSE FAILS CLOSED. Returns (False, why) unless all of:
+          * no live or unresolved order -- an order with no terminal row
+            could still fill, so it is exposure we simply have not seen yet;
+          * a reconciliation attestation exists, written by the session that
+            actually held the venue transport;
+          * that attestation asserts the venue agreed with the ledger AND
+            that the session was allowed to assert flatness at all;
+          * the attested quantities still equal what THIS function re-derives
+            from the fill rows right now, so any fill after the attestation
+            invalidates it rather than inheriting its permission;
+          * YES and NO are both positive and exactly equal -- fully matched,
+            residual exactly zero, no directional exposure of any size.
+        """
+        if slug in live_or_unknown:
+            return False, "live_or_unresolved_order"
+        a = attested.get(slug)
+        if not a:
+            return False, "no_reconciliation_attestation"
+        if a.get("may_assert_flat") is not True:
+            return False, "attestation_does_not_assert_flat"
+        if a.get("venue_agrees") is not True:
+            return False, "venue_ledger_not_agreed"
+        up, dn = sides.get(slug, (D("0"), D("0")))
+        au, ad = _dec(a.get("up")), _dec(a.get("dn"))
+        if au is None or ad is None:
+            return False, "attestation_unreadable"
+        if au != up or ad != dn:
+            return False, "inventory_moved_since_attestation"
+        if up <= 0 or up != dn:
+            return False, "not_fully_matched"
+        return True, "matched_flat_pending_settlement"
+
+    pending: dict[str, str] = {}
+
     def _concurrently_open(slug: str) -> bool:
         if slug in settled:
             return False                     # reconciled: it is finished
         if slug in live_or_unknown:
             return True                      # a live or unresolved order
-        # ANY fill, not just an unmatched one. A fully MATCHED position still
-        # carries money to settlement, so residual == 0 does not mean flat.
-        return (filled_qty.get(slug) or D("0")) > 0
+        if (filled_qty.get(slug) or D("0")) <= 0:
+            return False                     # zero-fill: nothing to lose here
+        # A fully MATCHED position still carries money to settlement, so
+        # residual == 0 is NOT flat and the market keeps every accounting
+        # obligation. What it no longer needs is an ACQUISITION slot, because
+        # there is nothing left to work and nothing left to lose directionally.
+        ok, why = _settlement_pending_only(slug)
+        if ok:
+            pending[slug] = why
+            return False
+        return True
 
     open_markets = sorted(s for s in per_market if _concurrently_open(s))
 
@@ -434,19 +512,30 @@ def consumption(state_dir: Path, authorization_id: str) -> dict:
         "residual_usd": {k: str(v) for k, v in _residuals(fills).items()},
         "filled_qty": {k: str(v) for k, v in filled_qty.items()},
         "commits": len(commits), "unreadable_commits": unknown,
+        # OWNER 2026-09-17 P0: markets that owe a SETTLEMENT but no longer
+        # hold an acquisition slot. Still touched, still unsettled, still
+        # un-realized, still priced in the risk set -- just not blocking.
+        "markets_pending_settlement": sorted(pending),
+        "n_markets_pending_settlement": len(pending),
+        "pending_settlement_basis": {k: pending[k] for k in sorted(pending)},
         "open_basis": ("a live or unresolved order, or unsettled fills; "
                        "zero-fill fully-terminal markets release CONCURRENCY "
-                       "but still count toward markets_touched"),
+                       "but still count toward markets_touched; so does a "
+                       "venue-reconciled, fully matched, zero-residual market "
+                       "awaiting settlement, which keeps every accounting "
+                       "obligation and frees only the acquisition slot"),
     }
 
 
-def _residuals(fills: Mapping[str, list]) -> dict[str, D]:
-    """Worst-case dollars on UNMATCHED shares, per market.
+def _sides(fills: Mapping[str, list]) -> dict[str, tuple]:
+    """(up, dn) filled quantity per market.
 
-    Unmatched inventory is the part that can actually lose the full contract
-    value, so it is priced at $1/share rather than at what it cost.
+    ONE side-classification rule, shared by the residual price and by the
+    matched test that releases concurrency. Two copies of this loop would let
+    "residual is zero" and "fully matched" drift apart, and the whole release
+    invariant rests on them meaning the same thing.
     """
-    out: dict[str, D] = {}
+    out: dict[str, tuple] = {}
     for slug, rows in fills.items():
         up = dn = D("0")
         for r in rows:
@@ -456,8 +545,18 @@ def _residuals(fills: Mapping[str, list]) -> dict[str, D]:
                 dn += q
             else:
                 up += q
-        out[slug] = abs(up - dn) * ONE
+        out[str(slug)] = (up, dn)
     return out
+
+
+def _residuals(fills: Mapping[str, list]) -> dict[str, D]:
+    """Worst-case dollars on UNMATCHED shares, per market.
+
+    Unmatched inventory is the part that can actually lose the full contract
+    value, so it is priced at $1/share rather than at what it cost.
+    """
+    return {slug: abs(up - dn) * ONE
+            for slug, (up, dn) in _sides(fills).items()}
 
 
 def _dec(v: Any) -> Optional[D]:
@@ -590,6 +689,44 @@ def link_order(state_dir: Path, mandate: Mandate, commit_id: str,
     _append(Path(state_dir), {
         "kind": LINK_KIND, "authorization_id": mandate.authorization_id,
         "commit_id": str(commit_id), "order_id": str(order_id)})
+
+
+def attest_matched_flat(state_dir: Path, *, slug: str, up: Any, dn: Any,
+                        recon: Mapping[str, Any],
+                        authorization_id: str = "") -> Optional[dict]:
+    """Record that the VENUE agreed with our ledger on a fully matched market.
+
+    OWNER 2026-09-17 P0. Called by the session that holds the transport,
+    because that is the only place the venue comparison exists. It writes
+    EVIDENCE, not a decision: consumption() re-derives the matched state for
+    itself and ignores this row whenever the two disagree.
+
+    Writes nothing, and returns None, unless the market really is reconciled,
+    fully matched and directionally flat. A row that does not exist cannot
+    release anything, so every failure here fails closed by construction.
+    """
+    vl = (recon or {}).get("venue_vs_ledger") or {}
+    u, d0 = _dec(up), _dec(dn)
+    if not slug or u is None or d0 is None:
+        return None
+    if u <= 0 or u != d0:
+        return None                        # not matched, or nothing held
+    if (recon or {}).get("may_assert_flat") is not True:
+        return None                        # open orders, contradictions, ...
+    if vl.get("agrees") is not True:
+        return None                        # disagreement OR missing evidence
+    row = {"kind": FLAT_ATTEST_KIND, "slug": str(slug),
+           "authorization_id": str(authorization_id or ""),
+           "up": str(u), "dn": str(d0),
+           "may_assert_flat": True, "venue_agrees": True,
+           "venue_qty": str(vl.get("venue_qty")),
+           "ledger_qty": str(vl.get("ledger_qty")),
+           "labels": ("venue-reconciled, fully matched, residual exactly "
+                      "zero: this market keeps its settlement and accounting "
+                      "obligations and its place in markets_touched, and "
+                      "releases ONLY the acquisition/concurrency slot")}
+    _append(Path(state_dir), row)
+    return row
 
 
 def _append(d: Path, row: Mapping[str, Any]) -> None:

@@ -47,7 +47,8 @@ def snapshot(unsettled: Iterable[str], held: Iterable[str],
              total_matched_capital_usd: Optional[str] = None,
              total_unmatched_usd: Optional[str] = None,
              portfolio_worst_case_usd: Optional[str] = None,
-             daily_realized_pnl_usd: Optional[str] = None) -> dict:
+             daily_realized_pnl_usd: Optional[str] = None,
+             settlement_pending: Optional[Iterable[str]] = None) -> dict:
     """What the engine is carrying, against what it is scheduling.
 
     `unsettled` is the RISK-BEARING set (ledger, filled-and-not-settled).
@@ -62,6 +63,7 @@ def snapshot(unsettled: Iterable[str], held: Iterable[str],
     others.
     """
     u, h = sorted(set(unsettled or ())), sorted(set(held or ()))
+    sp = sorted(set(settlement_pending or ()))
     charged_not_scheduled = sorted(set(u) - set(h))
     scheduled_not_charged = sorted(set(h) - set(u))
     return {
@@ -74,6 +76,15 @@ def snapshot(unsettled: Iterable[str], held: Iterable[str],
         # the venue shows a position the ledger has already settled, or never
         # recorded. Rarer and more surprising than the other direction.
         "scheduled_not_charged": scheduled_not_charged,
+        # OWNER 2026-09-17 P0: a FOURTH question, and the one whose absence
+        # made `charged_not_scheduled` ambiguous. These markets are venue-
+        # reconciled, fully matched and directionally flat, so they left the
+        # scheduler legitimately -- there was no work left -- and they are
+        # still fully charged here. Separating them is what lets the alarm
+        # below keep meaning "we may have missed a resolution" instead of
+        # firing on the ordinary end of every matched lifecycle.
+        "settlement_pending": sp,
+        "n_settlement_pending": len(sp),
         "n_risk_bearing": len(u),
         "n_scheduled": len(h),
         # THREE different counts, never one standing in for another:
@@ -97,7 +108,8 @@ def snapshot(unsettled: Iterable[str], held: Iterable[str],
 
 
 def detect(prev_held: Iterable[str], held: Iterable[str],
-           unsettled: Iterable[str]) -> list:
+           unsettled: Iterable[str],
+           settlement_pending: Optional[Iterable[str]] = None) -> list:
     """The owner's condition, exactly: a slug that WAS scheduled, is now
     absent, and is still in the risk-bearing set.
 
@@ -107,9 +119,22 @@ def detect(prev_held: Iterable[str], held: Iterable[str],
     settlement separately would be a second, driftable definition of the
     same fact.
 
+    OWNER 2026-09-17 P0 narrows it by one clause, and only one. A market that
+    is venue-reconciled, fully matched and directionally flat left the
+    scheduler because there was nothing left to work, not because we lost
+    track of it -- the settlement obligation is recorded and watched in
+    `settlement_pending`. Alarming on that fires on the ordinary end of every
+    matched lifecycle, which would train a reader to ignore the alarm that
+    still matters. The alarm's real subject is unchanged: a market that left
+    the scheduler with exposure or evidence we cannot account for.
+
+    Defaults to empty, so a caller that passes nothing gets exactly the old
+    behaviour: suppression requires positive proof, never absence of it.
+
     Returns one row per slug. An empty list is the normal case and must stay
     cheap: this runs on every cycle of the live loop."""
     prev, now, un = set(prev_held or ()), set(held or ()), set(unsettled or ())
+    un -= set(settlement_pending or ())
     out = []
     for slug in sorted((prev - now) & un):
         out.append({

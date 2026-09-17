@@ -2125,7 +2125,33 @@ def _reconcile_fills(t: Transport, slug: str, ledger, inv: Inventory) -> dict:
         audit["may_assert_flat"] = False
         audit["contradictions"] = ledger.contradictions
     audit["provenance"] = getattr(ledger, "provenance", [])[-16:]
+    _attest_matched_flat(slug, inv, audit)
     return audit
+
+
+def _attest_matched_flat(slug: str, inv: Inventory, audit: Mapping) -> None:
+    """OWNER 2026-09-17 P0: persist the venue-reconciliation proof.
+
+    THIS IS THE ONLY PLACE may_assert_flat is computed, which is why the
+    attestation is written here rather than at a session_end call site -- every
+    path that reconciles passes through this function, and a path that does not
+    reconcile has nothing to attest.
+
+    It cannot change a decision. The mandate re-derives the matched state
+    itself and ignores the row when they disagree, so the worst case of a bug
+    here is a market that keeps holding its concurrency slot -- the behaviour
+    we already had. An exception is swallowed for the same reason every other
+    observability call in this file swallows one: evidence must never take
+    down the money path.
+    """
+    try:
+        from src import pmus_live_mandate as _lm
+        _m, _ = _lm.load_mandate()
+        _lm.attest_matched_flat(
+            q1.state_dir(), slug=slug, up=inv.up, dn=inv.dn, recon=audit,
+            authorization_id=str(getattr(_m, "authorization_id", "") or ""))
+    except Exception:                                   # noqa: BLE001
+        pass
 
 
 def held_inventory_from_ledger(slug: str) -> Inventory:
