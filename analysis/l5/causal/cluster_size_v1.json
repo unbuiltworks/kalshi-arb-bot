@@ -1,0 +1,127 @@
+{
+  "unit_A_public_fills": 2000,
+  "unit_B_clusters": 1694,
+  "unit_C_proven_parent_orders": 187,
+  "A_to_B_reduction": 0.153,
+  "B_to_C_reduction_on_resolved": 0.2917,
+  "A_to_C_reduction_on_resolved": 0.2917,
+  "fills_with_a_proven_parent": 264,
+  "cluster_size": {
+    "mean": 1.181,
+    "max": 8,
+    "share_multi": 0.1358
+  },
+  "multi_fill_clusters_on_chain": {
+    "n": 230,
+    "SAME_PARENT": 24,
+    "MULTIPLE_PARENTS": 1,
+    "UNRESOLVABLE": 205,
+    "share_same_of_resolved": 0.96,
+    "share_FILLS_collapsing": 0.9385
+  },
+  "parent_executions": {
+    "mean": 1.455,
+    "p50": 1,
+    "p90": 2,
+    "max": 8,
+    "share_with_multiple_executions": 0.3102
+  },
+  "parent_lifetime_lower_bound_s": {
+    "n_with_multiple_timestamps": 27,
+    "share_spanning_timestamps": 0.1444,
+    "p50": 2,
+    "p90": 4,
+    "max": 6,
+    "basis": "LOWER BOUND ONLY: the span between first and last observed execution. The order existed before its first fill by an unknown amount and may have persisted after its last."
+  },
+  "fill_size_modes": [
+    [
+      100.0,
+      192
+    ],
+    [
+      5.0,
+      145
+    ],
+    [
+      10.0,
+      72
+    ],
+    [
+      15.0,
+      59
+    ],
+    [
+      20.0,
+      40
+    ],
+    [
+      30.0,
+      38
+    ],
+    [
+      6.0,
+      29
+    ],
+    [
+      80.0,
+      28
+    ],
+    [
+      25.0,
+      25
+    ],
+    [
+      40.0,
+      21
+    ]
+  ],
+  "parent_quantity_modes": [
+    [
+      100.0,
+      37
+    ],
+    [
+      200.0,
+      8
+    ],
+    [
+      10.0,
+      8
+    ],
+    [
+      5.0,
+      7
+    ],
+    [
+      80.0,
+      6
+    ],
+    [
+      20.0,
+      4
+    ],
+    [
+      35.0,
+      3
+    ],
+    [
+      32.0,
+      3
+    ],
+    [
+      15.0,
+      2
+    ],
+    [
+      82.0,
+      2
+    ]
+  ],
+  "labels": "B is a HEURISTIC (same instant, side and price). C is EVIDENCE (one chain orderHash). They are never equated. This is L5's RECENT activity, a different population from the frozen 2026-03..08 BTC15m tape, and is not pooled with it.",
+  "label": "CLUSTER_SIZE_FORENSICS_V1",
+  "population": "L5 RECENT public activity (data-api), not the frozen tape",
+  "tx_attempted": 260,
+  "tx_missing_receipts": 0,
+  "receipt_availability": 1.0
+}
