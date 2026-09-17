@@ -56,6 +56,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.l5_shadow import venues as V
+from src import l5_residual_episode_clock as CLK
 
 LABEL = "GEMINI_BTC05M_SURFACE_SHADOW_V1"
 STRICT = "VOLUME_AHEAD_CLEARED"
@@ -164,6 +165,9 @@ class SurfaceState:
         self.rungs = collections.Counter()
         self.placed = 0
         self.fills: List[dict] = []
+        self.clock = CLK.Clock("GEMINI")
+        self.run_side: Optional[str] = None
+        self.run_len = 0
 
     @property
     def residual(self) -> D:
@@ -174,24 +178,41 @@ class SurfaceState:
         return min(self.long_qty, self.short_qty)
 
     def economics(self) -> dict:
+        """The four Gemini quantities kept SEPARATE, per owner 2026-09-17.
+
+        Gemini has one contract, so a sale is a SYNTHETIC complement, not a
+        second token owned. Collapsing buy_cost, sell_proceeds and
+        synthetic_complement_cost into one "pair" number is what would make an
+        open position look like half a completed pair."""
         avg_b = (self.long_usd / self.long_qty) if self.long_qty else None
         avg_s = (self.short_usd / self.short_qty) if self.short_qty else None
-        pair = (avg_b + (D("1") - avg_s)) if (avg_b is not None and avg_s is not None) else None
+        pe = CLK.pair_economics(
+            "GEMINI",
+            buy_px=(float(avg_b) if avg_b is not None else None),
+            sell_px=(float(avg_s) if avg_s is not None else None),
+            buy_fee="venue_declared_unknown", sell_fee="venue_declared_unknown")
         return {
             "long_qty": str(self.long_qty), "short_qty": str(self.short_qty),
-            "avg_buy": (str(avg_b) if avg_b is not None else None),
-            "avg_sell": (str(avg_s) if avg_s is not None else None),
-            "matched_qty": str(self.matched), "residual": str(self.residual),
-            "effective_pair_cost": (str(pair) if pair is not None else None),
-            "matched_edge_per_unit": (str(D("1") - pair) if pair is not None else None),
-            "basis": ("evidenced fills only (%s). Gemini serves one symbol, so "
-                      "a pair is BUY b + SELL s and its cost is b + (1 - s)."
-                      % STRICT),
-            "fees": "venue_declared_unknown_here: not netted, never estimated",
+            "buy_cost": pe["buy_cost"],
+            "sell_proceeds": pe["sell_proceeds"],
+            "synthetic_complement_cost": pe["synthetic_complement_cost"],
+            "effective_pair_cost": pe["effective_pair_cost"],
+            "edge_per_unit": pe["edge_per_unit"],
+            "both_legs_filled": bool(self.long_qty and self.short_qty),
+            "synthetic_pair_realized": False,
+            "matched_qty_SYNTHETIC": str(self.matched),
+            "residual": str(self.residual),
+            "basis": ("evidenced fills only (%s); a SYNTHETIC pair, never "
+                      "realized until BOTH orders fill AND authoritative "
+                      "settlement/cash accounting confirms it" % STRICT),
+            "fees": {"buy": pe["buy_fee"], "sell": pe["sell_fee"],
+                     "netted": False},
+            "mapping": pe["mapping"], "labels": pe["labels"],
         }
 
 
-def step(st: SurfaceState, book: dict, prints: List[dict], now: float) -> List[dict]:
+def step(st: SurfaceState, book: dict, prints: List[dict], now: float,
+         *, symbol: str = "", tte_s: Optional[float] = None) -> List[dict]:
     """One observation for one surface. Returns evidence rows."""
     bb, aa, at_price = touch(book)
     rows: List[dict] = []
@@ -243,12 +264,27 @@ def step(st: SurfaceState, book: dict, prints: List[dict], now: float) -> List[d
                              "evidence": STRICT,
                              "volume_ahead_at_placement": str(q.volume_ahead),
                              "volume_cleared": str(q.cleared_volume)})
+            st.run_len = (st.run_len + 1) if st.run_side == q.side else 1
+            st.run_side = q.side
             rows.append({"kind": "evidenced_fill", "surface": st.name,
                          "side": q.side, "px": str(q.px), "qty": str(fill_qty),
                          "evidence": STRICT, "t": now,
+                         "run_position": st.run_len,
                          "labels": "EVIDENCED, not venue-confirmed: queue "
                                    "position is unpublished and this assumes "
                                    "we joined behind everything resting."})
+            # a residual episode opens on the FIRST evidenced fill of a side
+            # while the other side is absent -- that is the moment directional
+            # exposure exists and the preregistered clock starts
+            if (st.long_qty == 0) != (st.short_qty == 0):
+                ep = st.clock.open_episode(
+                    "%s|%s|%s|%.3f" % (st.name, q.side, q.px, now),
+                    symbol=symbol, t=now, side=q.side, px=float(q.px),
+                    qty=float(fill_qty), tte_s=tte_s, run_position=st.run_len)
+                rows.append({"kind": "residual_episode_opened",
+                             "label": CLK.LABEL, "surface": st.name,
+                             "episode": ep.key, "marks_s": list(CLK.MARKS_S),
+                             "t": now})
             st.quotes.pop(k, None)
 
     for q in st.quotes.values():
@@ -256,6 +292,32 @@ def step(st: SurfaceState, book: dict, prints: List[dict], now: float) -> List[d
         st.rungs["book_reached_quote"] += int(q.book_reached)
         st.rungs["trade_flow_through_quote"] += int(q.trade_flow)
     st.rungs[STRICT] = len(st.fills)
+
+    # --- preregistered residual-episode marks that have come due
+    econ = st.economics()
+    live = {r: any(getattr(q, a) for q in st.quotes.values())
+            for r, a in (("quote_restable", "restable"),
+                         ("book_reached_quote", "book_reached"),
+                         ("trade_flow_through_quote", "trade_flow"))}
+    for ep, mark in list(st.clock.due_marks(now)):
+        opp = [f for f in st.fills
+               if f["side"] != ep.first_side and f["t"] > ep.opened_t]
+        rows.append(ep.record(mark, {
+            "evidenced_complement": bool(opp),
+            "complement_dt_s": (round(opp[0]["t"] - ep.opened_t, 3)
+                                if opp else None),
+            "quote_restable": live["quote_restable"],
+            "book_reached_quote": live["book_reached_quote"],
+            "trade_flow_through_quote": live["trade_flow_through_quote"],
+            CLK.STRICT: bool(opp),
+            "inventory": {"long": str(st.long_qty), "short": str(st.short_qty)},
+            "residual": str(st.residual),
+            "quote_validity": {"live_quotes": len(st.quotes),
+                               "any_restable": live["quote_restable"]},
+            "pair_economics": econ,
+        }) | {"surface": st.name})
+        if mark == CLK.MARKS_S[-1]:
+            st.clock.retire(ep.key)
     return rows
 
 
@@ -301,7 +363,8 @@ def run(out_dir: str, *, minutes: float, interval: float) -> int:
             obs += 1
             for name in SURFACES:
                 st = states[sym].setdefault(name, SurfaceState(name))
-                for r in step(st, book, fresh, t0):
+                for r in step(st, book, fresh, t0, symbol=sym,
+                              tte_s=w["window_end"] - t0):
                     emit({**r, "symbol": sym, "tte_s": w["window_end"] - t0})
             emit({"kind": "observation", "symbol": sym,
                   "market_key": w["market_key"],
