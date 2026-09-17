@@ -90,7 +90,10 @@ SOURCES: Dict[str, Dict[str, Dict[str, str]]] = {
             "404). sharesTraded is cumulative per market and cannot say a "
             "trade happened at OUR price, which is what "
             "VOLUME_AHEAD_CLEARED requires. src.pmus_ws_evidence_recorder "
-            "already reads this stream read-only."),
+            "already reads this stream read-only and "
+            "src.l5_surface.pmus_prints now joins its rows to the ladder "
+            "with coverage rules, so what remains is wiring the live feed "
+            "to a running surface -- not code that does not exist."),
         EV.EVIDENCED_FILL: _src("follows TRADE_FLOW", NEEDS_DEPLOYMENT,
                                 "cannot be evidenced while TRADE_FLOW is not"),
         EV.INVENTORY_UPDATE: _src("follows EVIDENCED_FILL", NEEDS_DEPLOYMENT,
