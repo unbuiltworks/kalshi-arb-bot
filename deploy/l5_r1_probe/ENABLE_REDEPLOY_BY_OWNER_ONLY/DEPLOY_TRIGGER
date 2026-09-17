@@ -433,3 +433,49 @@ deploy and why the owner asked for it.
             no fill was forced and the controller was not touched.
 
             Record: analysis/l5/authorization/PROBE_COMPLETE_2026-09-16.md.
+
+--------------------------------------------------------------------------
+2026-09-17T00:1xZ — DEPLOY THE FRESHNESS SUBMISSION GATE, HALTED
+
+            OWNER AUTHORIZATION 2026-09-17: "Deploy the resulting artifact
+            HALTED first... Do not re-arm from this authorization. Do not
+            create a new live mandate yet."
+
+            analysis/l5/authorization/HALT is PRESENT in this tree, so
+            shutdown_requested() returns True before armed() is consulted.
+            This deploy arms nothing and creates no authorization. The
+            existing live_mandate.json is untouched and remains EXHAUSTED
+            (3 of 3 markets spent); it expires on its own at 20:36:35Z today.
+
+            THE CHANGE. A live order is no longer submitted when the
+            authenticated executable book that validates post-only placement
+            is stale, missing or unreadable. The controller may still produce
+            the action; the execution adapter refuses to send it, fail-closed.
+            The PRICING half is untouched: _authenticated_trim still fails
+            open and still cannot raise a price.
+
+            WHY. On aec-dota2-yes-tm the gateway read 0.45/0.49 while the
+            venue's real ask was 0.45. The authenticated book that would have
+            caught it was 11.2s old and was DISCARDED FOR BEING STALE in
+            favour of a fresher, wrong one; five post-only buys crossed and
+            were refused at insertion. Order 6 is the control: a fresh read
+            arrived, the trim applied, 0.45 -> 0.44, and it rested.
+
+            MEASURED COUNTERFACTUAL over the real 13 CP1 trim verdicts:
+            3 would submit, 10 would skip, and ALL FIVE observed insertion
+            rejections are prevented. Pinned as a fixture.
+
+            MODEL WANTED ACTION != EXECUTION COULD SAFELY SUBMIT IT. Skips are
+            recorded with the model's action in `attempted`, a per-condition
+            refusal string so hold_refusals is countable, and a
+            venue/execution-adaptation class -- never a safety cap and never a
+            model WAIT prediction.
+
+            UNCHANGED: sizing 0.10/0.125, k 0.00619, 30s rest, maker/post-only,
+            0.98 fee-safe ceiling, ACT/WAIT and model logic, market selection,
+            residual limits, concurrency, campaign limits, daily loss limit.
+
+            Full suite 5008 passed. Lineage REVIEWED advanced to the exact
+            green artifact with FORBIDDEN_CLASSES untouched; ACCEPTANCE true.
+
+            Record: analysis/l5/live_probe/CP1_13_ORDER_FORENSICS_2026-09-16.md
