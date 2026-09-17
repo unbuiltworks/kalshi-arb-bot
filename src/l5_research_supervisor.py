@@ -754,6 +754,25 @@ class Supervisor:
         print("L5_SURFACE_SHADOW " + json.dumps(rep, default=str), flush=True)
         return rep
 
+    def report_gemini_surface(self) -> Optional[dict]:
+        """P0: did the Gemini surface fill on BOTH sides, or only one?
+
+        A fill total that is not split by side cannot tell a broken complement
+        from a sell side the market never hit, and those are opposite
+        conclusions. A REPORT over a tape already written; it places nothing.
+        """
+        d = os.path.join(self.root, "gemini-surface")
+        try:
+            from analysis.l5.gemini_surface import report as GR
+            rep = GR.report(d)
+        except Exception as exc:                              # noqa: BLE001
+            print("L5_GEMINI_SURFACE " + json.dumps(
+                {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:300]}),
+                flush=True)
+            return None
+        print("L5_GEMINI_SURFACE " + json.dumps(rep, default=str), flush=True)
+        return rep
+
     def run(self) -> int:
         self.boot()
         # once, with the per-parent detail: the tapes cannot be read from
@@ -786,6 +805,7 @@ class Supervisor:
                 self.report_pairs()
                 self.report_window_surface()
                 self.report_surface_shadow()
+                self.report_gemini_surface()
             time.sleep(2.0)
         self.stop()
         return 0
