@@ -279,3 +279,130 @@ def report(pages: int = 6, max_tx: int = 1500) -> Dict[str, Any]:
     g["tx_attempted"] = b["tx_attempted"]
     g["tx_missing"] = b["tx_missing"]
     return g
+
+
+# ---------------------------------------------------------------------------
+# WHAT IS THE 100-LOT? Five competing readings, discriminated rather than
+# asserted. OWNER 2026-09-17.
+
+def base_lot_hypotheses(parents: Sequence[dict]) -> Dict[str, Any]:
+    """fixed base lot | probability-scaled notional | inventory-scaled lot |
+    ladder rung | mixture.
+
+    Each makes a different prediction and they are tested against each other,
+    not confirmed one at a time."""
+    ok = [p for p in parents if p["executed_qty"] > 0 and p["avg_px"]]
+    qty = [p["executed_qty"] for p in ok]
+    notional = [p["executed_qty"] * p["avg_px"] for p in ok]
+
+    def cv(xs):
+        m = sum(xs) / len(xs)
+        return round((statistics.pstdev(xs) / m), 4) if m else None
+
+    is100 = [p for p in ok if abs(p["executed_qty"] - 100.0) < 1e-6]
+    not100 = [p for p in ok if abs(p["executed_qty"] - 100.0) >= 1e-6]
+
+    # A fixed base lot has a FLAT share across every conditioning variable.
+    by_p = collections.defaultdict(lambda: [0, 0])
+    by_inv = collections.defaultdict(lambda: [0, 0])
+    for p in ok:
+        for d, k in ((by_p, _bin_p(p["p_up"])),
+                     (by_inv, _bin_inv(p["inventory_total_before"]))):
+            d[k][1] += 1
+            d[k][0] += int(abs(p["executed_qty"] - 100.0) < 1e-6)
+    sh_p = {k: round(v[0] / v[1], 4) for k, v in by_p.items() if v[1] >= 20}
+    sh_i = {k: round(v[0] / v[1], 4) for k, v in by_inv.items() if v[1] >= 20}
+
+    # A LADDER RUNG shows up disproportionately among parents that have a
+    # same-outcome neighbour within 5s at a different price.
+    bym = collections.defaultdict(list)
+    for p in ok:
+        bym[p["cid"]].append(p)
+    in_ladder = set()
+    for ps in bym.values():
+        ps.sort(key=lambda x: x["first_t"])
+        for i, a in enumerate(ps):
+            for b in ps[i + 1:]:
+                if b["first_t"] - a["first_t"] > 5:
+                    break
+                if (a["outcome"] == b["outcome"]
+                        and a["public_px"] != b["public_px"]):
+                    in_ladder.add(a["order_hash"])
+                    in_ladder.add(b["order_hash"])
+    lad100 = sum(1 for p in is100 if p["order_hash"] in in_ladder)
+    ladoth = sum(1 for p in not100 if p["order_hash"] in in_ladder)
+
+    return {
+        "n": len(ok),
+        "dispersion": {
+            "cv_executed_qty": cv(qty),
+            "cv_notional_usd": cv(notional),
+            "reads": ("a PROBABILITY-SCALED NOTIONAL rule makes notional the "
+                      "tighter quantity; a FIXED LOT makes share count the "
+                      "tighter one"),
+            "tighter": ("notional" if (cv(notional) or 9) < (cv(qty) or 9)
+                        else "share_count"),
+        },
+        "fixed_base_lot": {
+            "share_100_by_probability": sh_p,
+            "spread_across_probability": (round(max(sh_p.values()) - min(sh_p.values()), 4)
+                                          if sh_p else None),
+            "share_100_by_inventory": sh_i,
+            "spread_across_inventory": (round(max(sh_i.values()) - min(sh_i.values()), 4)
+                                        if sh_i else None),
+            "reads": "a fixed lot is FLAT in both; a large spread falsifies it",
+        },
+        "inventory_scaled": {
+            "median_qty_by_inventory": {
+                k: round(statistics.median(
+                    [p["executed_qty"] for p in ok if _bin_inv(p["inventory_total_before"]) == k]), 2)
+                for k in sh_i},
+            "reads": "an inventory-scaled lot rises or falls monotonically with inventory",
+        },
+        "ladder_rung": {
+            "share_of_100s_in_a_ladder": (round(lad100 / len(is100), 4)
+                                          if is100 else None),
+            "share_of_others_in_a_ladder": (round(ladoth / len(not100), 4)
+                                            if not100 else None),
+            "reads": ("a ladder rung appears in ladders MORE than other sizes; "
+                      "similar shares mean 100 is not specifically a rung"),
+        },
+        "notional_usd": {
+            "median": round(statistics.median(notional), 2),
+            "modes": _modes(notional, 8),
+            "median_for_100_lots": (round(statistics.median(
+                [p["executed_qty"] * p["avg_px"] for p in is100]), 2)
+                if is100 else None),
+        },
+    }
+
+
+def opposite_outcome_event_time(parents: Sequence[dict]) -> Dict[str, Any]:
+    """How close in EVENT time are opposite-outcome parents? A persistent
+    two-sided surface needs them near-simultaneous, not merely eventual."""
+    bym = collections.defaultdict(list)
+    for p in parents:
+        bym[p["cid"]].append(p)
+    gaps = []
+    for ps in bym.values():
+        ps.sort(key=lambda x: x["first_t"])
+        for i, a in enumerate(ps):
+            nxt = next((b for b in ps[i + 1:] if b["outcome"] != a["outcome"]), None)
+            if nxt is not None:
+                gaps.append({"dt": nxt["first_t"] - a["first_t"],
+                             "pair": round(a["public_px"] + nxt["public_px"], 4)})
+    if not gaps:
+        return {"n": 0}
+    d = sorted(g["dt"] for g in gaps)
+    out = {"n": len(gaps),
+           "median_dt_s": d[len(d) // 2], "p25": d[len(d) // 4],
+           "p75": d[3 * len(d) // 4]}
+    for h in (0, 1, 5, 15, 30, 60):
+        sel = [g for g in gaps if g["dt"] <= h]
+        out["within_%ds" % h] = {
+            "share": round(len(sel) / len(gaps), 4),
+            "median_implied_pair": (sorted(g["pair"] for g in sel)[len(sel) // 2]
+                                    if sel else None),
+            "share_pair_below_1": (round(sum(1 for g in sel if g["pair"] < 1.0)
+                                         / len(sel), 4) if sel else None)}
+    return out
