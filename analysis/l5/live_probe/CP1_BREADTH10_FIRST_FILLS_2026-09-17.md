@@ -17,8 +17,17 @@ max_total_spend 15.00 / max_residual 3.00 / max_daily_realized_loss 6.00`.
 | ARMED | YES — 2026-09-17T01:30:24Z |
 | SUBMITTED | YES — 27 orders across 5 markets |
 | FILLED | **YES — 2 orders, 0.36 contracts total, venue-confirmed** |
-| SETTLED | **NO** — market resolves ~2026-10-01 (`hours_to_end` 334.5 at selection) |
+| SETTLED | **NO** — still `MARKET_STATUS_OPEN` at 01:55Z |
 | REALIZED | **NO — nothing here is realized profit and none may be labelled as such** |
+
+> **CORRECTION 2026-09-17T01:55Z.** This record originally said the market
+> "resolves ~2026-10-01", reading `hours_to_end 334.5` as a resolution time. That
+> was wrong. `hours_to_end` comes from `market.endDate`, which is a fixed
+> contract expiry (gameStartTime + 14.00 d, measured 18/18 live events), not a
+> settlement time. This market is a **live tennis match** that began at
+> `gameStartTime 2026-09-17T01:08:24Z` — 0.79 h before we selected it — and
+> resolves in hours, not weeks. See
+> `analysis/l5/selection/SETTLEMENT_HORIZON_2026-09-17.md`.
 
 Cash committed: **$0.1584** filled notional, $0.2394 including the in-flight
 admission reserve. Remaining: $14.76 of the $15.00 campaign cap, $4.76 of the
