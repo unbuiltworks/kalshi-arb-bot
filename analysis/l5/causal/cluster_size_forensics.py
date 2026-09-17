@@ -248,3 +248,140 @@ def run(pages: int = 6, max_tx: int = 400) -> Dict[str, Any]:
     out["receipt_availability"] = (
         round(1 - r["tx_missing"] / max(1, r["tx_attempted"]), 4))
     return out
+
+
+# ---------------------------------------------------------------------------
+# The historical re-run: what does the behavioral model look like on the
+# COLLAPSED unit?
+#
+# The frozen BTC15m tape cannot be collapsed to unit C -- its receipts are
+# pruned. It CAN be collapsed to unit B, and the chain gives us the accuracy of
+# that proxy: on RESOLVED multi-fill clusters 96% were a single parent order.
+# So B is a good but IMPERFECT stand-in for C, and every number below carries
+# that caveat rather than being presented as parent-order truth.
+
+def historical_units(cohort: str = "BTC15m"):
+    """Per window: the FILL sequence and the CLUSTER-collapsed sequence."""
+    from analysis.l5.residual_exit import forensics as F
+    windows, _ = F.load_windows(cohort)
+    out = {}
+    for cid, w in windows.items():
+        fills = [{"t": t, "px": px, "oc": oc, "qty": sz, "usd": usd}
+                 for t, px, oc, sz, usd in w["fills"]]
+        if len(fills) < 5:
+            continue
+        g = collections.OrderedDict()
+        for f in fills:
+            k = (f["t"], f["oc"], f["px"])
+            e = g.setdefault(k, {"t": f["t"], "px": f["px"], "oc": f["oc"],
+                                 "qty": 0.0, "usd": 0.0, "n": 0})
+            e["qty"] += f["qty"]
+            e["usd"] += f["usd"]
+            e["n"] += 1
+        out[cid] = {"A": fills, "B": list(g.values()),
+                    "end": w["meta"][2]}
+    return out
+
+
+def _seq_stats(seqs: Dict[str, List[dict]], key: str) -> Dict[str, Any]:
+    """Run lengths, continuation hazard, switches and the state-model gain,
+    computed identically on whichever unit is passed in."""
+    runs, haz = [], collections.defaultdict(lambda: [0, 0])
+    switches, n_actions, n_windows = 0, 0, 0
+    rows = []
+    for cid, d in seqs.items():
+        s = d[key]
+        if len(s) < 3:
+            continue
+        n_windows += 1
+        n_actions += len(s)
+        run_side, run_len = None, 0
+        up = dn = 0.0
+        for i, e in enumerate(s):
+            run_len = (run_len + 1) if run_side == e["oc"] else 1
+            if run_side is not None and run_side != e["oc"]:
+                switches += 1
+            run_side = e["oc"]
+            if i + 1 < len(s):
+                k = min(run_len, 10)
+                haz[k][1] += 1
+                haz[k][0] += (s[i + 1]["oc"] == e["oc"])
+                rows.append({"side": e["oc"], "next": s[i + 1]["oc"],
+                             "run": min(run_len, 4),
+                             "res": up - dn, "tte": d["end"] - e["t"]})
+            if e["oc"] == "Up":
+                up += e["qty"]
+            else:
+                dn += e["qty"]
+            if i + 1 == len(s) or s[i + 1]["oc"] != e["oc"]:
+                runs.append(run_len)
+    # OOS log-loss, previous-side baseline vs a small state table
+    rows.sort(key=lambda r: 0)
+    cut = int(len(rows) * 0.7)
+    tr, oos = rows[:cut], rows[cut:]
+
+    def fit(keyfn):
+        c = collections.defaultdict(lambda: [0, 0])
+        for r in tr:
+            k = keyfn(r)
+            c[k][1] += 1
+            c[k][0] += (r["next"] == "Up")
+        return c
+
+    prior = (sum(1 for r in tr if r["next"] == "Up") / len(tr)) if tr else 0.5
+
+    def score(c, keyfn, a=20.0):
+        tot = n = 0.0
+        for r in oos:
+            h, m = c.get(keyfn(r), [0, 0])
+            p = min(max((h + a * prior) / (m + a), 1e-6), 1 - 1e-6)
+            tot += -(math.log(p) if r["next"] == "Up" else math.log(1 - p))
+            n += 1
+        return tot / n if n else None
+    import math as _m
+    globals().setdefault("math", _m)
+    bk = lambda r: r["side"]
+    sk = lambda r: (r["side"], r["run"],
+                    "neg" if r["res"] < -2 else "flat" if r["res"] <= 2 else "pos",
+                    "late" if r["tte"] < 180 else "mid" if r["tte"] < 450 else "early")
+    ll_b = score(fit(bk), bk)
+    ll_s = score(fit(sk), sk)
+    hz = {k: round(v[0] / v[1], 4) for k, v in sorted(haz.items()) if v[1] >= 500}
+    return {
+        "n_windows": n_windows, "n_actions": n_actions,
+        "actions_per_window": round(n_actions / n_windows, 2) if n_windows else None,
+        "run_length": {"mean": round(sum(runs) / len(runs), 3) if runs else None,
+                       "max": max(runs) if runs else None,
+                       "share_len1": round(sum(1 for r in runs if r == 1) / len(runs), 4) if runs else None},
+        "switches_per_window": round(switches / n_windows, 2) if n_windows else None,
+        "continuation_hazard": hz,
+        "hazard_rise_run1_to_run10": (round(hz[max(hz)] - hz[min(hz)], 4)
+                                      if len(hz) > 1 else None),
+        "oos_logloss_prev_side": round(ll_b, 6) if ll_b else None,
+        "oos_logloss_state": round(ll_s, 6) if ll_s else None,
+        "state_gain_nats": (round(ll_b - ll_s, 6)
+                            if (ll_b and ll_s) else None),
+    }
+
+
+def historical_comparison(cohort: str = "BTC15m") -> Dict[str, Any]:
+    import math
+    globals()["math"] = math
+    seqs = historical_units(cohort)
+    a = _seq_stats(seqs, "A")
+    b = _seq_stats(seqs, "B")
+    return {
+        "label": "CLUSTER_SIZE_FORENSICS_V1/historical",
+        "cohort": cohort,
+        "unit_A_public_fills": a,
+        "unit_B_collapsed_clusters": b,
+        "action_count_reduction": (round(1 - b["n_actions"] / a["n_actions"], 4)
+                                   if a["n_actions"] else None),
+        "caveat": (
+            "The frozen tape CANNOT be collapsed to unit C: its receipts are "
+            "pruned. B is a PROXY for C, and the chain measured its accuracy "
+            "on recent activity -- 96% of RESOLVED multi-fill clusters were a "
+            "single parent order. So these are 'as if same-instant clusters "
+            "were parent orders', which is right about 96% of the time on a "
+            "different population, and is not parent-order truth."),
+    }

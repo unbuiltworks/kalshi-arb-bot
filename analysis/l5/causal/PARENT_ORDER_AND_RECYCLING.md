@@ -124,3 +124,48 @@ method-dependent and only the total is cash.
 
 Findings only. Frozen studies untouched, no gate created, no live authorization,
 R1 not restarted. All four data processes ran throughout.
+
+## 4. What the behavioral model looks like after collapsing (unit A vs unit B)
+
+The frozen BTC15m tape **cannot** be collapsed to unit C — its receipts are
+pruned. It *can* be collapsed to unit B, and the chain gives us that proxy's
+accuracy: **96% of resolved multi-fill clusters were a single parent order.**
+So this is *"as if same-instant clusters were parent orders"*, right about 96%
+of the time on a different population — **not parent-order truth.**
+
+**693,814 fills → 573,584 clusters: 17.3% of apparent actions disappear.**
+
+| metric | **A** public fills | **B** collapsed clusters |
+|---|---|---|
+| actions per window | 126.13 | **104.29** |
+| switches per window | 33.68 | **33.23** |
+| run length mean / max | 3.636 / 78 | 3.046 / 71 |
+| share of runs = 1 | 0.3321 | 0.3723 |
+| **continuation hazard, run 1 → 10** | **0.6745 → 0.8240** | **0.6349 → 0.7792** |
+| **hazard rise** | **+0.1495** | **+0.1443** |
+| OOS log-loss, previous side only | 0.595008 | 0.637553 |
+| OOS log-loss, + state | 0.594049 | 0.635966 |
+| state gain (nats) | 0.000959 | 0.001587 |
+
+**Three things follow.**
+
+**The rising-hazard result is not an artifact of partial fills.** It was the
+strongest evidence for flow persistence in `L5_CAUSAL_MECHANISM_V1`, and the
+obvious worry was that it merely counted one order filling repeatedly. It does
+not: the hazard still rises monotonically on the collapsed unit and the *size*
+of the rise is nearly unchanged (+0.1443 vs +0.1495).
+
+**The oscillation is real, not fragmentation.** Switches per window barely
+move — 33.68 → 33.23. Collapsing removes fills, not direction changes.
+
+**Part of the apparent predictability of the next side was trivial.** Log-loss
+gets *worse* on the collapsed unit (0.5950 → 0.6376): at fill level, some of
+what looked like "he continues the same side" was just *the same order still
+filling*. Remove that and the sequence is genuinely harder to predict — which
+is the right direction for an honest model. The state overlay stays small on
+both units (0.001–0.002 nats over a previous-side baseline).
+
+**Net answer to "how much of the inferred sequential behavior was exchange
+matching":** about **17% of the action count**, and of the *signal*, the part
+that was trivially self-predictive — but **not** the run-persistence structure,
+which survives collapsing intact.
