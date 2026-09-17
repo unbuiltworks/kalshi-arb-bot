@@ -41,9 +41,16 @@ def load(state_root: str) -> List[dict]:
 def gaps(rows: Sequence[dict]) -> List[Dict[str, Any]]:
     """Every interval in which a stream was demonstrably not observing.
 
-    Two sources, both explicit rather than inferred: a `coverage_gap` marker
-    written at boot for the hole before it, and the interval between a
-    `stream_exit` and the `stream_restart` that follows it.
+    Three sources, all explicit rather than inferred: a `coverage_gap` marker
+    written at boot for the hole before it, the interval between a
+    `stream_exit` and the `stream_restart` that follows it, and the interval a
+    `RECORDER_STALE` opens when a recorder's store stopped advancing.
+
+    The third one does NOT start where the watchdog noticed. It starts at
+    `last_good_output_utc` -- the last row we actually have -- because the
+    silence began then, not when we got around to looking. Starting it at the
+    detection instant would quietly shave up to `STALE_AFTER_S` off every gap
+    and hand that time back as if it had been observed.
     """
     out: List[Dict[str, Any]] = []
     for r in rows:
@@ -56,6 +63,7 @@ def gaps(rows: Sequence[dict]) -> List[Dict[str, Any]]:
                         "to": r.get("to_utc"), "gap_s": r.get("gap_s"),
                         "source": "boot marker (supervisor heartbeat)"})
     open_exit: Dict[str, float] = {}
+    open_stale: Dict[str, float] = {}
     for r in sorted(rows, key=lambda x: float(x.get("t") or 0)):
         k, st, t = r.get("kind"), r.get("stream"), float(r.get("t") or 0)
         if k == "stream_exit" and st:
@@ -64,10 +72,38 @@ def gaps(rows: Sequence[dict]) -> List[Dict[str, Any]]:
             t0 = open_exit.pop(st)
             out.append({"stream": st, "from": t0, "to": t,
                         "gap_s": round(t - t0, 1), "source": "exit/restart"})
+        elif k == "RECORDER_STALE" and st:
+            lg = r.get("last_good_output_utc")
+            open_stale[st] = float(lg) if isinstance(lg, (int, float)) else t
+        elif k == "RECORDER_RESTART" and st in open_stale:
+            t0 = open_stale.pop(st)
+            out.append({"stream": st, "from": t0, "to": t,
+                        "gap_s": round(t - t0, 1),
+                        "source": "recorder stale/restart"})
     for st, t0 in open_exit.items():
         out.append({"stream": st, "from": t0, "to": None, "gap_s": None,
                     "source": "exit with no restart yet -- STILL DOWN"})
+    for st, t0 in open_stale.items():
+        out.append({"stream": st, "from": t0, "to": None, "gap_s": None,
+                    "source": "stale with no restart yet -- STILL STALE"})
     return sorted(out, key=lambda g: (g["stream"] or "", g["from"] or 0))
+
+
+def _union_s(gs: Sequence[dict]) -> float:
+    """Total length of the UNION of closed intervals, in seconds."""
+    spans = sorted((float(x["from"]), float(x["to"]))
+                   for x in gs if x["from"] is not None and x["to"] is not None)
+    total, cur_lo, cur_hi = 0.0, None, None
+    for lo, hi in spans:
+        if cur_hi is None or lo > cur_hi:
+            if cur_hi is not None:
+                total += cur_hi - cur_lo
+            cur_lo, cur_hi = lo, hi
+        else:
+            cur_hi = max(cur_hi, hi)
+    if cur_hi is not None:
+        total += cur_hi - cur_lo
+    return total
 
 
 def observed(rows: Sequence[dict], stream: str, a: float, b: float) -> bool:
@@ -104,7 +140,10 @@ def report(state_root: str) -> Dict[str, Any]:
     per: Dict[str, Any] = {}
     for st in sorted({x.get("stream") for x in rows if x.get("stream")}):
         sg = [x for x in g if x["stream"] == st]
-        down = sum(x["gap_s"] or 0.0 for x in sg)
+        # UNION, not sum: an exit/restart gap and a stale/restart gap for the
+        # same outage are two witnesses to one hole, and adding them would
+        # invent downtime that did not happen.
+        down = _union_s(sg)
         per[st] = {
             "gaps": len(sg),
             "downtime_s": round(down, 1),

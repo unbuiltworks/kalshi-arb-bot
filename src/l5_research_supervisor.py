@@ -55,14 +55,50 @@ GATE_S = 600.0
 # failure should be visible in the markers rather than hidden by churn
 BACKOFF_S = (2.0, 5.0, 15.0, 30.0, 60.0)
 
-# name -> (module, state subdirectory, the file whose last row dates the stream)
+# name -> (module, state subdirectory, the file whose last row dates the
+# stream, and optionally extra argv). The dating entry may be a GLOB: a
+# recorder that opens a new timestamped segment on every start has no single
+# file, and the newest matching segment is the one that dates it.
 STREAMS: Dict[str, tuple] = {
     "exec_shadow": ("src.l5_shadow.service", "l5-shadow-state", "routes.jsonl"),
     "gemini_depth": ("analysis.l5.gemini_depth.probe", "gemdepth",
                      "samples.jsonl"),
     "chain_validate": ("analysis.l5.chain_observer.validate", "chainval",
                        "validations.jsonl"),
+    # OWNER 2026-09-17 P0. These two died silently inside the session container
+    # TWICE -- 17:16 and 17:37 -- and nothing noticed for ten minutes the
+    # second time. A watchdog inside that container shares its failure domain
+    # and dies with them, so they belong here, where restartPolicyType is
+    # ALWAYS and the process outlives the session.
+    "book_context": ("src.l5_book_context", "l5-book-context",
+                     "l5_book_context_*.jsonl",
+                     ["--minutes", "1440", "--book-interval", "1.0",
+                      "--activity-interval", "3.0", "--cohorts",
+                      "BTC5m,BTC15m"]),
+    "gemini_surface": ("src.gemini_l5_surface_shadow", "gemini-surface",
+                       "gemini_surface_*.jsonl",
+                       ["--minutes", "1440", "--interval", "2.0"]),
 }
+
+#: a stream whose newest row is older than this is STALE even if its process is
+#: alive. Conservative on purpose: a real recorder writes every few seconds, so
+#: five minutes of silence is never normal and is never a quiet market.
+STALE_AFTER_S = 300.0
+
+#: distinguishes "not resolved yet" from a genuinely unresolvable commit
+_UNSET = object()
+
+
+def _newest_segment(state_dir: str, fname: str) -> Optional[str]:
+    """The file that dates a stream. A glob picks the newest segment, because
+    a recorder that opens a new file on every start has no single store and
+    reading a stale segment would report an old timestamp as current."""
+    import glob as _g
+    if "*" not in fname:
+        p = os.path.join(state_dir, fname)
+        return p if os.path.exists(p) else None
+    hits = _g.glob(os.path.join(state_dir, fname))
+    return max(hits, key=os.path.getmtime) if hits else None
 
 
 def _last_row_time(path: str) -> Optional[float]:
@@ -92,7 +128,7 @@ def _last_row_time(path: str) -> Optional[float]:
         except ValueError:
             continue
         for k in ("t", "observed_at", "decided_at", "evaluated_at",
-                  "resolved_at"):
+                  "resolved_at", "L5_OBSERVATION_CLOCK"):
             v = r.get(k)
             if isinstance(v, (int, float)):
                 return float(v)
@@ -105,6 +141,9 @@ class Supervisor:
         self.deadline = (time.time() + hours * 3600) if hours else None
         self.procs: Dict[str, subprocess.Popen] = {}
         self.fails: Dict[str, int] = {n: 0 for n in STREAMS}
+        self._size_seen: Dict[str, tuple] = {}
+        self._commit_sha: Any = _UNSET
+        self._last_reason: Dict[str, Optional[str]] = {n: None for n in STREAMS}
         self.next_try: Dict[str, float] = {n: 0.0 for n in STREAMS}
         self.started_at = time.time()
         os.makedirs(self.root, exist_ok=True)
@@ -175,8 +214,10 @@ class Supervisor:
         upper bound that conflates our absence with the market's quiet.
         """
         gaps = {}
-        for name, (_mod, sub, fname) in STREAMS.items():
-            last = _last_row_time(os.path.join(self.root, sub, fname))
+        for name, spec in STREAMS.items():
+            sub, fname = spec[1], spec[2]
+            seg = _newest_segment(os.path.join(self.root, sub), fname)
+            last = _last_row_time(seg) if seg else None
             gaps[name] = {
                 "last_row_utc": last,
                 "gap_s": (round(self.started_at - last, 1) if last else None),
@@ -212,14 +253,16 @@ class Supervisor:
     # ------------------------------------------------------------ children
 
     def _cmd(self, name: str) -> List[str]:
-        mod, sub, _f = STREAMS[name]
-        return [sys.executable, "-m", mod, "--out-dir",
-                os.path.join(self.root, sub)]
+        spec = STREAMS[name]
+        mod, sub = spec[0], spec[1]
+        extra = list(spec[3]) if len(spec) > 3 else []
+        return ([sys.executable, "-m", mod, "--out-dir",
+                 os.path.join(self.root, sub)] + extra)
 
     def start(self, name: str) -> None:
         if time.time() < self.next_try[name]:
             return
-        _mod, sub, _f = STREAMS[name]
+        sub = STREAMS[name][1]
         os.makedirs(os.path.join(self.root, sub), exist_ok=True)
         try:
             p = subprocess.Popen(self._cmd(name), stdout=sys.stdout,
@@ -231,10 +274,139 @@ class Supervisor:
             self.next_try[name] = time.time() + self._backoff(name)
             return
         self.procs[name] = p
+        # EVERY segment gets its provenance, not only the ones a restart
+        # opened, so any two segments can be compared for equivalence without
+        # anyone having to assume the code was the same across them.
         self.mark("stream_restart" if self.fails[name] else "stream_start",
                   stream=name, pid=p.pid, out_dir=os.path.join(self.root, sub),
                   consecutive_failures=self.fails[name],
+                  provenance=self.provenance(name, self._cmd(name)),
                   labels="resumed against the existing store; nothing reset")
+
+    def _commit(self) -> Optional[str]:
+        """Resolved ONCE. A running process cannot change the commit it is
+        running, and re-shelling out on every restart would put a subprocess
+        spawn on the recovery path."""
+        if self._commit_sha is not _UNSET:
+            return self._commit_sha
+        try:
+            self._commit_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL).decode().strip() or None
+        except Exception:                                     # noqa: BLE001
+            self._commit_sha = None
+        return self._commit_sha
+
+    def provenance(self, name: str, cmd: List[str]) -> Dict[str, Any]:
+        """Exactly what this segment was started from, so a post-restart
+        segment can be PROVEN equivalent to the one before it rather than
+        assumed to be."""
+        import hashlib
+        spec = STREAMS[name]
+        commit = self._commit()
+        mod_path = os.path.join(*spec[0].split(".")) + ".py"
+        sha = None
+        if os.path.exists(mod_path):
+            h = hashlib.sha256()
+            with open(mod_path, "rb") as fh:
+                h.update(fh.read())
+            sha = h.hexdigest()
+        return {"stream": name, "commit": commit, "module": spec[0],
+                "module_sha256": sha, "command": cmd,
+                "state_subdir": spec[1], "dating_glob": spec[2],
+                "extra_argv": list(spec[3]) if len(spec) > 3 else [],
+                "labels": ("equivalence evidence for this segment. A new "
+                           "segment after a restart is a NEW segment and is "
+                           "never presented as continuous with the last one.")}
+
+    def recorder_health(self) -> Dict[str, Any]:
+        """Freshness, not liveness. A process can be alive and writing nothing,
+        which is exactly how these two died unnoticed: the PID was the thing
+        being watched and the PID was fine right up until it wasn't."""
+        now = time.time()
+        out: Dict[str, Any] = {}
+        for name, spec in STREAMS.items():
+            sub, fname = spec[1], spec[2]
+            sdir = os.path.join(self.root, sub)
+            seg = _newest_segment(sdir, fname)
+            last = _last_row_time(seg) if seg else None
+            size = os.path.getsize(seg) if seg else None
+            prev = self._size_seen.get(name)
+            if size is not None:
+                if prev is None or prev[0] != seg:
+                    # FIRST sighting of THIS segment: its own mtime, never
+                    # `now`. A store that was already dead when this supervisor
+                    # booted must not be handed a fresh clock by the mere act
+                    # of being looked at. For a segment just opened by a
+                    # restart the mtime is ~now, which is also correct.
+                    self._size_seen[name] = (seg, size, os.path.getmtime(seg))
+                elif size != prev[1]:
+                    self._size_seen[name] = (seg, size, now)
+            changed = self._size_seen.get(name, (None, None, None))[2]
+            out[name] = {
+                "process_alive": name in self.procs,
+                "latest_output_timestamp": last,
+                "output_age_seconds": (round(now - last, 1)
+                                       if last is not None else None),
+                "file_size": size,
+                "last_size_change": changed,
+                "size_age_seconds": (round(now - changed, 1)
+                                     if changed is not None else None),
+                "segment": seg,
+                "restart_count": self.fails.get(name, 0),
+                "last_restart_reason": self._last_reason.get(name),
+            }
+        return out
+
+    def watch_freshness(self) -> None:
+        """RECORDER_STALE -> restart that recorder ONLY, with its exact frozen
+        command, into a NEW segment. The gap is preserved and reported; it is
+        never backfilled and the stores are never repaired."""
+        health = self.recorder_health()
+        for name, h in health.items():
+            if len(STREAMS[name]) <= 3:
+                continue          # only the rotating recorders are watched here
+            if h["segment"] is None and not h["process_alive"]:
+                continue          # never started here; the boot path owns that
+            age = h["output_age_seconds"]
+            sage = h["size_age_seconds"]
+            dead = not h["process_alive"]
+            row_stale = age is not None and age > STALE_AFTER_S
+            # a recorder that opened a segment and then wrote nothing into it
+            # has no row old enough to be stale, so the BYTES are the only
+            # witness left. This is the shape the second death actually took.
+            size_stale = sage is not None and sage > STALE_AFTER_S
+            if not (dead or row_stale or size_stale):
+                continue
+            if time.time() < self.next_try.get(name, 0.0):
+                continue
+            basis = ("process_gone" if dead else
+                     "rows_stopped>%ds" % int(STALE_AFTER_S) if row_stale else
+                     "file_not_growing>%ds" % int(STALE_AFTER_S))
+            self.mark("RECORDER_STALE", stream=name, stale_basis=basis,
+                      last_good_output_utc=h["latest_output_timestamp"],
+                      output_age_seconds=age, size_age_seconds=sage,
+                      last_size_change=h["last_size_change"],
+                      process_alive=h["process_alive"],
+                      segment=h["segment"], file_size=h["file_size"],
+                      labels=("the store stopped advancing. The interval from "
+                              "last_good_output_utc to the next segment's "
+                              "first row is a REAL GAP and stays one."))
+            self._last_reason[name] = basis
+            p = self.procs.pop(name, None)
+            if p is not None:
+                try:
+                    p.terminate()
+                except Exception:                             # noqa: BLE001
+                    pass
+            self.fails[name] = self.fails.get(name, 0) + 1
+            self.start(name)
+            self.mark("RECORDER_RESTART", stream=name,
+                      reason=self._last_reason[name],
+                      restart_count=self.fails[name],
+                      provenance=self.provenance(name, self._cmd(name)),
+                      labels=("a NEW segment, not a continuation. Nothing "
+                              "backfills the missing interval."))
 
     def _backoff(self, name: str) -> float:
         i = min(self.fails[name], len(BACKOFF_S)) - 1
@@ -412,6 +584,7 @@ class Supervisor:
                 if name not in self.procs:
                     self.start(name)
             self.reap()
+            self.watch_freshness()
             now = time.time()
             if now - last_hb >= HEARTBEAT_S:
                 last_hb = now
@@ -419,7 +592,8 @@ class Supervisor:
                           uptime_s=round(now - self.started_at, 1),
                           running=sorted(self.procs),
                           not_running=sorted(set(STREAMS) - set(self.procs)),
-                          failures=dict(self.fails))
+                          failures=dict(self.fails),
+                          recorder_health=self.recorder_health())
             if now - last_gate >= GATE_S:
                 last_gate = now
                 self.report_gate()
