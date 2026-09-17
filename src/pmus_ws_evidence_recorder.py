@@ -955,6 +955,93 @@ def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
     publish_live_status(status)
 
 
+# ---------------------------------------------------------------------------
+# PROPOSED, OFF BY DEFAULT, NOT DEPLOYED: the per-market trade tail.
+#
+# WHY IT IS NEEDED AT ALL. A separate read-only consumer (the PMUS passive
+# surface) must reach TRADE_FLOW, which means volume traded THROUGH a PRICE.
+# Nothing already exported supplies that:
+#
+#   the volume       Railway attaches a volume to ONE service ("Each service
+#                    can only have a single volume"; files are reachable only
+#                    "through a service the volume is attached to"), so a
+#                    second consumer cannot mount /state/pmus-ws. This module
+#                    already says as much: the probe and the recorder "sit on
+#                    different volumes, so the status document cannot be
+#                    shared as a file".
+#   /status          carries the authenticated BOOK per market, which is
+#                    enough for RESTABLE and BOOK_REACHED, and carries trades
+#                    only as AGGREGATES -- trades_1h (a count),
+#                    two_sided_trades (a bool), slot counts. A count cannot
+#                    say a trade happened at OUR price.
+#   /l5_shadow       a compacted report, not a tape.
+#
+# THE MINIMUM. One more GET path on the HTTP server that already exists, fed
+# from the SAME snapshot the status build already takes. No new service, no
+# new port, no new credential, no new thread, and no order capability: the
+# handler stays GET-only over an already-serialised immutable bytes object,
+# exactly like the live-status publisher beside it.
+#
+# OFF BY DEFAULT, so merging this changes nothing until it is turned on.
+TRADES_HTTP_PATH = "/trades"
+TRADES_ENV = "PMUS_WS_TRADES_HTTP"
+TRADES_PER_MARKET = 200        # newest N; the in-memory ring holds 500
+_LIVE_TRADES: dict[str, Any] = {"line": None, "utc": None, "n": 0}
+
+
+def trades_http_enabled() -> bool:
+    """OFF unless explicitly turned on."""
+    return str(os.getenv(TRADES_ENV, "")).strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def trades_payload(state: Mapping[str, Any], now: float) -> dict:
+    """Per-market trade tail: {t, px, qty, dir}, newest last.
+
+    `ring_full` travels WITH the data because a consumer cannot otherwise
+    know that older trades in its interval may have been dropped -- and a
+    wrapped ring is exactly where an empty result stops meaning "nobody
+    traded". Without it, silence would be mistaken for evidence.
+    """
+    markets: dict = {}
+    for slug, s in (state or {}).items():
+        raw = list((s or {}).get("trades") or [])
+        markets[slug] = {
+            "trades": [{"t": t.get("t"), "px": t.get("px"),
+                        "qty": t.get("qty"), "dir": t.get("dir")}
+                       for t in raw[-TRADES_PER_MARKET:]],
+            "ring_full": len(raw) >= 500,
+            "bad_trade_rows": (s or {}).get("bad_trade_rows", 0),
+        }
+    return {"t": datetime.now(timezone.utc).isoformat(), "now": now,
+            "markets": markets,
+            "labels": ("AUTHENTICATED trade tape, read-only. ring_full means "
+                       "older trades in an interval may have been dropped, so "
+                       "an empty result no longer means nobody traded.")}
+
+
+def publish_live_trades(state: Mapping[str, Any], now: float) -> None:
+    """Publish the newest trade tail for the HTTP handler. Never raises."""
+    if not trades_http_enabled():
+        return
+    try:
+        line = json.dumps(trades_payload(state, now),
+                          separators=(",", ":"), default=str)
+        _LIVE_TRADES["line"] = (line + "\n").encode("utf-8")
+        _LIVE_TRADES["utc"] = datetime.now(timezone.utc).isoformat()
+        _LIVE_TRADES["n"] = int(_LIVE_TRADES.get("n") or 0) + 1
+    except Exception:                                     # noqa: BLE001
+        pass
+
+
+def live_trades_bytes() -> Optional[bytes]:
+    """The newest published trade tail, or None when unset/disabled."""
+    if not trades_http_enabled():
+        return None
+    v = _LIVE_TRADES.get("line")
+    return v if isinstance(v, (bytes, bytearray)) else None
+
+
 # Read-only status handoff over Railway's private network. The spring
 # probe and the recorder sit on different volumes, so the status document
 # cannot be shared as a file; this serves the SAME document the recorder
@@ -1044,6 +1131,23 @@ def serve_status_doc(root: Path, port: int):
 
         def do_GET(self) -> None:                     # noqa: N802
             path = self.path.split("?", 1)[0]
+            if path == TRADES_HTTP_PATH:
+                # PROPOSED, OFF BY DEFAULT: the per-market trade tail, which
+                # is the only thing here that can carry volume traded THROUGH
+                # a price. Served from memory only; there is no file for it,
+                # so a disabled flag is a 404 rather than an empty tape that
+                # would read as "nobody traded".
+                blob = live_trades_bytes()
+                if blob is None:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(blob)))
+                self.end_headers()
+                self.wfile.write(blob)
+                return
             if path == SHADOW_HTTP_PATH:
                 # the read-only multi-market L5 shadow report (same
                 # handoff pattern as the status document)
@@ -1478,6 +1582,9 @@ async def run(minutes: Optional[float]) -> int:
                 print("PMUS_WS_STATUS " + json.dumps(
                     st, separators=(",", ":"), default=str), flush=True)
                 write_status_doc(root, st)
+                # the trade tail, from the SAME snapshot, so the book and the
+                # trades a consumer sees can never be from different moments
+                publish_live_trades(snap, time.time())
                 try:
                     from src import pmus_sports_collector as col
                     xs = gateway_xcheck(

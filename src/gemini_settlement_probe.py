@@ -188,6 +188,37 @@ def proof_chain(sym: str, st: S.Settlement, candidates: Sequence[dict]
     }
 
 
+def shape_of(body: Any, limit: int = 40) -> Dict[str, Any]:
+    """The STRUCTURE of a response, never its values.
+
+    Endpoint reachability is not the same as an endpoint that CARRIES an
+    authoritative outcome, and the difference decides whether a lane can
+    settle. This reports field names and row counts so that question can be
+    answered without copying account data into an artifact or a log.
+    """
+    if body is None:
+        return {"kind": "none"}
+    if isinstance(body, list):
+        keys: set = set()
+        for row in body[:limit]:
+            if isinstance(row, dict):
+                keys |= set(row.keys())
+        return {"kind": "list", "rows": len(body),
+                "row_keys": sorted(keys)}
+    if isinstance(body, dict):
+        inner = {}
+        for k, v in list(body.items())[:limit]:
+            if isinstance(v, list):
+                ks: set = set()
+                for row in v[:limit]:
+                    if isinstance(row, dict):
+                        ks |= set(row.keys())
+                inner[k] = {"kind": "list", "rows": len(v),
+                            "row_keys": sorted(ks)}
+        return {"kind": "dict", "keys": sorted(body.keys()), "lists": inner}
+    return {"kind": type(body).__name__}
+
+
 async def probe(symbols: Sequence[str]) -> Dict[str, Any]:
     if not has_credentials():
         return {"label": LABEL, "ok": False, "verdict": "NO_CREDENTIALS",
@@ -220,10 +251,16 @@ async def probe(symbols: Sequence[str]) -> Dict[str, Any]:
              if c.get("reachable") and c.get("status") == 200]
     return {
         "label": LABEL, "ok": True,
-        "account_reads": [{k: v for k, v in a.items() if k != "body"}
-                          for a in account],
-        "settlement_candidates": [{k: v for k, v in c.items() if k != "body"}
-                                  for c in candidates],
+        "account_reads": [
+            {**{k: v for k, v in a.items() if k != "body"},
+             "shape": shape_of(a.get("body"))} for a in account],
+        "settlement_candidates": [
+            {**{k: v for k, v in c.items() if k != "body"},
+             # SHAPE ONLY -- field names and row counts, never values. An
+             # endpoint that answers 200 is not yet an endpoint that carries
+             # an authoritative outcome, and this is what tells them apart.
+             "shape": shape_of(c.get("body"))}
+            for c in candidates],
         "settlement_endpoint_found": [c["path"] for c in found],
         "settlement_endpoint_exists": bool(found),
         "per_symbol": per_symbol,

@@ -33,6 +33,14 @@ LABEL = "PMUS_L5_SURFACE_RUNNER_V1"
 
 AUTHENTICATED = "AUTHENTICATED_WS"
 PUBLIC = "PUBLIC_BOOK_ONLY"
+#: the recorder's existing read-only HTTP handoff, over Railway's private
+#: network. AUTHENTICATED BOOK, and no trade tape -- see below.
+STATUS_HTTP = "STATUS_HTTP"
+
+#: the recorder serves this unconditionally on a daemon thread; status_port()
+#: falls back to PORT and then 8080, so it is listening even unconfigured.
+DEFAULT_STATUS_URL = ("http://pmus-ws-evidence-recorder.railway.internal:8080"
+                      "/status")
 
 
 def _f(v: Any) -> Optional[str]:
@@ -70,6 +78,67 @@ def market_from_gateway(slug: str, get_json) -> Optional[Dict[str, Any]]:
     }
 
 
+def markets_from_status(body: str) -> Dict[str, Dict[str, Any]]:
+    """The recorder's status document -> per-market state, by slug.
+
+    WHAT THIS SOURCE CAN AND CANNOT REACH. The status document carries the
+    AUTHENTICATED book per market -- bid, bid_qty, ask, ask_qty -- which is
+    strictly better than the public gateway: same venue, authenticated, and
+    the recorder's own WS state rather than a REST sample. It carries trades
+    only as AGGREGATES (`trades_1h`, a count; `two_sided_trades`, a bool;
+    slot counts), and VOLUME_AHEAD_CLEARED needs volume traded THROUGH a
+    PRICE. So `trades` is None here -- UNREADABLE, never [] -- and the ladder
+    correctly stops at BOOK_REACHED and says TRADE_FLOW_NOT_OBSERVABLE.
+
+    Reaching TRADE_FLOW from this source needs the recorder to export the
+    per-market trade tail; that is the minimum additive change, and it is a
+    proposal rather than something done here.
+
+    The document is newline-delimited and appended to, so the LAST parseable
+    line is the newest.
+    """
+    newest = None
+    for line in (body or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            newest = json.loads(line)
+        except ValueError:
+            continue
+    if not isinstance(newest, dict):
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    # the same row shape appears in all three lists; later ones do not
+    # overwrite earlier, because they are the same rows
+    for key in ("top_markets", "eligible_markets", "spring_watch"):
+        for r in (newest.get(key) or []):
+            slug = r.get("slug")
+            if not slug or slug in out:
+                continue
+            out[slug] = {
+                "bid": _f(r.get("bid")), "ask": _f(r.get("ask")),
+                "bid_qty": _f(r.get("bid_qty")), "ask_qty": _f(r.get("ask_qty")),
+                "trades": None,            # UNREADABLE, never empty
+                "both_sides_served": r.get("both_sides_served"),
+                "authenticated_age_s": r.get("last_authenticated_update_age_s"),
+            }
+    return out
+
+
+def fetch_status(url: str, timeout: float = 10.0) -> Optional[str]:
+    """GET the recorder's status document. A failure is None, not {}."""
+    import urllib.error
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "l5-surface"},
+                                     method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as fh:
+            return fh.read().decode("utf-8")
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+        return None
+
+
 def market_from_recorder(state: Mapping[str, Any]) -> Dict[str, Any]:
     """The WS recorder's per-market state, used as-is.
 
@@ -96,6 +165,7 @@ def discover(cap: int = 64) -> List[str]:
 
 def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
         cap: int = 40, source: str = PUBLIC,
+        status_url: str = DEFAULT_STATUS_URL,
         states: Optional[Mapping[str, Mapping[str, Any]]] = None) -> int:
     from src.pmus_sports_collector import http_get_json
 
@@ -109,7 +179,13 @@ def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
         fh.flush()
 
     spec = SS.spec()
-    slugs = list(states) if states is not None else discover(cap)
+    if source == STATUS_HTTP:
+        first = markets_from_status(fetch_status(status_url) or "")
+        slugs = list(first)[:cap]
+    elif states is not None:
+        slugs = list(states)
+    else:
+        slugs = discover(cap)
     surfaces: Dict[str, SS.MarketSurface] = {
         s: SS.MarketSurface(s, spec) for s in slugs}
 
@@ -117,6 +193,7 @@ def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
           "spec_label": spec.label, "spec_sha256": spec.spec_sha256(),
           "trade_flow_source": (AUTHENTICATED if source == AUTHENTICATED
                                 else "UNAVAILABLE"),
+          "status_url": (status_url if source == STATUS_HTTP else None),
           "source": source, "slugs": slugs,
           "labels": ("a PUBLIC run cannot reach TRADE_FLOW: the gateway "
                      "serves no print tape and sharesTraded is cumulative per "
@@ -126,10 +203,22 @@ def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
     obs = 0
     while time.time() < deadline:
         t0 = time.time()
+        served: Dict[str, Dict[str, Any]] = {}
+        if source == STATUS_HTTP:
+            body = fetch_status(status_url)
+            if body is None:
+                emit({"kind": "status_unreachable", "t": time.time(),
+                      "url": status_url,
+                      "labels": ("UNREACHABLE, not empty: no market is "
+                                 "observed this cycle and none is scored")})
+            else:
+                served = markets_from_status(body)
         for slug, surf in surfaces.items():
             if source == AUTHENTICATED:
                 st = (states or {}).get(slug)
                 mkt = market_from_recorder(st) if st else None
+            elif source == STATUS_HTTP:
+                mkt = served.get(slug)
             else:
                 mkt = market_from_gateway(slug, http_get_json)
             if mkt is None:
@@ -160,10 +249,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--minutes", type=float, default=30.0)
     ap.add_argument("--interval", type=float, default=5.0)
     ap.add_argument("--cap", type=int, default=40)
-    ap.add_argument("--source", choices=(PUBLIC, AUTHENTICATED), default=PUBLIC)
+    ap.add_argument("--source", choices=(PUBLIC, AUTHENTICATED, STATUS_HTTP),
+                    default=PUBLIC)
+    ap.add_argument("--status-url", default=DEFAULT_STATUS_URL)
     a = ap.parse_args(argv)
     return run(a.out_dir, minutes=a.minutes, interval=a.interval, cap=a.cap,
-               source=a.source)
+               source=a.source, status_url=a.status_url)
 
 
 if __name__ == "__main__":

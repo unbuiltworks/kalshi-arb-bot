@@ -2,6 +2,7 @@
 import ast
 import asyncio
 import inspect
+import json
 
 import pytest
 
@@ -190,3 +191,40 @@ def test_an_endpoint_that_raises_is_a_result_not_a_crash(monkeypatch):
     out = _run(P.probe(["GEMI-X"]))
     t = [a for a in out["account_reads"] if a["path"] == "/v1/transfers"][0]
     assert t["reachable"] is False and t["error"] == "RuntimeError"
+
+
+# --------------------------- reachable is not the same as carrying an outcome
+
+def test_shape_reports_structure_never_values():
+    """An endpoint that answers 200 is not yet one that carries an
+    authoritative outcome. Shape tells them apart without copying account
+    data into an artifact."""
+    sh = P.shape_of([{"symbol": "GEMI-X", "amount": "1.23", "side": "long"}])
+    assert sh == {"kind": "list", "rows": 1,
+                  "row_keys": ["amount", "side", "symbol"]}
+    flat = json.dumps(sh)
+    assert "1.23" not in flat and "GEMI-X" not in flat
+
+
+def test_shape_descends_one_level_into_a_wrapper_object():
+    sh = P.shape_of({"positions": [{"symbol": "X", "settled": True}]})
+    assert sh["kind"] == "dict" and sh["keys"] == ["positions"]
+    assert sh["lists"]["positions"]["row_keys"] == ["settled", "symbol"]
+
+
+def test_shape_of_nothing_is_declared():
+    assert P.shape_of(None) == {"kind": "none"}
+
+
+def test_an_empty_list_is_shaped_as_zero_rows_not_absent():
+    """rows 0 with a 200 is 'works and is empty', which is the distinction
+    between no historical fill and a broken read."""
+    assert P.shape_of([]) == {"kind": "list", "rows": 0, "row_keys": []}
+
+
+def test_shapes_are_attached_to_both_read_sets(monkeypatch):
+    monkeypatch.setattr(P, "has_credentials", lambda: True)
+    monkeypatch.setattr(P, "private_rest_request", _fake(_all_ok([])))
+    out = _run(P.probe(["GEMI-X"]))
+    assert all("shape" in a for a in out["account_reads"])
+    assert all("shape" in c for c in out["settlement_candidates"])
