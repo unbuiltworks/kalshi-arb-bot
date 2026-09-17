@@ -170,7 +170,45 @@ table-tennis 6). That is what the venue happens to have live at 10:36Z on a
 weekday morning, not a designed preference; the MLB slate returns this evening
 and qualifies on the same rule.
 
-## 6. What must clear before activation
+## 6. Verification state — including four EXPECTED failures
+
+Full suite on the committed tree: **5046 passed, 4 failed, 27 skipped,
+1 xfailed** (147.59s).
+
+**All four failures are the R1 lineage gate refusing this change, and they are
+the intended outcome rather than a defect.** The assertion is literally:
+
+```
+assert v["differing"] == ["analysis/l5/authorization/"]
+AssertionError: ['analysis/l5/authorization/',
+                 'src/pmus_event_progress.py',
+                 'src/pmus_l5_continuous_session.py']
+```
+
+- `tests/test_r1_source_lineage.py::test_the_acceptance_condition_holds_on_the_current_tree`
+- `tests/test_r1_source_lineage.py::test_every_disclosed_delta_is_named_and_none_is_execution_class`
+- `tests/test_lane_a_probe_v0.py::test_the_real_r1_image_lineage_accepts_against_the_reviewed_artifact`
+- `tests/test_lane_a_probe_v0.py::test_the_real_lineage_check_rejects_an_edit_to_an_allow_listed_file`
+
+These four fail for **any** un-reviewed EXECUTION-class delta and will keep
+failing until the owner reviews and the baseline is re-pinned. **Making them
+pass would mean re-pinning around the gate, which is precisely what must not
+happen.** They are the machine-readable form of §7 item 2.
+
+A note on how this was measured, because the earlier MLB record is slightly
+rosier than it should have been: the 5032-pass figure recorded there was taken
+**before** that commit, while HEAD was still clean, so the lineage tests had
+nothing to object to. The same four would have failed immediately after it —
+and `verify()` did report `ACCEPTANCE: False` at the time, so the finding was
+disclosed even though the suite number did not carry it. The 5046/4 figure
+above is post-commit and does carry it.
+
+Everything else is green, including the 42 cohort tests: that the sentinel
+relaxes the league clause **and nothing else**, that the reviewed MLB verdicts
+are verdict-for-verdict unchanged, the real venue period tokens measured live,
+and that the gate's executed code reaches no trading parameter.
+
+## 7. What must clear before activation
 
 1. **Owner authorization** of §4.
 2. **R1 lineage review — still correctly FAILING.** The gate lives in
