@@ -234,8 +234,31 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "d7645e2a44ca69b91aacfcc3b6db0a4006255016",
-        "why": ("RE-PINNED 2026-09-16 after the CP1 probe COMPLETED its "
+        "sha": "9a6e80785a33efe68efcdcb60de8b101e2c2f8a4",
+        "why": ("RE-PINNED 2026-09-17 for the freshness submission gate "
+                "record. This tree adds "
+                "FRESHNESS_SUBMISSION_GATE_2026-09-17.md -- prose, not code "
+                "-- and HALT is STILL PRESENT with the exhausted "
+                "live_mandate.json beside it. No authorization was created "
+                "and nothing was armed: the gate was deployed HALTED as the "
+                "owner required. Previously re-pinned after the CP1 probe "
+                "COMPLETED its authorization (3 of 3 markets, 13 orders, "
+                "zero fills, $0.00 moved), and before that for the "
+                "concurrency-accounting fix and the second activation. The "
+                "pin has now covered this directory halted, armed, halted, "
+                "armed and halted again; each transition is a reviewed "
+                "commit, which is the mechanism working rather than being "
+                "noisy. "
+                "WHY THIS ENTRY IS ALWAYS EXERCISED: it is a "
+                "DIRECTORY, and verify() compares `git show <rev>:<path>`, "
+                "whose first line echoes the revision string itself. So it "
+                "reads as differing even when its tree sha is identical, "
+                "and the pin is therefore checked on every single run. That "
+                "is the right outcome for the directory that grants spend, "
+                "but it is an accident of how git prints a tree rather than "
+                "a designed property, and it is recorded here so nobody "
+                "later 'fixes' it without knowing what it was doing. "
+                "The committed HALT latch, the live mandate when one exists, "
                 "authorization. HALT is back and live_mandate.json remains, "
                 "now EXHAUSTED rather than invalid: the campaign touched 3 "
                 "of 3 markets, submitted 13 maker orders, filled NOTHING and "
