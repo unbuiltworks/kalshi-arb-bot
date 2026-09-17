@@ -54,3 +54,4 @@ analysis/l5/historical_l2/l5_backfill.json
 analysis/l5/historical_l2/block_times.json
 data/l5_book_context/*.jsonl
 data/gemini_surface_shadow/*.jsonl
+data/l5_window_forensics/*.jsonl
