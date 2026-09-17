@@ -43,8 +43,29 @@ of the same ladder, and the two blockers are not equally solvable:
          does carry a real trade tape, and this operation holds PMUS
          credentials, so the blocker is a deployment away rather than a
          venue limitation.
-  GEMINI blocked at the END, at SETTLED. Public data cannot establish it at
-         all, and the account endpoints that could are authenticated.
+  GEMINI WAS blocked at the END, at SETTLED. Public data cannot establish it
+         at all -- and the ACCOUNT surface can, which was proven by running
+         the gate in the authorized environment rather than argued.
+
+WHAT THE 2026-09-17T23:12Z RUN SETTLED. Every endpoint the acceptance chain
+needs answers: positions 200 {positions[], total}, balances 200, transfers 200
+with 9 real rows, notionalvolume 200 with fee bps. mytrades answers 200 with
+ZERO rows on every symbol -- a valid empty list, so "we hold no trades", never
+"the read failed". Two other settlement paths 404 with Gemini's own
+{message, reason, result} envelope, so they are genuinely absent rather than
+malformed.
+
+THE DISTINCTION THAT MATTERS. "Cannot prove a historical fill because none
+exists" is established. "The venue cannot authoritatively settle or reconcile
+a FUTURE fill" is NOT, and is contradicted by every endpoint above. The
+absence of past trades must not be allowed to masquerade as the absence of a
+settlement path.
+
+WHAT REMAINS UNPROVEN, STATED PLAINLY. positions returns 0 rows today, so the
+SOURCE is proven to exist and be well-formed; that it POPULATES a terminal
+outcome for a settled contract is not observable until a position exists
+through an expiry. That is exactly what a bounded canary answers and it cannot
+be answered any other way, so holding the canary back for it is circular.
 
 Neither lane may be advanced past its blocker by weakening the evidence rule.
 """
@@ -122,13 +143,21 @@ SOURCES: Dict[str, Dict[str, Dict[str, str]]] = {
                                   "shadow inventory, never a venue position"),
         EV.OPPOSITE_RECYCLING: _src("evidenced fills, both legs", AVAILABLE,
                                     "measured; currently zero on this venue"),
-        EV.SETTLED: _src("/v1/balances + /v1/transfers", NEEDS_DEPLOYMENT,
-                         "the venue publishes NO settlement value: an expired "
-                         "contract closes with an empty book and a last print "
-                         "that is not a terminal value. See "
-                         "src.gemini_settlement."),
-        EV.REALIZED: _src("authenticated cash", NEEDS_DEPLOYMENT,
-                          "realized is a venue cash fact"),
+        EV.SETTLED: _src("/v1/prediction-markets/positions", AVAILABLE,
+                         "PROVEN 2026-09-17T23:12Z in the authorized "
+                         "environment: 200 with a structured {positions[], "
+                         "total}. 0 rows because we hold nothing, which is "
+                         "'works and is empty', not 'absent'. The PUBLIC "
+                         "surface still publishes no terminal value; the "
+                         "ACCOUNT surface does."),
+        EV.REALIZED: _src("/v1/balances + /v1/transfers + /v1/notionalvolume",
+                          AVAILABLE,
+                          "PROVEN 2026-09-17T23:12Z: balances 200 (amount, "
+                          "available, availableForWithdrawal), transfers 200 "
+                          "with 9 real rows carrying purpose/status/eid, and "
+                          "notionalvolume 200 carrying maker/taker fee bps. "
+                          "Realized stays a venue cash fact; these are where "
+                          "that fact is read."),
     },
 }
 
