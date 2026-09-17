@@ -167,7 +167,9 @@ def replay_market(obs: list, cfg: dict) -> dict:
                 # COMPLETEs were. Nothing here feeds behaviour or ranking.
                 _px = _d(p.get("px"))
                 if _px is not None and bid is not None:
-                    rest_diag.append({"at": idx, "px": _px, "bid_at_quote": bid})
+                    rest_diag.append({
+                        "at": idx, "px": _px, "bid_at_quote": bid,
+                        "vol_at_quote": _d(r.get("shares_traded"))})
             else:
                 ext_wait += 1
 
@@ -192,31 +194,51 @@ def replay_market(obs: list, cfg: dict) -> dict:
     # forward. DIAGNOSTIC ONLY: none of this becomes a fill, and none of it
     # feeds ranking. It answers "was the quote anywhere near the flow?", which
     # rejection rate alone cannot.
+    # TWO DIFFERENT CLAIMS, deliberately never merged (owner 2026-09-17):
+    #
+    #   book_reached_the_quote  -- the touch moved to or through our price.
+    #                              Establishes EXECUTABILITY and STALENESS:
+    #                              from that instant the quote would have been
+    #                              rejected had it been submitted afresh.
+    #   trade_flow_through_quote -- cumulative shares_traded ROSE and the last
+    #                              trade printed at or through our price. Real
+    #                              opposing flow existed there. Strictly
+    #                              stronger evidence of potential interaction.
+    #
+    # NEITHER ESTABLISHES OUR FILL. We would have queued behind makers this
+    # tape does not name, and no queue evidence exists here. The gap between
+    # the two counts is itself the finding: a book that drifts through a price
+    # without trading is not flow.
     diag = []
     for q in rest_diag:
-        i, px = q["at"], q["px"]
-        stale_after = None
+        i, px, v0 = q["at"], q["px"], q["vol_at_quote"]
+        nonmarketable_for = None
         moved = D("0")
-        touched = False
+        touched = traded = False
         for j in range(i + 1, len(obs)):
-            b2 = _d(obs[j].get("bid"))
-            if b2 is None:
-                continue
-            moved = max(moved, abs(b2 - q["bid_at_quote"]))
-            # the quote becomes marketable once the bid reaches it: that is
-            # the moment a resting NO buy would have been interacted with
-            if not touched and b2 <= px:
-                touched = True
-                stale_after = j - i
+            o2 = obs[j]
+            b2 = _d(o2.get("bid"))
+            if b2 is not None:
+                moved = max(moved, abs(b2 - q["bid_at_quote"]))
+                if not touched and b2 <= px:
+                    touched = True
+                    nonmarketable_for = j - i
+            if not traded and v0 is not None:
+                v2, last = _d(o2.get("shares_traded")), _d(o2.get("last"))
+                if v2 is not None and v2 > v0 and last is not None and last <= px:
+                    traded = True
         diag.append({"ticks_from_touch": int(abs(
                         (q["bid_at_quote"] - px) / C.TICK)),
-                     "obs_until_marketable": stale_after,
+                     "obs_nonmarketable": nonmarketable_for,
                      "max_subsequent_touch_move": str(moved),
-                     "book_reached_the_quote": touched})
+                     "book_reached_the_quote": touched,
+                     "trade_flow_through_quote": traded})
     reached = [d for d in diag if d["book_reached_the_quote"]]
+    traded_d = [d for d in diag if d["trade_flow_through_quote"]]
     ticks = [d["ticks_from_touch"] for d in diag]
-    waits = [d["obs_until_marketable"] for d in reached
-             if d["obs_until_marketable"] is not None]
+    waits = [d["obs_nonmarketable"] for d in reached
+             if d["obs_nonmarketable"] is not None]
+    never = sum(1 for d in diag if d["obs_nonmarketable"] is None)
 
     n = len(obs) or 1
     return {
@@ -248,14 +270,29 @@ def replay_market(obs: list, cfg: dict) -> dict:
             "book_later_reached_the_quote": len(reached),
             "share_reached": (round(len(reached) / len(diag), 4)
                               if diag else None),
-            "median_obs_until_marketable": (sorted(waits)[len(waits) // 2]
-                                            if waits else None),
-            "labels": ("DIAGNOSTIC ONLY. `book_later_reached_the_quote` means "
-                       "the touch subsequently moved to or through our price "
-                       "-- evidence the quote was near real flow. It is NOT a "
-                       "fill: we would have queued behind makers this tape "
-                       "does not name, and no count here is ever converted "
-                       "into one."),
+            "trade_flow_through_quote": len(traded_d),
+            "share_with_trade_flow": (round(len(traded_d) / len(diag), 4)
+                                      if diag else None),
+            # time the quote stayed NONMARKETABLE, which is the window in
+            # which it was a legal resting order at all
+            "obs_nonmarketable_median": (sorted(waits)[len(waits) // 2]
+                                         if waits else None),
+            "obs_nonmarketable_p25": (sorted(waits)[len(waits) // 4]
+                                      if len(waits) > 3 else None),
+            "obs_nonmarketable_p75": (sorted(waits)[3 * len(waits) // 4]
+                                      if len(waits) > 3 else None),
+            "never_became_marketable": never,
+            "labels": ("DIAGNOSTIC ONLY, and TWO DIFFERENT CLAIMS kept apart. "
+                       "book_later_reached_the_quote: the touch moved to or "
+                       "through our price -- executability and staleness, and "
+                       "from that instant the same quote would be REJECTED if "
+                       "submitted afresh. trade_flow_through_quote: shares "
+                       "traded actually rose with a print at or through our "
+                       "price -- real opposing flow, strictly stronger. "
+                       "NEITHER IS A FILL: we would have queued behind makers "
+                       "this tape does not name. The GAP between the two is "
+                       "the finding -- a book that drifts through a price "
+                       "without trading is not flow."),
         },
         "pair_completions": len(pair_costs),
         "pair_cost_mean": (str(sum(pair_costs, ZERO) / len(pair_costs))[:6]
