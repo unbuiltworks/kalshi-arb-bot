@@ -773,6 +773,27 @@ class Supervisor:
         print("L5_GEMINI_SURFACE " + json.dumps(rep, default=str), flush=True)
         return rep
 
+    def report_gemini_queue(self) -> Optional[dict]:
+        """WHY a quote that is traded through still does not fill.
+
+        The side-split established QUEUE_BOUND: the sell side is placed, rests,
+        reaches the book and sees flow, and records no fills. This diagnoses
+        which of persistence, placement, refresh or the queue MODEL the
+        evidence supports. A REPORT over a tape already written; it places
+        nothing and changes no parameter.
+        """
+        d = os.path.join(self.root, "gemini-surface")
+        try:
+            from analysis.l5.gemini_surface import queue_diagnosis as QD
+            rep = QD.report(d)
+        except Exception as exc:                              # noqa: BLE001
+            print("L5_GEMINI_QUEUE " + json.dumps(
+                {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:300]}),
+                flush=True)
+            return None
+        print("L5_GEMINI_QUEUE " + json.dumps(rep, default=str), flush=True)
+        return rep
+
     def run(self) -> int:
         self.boot()
         # once, with the per-parent detail: the tapes cannot be read from
@@ -806,6 +827,7 @@ class Supervisor:
                 self.report_window_surface()
                 self.report_surface_shadow()
                 self.report_gemini_surface()
+                self.report_gemini_queue()
             time.sleep(2.0)
         self.stop()
         return 0

@@ -108,6 +108,7 @@ COPY artifacts/l5_surface/ artifacts/l5_surface/
 COPY analysis/l5/window_forensics/spec.py analysis/l5/window_forensics/spec.py
 COPY analysis/l5/surface_shadow/report.py analysis/l5/surface_shadow/report.py
 COPY analysis/l5/gemini_surface/report.py analysis/l5/gemini_surface/report.py
+COPY analysis/l5/gemini_surface/queue_diagnosis.py analysis/l5/gemini_surface/queue_diagnosis.py
 COPY deploy/l5_exec_shadow/RELEASE RELEASE
 
 CMD ["python", "-m", "src.l5_research_supervisor", \
