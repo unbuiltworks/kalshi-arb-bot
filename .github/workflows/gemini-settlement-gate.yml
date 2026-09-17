@@ -126,7 +126,22 @@ jobs:
           if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/(settlement_gate|canary_preflight)_[0-9TZ]+\.json$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
-            git push origin HEAD:claude/l5-execution-instrumentation-io6nzi
+            # An evidence job must not lose its evidence to a race. Any other
+            # push to this branch while the job runs makes the push a
+            # non-fast-forward; rebase onto the remote and retry rather than
+            # discard a reading that cannot be reproduced (the venue has
+            # moved on by the next run).
+            for attempt in 1 2 3; do
+              if git push origin HEAD:claude/l5-execution-instrumentation-io6nzi; then
+                exit 0
+              fi
+              echo "push rejected (attempt $attempt); rebasing onto remote"
+              git fetch origin claude/l5-execution-instrumentation-io6nzi
+              git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
+              sleep $((attempt * 3))
+            done
+            echo "::error::could not push evidence after 3 attempts"
+            exit 1
           else
             echo "::error::refusing to commit files outside analysis/gemini/"
             git diff --cached --name-only; exit 1

@@ -118,3 +118,27 @@ def test_it_submits_no_order_and_says_so():
     wf = WF.read_text()
     assert "NO ORDER IS SUBMITTED" in wf
     assert "no order transport" in wf
+
+
+def test_the_evidence_push_survives_a_concurrent_push():
+    """Run 3 built both artifacts and lost them: another push landed while it
+    ran and the non-fast-forward killed the job. A reading cannot be
+    reproduced -- the venue has moved on by the next run -- so the push
+    rebases and retries rather than discarding it."""
+    wf = WF.read_text()
+    assert "rebasing onto remote" in wf
+    assert "git rebase FETCH_HEAD" in wf
+    assert "git rebase --abort" in wf
+
+
+def test_the_preflight_step_cannot_fail_the_job_for_having_no_window():
+    """A BTC5m window is only eligible for part of each cycle."""
+    wf = WF.read_text()
+    i = wf.index("Canary preflight")
+    assert "|| true" in wf[i:i + 900]
+
+
+def test_the_preflight_artifact_is_committable():
+    wf = WF.read_text()
+    assert "canary_preflight_" in wf
+    assert "(settlement_gate|canary_preflight)" in wf
