@@ -82,7 +82,33 @@ LABEL = "R1_SOURCE_LINEAGE"
 #:
 #: This is a REVIEW gate, not a boot gate. Advancing it grants nothing: HALT
 #: still halts and the mandate is still the only authorization to spend.
-REVIEWED = "33589cd2"
+#: ADVANCED 2026-09-17 for OWNER AUTHORIZATION "authenticated-book freshness
+#: submission gate". The changed file is src/pmus_spring_l5_session.py, and its
+#: honest class is EXECUTION -- the most forbidden class in the table below.
+#: This gate decides whether a live order is sent at all. There is no way to
+#: describe it as anything milder and stay truthful.
+#:
+#: WHAT CHANGED: a submission is now refused when the authenticated executable
+#: book that validates post-only placement is stale, missing or unreadable.
+#: The PRICING half is untouched -- _authenticated_trim still fails open and
+#: still cannot raise a price. The forensics showed failing open was right for
+#: pricing and wrong for submitting: a book discarded for being 11.2s stale was
+#: replaced by a fresher, wrong gateway book and five post-only orders crossed
+#: the real ask and were refused at insertion.
+#:
+#: WHY THE BASELINE MOVED RATHER THAN THE ALLOW-LIST GROWING: allow-listing
+#: this file would mean either calling an execution change something it is not,
+#: or dropping EXECUTION from FORBIDDEN_CLASSES and weakening the gate
+#: permanently for every future change to the session. The owner reviewed and
+#: authorized this change specifically, with seven named adversarial test
+#: categories and a required counterfactual. Advancing the baseline keeps the
+#: gate's strength intact. FORBIDDEN_CLASSES is UNCHANGED and still contains
+#: all four classes; the next change to this file fails this gate exactly as
+#: this one did.
+#:
+#: Still a REVIEW gate, not a boot gate. Advancing it grants nothing: HALT
+#: still halts, and there is no live mandate.
+REVIEWED = "1a30eb41"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
