@@ -1,5 +1,17 @@
 # EXPLORATORY_V2 — how much of L5's oscillation do we actually need?
 
+> **FROZEN 2026-09-17 by owner direction — "Freeze EXPLORATORY_V2. Do not tune
+> it further."** Hashes in `FROZEN.json`. These files are evidence; changing one
+> after the freeze invalidates it and must be recorded as a NEW study, never as
+> an edit to this one.
+>
+> **Disposition.** `V2E` matched-preservation is the **leading ADAPTED
+> hypothesis for prospective testing — NOT promoted to live.** `V2A` and `V2F`
+> are preserved as **secondary challengers**. `V2C` run-cutoff is **REJECTED as
+> a control rule** despite the best OOS result, because its cutoff is
+> temporally unstable (~9 TRAIN vs ~4 OOS) and every member fails TRAIN. It is
+> retained as evidence, never as a gate.
+
 `analysis/l5/exploratory_v2/` · BTC15m · 5,546 windows, 693,731 attributed
 fills · chronological TRAIN (3,882 windows) / OOS (1,664 windows) ·
 `btc15m_v2_sweep.json`, `btc15m_v2_studies.json`

@@ -124,6 +124,53 @@ position; L5's unfilled, resting or cancelled orders — so *"L5 waited"* and
 *"L5 quoted and was not hit"* are the same observation in this data; maker vs
 taker per fill; per-market incentive credits.
 
+## 2b. ADAPTED conclusions — EXPLORATORY_V2, FROZEN 2026-09-17
+
+**SCOPE: BTC15m ONLY.** Source: `analysis/l5/exploratory_v2/EXPLORATORY_V2.md`,
+hashes in `analysis/l5/exploratory_v2/FROZEN.json`. Frozen by owner direction;
+no further historical tuning. These are behavioral conclusions, not a policy.
+
+1. **BTC15m FIDELITY is inventory oscillation, not flat completion.** 84.3% of
+   imbalance episodes end by overshooting through zero; 1.2% land on it; one of
+   5,546 windows ended flat.
+2. **Same-side run length predicts L5's behaviour but is NOT a stable control
+   variable.** It is the strongest replicating predictor of `EXTEND`
+   (Spearman 1.00 OOS), yet the profitable cutoff MOVED — total per share
+   crosses zero at run position ≈9 in training and ≈4 out of sample — and every
+   run-cutoff gate is net-negative in training. **Predictor ≠ control.**
+3. **|Δp| predicts more subsequent opposite-side opportunity, and also worse
+   residual economics.** P(opposite fill within 60 s) rises monotonically in
+   both periods, but the attainable pair with that fill is 0.9900 in EVERY bin —
+   more opportunity at an unchanged price — while residual P&L per share
+   deteriorates monotonically. Net value-destroying past |Δp| ≈ 0.02 OOS.
+4. **Favored-side momentum is NOT supported.** P(next fill on the favored side)
+   is 0.4919 TRAIN / 0.4847 OOS and FALLS when pair cost exceeds 1.02;
+   conditioning on where the residual already sat collapses the effect to run
+   persistence. `sign(Δp)` is not a signal and is used nowhere.
+5. **Instantaneous pair cost is NOT equivalent to eventual effective pair
+   economics.** Scored by what the shares actually earned, the 1.00–1.02
+   instantaneous band is the BEST in both periods (+98 / +61 bp) and ≤0.96 is
+   NEGATIVE in both (−28 / −119 bp); median window pair cost is near-identical
+   across every band. This does not disturb the window-level `effective pair
+   ≤0.96 → +600 matched bp/$` finding — different object, different measurement.
+6. **August BTC15m trading economics were extremely thin and cannot be rescued
+   with unattributed incentives in our clone.** August carried 59% of all
+   BTC15m spend and returned 3.7 bp, matched (+$104,065) and residual
+   (−$102,687) almost exactly cancelling, while ACCOUNT-LEVEL incentives that
+   month were $61,022 — 44× the month's BTC15m trading P&L and 4.0× it across
+   the sample. Those credits are account-wide and are never attributed to a
+   market, an episode or our clone.
+
+**Standing disposition for prospective work.**
+
+* `ADAPTED_V2E` (matched-inventory preservation) — **leading hypothesis for
+  prospective testing. NOT promoted to live.**
+* `ADAPTED_V2A` (proposed-residual cap) and `V2F` (hybrid) — secondary
+  challengers, preserved.
+* `V2C` (same-side run cutoff) — **rejected as a control rule.** Retained as
+  evidence, never as a gate. This supersedes any earlier treatment of a
+  run cap as the ADAPTED control.
+
 ## 3. Measured historical evolution
 
 Artifact: `analysis/l5/l5_ramp_analysis.json`  
