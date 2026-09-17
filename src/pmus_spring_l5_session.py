@@ -2641,6 +2641,81 @@ def _run_session_body(t: Optional[Transport] = None,
                                   "side": "YES" if side_up_ else "NO",
                                   "price": str(px_), "qty": str(got_),
                                   "order_id": oid})
+            # OWNER 2026-09-17 P0: FULL ORDER<->DECISION PROVENANCE, written
+            # durably at the one point where the venue's order id first exists
+            # alongside the decision that produced it.
+            #
+            # WHY THIS ROW EXISTS. The 2026-09-17 rejection forensics could not
+            # answer "what was the book when we sent this order?" for a single
+            # one of 47 submissions. `id=` appears in ZERO of the preview log
+            # lines (they truncate before it), only 23 of 63 decision rows
+            # carried a BBO, and positional alignment of decisions to orders
+            # was wrong in 5 of 9 sessions. Three different joins were tried
+            # and two were plainly wrong. A question that basic must never
+            # again depend on reconstructing truncated log text.
+            #
+            # The decision is bound HERE, not inferred later: report
+            # ["decisions"][-1] is the decision current at submission, the same
+            # convention every refusal gate in this loop already uses.
+            try:
+                _dec = (report.get("decisions") or [{}])[-1]
+                _os = _dec.get("open_side") or {}
+                _at = _dec.get("authenticated_trim") or {}
+                _prov = _at.get("provenance") or {}
+                _inv_b = _dec.get("inventory_before") or {}
+                _wire = px_ if side_up_ else (D("1") - px_)
+
+                def _q(v):
+                    try:
+                        return D(str(v))
+                    except Exception:               # noqa: BLE001
+                        return D("0")
+                _after_up = _q(_inv_b.get("up")) + (qty_ if side_up_ else D("0"))
+                _after_dn = _q(_inv_b.get("dn")) + (D("0") if side_up_ else qty_)
+                q1.ledger_append({
+                    "kind": "order_provenance", "spring": True, "slug": slug,
+                    "order_id": oid, "stage": stage,
+                    "session_id": _dec.get("session_id"),
+                    "decision_id": _dec.get("decision_id"),
+                    "decision_idx": _dec.get("decision_idx"),
+                    "sampled_relation": ((_dec.get("shadow") or {})
+                                         .get("stochastic") or {}).get("sampled"),
+                    "acted_relation": _dec.get("acted"),
+                    "order_relation": relation_,
+                    "side": "YES" if side_up_ else "NO",
+                    "desired_px": str(px_), "wire_px": str(_wire),
+                    "qty": str(qty_),
+                    "inventory_before": _inv_b,
+                    "proposed_inventory_after_if_filled": {
+                        "up": str(_after_up), "dn": str(_after_dn),
+                        "residual": str(_after_up - _after_dn),
+                        "labels": "PROPOSED, not achieved: what a full fill "
+                                  "would leave. Never read as a position."},
+                    "authenticated_bbo": {
+                        "yes_bid": _os.get("yes_bid"), "yes_ask": _os.get("yes_ask"),
+                        "source": _prov.get("source"),
+                        "status_utc": _prov.get("status_utc"),
+                        "authenticated_age_s": _prov.get("authenticated_age_s"),
+                        "both_sides_served": _prov.get("both_sides_served"),
+                        "elapsed_ms": _at.get("elapsed_ms")},
+                    "pair_economics": _dec.get("complement_preflight"),
+                    "cap_check": _dec.get("cap_check"),
+                    "submission_result": {"order_id_returned": bool(oid)},
+                    "terminal_result": {"end_reason": end_reason,
+                                        "filled_qty": str(got_),
+                                        "rest_s": rest_s},
+                    "labels": ("the complete chain for ONE order: decision -> "
+                               "book -> inventory -> price -> venue outcome. "
+                               "No field here is reconstructed from a log."),
+                })
+            except Exception as _pexc:                  # noqa: BLE001
+                # provenance must never break the money path, and a missing
+                # row is visible as a gap rather than as a wrong answer
+                print("PMUS_SPRING_ALARM " + json.dumps(
+                    {"alarm": "order_provenance_write_failed",
+                     "order_id": oid, "slug": slug,
+                     "error": "%s:%s" % (type(_pexc).__name__, str(_pexc)[:120])}),
+                    flush=True)
             report.setdefault("orders", []).append(
                 {"stage": stage, "order_id": oid,
                  "side": "YES" if side_up_ else "NO",
