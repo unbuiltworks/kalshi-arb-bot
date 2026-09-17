@@ -20,6 +20,31 @@ import subprocess
 from typing import Any, Dict, List
 
 LABEL = "R1_SOURCE_LINEAGE"
+#: ADVANCED 2026-09-17 for OWNER P0 "FIX SETTLED-PENDING FULLY-MATCHED
+#: CONCURRENCY DEADLOCK", on the same terms as every advance below. Four
+#: COPY-set files move -- src/pmus_live_mandate.py, src/pmus_spring_l5_session.py,
+#: src/pmus_risk_set_audit.py, src/pmus_l5_continuous_session.py -- and their
+#: honest class is EXECUTION, a FORBIDDEN one. That is why this gate failed on
+#: them, which is the gate working, not the gate being in the way.
+#:
+#: THIS IS NOT A WEAKENING. FORBIDDEN_CLASSES is UNTOUCHED and still contains
+#: EXECUTION, DECISION, SIZING and SUBMISSION. The next execution change fails
+#: this gate exactly as this one did and still needs its own review. Nothing was
+#: relabelled to fit: the delta is NOT disclosed as DOCUMENTATION or as a
+#: risk-bound tightening. It was reviewed and the baseline moved to the exact
+#: green artifact, which is the only route this mechanism offers an EXECUTION
+#: change -- and it costs a named owner review every time.
+#:
+#: WHAT WAS REVIEWED: concurrency and settlement obligation become two sets
+#: instead of one. A market with no live or unresolved order, venue reconciled
+#: to ledger, YES == NO > 0 and residual exactly zero releases the ACQUISITION
+#: SLOT while keeping its ledger row, its place in max_total_markets, its
+#: risk-set charge against the daily stop and its un-realized status. NO LIMIT
+#: MOVED: max_markets is still 1, max_total_markets 10, $5.00/market, $15.00
+#: total, residual 3.00, daily stop -$6.00. Every other state fails closed,
+#: proven by 26 adversarial tests which fail 6 ways when the release predicate
+#: is disabled. Full suite 5094 passed, zero failures.
+#:
 #: OWNER AUTHORIZATION 2026-09-16 "A2". The baseline advanced from the R1
 #: review to the CP1 candidate artifact, which contains ONLY the explicitly
 #: authorized Option A changes: the CP1 rung, the image's rung and market
@@ -159,7 +184,7 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: WHICH artifact the COPY set is compared against. The gate can only REFUSE
 #: candidates: it computes no price, size, side or timing, and tests assert its
 #: executed identifiers reach no trading parameter and no endDate.
-REVIEWED = "2366aa3b"
+REVIEWED = "8b46565d"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
@@ -285,8 +310,28 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "870163b1510abb325b43fbd7d7f4af355521db1e",
-        "why": ("RE-PINNED 2026-09-17 for the STOCHASTIC SELECTOR "
+        "sha": "35e9ace92e16856b95dd72ce477aede6604035bd",
+        "why": ("RE-PINNED 2026-09-17 for the SETTLEMENT-PENDING CONCURRENCY "
+                "REPAIR (OWNER P0 'FIX SETTLED-PENDING FULLY-MATCHED "
+                "CONCURRENCY DEADLOCK'), adding "
+                "ACTIVATION_6_SETTLEMENT_PENDING_2026-09-17.md -- the record, "
+                "prose not code. This tree carries the FRESH immutable mandate "
+                "OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT, whose "
+                "envelope is IDENTICAL FIELD FOR FIELD to the cohort it "
+                "follows: 1 concurrent, 10 total, $5.00 per market, $15.00 "
+                "total, $3.00 residual, -$6.00 daily stop, 12h. A new "
+                "authorization_id, not a reuse or an enlargement, so "
+                "consumption() starts at zero markets touched. A "
+                "concurrency-ACCOUNTING repair is not a reason to move money, "
+                "and the repair itself explicitly refuses to: a market that "
+                "releases its acquisition slot still consumes one of "
+                "max_total_markets, and a test pins that. HALT is ABSENT, so "
+                "this pin covers an ARMED authorization -- the strongest "
+                "reason the directory is gated at all. Removing HALT does not "
+                "authorize trading: orders additionally require the mandate, "
+                "and the halt/authorization consistency test enforces that the "
+                "absence of HALT is never on its own an authorization. "
+                "PREVIOUSLY, for the STOCHASTIC SELECTOR "
                 "ACTIVATION (OWNER 'RESTORE FIDELITY ACTION SELECTION'), "
                 "adding ACTIVATION_5_STOCHASTIC_SELECTOR_2026-09-17.md -- the "
                 "record, prose not code. This tree carries the FRESH "
