@@ -1,6 +1,6 @@
 {
   "service": "l5-exec-shadow",
-  "code_sha": "e1f8b7474606e808b413eb040faf4c3d00d33517",
+  "code_sha": "e7a4a41bbaf27516617cd545a6343ad28fac6d2a",
   "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one.",
   "window_forensics_migration": {
     "module": "src/l5_window_forensics.py",
@@ -57,5 +57,12 @@
       }
     ],
     "labels": "recorded BEFORE the reporting promotion so the sample's provenance cannot be attributed to the deployment that scores it"
+  },
+  "frozen_specs_20260917": {
+    "FIDELITY_OBSERVABLE_V1": "d583fa4005d1b815223f40235d368a347208b942633603aa31d90f6dde58cb95",
+    "L5_ADAPTED_V1": "fe9d6557af80df02f40ac3a691650aa77da65f3b6505d818803ab54b8764d777",
+    "mechanism_verdict": "UNRESOLVED",
+    "chain_proven_parents": 208,
+    "units_scored": 238
   }
 }
