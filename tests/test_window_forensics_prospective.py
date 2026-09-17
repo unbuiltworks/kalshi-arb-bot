@@ -365,7 +365,7 @@ def test_an_ineligible_window_is_never_scored(tmp_path):
     rep = P.report(d)
     assert rep["eligible_windows"] == []
     assert rep["windows"] == []
-    assert rep["mechanism"]["verdict"] == P.UNRESOLVED
+    assert rep["mechanism"]["verdict"] == P.INTEGRITY_FAILURE
 
 
 def test_a_hand_run_tape_is_never_scored_however_complete(tmp_path):
@@ -440,3 +440,121 @@ def test_pair_economics_never_claims_realization(tmp_path):
     assert e["matched_qty"] == 100.0
     joined = " ".join(e["labels"]).lower()
     assert "not realized" in joined and "accounting-method dependent" in joined
+
+
+# ------------------------------------------- the integrity gate and artifact
+
+def test_an_incomplete_sample_yields_no_verdict_at_all(tmp_path):
+    """Not UNRESOLVED, which is a finding. NO verdict: a preregistered test run
+    on a short sample is not that test."""
+    for i in (0, 1):                       # two complete windows, not three
+        st = START + i * 1800
+        t = st + 200
+        d = tmp_path / "seg_20260917T184300Z_001"
+        d.mkdir(exist_ok=True)
+        rows = [{"kind": "preregistration", "window_start": st,
+                 "window_end": st + 900, "slug": "s",
+                 "procedure": {"lead_s": 120, "follow_s": 300},
+                 "L5_OBSERVATION_CLOCK": st - 120},
+                _book(t - 2, up_bids=[(0.55, 400.0)]),
+                _parent(t, "Up", 0.55, 100.0),
+                {"kind": "window_end", "window_start": st,
+                 "L5_OBSERVATION_CLOCK": st + 1200}]
+        io.open(d / ("window_%d.jsonl" % st), "w").write(
+            "".join(json.dumps(r) + "\n" for r in rows))
+    rep = P.report(str(tmp_path / "seg_20260917T184300Z_001"))
+    assert rep["integrity"]["eligible_n"] == 2
+    assert rep["integrity"]["sample_complete"] is False
+    assert rep["mechanism"]["verdict"] == P.INTEGRITY_FAILURE
+    assert "incomplete preregistered sample" in rep["mechanism"]["why"]
+    assert "without retuning" in rep["mechanism"]["next"]
+
+
+def test_integrity_names_the_gates_and_the_frozen_module(tmp_path):
+    t = START + 200
+    rows = [_book(t - 2, up_bids=[(0.55, 400.0)]), _parent(t, "Up", 0.55, 1.0)]
+    d, _ = _tape(tmp_path, rows)
+    integ = P.report(d)["integrity"]
+    assert integ["n_required"] == 3
+    assert len(integ["frozen_module_sha256"]) == 64
+    assert integ["gates_per_capture"][0]["durable"] is True
+    assert "four frozen gates" in " ".join(integ["labels"])
+
+
+def test_coverage_reports_the_gaps_rather_than_smoothing_them(tmp_path):
+    t = START + 200
+    rows = [_book(t - 400, up_bids=[(0.55, 1.0)]),
+            _book(t - 2, up_bids=[(0.55, 400.0)]),
+            _parent(t, "Up", 0.55, 100.0)]
+    d, _ = _tape(tmp_path, rows)
+    w = P.analyse_window(P.EL.tapes(d)[0])
+    c = w["coverage"]
+    assert c["book_snapshots"] == 2
+    assert c["book_gaps_over_stale_threshold"] == 1
+    assert c["book_largest_gap_s"] == 398.0
+    assert c["chain_receipt_share"] == 1.0
+
+
+def test_the_complete_artifact_is_persisted_whole_and_atomically(tmp_path):
+    t = START + 200
+    rows = [_book(t - 2, up_bids=[(0.55, 400.0)]),
+            _parent(t, "Up", 0.55, 100.0),
+            _parent(t + 60, "Down", 0.49, 100.0)]
+    d, _ = _tape(tmp_path, rows)
+    rep = P.report(d)
+    out = P.persist(rep, d)
+    assert out and out.endswith(P.LABEL + ".json")
+    assert not os.path.exists(out + ".tmp")
+    back = json.load(io.open(out))
+    # the rows behind the label must survive: a verdict without them cannot
+    # be re-checked
+    assert back["windows"][0]["scored_parents"]
+    assert "reversal_rows" in back["windows"][0]
+    assert back["integrity"]["eligible_n"] == 1
+
+
+def test_quantity_compatibility_is_scored_apart_from_price(tmp_path):
+    t = START + 200
+    rows = [_book(t - 2, up_bids=[(0.55, 400.0)]),
+            _pred(t - 5, [("Up", 0.55, 1)]),          # base lot 100
+            _parent(t, "Up", 0.55, 37.0)]            # right level, wrong lot
+    d, _ = _tape(tmp_path, rows)
+    w = P.analyse_window(P.EL.tapes(d)[0])
+    (r,) = w["scored_parents"]
+    assert r["predicted_exact"] is not None
+    assert r["predicted_qty_base_lot"] == 100.0
+    assert r["qty_compatible_with_prediction"] is False
+    assert r["qty_within_prediction_lot"] is True
+    assert w["prediction_hits"]["exact"] == 1
+    assert w["prediction_hits"]["qty_exactly_compatible"] == 0
+    assert w["prediction_hits"]["qty_within_lot"] == 1
+
+
+def test_the_frozen_safeguards_are_unchanged_since_d01094c4():
+    """The additions are reporting completeness. Every safeguard the owner
+    enumerated must be byte-identical to the reviewed commit."""
+    import subprocess, sys as _s
+    old = subprocess.run(
+        ["git", "show", "d01094c4:analysis/l5/window_forensics/prospective.py"],
+        capture_output=True, text=True, timeout=120)
+    assert old.returncode == 0, old.stderr[-300:]
+    now = io.open("analysis/l5/window_forensics/prospective.py").read()
+
+    def block(src, start, end=None):
+        i = src.index(start)
+        j = src.index(end, i) if end else len(src)
+        return src[i:j]
+
+    for start, end in (
+            ("MECHANISM_RULE: Dict[str, Any] = {", "\n# ---"),
+            ("def classify(", "\nUNRESOLVED_VARIABLES"),
+            ("def parents_in_event_order(", "\ndef _lot_class"),
+            ("def reversals(", "\n# ------"),
+            ("    def size_at(", "\n    def ticks_from_touch"),
+            ("def _at(", "\n# ---")):
+        assert block(old.stdout, start, end) == block(now, start, end), start
+    for const in ("MARKS_S: Tuple[int, ...] = (-120, -60, -30, -15, -5, -1)",
+                  "BOOK_STALE_S = 5.0",
+                  '"min_resolved_reversals": 8',
+                  '"min_parents": 20'):
+        assert const in now, const

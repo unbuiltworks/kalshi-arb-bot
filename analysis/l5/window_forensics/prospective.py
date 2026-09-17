@@ -360,6 +360,15 @@ def score_parent(p: dict, books: Sequence[Book], preds: Sequence[dict],
                             "delta_ticks": round(d / tick, 2)}
     row["predicted_exact"] = hit_exact
     row["predicted_within_1_tick"] = hit_near or hit_exact
+    # QUANTITY compatibility is a separate question from price. A surface that
+    # names the right level with the wrong lot has predicted the geometry and
+    # not the sizing, and collapsing the two would hide that.
+    base = (hit_exact or hit_near or {}).get("qty_base_lot")
+    row["predicted_qty_base_lot"] = base
+    row["qty_compatible_with_prediction"] = (
+        None if base is None else bool(abs(float(base) - p["qty"]) <= EXACT_TOL))
+    row["qty_within_prediction_lot"] = (
+        None if base is None else bool(p["qty"] <= float(base) + EXACT_TOL))
     row["prediction_attribution"] = "INFERRED_SURFACE"
 
     for m in REPLENISH_S:
@@ -598,6 +607,57 @@ def qty_vs_inventory(parents: Sequence[dict]) -> Dict[str, Any]:
                       "size-scaled surface would not")}
 
 
+def qty_vs_tte(scored: Sequence[dict]) -> Dict[str, Any]:
+    """Does the lot shrink as expiry approaches, or is it flat?"""
+    pairs = [(r["tte_s"], r["qty"]) for r in scored
+             if isinstance(r.get("tte_s"), (int, float))]
+    buckets: Dict[str, List[float]] = {}
+    for tte, q in pairs:
+        k = ("tte>600" if tte > 600 else "tte300-600" if tte > 300
+             else "tte120-300" if tte > 120 else "tte<=120")
+        buckets.setdefault(k, []).append(q)
+    return {"n": len(pairs),
+            "corr_tte_vs_qty": _corr([t for t, _ in pairs],
+                                     [q for _, q in pairs]),
+            "by_bucket": {k: {"n": len(v),
+                              "mean_qty": round(sum(v) / len(v), 4),
+                              "exact_100": sum(1 for x in v
+                                               if abs(x - 100.0) <= EXACT_TOL)}
+                          for k, v in sorted(buckets.items())}}
+
+
+def coverage(books: Sequence["Book"], parents: Sequence[dict],
+             window_start: float, window_end: float) -> Dict[str, Any]:
+    """Was anyone LOOKING, and for how much of the window?
+
+    A finding of "no compatible liquidity" is only a finding over intervals we
+    actually observed, so the gaps are reported rather than smoothed over."""
+    ts = sorted(b.t for b in books)
+    gaps = [round(b - a, 2) for a, b in zip(ts, ts[1:])]
+    big = [g for g in gaps if g > BOOK_STALE_S]
+    with_receipt = sum(1 for p in parents if p["n_legs"] > 0)
+    return {
+        "book_snapshots": len(books),
+        "book_first_venue_clock": (ts[0] if ts else None),
+        "book_last_venue_clock": (ts[-1] if ts else None),
+        "book_median_interval_s": (
+            round(sorted(gaps)[len(gaps) // 2], 2) if gaps else None),
+        "book_gaps_over_stale_threshold": len(big),
+        "book_largest_gap_s": (max(gaps) if gaps else None),
+        "book_seconds_covered": (round(ts[-1] - ts[0], 1) if len(ts) > 1
+                                 else 0.0),
+        "capture_span_required_s": round((window_end + 300)
+                                         - (window_start - 120), 1),
+        "chain_parents": len(parents),
+        "chain_parents_with_receipt": with_receipt,
+        "chain_receipt_share": _share(with_receipt, len(parents)),
+        "parents_missing_price": sum(1 for p in parents
+                                     if p["price"] is None),
+        "labels": ("an absence of compatible liquidity is a claim only over "
+                   "intervals a snapshot actually covered"),
+    }
+
+
 def opposite_recycling(parents: Sequence[dict]) -> Dict[str, Any]:
     out: Dict[str, Any] = {"n": len(parents)}
     for m in RECYCLE_S:
@@ -825,9 +885,19 @@ def analyse_window(path: str) -> Dict[str, Any]:
             "max": (firsts_sorted[-1] if firsts_sorted else None)},
         "prediction_hits": {
             "n_parents": len(scored),
+            "outcome_predicted": sum(
+                1 for r in scored if r.get("predicted_within_1_tick")),
             "exact": len(ex), "exact_share": _share(len(ex), len(scored)),
             "within_1_tick": len(nr),
             "within_1_tick_share": _share(len(nr), len(scored)),
+            "qty_exactly_compatible": sum(
+                1 for r in scored
+                if r.get("qty_compatible_with_prediction")),
+            "qty_within_lot": sum(1 for r in scored
+                                  if r.get("qty_within_prediction_lot")),
+            "qty_judgeable": sum(1 for r in scored
+                                 if r.get("predicted_qty_base_lot")
+                                 is not None),
             "attribution": "INFERRED_SURFACE vs OBSERVED_L5_PARENT"},
         "reversals": counts,
         "reversal_rows": revs,
@@ -835,6 +905,9 @@ def analyse_window(path: str) -> Dict[str, Any]:
         "geometry": adjacent_tick_geometry(parents, tick),
         "qty": qty_distribution(parents),
         "qty_vs_inventory": qty_vs_inventory(parents),
+        "qty_vs_tte": qty_vs_tte(scored),
+        "coverage": coverage(books, parents, float((pre or {}).get(
+            "window_start") or 0.0), w_end),
         "recycling": opposite_recycling(parents),
         "replenishment": replenishment_summary(scored),
         "pair_economics": pair_economics(parents),
@@ -842,7 +915,66 @@ def analyse_window(path: str) -> Dict[str, Any]:
     }
 
 
-def report(*dirs: str) -> Dict[str, Any]:
+N_REQUIRED = EL.N_REQUIRED
+INTEGRITY_FAILURE = "INTEGRITY_FAILURE_NO_VERDICT"
+
+
+def integrity(el: Dict[str, Any], windows: Sequence[Dict[str, Any]],
+              state_root: Optional[str]) -> Dict[str, Any]:
+    """What the sample IS, before anything is said about what it shows.
+
+    The preregistered sample is three COMPLETE windows. Below that there is no
+    mechanism verdict to give -- not UNRESOLVED, which is a finding, but no
+    verdict at all, because a preregistered test run on a short sample is not
+    that test."""
+    import hashlib
+    mod = "src/l5_window_forensics.py"
+    sha = None
+    if os.path.exists(mod):
+        sha = hashlib.sha256(open(mod, "rb").read()).hexdigest()
+    gates: List[Dict[str, Any]] = []
+    for c in el["captures"]:
+        gates.append({"window_start": c.get("window_start"),
+                      "verdict": c["verdict"], "durable": c.get("durable"),
+                      "declared_ineligible": c.get("declared_ineligible"),
+                      "failed": c.get("failed"), "path": c.get("path")})
+    cov = None
+    if state_root:
+        try:
+            from analysis.l5 import coverage as CV
+            rep = CV.report(state_root)
+            cov = {k: rep.get(k) for k in
+                   ("markers", "boots", "heartbeats", "restarts", "exits",
+                    "span_s")}
+            cov["window_forensics"] = (rep.get("per_stream")
+                                       or {}).get("window_forensics")
+        except Exception as exc:                              # noqa: BLE001
+            cov = {"available": False,
+                   "err": f"{type(exc).__name__}: {exc}"[:200]}
+    return {
+        "eligible_n": el["n_complete"],
+        "n_required": N_REQUIRED,
+        "sample_complete": el["n_complete"] >= N_REQUIRED,
+        "eligible_window_ids": el["complete_windows"],
+        "diagnostic_captures": el.get("diagnostic_captures"),
+        "frozen_module": mod,
+        "frozen_module_sha256": sha,
+        "gates_per_capture": gates,
+        "supervisor_coverage": cov,
+        "per_window_coverage": [
+            {"window_start": w["window_start"], **w["coverage"]}
+            for w in windows],
+        "labels": [
+            "lead / close / follow / origin are the four frozen gates; a "
+            "capture failing any one is not a window of this sample.",
+            "Below %d eligible windows there is NO mechanism verdict. That is "
+            "an integrity failure to report, not a result to interpret."
+            % N_REQUIRED,
+        ],
+    }
+
+
+def report(*dirs: str, state_root: Optional[str] = None) -> Dict[str, Any]:
     """Eligibility FIRST, then the strategy result -- never the other way."""
     el = EL.report(*dirs)
     eligible = [c["path"] for c in el["captures"]
@@ -875,14 +1007,28 @@ def report(*dirs: str) -> Dict[str, Any]:
         "both_sides": {"readable_snapshots": bs_read, "both_outcomes": bs_both,
                        "both_outcomes_share": _share(bs_both, bs_read)},
     }
+    integ = integrity(el, windows, state_root)
+    # THE GATE. A preregistered test run on a short sample is not that test,
+    # so an incomplete sample yields no verdict at all rather than a weak one.
+    mech = (classify(agg) if integ["sample_complete"] else {
+        "verdict": INTEGRITY_FAILURE,
+        "why": ("the preregistered sample is %d complete windows and only %d "
+                "are eligible. No mechanism verdict is produced from an "
+                "incomplete preregistered sample."
+                % (N_REQUIRED, integ["eligible_n"])),
+        "next": ("continue the identical frozen capture procedure, without "
+                 "retuning, until %d eligible durable windows exist"
+                 % N_REQUIRED),
+        "evidence": {"eligible_n": integ["eligible_n"]}})
     return {
         "label": LABEL,
+        "integrity": integ,
         "eligibility": {k: v for k, v in el.items() if k != "captures"},
         "eligible_windows": [w["window_start"] for w in windows],
         "eligibility_captures": el["captures"],
         "mechanism_rule": MECHANISM_RULE,
         "pooled": agg,
-        "mechanism": classify(agg),
+        "mechanism": mech,
         "unresolved_variables": UNRESOLVED_VARIABLES,
         "windows": windows,
         "labels": [
@@ -897,16 +1043,38 @@ def report(*dirs: str) -> Dict[str, Any]:
     }
 
 
+def persist(rep: Dict[str, Any], out_dir: str) -> Optional[str]:
+    """Write the COMPLETE artifact next to the tapes.
+
+    The log carries a summary and the log rotates; the artifact is the record.
+    Written whole -- every scored parent and every reversal row -- because a
+    mechanism label without the rows behind it cannot be re-checked."""
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        path = os.path.join(out_dir, LABEL + ".json")
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(rep, fh, default=str, indent=1)
+        os.replace(tmp, path)          # atomic: never a half-written artifact
+        return path
+    except OSError:
+        return None
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("dirs", nargs="*",
                     default=["/state/l5-research/l5-window-forensics"])
+    ap.add_argument("--state-root", default=None,
+                    help="supervisor state root, for coverage markers")
     ap.add_argument("--rows", action="store_true",
                     help="also emit one L5_PSP_ROW line per scored parent")
     a = ap.parse_args(argv)
     dirs = a.dirs or ["/state/l5-research/l5-window-forensics"]
-    rep = report(*dirs)
+    rep = report(*dirs, state_root=a.state_root)
+    written = persist(rep, dirs[0])
+    rep["artifact_path"] = written
     slim = {k: v for k, v in rep.items() if k != "windows"}
     slim["windows"] = [{k: v for k, v in w.items()
                         if k not in ("scored_parents", "reversal_rows")}
