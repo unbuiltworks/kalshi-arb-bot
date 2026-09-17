@@ -697,7 +697,10 @@ class Supervisor:
         root = os.path.join(self.root, "l5-window-forensics")
         try:
             from analysis.l5.window_forensics import prospective as PS
-            rep = PS.report(root, state_root=self.root)
+            # enrich=True recovers the chain receipts the recorder failed
+            # to write when it pinned a CA bundle absent from this image.
+            # Every fill carries its tx, so this needs no new capture.
+            rep = PS.report(root, state_root=self.root, enrich=True)
             rep["artifact_path"] = PS.persist(rep, root)
         except Exception as exc:                              # noqa: BLE001
             print("L5_PSP " + json.dumps(

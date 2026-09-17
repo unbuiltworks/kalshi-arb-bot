@@ -558,3 +558,98 @@ def test_the_frozen_safeguards_are_unchanged_since_d01094c4():
                   '"min_resolved_reversals": 8',
                   '"min_parents": 20'):
         assert const in now, const
+
+
+# ------------------------------------------- chain recovery and the collapse
+
+def test_the_worked_case_collapse_reproduces_one_parent_of_eighty():
+    """30/10/40 at 7c sharing one order_hash is ONE parent of exactly 80.00 --
+    the frozen worked case, where 58 public fills became 37 proven parents."""
+    fills = [{"idx": i, "L5_EVENT_CLOCK": 100.0 + i * 0.5, "outcome": "Down",
+              "price": 0.07, "qty": q, "order_hashes": ["0xA"], "n_legs": 1}
+             for i, q in enumerate((30.0, 10.0, 40.0))]
+    c = P.collapse_to_parents(fills)
+    assert c["n_units"] == 1 and c["n_chain_proven"] == 1
+    (p,) = c["parents"]
+    assert p["qty"] == 80.0 and p["n_fills"] == 3
+    assert p["unit"] == "CHAIN_PROVEN_PARENT"
+    assert p["execution_lifetime_lower_bound_s"] == 1.0
+
+
+def test_a_fill_with_no_recovered_hash_is_never_merged():
+    """Guessing which unproven fills belong together is the same-second
+    cluster heuristic, which the forensics kept separate from chain proof."""
+    fills = [{"idx": 0, "L5_EVENT_CLOCK": 100.0, "outcome": "Up",
+              "price": 0.55, "qty": 30.0, "order_hashes": [None], "n_legs": 0},
+             {"idx": 1, "L5_EVENT_CLOCK": 100.0, "outcome": "Up",
+              "price": 0.55, "qty": 70.0, "order_hashes": [], "n_legs": 0}]
+    c = P.collapse_to_parents(fills)
+    assert c["n_units"] == 2 and c["n_chain_proven"] == 0
+    assert all(p["unit"] == "UNPROVEN_FILL" for p in c["parents"])
+    assert all(p["qty"] in (30.0, 70.0) for p in c["parents"])
+
+
+def test_inventory_is_rebuilt_over_the_collapsed_sequence():
+    fills = [{"idx": 0, "L5_EVENT_CLOCK": 100.0, "outcome": "Down",
+              "price": 0.07, "qty": 30.0, "order_hashes": ["0xA"], "n_legs": 1},
+             {"idx": 1, "L5_EVENT_CLOCK": 101.0, "outcome": "Down",
+              "price": 0.07, "qty": 50.0, "order_hashes": ["0xA"], "n_legs": 1},
+             {"idx": 2, "L5_EVENT_CLOCK": 200.0, "outcome": "Up",
+              "price": 0.55, "qty": 20.0, "order_hashes": ["0xB"], "n_legs": 1}]
+    c = P.collapse_to_parents(fills)
+    a, b = c["parents"]
+    assert a["qty"] == 80.0 and a["inventory_after"] == {"Down": 80.0}
+    assert b["inventory_before"] == {"Down": 80.0}
+    assert b["inventory_after"] == {"Down": 80.0, "Up": 20.0}
+
+
+def test_enrichment_recovers_legs_from_the_recorded_tx():
+    rows = [{"kind": "l5_parent_execution", "tx": "0x1", "parents": [],
+             "outcome": "Up", "price": 0.5, "qty": 10.0,
+             "L5_EVENT_CLOCK": 1.0},
+            {"kind": "l5_parent_execution", "tx": "0x1", "parents": [],
+             "outcome": "Up", "price": 0.5, "qty": 5.0,
+             "L5_EVENT_CLOCK": 2.0}]
+    leg = {"order_hash": "0xA", "maker_asset_id": 0, "taker_asset_id": 1,
+           "maker_amount_filled": 1, "taker_amount_filled": 1, "fee": 0}
+    got = P.enrich_chain(rows, fetch=lambda tx: [leg])
+    assert got["recovered"] == 2 and got["distinct_tx"] == 1
+    assert rows[0]["parents"][0]["order_hash"] == "0xA"
+    assert rows[0]["chain_recovery"] == P.CHAIN_RECOVERED
+
+
+def test_an_unreadable_receipt_is_not_a_receipt_without_an_l5_order():
+    """The two look identical, and only one of them is a finding. This is the
+    exact confusion that let chain_receipt_share 0.0 pass for data."""
+    rows = [{"kind": "l5_parent_execution", "tx": "0x1", "parents": [],
+             "outcome": "Up", "price": 0.5, "qty": 10.0,
+             "L5_EVENT_CLOCK": 1.0}]
+    got = P.enrich_chain(rows, fetch=lambda tx: None)
+    assert got["recovered"] == 0 and got["unreadable"] == 1
+    assert rows[0]["parents"] == []
+    assert rows[0]["chain_recovery"] == "UNREADABLE"
+    assert "only one is a finding" in got["labels"]
+
+    empty = [{"kind": "l5_parent_execution", "tx": "0x2", "parents": [],
+              "outcome": "Up", "price": 0.5, "qty": 10.0,
+              "L5_EVENT_CLOCK": 1.0}]
+    got2 = P.enrich_chain(empty, fetch=lambda tx: [])
+    assert got2["recovered"] == 1 and got2["unreadable"] == 0
+    assert empty[0]["chain_recovery"] == P.CHAIN_RECOVERED
+
+
+def test_a_window_reports_fills_and_parents_as_different_units(tmp_path):
+    t = START + 200
+    rows = [_book(t - 2, up_bids=[(0.55, 400.0)])]
+    for i in range(3):
+        p = _parent(t + i, "Up", 0.55, 10.0)
+        p["parents"][0]["order_hash"] = "0xSAME"
+        rows.append(p)
+    d, _ = _tape(tmp_path, rows)
+    w = P.analyse_window(P.EL.tapes(d)[0])
+    assert w["counts"]["public_fills"] == 3
+    assert w["counts"]["parents"] == 1
+    assert w["parents"]["chain_proven"] == 1
+    assert w["collapse"]["collapse_ratio"] == round(1 / 3, 4)
+    (r,) = w["scored_parents"]
+    assert r["qty"] == 30.0

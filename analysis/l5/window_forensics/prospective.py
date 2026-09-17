@@ -224,6 +224,123 @@ def _at(books: Sequence[Book], when: float) -> Optional[Book]:
 
 # ------------------------------------------------------- parent reconstruction
 
+CHAIN_RECOVERED = "CHAIN_RECOVERED"
+
+
+def enrich_chain(rows: Sequence[dict], *, fetch=None) -> Dict[str, Any]:
+    """Recover the chain legs the recorder failed to write, from the tapes.
+
+    The recorder pinned a CA bundle that does not exist in the deployed image,
+    so every eth_getTransactionReceipt returned None and every execution was
+    written with `parents: []`. The FILLS are intact and each carries its
+    `tx`, so the chain layer is recoverable here without capturing a single
+    new window.
+
+    Mutates the rows in place and reports what it recovered. A tx that still
+    cannot be read stays empty and is counted -- an unrecovered receipt is
+    never presented as a receipt containing no L5 order, because those two
+    look identical and only one of them is a finding.
+    """
+    if fetch is None:
+        from analysis.l5.causal import order_id_forensics as OF
+
+        def fetch(tx):
+            rc = OF.rpc("eth_getTransactionReceipt", [tx])
+            return OF.l5_orders_in(rc) if rc else None
+
+    seen: Dict[str, Any] = {}
+    already = recovered = failed = 0
+    for r in rows:
+        if r.get("kind") != "l5_parent_execution":
+            continue
+        if r.get("parents"):
+            already += 1
+            continue
+        tx = r.get("tx")
+        if not tx:
+            failed += 1
+            continue
+        if tx not in seen:
+            try:
+                seen[tx] = fetch(tx)
+            except Exception:                                 # noqa: BLE001
+                seen[tx] = None
+        legs = seen[tx]
+        if legs is None:
+            r["chain_recovery"] = "UNREADABLE"
+            failed += 1
+            continue
+        r["parents"] = [{"order_hash": x["order_hash"],
+                         "maker_asset_id": str(x["maker_asset_id"]),
+                         "taker_asset_id": str(x["taker_asset_id"]),
+                         "maker_amount_filled": str(x["maker_amount_filled"]),
+                         "taker_amount_filled": str(x["taker_amount_filled"]),
+                         "fee": str(x["fee"])} for x in legs]
+        r["chain_recovery"] = CHAIN_RECOVERED
+        recovered += 1
+    return {"already_had_legs": already, "recovered": recovered,
+            "unreadable": failed, "distinct_tx": len(seen),
+            "labels": ("an UNREADABLE receipt is not a receipt with no L5 "
+                       "order in it; the two look identical and only one is "
+                       "a finding")}
+
+
+def collapse_to_parents(fills: Sequence[dict]) -> Dict[str, Any]:
+    """Unit A (public fills) -> unit C (chain-proven parent orders).
+
+    Fills sharing an `order_hash` are ONE parent order. This is the collapse
+    the frozen worked case established -- 58 public fills became 37 proven
+    parents there, and 30/10/40 at 7c became one parent of exactly 80.00.
+
+    A fill with no recovered hash is NOT merged with anything. It stays its
+    own unit and is labelled UNPROVEN, because guessing which unproven fills
+    belong together is precisely the same-second-cluster heuristic that the
+    forensics kept separate from chain proof.
+    """
+    by_hash: Dict[str, List[dict]] = {}
+    unproven: List[dict] = []
+    for f in fills:
+        hashes = [h for h in (f.get("order_hashes") or []) if h]
+        if len(set(hashes)) == 1:
+            by_hash.setdefault(hashes[0], []).append(f)
+        else:
+            unproven.append(f)
+    parents: List[dict] = []
+    for h, group in by_hash.items():
+        group = sorted(group, key=lambda x: x["L5_EVENT_CLOCK"])
+        first = group[0]
+        parents.append({**first,
+                        "order_hash": h,
+                        "qty": round(sum(g["qty"] for g in group), 6),
+                        "n_fills": len(group),
+                        "unit": "CHAIN_PROVEN_PARENT",
+                        "execution_lifetime_lower_bound_s": round(
+                            group[-1]["L5_EVENT_CLOCK"]
+                            - first["L5_EVENT_CLOCK"], 3)})
+    for f in unproven:
+        parents.append({**f, "order_hash": None, "n_fills": 1,
+                        "unit": "UNPROVEN_FILL"})
+    parents.sort(key=lambda x: x["L5_EVENT_CLOCK"])
+    for i, p in enumerate(parents):
+        p["idx"] = i
+    # inventory must be rebuilt over the COLLAPSED sequence, not carried over
+    inv: Dict[str, float] = {}
+    for p in parents:
+        p["inventory_before"] = dict(inv)
+        inv[p["outcome"]] = inv.get(p["outcome"], 0.0) + p["qty"]
+        p["inventory_after"] = dict(inv)
+    proven = [p for p in parents if p["unit"] == "CHAIN_PROVEN_PARENT"]
+    return {"parents": parents, "n_units": len(parents),
+            "n_chain_proven": len(proven),
+            "n_unproven_fills": len(parents) - len(proven),
+            "n_input_fills": len(fills),
+            "collapse_ratio": (round(len(parents) / len(fills), 4)
+                               if fills else None),
+            "labels": ("unit A is a public fill, unit C is a chain-proven "
+                       "parent. They are never equated, and an unproven fill "
+                       "is never merged with another on a heuristic.")}
+
+
 def parents_in_event_order(rows: Sequence[dict]) -> List[dict]:
     """Stable-sorted by L5_EVENT_CLOCK, with inventory rebuilt from scratch.
 
@@ -809,13 +926,19 @@ UNRESOLVED_VARIABLES = [
 
 # ----------------------------------------------------------------- reporting
 
-def analyse_window(path: str) -> Dict[str, Any]:
+def analyse_window(path: str, *, enrich: bool = False,
+                   fetch=None) -> Dict[str, Any]:
     rows = _rows(path)
     pre = next((r for r in rows if r.get("kind") == "preregistration"), None)
     end_row = next((r for r in rows if r.get("kind") == "window_end"), None)
     books = [Book(r) for r in rows if r.get("kind") == "book_full_joint"]
     preds = [r for r in rows if r.get("kind") == "surface_prediction"]
-    parents = parents_in_event_order(rows)
+    enrichment = enrich_chain(rows, fetch=fetch) if enrich else None
+    fills = parents_in_event_order(rows)
+    collapse = collapse_to_parents(fills)
+    # scoring runs on the COLLAPSED units: a parent order is the thing L5
+    # placed, and three fills of it are one decision, not three
+    parents = collapse["parents"]
     w_end = float((pre or {}).get("window_end") or 0.0)
     tick = books[0].tick if books else 0.01
 
@@ -862,20 +985,24 @@ def analyse_window(path: str) -> Dict[str, Any]:
         "window_start": (pre or {}).get("window_start"),
         "window_end": (pre or {}).get("window_end"),
         "slug": (pre or {}).get("slug"),
+        "chain_enrichment": enrichment,
+        "collapse": {k: v for k, v in collapse.items() if k != "parents"},
         "counts": {"books": len(books), "predictions": len(preds),
-                   "parents": len(parents),
+                   "public_fills": len(fills), "parents": len(parents),
                    "recorder_reported": {
                        "books": (end_row or {}).get("books"),
                        "predictions": (end_row or {}).get("predictions"),
                        "parent_executions": (
                            end_row or {}).get("parent_executions")}},
         "parents": {"n": len(parents),
+                    "chain_proven": collapse["n_chain_proven"],
+                    "unproven_fills": collapse["n_unproven_fills"],
                     "maker": sum(1 for p in parents
-                                 if p["liquidity_role"] == "MAKER"),
+                                 if p.get("liquidity_role") == "MAKER"),
                     "taker": sum(1 for p in parents
-                                 if p["liquidity_role"] == "TAKER"),
+                                 if p.get("liquidity_role") == "TAKER"),
                     "role_unknown": sum(1 for p in parents
-                                        if p["liquidity_role"] is None)},
+                                        if p.get("liquidity_role") is None)},
         "primary": primary,
         "first_observed_compatible_lead_s": {
             "n": len(firsts),
@@ -961,6 +1088,14 @@ def integrity(el: Dict[str, Any], windows: Sequence[Dict[str, Any]],
         "frozen_module_sha256": sha,
         "gates_per_capture": gates,
         "supervisor_coverage": cov,
+        "chain_units": [
+            {"window_start": w["window_start"],
+             "public_fills": w["counts"]["public_fills"],
+             "units_after_collapse": w["collapse"]["n_units"],
+             "chain_proven_parents": w["collapse"]["n_chain_proven"],
+             "unproven_fills": w["collapse"]["n_unproven_fills"],
+             "enrichment": w.get("chain_enrichment")}
+            for w in windows],
         "per_window_coverage": [
             {"window_start": w["window_start"], **w["coverage"]}
             for w in windows],
@@ -974,12 +1109,13 @@ def integrity(el: Dict[str, Any], windows: Sequence[Dict[str, Any]],
     }
 
 
-def report(*dirs: str, state_root: Optional[str] = None) -> Dict[str, Any]:
+def report(*dirs: str, state_root: Optional[str] = None,
+           enrich: bool = False) -> Dict[str, Any]:
     """Eligibility FIRST, then the strategy result -- never the other way."""
     el = EL.report(*dirs)
     eligible = [c["path"] for c in el["captures"]
                 if c["verdict"] == EL.COMPLETE]
-    windows = [analyse_window(p) for p in sorted(eligible)]
+    windows = [analyse_window(p, enrich=enrich) for p in sorted(eligible)]
 
     pooled_primary: Dict[str, Any] = {}
     for m in MARKS_S:
@@ -1068,11 +1204,13 @@ def main(argv=None) -> int:
                     default=["/state/l5-research/l5-window-forensics"])
     ap.add_argument("--state-root", default=None,
                     help="supervisor state root, for coverage markers")
+    ap.add_argument("--enrich", action="store_true",
+                    help="recover missing chain receipts from recorded tx")
     ap.add_argument("--rows", action="store_true",
                     help="also emit one L5_PSP_ROW line per scored parent")
     a = ap.parse_args(argv)
     dirs = a.dirs or ["/state/l5-research/l5-window-forensics"]
-    rep = report(*dirs, state_root=a.state_root)
+    rep = report(*dirs, state_root=a.state_root, enrich=a.enrich)
     written = persist(rep, dirs[0])
     rep["artifact_path"] = written
     slim = {k: v for k, v in rep.items() if k != "windows"}
