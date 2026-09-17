@@ -2,7 +2,8 @@
 to enlarge it.
 
 Owner authorization 2026-09-16 "Option A": max_spend_per_market $5.00,
-max_residual $3.00, max_total_spend $15.00, max_markets 1, max_total_markets 3,
+max_residual $3.00, max_total_spend $15.00, max_markets 1, max_total_markets 10
+(widened from 3 by OWNER 2026-09-17, breadth only),
 max_daily_realized_loss $6.00, 24h expiry, k 0.00619 unchanged.
 """
 from __future__ import annotations
@@ -21,7 +22,7 @@ pytestmark = pytest.mark.real_mandate_env
 AUTHORIZED = {
     "authorization_id": "TEST", "authorized_at": "2026-09-16T18:00:00Z",
     "service": "l5-r1-probe", "strategy": "l5_continuous_inventory",
-    "strategy_version": "v1.1", "max_markets": 1, "max_total_markets": 3,
+    "strategy_version": "v1.1", "max_markets": 1, "max_total_markets": 10,
     "max_spend_per_market": "5.00", "max_total_spend": "15.00",
     "max_residual": "3.00", "max_daily_realized_loss": "6.00",
     "expiry": "2026-09-17T18:00:00Z",
@@ -90,19 +91,36 @@ def test_cp1_residual_units_cannot_exceed_the_mandate_dollar_ceiling():
     assert D(units) * D("1.00") <= D(AUTHORIZED["max_residual"])
 
 
-def test_cp1_worst_case_matches_the_authorized_envelope():
+def test_cp1_worst_case_and_what_actually_bounds_the_campaign(tmp_path):
+    """OWNER 2026-09-17 widened breadth 3 -> 10 and held max_total_spend at
+    $15.00, which SEPARATED two numbers that used to coincide.
+
+    `worst_case` derives per_campaign as cap x markets, so the RUNG's own
+    worst case is now $5.00 x 10 = $50.00 where it read $15.00 at three
+    markets. That is a true statement about the rung and it is NOT the
+    binding constraint: the immutable mandate caps campaign spend at $15.00
+    and GuardedTransport enforces it at the wire. Asserting the min() rather
+    than a single number is the point -- at 3 markets the two were equal and
+    a test on either one looked identical."""
     wc = ladder.worst_case(ladder.rung("CP1"))
     assert wc["per_market_usd"] == "5.00"
-    assert wc["per_campaign_usd"] == "15.00"          # == max_total_spend
+    assert wc["per_campaign_usd"] == "50.00"          # the RUNG's own
     assert wc["max_concurrent_open_exposure_usd"] == "5.00"   # concurrency 1
     assert wc["daily_loss_stop_usd"] == "-6.00"
+    # what actually bounds the campaign's dollars
+    m = _mandate(tmp_path)
+    assert min(D(wc["per_campaign_usd"]),
+               D(str(m.max_total_spend))) == D("15.00")
+    assert D(str(m.max_total_spend)) < D(wc["per_campaign_usd"]), (
+        "the mandate must be the tighter of the two, or breadth would have "
+        "bought dollars rather than observations")
 
 
 def test_cp1_matches_every_authorized_limit():
     r = ladder.rung("CP1")
     assert r["per_market_cap_usd"] == "5.00"
     assert r["concurrency"] == 1                       # max_markets
-    assert r["markets_per_campaign"] == 3              # max_total_markets
+    assert r["markets_per_campaign"] == 10             # max_total_markets
     assert r["daily_loss_stop_usd"] == "-6.00"
     assert r["max_actions_per_session"] == 6           # R1's, unchanged
 
@@ -145,14 +163,24 @@ def test_no_seven_fifty_rung_was_selected():
     assert seven_fifty and assigned not in seven_fifty, seven_fifty
 
 
-def test_the_campaign_market_allowance_matches_the_authorized_three():
-    """PMUS_SPRING_RUNG_MARKETS overrides the rung, so a stale 1 would silently
-    run a one-market probe under a three-market authorization."""
+def test_all_three_market_allowances_agree(tmp_path):
+    """THE ALLOWANCE IS A min() OF THREE INDEPENDENT NUMBERS, and any one of
+    them left behind silently caps the authorization.
+
+    `_rung_markets_of` returns min(PMUS_SPRING_RUNG_MARKETS, rung's
+    markets_per_campaign), and the mandate's max_total_markets binds again at
+    the wire. Widening one or two of the three would have produced a probe
+    that quietly stopped early while every record claimed ten -- which is the
+    failure this test exists to make impossible."""
     df = open("deploy/l5_r1_probe/Dockerfile", encoding="utf-8").read()
     env = [l.strip() for l in df.splitlines()
            if l.strip().startswith("PMUS_SPRING_RUNG_MARKETS=")]
-    assert env == ["PMUS_SPRING_RUNG_MARKETS=3 \\"], env
-    assert ladder.rung("CP1")["markets_per_campaign"] == 3
+    assert env == ["PMUS_SPRING_RUNG_MARKETS=10 \\"], env
+    env_v = int(env[0].split("=", 1)[1].rstrip(" \\"))
+    rung_v = ladder.rung("CP1")["markets_per_campaign"]
+    mandate_v = _mandate(tmp_path).max_total_markets
+    assert env_v == rung_v == mandate_v == 10, (env_v, rung_v, mandate_v)
+    assert min(env_v, rung_v, mandate_v) == 10
 
 
 def test_the_min_rule_itself_is_still_in_the_source():

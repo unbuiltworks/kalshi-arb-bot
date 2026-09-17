@@ -201,10 +201,16 @@ def test_the_shipped_mandate_is_exactly_the_authorized_envelope():
     the authorized envelope, so a mandate that is absent, unparseable, expired,
     aimed at another service, or roomier than authorized ALL still fail here.
 
-    THE AUTHORIZED ENVELOPE, from the owner's 2026-09-16 message:
+    THE AUTHORIZED ENVELOPE, from the owner's 2026-09-17 message (breadth
+    widened from the 2026-09-16 three-market probe; DOLLARS UNCHANGED):
       max_spend_per_market $5.00 · max_total_spend $15.00 · max_residual $3.00
-      max_markets 1 · max_total_markets 3 · max_daily_realized_loss $6.00
+      max_markets 1 · max_total_markets 10 · max_daily_realized_loss $6.00
       expiry 24h · service l5-r1-probe
+
+    Note what did NOT move: max_total_spend stays $15.00 while breadth goes to
+    ten, so the mandate is now strictly tighter than the rung's own
+    cap x markets worst case ($50.00) instead of equal to it. The
+    "not roomier than the rung" checks below therefore still bind.
     """
     f = AUTH_DIR / "live_mandate.json"
     if not f.exists():
@@ -222,7 +228,7 @@ def test_the_shipped_mandate_is_exactly_the_authorized_envelope():
     assert str(m.max_residual) == "3.00"
     assert str(m.max_daily_realized_loss) == "6.00"
     assert m.max_markets == 1
-    assert m.max_total_markets == 3
+    assert m.max_total_markets == 10
     # NOT ROOMIER THAN THE RUNG EITHER. min(rung, mandate) means a roomier
     # mandate cannot raise the envelope, but it would still misstate what was
     # authorized, and this file is the authorization of record.

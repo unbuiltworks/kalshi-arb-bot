@@ -47,14 +47,15 @@ def test_the_rung_and_the_market_allowance_are_pinned_in_the_image():
 
     RESTATED 2026-09-16 (OWNER "Option A"), not relaxed. It asserted R1 and ONE
     market, which were the right values until the owner authorized a bounded
-    three-market probe. The property under test never changed: both values must
+    ten-market probe (three until OWNER 2026-09-17). The property under
+    test never changed: both values must
     be IN THE IMAGE, so no Railway variable decides the envelope. Leaving the
     old numbers here would have been the same class of error as the legacy
     service -- the envelope stated in one place and run from another.
     """
     d = "\n".join(_directives(DF))
     assert "PMUS_SPRING_RUNG=CP1" in d
-    assert "PMUS_SPRING_RUNG_MARKETS=3" in d
+    assert "PMUS_SPRING_RUNG_MARKETS=10" in d
     # and it must be exactly one value each: an image that pins two is an
     # image whose envelope depends on directive order.
     assert d.count("PMUS_SPRING_RUNG=") == 1
@@ -69,7 +70,10 @@ def test_the_pinned_rung_is_the_one_the_ladder_bounds():
     r = ladder.rung("CP1")
     assert r["id"] == "CP1"
     assert r["per_market_cap_usd"] == "5.00"
-    assert r["markets_per_campaign"] == 3
+    # OWNER 2026-09-17: breadth 3 -> 10. The image env and this rung are two of
+    # the three numbers min()'d into the allowance (the mandate is the third),
+    # so they must move together or the authorization is silently capped.
+    assert r["markets_per_campaign"] == 10
     assert r["promote"] is None, "CP1 must never promote itself"
 
 

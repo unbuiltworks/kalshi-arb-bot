@@ -201,7 +201,7 @@ def test_the_mandate_still_clamps_the_explicit_sizing(monkeypatch):
     monkeypatch.setenv("PMUS_LIVE_MANDATE", json.dumps({
         "authorization_id": "SIZING-TEST", "authorized_at": "2026-01-01T00:00:00Z",
         "service": "test-suite", "strategy": "t", "strategy_version": "t",
-        "max_markets": 1, "max_total_markets": 3,
+        "max_markets": 1, "max_total_markets": 10,
         "max_spend_per_market": "1.00", "max_total_spend": "3.00",
         "max_residual": "3.00", "max_daily_realized_loss": "6.00",
         "expiry": "2999-01-01T00:00:00Z"}))
@@ -262,12 +262,19 @@ def test_the_residual_overshoot_is_bounded_and_disclosed():
     assert D(3) + q_max < D("6.00")
 
 
-def test_the_worst_case_campaign_spend_is_unchanged_at_fifteen_dollars():
+def test_the_sizing_levers_are_untouched_by_the_breadth_widening():
+    """OWNER 2026-09-17 widened breadth 3 -> 10 and changed NOTHING about
+    size. The rung's own per-campaign worst case follows breadth to $50.00
+    (cap x markets); the mandate still caps campaign spend at $15.00 and is
+    now the binding side of that min(). What matters for THIS file is that
+    neither sizing lever moved."""
     w = ld.worst_case(_cp1())
     assert w["per_market_usd"] == "5.00"
-    assert w["per_campaign_usd"] == "15.00"
+    assert w["per_campaign_usd"] == "50.00"        # rung-only; mandate binds $15
     assert w["max_concurrent_open_exposure_usd"] == "5.00"
     assert w["daily_loss_stop_usd"] == "-6.00"
+    assert w["per_action_target_usd"] == "0.10"
+    assert w["per_leg_max_usd"] == "0.125"
 
 
 def test_cp1_is_still_unpromotable_and_off_the_auto_ladder():

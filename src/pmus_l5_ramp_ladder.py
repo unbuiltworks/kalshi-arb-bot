@@ -112,13 +112,32 @@ OWNER_RUNGS: tuple[dict, ...] = (
     # assumption. The transport's $3.00 `max_residual` remains the authoritative
     # economic ceiling; this unit count can only ever bind EARLIER, never later.
     #
-    # Every other lever is R1's, unchanged: 3 markets, 1 concurrent, 6 actions
-    # per session, maker-only, fee-safe completion, HOLD-to-settlement.
-    # Worst case per campaign $5.00 x 3 = $15.00, which is exactly the
-    # authorized max_total_spend; the daily stop is the authorized $6.00.
-    {"id": "CP1", "name": "bounded continuous live probe, 3 markets "
-                          "(OWNER 2026-09-16 Option A)",
-     "per_market_cap_usd": "5.00", "residual_units": 3, "markets_per_campaign": 3,
+    # BREADTH WIDENED 3 -> 10 BY OWNER AUTHORIZATION 2026-09-17, and ONLY
+    # breadth. Every other lever is untouched: $5.00/market, 1 concurrent, 6
+    # actions per session, residual 3 units, maker-only, fee-safe completion,
+    # $0.10/$0.125 sizing, the -$6.00 daily stop.
+    #
+    # WIDENED IN PLACE RATHER THAN AS A NEW RUNG, deliberately. Durable state
+    # stores the rung ID and `known_rung()` resolves it against this table, so
+    # a NEW id (pinned) against the stored "CP1" would have met B3's
+    # `tightest()` -- markets_per_campaign IS a risk dimension -- and the
+    # stored 3 would have silently clamped a 10-market authorization back to
+    # 3. Widening CP1 itself means the stored id resolves to these values and
+    # nothing is clamped. The identity strings are updated with it so the rung
+    # does not go on describing itself as the three-market one.
+    #
+    # WHAT NOW BINDS THE CAMPAIGN'S DOLLARS. `worst_case()` derives
+    # per_campaign as cap x markets, so it reads $5.00 x 10 = $50.00 where it
+    # used to read $15.00. That is a true statement about THE RUNG, and it is
+    # no longer the binding constraint: the owner held max_total_spend at
+    # $15.00 while widening breadth, and the immutable mandate enforces that
+    # at the wire through GuardedTransport. At 3 markets the two coincided at
+    # $15.00 and nothing distinguished them; at 10 they do not, and the
+    # MANDATE is the campaign-spend ceiling. Breadth buys observations, not
+    # dollars.
+    {"id": "CP1", "name": "bounded continuous live probe, 10 markets "
+                          "(OWNER 2026-09-17 execution-measurement breadth)",
+     "per_market_cap_usd": "5.00", "residual_units": 3, "markets_per_campaign": 10,
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
      "daily_loss_stop_usd": "-6.00",
      # OWNER AUTHORIZATION 2026-09-16 "CP1 explicit sizing fix". STATED, not
@@ -150,10 +169,13 @@ OWNER_RUNGS: tuple[dict, ...] = (
      # excluded; B3's intersection keeps them out even if R3L is on the volume.
      "target_notional_usd": "0.10", "max_leg_notional_usd": "0.125",
      "lever": "caps", "promote": None,
-     "derived_from": "OWNER live authorization 2026-09-16: max_spend_per_market "
-                     "$5.00, max_residual $3.00, max_total_spend $15.00, "
-                     "max_markets 1, max_total_markets 3, daily stop $6.00, "
-                     "24h expiry, k 0.00619 unchanged"},
+     "derived_from": "OWNER live authorization 2026-09-17 "
+                     "(execution-measurement breadth), superseding the "
+                     "2026-09-16 three-market Option A: max_spend_per_market "
+                     "$5.00, max_residual $3.00, max_total_spend $15.00 "
+                     "UNCHANGED, max_markets 1, max_total_markets 3 -> 10, "
+                     "daily stop $6.00, 24h expiry, k 0.00619 unchanged, "
+                     "sizing $0.10/$0.125 unchanged. BREADTH ONLY."},
     {"id": "R2C", "name": "caps: $0.15 per market, residual 6 units (OWNER 5560851070)",
      "per_market_cap_usd": "0.15", "residual_units": 6, "markets_per_campaign": 6,
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
