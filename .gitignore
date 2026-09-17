@@ -52,3 +52,5 @@ analysis/l5/pair_formation/receipts.jsonl
 # they produce are committed instead.
 analysis/l5/historical_l2/l5_backfill.json
 analysis/l5/historical_l2/block_times.json
+data/l5_book_context/*.jsonl
+data/gemini_surface_shadow/*.jsonl
