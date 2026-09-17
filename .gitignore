@@ -33,6 +33,8 @@ data/policy_d_port/tape_*.jsonl
 data/policy_d_port_hot/tape_*.jsonl
 data/policy_d_port_hot/canonical_*.jsonl
 data/pmus_book_tape/pmus_book_*.jsonl
+data/policy_d_port_hot/*.jsonl.gz
+data/pmus_book_tape/*.jsonl.gz
 
 # prospective FIDELITY rows are runtime research state, not source code.
 # The v0 snapshots already committed stay committed; nothing is rewritten.

@@ -20,6 +20,21 @@ WHAT DOES NOT COUNT, each of which has at some point looked like money:
   * mark-to-market. A residual marked at 0.01 has lost nothing yet;
   * theoretical or modelled fills, shadow inventory, estimated rebates.
 
+MATCHED VS RESIDUAL IS AN ATTRIBUTION, NOT A CONFIRMATION, and the two are no
+longer allowed to share a word. The venue resolves a NET position: for
+`aec-itfme-maxreh-alewei-2026-09-17` it reported `realized_usd -0.0832` with
+`beforeNet -0.1900 -> afterNet 0.0000` and NOTHING ELSE. The 0.40 matched YES
+and 0.40 matched NO netted to zero and never appeared as a cashflow at all, so
+there is no venue line saying the pair earned anything.
+
+The split IS determinate from the durable ledger -- quantities, per-fill cost
+and the settlement outcome fix it exactly, under the average-cost convention
+used in all authoritative accounting here -- so it is reported. But it is
+`matched_attributed_usd`, classified MATCHED_REALIZED_UNCONFIRMED, and it sits
+beside `total_confirmed_realized_usd`, which is the only venue-confirmed
+number. Calling the attribution "matched realized" is what produced a
+contradiction with the settlement watch on 2026-09-17.
+
 Incentives are tracked SEPARATELY and never summed into trading P&L, because a
 rebate that makes a losing trade look profitable is how a strategy dies slowly.
 
@@ -41,6 +56,35 @@ REALIZED_KIND = "realized"
 BREAKDOWN_KIND = "settlement_breakdown"
 #: a market whose venue settlement carried no realized figure
 UNCONFIRMED = "SETTLED_REALIZED_UNCONFIRMED"
+
+#: how much the VENUE said about the matched component specifically. This is a
+#: separate axis from whether the TOTAL was confirmed, and conflating the two
+#: is the defect this vocabulary exists to prevent.
+MATCHED_CONFIRMED = "MATCHED_REALIZED_CONFIRMED"
+MATCHED_UNCONFIRMED = "MATCHED_REALIZED_UNCONFIRMED"
+MATCHED_NOT_SEPARABLE = "NOT_SEPARABLY_ATTRIBUTABLE"
+MATCHED_CLASSES = (MATCHED_CONFIRMED, MATCHED_UNCONFIRMED, MATCHED_NOT_SEPARABLE)
+
+#: the venue nets YES against NO, so a matched pair produces no settlement
+#: cashflow of its own. Until a venue serves a per-leg realized figure, the
+#: strongest claim available is UNCONFIRMED.
+MATCHED_ATTRIBUTION_BASIS = (
+    "ledger-derived: matched = min(up, dn) at the average per-fill cost of "
+    "each side, with the settlement outcome from the venue. The identity "
+    "matched + residual == payout - spend holds exactly. The VENUE reported "
+    "only a net position resolution and no matched line, so this is an "
+    "attribution under a stated convention, never a confirmed cashflow.")
+
+
+def classify_matched(row: Mapping[str, Any]) -> str:
+    """Which of the three the owner named applies to ONE settlement row."""
+    if _dec(row.get("venue_matched_realized_usd")) is not None:
+        return MATCHED_CONFIRMED
+    have = all(_dec(row.get(k)) is not None
+               for k in ("matched_pairs", "avg_up", "avg_dn"))
+    if not have or str(row.get("settlement_status") or "") == UNCONFIRMED:
+        return MATCHED_NOT_SEPARABLE
+    return MATCHED_UNCONFIRMED
 
 
 def _dec(v: Any) -> Optional[D]:
@@ -123,6 +167,7 @@ def _period(rows, now, days) -> dict:
 
     matched = residual = incentives = ZERO
     fees_unreported = 0
+    matched_rows = 0
     for r in sel:
         if r.get("kind") != BREAKDOWN_KIND:
             continue
@@ -133,6 +178,7 @@ def _period(rows, now, days) -> dict:
         i = _dec(r.get("incentives_usd"))
         if m is not None:
             matched += m
+            matched_rows += 1
         if d0 is not None:
             residual += d0
         if i is not None:
@@ -141,8 +187,13 @@ def _period(rows, now, days) -> dict:
             fees_unreported += 1
 
     return {
-        "matched_realized_usd": str(matched),
-        "residual_realized_usd": str(residual),
+        # NOT "matched_realized": the venue confirmed a NET total, not a
+        # matched line. See MATCHED_ATTRIBUTION_BASIS.
+        "matched_attributed_usd": str(matched),
+        "residual_attributed_usd": str(residual),
+        "matched_realization_class": (MATCHED_UNCONFIRMED if matched_rows
+                                      else MATCHED_NOT_SEPARABLE),
+        "matched_attribution_basis": MATCHED_ATTRIBUTION_BASIS,
         "fees_usd": ("venue_unreported" if fees_unreported else "0"),
         "incentives_usd": str(incentives),
         "total_confirmed_realized_usd": str(realized),
@@ -259,11 +310,11 @@ def render(sb: Mapping[str, Any]) -> str:
         L.append("  !! LEDGER PARTIALLY UNREADABLE -- figures are incomplete")
     L.append("")
     L.append("%-26s %14s %14s %14s" % ("", "today", "7d", "30d"))
-    keys = [("matched realized", "matched_realized_usd"),
-            ("residual realized", "residual_realized_usd"),
+    keys = [("matched ATTRIBUTED (not confirmed)", "matched_attributed_usd"),
+            ("residual ATTRIBUTED (not confirmed)", "residual_attributed_usd"),
             ("fees", "fees_usd"),
             ("incentives (separate)", "incentives_usd"),
-            ("TOTAL CONFIRMED REALIZED", "total_confirmed_realized_usd"),
+            ("TOTAL CONFIRMED REALIZED (venue)", "total_confirmed_realized_usd"),
             ("markets completed", "markets_completed"),
             ("realized / market", "realized_per_market_usd")]
     for label, k in keys:
@@ -271,6 +322,8 @@ def render(sb: Mapping[str, Any]) -> str:
             label, sb["today"].get(k), sb["last_7d"].get(k),
             sb["last_30d"].get(k)))
     L.append("")
+    L.append("matched/residual are an ATTRIBUTION (%s); only the TOTAL is "
+             "venue-confirmed" % sb["today"].get("matched_realization_class"))
     L.append("capital committed   %s   markets touched %s" % (
         sb["capital_committed_usd"], sb["markets_touched"]))
     L.append("submissions %s   fills %s   rejections %s" % (

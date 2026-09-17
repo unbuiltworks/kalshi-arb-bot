@@ -54,8 +54,8 @@ def test_matched_and_residual_are_reported_separately_never_summed(tmp_path):
     _write(tmp_path, [_realized("m1", "-0.1836"),
                       _breakdown("m1", "0", "-0.1836")])
     s = sb.scoreboard(tmp_path, NOW)["today"]
-    assert s["matched_realized_usd"] == "0"
-    assert s["residual_realized_usd"] == "-0.1836"
+    assert s["matched_attributed_usd"] == "0"
+    assert s["residual_attributed_usd"] == "-0.1836"
     assert s["total_confirmed_realized_usd"] == "-0.1836"
 
 
@@ -81,7 +81,7 @@ def test_settled_realized_unconfirmed_is_excluded_and_named(tmp_path):
                    status="SETTLED_REALIZED_UNCONFIRMED")])
     s = sb.scoreboard(tmp_path, NOW)
     assert s["today"]["total_confirmed_realized_usd"] == "0"
-    assert s["today"]["matched_realized_usd"] == "0"
+    assert s["today"]["matched_attributed_usd"] == "0"
     assert s["excluded_settled_realized_unconfirmed"] == \
         ["aec-itfme-artkuk-egople-2026-09-17"]
 
@@ -169,3 +169,88 @@ def test_the_scoreboard_never_writes_to_the_ledger(tmp_path):
     before = (tmp_path / "ledger.jsonl").read_bytes()
     sb.scoreboard(tmp_path, NOW)
     assert (tmp_path / "ledger.jsonl").read_bytes() == before
+
+
+# --------------------------------------------------------------------------
+# OWNER 2026-09-17 P0 -- the lifecycle-3 contradiction, and why it happened
+#
+# Two artifacts disagreed about the same market. The settlement artifact said
+# "matched-pair realized +$0.00929"; the accounting watch said "matched-pair
+# realized $0.00, economics unmeasured". Both were reading the same evidence.
+#
+# The venue's ENTIRE statement about aec-itfme-maxreh-alewei-2026-09-17 was:
+#
+#   {"kind":"REALIZED","realized_usd":"-0.0832",
+#    "resolution":{"side":"POSITION_RESOLUTION_SIDE_LONG",
+#                  "beforeNet":"-0.1900","afterNet":"0.0000"}}
+#
+# `beforeNet -0.1900` is the point. The venue resolves a NET position: the 0.40
+# matched YES and 0.40 matched NO cancelled and produced no cashflow of their
+# own. There is no venue line saying the pair earned anything. The +$0.00929 is
+# ours -- determinate from the ledger, but ours.
+#
+# So the two claims were never in conflict about a number; they were in
+# conflict about a WORD. These tests make the word impossible to reuse.
+
+def test_the_matched_split_is_never_labelled_realized(tmp_path):
+    """The rename is the fix. If `matched_realized_usd` ever comes back, the
+    same contradiction comes back with it."""
+    _write(tmp_path, [_breakdown("m1", "0.00929", "-0.09249"),
+                      _realized("m1", "-0.0832")])
+    s = sb.scoreboard(tmp_path, NOW)
+    for scope in ("today", "last_7d", "last_30d"):
+        assert "matched_realized_usd" not in s[scope]
+        assert "residual_realized_usd" not in s[scope]
+        assert "matched_attributed_usd" in s[scope]
+    assert "matched realized" not in sb.render(s)
+
+
+def test_only_the_total_is_called_venue_confirmed(tmp_path):
+    _write(tmp_path, [_breakdown("m1", "0.00929", "-0.09249"),
+                      _realized("m1", "-0.0832")])
+    s = sb.scoreboard(tmp_path, NOW)
+    assert s["today"]["total_confirmed_realized_usd"] == "-0.0832"
+    assert s["today"]["matched_attributed_usd"] == "0.00929"
+    assert s["today"]["matched_realization_class"] == sb.MATCHED_UNCONFIRMED
+    text = sb.render(s)
+    assert "ATTRIBUTION" in text and "only the TOTAL is" in text
+
+
+def test_the_attribution_reconciles_to_the_venue_total(tmp_path):
+    """matched + residual == the confirmed total. If that identity fails, the
+    split is an allocation of something else and must not be shown."""
+    _write(tmp_path, [_breakdown("m1", "0.00929", "-0.09249"),
+                      _realized("m1", "-0.0832")])
+    s = sb.scoreboard(tmp_path, NOW)["today"]
+    total = D(s["matched_attributed_usd"]) + D(s["residual_attributed_usd"])
+    assert abs(total - D(s["total_confirmed_realized_usd"])) <= D("0.0001")
+
+
+def test_the_three_classifications_are_the_only_ones(tmp_path):
+    assert sb.MATCHED_CLASSES == ("MATCHED_REALIZED_CONFIRMED",
+                                  "MATCHED_REALIZED_UNCONFIRMED",
+                                  "NOT_SEPARABLY_ATTRIBUTABLE")
+
+
+def test_a_venue_matched_line_would_be_the_only_route_to_confirmed():
+    """Nothing we compute can promote the split to CONFIRMED -- only the venue
+    serving a per-leg realized figure can."""
+    assert sb.classify_matched({
+        "matched_pairs": "0.40", "avg_up": "0.49", "avg_dn": "0.4868",
+    }) == sb.MATCHED_UNCONFIRMED
+    assert sb.classify_matched({
+        "matched_pairs": "0.40", "avg_up": "0.49", "avg_dn": "0.4868",
+        "venue_matched_realized_usd": "0.00929",
+    }) == sb.MATCHED_CONFIRMED
+
+
+def test_without_quantities_or_costs_the_split_is_not_separable():
+    """The guard the owner named: do not manufacture a matched realization by
+    allocating an aggregate the ledger cannot decompose."""
+    assert sb.classify_matched({"matched_pairs": "0.40"}) == \
+        sb.MATCHED_NOT_SEPARABLE
+    assert sb.classify_matched({}) == sb.MATCHED_NOT_SEPARABLE
+    assert sb.classify_matched({
+        "matched_pairs": "0.40", "avg_up": "0.49", "avg_dn": "0.4868",
+        "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+    }) == sb.MATCHED_NOT_SEPARABLE
