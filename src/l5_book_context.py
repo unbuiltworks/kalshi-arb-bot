@@ -52,6 +52,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.l5_shadow import venues as V
 from src.l5_chain_observer import observer as OB
+from src import l5_residual_episode_clock as CLK
 
 LABEL = "L5_BOOK_CONTEXT_V1"
 LOOKBACK_S = (1, 5, 10, 30, 60)
@@ -203,8 +204,15 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
     meta: Dict[str, dict] = {}
     seen: set = set()
     pending: List[dict] = []
+    clock = CLK.Clock("PMUS")
+    # L5's inventory AS SEEN SINCE THIS PROCESS STARTED. It is not his position:
+    # anything he held before we attached is invisible, and the label says so.
+    inv: Dict[str, Dict[str, float]] = collections.defaultdict(
+        lambda: {"Up": 0.0, "Down": 0.0})
+    l5_fills: Dict[str, List[dict]] = collections.defaultdict(list)
     deadline = time.time() + minutes * 60.0
     last_activity = 0.0
+    last_summary = 0.0
     n_books = n_events = 0
 
     while time.time() < deadline:
@@ -229,11 +237,26 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
             if m["window_end"] < loop_t - 120:
                 meta.pop(mk, None)
                 continue
-            for tok in m["tokens"]:
+            for oc, tok in (m.get("token_by_outcome") or {}).items():
                 b = V.pm_book(str(tok))
                 if b:
                     rings[str(tok)].add(b)
                     n_books += 1
+                    # a periodic PUBLIC book summary, so habitat can be scored
+                    # on this venue at all. Without it the tape only exists
+                    # where L5 happened to trade, which is precisely the
+                    # selection bias a habitat measure must not have.
+                    if loop_t - last_summary >= 5.0:
+                        emit({"kind": "book_observation", "slug": mk,
+                              "cohort": m.get("cohort"), "outcome": oc,
+                              "token": str(tok),
+                              "tte_s": round(m["window_end"] - loop_t, 1),
+                              **(summarize(b) or {}),
+                              "labels": "PUBLIC BOOK STATE ONLY -- never a "
+                                        "fill, never realized, and no claim "
+                                        "about L5's orders."})
+            if loop_t - last_summary >= 5.0:
+                last_summary = loop_t
 
         # --- L5 activity
         if loop_t - last_activity >= activity_interval:
@@ -262,6 +285,34 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
                             "L5_EVENT_CLOCK": float(f.get("ts") or 0),
                             "L5_OBSERVATION_CLOCK": obs_clock,
                         })
+                        oc = "Up" if str(f.get("outcome")) == "Up" else "Down"
+                        try:
+                            fq = float(f.get("size") or 0)
+                            fp = float(f.get("price") or 0)
+                        except (TypeError, ValueError):
+                            fq = fp = 0.0
+                        before = dict(inv[slug])
+                        inv[slug][oc] += fq
+                        l5_fills[slug].append(
+                            {"t": float(f.get("ts") or 0), "outcome": oc,
+                             "px": fp, "qty": fq})
+                        # a residual episode opens when session-local inventory
+                        # leaves flat on one side only
+                        if (before["Up"] == 0) and (before["Down"] == 0):
+                            run = sum(1 for x in l5_fills[slug]
+                                      if x["outcome"] == oc)
+                            ep = clock.open_episode(
+                                "%s|%s|%s" % (slug, oc, f.get("ts")),
+                                symbol=slug, t=float(f.get("ts") or 0),
+                                side=oc, px=fp, qty=fq,
+                                tte_s=(meta[slug]["window_end"]
+                                       - float(f.get("ts") or 0)),
+                                run_position=run)
+                            emit({"kind": "residual_episode_opened",
+                                  "label": CLK.LABEL, "episode": ep.key,
+                                  "slug": slug, "marks_s": list(CLK.MARKS_S),
+                                  "L5_EVENT_CLOCK": float(f.get("ts") or 0),
+                                  "L5_OBSERVATION_CLOCK": obs_clock})
                         emit({"kind": "l5_event_seen",
                               "tx": tx, "fill_index": i, "slug": slug,
                               "L5_EVENT_CLOCK": float(f.get("ts") or 0),
@@ -271,6 +322,49 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
                               "note": "recorded immediately; the joined context "
                                       "follows once +%ds of book evolution "
                                       "exists" % FOLLOW_S})
+
+        # --- preregistered residual-episode marks that have come due
+        for ep, mark in list(clock.due_marks(time.time())):
+            slug = ep.symbol
+            m = meta.get(slug) or {}
+            fl = l5_fills[slug]
+            opp = [x for x in fl
+                   if x["outcome"] != ep.first_side and x["t"] > ep.opened_t]
+            same = [x for x in fl if x["outcome"] == ep.first_side]
+            # is a maker order at the first fill's price still legal NOW?
+            valid = None
+            tok = (m.get("token_by_outcome") or {}).get(ep.first_side)
+            if tok:
+                hit = rings[str(tok)].at_or_before(time.time())
+                if hit:
+                    sm = summarize(hit[2])
+                    valid = {"still_restable": (sm["ask"] is not None
+                                                and ep.first_px < sm["ask"]),
+                             "bid": sm["bid"], "ask": sm["ask"],
+                             "one_sided": sm["one_sided"],
+                             "clock_basis": hit[1]}
+            comp_px = opp[0]["px"] if opp else None
+            emit(ep.record(mark, {
+                "evidenced_complement": bool(opp),
+                "complement_dt_s": (round(opp[0]["t"] - ep.opened_t, 3)
+                                    if opp else None),
+                "quote_restable": (valid or {}).get("still_restable"),
+                "book_reached_quote": None,
+                "trade_flow_through_quote": bool(opp) or len(same) > 1,
+                CLK.STRICT: bool(opp),
+                "inventory": {**inv[slug],
+                              "basis": "SESSION-LOCAL: only fills observed "
+                                       "since this process attached. NOT L5's "
+                                       "position."},
+                "residual": inv[slug]["Up"] - inv[slug]["Down"],
+                "quote_validity": valid,
+                "pair_economics": CLK.pair_economics(
+                    "PMUS", buy_px=ep.first_px, complement_buy_px=comp_px),
+            }) | {"slug": slug,
+                  "L5_OBSERVATION_CLOCK": time.time(),
+                  "l5_resting_orders": UNRESOLVED})
+            if mark == CLK.MARKS_S[-1]:
+                clock.retire(ep.key)
 
         # --- events whose forward window has now elapsed
         still: List[dict] = []
@@ -312,6 +406,8 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
 
     emit({"kind": "session_end", "books_recorded": n_books,
           "l5_events_recorded": n_events,
+          "residual_episodes_opened": clock.n_opened,
+          "residual_episodes_still_open": len(clock.open),
           "events_pending_at_close": len(pending),
           "L5_OBSERVATION_CLOCK": time.time()})
     fh.close()
