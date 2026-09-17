@@ -479,3 +479,56 @@ deploy and why the owner asked for it.
             green artifact with FORBIDDEN_CLASSES untouched; ACCEPTANCE true.
 
             Record: analysis/l5/live_probe/CP1_13_ORDER_FORENSICS_2026-09-16.md
+
+--------------------------------------------------------------------------
+2026-09-17T01:2xZ — ACTIVATE: the 10-market CP1 execution-measurement probe
+
+            OWNER AUTHORIZATION 2026-09-17: "NEXT CP1 LIVE EXECUTION PROBE".
+            Breadth only, on the accepted freshness-gate execution baseline.
+            "Then remove HALT, deploy the exact tested artifact and GO LIVE."
+
+            HALT is REMOVED from this tree; the FRESH mandate
+            OWNER-2026-09-17-CP1-BREADTH10-EXECUTION-PROBE remains.
+
+            AUTHORIZATION-ONLY DESCENDANT, PROVEN NOT ASSERTED. The execution
+            path is BYTE-IDENTICAL to the accepted artifact 0edd1eb061f9: git
+            diff over pmus_spring_l5_session.py, pmus_live_mandate.py and
+            pmus_l5_continuous_session.py is EMPTY. Only the mandate, the
+            ladder's breadth, this image's market allowance, tests, lineage
+            and records differ.
+
+            BREADTH IS A min() OF THREE NUMBERS, and all three moved together:
+            PMUS_SPRING_RUNG_MARKETS=10, CP1 markets_per_campaign=10, mandate
+            max_total_markets=10. Moving fewer would have produced a probe
+            that quietly stopped early while every record claimed ten. A test
+            now asserts they agree.
+
+            CP1 WAS WIDENED IN PLACE, not added as a new rung: durable state
+            stores the rung ID, so a new pinned id meeting the stored "CP1"
+            would have gone through B3's tightest() -- markets_per_campaign is
+            a risk dimension -- and the stored 3 would have clamped the
+            authorization back to 3. B3 is untouched.
+
+            WHAT BINDS THE DOLLARS, and it changed. The rung's own worst case
+            is now $5.00 x 10 = $50.00 where it read $15.00 at three markets.
+            max_total_spend stays $15.00, so the MANDATE is now strictly
+            tighter than the rung and is the campaign-spend ceiling at the
+            wire. Breadth buys observations, not dollars.
+
+            UNCHANGED: target $0.10, leg $0.125, k 0.00619, maker/post-only,
+            ~30s rest, fee-safe 0.98, residual 3, concurrency 1, ACT/WAIT and
+            model logic, market selection, the freshness gate, GuardedTransport
+            and every existing fail-closed control.
+
+            ALL EIGHT PRE-ARMING CHECKS PASSED BEFORE HALT WAS REMOVED,
+            including 01:16:23Z SHUTDOWN_VERIFIED with held_preserved [],
+            still_pending [], refusals 0, position_net 0, and full suite 5008.
+
+            FOR THIS RUN: do not force a trade; do not alter aggressiveness,
+            rest, sizing or controller behaviour in response to early
+            non-fills; freshness skips are never scored as model WAIT; on a
+            fill the existing controller handles inventory and no complement
+            is manufactured by hand; HALT immediately on any discrepancy
+            capable of increasing exposure beyond this authorization.
+
+            Record: analysis/l5/authorization/ACTIVATION_3_BREADTH10_2026-09-17.md
