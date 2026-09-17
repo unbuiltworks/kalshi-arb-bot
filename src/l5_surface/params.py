@@ -32,16 +32,26 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 SCHEMA = "l5_passive_surface_params/v1"
 
 OBSERVED_PROSPECTIVE = "OBSERVED_PROSPECTIVE"
+#: observed on ANOTHER venue and carried here as a hypothesis. It is NOT
+#: evidence about this venue, and the whole point of running two lanes is that
+#: a transfer can FAIL -- which is only learnable if transferred fields are
+#: distinguishable from measured ones.
+TRANSFERRED = "TRANSFERRED"
 OBSERVED_RETROSPECTIVE = "OBSERVED_RETROSPECTIVE"
 INFERRED = "INFERRED"
 UNRESOLVED = "UNRESOLVED"
 OURS_ADAPTED = "OURS_ADAPTED"
 
 STATUSES = (OBSERVED_PROSPECTIVE, OBSERVED_RETROSPECTIVE, INFERRED,
-            UNRESOLVED, OURS_ADAPTED)
+            UNRESOLVED, OURS_ADAPTED, TRANSFERRED)
 
 #: statuses that may be read as a statement about L5's own behaviour
 L5_EVIDENCE = (OBSERVED_PROSPECTIVE, OBSERVED_RETROSPECTIVE)
+
+
+#: optional Param keys omitted from the identity hash when unset, so that
+#: ADDING one does not invalidate specs frozen before it existed
+OPTIONAL_KEYS = ("transferred_from",)
 
 
 class Unresolved(Exception):
@@ -59,6 +69,7 @@ class Param:
     evidence: Optional[str] = None
     prior_evidence: Optional[str] = None
     pending_source: Optional[str] = None
+    transferred_from: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.status not in STATUSES:
@@ -74,6 +85,10 @@ class Param:
         if self.status in L5_EVIDENCE and not self.evidence:
             raise ValueError("%s claims to be observed about L5 and cites "
                              "nothing" % self.name)
+        if self.status == TRANSFERRED and not self.transferred_from:
+            raise ValueError("%s is TRANSFERRED and does not say from where; "
+                             "an unattributed transfer is indistinguishable "
+                             "from a measurement" % self.name)
 
     def get(self) -> Any:
         if self.status == UNRESOLVED:
@@ -135,6 +150,9 @@ class SurfaceParams:
     def get(self, name: str) -> Any:
         return self.params[name].get()
 
+    def transferred(self) -> List[str]:
+        return [f for f in FIELDS if self.params[f].status == TRANSFERRED]
+
     def unresolved(self) -> List[str]:
         return [f for f in FIELDS if self.params[f].status == UNRESOLVED]
 
@@ -150,9 +168,18 @@ class SurfaceParams:
         Covers the statuses and the citations as well as the values: a set
         whose numbers are unchanged but whose evidence was rewritten is NOT
         the same spec."""
+        def _canon(p: "Param") -> Dict[str, Any]:
+            # A spec's identity is its CONTENT, not the dataclass's field
+            # list. An optional key that is None everywhere carries no
+            # content, so omitting it keeps a hash stable when the schema
+            # gains a field -- otherwise adding one silently invalidates
+            # every artifact already frozen and reviewed.
+            d = asdict(p)
+            return {k: v for k, v in d.items()
+                    if not (k in OPTIONAL_KEYS and v is None)}
         blob = json.dumps(
             {"label": self.label, "kind": self.kind,
-             "params": {k: asdict(self.params[k]) for k in FIELDS}},
+             "params": {k: _canon(self.params[k]) for k in FIELDS}},
             sort_keys=True, default=str)
         return hashlib.sha256(blob.encode()).hexdigest()
 
@@ -163,6 +190,7 @@ class SurfaceParams:
             "fields": {k: asdict(self.params[k]) for k in FIELDS},
             "unresolved": self.unresolved(),
             "n_unresolved": len(self.unresolved()),
+            "transferred": self.transferred(),
             "l5_evidence_fields": self.l5_evidence_fields(),
             "notes": self.notes,
             "labels": [
