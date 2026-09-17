@@ -22,6 +22,20 @@ from src.l5_surface import params as PR
 
 LABEL = "L5_PASSIVE_SURFACE_SPEC_V1"
 
+#: the two frozen sets this module produces.
+#:
+#: FIDELITY_OBSERVABLE_V1 is every field observable L5 evidence supports, with
+#: the unobservable ones explicitly unresolved. It is not a failed spec: it is
+#: the exact boundary of what public data can say about him, and that boundary
+#: is a result.
+#:
+#: L5_ADAPTED_V1 is that set plus OUR deployment policies for the load-bearing
+#: fields nothing can observe. Those policies exist to make the observable
+#: mechanism EXECUTABLE so it can be tested prospectively -- never to claim L5
+#: uses them.
+FIDELITY_LABEL = "FIDELITY_OBSERVABLE_V1"
+ADAPTED_LABEL = "L5_ADAPTED_V1"
+
 # --------------------------------------------------------------------------
 # WHAT COUNTS AS ESTABLISHED. Declared before the code that evaluates it.
 # Each entry: the statistic, the threshold, and the minimum sample beneath
@@ -345,7 +359,8 @@ def build(rep: Dict[str, Any], *, kind: str = "FIDELITY") -> Dict[str, Any]:
         fields["max_residual"] = PR.ADAPTED_V0.params["max_residual"]
 
     sp = PR.SurfaceParams(
-        label="%s_%s" % (LABEL, kind), kind=kind, params=fields,
+        label=(FIDELITY_LABEL if kind == "FIDELITY" else ADAPTED_LABEL),
+        kind=kind, params=fields,
         notes=("populated from L5_PASSIVE_SURFACE_PROSPECTIVE_V1 by the rules "
                "frozen in analysis/l5/window_forensics/spec.py"))
     return {"built": True, "spec": sp, "report": sp.report(),

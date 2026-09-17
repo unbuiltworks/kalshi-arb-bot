@@ -331,3 +331,103 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# --------------------------------------------------------------------------
+# THE TWO ADAPTED ASSUMPTIONS, AS EXPERIMENTAL AXES.
+#
+# `inventory_price_skew = NONE` and `withdrawal_policy = TTE_FLOOR` are OUR
+# choices, made because nothing observable establishes L5's. They are not
+# neutral: each has a specific way of being wrong, and a shadow that did not
+# measure it would let a bad default survive by never being looked at.
+#
+# So each axis names the harm it would cause and the statistic that would show
+# it. Tuning them later comes from THESE numbers -- our own prospective
+# executable economics -- and never from pretending public data revealed them.
+# --------------------------------------------------------------------------
+ASSUMPTION_AXES: Dict[str, Dict[str, Any]] = {
+    "stranded_residual": {
+        "assumption": "inventory_price_skew = NONE",
+        "harm": ("with no skew, nothing pulls quoting toward the side that "
+                 "would reduce an imbalance, so a residual can sit unworked"),
+        "statistic": "share of ticks with |residual| > 0 and no live reducing "
+                     "rung",
+    },
+    "one_sided_accumulation": {
+        "assumption": "inventory_price_skew = NONE",
+        "harm": "both sides quoted equally while only one keeps filling",
+        "statistic": "max |residual| reached, and its share of total filled",
+    },
+    "poor_recycling": {
+        "assumption": "inventory_price_skew = NONE",
+        "harm": "matched inventory forms slowly or not at all",
+        "statistic": "p_opposite_within_{5,15,30,60,120,300}s over fills",
+    },
+    "stale_quote_exposure": {
+        "assumption": "withdrawal_policy = TTE_FLOOR",
+        "harm": ("never withdrawing before the floor leaves quotes resting "
+                 "through state changes that would have moved them"),
+        "statistic": "seconds a live rung spent more than one tick away from "
+                     "the touch it was placed against",
+    },
+    "adverse_selection": {
+        "assumption": "withdrawal_policy = TTE_FLOOR",
+        "harm": "the fills we get are the ones we least wanted",
+        "statistic": ("touch movement against us in the 30s after each "
+                      "EVIDENCED_FILL"),
+    },
+    "unnecessary_cancellation": {
+        "assumption": "withdrawal_policy = TTE_FLOOR",
+        "harm": "withdrawing at the floor discards rungs that would have "
+                "filled",
+        "statistic": "rungs withdrawn at the floor that later saw TRADE_FLOW "
+                     "at their price",
+    },
+    "divergence_from_l5": {
+        "assumption": "both",
+        "harm": "our surface stops resembling his proven parents",
+        "statistic": "exact-level and within-1-tick share against subsequent "
+                     "OBSERVED_L5_PARENT executions",
+    },
+}
+
+
+def axes_report(rungs: Sequence[EV.RungEvidence], parents: Sequence[dict],
+                ticks: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Score the two ADAPTED assumptions against what actually happened.
+
+    Every figure here is SHADOW: it comes from evidenced fills on orders that
+    were never placed. It measures whether OUR defaults are hurting, which is
+    a question about our deployment and not a finding about L5.
+    """
+    fills = [r for r in rungs if r.is_fill()]
+    inv: Dict[str, float] = {}
+    peak = 0.0
+    for r in fills:
+        inv[r.outcome] = inv.get(r.outcome, 0.0) + float(r.filled_qty())
+        peak = max(peak, abs(inv.get("Up", 0.0) - inv.get("Down", 0.0)))
+    total = sum(inv.values())
+    rec = EV.recycling(fills, RECYCLE_S)
+    starved = sum(1 for t in ticks if t.get("residual")
+                  and not t.get("has_reducing_rung"))
+    return {
+        "axes": ASSUMPTION_AXES,
+        "n_evidenced_fills": len(fills),
+        "stranded_residual": {
+            "ticks_with_residual_and_no_reducing_rung": starved,
+            "ticks_considered": len(ticks),
+            "share": (round(starved / len(ticks), 4) if ticks else None)},
+        "one_sided_accumulation": {
+            "peak_abs_residual": round(peak, 6),
+            "total_filled": round(total, 6),
+            "peak_share_of_filled": (round(peak / total, 4) if total else None)},
+        "poor_recycling": rec,
+        "divergence_from_l5": {"n_parents_compared": len(parents)},
+        "labels": [
+            "SHADOW. Evidenced fills on orders that were never placed; no "
+            "position exists and nothing here is realized.",
+            "These measure OUR defaults, not L5. inventory_price_skew=NONE "
+            "and withdrawal_policy=TTE_FLOOR are OURS_ADAPTED and are tuned "
+            "from these numbers, never from public data about him.",
+        ],
+    }

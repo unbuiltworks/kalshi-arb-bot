@@ -255,3 +255,49 @@ def test_the_surface_is_written_before_the_evidence_that_scores_it(
 
 def test_an_unknown_spec_label_is_refused_rather_than_defaulted():
     assert S.main(["--spec", "NOPE", "--out-dir", "/tmp/x"]) == 2
+
+
+def test_every_adapted_assumption_names_its_harm_and_its_statistic():
+    """A default nobody measures survives by never being looked at."""
+    for name, ax in S.ASSUMPTION_AXES.items():
+        assert ax["assumption"] in ("inventory_price_skew = NONE",
+                                    "withdrawal_policy = TTE_FLOOR", "both")
+        assert ax["harm"] and ax["statistic"], name
+    covered = {ax["assumption"] for ax in S.ASSUMPTION_AXES.values()}
+    assert "inventory_price_skew = NONE" in covered
+    assert "withdrawal_policy = TTE_FLOOR" in covered
+    for required in ("stranded_residual", "one_sided_accumulation",
+                     "poor_recycling", "stale_quote_exposure",
+                     "adverse_selection", "unnecessary_cancellation",
+                     "divergence_from_l5"):
+        assert required in S.ASSUMPTION_AXES, required
+
+
+def test_the_axes_report_counts_only_evidenced_fills():
+    a = EV.RungEvidence(surface_id="s", spec_sha256="x", market_key="m",
+                        outcome="Up", price="0.50", desired_qty="100",
+                        rung_index=0)
+    for st in EV.STAGES[1:EV.STAGES.index(EV.EVIDENCED_FILL) + 1]:
+        a.advance(st, modelled_fill_qty="100", t=10.0)
+    b = EV.RungEvidence(surface_id="s", spec_sha256="x", market_key="m",
+                        outcome="Down", price="0.49", desired_qty="100",
+                        rung_index=0)
+    for st in EV.STAGES[1:EV.STAGES.index(EV.TRADE_FLOW) + 1]:
+        b.advance(st)
+    r = S.axes_report([a, b], [], [])
+    assert r["n_evidenced_fills"] == 1
+    assert r["one_sided_accumulation"]["peak_abs_residual"] == 100.0
+    assert r["one_sided_accumulation"]["peak_share_of_filled"] == 1.0
+    joined = " ".join(r["labels"])
+    assert "never placed" in joined and "nothing here is realized" in joined
+    assert "OURS_ADAPTED" in joined
+
+
+def test_stranded_residual_counts_ticks_with_no_reducing_rung():
+    r = S.axes_report([], [], [
+        {"residual": 5, "has_reducing_rung": False},
+        {"residual": 5, "has_reducing_rung": True},
+        {"residual": 0, "has_reducing_rung": False},
+        {"residual": 3, "has_reducing_rung": False}])
+    assert r["stranded_residual"]["ticks_with_residual_and_no_reducing_rung"] == 2
+    assert r["stranded_residual"]["share"] == 0.5

@@ -174,3 +174,43 @@ def test_the_fidelity_build_stays_unrunnable_and_says_why():
     assert r["emitted"] is False
     assert "inventory_price_skew" in r["blocked_by"]
     assert "withdrawal_policy" in r["blocked_by"]
+
+
+def test_the_two_frozen_sets_carry_the_owner_s_names():
+    assert SP.FIDELITY_LABEL == "FIDELITY_OBSERVABLE_V1"
+    assert SP.ADAPTED_LABEL == "L5_ADAPTED_V1"
+    assert SP.build(_rep(), kind="FIDELITY")["spec"].label == SP.FIDELITY_LABEL
+    assert SP.build(_rep(), kind="ADAPTED")["spec"].label == SP.ADAPTED_LABEL
+
+
+def test_adapted_is_the_observable_set_plus_our_policies_and_nothing_else():
+    """L5_ADAPTED_V1 must differ from FIDELITY_OBSERVABLE_V1 ONLY in the
+    fields we supply. Any other difference would mean the adapted set quietly
+    re-read the evidence."""
+    f = SP.build(_rep(), kind="FIDELITY")["spec"]
+    a = SP.build(_rep(), kind="ADAPTED")["spec"]
+    differ = [k for k in PR.FIELDS if f.params[k] != a.params[k]]
+    assert set(differ) == {"inventory_price_skew", "withdrawal_policy",
+                           "minimum_rest_time", "max_residual"}
+    for k in differ:
+        assert a.params[k].status == PR.OURS_ADAPTED
+    # every field the evidence DID establish is carried across unchanged
+    for k in PR.FIELDS:
+        if f.params[k].status == PR.OBSERVED_PROSPECTIVE:
+            assert a.params[k] == f.params[k], k
+    assert a.l5_evidence_fields() == f.l5_evidence_fields()
+
+
+def test_the_first_adapted_shadow_uses_the_declared_conservative_policies():
+    a = SP.build(_rep(), kind="ADAPTED")["spec"]
+    assert a.get("inventory_price_skew") == {"widening_ticks": 0,
+                                             "reducing_ticks": 0}
+    assert a.get("withdrawal_policy")["mode"] == "WITHDRAW_ON_TTE_FLOOR"
+    # and they are NOT derived from the report -- the same policies come back
+    # from a report with completely different numbers
+    other = _rep()
+    other["pooled"]["reversals"]["share_already_present"] = 0.05
+    other["windows"][0]["qty"]["classes"]["EXACT_100"] = 1
+    b = SP.build(other, kind="ADAPTED")["spec"]
+    assert b.params["inventory_price_skew"] == a.params["inventory_price_skew"]
+    assert b.params["withdrawal_policy"] == a.params["withdrawal_policy"]
