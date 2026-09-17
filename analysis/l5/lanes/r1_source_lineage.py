@@ -285,8 +285,28 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "3228496202db7f5c56ec70dcb87f3724e24b318d",
-        "why": ("RE-PINNED 2026-09-17 to ARM the 10-market execution probe. "
+        "sha": "7fa63fbee5a5068ca1c79b7406323dd384d4646d",
+        "why": ("RE-PINNED 2026-09-17 for the LIVE SHORT-HORIZON SPORTS "
+                "cohort. This tree carries the FRESH immutable mandate "
+                "OWNER-2026-09-17-CP1-LIVE-SHORT-HORIZON-COHORT (1 "
+                "concurrent / 10 total, $5.00 per market, $15.00 total, "
+                "$3.00 residual, -$6.00 daily stop, 12h) replacing the "
+                "breadth-10 mandate whose campaign ended CAMPAIGN_STOP:HALT "
+                "at 02:28:12Z. A new authorization_id, not a reuse or an "
+                "enlargement, so consumption() starts at zero markets "
+                "touched. NO monetary envelope moved despite the candidate "
+                "universe growing from one league to every live sport: a "
+                "wider choice under an unchanged cap is more CHOICE, not "
+                "more money. HALT is ABSENT, so this pin covers an ARMED "
+                "authorization -- the strongest reason the directory is "
+                "gated at all. Removing HALT does not authorize trading: "
+                "orders additionally require the mandate, and the "
+                "halt/authorization consistency test enforces that the "
+                "absence of HALT is never on its own an authorization. The "
+                "tree also adds LIVE_SHORT_HORIZON_COHORT_2026-09-17.md and "
+                "marks MLB_COHORT_PREACTIVATION_2026-09-17.md SUPERSEDED -- "
+                "prose, not code. "
+                "PREVIOUSLY: pinned to ARM the 10-market execution probe. "
                 "HALT is REMOVED from this tree and the FRESH mandate "
                 "OWNER-2026-09-17-CP1-BREADTH10-EXECUTION-PROBE remains, so "
                 "this pin covers an ARMED authorization -- the strongest "
