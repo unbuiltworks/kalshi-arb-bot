@@ -689,11 +689,16 @@ class Supervisor:
         nothing. `rows` emits one line per scored parent and per reversal, and
         is passed once at boot rather than on the cadence so the detail is
         available without repeating every ten minutes.
+
+        The COMPLETE artifact -- every scored parent and reversal row -- is
+        also written next to the tapes, because the log rotates and a
+        mechanism label without the rows behind it cannot be re-checked.
         """
         root = os.path.join(self.root, "l5-window-forensics")
         try:
             from analysis.l5.window_forensics import prospective as PS
-            rep = PS.report(root)
+            rep = PS.report(root, state_root=self.root)
+            rep["artifact_path"] = PS.persist(rep, root)
         except Exception as exc:                              # noqa: BLE001
             print("L5_PSP " + json.dumps(
                 {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:300]}),
