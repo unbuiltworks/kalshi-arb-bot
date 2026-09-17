@@ -1,6 +1,6 @@
 {
   "service": "l5-exec-shadow",
-  "code_sha": "5248ec3fe6e66b48394ecd6415b2b3716e20c35a",
+  "code_sha": "601acfa720e84d7263ad1c40c2f04a2b271ec0ce",
   "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one.",
   "window_forensics_migration": {
     "module": "src/l5_window_forensics.py",
@@ -26,5 +26,36 @@
     },
     "transition_utc": 1789669526.4022691,
     "labels": "The module bytes are identical before and after. Only where it runs and where it writes changed. The container tape and the volume tape are separate tapes; neither continues the other and nothing is backfilled between them."
+  },
+  "pre_deploy_state_20260917T2005Z": {
+    "serving_deployment": "e6e180eb-9532-4be2-838c-871aa9c17cd4",
+    "serving_commit": "4518b64a85f99ff9a70068f1d1894a9a37236139",
+    "serving_code_sha": "5248ec3fe6e66b48394ecd6415b2b3716e20c35a",
+    "window_forensics_module_sha256": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "segment": "/state/l5-research/l5-window-forensics/seg_20260917T183036Z_001",
+    "uptime_s_at_2000Z": 5411.6,
+    "failures": {
+      "exec_shadow": 0,
+      "gemini_depth": 0,
+      "chain_validate": 0,
+      "book_context": 0,
+      "gemini_surface": 0,
+      "window_forensics": 0
+    },
+    "terminal_states": [
+      {
+        "window": 1789670700,
+        "window_done_utc": 1789673100.153
+      },
+      {
+        "window": 1789672500,
+        "window_done_utc": 1789674904.113
+      },
+      {
+        "window": 1789674300,
+        "window_done_utc": 1789675509.592
+      }
+    ],
+    "labels": "recorded BEFORE the reporting promotion so the sample's provenance cannot be attributed to the deployment that scores it"
   }
 }
