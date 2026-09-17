@@ -695,10 +695,15 @@ def _tally(items) -> dict:
 
 COHORT_ENV = "PMUS_L5_COHORT"
 COHORT_CLASS = "venue_execution_adaptation:cohort_horizon"
+#: The cohort value meaning ANY league, provided every other clause still
+#: holds. It is "*" rather than a word because the check it bypasses is an
+#: equality against the venue's own `primaryTag` slug ("mlb", "itfwo", "utr",
+#: "esports", "county", ...), and "*" cannot collide with one of those.
+COHORT_ANY_LIVE = "*"
 
 
-def cohort_league() -> str:
-    """The league this cohort is restricted to, or "" for no restriction.
+def cohort_spec() -> str:
+    """The cohort restriction: a league slug, COHORT_ANY_LIVE, or "" for none.
 
     UNSET IS THE DEFAULT AND MEANS UNCHANGED BEHAVIOUR. The restriction is
     opt-in per authorization and is carried by the image, exactly as the rung
@@ -708,7 +713,7 @@ def cohort_league() -> str:
 
 
 def cohort_reason(progress: Optional[Mapping[str, Any]],
-                  league: str) -> Optional[str]:
+                  cohort: str) -> Optional[str]:
     """Why this market is not in the authorized cohort. None = eligible.
 
     L5_ADAPTED venue/market SELECTION. It decides which markets execution may
@@ -730,15 +735,27 @@ def cohort_reason(progress: Optional[Mapping[str, Any]],
     Neither does this function manufacture a settlement time -- it reports the
     venue's game position and nothing more, which is the same discipline
     pmus_event_progress already holds itself to.
+
+    `cohort` is a league slug, or COHORT_ANY_LIVE for a generic live-sports
+    cohort. The sentinel relaxes EXACTLY ONE clause -- the league equality --
+    and nothing else: an event still has to be in the live feed, still has to
+    carry a period token we recognise, and still must not be ended. Measured
+    2026-09-17T10:36Z over 74 live events, that refuses cricket (its token is
+    the bare word "LIVE", which reports liveness and no position, and county
+    cricket runs for days), esports ("Map 2" with no served series length) and
+    NPB/KBO baseball (its "IN5" token is not the MLB "Top 5th" form the
+    inning regex reads). Those are the long and the unknowable horizons, and
+    they are refused for want of evidence rather than by naming a sport.
     """
-    if not league:
+    if not cohort:
         return None                      # no cohort restriction configured
     if not progress:
         # covers not-yet-started, already-ended, and a live-feed outage
         return "cohort:not_in_live_feed"
-    got = (progress.get("league") or "").strip().lower()
-    if got != league:
-        return "cohort:not_%s:%s" % (league, got or "unknown")
+    if cohort != COHORT_ANY_LIVE:
+        got = (progress.get("league") or "").strip().lower()
+        if got != cohort:
+            return "cohort:not_%s:%s" % (cohort, got or "unknown")
     if progress.get("ended"):
         return "cohort:event_ended"
     if progress.get("game_proximity") is None:
@@ -768,7 +785,7 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         progress_by_slug, progress_diag = {}, {
             "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
     admitted, refused = [], []
-    _cohort = cohort_league()
+    _cohort = cohort_spec()
     for row in status.get("spring_watch") or []:
         if not isinstance(row, Mapping) or not row.get("slug"):
             continue

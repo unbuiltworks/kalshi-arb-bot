@@ -1,5 +1,15 @@
 # MLB same-day cohort — pre-activation evidence
 
+> **SUPERSEDED 2026-09-17T10:40Z — DO NOT ACTIVATE.**
+> The owner withdrew this league-specific authorization in favour of
+> `LIVE_SHORT_HORIZON_COHORT_2026-09-17.md`, a generic live-sports cohort.
+> The eligibility LAYER below was kept and generalised (the league equality is
+> the only clause relaxed); the AUTHORIZATION below is void. `PMUS_L5_COHORT`
+> must not be set to `mlb` on the strength of this document.
+>
+> Everything below is retained as the measurement record that produced the
+> gate, not as a live proposal.
+
 Prepared 2026-09-17T02:10Z. **Nothing is activated.** No deploy, no mandate, no
 arming. `PMUS_L5_COHORT` is unset, and with it unset the gate refuses nothing,
 so the running probe is bit-for-bit unchanged.

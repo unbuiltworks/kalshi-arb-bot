@@ -25,7 +25,7 @@ def _no_ambient_cohort(monkeypatch):
 def test_unset_cohort_refuses_nothing():
     """THE compatibility property: committing this gate must not change the
     behaviour of a probe that does not opt into it."""
-    assert sess.cohort_league() == ""
+    assert sess.cohort_spec() == ""
     for p in (None, {}, MLB_LIVE, {**MLB_LIVE, "league": "wta"},
               {**MLB_LIVE, "game_proximity": None}, {**MLB_LIVE, "ended": True}):
         assert sess.cohort_reason(p, "") is None
@@ -33,7 +33,7 @@ def test_unset_cohort_refuses_nothing():
 
 def test_the_cohort_comes_from_the_environment_and_is_case_folded(monkeypatch):
     monkeypatch.setenv(sess.COHORT_ENV, "  MLB  ")
-    assert sess.cohort_league() == "mlb"
+    assert sess.cohort_spec() == "mlb"
 
 
 # ----------------------------------------------- what is eligible
@@ -223,3 +223,130 @@ def test_progress_table_carries_the_league_through():
     assert got["league"] == "mlb"
     assert got["game_proximity"] is not None
     assert sess.cohort_reason(got, "mlb") is None
+
+
+# ===================================================================
+# LIVE_SHORT_HORIZON_SPORTS: the generic any-live cohort.
+#
+# The sentinel is a GENERALISATION of the reviewed MLB layer: it relaxes the
+# league equality and nothing else. These tests exist to pin "and nothing
+# else", because that is the entire safety claim.
+# ===================================================================
+
+ANY = sess.COHORT_ANY_LIVE
+
+
+def test_the_sentinel_cannot_collide_with_a_venue_league_slug():
+    """It bypasses an equality against the venue's own primaryTag slug, so it
+    must not be spellable as one. Real slugs seen live: mlb, itfwo, itfme,
+    utr, atp, county, esports, setkameua, setkamecz, wtt, npb, kbo, etpl."""
+    assert ANY == "*"
+    assert not ANY.isalnum()
+
+
+def test_any_live_admits_a_live_recognised_event_of_any_league():
+    for lg in ("itfwo", "utr", "atp", "setkameua", "wtt", "mlb"):
+        assert sess.cohort_reason({**MLB_LIVE, "league": lg}, ANY) is None, lg
+
+
+def test_any_live_relaxes_the_league_clause_AND_NOTHING_ELSE():
+    """THE property. Every non-league refusal must still fire under the
+    sentinel; if one stops firing, the generalisation has widened the gate."""
+    for progress, expect in (
+        (None,                                        "cohort:not_in_live_feed"),
+        ({},                                          "cohort:not_in_live_feed"),
+        ({**MLB_LIVE, "ended": True},                 "cohort:event_ended"),
+        ({**MLB_LIVE, "game_proximity": None,
+          "proximity_basis": "unrecognised_period_token"},
+         "cohort:unknown_progress:unrecognised_period_token"),
+        ({**MLB_LIVE, "game_proximity": None,
+          "proximity_basis": "unknown_series_length"},
+         "cohort:unknown_progress:unknown_series_length"),
+    ):
+        assert sess.cohort_reason(progress, ANY) == expect, progress
+    # ...and the ONLY thing it does relax is the league
+    assert sess.cohort_reason({**MLB_LIVE, "league": "itfwo"}, "mlb") == \
+        "cohort:not_mlb:itfwo"
+    assert sess.cohort_reason({**MLB_LIVE, "league": "itfwo"}, ANY) is None
+
+
+def test_a_missing_league_is_fine_under_the_sentinel_but_liveness_is_not():
+    """The sentinel does not care WHICH league, so an absent one is no longer
+    disqualifying -- but it must not become a way in for an unknown horizon."""
+    assert sess.cohort_reason({**MLB_LIVE, "league": None}, ANY) is None
+    assert sess.cohort_reason(
+        {"league": None, "ended": False, "game_proximity": None,
+         "proximity_basis": "no_period_served"}, ANY) == \
+        "cohort:unknown_progress:no_period_served"
+
+
+def test_the_reviewed_mlb_behaviour_is_unchanged_by_the_generalisation():
+    """Regression on the layer already reviewed: with a league spec, every
+    verdict is what it was before the sentinel existed."""
+    assert sess.cohort_reason(MLB_LIVE, "mlb") is None
+    assert sess.cohort_reason({**MLB_LIVE, "league": "npb"}, "mlb") == \
+        "cohort:not_mlb:npb"
+    assert sess.cohort_reason(None, "mlb") == "cohort:not_in_live_feed"
+    assert sess.cohort_reason({**MLB_LIVE, "ended": True}, "mlb") == \
+        "cohort:event_ended"
+    assert sess.cohort_reason(MLB_LIVE, "") is None
+
+
+# --------------------------------------------- real venue period tokens
+# Measured live 2026-09-17T10:36Z over 74 events. These are the actual
+# strings the venue served, not invented ones.
+
+@pytest.mark.parametrize("period,sport", [
+    ("S1", "tennis"), ("S2", "tennis"), ("S3", "tennis"),
+    ("S1", "table-tennis"), ("S2", "table-tennis"), ("S5", "table-tennis"),
+])
+def test_live_racquet_sports_are_eligible(period, sport):
+    prx, basis = prog.proximity(period, sport, False)
+    assert prx is not None
+    assert sess.cohort_reason(
+        {"league": "itfwo", "ended": False,
+         "game_proximity": prx, "proximity_basis": basis}, ANY) is None
+
+
+@pytest.mark.parametrize("period,sport,why", [
+    ("LIVE", "cricket", "unrecognised_period_token"),
+    ("Map 1", "esports", "unknown_series_length"),
+    ("Game 2", "esports", "unknown_series_length"),
+    ("IN5", "enetpulse_baseball", "unrecognised_period_token"),
+])
+def test_long_or_unknowable_horizons_are_refused(period, sport, why):
+    """Cricket's token is the bare word LIVE -- liveness with no position, and
+    county cricket runs for DAYS. Esports serves no series length. NPB/KBO use
+    "IN5" rather than the MLB "Top 5th" form. Each is refused for want of
+    evidence, not because a sport was named."""
+    prx, basis = prog.proximity(period, sport, False)
+    assert prx is None and basis == why
+    assert sess.cohort_reason(
+        {"league": "county", "ended": False,
+         "game_proximity": None, "proximity_basis": basis}, ANY) == \
+        "cohort:unknown_progress:%s" % why
+
+
+def test_cricket_live_is_not_quietly_read_as_a_liveness_pass():
+    """The most dangerous near-miss: "LIVE" looks like a positive signal and
+    is the longest-settling market on the board. It must refuse."""
+    assert prog.proximity("LIVE", "cricket", False)[0] is None
+
+
+def test_the_generic_gate_would_have_admitted_the_losing_tennis_market():
+    """HONESTY TEST. The trade that realized -$0.1836 was tennis in set 1: it
+    passes this gate. The cohort gate bounds SETTLEMENT LATENCY, not P&L --
+    that loss was directional residual, which no selection rule addresses.
+    Pinned so nobody later reads the gate as a loss-prevention control."""
+    prx, basis = prog.proximity("S1", "tennis", False)
+    assert sess.cohort_reason(
+        {"league": "itfwo", "ended": False,
+         "game_proximity": prx, "proximity_basis": basis}, ANY) is None
+
+
+def test_the_sentinel_reaches_no_trading_parameter_either():
+    toks = _code_tokens("cohort_reason")
+    for bad in ("price", "qty", "size", "rest", "pair", "residual", "notional",
+                "post_only", "aggress", "tick", "spread", "submit", "order",
+                "cap", "spring_live", "spring_arm", "mandate", "enddate"):
+        assert not any(bad in t for t in toks), f"cohort_reason mentions {bad}"
