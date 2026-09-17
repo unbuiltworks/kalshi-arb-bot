@@ -59,6 +59,71 @@ The live/sports implementation must therefore distinguish:
 2. **venue/execution shell** — what is actually executable/safe here;
 3. **economic gate** — whether the action remains positive expectancy without unsupported rebates/rewards.
 
+## 2a. FIDELITY CONCLUSION — L5 is an inventory oscillator, not a flat-completion controller
+
+**SCOPE: BTC15m ONLY.** This statement is NOT promoted to the general L5 model
+until other cohorts support it. On BTC15m the evidence is strong.
+
+Source: `analysis/l5/residual_exit/RESIDUAL_EXIT_FORENSICS_V1.md` ·
+`analysis/l5/residual_exit/forensics.py` · 5,546 windows, 693,916 fills, **zero
+sells**, 38,180 reconstructed residual episodes, chronological TRAIN/OOS.
+Residual P&L reconciles exactly to the authoritative window-level figure
+(−$144,064.99997 vs −$144,065 in `analysis/l5/btc15m/decompose.py`).
+
+* **84.3%** of imbalance episodes end by OVERSHOOTING through zero (`FLIPPED`).
+  **1.2%** end on it (`COMPLETED_FLAT`). **Exactly one of 5,546 windows ended
+  flat.**
+* Flat completion is also his MOST EXPENSIVE exit: median episode pair cost
+  0.9950 against 0.980–0.986 for flips, median attainable pair at that instant
+  **1.01**, and summed matched P&L **negative**.
+* It was being abandoned chronologically: 15.4% (Mar) → 0.32% (Aug); 0.24% OOS.
+* Median residual carried into settlement is **141.8 shares = 7.7% of all
+  shares traded in the window** (p90 462). Worth **−$144,065** across the sample.
+
+**Consequences for the model.** `OPEN → EXTEND → EXTEND / WAIT → COMPLETE or
+SWITCH` in §2 is right about the actions and wrong about the terminal state:
+there is no completion controller driving inventory to zero. The oscillation
+IS the process, and matched inventory is its by-product.
+
+**Predictors of the next action, chronologically validated.**
+
+* P(next action = `EXTEND`) = **0.66** unconditionally.
+* The only feature that separates it AND keeps its bin ordering out of sample
+  is **his own same-side run length** (Spearman 1.00; run 4+ → 0.733 OOS).
+  This supersedes `last_rel` as the concrete form of "repeated same-side
+  actions are predictive".
+* **Directional momentum is falsified.** The Δp-over-60s relation replicates
+  (ρ = 1.00) but is SYMMETRIC — 0.672 for Δp > +0.05, 0.663 for Δp < −0.05,
+  lowest (0.622) when flat. **|Δp| predicts extension; sign(Δp) does not.**
+  Movement direction must not be used as a favored-side signal.
+* **Favored-side accumulation is falsified.** P(next fill on the favored side)
+  = 0.4919 TRAIN / 0.4847 OOS, and it FALLS to 0.4707 OOS when attainable pair
+  cost exceeds 1.02. Conditioning on where the residual already sat collapses
+  the apparent effect to run persistence (0.64 favored / 0.34 against, flat
+  across every pair-cost bin).
+* **Carried residual lost money on both sides**, favored included: +$1,631
+  TRAIN but **−$12,971 OOS**. The high favored-side win rate is priced, not an
+  edge. This extends "no demonstrated directional skill" in §2 from "~50%
+  winner rate" to "negative expectancy after cost basis, out of sample".
+
+**Replication and monetization now separate (OWNER 2026-09-17).**
+
+* **FIDELITY** — reproduce the observed flip/extension process.
+* **ADAPTED** — determine how much of that process is actually necessary to
+  harvest the matched economics WITHOUT inheriting the negative residual
+  economics. This is the central optimization question, worked in
+  `analysis/l5/exploratory_v2/`.
+
+The useful frontier is **maximum matched economics retained per dollar of
+residual risk removed**. A gate that removes residual by removing the inventory
+cycling that creates matched inventory is not a win and must be reported as the
+matched-volume loss it is.
+
+**Unobservable and never imputed:** the historical book at any instant; queue
+position; L5's unfilled, resting or cancelled orders — so *"L5 waited"* and
+*"L5 quoted and was not hit"* are the same observation in this data; maker vs
+taker per fill; per-market incentive credits.
+
 ## 3. Measured historical evolution
 
 Artifact: `analysis/l5/l5_ramp_analysis.json`  
