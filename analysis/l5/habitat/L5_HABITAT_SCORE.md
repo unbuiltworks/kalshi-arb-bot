@@ -3,6 +3,22 @@
 `analysis/l5/habitat/score.py` · `habitat_v1.json` · real observations only ·
 **no composite score**
 
+> **CORRECTED 2026-09-17.** The first version of this file reported the
+> **median market** and called it the venue. On a venue with 325 markets of
+> which most never trade, the median market is idle, so it reported
+> *"Gemini 0.0000 at every horizon, PMUS 0.0086–0.0595"* — which **understated
+> both venues and got their ranking wrong**. Two defects are fixed and both
+> statistics are now reported side by side:
+>
+> * **POOLED** sums each market's own counts. An observation is only ever
+>   completed by a trade **in the same market** — an intermediate version
+>   merged the event streams and let market X be completed by market Y, which
+>   inflated PMUS to 0.83. That artifact is gone.
+> * **Polymarket BTC15m was `UNMEASURABLE`**, not zero: the recorder sees L5's
+>   fills and the venue publishes no price on that row. The market's own public
+>   prints were joined afterwards, read-only, without touching the running
+>   recorder.
+
 The primary diagnostic is **post-fill continuation opportunity**: after
 acquiring one side, does a credible **opposite-side** interaction actually
 arrive, and how soon? `MATCHED_SHARE_LINEAGE_V1` found that the complement has
@@ -24,76 +40,80 @@ not flattened:
 
 ## The primary diagnostic
 
-P(opposite interaction within Δ), median across markets. `harder_side` is the
-minimum of the two directions — a surface needs whichever side it did **not**
-just fill.
+P(opposite interaction within Δ) after a hypothetical first-side fill.
+`harder_side` is the minimum of the two directions — a surface needs whichever
+side it did **not** just fill.
 
-| Δ | **Gemini BTC05M** buy / sell / **harder** | **PMUS sports** buy / sell / **harder** |
-|---|---|---|
-| 5 s | 0.0000 / 0.0188 / **0.0000** | 0.0238 / 0.0121 / **0.0086** |
-| 30 s | 0.0000 / 0.1129 / **0.0000** | 0.0562 / 0.0357 / **0.0192** |
-| 60 s | 0.0000 / 0.2177 / **0.0000** | 0.1087 / 0.0714 / **0.0257** |
-| 120 s | 0.0726 / 0.2820 / **0.0000** | 0.1698 / 0.1217 / **0.0595** |
+### POOLED — per-market counts summed, never cross-market
 
-**Gemini BTC05M is 0.0000 on the harder side at every horizon.** After buying
-the bid, no trade printed at or above the ask within two minutes in the median
-market. The complement does not arrive.
+| venue | ≤5 s | ≤30 s | ≤60 s | ≤120 s | n two-sided obs |
+|---|---|---|---|---|---|
+| Gemini BTC05M | 0.0042 | 0.0205 | 0.0368 | 0.0713 | 3,803 |
+| **PMUS sports** | **0.0292** | **0.0592** | **0.0969** | **0.1307** | 20,404 |
+| Polymarket BTC15m (L5 native) | 0.0244 | 0.0297 | 0.0393 | 0.0626 | 942 |
 
-**PMUS sports is low but non-zero and monotone** on both directions and on the
-harder side.
+### Every other component, reported separately — MEDIAN MARKET
 
-## Every other component, reported separately
-
-| component | Gemini BTC05M | PMUS sports | Polymarket BTC15m |
+| component | Gemini BTC05M | PMUS sports | **Polymarket BTC15m** |
 |---|---|---|---|
-| markets / quotes / interactions | 18 / 5,478 / **67** | 168 / 20,110 / **1,694** | instrumented 16:04Z, pending |
-| expected credible interactions remaining | **0.63** | n/a (no uniform window) | pending |
-| two-sided uptime | 0.7612 | **0.8897** | pending |
-| reversal frequency / min | **5.835** | **0.000** | pending |
-| spread (median) | **0.220 = 22 ticks** | 0.050 = 5 ticks | pending |
-| touch depth bid / ask / harder | 10 / 10 / **10** | 5,100 / 4,900 / **2,400** | pending |
-| interaction frequency / min | 0.500 | 0.044 | pending |
-| maker/post-only validity | 1.0000 | 1.0000 | pending |
-| known fees | **venue_declared_unknown** — not estimated | 0.07 taker-only, rebate 0.2, tick 0.01, min 5, rewards min 50 / max spread 4.5 | same as PMUS |
-| **capacity** (median touch notional) | **$4.40** | **$1,650.00** | pending |
+| markets | 18 | 325 | 8 |
+| two-sided uptime | 0.7612 | **0.9712** | 0.8258 |
+| reversal frequency / min | 5.835 | **0.000** | 3.491 |
+| **spread (median ticks)** | 22.0 | 5.0 | **1.0** |
+| touch depth, harder side | 10.0 | **2,600** | 149.5 |
+| **capacity** (median touch notional) | **$4.40** | **$1,650** | **$156** |
+| interaction frequency / min | 0.500 | 0.000 | 7.165 *(pooled; median market 0)* |
+| maker/post-only validity | 1.0000 | 1.0000 | 1.0000 |
+| known fees | **venue_declared_unknown** — not estimated | 0.07 taker-only, tick 0.01, min size 5 | same as PMUS |
+| known rewards, kept separate | unknown | declared eligibility only: rewards min size 50, max spread 4.5 — **nothing credited, nothing estimated** | same |
 
 **`composite: null`, deliberately.** A composite lets a failed component hide
-behind a passing one. Gemini's 22-tick spread and perfect maker validity would
-carry an average straight past a continuation probability of zero.
+behind a passing one.
 
 ## Reading
 
-**Gemini BTC05M has an excellent price and nobody to trade with.** A 22-tick
+**The venue ranking is the opposite of what the median reported, and the
+corrected picture is more interesting.**
+
+**PMUS sports has the best post-fill continuation** — roughly **2×** Gemini at
+every horizon and **~2×** Polymarket BTC15m at 60–120 s — plus **$1,650** at
+the touch and 0.97 two-sided uptime. Its weakness is that it **never
+oscillates**: 0.000 reversals/min. Pre-event sports books sit still, and
+`MATCHED_SHARE_LINEAGE_V1` found that *reversals*, not drift, are what generate
+matched pairs.
+
+**Gemini BTC05M has an excellent price and almost no counterparty.** A 22-tick
 spread implies a pair at the touch near 0.71–0.80 against ~0.98 on PMUS — and
-it is unreachable: **$4.40 at the touch**, 67 interactions across 18 markets,
-and a **zero** probability that the harder side prints within two minutes. It
-is an empty room with a very good price tag.
+it is barely reachable: **$4.40** at the touch, 67 interactions across 18
+markets, and pooled harder-side continuation of **0.0042 → 0.0713**. The
+prospective surface shadow says the same thing far more directly: **17
+evidenced fills, zero complements at any mark.**
 
-**This does not contradict the preregistered Gemini verdict, it sharpens it.**
-That verdict returned `VIABLE_FOR_NEXT_L5_STAGE` for BTC05M on flow floors
-(11.32 seq/hr upper bound, 0.7903 trades/min) and its own label said *"VIABLE
-means the venue clears the floor, never that the strategy is profitable
-there"*, with sequence counts that *"assume we win every print"*. Continuation
-is the test the floor cannot do: it asks whether the **second** leg arrives.
-Here it does not.
+**L5's own venue is not the best on continuation — it is the tightest and the
+choppiest.** Polymarket BTC15m runs a **1.0-tick spread** with **3.49
+reversals/min**, 0.826 two-sided uptime and $156 at the touch. A one-tick
+spread means the pair at the touch is around **1.01**: there is no spread to
+capture. What that venue offers is **constant two-sided flow at a price where
+being the resting side, repeatedly, is the entire edge** — which is exactly the
+mechanism `L5_CAUSAL_MECHANISM_V1` inferred and the parent-order work has now
+confirmed on chain.
 
-**PMUS sports is the opposite trade-off.** A 5-tick spread and 0.044
-interactions/min per market look thin, but there are 168 of them, the touch
-carries **$1,650**, two-sided uptime is 0.89, and the harder-side continuation
-is small yet **real and monotone** (0.0086 → 0.0595). Capacity is ~**375×**
-Gemini's.
+### Why L5's directly-measured recycling is far higher than this number
 
-**One PMUS sports property matters for the lineage result: reversals are
-0.000/min.** Pre-event sports books barely oscillate. `MATCHED_SHARE_LINEAGE_V1`
-found that *reversals*, not drift, generate matched pairs (0 reversals →
-+14.8 bp/$ OOS; 6+ → +93.9). If that relationship survives prospectively, a
-book that never reverses is structurally poor for pair formation — and Gemini,
-which reverses 5.8×/min, has the choppiness but not the counterparties.
+The prospective residual clock measured L5's *actual* episodes recycling at
+**0.40 / 0.60 / 1.00** by 60 / 120 / 300 s. This table says a random two-sided
+moment on his venue sees the harder side within 120 s only **6.3%** of the
+time. Both are correct and they measure different things:
 
-**Neither venue currently looks like L5's habitat**, and the reasons differ:
-Gemini lacks counterparties and capacity; PMUS sports lacks oscillation. That
-is the most direct evidence yet that what we fail to reproduce is **the
-habitat**, not the decision rule.
+* this metric asks *"if you were filled at an arbitrary moment, would the other
+  side trade?"*
+* L5's episodes are the moments he **was** filled — a selected subset — and he
+  is already resting on **both** sides, so his complement can come from his own
+  standing quote rather than from a new opportunity.
+
+**A continuation probability measured from a random moment understates what an
+already-resting two-sided surface achieves.** That gap is itself the argument
+for the surface: presence beats reaction.
 
 ## Caveats, stated rather than buried
 

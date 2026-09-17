@@ -192,6 +192,30 @@ def from_book_context(paths: Sequence[str]) -> Dict[str, dict]:
     return dict(out)
 
 
+def public_trades_for(markets: Dict[str, dict]) -> Dict[str, dict]:
+    """Fill in the interaction stream for the Polymarket recorder.
+
+    The recorder sees L5's fills but the venue publishes no price on that row,
+    so continuation was UNMEASURABLE from it. The market's own public prints DO
+    carry a price and are fetched here, read-only and AFTER the fact, so the
+    running recorder is not touched. These are everyone's trades, not L5's --
+    which is exactly what a habitat measure needs."""
+    from src.l5_shadow import venues as V
+    out: Dict[str, dict] = {}
+    seen: Dict[str, list] = {}
+    for key, v in markets.items():
+        slug = key.split("|")[0]
+        if slug not in seen:
+            w = V.pm_window(slug)
+            cid = (w or {}).get("condition_id")
+            tr = V.pm_trades(cid) if cid else None
+            seen[slug] = [{"t": float(x["t"]), "price": float(x["price"]),
+                           "qty": float(x["size"])} for x in (tr or [])]
+        out[key] = {"quotes": v["quotes"], "expiry": v.get("expiry"),
+                    "interactions": seen[slug]}
+    return out
+
+
 # ---------------------------------------------------------------------------
 # the components, computed identically everywhere
 
@@ -206,6 +230,15 @@ def continuation(q: Sequence[dict], inter: Sequence[dict]) -> dict:
     its = sorted((x for x in inter if x["t"] is not None), key=lambda x: x["t"])
     ts = [x["t"] for x in its]
     res: Dict[str, Any] = {}
+    # A PRICELESS INTERACTION STREAM CANNOT ANSWER THIS. The Polymarket
+    # recorder sees L5's fills but the venue does not publish a price on that
+    # row, so "no opposite interaction" would be indistinguishable from "we
+    # cannot tell". Refuse rather than return a zero that reads as a
+    # measurement.
+    if its and not any(x.get("price") is not None for x in its):
+        return {"UNMEASURABLE": ("interactions carry no price on this stream, "
+                                 "so a trade cannot be placed relative to the "
+                                 "touch; this is not a zero")}
     for h in HORIZONS_S:
         up = dn = n = 0
         for o in q:
@@ -254,7 +287,7 @@ def score_market(m: dict, *, window_s: Optional[float], venue: str) -> dict:
     legal = sum(1 for s in spreads if s >= TICK)
     # a credible opposite interaction rate, per second, from the harder side
     cont = continuation(q, inter)
-    hard60 = cont["p_opposite_within_60s"]["harder_side"]
+    hard60 = (cont.get("p_opposite_within_60s") or {}).get("harder_side")
     rate = (len(inter) / span) if span else 0.0
     return {
         "n_quotes": len(q), "n_interactions": len(inter),
@@ -307,8 +340,46 @@ def aggregate(markets: Dict[str, dict], *, venue: str,
                 vals.append(cur)
         return _med(vals)
 
+    # POOLED = counts summed ACROSS markets, never event streams merged.
+    #
+    # The first version of this merged every market's quotes and every
+    # market's interactions into one call, so an observation in market X could
+    # be "completed" by a trade in market Y. On a 325-market venue that
+    # inflated PMUS from a few percent to 0.83 -- a cross-market artifact, not
+    # flow. Counts are therefore accumulated per market and added.
+    agg: Dict[int, List[int]] = {h: [0, 0, 0, 0] for h in HORIZONS_S}
+    unmeasurable = 0
+    for v in ok:
+        c = v.get("post_fill_continuation_opportunity") or {}
+        if "UNMEASURABLE" in c:
+            unmeasurable += 1
+            continue
+        for h in HORIZONS_S:
+            cell = c.get("p_opposite_within_%ds" % h) or {}
+            n = cell.get("n_two_sided_observations") or 0
+            agg[h][0] += n
+            agg[h][1] += int(round((cell.get("after_buying_the_bid") or 0) * n))
+            agg[h][2] += int(round((cell.get("after_selling_the_ask") or 0) * n))
+            agg[h][3] += int(round((cell.get("harder_side") or 0) * n))
+    pooled = {"p_opposite_within_%ds" % h: {
+        "n_two_sided_observations": agg[h][0],
+        "after_buying_the_bid": (round(agg[h][1] / agg[h][0], 4) if agg[h][0] else None),
+        "after_selling_the_ask": (round(agg[h][2] / agg[h][0], 4) if agg[h][0] else None),
+        "harder_side": (round(agg[h][3] / agg[h][0], 4) if agg[h][0] else None),
+    } for h in HORIZONS_S}
+    if unmeasurable == len(ok):
+        pooled = {"UNMEASURABLE": "no market on this venue could be measured"}
+    pooled["markets_unmeasurable"] = unmeasurable
+
     return {
         "label": LABEL, "venue": venue, "markets": len(ok),
+        "post_fill_continuation_opportunity_POOLED": pooled,
+        "aggregation_note": (
+            "POOLED sums each market's own counts -- an observation is only "
+            "ever completed by a trade IN THE SAME MARKET. MEDIAN below is the median "
+            "MARKET, which on a venue of mostly-idle markets reports an idle "
+            "market. Read POOLED for 'is there flow here at all' and MEDIAN "
+            "for 'what is a typical market like'."),
         "economic_mapping": economic_mapping,
         "total_quotes": sum(v["n_quotes"] for v in ok),
         "total_interactions": sum(v["n_interactions"] for v in ok),
