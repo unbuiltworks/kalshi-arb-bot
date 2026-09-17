@@ -285,8 +285,10 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "7fa63fbee5a5068ca1c79b7406323dd384d4646d",
+        "sha": "3baae6d304f74099184adfb47c119e99bc465e1a",
         "why": ("RE-PINNED 2026-09-17 for the LIVE SHORT-HORIZON SPORTS "
+                "ACTIVATION, adding ACTIVATION_4_LIVE_SHORT_HORIZON_2026-09-17.md "
+                "-- the record, prose not code. "
                 "cohort. This tree carries the FRESH immutable mandate "
                 "OWNER-2026-09-17-CP1-LIVE-SHORT-HORIZON-COHORT (1 "
                 "concurrent / 10 total, $5.00 per market, $15.00 total, "
