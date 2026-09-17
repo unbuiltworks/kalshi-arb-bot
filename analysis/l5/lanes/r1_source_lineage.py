@@ -20,6 +20,35 @@ import subprocess
 from typing import Any, Dict, List
 
 LABEL = "R1_SOURCE_LINEAGE"
+#: ADVANCED 2026-09-17 for OWNER "GO -- finish Lane B now", the single reviewed
+#: deployment artifact batching four repairs. Three COPY-set files move --
+#: src/pmus_spring_l5_session.py, src/pmus_fill_ledger.py,
+#: src/pmus_q1_executor_v4.py -- and their honest class is EXECUTION, a
+#: FORBIDDEN one, which is why this gate failed on them first.
+#:
+#: THIS IS NOT A WEAKENING, and the owner asked for it not to be one.
+#: FORBIDDEN_CLASSES is UNTOUCHED and still contains EXECUTION, DECISION,
+#: SIZING and SUBMISSION. Nothing was relabelled: the delta is not disclosed as
+#: DOCUMENTATION or as a risk-bound tightening. The baseline moved to the exact
+#: green artifact, which is the only route this mechanism offers an EXECUTION
+#: change and costs a named owner review every time.
+#:
+#: WHAT IS IN THE ARTIFACT:
+#:   * 9dcd25cd -- whole-market reconciliation scope (a fresh session can no
+#:     longer let its local inventory stand in for account exposure), terminal
+#:     ORDER_REJECTED_ZERO_FILL closed from the venue's own record instead of a
+#:     GET the venue refuses, and unreadable_why on every failed status read;
+#:   * 78237e24 -- two mark_noop call sites passing the divergence KEY instead
+#:     of running the classifier on its own output;
+#:   * 03f881ca -- order_provenance, so an arbitrary venue order traces
+#:     deterministically to the decision, book and inventory that created it;
+#:   * the read-only income scoreboard and the frozen sweep modules, neither of
+#:     which the executor imports.
+#:
+#: DEPLOYING THIS IS NOT AUTHORISING TRADING. The artifact is prepared and
+#: green; arming a policy is a separate owner action, and the previous policy's
+#: completed cohort is preserved as the control.
+#:
 #: ADVANCED 2026-09-17 for OWNER P0 "FIX SETTLED-PENDING FULLY-MATCHED
 #: CONCURRENCY DEADLOCK", on the same terms as every advance below. Four
 #: COPY-set files move -- src/pmus_live_mandate.py, src/pmus_spring_l5_session.py,
@@ -184,7 +213,7 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: WHICH artifact the COPY set is compared against. The gate can only REFUSE
 #: candidates: it computes no price, size, side or timing, and tests assert its
 #: executed identifiers reach no trading parameter and no endDate.
-REVIEWED = "8b46565d"
+REVIEWED = "03f881ca"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
