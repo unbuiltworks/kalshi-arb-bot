@@ -108,7 +108,34 @@ LABEL = "R1_SOURCE_LINEAGE"
 #:
 #: Still a REVIEW gate, not a boot gate. Advancing it grants nothing: HALT
 #: still halts, and there is no live mandate.
-REVIEWED = "1a30eb41"
+#: ADVANCED 2026-09-17 for OWNER AUTHORIZATION "next CP1 live execution probe".
+#: The changed file is src/pmus_l5_ramp_ladder.py and the honest class is
+#: SIZING -- the ladder is the risk-envelope table.
+#:
+#: THIS IS THE FIRST ADVANCE THAT WIDENS. Every previous one carried a fix or a
+#: tightening: the CP1 cap so min(rung, mandate) could reach an envelope, the
+#: explicit sizing that replaced inherited micro defaults, B3's intersection,
+#: the concurrency-accounting correction, the freshness submission gate. This
+#: one deliberately RAISES a risk dimension -- markets_per_campaign 3 -> 10 --
+#: and that deserves to be named rather than buried among them.
+#:
+#: WHAT IT DOES AND DOES NOT WIDEN. Breadth only. Per-market cap $5.00,
+#: residual 3 units, concurrency 1, 6 actions per session, sizing $0.10/$0.125,
+#: k, the -$6.00 daily stop and max_total_spend $15.00 are all unchanged. The
+#: owner held campaign dollars flat while widening market count, so the
+#: mandate's $15.00 is now strictly tighter than the rung's own cap x markets
+#: worst case of $50.00 and is the binding campaign-spend ceiling at the wire.
+#: More markets buys more observations, not more money.
+#:
+#: WHY THE RUNG WAS EDITED IN PLACE: durable state stores the rung ID, so a new
+#: id would have met the stored "CP1" in B3's tightest() and been clamped back
+#: to 3 markets. B3 is untouched and still intersects every dimension; it is
+#: simply not handed a stale value to intersect against.
+#:
+#: FORBIDDEN_CLASSES is UNCHANGED and still contains all four classes. The next
+#: ladder change fails this gate exactly as this one did. Still a REVIEW gate,
+#: not a boot gate.
+REVIEWED = "6f382b37"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
@@ -234,8 +261,26 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "9a6e80785a33efe68efcdcb60de8b101e2c2f8a4",
-        "why": ("RE-PINNED 2026-09-17 for the freshness submission gate "
+        "sha": "9addb2ef83a18ce569e3e4294d0c22b8f41fb7e2",
+        "why": ("RE-PINNED 2026-09-17 for the 10-market execution probe. "
+                "This tree carries the FRESH immutable mandate "
+                "OWNER-2026-09-17-CP1-BREADTH10-EXECUTION-PROBE (1 "
+                "concurrent / 10 total, $5.00 per market, $15.00 total, "
+                "$3.00 residual, -$6.00 daily stop, 24h) replacing the "
+                "EXHAUSTED three-market one -- a new authorization_id, not a "
+                "reuse or an enlargement, so consumption() starts at zero "
+                "markets touched. HALT is STILL PRESENT in this tree; "
+                "arming is a separate reviewed commit. "
+                "WHY THIS ENTRY IS ALWAYS EXERCISED: it is a "
+                "DIRECTORY, and verify() compares `git show <rev>:<path>`, "
+                "whose first line echoes the revision string itself. So it "
+                "reads as differing even when its tree sha is identical, "
+                "and the pin is therefore checked on every single run. That "
+                "is the right outcome for the directory that grants spend, "
+                "but it is an accident of how git prints a tree rather than "
+                "a designed property, and it is recorded here so nobody "
+                "later 'fixes' it without knowing what it was doing. "
+                "The committed HALT latch, the live mandate when one exists, "
                 "record. This tree adds "
                 "FRESHNESS_SUBMISSION_GATE_2026-09-17.md -- prose, not code "
                 "-- and HALT is STILL PRESENT with the exhausted "
