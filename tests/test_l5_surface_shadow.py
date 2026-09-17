@@ -199,7 +199,7 @@ def test_running_with_an_unresolved_spec_records_refusals_not_guesses(
     monkeypatch.setattr(S, "_markets", lambda c: [
         {"market_key": "btc-updown-15m-1", "cohort": "BTC15m",
          "end_epoch": 1789674300, "terms": TERMS,
-         "tokens": {"Up": "tok-u", "Down": "tok-d"}}])
+         "by_outcome": {"Up": "tok-u", "Down": "tok-d"}}])
     monkeypatch.setattr(S.V, "pm_book", lambda tok: BOOK)
     monkeypatch.setattr(S.time, "sleep", lambda s: None)
     # a counting clock: every call advances 0.01s until it jumps past the
@@ -237,7 +237,7 @@ def test_the_surface_is_written_before_the_evidence_that_scores_it(
             "TTE_policy": {}, "max_residual": "9999"}.items()}})
     monkeypatch.setattr(S, "_markets", lambda c: [
         {"market_key": "m", "cohort": "BTC15m", "end_epoch": 1789674300,
-         "terms": TERMS, "tokens": {"Up": "t"}}])
+         "terms": TERMS, "by_outcome": {"Up": "t"}}])
     monkeypatch.setattr(S.V, "pm_book", lambda tok: BOOK)
     monkeypatch.setattr(S.time, "sleep", lambda s: None)
     n = {"i": 0}
@@ -301,3 +301,73 @@ def test_stranded_residual_counts_ticks_with_no_reducing_rung():
         {"residual": 3, "has_reducing_rung": False}])
     assert r["stranded_residual"]["ticks_with_residual_and_no_reducing_rung"] == 2
     assert r["stranded_residual"]["share"] == 0.5
+
+
+# --------------------------------- the field names the discovery path depends on
+
+def _real_outcome_tokens(key):
+    """EXACTLY the shape src.l5_book_context.outcome_tokens returns."""
+    return {"market_key": key, "condition_id": "0xcond",
+            "token_by_outcome": {"Up": "tok-up", "Down": "tok-dn"},
+            "tokens": ["tok-up", "tok-dn"], "outcomes": ["Up", "Down"],
+            "accepting_orders": True, "end_date": "2026-09-17T21:00:00Z",
+            "terms": {"tick": 0.01, "order_min_size": 5, "fee_rate": 0.07}}
+
+
+def _real_live_windows(now=None):
+    """EXACTLY the shape src.l5_shadow.venues.live_windows returns."""
+    return [{"cohort": "BTC15m", "market_key": "btc-updown-15m-1789677900",
+             "window_start": 1789677900, "window_end": 1789678800}]
+
+
+def test_discovery_reads_the_field_names_the_readers_actually_produce(
+        monkeypatch):
+    """The bug this pins: reading `by_outcome` (the real key is
+    `token_by_outcome`) fell through to the whole dict, so the string fields
+    market_key and condition_id were treated as tokens. The engine then found
+    no Up/Down outcome and emitted surfaces with ZERO rungs -- which looks
+    exactly like a quiet market and reported no refusal at all."""
+    monkeypatch.setattr(S.V, "live_windows", _real_live_windows)
+    monkeypatch.setattr(S.BC, "outcome_tokens", _real_outcome_tokens)
+    (m,) = S._markets(["BTC15m"])
+    assert sorted(m["by_outcome"]) == ["Down", "Up"]
+    assert m["by_outcome"]["Up"] == "tok-up"
+    assert m["end_epoch"] == 1789678800
+    assert m["terms"]["tick"] == 0.01 and m["terms"]["order_min_size"] == 5
+    # nothing that is not an outcome may reach the book reader
+    assert "condition_id" not in m["by_outcome"]
+    assert "market_key" not in m["by_outcome"]
+
+
+def test_a_surface_with_no_rungs_is_reported_not_passed_over(tmp_path,
+                                                             monkeypatch):
+    """An empty surface is a defect, not a quiet tick. 70 of them in a row
+    once read as a healthy stream."""
+    sp = PR.SurfaceParams(
+        label="TEST", kind="FIDELITY",
+        params={k: PR.Param(k, PR.INFERRED, value=v) for k, v in {
+            "rung_count": 1, "tick_offsets": [0], "base_parent_qty": "100",
+            "secondary_rung_qty": "25",
+            "both_sides_policy": {"outcomes": ["Sideways"]},   # no such book
+            "inventory_price_skew": {}, "inventory_size_skew": {},
+            "refresh_policy": {}, "replenishment_policy": {},
+            "minimum_rest_time": 30.0, "withdrawal_policy": {},
+            "TTE_policy": {}, "max_residual": "9999"}.items()})
+    monkeypatch.setattr(S, "_markets", lambda c: [
+        {"market_key": "m", "cohort": "BTC15m", "end_epoch": 1789678800,
+         "terms": TERMS, "by_outcome": {"Up": "t"}}])
+    monkeypatch.setattr(S.V, "pm_book", lambda tok: BOOK)
+    monkeypatch.setattr(S.time, "sleep", lambda s: None)
+    n = {"i": 0}
+
+    def clk():
+        n["i"] += 1
+        return 999.0 if n["i"] > 30 else n["i"] * 0.01
+    out = S.run(str(tmp_path), minutes=0.005, interval=1.0,
+                cohorts=["BTC15m"], spec=sp, clock=clk)
+    kinds = [json.loads(l)["kind"] for l in io.open(out["path"])]
+    assert "empty_surface" in kinds
+    row = [json.loads(l) for l in io.open(out["path"])
+           if json.loads(l)["kind"] == "empty_surface"][0]
+    assert row["book_outcomes"] == ["Up"]
+    assert "it is nothing being quoted" in row["labels"]

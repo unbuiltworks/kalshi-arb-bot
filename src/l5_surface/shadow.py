@@ -221,7 +221,17 @@ def open_tape(out_dir: str) -> Tuple[Any, str]:
 
 
 def _markets(cohorts: Sequence[str]) -> List[Dict[str, Any]]:
-    """Live windows, from the existing venue reader. No new discovery path."""
+    """Live windows, from the existing venue readers. No new discovery path.
+
+    THE FIELD NAMES ARE LOAD-BEARING. `outcome_tokens` returns the mapping
+    under `token_by_outcome` and the venue terms under `terms`;
+    `live_windows` returns the expiry as `window_end`. Reading any of them by
+    a name that does not exist fails SILENTLY -- an earlier version read
+    `by_outcome`, fell through to the whole dict, and "booked" the string
+    fields market_key and condition_id as if they were tokens. The engine
+    then found no Up/Down outcome and emitted 70 surfaces with zero rungs,
+    which looks exactly like a quiet market.
+    """
     out: List[Dict[str, Any]] = []
     for w in (V.live_windows() or []):
         key = w.get("market_key") or w.get("slug")
@@ -229,11 +239,13 @@ def _markets(cohorts: Sequence[str]) -> List[Dict[str, Any]]:
         if not key or (cohorts and coh not in cohorts):
             continue
         toks = BC.outcome_tokens(key)
-        if not toks:
+        by_outcome = (toks or {}).get("token_by_outcome") or {}
+        if not by_outcome:
             continue
         out.append({"market_key": key, "cohort": coh,
-                    "end_epoch": w.get("end_epoch") or w.get("end_ts"),
-                    "tokens": toks, "terms": w.get("terms") or {}})
+                    "end_epoch": w.get("window_end"),
+                    "by_outcome": dict(by_outcome),
+                    "terms": (toks or {}).get("terms") or {}})
     return out
 
 
@@ -264,12 +276,13 @@ def run(out_dir: str, *, minutes: float, interval: float,
         tick_t = clock()
         for m in _markets(cohorts):
             books = {}
-            for outcome, tok in (m["tokens"].get("by_outcome")
-                                 or m["tokens"]).items():
+            for outcome, tok in (m["by_outcome"] or {}).items():
                 if not isinstance(tok, str):
                     continue
                 books[outcome] = V.pm_book(tok)
             if not books:
+                emit({"kind": "no_books", "market_key": m["market_key"],
+                      "outcomes": sorted(m["by_outcome"] or {})})
                 continue
             st = state_from_books(m, books, {}, tick_t)
             res = E.desired_surface(st, spec)
@@ -286,6 +299,16 @@ def run(out_dir: str, *, minutes: float, interval: float,
             # interaction is known, and never revised.
             emit({"kind": "desired_passive_surface", "decision_time": tick_t,
                   **surf.report()})
+            if not surf.live_rungs():
+                # a DIFFERENT condition from "refused", and it must not read
+                # as a healthy quiet tick: a surface with no rungs means the
+                # engine found no outcome to quote, which is a defect
+                emit({"kind": "empty_surface", "market_key": m["market_key"],
+                      "state_outcomes": sorted(st.get("outcomes") or {}),
+                      "book_outcomes": sorted(books),
+                      "suppressed": surf.overlay.get("suppressed_rungs"),
+                      "labels": ("no live rung was produced; this is not a "
+                                 "quiet market, it is nothing being quoted")})
             made: List[RungTracker] = []
             for r in surf.live_rungs():
                 b = books.get(r.outcome)
