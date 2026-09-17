@@ -164,6 +164,11 @@ class SurfaceState:
         self.short_qty = self.short_usd = D("0")
         self.rungs = collections.Counter()
         self.placed = 0
+        # SPLIT BY SIDE, because an aggregate placement count cannot tell a
+        # sell side that was never placed from one that rested and was never
+        # traded through -- opposite conclusions with the same headline.
+        self.placed_side = collections.Counter()
+        self.rungs_side = collections.Counter()
         self.fills: List[dict] = []
         self.clock = CLK.Clock("GEMINI")
         self.run_side: Optional[str] = None
@@ -176,6 +181,37 @@ class SurfaceState:
     @property
     def matched(self) -> D:
         return min(self.long_qty, self.short_qty)
+
+    def queue_ahead(self) -> dict:
+        """How much volume sits in front of our LIVE quotes, per side.
+
+        The unfilled side is the one nobody can see: a fill row carries its
+        own queue depth, so a side that never fills leaves no record of how
+        far it was from filling. Without this, "the sell side never traded"
+        and "the sell side was behind a wall" look identical.
+
+        Depth is frozen at PLACEMENT and is a model, not a venue fact: queue
+        position is unpublished and this assumes we joined behind everything
+        already resting.
+        """
+        out: Dict[str, Any] = {}
+        for side in ("BUY", "SELL"):
+            qs = [q for q in self.quotes.values() if q.side == side]
+            ahead = sorted(q.volume_ahead for q in qs)
+            cleared = sorted(q.cleared_volume for q in qs)
+            out[side] = {
+                "live_quotes": len(qs),
+                "median_volume_ahead_at_placement": (
+                    str(ahead[len(ahead) // 2]) if ahead else None),
+                "median_volume_cleared_since": (
+                    str(cleared[len(cleared) // 2]) if cleared else None),
+                "n_quotes_past_their_queue": sum(
+                    1 for q in qs if q.cleared_volume > q.volume_ahead),
+            }
+        out["labels"] = ("depth frozen at placement; queue position is "
+                         "unpublished, so this assumes we joined behind "
+                         "everything resting. Never a venue fact.")
+        return out
 
     def economics(self) -> dict:
         """The four Gemini quantities kept SEPARATE, per owner 2026-09-17.
@@ -230,6 +266,7 @@ def step(st: SurfaceState, book: dict, prints: List[dict], now: float,
             continue
         st.quotes[k] = Quote(side, px, now, at_price.get(px, D("0")))
         st.placed += 1
+        st.placed_side[side] += 1
 
     # --- advance every live quote against the book and the tape
     for k, q in list(st.quotes.items()):
@@ -291,7 +328,15 @@ def step(st: SurfaceState, book: dict, prints: List[dict], now: float,
         st.rungs["RESTABLE"] += int(q.restable)
         st.rungs["book_reached_quote"] += int(q.book_reached)
         st.rungs["trade_flow_through_quote"] += int(q.trade_flow)
+        for rung, hit in (("RESTABLE", q.restable),
+                          ("book_reached_quote", q.book_reached),
+                          ("trade_flow_through_quote", q.trade_flow)):
+            st.rungs_side["%s|%s" % (q.side, rung)] += int(hit)
     st.rungs[STRICT] = len(st.fills)
+    st.rungs_side["BUY|%s" % STRICT] = sum(
+        1 for f in st.fills if f.get("side") == "BUY")
+    st.rungs_side["SELL|%s" % STRICT] = sum(
+        1 for f in st.fills if f.get("side") == "SELL")
 
     # --- preregistered residual-episode marks that have come due
     econ = st.economics()
@@ -381,6 +426,11 @@ def run(out_dir: str, *, minutes: float, interval: float) -> int:
                   "surfaces": {n: {"rungs": dict(s.rungs),
                                    "quotes_placed": s.placed,
                                    "live_quotes": len(s.quotes),
+                                   # per side, so a quiet sell side can be
+                                   # told from an absent one
+                                   "rungs_by_side": dict(s.rungs_side),
+                                   "quotes_placed_by_side": dict(s.placed_side),
+                                   "queue_ahead_by_side": s.queue_ahead(),
                                    **s.economics()}
                                for n, s in states[sym].items()}})
         sl = interval - (time.time() - t0)
