@@ -532,3 +532,47 @@ deploy and why the owner asked for it.
             capable of increasing exposure beyond this authorization.
 
             Record: analysis/l5/authorization/ACTIVATION_3_BREADTH10_2026-09-17.md
+
+2026-09-17  OWNER "LIVE SHORT-HORIZON SPORTS": deploy the generic live-sports
+            cohort and GO LIVE. The owner reviewed the change through commit
+            2366aa3b and authorized the EXECUTION-class delta in
+            src/pmus_event_progress.py and src/pmus_l5_continuous_session.py
+            by name; the R1 lineage baseline was re-pinned to that artifact.
+            FORBIDDEN_CLASSES is UNCHANGED and still contains EXECUTION, so
+            the next execution change fails the gate exactly as this one did.
+
+            WHAT CHANGED: the cohort eligibility gate generalises from a named
+            league to COHORT_ANY_LIVE='*'. AST-stripped, the only semantic
+            change is wrapping the league equality in
+            `if cohort != COHORT_ANY_LIVE:`. not_in_live_feed, event_ended and
+            unknown_progress are byte-identical. Selection only -- it can
+            REFUSE a candidate and nothing else.
+
+            ELIGIBILITY IS FAIL CLOSED: live-feed presence, not ended, and a
+            recognised progress token. Unknown progress refused, feed outage
+            refused, no endDate inference, no invented per-sport duration.
+            Measured over 74 live events, 54 eligible; cricket, esports and
+            NPB/KBO refused for insufficient progress evidence, never by name.
+
+            UNCHANGED: target $0.10, leg $0.125, k 0.00619, maker/post-only,
+            the authenticated-book freshness gate, rest/requote, pair ceiling,
+            ACT/WAIT, EXTEND/SWITCH/COMPLETE, residual logic, GuardedTransport
+            and every existing fail-closed control. NO monetary envelope moved
+            despite the wider universe: 1 concurrent, 10 total, $5.00/market,
+            $15.00 total, residual 3, -$6.00 daily stop, 12h.
+
+            PRE-ACTIVATION VERIFIED: lineage ACCEPTANCE True with only the
+            pinned authorization directory differing; git diff of src/ against
+            the reviewed artifact EMPTY; fresh mandate
+            OWNER-2026-09-17-CP1-LIVE-SHORT-HORIZON-COHORT loaded; zero
+            starting exposure (campaign_end pending 0, position_net 0,
+            afterNet 0.0000); full suite 5052 passed, ZERO failures.
+
+            FOR THIS RUN: do not tune during the cohort; freshness and cohort
+            skips are never scored as model WAIT; on a fill the existing
+            controller handles inventory and no complement is manufactured by
+            hand; HALT immediately on any hard safety condition. The previous
+            tennis lifecycle stands at REALIZED -$0.1836, entirely directional
+            residual, and one result is not a reason to move the controller.
+
+            Record: analysis/l5/authorization/ACTIVATION_4_LIVE_SHORT_HORIZON_2026-09-17.md
