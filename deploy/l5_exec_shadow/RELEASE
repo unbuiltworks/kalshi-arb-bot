@@ -1,5 +1,30 @@
 {
   "service": "l5-exec-shadow",
-  "code_sha": "5c51708f8180d8b156d8bd865a253d79f679ccd0",
-  "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one."
+  "code_sha": "5248ec3fe6e66b48394ecd6415b2b3716e20c35a",
+  "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one.",
+  "window_forensics_migration": {
+    "module": "src/l5_window_forensics.py",
+    "module_sha256_before": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "module_sha256_after": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "argv": [
+      "--windows",
+      "3",
+      "--lead-s",
+      "120",
+      "--follow-s",
+      "300"
+    ],
+    "environment_before": {
+      "host": "session container (ephemeral, reclaimed three times on 2026-09-17: 17:16Z, 17:37Z, 18:10Z)",
+      "out_dir": "data/l5_window_forensics (container filesystem)",
+      "supervision": "none -- a bare process"
+    },
+    "environment_after": {
+      "host": "Railway service l5-exec-shadow (restartPolicyType ALWAYS)",
+      "out_dir": "/state/l5-research/l5-window-forensics/seg_<stamp>_<n> (50GB durable volume)",
+      "supervision": "src.l5_research_supervisor, freshness-watched"
+    },
+    "transition_utc": 1789669526.4022691,
+    "labels": "The module bytes are identical before and after. Only where it runs and where it writes changed. The container tape and the volume tape are separate tapes; neither continues the other and nothing is backfilled between them."
+  }
 }

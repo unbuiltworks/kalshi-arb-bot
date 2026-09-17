@@ -25,3 +25,4 @@ promote adapted3: settle the ADAPTED windows, or A-2/A-3/A-6 can never pass
 promote failure: decompose the FAILED cap5/8/13 experiment on the frozen sample
 promote failure2: correct the TTE clock, the loss ratio, and the control/re-roll split
 promote watchdog: own the two prospective recorders here, where the process outlives the session
+promote window study: run the frozen preregistered capture where the process outlives the session
