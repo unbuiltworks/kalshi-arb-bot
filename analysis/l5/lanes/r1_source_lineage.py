@@ -261,8 +261,29 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "9addb2ef83a18ce569e3e4294d0c22b8f41fb7e2",
-        "why": ("RE-PINNED 2026-09-17 for the 10-market execution probe. "
+        "sha": "3228496202db7f5c56ec70dcb87f3724e24b318d",
+        "why": ("RE-PINNED 2026-09-17 to ARM the 10-market execution probe. "
+                "HALT is REMOVED from this tree and the FRESH mandate "
+                "OWNER-2026-09-17-CP1-BREADTH10-EXECUTION-PROBE remains, so "
+                "this pin covers an ARMED authorization -- the strongest "
+                "reason the directory is gated at all. All eight of the "
+                "owner's pre-arming checks passed first, including that the "
+                "execution path is BYTE-IDENTICAL to the accepted "
+                "freshness-gate artifact 0edd1eb061f9. Removing HALT does "
+                "not authorize trading: orders additionally require the "
+                "mandate, and the halt/authorization consistency test "
+                "enforces that the absence of HALT is never on its own an "
+                "authorization. "
+                "WHY THIS ENTRY IS ALWAYS EXERCISED: it is a "
+                "DIRECTORY, and verify() compares `git show <rev>:<path>`, "
+                "whose first line echoes the revision string itself. So it "
+                "reads as differing even when its tree sha is identical, "
+                "and the pin is therefore checked on every single run. That "
+                "is the right outcome for the directory that grants spend, "
+                "but it is an accident of how git prints a tree rather than "
+                "a designed property, and it is recorded here so nobody "
+                "later 'fixes' it without knowing what it was doing. "
+                "The committed HALT latch, the live mandate when one exists, "
                 "This tree carries the FRESH immutable mandate "
                 "OWNER-2026-09-17-CP1-BREADTH10-EXECUTION-PROBE (1 "
                 "concurrent / 10 total, $5.00 per market, $15.00 total, "
