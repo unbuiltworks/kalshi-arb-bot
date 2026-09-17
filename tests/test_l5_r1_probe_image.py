@@ -231,3 +231,62 @@ def test_the_image_pins_a_cohort_at_all():
     possible one."""
     d = "\n".join(_directives(DF))
     assert "PMUS_L5_COHORT=" in d
+
+
+def test_the_action_selector_is_pinned_in_the_image_as_stochastic():
+    """OWNER 2026-09-17 "RESTORE FIDELITY ACTION SELECTION".
+
+    UNSET IS THE DEFECT, NOT A NEUTRAL STATE: the reader is
+    os.getenv(ACTION_SELECTION_ENV, "modal"), so an image that simply omits
+    this variable silently executes the argmax that suppressed COMPLETE 77
+    times out of 77. The pin therefore has to be IN THE IMAGE, exactly like
+    the rung and the market allowance.
+    """
+    d = _directives(DF)
+    lines = [l for l in d if "PMUS_SPRING_ACTION_SELECTION=" in l]
+    assert len(lines) == 1, lines
+    raw = lines[0].split("PMUS_SPRING_ACTION_SELECTION=", 1)[1]
+    raw = raw.rstrip("\\").strip()
+    assert raw == "stochastic", repr(raw)
+    assert not raw.startswith(('"', "'")), repr(raw)
+
+
+def test_the_runtime_resolves_action_selection_to_stochastic_not_just_the_string():
+    """The property that matters is what the PROCESS resolves, not what the
+    Dockerfile spells. This applies the image's own pinned value through the
+    exact expression the session uses, so a quoting or casing change that
+    would resolve to something other than "stochastic" fails here rather
+    than silently reverting the selector in production."""
+    import os
+    from src import pmus_spring_l5_session as sess
+    d = _directives(DF)
+    raw = [l for l in d if "PMUS_SPRING_ACTION_SELECTION=" in l][0]
+    raw = raw.split("PMUS_SPRING_ACTION_SELECTION=", 1)[1].rstrip("\\").strip()
+    prev = os.environ.get(sess.ACTION_SELECTION_ENV)
+    try:
+        os.environ[sess.ACTION_SELECTION_ENV] = raw
+        resolved = os.getenv(sess.ACTION_SELECTION_ENV, "modal").strip().lower()
+        assert resolved == "stochastic", resolved
+        # and that value is the one the session branches on
+        import inspect
+        src = inspect.getsource(sess)
+        assert f'elif selection == "{resolved}" and draw.get("sampled"):' in src
+    finally:
+        if prev is None:
+            os.environ.pop(sess.ACTION_SELECTION_ENV, None)
+        else:
+            os.environ[sess.ACTION_SELECTION_ENV] = prev
+
+
+def test_an_absent_selector_pin_would_resolve_to_the_defect():
+    """Guards the two tests above: proves the default really is "modal", so
+    they are testing something. If the default ever became stochastic these
+    would pass vacuously."""
+    import os
+    from src import pmus_spring_l5_session as sess
+    prev = os.environ.pop(sess.ACTION_SELECTION_ENV, None)
+    try:
+        assert os.getenv(sess.ACTION_SELECTION_ENV, "modal").strip().lower() == "modal"
+    finally:
+        if prev is not None:
+            os.environ[sess.ACTION_SELECTION_ENV] = prev

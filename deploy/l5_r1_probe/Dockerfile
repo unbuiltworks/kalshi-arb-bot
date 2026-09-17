@@ -195,6 +195,26 @@ ENV PMUS_SERVICE_ROLE=l5-r1-probe \
     # NO cohort restriction at all, which is why it is set explicitly rather
     # than left to a default.
     PMUS_L5_COHORT=* \
+    # OWNER 2026-09-17 "RESTORE FIDELITY ACTION SELECTION". The executed
+    # relation is the EXISTING deterministic seeded inverse-CDF draw from the
+    # frozen model's own conditional masses, not their argmax. Pinned in the
+    # IMAGE so a restart cannot silently fall back to the "modal" default:
+    # os.getenv(ACTION_SELECTION_ENV, "modal") means an UNSET variable is the
+    # defect, not a neutral state. No service variable of this name exists, so
+    # the image value is authoritative.
+    #
+    # WHY: argmax over a stochastic policy can never select a minority
+    # relation. Live, COMPLETE carried p=0.2563-0.3682 on 76 of 77 decisions
+    # and modal chose it 0 times, producing one unbroken EXTEND run of 76
+    # while L5 completes 46-54% from the same imb1-10 states. FIDELITY
+    # correction, not a P&L optimization: the frozen behavioral gate scores
+    # l1_sampled_vs_l5, i.e. the draw, and the sampler already existed.
+    #
+    # This changes WHICH relation is chosen and nothing else. Every safety
+    # gate applies to the drawn relation unchanged, and a sampled COMPLETE
+    # the shell refuses is recorded as a refusal with its reason -- it is
+    # never substituted with EXTEND.
+    PMUS_SPRING_ACTION_SELECTION=stochastic \
     PYTHONUNBUFFERED=1
 
 # The role guard is this probe's own, so the legacy role cannot start this
