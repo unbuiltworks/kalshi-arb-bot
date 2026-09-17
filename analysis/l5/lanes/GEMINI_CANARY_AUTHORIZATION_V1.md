@@ -203,3 +203,63 @@ The table above is the exact mechanism and a worked example of its output, not
 a standing order.
 
 **STATUS: STOPPED FOR OWNER AUTHORIZATION. Nothing submitted.**
+
+---
+
+# BLOCKER FOUND AT SUBMISSION TIME — no order path exists
+
+Owner authorized one live canary 2026-09-17. **It was not submitted**, because
+this repository has no Gemini order-submission path. Established four ways:
+
+1. **Every** caller of `private_rest_request` is a read — `/v1/balances`,
+   `/v1/notionalvolume`, `/v1/prediction-markets/positions`, `/v1/mytrades`,
+   `/v1/transfers`.
+2. `/v1/order/new` occurs in the tree **only inside test ban-lists**:
+   `tests/test_gemini_subsidy_readonly.py:18` and
+   `tests/test_gemini_l5_shadow_service.py:68`. Those tests exist to assert
+   that no Gemini module can reach an order endpoint.
+3. `src/l5_surface_exec/adapter.py` holds the only `submit()`; it imports
+   `pmus_q1_executor` and contains zero Gemini references.
+4. `src/gemini_maker/engine_v3.py` emits intents (`side, price, size,
+   POST_ONLY`) with no transport. `subsidy_verify.py` states the auth helper
+   "contains no order transport."
+
+The `aws-gemini-*-live` workflows ran code on a host that was never in this
+repo; those workflow files are deleted from `main`.
+
+**Why this was not improvised.** Submitting would have meant writing a new,
+unreviewed order-placement path against a live funded account, inside a 300s
+window, and running it immediately — while deliberately defeating two existing
+safety tests whose whole purpose is to keep an order endpoint out of the Gemini
+modules. That is a build, not a button-press, and it is not what one-order
+authorization buys.
+
+**My preflight contributed to the confusion** and is corrected here: it listed
+an "authoritative order/fill read path" and a "durable intent path". Both are
+real, and both are READS or local writes. It never established a venue WRITE
+path, and it should have said so under its own gate list.
+
+## What the smallest honest path looks like
+
+1. **A reviewed Gemini order module.** `POST /v1/order/new` via the existing
+   auth helper, with `options: ["maker-or-cancel"]` so the venue rejects
+   anything that would cross — the same post-only mandate PMUS gets from
+   `participateDontInitiate`. Envelope enforced in code: one symbol, one
+   order, `amount 0.01`, `price` from the fresh preflight, side BUY.
+2. **Arming that is separable from capability.** A dual key (live flag +
+   session id) so the module is inert by default, exactly as
+   `pmus_q1_executor.armed()` works.
+3. **Adjust the two ban-list tests deliberately**, narrowing them to the
+   modules that must stay read-only (`subsidy_verify`, the shadow service, the
+   settlement probe) rather than deleting the guard. A safety test should be
+   re-scoped in the open, never quietly dropped.
+4. **Idempotency.** A durable one-shot latch so a retried job cannot place a
+   second order — the authorization is for one order and the code should make
+   a second one impossible, not merely unintended.
+5. Then re-run the fresh preflight and submit inside one window.
+
+Steps 1-4 are the work. None of it is in place, and none of it should be rushed
+to fit a 300-second window.
+
+**STATUS: AUTHORIZED, NOT SUBMITTED. Nothing was armed and no order was
+placed.**
