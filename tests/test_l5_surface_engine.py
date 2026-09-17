@@ -102,11 +102,20 @@ def test_the_shipped_sets_claim_no_l5_evidence_yet():
         assert s.l5_evidence_fields() == []
 
 
-def test_adapted_resolves_only_the_two_fields_that_are_genuinely_ours():
-    assert set(PR.ADAPTED_V0.resolved()) == {"max_residual",
-                                             "minimum_rest_time"}
-    for f in ("max_residual", "minimum_rest_time"):
-        assert PR.ADAPTED_V0.params[f].status == PR.OURS_ADAPTED
+def test_adapted_resolves_only_the_fields_that_are_genuinely_ours():
+    """Four, and each for a stated reason. Two are risk bounds; two are
+    fields NO study of public data can ever reach -- a level shift with
+    inventory is not visible in a study of levels, and a cancellation is not
+    in any feed we have. Supplying them is a deployment choice, so they are
+    OURS_ADAPTED and can never be cited as evidence about L5."""
+    ours = {"max_residual", "minimum_rest_time", "inventory_price_skew",
+            "withdrawal_policy"}
+    assert set(PR.ADAPTED_V0.resolved()) == ours
+    for f in ours:
+        p = PR.ADAPTED_V0.params[f]
+        assert p.status == PR.OURS_ADAPTED
+        assert p.evidence is None, "ours is never evidence about him"
+    assert PR.ADAPTED_V0.l5_evidence_fields() == []
 
 
 def test_a_prior_is_recorded_without_becoming_a_value():

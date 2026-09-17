@@ -263,12 +263,33 @@ ADAPTED_V0 = SurfaceParams(
            "be cited as evidence about L5."),
     params={
         **{k: v for k, v in FIDELITY_V0.params.items()
-           if k not in ("max_residual", "minimum_rest_time")},
+           if k not in ("max_residual", "minimum_rest_time",
+                        "inventory_price_skew", "withdrawal_policy")},
         "max_residual": Param(
             "max_residual", OURS_ADAPTED, value="3.00",
             evidence=None,
             prior_evidence="V2E matched-preservation was the leading ADAPTED "
                            "hypothesis and is NOT promoted to live.",
+        ),
+        # TWO FIELDS NO STUDY OF PUBLIC DATA CAN EVER REACH, so if we want a
+        # runnable surface at all, WE supply them and say plainly that they
+        # are ours. A prospective study scores whether a level was resting; it
+        # cannot see a level SHIFT with inventory, and it cannot see a
+        # cancellation at all. Leaving them UNRESOLVED would make FIDELITY
+        # permanently unrunnable -- which is the honest verdict for FIDELITY
+        # and would be an absurd reason never to deploy anything.
+        "inventory_price_skew": Param(
+            "inventory_price_skew", OURS_ADAPTED,
+            value={"widening_ticks": 0, "reducing_ticks": 0},
+            prior_evidence="NO skew, chosen because nothing established one. "
+                           "This is our default, not a finding about L5.",
+        ),
+        "withdrawal_policy": Param(
+            "withdrawal_policy", OURS_ADAPTED,
+            value={"mode": "WITHDRAW_ON_TTE_FLOOR", "tte_floor_s": 0},
+            prior_evidence="OURS. Cancellations appear in no public feed, so "
+                           "L5's withdrawal behaviour is unobservable and this "
+                           "field can never be evidence about him.",
         ),
         "minimum_rest_time": Param(
             "minimum_rest_time", OURS_ADAPTED, value=30.0,
