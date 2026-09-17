@@ -199,8 +199,9 @@ def test_finishing_its_batch_is_not_counted_as_a_failure(tmp_path):
 
 # -------------------------------------------------------- eligibility rules
 
-def _tape(tmp_path, start, *, first, last, window_end_row, name=None):
-    d = tmp_path / "wf"
+def _tape(tmp_path, start, *, first, last, window_end_row, name=None,
+          durable=True):
+    d = tmp_path / ("seg_20260917T184300Z_001" if durable else "handrun")
     d.mkdir(exist_ok=True)
     p = d / (name or ("window_%d.jsonl" % start))
     rows = [{"kind": "preregistration", "window_start": start,
@@ -277,6 +278,34 @@ def test_the_1830_window_is_declared_ineligible_by_sequencing(tmp_path):
     assert c["verdict"] == E.TRUNCATED
     assert c["declared_ineligible"] is True
     assert "INELIGIBLE_BY_OWNER_SEQUENCING" in c["failed"][0]
+
+
+def test_a_hand_run_container_capture_cannot_be_one_of_the_three(tmp_path):
+    """Structurally perfect and still diagnostic. The same frozen module was
+    run by hand in the session container three times today and the container
+    killed it each time; counting one of those tapes would put a window of the
+    sample back inside the failure domain the migration exists to leave."""
+    st = 1789671600
+    d = _tape(tmp_path, st, first=st - 120, last=st + 900 + 300,
+              window_end_row=True, durable=False)
+    r = E.report(d)
+    (c,) = r["captures"]
+    assert c["durable"] is False
+    assert c["verdict"] == E.TRUNCATED
+    assert any(f.startswith("origin:") for f in c["failed"])
+    # and nothing structural is wrong with it -- only its origin
+    assert not [f for f in c["failed"]
+                if f.startswith(("lead:", "close:", "follow:"))]
+    assert r["n_complete"] == 0 and r["diagnostic_captures"] == 1
+
+
+def test_the_same_window_counts_when_the_durable_stream_captures_it(tmp_path):
+    st = 1789671600
+    d = _tape(tmp_path, st, first=st - 120, last=st + 900 + 300,
+              window_end_row=True, durable=True)
+    r = E.report(d)
+    assert r["n_complete"] == 1 and r["complete_windows"] == [st]
+    assert r["diagnostic_captures"] == 0
 
 
 def test_three_attempts_are_not_three_windows(tmp_path):

@@ -62,6 +62,24 @@ DECLARED_INELIGIBLE: Dict[int, str] = {
 #: sampler jitter, not for a missing minute.
 TOL_S = 3.0
 
+#: A capture counts toward the prospective sample only if the SUPERVISED
+#: DURABLE stream produced it, which its path proves: the supervisor gives
+#: every start its own `seg_<stamp>_<n>` directory on /state/l5-research, and
+#: nothing else writes there.
+#:
+#: This is not bookkeeping fussiness. The same frozen module can be run by
+#: hand in the session container -- it was, three times today, and the
+#: container killed it -- and those tapes are indistinguishable from durable
+#: ones by content alone. Counting one would put a window of the prospective
+#: sample back inside the failure domain the migration exists to leave.
+DURABLE_SEGMENT = "seg_"
+
+
+def is_durable(path: str) -> bool:
+    """Did the supervised durable stream write this tape?"""
+    parent = os.path.basename(os.path.dirname(os.path.abspath(path)))
+    return parent.startswith(DURABLE_SEGMENT)
+
 
 def _rows(path: str) -> List[dict]:
     out: List[dict] = []
@@ -124,6 +142,11 @@ def classify(path: str) -> Dict[str, Any]:
             % (out["last_row_utc"], int(follow),
                (end + follow) - (out["last_row_utc"] or end)))
 
+    out["durable"] = is_durable(path)
+    if not out["durable"]:
+        failed.insert(0, "origin: not written by the supervised durable "
+                           "stream (no seg_* segment in its path), so it is "
+                           "diagnostic evidence and cannot be one of the three")
     declared = DECLARED_INELIGIBLE.get(int(start))
     if declared:
         failed.insert(0, declared)
@@ -148,6 +171,7 @@ def report(*dirs: str) -> Dict[str, Any]:
     every other capture is."""
     rows = [classify(p) for p in tapes(*dirs)]
     complete = [r for r in rows if r["verdict"] == COMPLETE]
+    diagnostic = [r for r in rows if not r.get("durable")]
     # a window can be captured twice (a restart that targets the same boundary
     # writes into its own segment). Count WINDOWS, not tapes.
     by_window = sorted({int(r["window_start"]) for r in complete
@@ -158,6 +182,7 @@ def report(*dirs: str) -> Dict[str, Any]:
         "complete_windows": by_window,
         "n_complete": len(by_window),
         "satisfied": len(by_window) >= N_REQUIRED,
+        "diagnostic_captures": len(diagnostic),
         "captures": rows,
         "labels": [
             "n_complete counts distinct WINDOWS whose capture ran from "
@@ -168,6 +193,10 @@ def report(*dirs: str) -> Dict[str, Any]:
             "predictions before the replacement sample completes.",
             "Nothing here splices two partial captures into a complete one. "
             "Each tape is judged whole or not at all.",
+            "Only the supervised durable stream's tapes count. A hand-run "
+            "capture in an ephemeral container can be structurally perfect "
+            "and is still diagnostic -- otherwise a window of the sample "
+            "would sit back inside the failure domain the migration left.",
         ],
     }
 
