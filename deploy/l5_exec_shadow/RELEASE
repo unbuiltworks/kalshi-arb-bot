@@ -1,6 +1,6 @@
 {
   "service": "l5-exec-shadow",
-  "code_sha": "601acfa720e84d7263ad1c40c2f04a2b271ec0ce",
+  "code_sha": "e1f8b7474606e808b413eb040faf4c3d00d33517",
   "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one.",
   "window_forensics_migration": {
     "module": "src/l5_window_forensics.py",

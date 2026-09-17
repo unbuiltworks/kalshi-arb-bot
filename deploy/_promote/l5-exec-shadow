@@ -27,3 +27,4 @@ promote failure2: correct the TTE clock, the loss ratio, and the control/re-roll
 promote watchdog: own the two prospective recorders here, where the process outlives the session
 promote window study: run the frozen preregistered capture where the process outlives the session
 promote scorer: audit the durable tapes in-container, after W3 reached window_end+300s
+promote chain recovery: the CA pin emptied every receipt; recover from the recorded tx and collapse fills to parents
