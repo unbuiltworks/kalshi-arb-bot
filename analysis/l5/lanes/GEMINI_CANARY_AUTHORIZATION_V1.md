@@ -43,29 +43,57 @@ From `/v1/symbols/details/GEMI-BTC05M<expiry>-UP`, read 2026-09-17:
 
 ---
 
-## 3. The bounded envelope — smallest that can answer the question
+## 3. The bounded envelope — TIGHTENED for the FIRST probe (owner, 2026-09-17)
 
-| bound | value | why |
-|---|---|---|
-| venue / instrument | Gemini `GEMI-BTC05M<expiry>-UP` | the only executable short-crypto lane |
-| markets | **1** | |
-| outstanding orders | **1** | |
-| size | **0.01 contracts** (the venue minimum) | ≈ **$0.005** notional at 0.50. Deliberately the smallest order the venue will accept |
-| max total notional | **$0.05** | covers a handful of attempts across windows |
-| order type | **limit, maker-only** | enforced by the venue's `limit_only` |
-| sides | BUY first; SELL only as the complement | |
-| max residual | **0.01 contracts** | one unit; a single unmatched lot |
-| windows | at most **3** consecutive BTC5m expiries | enough to see one settle |
-| daily loss stop | **$0.25** | far above any plausible loss at this size; it exists to bound a defect, not the trade |
-| auto-repeat | **NONE** | it does not relaunch after completion or crash |
+| bound | value |
+|---|---|
+| windows | **exactly one** BTC5m window |
+| orders | **exactly one** passive limit order |
+| quantity | **0.01 contracts** (the venue minimum) |
+| automatic second order | **NO** |
+| automatic complement | **NO** |
+| automatic repeat | **NO** |
+| max residual | **0.01 contracts** |
+| order type | **limit only** — enforced by the venue's own `limit_only` status |
+| risk / deadman | **existing protections remain in force, unmodified** |
+| queue priority | **absolutely no change intended to improve it** |
 
-**Size note, stated because it is the easy mistake:** 0.01 is chosen for *risk
-and partial-fill* reasons, **not** as a queue-priority fix. Reducing our lot
-does not reduce the volume already ahead of us — the queue is unchanged and a
-smaller order waits behind exactly the same depth. A lot at the venue minimum
-simply cannot partially fill, which removes one source of unmatched residual.
+Enforced in code, not described: `src/gemini_canary_preflight.py` holds
+`QTY=0.01`, `MAX_ORDERS=1`, `MAX_WINDOWS=1`, `MAX_RESIDUAL=0.01`,
+`TICK_OFFSET=0`, with tests pinning each.
 
----
+**On the last row, which is load-bearing.** The order quotes *at the touch*,
+tick offset 0 — the same placement the shadow used for every observation that
+justified running this. Changing placement to chase priority would make the
+first live result incomparable with that evidence. Window selection ranks on
+**instrument quality** (genuinely two-sided, then tightest spread), never on
+where we would sit in the queue; depth at the touch is reported and not
+optimised.
+
+**Size is not a queue fix.** 0.01 is the venue minimum, chosen for risk and
+partial-fill reasons: a lot at the minimum cannot partially fill, which removes
+a source of unmatched residual. It does **not** reduce the volume already ahead
+of us — the queue is unchanged and a smaller order waits behind the same depth.
+
+### The cost of this envelope, stated before authorization
+
+**The accounting half of this canary needs a fill.** With no fill there is no
+position, so `/v1/prediction-markets/positions` stays empty and the settlement
+question sits exactly where it is today.
+
+The lane is **queue-bound** — flow went through the sell side 20 times and
+cleared zero fills — so an **unfilled first order is the likely outcome**.
+
+- **If it fills:** the durable-intent path, `/v1/mytrades`, the *population* of
+  `positions` at settlement, and cash reconciliation are all exercised. That is
+  the whole question answered.
+- **If it does not fill:** `SUBMITTED → UNFILLED → EXPIRED` and the
+  authoritative order-state read path are exercised; the settlement and
+  position chain is **not**.
+
+This is a cost of the envelope rather than a defect in it: improving queue
+priority is the only thing that would raise the fill probability, and the
+envelope forbids it. **It is the owner's call to accept.**
 
 ## 4. The acceptance chain this canary must complete
 
