@@ -37,7 +37,16 @@ R1 = {
     "max_total_spend": "0.05",
     "max_residual": "0.06",
     "max_daily_realized_loss": "1.00",
-    "expiry": "2026-09-16T23:59:00Z",
+    # PRE-EXISTING TIME BOMB, found 2026-09-17T00:0xZ and fixed then. This was
+    # hardcoded to "2026-09-16T23:59:00Z" -- one minute before midnight on the
+    # day it was written. Every test built on this fixture went red the moment
+    # the clock rolled over, with `mandate_expired` standing in for whatever
+    # the test was actually asserting. Bumping the date would only re-arm it,
+    # so the expiry is now computed from the real clock and cannot expire
+    # again. The EXPIRED path is unaffected and still covered explicitly, by
+    # the tests that pass an expiry in the past.
+    "expiry": (datetime.now(timezone.utc) + timedelta(days=1)
+               ).strftime("%Y-%m-%dT%H:%M:%SZ"),
 }
 
 

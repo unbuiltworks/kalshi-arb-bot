@@ -1857,6 +1857,8 @@ DIVERGENCE_CLASSES = {
     "policy_flag:cap_fallback_complete": "safety-cap override (L5-consistent fallback)",
     "safety_adaptation:off_distribution_hold": "genuinely off-distribution state",
     "safety_adaptation:complement_not_priceable": "venue/execution adaptation",
+    "venue_execution_adaptation:authenticated_book_unusable":
+        "venue/execution adaptation (authenticated book not fresh enough to validate post-only placement)",
     "safety_adaptation:complement_preview_rejected": "venue/execution adaptation",
     "safety_adaptation:complement_acceptance_unproven": "venue/execution adaptation",
     "behavioral:modal_argmax_vs_stochastic_draw": "model deficiency (argmax execution of a stochastic policy)",
@@ -1869,6 +1871,52 @@ DIVERGENCE_CLASSES = {
     "none": "no disagreement",
     "none:stochastic_draw_executed": "no disagreement",
 }
+
+
+#: The trim outcomes that mean "we actually read the venue's own book and it
+#: returned a definite verdict about crossing". Everything else means we did
+#: NOT have that book, whatever the reason.
+AUTH_BOOK_DEFINITE = ("already_non_crossing_on_both_books",)
+
+
+def authenticated_book_usable(trim: Optional[Mapping[str, Any]]) -> tuple[bool, str]:
+    """May a post-only first leg be SUBMITTED on the strength of this trim?
+
+    OWNER AUTHORIZATION 2026-09-17, after the CP1 13-order forensics.
+
+    `_authenticated_trim` fails OPEN by design: an unreadable or stale book
+    leaves the price exactly as the gateway chose it, on the reasoning that
+    "the worst case is the rejection we already get today". The forensics
+    falsified that premise. On aec-dota2-yes-tm the gateway read 0.45/0.49
+    while the venue's real ask was 0.45, the authenticated book was 11.2s old
+    and was therefore DISCARDED FOR BEING STALE, and five post-only buys at
+    0.45 crossed and were refused at insertion. The accurate source was thrown
+    away in favour of a fresher, wrong one.
+
+    So failing open is right for PRICING -- the trim may only ever move a
+    price down -- and wrong for SUBMITTING. This function is the second half:
+    the price is still never raised, and the order is simply not sent when the
+    book that would have validated it was not available.
+
+    THE RULE IS POSITIVE, NOT A BLOCKLIST. Submission is permitted only when
+    the authenticated book was genuinely consulted and came back with a
+    definite answer: either it disagreed and the price was trimmed
+    (`applied`), or it agreed the price was already non-crossing. Every other
+    outcome -- unreadable, slug absent, stale, slow read, missing opposite
+    ask, untrimmable, or an exception -- is NOT usable. A reason invented
+    tomorrow is not usable either, without anyone remembering to add it here.
+
+    Returns (usable, why). `why` is the trim's own `why`, so the refusal
+    recorded downstream names the actual condition rather than a category.
+    """
+    if not isinstance(trim, Mapping):
+        return False, "no_trim_record"
+    if trim.get("applied") is True:
+        return True, "trimmed_from_authenticated_book"
+    why = str(trim.get("why") or "no_why_recorded")
+    if why in AUTH_BOOK_DEFINITE:
+        return True, why
+    return False, why
 
 
 def divergence_class(divergence: str) -> str:
@@ -2703,6 +2751,31 @@ def _run_session_body(t: Optional[Transport] = None,
                 book = _recorder_book(slug, side_up_)
                 info["elapsed_ms"] = round(
                     (time.monotonic() - t0) * 1000.0, 1)
+                # OWNER AUTHORIZATION 2026-09-17: "preserve the raw source
+                # timestamps and source provenance used to make every
+                # freshness decision". A submission is now refused on this
+                # verdict, so the inputs to it have to survive on the record
+                # -- including, above all, on the branches that REFUSE, which
+                # previously kept nothing but a `why` string. PURELY
+                # ADDITIVE: every pre-existing key keeps its exact prior value
+                # and meaning, and this block reads the book already in hand
+                # rather than re-reading anything.
+                _obs = book.get("cross_shadow_observation")
+                info["provenance"] = {
+                    "source": book.get("source"),
+                    "status_utc": book.get("status_utc"),
+                    "authenticated_age_s": book.get("authenticated_age_s"),
+                    "probe_receipt_utc": (_obs or {}).get("probe_receipt_utc")
+                    if isinstance(_obs, Mapping) else None,
+                    "both_sides_served": book.get("both_sides_served"),
+                    "yes_bid": book.get("yes_bid"),
+                    "yes_ask": book.get("yes_ask"),
+                    "freshness_standard_s": AUTH_TRIM_MAX_AGE_S,
+                    "slow_read_budget_ms": AUTH_TRIM_SLOW_MS,
+                    "labels": ("raw inputs to the freshness decision, kept on "
+                               "refusing branches too; never re-read, never "
+                               "inferred"),
+                }
                 if book.get("unreadable"):
                     info["why"] = f"unreadable:{book.get('unreadable')}"
                     return info
@@ -3497,6 +3570,58 @@ def _run_session_body(t: Optional[Transport] = None,
                     report["decisions"][-1]["authenticated_trim"] = _trim
                     if _trim.get("applied"):
                         px = D(str(_trim["px_out"]))
+                    # OWNER AUTHORIZATION 2026-09-17 -- THE FRESHNESS
+                    # SUBMISSION GATE. The trim above fails OPEN for PRICING
+                    # and may only ever move a price down. That is still
+                    # right. What was wrong is that it then SUBMITTED anyway
+                    # on a gateway price the venue's own book had never
+                    # validated: on aec-dota2-yes-tm the gateway read
+                    # 0.45/0.49, the real ask was 0.45, the authenticated
+                    # book was 11.2s old and was discarded for being stale,
+                    # and five post-only buys crossed and were refused at
+                    # insertion (leavesQuantity 0, insertTime ==
+                    # lastTransactTime). Order 6 is the control: a fresh read
+                    # arrived, the trim applied, 0.45 -> 0.44, and it rested.
+                    #
+                    # MODEL WANTED ACTION != EXECUTION COULD SAFELY SUBMIT IT.
+                    # The controller's draw is untouched and still scored --
+                    # mark_noop keeps it in `attempted` and the behavioural
+                    # fidelity layer reads the model's `sampled` draw, not
+                    # this. Only the EXECUTABLE layer sees the hold, under its
+                    # own named refusal, so these are counted as skips and
+                    # never as WAIT predictions.
+                    #
+                    # Fail-closed: not submitting costs an action and nothing
+                    # else. Submitting on a book we could not read costs a
+                    # rejection, and a rejection is indistinguishable at the
+                    # venue from an order that was never wanted.
+                    _ok, _why = authenticated_book_usable(_trim)
+                    if not _ok:
+                        dec = report["decisions"][-1]
+                        dec["execution_gate"] = {
+                            "gate": "authenticated_book_freshness",
+                            "submitted": False,
+                            "why": _why,
+                            "model_wanted": relation,
+                            "would_have_priced": str(px),
+                            "freshness_standard_s": AUTH_TRIM_MAX_AGE_S,
+                            "provenance": _trim.get("provenance"),
+                            "labels": ("the model's action stands and is "
+                                       "scored; the execution adapter refused "
+                                       "to submit it because the venue's own "
+                                       "book could not validate post-only "
+                                       "placement. No order, no cash, no "
+                                       "exposure."),
+                        }
+                        report["execution_gate_skips"] = int(
+                            report.get("execution_gate_skips") or 0) + 1
+                        mark_noop(
+                            dec, f"authenticated_book_unusable:{_why}",
+                            "venue_execution_adaptation:"
+                            "authenticated_book_unusable")
+                        sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
+                        actions += 1
+                        continue
                 qty = spec["qty"]
                 # OWNER 2026-09-10: the average matched-pair ceiling. An
                 # EXTEND raises a_up under inventory that is ALREADY matched,

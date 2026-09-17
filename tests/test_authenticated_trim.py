@@ -7,9 +7,27 @@ Accepted OPEN controls crossed 0 of 11, rejected 14 of 17."""
 from __future__ import annotations
 
 import inspect
+import re
 from decimal import Decimal as D
 
 from src import pmus_spring_l5_session as s
+
+
+def _trim_body() -> str:
+    """The WHOLE `_authenticated_trim` function, not a fixed byte count.
+
+    These tests used to slice `[:4000]` chars. That silently became a
+    truncation on 2026-09-17 when the owner-authorized freshness submission
+    gate added provenance capture inside the function (now 5,195 chars), and
+    three assertions failed on properties that were still perfectly true --
+    they had simply scrolled past the window. Slicing the real function is
+    strictly MORE coverage than 4000 characters, not less: nothing in the
+    body can hide past the end of it any more.
+    """
+    src = inspect.getsource(s)
+    body = src[src.index("def _authenticated_trim"):]
+    nxt = re.search(r"\n        def ", body[1:])
+    return body[:nxt.start() + 1] if nxt else body
 
 
 def _trim_fn(book, *, slow_ms=0.0):
@@ -35,9 +53,7 @@ def test_it_can_only_ever_lower_the_price():
     opposite ask used is the MINIMUM of the two books, so the price is
     arithmetically incapable of moving up. The refusal is in the code, not
     only in the comment."""
-    src = inspect.getsource(s)
-    i = src.index("def _authenticated_trim")
-    body = src[i:i + 4000]
+    body = _trim_body()
     assert "safe = min(gw, auth_ask)" in body
     assert "refused:would_raise_price" in body
     assert "if new > px_:" in body
@@ -47,9 +63,7 @@ def test_it_fails_open_on_every_bad_book():
     """A first leg is never blocked by this. Unreadable, stale, slow,
     missing field, or any exception leaves L5's price exactly as chosen --
     the worst case is the rejection we already get today."""
-    src = inspect.getsource(s)
-    i = src.index("def _authenticated_trim")
-    body = src[i:i + 4000]
+    body = _trim_body()
     for guard in ('unreadable:', 'slow_read:failed_open', 'stale:',
                   'no_authenticated_opposite_ask', 'error_failed_open'):
         assert guard in body, guard
@@ -70,9 +84,7 @@ def test_latency_in_front_of_a_submission_is_bounded():
     """This is the one place the codebase does not spend latency. Over
     budget it fails open rather than delaying the order."""
     assert 0 < s.AUTH_TRIM_SLOW_MS <= 1000.0
-    src = inspect.getsource(s)
-    i = src.index("def _authenticated_trim")
-    body = src[i:i + 4000]
+    body = _trim_body()
     assert "AUTH_TRIM_SLOW_MS" in body
     assert "elapsed_ms" in body
 
@@ -83,7 +95,7 @@ def test_the_decision_row_records_what_happened_either_way():
     i = src.index("_trim = _authenticated_trim(")
     after = src[i:i + 500]
     assert 'report["decisions"][-1]["authenticated_trim"] = _trim' in after
-    body = src[src.index("def _authenticated_trim"):][:4000]
+    body = _trim_body()
     assert '"px_in"' in body and '"px_out"' in body
 
 
@@ -91,7 +103,7 @@ def test_nothing_else_moved():
     """The GO was for the crossing guard. Sizing, the cap, the stop, the
     band and concurrency are untouched by this change."""
     src = inspect.getsource(s)
-    body = src[src.index("def _authenticated_trim"):][:4000]
+    body = _trim_body()
     for forbidden in ("choose_micro_quantity", "target_notional",
                       "max_leg_notional", "pair_cost_max", "SPRING_BAND",
                       "daily", "concurren"):

@@ -92,6 +92,45 @@ def _tiny_model():
             "n_transitions": 10, "n_full_states": 1}
 
 
+class _AnySlug(str):
+    """A slug that matches whatever slug is asked for, so one fixture row
+    serves every market a test happens to select."""
+
+    def __eq__(self, other):      # noqa: D105
+        return True
+
+    def __hash__(self):           # noqa: D105
+        return hash("any-slug")
+
+
+def _fresh_authenticated_book(monkeypatch, bid="0.0100", ask="0.9900"):
+    """Give the session a FRESH authenticated book.
+
+    OWNER AUTHORIZATION 2026-09-17 added a fail-closed submission gate: no
+    live order is sent when the authenticated book that validates post-only
+    placement is stale, missing or unreadable. These tests have no recorder,
+    so without this every one of them would be gated before reaching the
+    behaviour it actually exercises -- which is the gate working, not the
+    tests being wrong.
+
+    DELIBERATELY PRICE-NEUTRAL, so no existing expectation moves. The book is
+    0.01/0.99, and the trim uses `safe = min(gateway, authenticated)`, so
+    `safe` always resolves to the GATEWAY value and the trim never fires: it
+    reports `already_non_crossing_on_both_books` and leaves every price
+    exactly where it was. This supplies a missing precondition; it does not
+    relax the gate. The gate's own refusal paths are proven in
+    tests/test_authenticated_book_submission_gate.py, which overrides this.
+    """
+    from src import pmus_spring_l5_probe_entry as entry_mod
+    doc = {"t": "2026-09-17T00:00:00+00:00",
+           "spring_watch": [{"slug": _AnySlug("any"), "bid": bid, "ask": ask,
+                             "bid_qty": "100.0", "ask_qty": "100.0",
+                             "both_sides_served": True,
+                             "last_authenticated_update_age_s": 0.1}]}
+    monkeypatch.setattr(entry_mod, "load_status_document",
+                        lambda _: (doc, "status_url:test-harness"))
+
+
 def _arm(monkeypatch, tmp_path, slug=SLUG):
     monkeypatch.setenv(spring.SPRING_LIVE_ENV, "YES")
     monkeypatch.setenv(spring.SPRING_SID_ENV, "s1")
@@ -108,6 +147,7 @@ def _arm(monkeypatch, tmp_path, slug=SLUG):
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
     _complement_proven(tmp_path)
+    _fresh_authenticated_book(monkeypatch)
 
 
 def _complement_proven(tmp_path, proven=True):

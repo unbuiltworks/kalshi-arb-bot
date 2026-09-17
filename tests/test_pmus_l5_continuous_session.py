@@ -77,8 +77,12 @@ def _arm(monkeypatch, tmp_path):
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
     monkeypatch.setattr(entry, "durable_state_reason", lambda *a, **k: None)
-    from tests.test_pmus_spring_l5_session import _complement_proven
+    from tests.test_pmus_spring_l5_session import (_complement_proven,
+                                                   _fresh_authenticated_book)
     _complement_proven(tmp_path)
+    # the 2026-09-17 freshness submission gate needs a readable book; this
+    # one is price-neutral (see the helper's docstring)
+    _fresh_authenticated_book(monkeypatch)
 
 
 # ---- selection: every row gated, admitted rows ranked, refusals named ----
@@ -358,7 +362,10 @@ def test_base_session_logs_model_rank_and_holds_off_distribution(
     """OWNER 5552036210 item 4: probability/rank on every decision; an
     off-distribution state mid-session is a logged HOLD, not a
     substituted rule and not a flatten."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     monkeypatch.setenv(base.SPRING_LIVE_ENV, "YES")
     monkeypatch.setenv(base.SPRING_SID_ENV, "s1")
     monkeypatch.setenv(base.SPRING_ARM_ENV, "s1")
@@ -424,7 +431,10 @@ def test_fill_updates_inventory_and_requeries_model_before_next_action(
     """After an authoritative fill the session must recompute the state
     from REAL inventory and ask the canonical model again; the second
     query sees the residual, the third sees the extended residual."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     monkeypatch.setenv(base.SPRING_LIVE_ENV, "YES")
     monkeypatch.setenv(base.SPRING_SID_ENV, "s1")
     monkeypatch.setenv(base.SPRING_ARM_ENV, "s1")
@@ -507,8 +517,12 @@ def _armed_session_env(monkeypatch, tmp_path):
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
-    from tests.test_pmus_spring_l5_session import _complement_proven
+    from tests.test_pmus_spring_l5_session import (_complement_proven,
+                                                   _fresh_authenticated_book)
     _complement_proven(tmp_path)
+    # the 2026-09-17 freshness submission gate needs a readable book; this
+    # one is price-neutral (see the helper's docstring)
+    _fresh_authenticated_book(monkeypatch)
 
 
 def _open_proposal(monkeypatch):
@@ -773,7 +787,10 @@ def test_resume_continues_the_held_market_with_real_inventory(monkeypatch,
     """The engine recognises 'I already own +0.02 YES here', rebuilds
     that inventory, asks the model in the post-fill state and acts on its
     answer (EXTEND here); the cap counts only NEW spend."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     _ledger_with_fill(tmp_path, slug="held")
     seen = []
@@ -807,7 +824,10 @@ def test_resume_continues_the_held_market_with_real_inventory(monkeypatch,
 
 def test_resume_refuses_when_ledger_and_venue_disagree(monkeypatch,
                                                        tmp_path):
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     _ledger_with_fill(tmp_path, slug="held")
     fake = Fake()
@@ -822,7 +842,10 @@ def test_resume_refuses_when_ledger_and_venue_disagree(monkeypatch,
 
 def test_resume_still_refuses_a_position_in_another_market(monkeypatch,
                                                            tmp_path):
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     _ledger_with_fill(tmp_path, slug="held")
     fake = Fake()
@@ -869,7 +892,10 @@ def test_resume_reconciles_an_unterminated_fill_before_rebuilding(
     recorded only the submission. Resume must reconcile it against the
     venue first, or the ledger says flat while the venue says +0.02 and
     the position can never be continued."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     (tmp_path / "ledger.jsonl").write_text(json.dumps(
         {"kind": "submitted", "stage": "spring_open_3", "slug": "held",
@@ -1029,7 +1055,10 @@ def test_continuation_extend_is_not_blocked_by_the_open_band(monkeypatch,
     """The 0.35-0.65 band is OPEN admission. A held position whose model
     state at the CURRENT price (0.78) is in-distribution and says EXTEND
     extends; the band no longer freezes a valid continuation."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     _ledger_with_fill(tmp_path, slug="held")
     monkeypatch.setattr(pv2, "proposal", lambda *a, **k: {
@@ -1050,7 +1079,10 @@ def test_continuation_extend_is_not_blocked_by_the_open_band(monkeypatch,
 
 def test_open_admission_band_still_applies_to_a_fresh_market(monkeypatch,
                                                               tmp_path):
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     _open_proposal(monkeypatch)
     fake = Fake(bid="0.7800", ask="0.7900")
@@ -1063,7 +1095,10 @@ def test_open_admission_band_still_applies_to_a_fresh_market(monkeypatch,
 def test_off_distribution_continuation_holds(monkeypatch, tmp_path):
     """Do not extrapolate L5 beyond observed states: an off-distribution
     current state on a held position is a logged HOLD, no order."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     _ledger_with_fill(tmp_path, slug="held")
     monkeypatch.setattr(pv2, "proposal", lambda *a, **k: {
@@ -1187,7 +1222,10 @@ def test_extend_stops_at_the_residual_cap_but_complete_may_continue(
     """Bounded imbalance: at 5 behavioral units of residual the model's
     EXTEND is a logged HOLD (residual_cap), nothing is flattened, and a
     COMPLETE still prices through the pair bounds."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     rows = []
     for i in range(5):                          # five 0.02 YES fills
@@ -1562,7 +1600,10 @@ def test_capped_extend_falls_to_complete_only_when_the_flag_is_on(monkeypatch,
     those states. With PMUS_SPRING_CAP_FALLBACK_COMPLETE=1 a capped
     EXTEND becomes the second-ranked COMPLETE (mass >= 0.20), priced by
     the unchanged <=0.98 / >=1c bounds; without the flag nothing moves."""
-    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    from tests.test_pmus_spring_l5_session import (Fake, _ticking,
+                                                   _fresh_authenticated_book)
+    # 2026-09-17 freshness submission gate: price-neutral readable book
+    _fresh_authenticated_book(monkeypatch)
     _armed_session_env(monkeypatch, tmp_path)
     rows = []
     for i in range(3):                          # three 0.02 YES fills = cap
