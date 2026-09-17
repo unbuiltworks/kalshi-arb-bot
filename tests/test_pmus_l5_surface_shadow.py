@@ -9,9 +9,15 @@ def _surf(slug="aec-t-2026-09-17"):
     return S.MarketSurface(slug, S.spec())
 
 
-def _mkt(bid="0.43", ask="0.48", bq="20", aq="570", trades=None):
+_UNSET = object()
+
+
+def _mkt(bid="0.43", ask="0.48", bq="20", aq="570", trades=_UNSET):
+    """`trades=None` means an UNREADABLE tape and must pass through as None.
+    Coercing it to [] would assert nobody traded -- the very distinction
+    these tests exist to hold -- so the default needs its own sentinel."""
     return {"bid": bid, "ask": ask, "bid_qty": bq, "ask_qty": aq,
-            "trades": trades if trades is not None else []}
+            "trades": [] if trades is _UNSET else trades}
 
 
 def _funnel(surf):
@@ -242,3 +248,40 @@ def test_no_order_path_is_reachable():
     called = {n.func.attr for n in ast.walk(tree)
               if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     assert not (called & {"place_limit_buy", "request", "submit"})
+
+
+# ------------------------------- unreadable tape is not observed absence
+
+def test_an_unreadable_tape_is_not_reported_as_no_flow():
+    """The public gateway serves no tape at all. Calling that NO_FLOW turns a
+    missing input into a finding about the market."""
+    surf = _surf()
+    for i in range(3):
+        S.step(surf, _mkt(trades=None), 100.0 + i, tte_s=3600.0)
+    r = S.report({surf.slug: surf})
+    assert r["verdict"] == "TRADE_FLOW_NOT_OBSERVABLE"
+    assert r["tape"] == {"readable_observations": 0,
+                         "unreadable_observations": 3,
+                         "flow_observable": False}
+
+
+def test_a_readable_empty_tape_IS_observed_absence():
+    surf = _surf()
+    for i in range(3):
+        S.step(surf, _mkt(trades=[]), 100.0 + i, tte_s=3600.0)
+    r = S.report({surf.slug: surf})
+    assert r["verdict"] == "NO_FILLS_NO_FLOW"
+    assert r["tape"]["flow_observable"] is True
+
+
+def test_an_unreadable_tape_with_nothing_placed_says_both():
+    surf = _surf()
+    S.step(surf, _mkt(ask=None, trades=None), 100.0, tte_s=3600.0)
+    assert S.report({surf.slug: surf})["verdict"] == \
+        "SURFACE_NEVER_PLACED_AND_FLOW_NOT_OBSERVABLE"
+
+
+def test_tape_readability_is_counted_per_observation_not_per_quote():
+    surf = _surf()
+    S.step(surf, _mkt(trades=None), 100.0, tte_s=3600.0)
+    assert surf.tape_unreadable == 1        # not 2, despite two live quotes

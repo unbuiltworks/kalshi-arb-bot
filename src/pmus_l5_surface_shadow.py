@@ -160,6 +160,11 @@ class MarketSurface:
         self.qty: Dict[str, D] = {"Up": D("0"), "Down": D("0")}
         self.observations = 0
         self.empty_reason = collections.Counter()
+        # observations where the trade tape was READABLE. Zero means flow was
+        # never observable, which is a different finding from flow observed to
+        # be absent -- and only the second one is evidence about the market.
+        self.tape_readable = 0
+        self.tape_unreadable = 0
 
     @property
     def residual(self) -> D:
@@ -249,6 +254,10 @@ def step(surf: MarketSurface, market: Mapping[str, Any], now: float,
         surf.ladder["%s|PLACED" % q.side] += 1
 
     prints = PP.to_prints(market.get("trades"))
+    if prints is None:
+        surf.tape_unreadable += 1
+    else:
+        surf.tape_readable += 1
 
     for k, q in list(surf.quotes.items()):
         # RESTABLE: a passive order must not cross. In YES terms a NO rung at
@@ -345,6 +354,8 @@ def report(surfaces: Mapping[str, MarketSurface]) -> Dict[str, Any]:
             "queue": s.queue_report(),
             "residual": str(s.residual), "matched": str(s.matched),
             "n_fills": len(s.fills),
+            "tape_readable": s.tape_readable,
+            "tape_unreadable": s.tape_unreadable,
             "not_emitted": dict(s.empty_reason),
         }
         tot.update(s.ladder)
@@ -354,6 +365,8 @@ def report(surfaces: Mapping[str, MarketSurface]) -> Dict[str, Any]:
         return {st: int(tot.get("%s|%s" % (sd, st), 0)) for st in STAGES}
 
     yes, no = side("BUY_YES"), side("BUY_NO")
+    readable = sum(s.tape_readable for s in surfaces.values())
+    unreadable = sum(s.tape_unreadable for s in surfaces.values())
     rec = recycling(all_fills)
     yes["OPPOSITE_RECYCLING"] = no["OPPOSITE_RECYCLING"] = int(
         rec.get("n_opposite_within_300s", 0))
@@ -362,7 +375,10 @@ def report(surfaces: Mapping[str, MarketSurface]) -> Dict[str, Any]:
         "per_side": {"BUY_YES": yes, "BUY_NO": no},
         "recycling": rec,
         "per_market": per,
-        "verdict": _verdict(yes, no),
+        "tape": {"readable_observations": readable,
+                 "unreadable_observations": unreadable,
+                 "flow_observable": readable > 0},
+        "verdict": _verdict(yes, no, flow_observable=readable > 0),
         "labels": [
             "every number is DISTINCT QUOTES that reached that stage, counted "
             "once each, so the funnel is monotone and PLACED is comparable "
@@ -375,12 +391,25 @@ def report(surfaces: Mapping[str, MarketSurface]) -> Dict[str, Any]:
             "refused on it.",
             "VOLUME_AHEAD_CLEARED is a model of an unpublished queue, never "
             "venue confirmation.",
+            "TRADE_FLOW 0 with an unreadable tape is NOT an observation that "
+            "nothing traded; the verdict says TRADE_FLOW_NOT_OBSERVABLE.",
         ],
     }
 
 
-def _verdict(yes: Mapping[str, int], no: Mapping[str, int]) -> str:
+def _verdict(yes: Mapping[str, int], no: Mapping[str, int],
+             *, flow_observable: bool) -> str:
+    """A run that could not read the tape says so.
+
+    Reporting NO_FILLS_NO_FLOW when the tape was UNREADABLE asserts something
+    the run cannot know -- it is the unreadable-versus-empty error, and it is
+    the one that turns a missing input into a finding about the market.
+    """
     fy, fn = yes["EVIDENCED_FILL"], no["EVIDENCED_FILL"]
+    if not flow_observable:
+        placed = yes["PLACED"] or no["PLACED"]
+        return ("TRADE_FLOW_NOT_OBSERVABLE" if placed
+                else "SURFACE_NEVER_PLACED_AND_FLOW_NOT_OBSERVABLE")
     if fy and fn:
         return "TWO_SIDED_EVIDENCED_FILLS"
     placed_both = yes["PLACED"] and no["PLACED"]
