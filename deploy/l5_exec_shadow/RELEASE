@@ -1,6 +1,6 @@
 {
   "service": "l5-exec-shadow",
-  "code_sha": "b7a2e86e1ddd2519d335aa8b44eb8ec10fe0948c",
+  "code_sha": "895724917c7d79a0dd442c1b19ccc49fb38f7b81",
   "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one.",
   "window_forensics_migration": {
     "module": "src/l5_window_forensics.py",
@@ -63,6 +63,42 @@
     "L5_ADAPTED_V1": "fe9d6557af80df02f40ac3a691650aa77da65f3b6505d818803ab54b8764d777",
     "mechanism_verdict": "UNRESOLVED",
     "chain_proven_parents": 208,
-    "units_scored": 238
+    "units_scored": 238,
+    "L5_ADAPTED_PMUS_SPORTS": "2237304d81ac63f51ea2adaf43849f6220fca7578c4b4a18ba68dc112877915c",
+    "L5_ADAPTED_GEMINI_CRYPTO": "62d004d80b4af8b97823e239d8919ee3abff5420c0318d18623c2810bdb3c2a6",
+    "lane_labels": "each lane inherits 4 TRANSFERRED fields from FIDELITY_OBSERVABLE_V1 and measures nothing of its own yet; observed_here is empty for both."
+  },
+  "served_modules": {
+    "labels": "the SHA256 of every module this image serves, recorded at promotion. A test asserts these match the files on disk, so a RELEASE left stale by a promotion breaks CI instead of silently attributing a segment to code that did not produce it -- which is exactly what happened at 21:46Z, when the gemini_surface counters shipped under the previous code_sha.",
+    "modules": {
+      "exec_shadow": {
+        "module": "src.l5_shadow.service",
+        "module_sha256": "1459c50cff0eef9bca101e91bc343adb572d64c4a3d58422ec66006844ea43dc"
+      },
+      "gemini_depth": {
+        "module": "analysis.l5.gemini_depth.probe",
+        "module_sha256": "f97915a1b3e33725459594f846470c1e002d0b7cbe3ae7f783fd8644d2e4269c"
+      },
+      "chain_validate": {
+        "module": "analysis.l5.chain_observer.validate",
+        "module_sha256": "28ec7e051d88e86378bfe3a8a3a4e2692634debe36ac272b825c4021392f9028"
+      },
+      "book_context": {
+        "module": "src.l5_book_context",
+        "module_sha256": "8d59cdf426f9ad1c581cf61ba62340457abd0e890c927481e0f329e0e9c2bf7e"
+      },
+      "gemini_surface": {
+        "module": "src.gemini_l5_surface_shadow",
+        "module_sha256": "8ad4bb1ca723146a16b186e593f6a0feb2d027ff1b4ab324fbc9647f74da7734"
+      },
+      "surface_shadow": {
+        "module": "src.l5_surface.shadow",
+        "module_sha256": "965a96b7386e5b583d74cd0d1d0ec8978f52dde9a96117c5e2d8f93559243951"
+      },
+      "window_forensics": {
+        "module": "src.l5_window_forensics",
+        "module_sha256": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6"
+      }
+    }
   }
 }
