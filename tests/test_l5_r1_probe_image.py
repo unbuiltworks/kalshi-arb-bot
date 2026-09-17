@@ -194,3 +194,40 @@ def test_the_manifest_sets_no_arming_variable():
     for name in ("PMUS_SPRING_LIVE", "PMUS_SPRING_ARM", "PMUS_SPRING_SESSION_ID",
                  "PMUS_SPRING_GATE_EVIDENCE"):
         assert f'"{name}"' not in blob and f"{name}=" not in blob
+
+
+def test_the_cohort_is_pinned_in_the_image_and_parses_to_the_sentinel():
+    """OWNER 2026-09-17 "LIVE SHORT-HORIZON SPORTS".
+
+    Two properties, and the second is the one that bites. First: the cohort is
+    in the IMAGE, so no Railway variable decides it -- same rule as the rung
+    and the market allowance.
+
+    Second: the pinned token must actually PARSE to the any-live sentinel. If
+    it were written quoted and the quotes survived into the environment, the
+    value would be '"*"', which is not COHORT_ANY_LIVE and would be read as a
+    league literally named '"*"'. That fails closed -- it would refuse the
+    entire board -- so it would not lose money, but it would silently idle a
+    live authorization and look like an empty slate rather than a
+    misconfiguration. Pinned unquoted and asserted through the same
+    normalisation cohort_spec() applies.
+    """
+    from src import pmus_l5_continuous_session as sess
+    d = _directives(DF)
+    lines = [l for l in d if "PMUS_L5_COHORT=" in l]
+    assert len(lines) == 1, lines
+    raw = lines[0].split("PMUS_L5_COHORT=", 1)[1]
+    raw = raw.rstrip("\\").strip()          # drop the ENV line continuation
+    assert raw == sess.COHORT_ANY_LIVE, repr(raw)
+    # and the value cohort_spec() would derive from it is the sentinel
+    assert raw.strip().lower() == sess.COHORT_ANY_LIVE
+    # it must not be quoted: quotes that survive would not compare equal
+    assert not raw.startswith('"') and not raw.startswith("'"), repr(raw)
+
+
+def test_the_image_pins_a_cohort_at_all():
+    """Unset means NO cohort restriction. For an authorization whose whole
+    point is the cohort, absence is not a safe default -- it is the widest
+    possible one."""
+    d = "\n".join(_directives(DF))
+    assert "PMUS_L5_COHORT=" in d

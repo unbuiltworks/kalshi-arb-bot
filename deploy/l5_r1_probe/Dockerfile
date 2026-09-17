@@ -185,6 +185,16 @@ ENV PMUS_SERVICE_ROLE=l5-r1-probe \
     # mandate's max_total_markets still binds at the wire regardless.
     PMUS_SPRING_RUNG_MARKETS=10 \
     PMUS_SPRING_MAX_ACTIONS=6 \
+    # OWNER 2026-09-17 "LIVE SHORT-HORIZON SPORTS". The cohort restriction,
+    # pinned in the IMAGE for the same reason the rung and the market
+    # allowance are: a Railway service variable overrides image ENV, so an
+    # envelope that depends on one is an envelope run from somewhere other
+    # than where it is stated. "*" is the any-live sentinel -- it relaxes the
+    # league equality and NOTHING else, so live-feed presence, a recognised
+    # progress token and not-ended are all still required. Unset would mean
+    # NO cohort restriction at all, which is why it is set explicitly rather
+    # than left to a default.
+    PMUS_L5_COHORT=* \
     PYTHONUNBUFFERED=1
 
 # The role guard is this probe's own, so the legacy role cannot start this

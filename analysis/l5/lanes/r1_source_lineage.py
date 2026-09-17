@@ -135,7 +135,31 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: FORBIDDEN_CLASSES is UNCHANGED and still contains all four classes. The next
 #: ladder change fails this gate exactly as this one did. Still a REVIEW gate,
 #: not a boot gate.
-REVIEWED = "6f382b37"
+#:
+#: ADVANCED 2026-09-17 for OWNER AUTHORIZATION "LIVE SHORT-HORIZON SPORTS", on
+#: exactly the same terms as every advance above. The owner reviewed the change
+#: through commit 2366aa3b and authorized the EXECUTION-class delta in
+#: src/pmus_event_progress.py and src/pmus_l5_continuous_session.py by name.
+#:
+#: WHAT MOVED, and why its honest class is EXECUTION: the cohort eligibility
+#: gate in pmus_l5_continuous_session generalises from a named league to
+#: COHORT_ANY_LIVE='*'. AST-stripped, the functional delta is 18 lines whose
+#: only semantic change is wrapping the league equality in
+#: `if cohort != COHORT_ANY_LIVE:` -- not_in_live_feed, event_ended and
+#: unknown_progress are byte-identical. pmus_event_progress gains one field,
+#: `league`, read from the venue's primaryTag on a request already being made.
+#: Both files sit in the image COPY set and the gate decides which markets
+#: execution may look at, so EXECUTION is the truthful class. The alternatives
+#: were to mislabel it or to drop EXECUTION from FORBIDDEN_CLASSES; the owner
+#: reviewed the artifact and advanced the baseline instead.
+#:
+#: THIS IS NOT A WEAKENING. FORBIDDEN_CLASSES is UNCHANGED and still contains
+#: all four classes, EXECUTION among them. The next execution change fails this
+#: gate exactly as this one did and needs its own review. What moved is only
+#: WHICH artifact the COPY set is compared against. The gate can only REFUSE
+#: candidates: it computes no price, size, side or timing, and tests assert its
+#: executed identifiers reach no trading parameter and no endDate.
+REVIEWED = "2366aa3b"
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS

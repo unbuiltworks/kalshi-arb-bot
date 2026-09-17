@@ -1,6 +1,6 @@
 {
-  "authorization_id": "OWNER-2026-09-17-CP1-BREADTH10-EXECUTION-PROBE",
-  "authorized_at": "2026-09-17T01:06:42Z",
+  "authorization_id": "OWNER-2026-09-17-CP1-LIVE-SHORT-HORIZON-COHORT",
+  "authorized_at": "2026-09-17T10:46:53Z",
   "service": "l5-r1-probe",
   "strategy": "pmus-l5-continuous-v1",
   "strategy_version": "CP1",
@@ -10,5 +10,5 @@
   "max_total_spend": "15.00",
   "max_residual": "3.00",
   "max_daily_realized_loss": "6.00",
-  "expiry": "2026-09-18T01:06:42Z"
+  "expiry": "2026-09-17T22:46:53Z"
 }
