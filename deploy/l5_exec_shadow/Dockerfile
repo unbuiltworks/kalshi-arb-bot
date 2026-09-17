@@ -94,6 +94,12 @@ COPY src/l5_window_forensics.py src/l5_window_forensics.py
 COPY src/l5_passive_surface_shadow.py src/l5_passive_surface_shadow.py
 # what this image was built from, for provenance. No .git ships, and
 # the supervisor reads no environment variable.
+# the prospective window scorer. The tapes live on the volume and are
+# unreadable from outside this container, so eligibility and scoring
+# run here and only the results leave through the log. Reports only:
+# it reads tapes already written and promotes nothing.
+COPY analysis/l5/window_forensics/eligibility.py analysis/l5/window_forensics/eligibility.py
+COPY analysis/l5/window_forensics/prospective.py analysis/l5/window_forensics/prospective.py
 COPY deploy/l5_exec_shadow/RELEASE RELEASE
 
 CMD ["python", "-m", "src.l5_research_supervisor", \

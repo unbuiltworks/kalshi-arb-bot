@@ -472,6 +472,42 @@ def test_every_module_the_supervisor_can_spawn_is_actually_in_the_image():
                          "ship: %s" % missing)
 
 
+def test_every_module_the_supervisor_lazily_imports_is_in_the_image_too():
+    """The stream check above only covers modules the supervisor SPAWNS. Its
+    report functions import more modules lazily, and one that the image does
+    not ship fails at runtime inside an except branch -- printing `ok: false`
+    on a ten-minute cadence forever while looking like it merely had no data.
+    """
+    src = io.open("src/l5_research_supervisor.py").read()
+    tree = ast.parse(src)
+    mods = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module.startswith(("analysis.", "src.")):
+                for a in node.names:
+                    mods.add("%s.%s" % (node.module, a.name))
+                    mods.add(node.module)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith(("analysis.", "src.")):
+                    mods.add(a.name)
+
+    df = io.open("deploy/l5_exec_shadow/Dockerfile").read()
+    copied = [l.split()[1] for l in df.splitlines()
+              if l.strip().startswith("COPY ")]
+
+    def shipped(dotted):
+        f = os.path.join(*dotted.split(".")) + ".py"
+        if not os.path.exists(f):
+            return True                       # a package, not a module
+        return f in copied or any(
+            c.endswith("/") and f.startswith(c) for c in copied)
+
+    missing = sorted(m for m in mods if not shipped(m))
+    assert not missing, ("the supervisor imports modules the image does not "
+                         "ship: %s" % missing)
+
+
 def test_the_watchdog_leaves_the_three_original_streams_to_the_exit_path(
         tmp_path):
     """Only the rotating recorders are freshness-watched. The event-driven

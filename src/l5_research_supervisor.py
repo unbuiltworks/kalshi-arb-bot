@@ -677,8 +677,50 @@ class Supervisor:
                 default=str), flush=True)
         return None
 
+    def report_window_surface(self, rows: bool = False) -> Optional[dict]:
+        """L5_PASSIVE_SURFACE_PROSPECTIVE_V1, printed from where the volume is.
+
+        The tapes live on /state/l5-research and nothing outside this container
+        can read them, so the scoring runs here and only its RESULTS travel out
+        through the log. Eligibility is evaluated first by the same call, so a
+        window that fails a frozen gate is never scored.
+
+        A REPORT. It reads tapes already written, places nothing, and promotes
+        nothing. `rows` emits one line per scored parent and per reversal, and
+        is passed once at boot rather than on the cadence so the detail is
+        available without repeating every ten minutes.
+        """
+        root = os.path.join(self.root, "l5-window-forensics")
+        try:
+            from analysis.l5.window_forensics import prospective as PS
+            rep = PS.report(root)
+        except Exception as exc:                              # noqa: BLE001
+            print("L5_PSP " + json.dumps(
+                {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:300]}),
+                flush=True)
+            return None
+        slim = {k: v for k, v in rep.items() if k != "windows"}
+        slim["windows"] = [{k: v for k, v in w.items()
+                            if k not in ("scored_parents", "reversal_rows")}
+                           for w in rep["windows"]]
+        print("L5_PSP_SUMMARY " + json.dumps(slim, default=str), flush=True)
+        if rows:
+            for w in rep["windows"]:
+                for r in w["scored_parents"]:
+                    print("L5_PSP_ROW " + json.dumps(
+                        {"window": w["window_start"], **r}, default=str),
+                        flush=True)
+                for r in w["reversal_rows"]:
+                    print("L5_PSP_REV " + json.dumps(
+                        {"window": w["window_start"], **r}, default=str),
+                        flush=True)
+        return rep
+
     def run(self) -> int:
         self.boot()
+        # once, with the per-parent detail: the tapes cannot be read from
+        # outside this container, so this is the only way the evidence travels
+        self.report_window_surface(rows=True)
         signal.signal(signal.SIGTERM, self.stop)
         signal.signal(signal.SIGINT, self.stop)
         last_hb = 0.0
@@ -704,6 +746,7 @@ class Supervisor:
                 self.report_economics()
                 self.report_dual_clock()
                 self.report_pairs()
+                self.report_window_surface()
             time.sleep(2.0)
         self.stop()
         return 0
