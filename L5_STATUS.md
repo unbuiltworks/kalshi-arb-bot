@@ -16,10 +16,22 @@ evidence and is not rewritten. Only this handoff section tracks current state.
 Labels are strict: HISTORICAL (source data), SHADOW/MODELED (never realized),
 LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 
-> **As of 2026-09-17T10:53Z the live executor is RUNNING AND ARMED.** Any text
-> in this file describing it as HALTED or unauthorized is the superseded
-> 2026-09-16 state; verify against Railway before acting on it, because runtime
-> evidence outranks this file. The old R1→R2→R3 rung/campaign program is still
+> **As of 2026-09-17T22:15Z the live executor is STOPPED.** It ran under
+> deployment `490ce8ac-4a73-4776-b7fa-0a5608f8d285` (serving SHA
+> `64909c5cb0b65bd9c602778241da2ee0f41b471f`, `mode: ARMED`,
+> `action_selection: stochastic`) from 12:48:57Z and ended at **13:36:57Z with
+> `CAMPAIGN_STOP:HALT`**, reason `MandateRefusal:max_concurrent_markets_exhausted`.
+> It has emitted nothing since — verified 22:10Z, no log entries for 8h33m, one
+> `Starting Container`, no crash, no restart loop. `campaign_end` records
+> `"next": "none: this status is an owner decision or a stop, and is never
+> auto-restarted"`.
+>
+> The mandate `OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT` (authorized
+> 12:41:20Z, **expires 2026-09-18T00:41:20Z**) is still within its window but
+> nothing is running under it. Earlier text in this file naming a 10:46:53Z
+> mandate expiring 22:46:53Z, deployment `75c3cef1`, or SHA `2368fb6f` is
+> SUPERSEDED. Verify against Railway before acting on any of it, because
+> runtime evidence outranks this file. The old R1→R2→R3 rung/campaign program is still
 > RETIRED — do not resurrect it, and do not clear a latch or set a dual key to
 > "unblock" anything. Read `L5_CURRENT_PRIORITY.md` first.
 
@@ -81,6 +93,39 @@ passes `last_rel`/`last_size`, so lookups are frozen at `(open, q<5)`, reaching
 `cadence_modal` gap buckets, which V1 does not consult. Full diagnosis:
 `analysis/l5/v1_shadow/ACT_VS_WAIT.md`. **Controller unchanged pending a
 decision.**
+
+### R1 runtime safety audit (2026-09-17T22:10Z, read-only)
+
+Closed out; see the superseding note at the top of this section.
+
+* **No unexpected orders.** Zero submissions in 8h33m. Last order `CJ19WJ4QEVNG`
+  (YES, qty 0.10, `spring_complete_8`, post_only, **filled_qty 0**) at 13:23:04Z.
+  Sessions after that all `SPRING_SKIP_NOT_QUALIFYING`, `submitted: 0`.
+* **Residual: ZERO.** The one non-zero residual, `aec-itfme-maxreh-alewei-2026-09-17`
+  at `-0.19` (`unmatched_usd 0.0925`), **resolved at 13:36:49Z** —
+  `beforeNet -0.1900 → afterNet 0.0000`, status `REALIZED`, `realized_usd
+  -0.0832`, `realized_confirmed: true`, `settled_by
+  position_resolution_activity`. Never more than ONE market with a non-zero
+  residual at once (`total_unmatched_usd` peaked at `0.0980`) — the concurrency
+  repair held.
+* **Latch/stop state.** `CAMPAIGN_STOP:HALT`, not auto-restarting. Daily loss
+  stop NOT reached: `daily_realized_pnl_usd -0.5619`, `combined_loss_usd
+  -0.6451` against `-6.00`. Budgets `market_remaining_after 4.4678` /
+  `total_remaining_after 14.4678`.
+* **`venue_vs_ledger`.** One `agrees:false` (12:59:31Z, delta 0.80) — on a
+  **fresh, non-resumed** session, i.e. the known scope artifact, not the HALT
+  condition. Every `resumed:true` session reconciled `agrees:true`,
+  `delta 0.0000`.
+* **Clean on the rest.** No sampled COMPLETE recorded as an executed EXTEND
+  (0 of 64 decisions). No unrecognized progress token admitted — those strings
+  appear only as *refusal* reasons. No crash, no restart loop. Two read-only
+  `held_absent_while_risk_bearing` alarms, `action: none taken` by design.
+* **Legacy `pmus-spring-l5-probe`: still halted.** Deployment `c30724d7` /
+  commit `6adcc4c43e67` unchanged since 2026-09-15T12:46Z. **Zero `PMUS_ORDER`
+  entries.** Latch untouched.
+
+Nothing reportable. Confirmed realized on this cohort stays **-$0.5619**,
+entirely directional residual; matched-pair realized $0.00.
 
 ### Scaling
 
