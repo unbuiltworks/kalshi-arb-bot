@@ -1,12 +1,17 @@
 # L5 CURRENT PRIORITY
 
-Operational north star, as of **2026-09-16**. Read with `L5_STATUS.md`, which
+Operational north star, as of **2026-09-17**. Read with `L5_STATUS.md`, which
 preserves evidence and history; this file states what we are doing now. Never
 rewrite historical evidence to fit current priorities.
 
-> **If you are a fresh session:** the remaining blocker is **not** an owner
-> arming decision. The old R1→R2→R3 rung/campaign program is **retired**. Do not
-> resurrect it. Do not clear a latch or set a dual key to "unblock" anything.
+> **If you are a fresh session, read this first.** As of **2026-09-17T10:53Z
+> the live executor is RUNNING and ARMED** under a current owner authorization.
+> Anything below or in `L5_STATUS.md` describing it as HALTED, unauthorized, or
+> blocked on an arming decision is **the superseded 2026-09-16 state**. Verify
+> against Railway before acting on any of it — runtime evidence outranks these
+> files. The old R1→R2→R3 rung/campaign program is still **retired**; do not
+> resurrect it, and do not clear a latch or set a dual key to "unblock"
+> anything.
 
 ## Destination
 
@@ -21,22 +26,42 @@ Stop expanding infrastructure unless it is required to reach that.
 
 ## P0 — Polymarket US sports
 
-### Live money executor: HALTED, and unauthorized
+### Live money executor: RUNNING AND ARMED (2026-09-17)
 
-`l5-r1-probe` (`6111a5d4-…`), deployment `e0e89ca7`, commit `9fc7f32d6c66`:
-`SHUTDOWN_VERIFIED`, zero open orders, account flat.
+`l5-r1-probe` (`6111a5d4-a2d9-4762-a057-31f02d07586f`), deployment
+**`75c3cef1-6e45-4ba9-9e69-5f77de1387bf`**, serving SHA
+**`2368fb6fe4c0eb71eda81467c514cb4b3799336c`** — verified from the runtime
+`campaign_start` record, not from a build result. `mode: ARMED`.
 
-Three independent reasons it cannot trade, two of them in the repository:
+**Authorization: `OWNER-2026-09-17-CP1-LIVE-SHORT-HORIZON-COHORT`**, authorized
+2026-09-17T10:46:53Z, **expires 2026-09-17T22:46:53Z**.
 
-1. `analysis/l5/authorization/HALT` exists and is COPYed into the image;
-   `shutdown_requested()` is read **before** `armed()`.
-2. `analysis/l5/authorization/live_mandate.json` is **absent** → `NO_MANDATE`
-   → `GuardedTransport` refuses every `POST /v1/orders`.
-3. Spending is admitted at the **wire** against an immutable mandate, by
-   economic effect rather than by action name.
+```
+cohort *      concurrency 1      total markets 10
+$5.00/market  $15.00 campaign    residual 3      daily stop -$6.00
+target $0.10  max leg $0.125     k 0.00619       maker/post-only
+```
 
-The service's `PMUS_SPRING_*` dual key is still set and **is no longer
-sufficient on its own**. Do not read it as arming.
+**LIVE_SHORT_HORIZON_SPORTS cohort.** Eligibility is fail-closed and generic:
+an event must be present in the authoritative live feed, not ended, and carry a
+progress token the existing rules genuinely recognise. Unknown progress, feed
+unavailable, not started and ended are all refused. **`endDate` is never used as
+a settlement horizon** — it is a fixed `gameStartTime + 14.00 d` contract expiry
+(measured 18/18 live events) and carries no settlement information. No
+per-sport duration is invented anywhere.
+
+Cricket, esports and NPB/KBO are excluded because their progress evidence is
+insufficient — **never because of their names**. They become eligible the day
+the existing rules can read their tokens, with no authorization change.
+
+Cohort refusals are **L5_ADAPTED** execution selection, counted via
+`cohort_refused` / `cohort_refusal_reasons`, and are **never scored as model
+WAIT**.
+
+The safety architecture below is unchanged and still load-bearing: HALT is read
+before `armed()`, an absent `live_mandate.json` still means `NO_MANDATE`, and
+spending is still admitted at the **wire** by economic effect. What changed is
+that a current mandate exists and HALT is absent — both reviewed commits.
 
 ### The 2026-09-16 authorization breach — happened, fixed, tested
 

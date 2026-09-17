@@ -11,24 +11,45 @@ and a committed mandate whose absence is the safe state.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
-## Current Live Transfer / Handoff (2026-09-16, for fresh sessions)
+## Current Live Transfer / Handoff (2026-09-17, for fresh sessions)
 
 Labels are strict: HISTORICAL (source data), SHADOW/MODELED (never realized),
 LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 
-> **The old R1→R2→R3 rung/campaign program is RETIRED.** The remaining blocker
-> is NOT an owner arming decision. Do not clear a latch or set a dual key to
+> **As of 2026-09-17T10:53Z the live executor is RUNNING AND ARMED.** Any text
+> in this file describing it as HALTED or unauthorized is the superseded
+> 2026-09-16 state; verify against Railway before acting on it, because runtime
+> evidence outranks this file. The old R1→R2→R3 rung/campaign program is still
+> RETIRED — do not resurrect it, and do not clear a latch or set a dual key to
 > "unblock" anything. Read `L5_CURRENT_PRIORITY.md` first.
 
 ### P0: Polymarket US sports
 
-**Live executor — HALTED and unauthorized.** `l5-r1-probe` (`6111a5d4-…`),
-deployment `e0e89ca7`, commit `9fc7f32d6c66`, `SHUTDOWN_VERIFIED`, zero open
-orders, account flat. `analysis/l5/authorization/HALT` is present and COPYed
-into the image (read before `armed()`); `analysis/l5/authorization/
-live_mandate.json` is **absent**, so `run_campaign` returns `NO_MANDATE` and
-the transport guard refuses every `POST /v1/orders`. The `PMUS_SPRING_*` dual
-key is still set on the service and is **no longer sufficient on its own**.
+**Live executor — RUNNING AND ARMED (2026-09-17).** `l5-r1-probe`
+(`6111a5d4-a2d9-4762-a057-31f02d07586f`), deployment
+`75c3cef1-6e45-4ba9-9e69-5f77de1387bf`, **serving SHA
+`2368fb6fe4c0eb71eda81467c514cb4b3799336c`** verified from the runtime
+`campaign_start` record rather than a build result, `mode: ARMED`, under
+`OWNER-2026-09-17-CP1-LIVE-SHORT-HORIZON-COHORT` (authorized 10:46:53Z,
+expires 22:46:53Z): cohort `*`, concurrency 1, 10 total markets, $5.00/market,
+$15.00 campaign, residual 3, −$6.00 daily stop, target $0.10, max leg $0.125,
+k 0.00619, maker/post-only. HALT is absent and a current mandate is present —
+both reviewed commits. The safety architecture is unchanged: HALT is still read
+before `armed()`, an absent mandate still means `NO_MANDATE`, and spend is
+still admitted at the wire by economic effect. The `PMUS_SPRING_*` dual key
+remains insufficient on its own.
+
+**First completed money lifecycle (previous authorization, 2026-09-17).**
+`aec-itfwo-erishi-jiahan-2026-09-17`: 3 maker fills, 0.48 NO at avg 0.3825,
+venue-reconciled to delta 0.0000, settled `POSITION_RESOLUTION_SIDE_LONG`
+(`beforeNet −0.4800 → afterNet 0.0000`), **REALIZED −$0.1836**,
+venue-confirmed. Split, never summed: matched-pair **$0** (no pair completed),
+directional residual **−$0.1836**, incentives **$0.0000**, fees
+`venue_unreported`. The sequence was OPEN → EXTEND → EXTEND with no COMPLETE,
+so it went to resolution as pure one-sided exposure — the outcome
+`L5_OPERATING_MODEL.md` warns about. That authorization's campaign ended
+`CAMPAIGN_STOP:HALT`; it is a **separate** authorization and does not consume
+the current one.
 
 **2026-09-16 authorization breach — occurred, fixed, tested.** Authorized for
 ONE market at $0.05; traded 11+ markets and committed **$19.3295** to one.
