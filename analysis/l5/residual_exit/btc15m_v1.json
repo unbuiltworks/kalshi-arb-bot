@@ -1,0 +1,1433 @@
+{
+  "cohort": "BTC15m",
+  "unobservable": [
+    "book state at any instant (bid, ask, spread, depth, imbalance)",
+    "queue position, and therefore whether any quote would have filled",
+    "L5's unfilled, resting or cancelled orders -- a quote that did not fill leaves NO trace, so 'L5 waited' and 'L5 quoted and was not hit' are the same observation here",
+    "maker vs taker per fill (only fee-bearing vs fee-free is recoverable)",
+    "L5's reward/rebate credits per window (not published for another account)",
+    "any price at an instant L5 did not trade"
+  ],
+  "n_episodes": 38180,
+  "segments": {
+    "CARRIED_TO_SETTLEMENT": {
+      "n": 5545,
+      "share": 0.1452,
+      "median_duration_s": 305,
+      "median_residual_abs_at_open": 14.179718999999977,
+      "median_max_subsequent_residual": 213.51464900000005,
+      "median_tte_s_at_open": 305,
+      "median_fills_in_episode": 30,
+      "opened_on_favored_side_share": 0.4166,
+      "median_p_up_last_print": 0.5,
+      "median_pair_cost_last_prints": 0.9900000181999999,
+      "median_episode_pair_cost": 0.9856188601687653,
+      "sum_episode_matched_pnl": 42815.27276782695,
+      "sum_episode_residual_pnl": -144064.99997020225,
+      "n_residual_pnl_determinate": 5545,
+      "median_t_to_opposite_fill_s": 26,
+      "n_no_opposite_fill_UNOBSERVABLE_WHY": 907,
+      "next_action_mix": {
+        "NONE_CARRIED": 343,
+        "EXTEND": 4891,
+        "COMPLETE_PARTIAL": 311
+      }
+    },
+    "COMPLETED_FLAT": {
+      "n": 452,
+      "share": 0.0118,
+      "median_duration_s": 18,
+      "median_residual_abs_at_open": 25.0,
+      "median_max_subsequent_residual": 30.0,
+      "median_tte_s_at_open": 863,
+      "median_fills_in_episode": 2,
+      "opened_on_favored_side_share": 0.4314,
+      "median_p_up_last_print": 0.5,
+      "median_pair_cost_last_prints": 1.01,
+      "median_episode_pair_cost": 0.9949999999999999,
+      "sum_episode_matched_pnl": -42.86482714285714,
+      "sum_episode_residual_pnl": 0.0,
+      "n_residual_pnl_determinate": 0,
+      "median_t_to_opposite_fill_s": 16,
+      "n_no_opposite_fill_UNOBSERVABLE_WHY": 0,
+      "next_action_mix": {
+        "COMPLETE_FLAT": 301,
+        "EXTEND": 125,
+        "COMPLETE_PARTIAL": 26
+      }
+    },
+    "FLIPPED_AWAY_FROM_FAVORED": {
+      "n": 16248,
+      "share": 0.4256,
+      "median_duration_s": 33,
+      "median_residual_abs_at_open": 14.122510999999804,
+      "median_max_subsequent_residual": 57.67247500000008,
+      "median_tte_s_at_open": 563,
+      "median_fills_in_episode": 7,
+      "opened_on_favored_side_share": 1.0,
+      "median_p_up_last_print": 0.49,
+      "median_pair_cost_last_prints": 0.99,
+      "median_episode_pair_cost": 0.9800641025641007,
+      "sum_episode_matched_pnl": 11183.788804413965,
+      "sum_episode_residual_pnl": 0.0,
+      "n_residual_pnl_determinate": 0,
+      "median_t_to_opposite_fill_s": 12,
+      "n_no_opposite_fill_UNOBSERVABLE_WHY": 0,
+      "next_action_mix": {
+        "EXTEND": 10299,
+        "SWITCH": 3297,
+        "COMPLETE_PARTIAL": 2652
+      }
+    },
+    "FLIPPED_TOWARD_FAVORED": {
+      "n": 15274,
+      "share": 0.4001,
+      "median_duration_s": 24,
+      "median_residual_abs_at_open": 12.700000000000003,
+      "median_max_subsequent_residual": 48.42104600000005,
+      "median_tte_s_at_open": 546,
+      "median_fills_in_episode": 6,
+      "opened_on_favored_side_share": 0.0,
+      "median_p_up_last_print": 0.49,
+      "median_pair_cost_last_prints": 0.98,
+      "median_episode_pair_cost": 0.9855884004658622,
+      "sum_episode_matched_pnl": 37676.18648168518,
+      "sum_episode_residual_pnl": 0.0,
+      "n_residual_pnl_determinate": 0,
+      "median_t_to_opposite_fill_s": 11,
+      "n_no_opposite_fill_UNOBSERVABLE_WHY": 0,
+      "next_action_mix": {
+        "EXTEND": 9496,
+        "SWITCH": 3580,
+        "COMPLETE_PARTIAL": 2198
+      }
+    },
+    "FLIPPED_NO_FAVORED_SIDE": {
+      "n": 661,
+      "share": 0.0173,
+      "median_duration_s": 54,
+      "median_residual_abs_at_open": 16.24,
+      "median_max_subsequent_residual": 58.04643799999997,
+      "median_tte_s_at_open": 846,
+      "median_fills_in_episode": 7,
+      "opened_on_favored_side_share": 0.0,
+      "median_p_up_last_print": 0.5,
+      "median_pair_cost_last_prints": 1.0,
+      "median_episode_pair_cost": 0.990128173229431,
+      "sum_episode_matched_pnl": 1550.9993018177581,
+      "sum_episode_residual_pnl": 0.0,
+      "n_residual_pnl_determinate": 0,
+      "median_t_to_opposite_fill_s": 16,
+      "n_no_opposite_fill_UNOBSERVABLE_WHY": 0,
+      "next_action_mix": {
+        "EXTEND": 453,
+        "COMPLETE_PARTIAL": 109,
+        "SWITCH": 99
+      }
+    }
+  },
+  "predictors": {
+    "n_episodes": 38180,
+    "n_train": 26726,
+    "n_oos": 11454,
+    "train_span_utc": [
+      1773917919,
+      1786769194
+    ],
+    "oos_span_utc": [
+      1786769262,
+      1788217207
+    ],
+    "targets": {
+      "p_extend": {
+        "residual_abs": {
+          "train": {
+            "1-5": {
+              "n": 4969,
+              "rate": 0.7092
+            },
+            "5-20": {
+              "n": 12722,
+              "rate": 0.6624
+            },
+            "<=1": {
+              "n": 1399,
+              "rate": 0.6891
+            },
+            "20-100": {
+              "n": 7636,
+              "rate": 0.6205
+            }
+          },
+          "oos": {
+            "1-5": {
+              "n": 1784,
+              "rate": 0.7399
+            },
+            "5-20": {
+              "n": 3877,
+              "rate": 0.6982
+            },
+            "<=1": {
+              "n": 498,
+              "rate": 0.749
+            },
+            "20-100": {
+              "n": 5295,
+              "rate": 0.6064
+            }
+          },
+          "train_spread": 0.0887,
+          "oos_spread": 0.1426,
+          "ordering_replicates": false,
+          "rank_corr": 0.8
+        },
+        "tte_s": {
+          "train": {
+            "60-180s": {
+              "n": 3225,
+              "rate": 0.6431
+            },
+            "420-700s": {
+              "n": 7041,
+              "rate": 0.6455
+            },
+            ">700s": {
+              "n": 8873,
+              "rate": 0.6926
+            },
+            "180-420s": {
+              "n": 6178,
+              "rate": 0.6559
+            },
+            "<=60s": {
+              "n": 1409,
+              "rate": 0.594
+            }
+          },
+          "oos": {
+            "60-180s": {
+              "n": 1238,
+              "rate": 0.689
+            },
+            "420-700s": {
+              "n": 3247,
+              "rate": 0.6548
+            },
+            ">700s": {
+              "n": 3858,
+              "rate": 0.6638
+            },
+            "180-420s": {
+              "n": 2874,
+              "rate": 0.6608
+            },
+            "<=60s": {
+              "n": 237,
+              "rate": 0.7257
+            }
+          },
+          "train_spread": 0.0986,
+          "oos_spread": 0.0709,
+          "ordering_replicates": false,
+          "rank_corr": -0.6
+        },
+        "p_up_last_print": {
+          "train": {
+            "<=0.10": {
+              "n": 2385,
+              "rate": 0.6151
+            },
+            ">=0.90": {
+              "n": 2401,
+              "rate": 0.6277
+            },
+            "0.10-0.30": {
+              "n": 4134,
+              "rate": 0.6759
+            },
+            "0.50-0.70": {
+              "n": 6934,
+              "rate": 0.6713
+            },
+            "0.70-0.90": {
+              "n": 4125,
+              "rate": 0.6645
+            },
+            "0.30-0.50": {
+              "n": 6747,
+              "rate": 0.6653
+            }
+          },
+          "oos": {
+            "<=0.10": {
+              "n": 821,
+              "rate": 0.6407
+            },
+            ">=0.90": {
+              "n": 728,
+              "rate": 0.6786
+            },
+            "0.10-0.30": {
+              "n": 2099,
+              "rate": 0.6779
+            },
+            "0.50-0.70": {
+              "n": 2899,
+              "rate": 0.6419
+            },
+            "0.70-0.90": {
+              "n": 2012,
+              "rate": 0.6784
+            },
+            "0.30-0.50": {
+              "n": 2895,
+              "rate": 0.6708
+            }
+          },
+          "train_spread": 0.0608,
+          "oos_spread": 0.0379,
+          "ordering_replicates": false,
+          "rank_corr": 0.0286
+        },
+        "pair_cost_last_prints": {
+          "train": {
+            ">1.02": {
+              "n": 10643,
+              "rate": 0.6405
+            },
+            "<=0.96": {
+              "n": 10700,
+              "rate": 0.6429
+            },
+            "0.96-0.99": {
+              "n": 555,
+              "rate": 0.6414
+            }
+          },
+          "oos": {
+            ">1.02": {
+              "n": 4789,
+              "rate": 0.6519
+            },
+            "<=0.96": {
+              "n": 4965,
+              "rate": 0.6504
+            },
+            "0.96-0.99": {
+              "n": 232,
+              "rate": 0.625
+            }
+          },
+          "train_spread": 0.0024,
+          "oos_spread": 0.0269,
+          "ordering_replicates": false,
+          "rank_corr": -0.5
+        },
+        "same_side_run_len": {
+          "train": {
+            "1": {
+              "n": 11934,
+              "rate": 0.6502
+            },
+            "2": {
+              "n": 4854,
+              "rate": 0.6059
+            },
+            "4+": {
+              "n": 7030,
+              "rate": 0.7189
+            },
+            "3": {
+              "n": 2908,
+              "rate": 0.6527
+            }
+          },
+          "oos": {
+            "1": {
+              "n": 4462,
+              "rate": 0.6477
+            },
+            "2": {
+              "n": 2053,
+              "rate": 0.5806
+            },
+            "4+": {
+              "n": 3760,
+              "rate": 0.733
+            },
+            "3": {
+              "n": 1179,
+              "rate": 0.6556
+            }
+          },
+          "train_spread": 0.113,
+          "oos_spread": 0.1524,
+          "ordering_replicates": true,
+          "rank_corr": 1.0
+        },
+        "dp_up_60s": {
+          "train": {
+            ">0.05": {
+              "n": 6961,
+              "rate": 0.6548
+            },
+            "0.01..0.05": {
+              "n": 2562,
+              "rate": 0.6237
+            },
+            "<=-0.05": {
+              "n": 6981,
+              "rate": 0.6531
+            },
+            "-0.05..-0.01": {
+              "n": 2554,
+              "rate": 0.6159
+            },
+            "-0.01..0.01": {
+              "n": 1038,
+              "rate": 0.6108
+            }
+          },
+          "oos": {
+            ">0.05": {
+              "n": 3039,
+              "rate": 0.6716
+            },
+            "0.01..0.05": {
+              "n": 1142,
+              "rate": 0.6427
+            },
+            "<=-0.05": {
+              "n": 3172,
+              "rate": 0.663
+            },
+            "-0.05..-0.01": {
+              "n": 1295,
+              "rate": 0.634
+            },
+            "-0.01..0.01": {
+              "n": 529,
+              "rate": 0.6219
+            }
+          },
+          "train_spread": 0.044,
+          "oos_spread": 0.0497,
+          "ordering_replicates": true,
+          "rank_corr": 1.0
+        },
+        "residual_is_favored": {
+          "train": {
+            "against": {
+              "n": 13685,
+              "rate": 0.6623
+            },
+            "favored": {
+              "n": 13041,
+              "rate": 0.6587
+            }
+          },
+          "oos": {
+            "against": {
+              "n": 5742,
+              "rate": 0.6679
+            },
+            "favored": {
+              "n": 5712,
+              "rate": 0.6611
+            }
+          },
+          "train_spread": 0.0036,
+          "oos_spread": 0.0068,
+          "ordering_replicates": true,
+          "rank_corr": null
+        },
+        "window_progress": {
+          "train": {
+            "q4": {
+              "n": 5736,
+              "rate": 0.6323
+            },
+            "q2": {
+              "n": 5765,
+              "rate": 0.6434
+            },
+            "q1": {
+              "n": 9524,
+              "rate": 0.6886
+            },
+            "q3": {
+              "n": 5701,
+              "rate": 0.6594
+            }
+          },
+          "oos": {
+            "q4": {
+              "n": 1995,
+              "rate": 0.6797
+            },
+            "q2": {
+              "n": 2675,
+              "rate": 0.6583
+            },
+            "q1": {
+              "n": 4140,
+              "rate": 0.6616
+            },
+            "q3": {
+              "n": 2644,
+              "rate": 0.6638
+            }
+          },
+          "train_spread": 0.0563,
+          "oos_spread": 0.0214,
+          "ordering_replicates": false,
+          "rank_corr": -0.4
+        }
+      },
+      "resolved_flat": {
+        "residual_abs": {
+          "train": {
+            "1-5": {
+              "n": 4969,
+              "rate": 0.0036
+            },
+            "5-20": {
+              "n": 12722,
+              "rate": 0.016
+            },
+            "<=1": {
+              "n": 1399,
+              "rate": 0.0021
+            },
+            "20-100": {
+              "n": 7636,
+              "rate": 0.0265
+            }
+          },
+          "oos": {
+            "1-5": {
+              "n": 1784,
+              "rate": 0.0
+            },
+            "5-20": {
+              "n": 3877,
+              "rate": 0.0003
+            },
+            "<=1": {
+              "n": 498,
+              "rate": 0.0
+            },
+            "20-100": {
+              "n": 5295,
+              "rate": 0.0047
+            }
+          },
+          "train_spread": 0.0244,
+          "oos_spread": 0.0047,
+          "ordering_replicates": false,
+          "rank_corr": 0.9439
+        },
+        "tte_s": {
+          "train": {
+            "60-180s": {
+              "n": 3225,
+              "rate": 0.0
+            },
+            "420-700s": {
+              "n": 7041,
+              "rate": 0.0044
+            },
+            ">700s": {
+              "n": 8873,
+              "rate": 0.0432
+            },
+            "180-420s": {
+              "n": 6178,
+              "rate": 0.0019
+            },
+            "<=60s": {
+              "n": 1409,
+              "rate": 0.0
+            }
+          },
+          "oos": {
+            "60-180s": {
+              "n": 1238,
+              "rate": 0.0
+            },
+            "420-700s": {
+              "n": 3247,
+              "rate": 0.0
+            },
+            ">700s": {
+              "n": 3858,
+              "rate": 0.0067
+            },
+            "180-420s": {
+              "n": 2874,
+              "rate": 0.0
+            },
+            "<=60s": {
+              "n": 237,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0432,
+          "oos_spread": 0.0067,
+          "ordering_replicates": false,
+          "rank_corr": 0.7717
+        },
+        "p_up_last_print": {
+          "train": {
+            "<=0.10": {
+              "n": 2385,
+              "rate": 0.0017
+            },
+            ">=0.90": {
+              "n": 2401,
+              "rate": 0.0
+            },
+            "0.10-0.30": {
+              "n": 4134,
+              "rate": 0.0036
+            },
+            "0.50-0.70": {
+              "n": 6934,
+              "rate": 0.0326
+            },
+            "0.70-0.90": {
+              "n": 4125,
+              "rate": 0.0039
+            },
+            "0.30-0.50": {
+              "n": 6747,
+              "rate": 0.0245
+            }
+          },
+          "oos": {
+            "<=0.10": {
+              "n": 821,
+              "rate": 0.0
+            },
+            ">=0.90": {
+              "n": 728,
+              "rate": 0.0
+            },
+            "0.10-0.30": {
+              "n": 2099,
+              "rate": 0.0
+            },
+            "0.50-0.70": {
+              "n": 2899,
+              "rate": 0.0045
+            },
+            "0.70-0.90": {
+              "n": 2012,
+              "rate": 0.0
+            },
+            "0.30-0.50": {
+              "n": 2895,
+              "rate": 0.0045
+            }
+          },
+          "train_spread": 0.0326,
+          "oos_spread": 0.0045,
+          "ordering_replicates": false,
+          "rank_corr": 0.8281
+        },
+        "pair_cost_last_prints": {
+          "train": {
+            ">1.02": {
+              "n": 10643,
+              "rate": 0.0039
+            },
+            "<=0.96": {
+              "n": 10700,
+              "rate": 0.003
+            },
+            "0.96-0.99": {
+              "n": 555,
+              "rate": 0.0162
+            }
+          },
+          "oos": {
+            ">1.02": {
+              "n": 4789,
+              "rate": 0.0002
+            },
+            "<=0.96": {
+              "n": 4965,
+              "rate": 0.0004
+            },
+            "0.96-0.99": {
+              "n": 232,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0132,
+          "oos_spread": 0.0004,
+          "ordering_replicates": false,
+          "rank_corr": -1.0
+        },
+        "same_side_run_len": {
+          "train": {
+            "1": {
+              "n": 11934,
+              "rate": 0.0311
+            },
+            "2": {
+              "n": 4854,
+              "rate": 0.0082
+            },
+            "4+": {
+              "n": 7030,
+              "rate": 0.0004
+            },
+            "3": {
+              "n": 2908,
+              "rate": 0.0041
+            }
+          },
+          "oos": {
+            "1": {
+              "n": 4462,
+              "rate": 0.0054
+            },
+            "2": {
+              "n": 2053,
+              "rate": 0.0005
+            },
+            "4+": {
+              "n": 3760,
+              "rate": 0.0003
+            },
+            "3": {
+              "n": 1179,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0307,
+          "oos_spread": 0.0054,
+          "ordering_replicates": false,
+          "rank_corr": 0.8
+        },
+        "dp_up_60s": {
+          "train": {
+            ">0.05": {
+              "n": 6961,
+              "rate": 0.0017
+            },
+            "0.01..0.05": {
+              "n": 2562,
+              "rate": 0.0016
+            },
+            "<=-0.05": {
+              "n": 6981,
+              "rate": 0.001
+            },
+            "-0.05..-0.01": {
+              "n": 2554,
+              "rate": 0.0008
+            },
+            "-0.01..0.01": {
+              "n": 1038,
+              "rate": 0.001
+            }
+          },
+          "oos": {
+            ">0.05": {
+              "n": 3039,
+              "rate": 0.0
+            },
+            "0.01..0.05": {
+              "n": 1142,
+              "rate": 0.0
+            },
+            "<=-0.05": {
+              "n": 3172,
+              "rate": 0.0
+            },
+            "-0.05..-0.01": {
+              "n": 1295,
+              "rate": 0.0
+            },
+            "-0.01..0.01": {
+              "n": 529,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0009,
+          "oos_spread": 0.0,
+          "ordering_replicates": false,
+          "rank_corr": null
+        },
+        "residual_is_favored": {
+          "train": {
+            "against": {
+              "n": 13685,
+              "rate": 0.0175
+            },
+            "favored": {
+              "n": 13041,
+              "rate": 0.0143
+            }
+          },
+          "oos": {
+            "against": {
+              "n": 5742,
+              "rate": 0.0031
+            },
+            "favored": {
+              "n": 5712,
+              "rate": 0.0014
+            }
+          },
+          "train_spread": 0.0032,
+          "oos_spread": 0.0017,
+          "ordering_replicates": true,
+          "rank_corr": null
+        },
+        "window_progress": {
+          "train": {
+            "q4": {
+              "n": 5736,
+              "rate": 0.0003
+            },
+            "q2": {
+              "n": 5765,
+              "rate": 0.0049
+            },
+            "q1": {
+              "n": 9524,
+              "rate": 0.0405
+            },
+            "q3": {
+              "n": 5701,
+              "rate": 0.0018
+            }
+          },
+          "oos": {
+            "q4": {
+              "n": 1995,
+              "rate": 0.0
+            },
+            "q2": {
+              "n": 2675,
+              "rate": 0.0
+            },
+            "q1": {
+              "n": 4140,
+              "rate": 0.0063
+            },
+            "q3": {
+              "n": 2644,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0402,
+          "oos_spread": 0.0063,
+          "ordering_replicates": false,
+          "rank_corr": 0.7746
+        }
+      },
+      "resolved_economically": {
+        "residual_abs": {
+          "train": {
+            "1-5": {
+              "n": 4969,
+              "rate": 0.002
+            },
+            "5-20": {
+              "n": 12722,
+              "rate": 0.0093
+            },
+            "<=1": {
+              "n": 1399,
+              "rate": 0.0
+            },
+            "20-100": {
+              "n": 7636,
+              "rate": 0.0149
+            }
+          },
+          "oos": {
+            "1-5": {
+              "n": 1784,
+              "rate": 0.0
+            },
+            "5-20": {
+              "n": 3877,
+              "rate": 0.0003
+            },
+            "<=1": {
+              "n": 498,
+              "rate": 0.0
+            },
+            "20-100": {
+              "n": 5295,
+              "rate": 0.003
+            }
+          },
+          "train_spread": 0.0149,
+          "oos_spread": 0.003,
+          "ordering_replicates": false,
+          "rank_corr": 0.9439
+        },
+        "tte_s": {
+          "train": {
+            "60-180s": {
+              "n": 3225,
+              "rate": 0.0
+            },
+            "420-700s": {
+              "n": 7041,
+              "rate": 0.003
+            },
+            ">700s": {
+              "n": 8873,
+              "rate": 0.024
+            },
+            "180-420s": {
+              "n": 6178,
+              "rate": 0.0013
+            },
+            "<=60s": {
+              "n": 1409,
+              "rate": 0.0
+            }
+          },
+          "oos": {
+            "60-180s": {
+              "n": 1238,
+              "rate": 0.0
+            },
+            "420-700s": {
+              "n": 3247,
+              "rate": 0.0
+            },
+            ">700s": {
+              "n": 3858,
+              "rate": 0.0044
+            },
+            "180-420s": {
+              "n": 2874,
+              "rate": 0.0
+            },
+            "<=60s": {
+              "n": 237,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.024,
+          "oos_spread": 0.0044,
+          "ordering_replicates": false,
+          "rank_corr": 0.7717
+        },
+        "p_up_last_print": {
+          "train": {
+            "<=0.10": {
+              "n": 2385,
+              "rate": 0.0017
+            },
+            ">=0.90": {
+              "n": 2401,
+              "rate": 0.0
+            },
+            "0.10-0.30": {
+              "n": 4134,
+              "rate": 0.0019
+            },
+            "0.50-0.70": {
+              "n": 6934,
+              "rate": 0.019
+            },
+            "0.70-0.90": {
+              "n": 4125,
+              "rate": 0.0027
+            },
+            "0.30-0.50": {
+              "n": 6747,
+              "rate": 0.0129
+            }
+          },
+          "oos": {
+            "<=0.10": {
+              "n": 821,
+              "rate": 0.0
+            },
+            ">=0.90": {
+              "n": 728,
+              "rate": 0.0
+            },
+            "0.10-0.30": {
+              "n": 2099,
+              "rate": 0.0
+            },
+            "0.50-0.70": {
+              "n": 2899,
+              "rate": 0.0034
+            },
+            "0.70-0.90": {
+              "n": 2012,
+              "rate": 0.0
+            },
+            "0.30-0.50": {
+              "n": 2895,
+              "rate": 0.0024
+            }
+          },
+          "train_spread": 0.019,
+          "oos_spread": 0.0034,
+          "ordering_replicates": false,
+          "rank_corr": 0.8305
+        },
+        "pair_cost_last_prints": {
+          "train": {
+            ">1.02": {
+              "n": 10643,
+              "rate": 0.0028
+            },
+            "<=0.96": {
+              "n": 10700,
+              "rate": 0.0019
+            },
+            "0.96-0.99": {
+              "n": 555,
+              "rate": 0.0054
+            }
+          },
+          "oos": {
+            ">1.02": {
+              "n": 4789,
+              "rate": 0.0
+            },
+            "<=0.96": {
+              "n": 4965,
+              "rate": 0.0002
+            },
+            "0.96-0.99": {
+              "n": 232,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0035,
+          "oos_spread": 0.0002,
+          "ordering_replicates": false,
+          "rank_corr": -0.866
+        },
+        "same_side_run_len": {
+          "train": {
+            "1": {
+              "n": 11934,
+              "rate": 0.0173
+            },
+            "2": {
+              "n": 4854,
+              "rate": 0.0054
+            },
+            "4+": {
+              "n": 7030,
+              "rate": 0.0003
+            },
+            "3": {
+              "n": 2908,
+              "rate": 0.0028
+            }
+          },
+          "oos": {
+            "1": {
+              "n": 4462,
+              "rate": 0.0036
+            },
+            "2": {
+              "n": 2053,
+              "rate": 0.0005
+            },
+            "4+": {
+              "n": 3760,
+              "rate": 0.0
+            },
+            "3": {
+              "n": 1179,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.017,
+          "oos_spread": 0.0036,
+          "ordering_replicates": true,
+          "rank_corr": 0.9439
+        },
+        "dp_up_60s": {
+          "train": {
+            ">0.05": {
+              "n": 6961,
+              "rate": 0.0009
+            },
+            "0.01..0.05": {
+              "n": 2562,
+              "rate": 0.0012
+            },
+            "<=-0.05": {
+              "n": 6981,
+              "rate": 0.0004
+            },
+            "-0.05..-0.01": {
+              "n": 2554,
+              "rate": 0.0004
+            },
+            "-0.01..0.01": {
+              "n": 1038,
+              "rate": 0.001
+            }
+          },
+          "oos": {
+            ">0.05": {
+              "n": 3039,
+              "rate": 0.0
+            },
+            "0.01..0.05": {
+              "n": 1142,
+              "rate": 0.0
+            },
+            "<=-0.05": {
+              "n": 3172,
+              "rate": 0.0
+            },
+            "-0.05..-0.01": {
+              "n": 1295,
+              "rate": 0.0
+            },
+            "-0.01..0.01": {
+              "n": 529,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0008,
+          "oos_spread": 0.0,
+          "ordering_replicates": false,
+          "rank_corr": null
+        },
+        "residual_is_favored": {
+          "train": {
+            "against": {
+              "n": 13685,
+              "rate": 0.0103
+            },
+            "favored": {
+              "n": 13041,
+              "rate": 0.0077
+            }
+          },
+          "oos": {
+            "against": {
+              "n": 5742,
+              "rate": 0.0023
+            },
+            "favored": {
+              "n": 5712,
+              "rate": 0.0007
+            }
+          },
+          "train_spread": 0.0026,
+          "oos_spread": 0.0016,
+          "ordering_replicates": true,
+          "rank_corr": null
+        },
+        "window_progress": {
+          "train": {
+            "q4": {
+              "n": 5736,
+              "rate": 0.0002
+            },
+            "q2": {
+              "n": 5765,
+              "rate": 0.0033
+            },
+            "q1": {
+              "n": 9524,
+              "rate": 0.0226
+            },
+            "q3": {
+              "n": 5701,
+              "rate": 0.0012
+            }
+          },
+          "oos": {
+            "q4": {
+              "n": 1995,
+              "rate": 0.0
+            },
+            "q2": {
+              "n": 2675,
+              "rate": 0.0
+            },
+            "q1": {
+              "n": 4140,
+              "rate": 0.0041
+            },
+            "q3": {
+              "n": 2644,
+              "rate": 0.0
+            }
+          },
+          "train_spread": 0.0224,
+          "oos_spread": 0.0041,
+          "ordering_replicates": false,
+          "rank_corr": 0.7746
+        }
+      }
+    }
+  },
+  "favored_side_next": {
+    "definition": "favored = the outcome whose up-equivalent LAST PRINT price exceeds 0.50. Ties at exactly 0.50 are EXCLUDED, not assigned. There is no book here, so this is L5's own print, never a mid or a touch.",
+    "confound_controlled": "P(extend) is ~0.66 unconditionally, so the second table conditions on whether the residual is ALREADY favored. Without that, run persistence masquerades as favor.",
+    "train": {
+      "base_rate": 0.4919,
+      "n": 21850,
+      "by_pair_cost": {
+        ">1.02": {
+          "n": 10392,
+          "p_favored": 0.4895
+        },
+        "<=0.96": {
+          "n": 10483,
+          "p_favored": 0.493
+        },
+        "0.96-0.99": {
+          "n": 501,
+          "p_favored": 0.501
+        },
+        "1.00-1.02": {
+          "n": 295,
+          "p_favored": 0.4881
+        }
+      },
+      "by_residual_side_and_pair_cost": {
+        "res_favored|>1.02": {
+          "n": 5102,
+          "p_favored": 0.6407
+        },
+        "res_against|<=0.96": {
+          "n": 5302,
+          "p_favored": 0.3448
+        },
+        "res_against|>1.02": {
+          "n": 5290,
+          "p_favored": 0.3437
+        },
+        "res_favored|<=0.96": {
+          "n": 5181,
+          "p_favored": 0.6447
+        },
+        "res_against|0.96-0.99": {
+          "n": 242,
+          "p_favored": 0.3512
+        },
+        "res_favored|0.96-0.99": {
+          "n": 259,
+          "p_favored": 0.6409
+        }
+      }
+    },
+    "oos": {
+      "base_rate": 0.4847,
+      "n": 10050,
+      "by_pair_cost": {
+        "<=0.96": {
+          "n": 4911,
+          "p_favored": 0.4932
+        },
+        ">1.02": {
+          "n": 4738,
+          "p_favored": 0.4707
+        },
+        "0.96-0.99": {
+          "n": 207,
+          "p_favored": 0.5507
+        }
+      },
+      "by_residual_side_and_pair_cost": {
+        "res_favored|<=0.96": {
+          "n": 2426,
+          "p_favored": 0.6492
+        },
+        "res_against|<=0.96": {
+          "n": 2485,
+          "p_favored": 0.3408
+        },
+        "res_favored|>1.02": {
+          "n": 2370,
+          "p_favored": 0.6266
+        },
+        "res_against|>1.02": {
+          "n": 2368,
+          "p_favored": 0.3146
+        }
+      }
+    }
+  },
+  "completion_improvement": {
+    "caveat": "Did waiting get a CHEAPER opposite leg than the price at the moment the\n    imbalance appeared?\n\n    THIS IS SELECTION-BIASED AND THE BIAS IS NOT REMOVABLE HERE. It conditions\n    on a completing fill having HAPPENED. Episodes where L5 quoted patiently and\n    was never hit leave no trace at all -- they end up in the carried bucket\n    with `t_to_opposite_fill_s = None` and are excluded. So this answers \"given\n    that the other side eventually traded, how good was that price\" and NOT\n    \"what is a waiting policy worth\". The second question needs the book, which\n    does not exist in this dataset.",
+    "train": {
+      "5-15s": {
+        "n": 6499,
+        "median": 0.010000000000000009,
+        "mean": 0.016543,
+        "p_improved": 0.6186
+      },
+      "15-60s": {
+        "n": 9139,
+        "median": 0.010000000000000009,
+        "mean": 0.016909,
+        "p_improved": 0.5712
+      },
+      "60-180s": {
+        "n": 3444,
+        "median": 0.00999999610000002,
+        "mean": 0.011523,
+        "p_improved": 0.5119
+      },
+      ">180s": {
+        "n": 401,
+        "median": 0.027000000399999946,
+        "mean": 0.036509,
+        "p_improved": 0.5287
+      },
+      "<=5s": {
+        "n": 6508,
+        "median": 0.010000000000000009,
+        "mean": 0.01672,
+        "p_improved": 0.7027
+      }
+    },
+    "oos": {
+      "15-60s": {
+        "n": 2976,
+        "median": 0.0,
+        "mean": 0.001709,
+        "p_improved": 0.4976
+      },
+      "5-15s": {
+        "n": 3290,
+        "median": 0.009999999999999898,
+        "mean": 0.006851,
+        "p_improved": 0.5553
+      },
+      "60-180s": {
+        "n": 510,
+        "median": -0.010000441700000029,
+        "mean": -0.014939,
+        "p_improved": 0.4176
+      },
+      "<=5s": {
+        "n": 4496,
+        "median": 0.010000000000000009,
+        "mean": 0.013085,
+        "p_improved": 0.6828
+      }
+    }
+  },
+  "carried_outcomes": {
+    "train": {
+      "n": 4303,
+      "p_residual_profitable": 0.4313,
+      "sum_residual_pnl": -63723.293486878865,
+      "median_residual_pnl": -6.167211690213474,
+      "by_side_at_open": {
+        "against": {
+          "n": 2361,
+          "p_win": 0.1372,
+          "sum_residual_pnl": -63337.18196300855
+        },
+        "favored": {
+          "n": 1878,
+          "p_win": 0.8009,
+          "sum_residual_pnl": 1631.3403556743713
+        }
+      }
+    },
+    "oos": {
+      "n": 1242,
+      "p_residual_profitable": 0.2794,
+      "sum_residual_pnl": -80341.70648332359,
+      "median_residual_pnl": -53.62415259393303,
+      "by_side_at_open": {
+        "favored": {
+          "n": 432,
+          "p_win": 0.6921,
+          "sum_residual_pnl": -12970.750021039828
+        },
+        "against": {
+          "n": 802,
+          "p_win": 0.0574,
+          "sum_residual_pnl": -66413.63804155632
+        }
+      }
+    }
+  },
+  "monthly": {
+    "2026-03": {
+      "n_episodes": 259,
+      "completed_flat": 40,
+      "completed_flat_rate": 0.15444,
+      "flipped_rate": 0.5135,
+      "p_extend": 0.5174,
+      "median_residual_abs_at_open": 5.599999999999994,
+      "median_episode_pair_cost": 0.9700000000000002
+    },
+    "2026-04": {
+      "n_episodes": 2874,
+      "completed_flat": 73,
+      "completed_flat_rate": 0.0254,
+      "flipped_rate": 0.7839,
+      "p_extend": 0.5783,
+      "median_residual_abs_at_open": 12.21341000000001,
+      "median_episode_pair_cost": 0.9796718750000075
+    },
+    "2026-05": {
+      "n_episodes": 5043,
+      "completed_flat": 107,
+      "completed_flat_rate": 0.02122,
+      "flipped_rate": 0.7967,
+      "p_extend": 0.6815,
+      "median_residual_abs_at_open": 10.347974000000022,
+      "median_episode_pair_cost": 0.981841808822594
+    },
+    "2026-06": {
+      "n_episodes": 3899,
+      "completed_flat": 51,
+      "completed_flat_rate": 0.01308,
+      "flipped_rate": 0.8159,
+      "p_extend": 0.6799,
+      "median_residual_abs_at_open": 12.595115000000021,
+      "median_episode_pair_cost": 0.9862500000000002
+    },
+    "2026-07": {
+      "n_episodes": 7364,
+      "completed_flat": 121,
+      "completed_flat_rate": 0.01643,
+      "flipped_rate": 0.8246,
+      "p_extend": 0.6688,
+      "median_residual_abs_at_open": 11.98192899999998,
+      "median_episode_pair_cost": 0.9849999999999988
+    },
+    "2026-08": {
+      "n_episodes": 18741,
+      "completed_flat": 60,
+      "completed_flat_rate": 0.0032,
+      "flipped_rate": 0.8818,
+      "p_extend": 0.6646,
+      "median_residual_abs_at_open": 17.202190999999857,
+      "median_episode_pair_cost": 0.9846570502978025
+    }
+  },
+  "reconciliation": {
+    "sum_episode_residual_pnl": -144064.99997020225,
+    "expected_window_residual_pnl": -144064.99997020225,
+    "sum_episode_matched_pnl": 93183.38252860116,
+    "windows_covered": 5546,
+    "episodes_with_indeterminate_settlement": 0,
+    "note": "residual is expected to agree to the cent with the btc15m decomposition; matched is a different partition and is expected to be SMALLER -- see the docstring"
+  }
+}
