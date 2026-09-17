@@ -171,6 +171,53 @@ no further historical tuning. These are behavioral conclusions, not a policy.
   evidence, never as a gate. This supersedes any earlier treatment of a
   run cap as the ADAPTED control.
 
+## 2c. EPISTEMIC CORRECTION — the matched/residual split is not a fact
+
+**OWNER 2026-09-17.** Source: `analysis/l5/causal/MATCHED_SHARE_LINEAGE_V1.md`,
+hashes in `analysis/l5/causal/FROZEN_LINEAGE.json`.
+
+> **Matched vs residual P&L attribution is ACCOUNTING-METHOD DEPENDENT.
+> TOTAL CASH P&L is authoritative.**
+
+On BTC15m the two conventions reconcile to the same cash and disagree
+enormously about the split:
+
+| | matched | residual | **total** |
+|---|---|---|---|
+| average cost (authoritative for cash) | +$162,257 | −$144,190 | **+$18,067** |
+| FIFO lineage | +$57,344 | −$39,277 | **+$18,067** |
+| **reallocation** | **−$104,913** | **+$104,913** | **0** |
+
+**$104,913 of disagreement on an $18,067 total.** The mechanism is understood:
+L5 buys the falling side, so the last shares on the heavy side are the
+cheapest; FIFO leaves those as residual while average cost charges the residual
+the mean price. **Average cost overstates BOTH legs.**
+
+**Forward rules.**
+
+* Do **not** use the average-cost matched/residual decomposition as causal
+  proof of anything.
+* Preserve **both** average-cost and FIFO where each is useful, and label which
+  is in use.
+* **Never confuse either attribution with venue cashflow.** Only the total is a
+  cashflow. This is the same distinction as §2d below and as
+  `MATCHED_REALIZED_UNCONFIRMED` in the live scoreboard: the venue nets, and
+  what it reports is a total.
+* Earlier statements of the form *"every dollar of BTC15m profit comes from the
+  matched leg and the residual gives most of it back"* are **true under average
+  cost and materially weaker under FIFO**. They are not retracted, they are
+  **qualified** — and they must carry the convention from now on.
+
+**What survives unaffected.** The lineage findings characterise **acquisition
+and complement trajectories** — time-to-complement, TTE at acquisition,
+reversal count, run position — which are measured from the tape and do not rest
+on the accounting split. Those remain the useful output.
+
+**The lineage cutoffs are NOT gates.** No `TTE<60`, no
+`complement_timeout=120`, no `run cap=N` is created from these historical
+observations. Whether the relationships survive is decided by the preregistered
+prospective residual-episode diagnostics at 5/15/30/60/120/300 s.
+
 ## 3. Measured historical evolution
 
 Artifact: `analysis/l5/l5_ramp_analysis.json`  

@@ -1,0 +1,32 @@
+{
+  "label": "MATCHED_SHARE_LINEAGE_V1_FROZEN",
+  "frozen_utc": "2026-09-17T15:58:20.849926+00:00",
+  "authority": "OWNER 2026-09-17: 'Freeze MATCHED_SHARE_LINEAGE_V1 before doing anything else. Do not tune its buckets/cutoffs.'",
+  "scope": "BTC15m ONLY.",
+  "buckets_frozen": "Every bin edge in lineage._bin and MIN_BIN=300 are frozen as-is. Changing one is a NEW study.",
+  "EPISTEMIC_CORRECTION": {
+    "statement": "MATCHED vs RESIDUAL P&L attribution is ACCOUNTING-METHOD DEPENDENT. TOTAL CASH P&L is authoritative.",
+    "evidence": "Average cost and FIFO reconcile to the same +$18,067 total on BTC15m and disagree by $104,913 about the split (avg: +162,257/-144,190; FIFO: +57,344/-39,277).",
+    "forward_rule": "Do NOT use the average-cost matched/residual decomposition as causal proof. Preserve BOTH average-cost and FIFO where useful, and never confuse either attribution with venue cashflow.",
+    "what_survives": "The lineage findings themselves remain valuable because they characterise ACQUISITION and COMPLEMENT TRAJECTORIES -- time-to-complement, TTE at acquisition, reversals, run position -- rather than resting on the accounting split."
+  },
+  "cutoffs_are_NOT_gates": {
+    "rule": "OWNER 2026-09-17: do not turn these cutoffs into gates. Specifically NOT created from these historical observations: TTE<60, complement_timeout=120, run cap=N.",
+    "instead": "Prospective residual-episode diagnostics at 5/15/30/60/120/300s, preregistered before collection, decide whether the historical relationships survive forward."
+  },
+  "commit": "61fce842ee5a7507a3806bf2580d330b2348530a",
+  "files": {
+    "analysis/l5/causal/lineage.py": {
+      "sha256": "641a7a8f5d3bc7216426b48820d057b0dc2ff8877ca6964b8911fd142cb9fcbb",
+      "bytes": 12687
+    },
+    "analysis/l5/causal/btc15m_lineage_v1.json": {
+      "sha256": "c2f202e103b32f77f8973891c4e9e4bcd5634ee55b451f0b8d5fef1ec9962d37",
+      "bytes": 39585
+    },
+    "analysis/l5/causal/MATCHED_SHARE_LINEAGE_V1.md": {
+      "sha256": "ad4eaa17a6656c23477412131920cbf3dc1ec5986d09926031b79e8abdd4d7a2",
+      "bytes": 6308
+    }
+  }
+}
