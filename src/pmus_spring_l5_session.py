@@ -3449,9 +3449,13 @@ def _run_session_body(t: Optional[Transport] = None,
                 # YES. Bind it the way every other mark_noop site in this loop
                 # does. A `dec` surviving from the PREVIOUS iteration would
                 # have been worse than the crash: it annotates the wrong row.
+                # Nothing may go between the binding and the call: a boot
+                # assertion greps for that exact adjacent pair. The third
+                # mark_noop argument is the divergence KEY, never
+                # divergence_class(key) -- see test_divergence_classification.
                 dec = report["decisions"][-1]
                 mark_noop(dec, f"combined_loss_stop:{_combined}<={daily_loss_stop()}",
-                          divergence_class("safety_adaptation:combined_loss_stop"))
+                          "safety_adaptation:combined_loss_stop")
                 dec["cap_binding"] = list(dec.get("cap_binding", [])) + \
                     ["combined_loss_stop"]
                 dec["combined_loss_usd"] = str(_combined)
@@ -3673,9 +3677,19 @@ def _run_session_body(t: Optional[Transport] = None,
                     dec["matched_pair_cost_if_filled"] = str(_after)
                     dec["cap_binding"] = list(dec.get("cap_binding", [])) + \
                         ["matched_pair_ceiling"]
+                    # OWNER 2026-09-17: the third argument is the divergence
+                    # KEY, never divergence_class(key). LIVE 11:59Z,
+                    # aec-itfme-artkuk-egople: both decisions refused here
+                    # recorded divergence_class "implementation bug
+                    # (unclassified divergence -- investigate)" because
+                    # mark_noop classifies what it is handed and the wrapper
+                    # ran the classifier on its own output. THE REFUSALS WERE
+                    # CORRECT; only the label was wrong, and the silent half
+                    # was dec["divergence"] holding prose instead of a key.
+                    # Classification only -- no gate, threshold, price, size or
+                    # relation moves. See tests/test_divergence_classification.
                     mark_noop(dec, report["stop_reason"],
-                              divergence_class(
-                                  "safety_adaptation:matched_pair_ceiling"))
+                              "safety_adaptation:matched_pair_ceiling")
                     sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                     actions += 1
                     continue
