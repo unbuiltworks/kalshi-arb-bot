@@ -50,7 +50,15 @@ GATE = "G-P8/accounting_survives_operating_state"
 TERMINAL_KINDS = ("fill", "settlement", "settled", "realized")
 # Records that carry no terminal accounting fact. Listed EXPLICITLY, because
 # "not in the terminal list" must never be the same as "safe to drop".
-NON_TERMINAL_KINDS = ("digest", "boot", "intent", "cycle_error")
+NON_TERMINAL_KINDS = ("digest", "boot", "intent", "cycle_error",
+                      # the prospective arm comparison: a decision record and
+                      # the arms' disagreement on it. Neither carries a
+                      # terminal accounting fact -- `classification` is
+                      # CROSS/RESTABLE/EXECUTABLE/WAIT and is explicitly never
+                      # a fill, and inventory advances only through
+                      # apply_evidenced_fill.
+                      "prospective_arm_decision",
+                      "prospective_arm_divergence")
 
 # Envelope shapes an operating state may wrap a record in. The first is the
 # ordinary one; the rest are the shapes that actually caused the loss.
