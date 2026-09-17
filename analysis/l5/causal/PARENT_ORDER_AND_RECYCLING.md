@@ -40,36 +40,48 @@ then re-run larger). The historical 50% miss really was pruning.
 
 On 2,000 recent public fills:
 
-| unit | count | |
+| unit | count | reduction |
 |---|---|---|
 | **A** individual public fill | 2,000 | what the 693k-fill history counts |
 | **B** same (market, timestamp, outcome, price) cluster | 1,694 | **−15.3%** |
-| **C** chain-proven parent order | 187 (of 264 fills with a proven parent) | **−29.2%** |
+| **C** chain-proven parent order | **845** (over the **1,215** fills that have a proven parent) | **−30.5%** |
 
 **B is a heuristic; C is evidence.** Two fills at the same instant, side and
 price *might* be one order swept, or two orders that coincided. Only the chain
 says which, and this module never reports B as if it were C.
 
-Of the **resolved** multi-fill clusters: **96% are one parent order**, and
-**93.85% of their fills collapse into it.** On the frozen historical sample the
-same figures were 60% / 58.06% at n=15 — the recent sample is larger and
-cleaner, and it is a **different population** (recent activity, not the
-2026-03…08 BTC15m tape). They are reported side by side and never pooled.
+### Expanded to 1,200 transactions — 0 receipts missing
+
+Of **230** multi-fill clusters, **137 resolved** on chain:
+
+| | |
+|---|---|
+| SAME_PARENT | **127** |
+| MULTIPLE_PARENTS | 10 |
+| UNRESOLVABLE | 93 (transactions outside the fetch cap, not pruning) |
+| **share of resolved clusters that are ONE parent** | **0.927** |
+| **share of their FILLS collapsing into one parent** | **0.9255** |
+
+On the frozen historical sample the same figures were 0.60 / 0.5806 at n=15,
+where the misses *were* pruning. The recent sample is **nine times larger** and
+is a **different population** (recent activity, not the 2026-03…08 BTC15m
+tape). The two are reported side by side and never pooled.
 
 **Parent orders execute in pieces, within seconds:**
 
-* executions per parent: mean 1.455, p50 1, p90 2, **max 8**; **31.0%** of
+* executions per parent: mean 1.473, p50 1, **p90 3, max 9**; **29.0%** of
   parents have more than one execution
 * **parent lifetime lower bound** (first → last observed execution, for the
-  14.4% that span more than one timestamp): **p50 2 s, p90 4 s, max 6 s**
+  **11.0%** that span more than one timestamp): **p50 2 s, p90 6 s, max 28 s**
 * this is a **lower bound only** — the order existed before its first fill by an
   unknown amount and may have persisted after its last
 
 **Size structure is round at the parent level and fragmented at the fill
-level.** Fill sizes: 100.0 (×192), 5.0 (×145), 10.0, 15.0, 20.0, 30.0, 6.0,
-80.0. Parent quantities: **100.0 (×37)**, 200.0, 10.0, 5.0, 80.0. The odd sizes
-are *fragments of round orders* — exactly the signature of partial execution,
-and a direct reason not to model fill size as a decision.
+level.** Parent quantities: **100.0 (×152)**, then 5.0, 200.0, 10.0, 80.0,
+20.0, 25.0, 30.0, 35.0, 95.0. Fill sizes include 6.0, 15.0 and other
+non-round values. The odd sizes are *fragments of round orders* — exactly the
+signature of partial execution, and a direct reason not to model fill size as a
+decision.
 
 ## 3. Does L5's inventory recycle? Prospectively — yes, and Gemini's does not
 
