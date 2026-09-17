@@ -201,3 +201,99 @@ missing is the join between its trade tape and the surface's resting quotes.
 
 Neither lane blocks the other. Neither may be advanced past its blocker by
 weakening the evidence rule. No live orders without explicit authorization.
+
+---
+
+# Addendum — 2026-09-17 evening, both lanes wired
+
+## LANE A — wired, and validated against live books
+
+`src/pmus_l5_surface_shadow.py` + `src/pmus_l5_surface_runner.py` run the
+frozen `L5_ADAPTED_PMUS_SPORTS` spec as a persistent two-sided surface and
+produce the per-side funnel with queue-ahead frozen at placement.
+
+The engine needed **no change**. PMUS quotes one slug (YES); buying NO at *p*
+is selling YES at *1−p*, so a two-sided surface on a slug is exactly the
+two-outcome surface the engine already emits. The engine is addressed in *its*
+names — the frozen spec's `both_sides_policy` scope is literally `["Up","Down"]`,
+and handing it `YES`/`NO` keys produced `emitted: True` with **zero rungs**, a
+surface silently quoting nothing. That now reports `no_rungs_in_scope`.
+
+**Validated live, 30 markets, 20 cycles, 4 minutes:**
+
+| | BUY_YES | BUY_NO |
+|---|---|---|
+| PLACED | 34 | 48 |
+| RESTABLE | 34 | 48 |
+| BOOK_REACHED | 34 | 48 |
+| TRADE_FLOW | — | — |
+| EVIDENCED_FILL | — | — |
+
+Queue-ahead captured at placement ranged **0.65 → 1233 shares**. 8 of 30
+markets were never two-sided (props/handicaps).
+
+That run caught a defect of my own: it first reported `NO_FILLS_NO_FLOW` when
+the public gateway serves **no tape at all**. `TRADE_FLOW 0` from an
+*unreadable* tape is not an observation that nothing traded — it is the
+unreadable-versus-empty error. The verdict is now
+**`TRADE_FLOW_NOT_OBSERVABLE`**, tape readability is counted per observation,
+and a readable-but-empty tape still reports `NO_FILLS_NO_FLOW`.
+
+Entry is **not** gated on pair cost; `0.96` appears in no AST constant.
+
+**Exact remaining blocker:** the surface must run where the authenticated WS
+tape is. That tape is recorded by `pmus-ws-evidence-recorder`
+(`71b6ea99-…`, **live**, 50GB volume at `/state/pmus-ws`, holds the PMUS
+credentials), whose Railway source branch is `feature/l5-transfer-backtest` —
+not the designated branch. Running the surface there means either pointing that
+service at this branch or merging, and it redeploys a live credentialed
+recorder. **That is an owner decision, not mine to take.**
+
+## LANE B — queue-bound diagnosed; settlement gate built and not yet run
+
+`analysis/l5/gemini_surface/queue_diagnosis.py`, wired into the supervisor
+cadence as `L5_GEMINI_QUEUE` (promoted).
+
+Both wrong answers are excluded **in code**, with tests, so neither gets
+re-asserted: **not flow-starved** (flow went through the sell side and was
+recorded) and **not a broken complement** (the sell side is placed, rests and
+reaches the book *more often* than the buy side).
+
+Four explanations, each measured off the tape already being written:
+`PERSISTENCE` (re-placement rate — a re-placed quote goes to the back),
+`PLACEMENT` (queue depth by offset), `REFRESH` (re-placing at an *unchanged*
+price is pure priority loss), `QUEUE_MODEL` (`VOLUME_AHEAD_CLEARED` assumes we
+joined behind *everything*, so it is a **lower bound**; reported as the
+priority factor our true position would need).
+
+It states what it **cannot** settle: our real queue position is unpublished, so
+no tape analysis converts the model into a fact.
+
+**Size is not a queue fix and is not presented as one.** `queue_priority_effect:
+NONE` — reducing our lot does not reduce volume already ahead of us; the queue
+is unchanged and a smaller order waits behind the same depth. It is reported
+as a **risk/capacity** axis: the shadow's `UNIT` is 100× the venue minimum, and
+a lot at the minimum cannot partially fill, which removes a source of residual.
+
+**Settlement.** The credentials are **not** on Railway and **not** on the AWS
+host — they are **GitHub Actions secrets**, and `gemini-subsidy-verify.yml` is
+the established read-only precedent. `.github/workflows/gemini-settlement-gate.yml`
+mirrors it exactly: guards run **before** any secret enters scope, `NO_CREDENTIALS`
+fails closed with no fallback, only `analysis/gemini/` artifacts may be
+committed, manual dispatch only, no order submitted. The probe emits the
+required chain per symbol — contract → expiry → authoritative outcome →
+position → settlement cashflow → fees → ledger reconciliation — reporting the
+**first break** rather than a score.
+
+**Exact remaining blocker:** `workflow_dispatch` registers only from the
+**default branch**. The file is on `claude/l5-execution-instrumentation-io6nzi`
+and **not on `main`**, so the API returns 404 and it cannot be run. Pushing to
+`main` is outside my branch authorization. **The owner must place it on `main`
+(merge or cherry-pick) — then it is one dispatch.**
+
+Note on what that run will and will not close: we have never traded on Gemini,
+so `/v1/mytrades` will be empty and the gate will still report BLOCKED on
+`AUTHORITATIVE_FILLS`. What it **does** decisively establish is
+`settlement_endpoint_exists` — whether an authoritative settlement/outcome read
+exists for this account at all. That single fact determines whether Lane B can
+*ever* score a canary.
