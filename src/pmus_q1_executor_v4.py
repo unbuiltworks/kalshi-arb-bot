@@ -193,8 +193,23 @@ def _order_status(t: Transport, order_id: str) -> dict:
                      "keys": sorted(order)[:60],
                      "fields": _scalar_fields(order, 1500)}, default=str),
                     flush=True)
-                raise RejectedNoFill(
+                # OWNER 2026-09-17 P0: carry the venue's OWN record on the
+                # exception. The rejection observed HERE is authoritative and
+                # terminal; a caller that has to re-GET the order to act on it
+                # is asking the venue a question it has already answered -- and
+                # this venue refuses GET /v1/order/{id} for orders it rejected,
+                # so that re-read fails and the order is left tracked as open
+                # forever, pinning may_assert_flat false for the life of the
+                # market. 11 of 13 rejections in the 2026-09-17 cohort did
+                # exactly that. Terminality must come from this record, never
+                # from the readability of a later request.
+                _rej = RejectedNoFill(
                     f"ORDER_REJECTED_ZERO_FILL:{order_id}:{state}:{why}")
+                _rej.order_id = order_id
+                _rej.order = dict(order)
+                _rej.state = state
+                _rej.reason = why
+                raise _rej
             return dict(order)
         except RejectedNoFill:
             raise

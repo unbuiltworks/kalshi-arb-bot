@@ -2004,11 +2004,35 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
         # leaving it tracked as open -- an order left open on every
         # post-only rejection pins may_assert_flat false for the life of
         # the market (LIVE 12:14Z, CC6WEM7CCR42 / CC6WXBGXJR42).
+        # OWNER 2026-09-17 P0: close from the VENUE RECORD THE EXCEPTION
+        # CARRIES, not from a fresh GET. The old line re-read the order here;
+        # this venue refuses GET /v1/order/{id} once it has rejected an order,
+        # so the read raised, the `except: pass` swallowed it, and the order
+        # stayed OPEN forever. Measured on 2026-09-17: 11 of 13 rejections did
+        # this, and each one pinned may_assert_flat false -- which is the gate
+        # that blocks settlement-pending concurrency release.
+        #
+        # Terminality now comes from the authoritative rejection itself. The
+        # guard inside close_on_venue_rejection is UNCHANGED and still refuses
+        # to close anything whose cumulative quantity disagrees with what we
+        # booked, so a rejection reporting an unexpected fill still leaves the
+        # order open. Unknown orders remain fail-closed: if we have no record,
+        # we fall back to the re-read, and if that is unreadable the order
+        # stays OPEN exactly as before. Terminality is NEVER inferred from
+        # unreadability.
         if ledger is not None:
-            try:
-                ledger.close_on_venue_rejection(oid, q1._order_status(t, oid))
-            except Exception:                           # noqa: BLE001
-                pass                # unreadable stays OPEN, never "closed"
+            _rec = getattr(exc, "order", None)
+            _closed = False
+            if _rec is not None:
+                try:
+                    _closed = bool(ledger.close_on_venue_rejection(oid, _rec))
+                except Exception:                       # noqa: BLE001
+                    _closed = False
+            if not _closed:
+                try:
+                    ledger.close_on_venue_rejection(oid, q1._order_status(t, oid))
+                except Exception:                       # noqa: BLE001
+                    pass            # unreadable stays OPEN, never "closed"
         return D("0"), round(clock() - start, 3), f"rejected:{str(exc)[:120]}"
     if fill is None:
         cancelled = False
@@ -2104,7 +2128,39 @@ def _reconcile_fills(t: Transport, slug: str, ledger, inv: Inventory) -> dict:
         venue_qty, evidence = got.get("qty"), got.get("evidence")
     except Exception:                                   # noqa: BLE001
         venue_qty = None
-    audit["venue_vs_ledger"] = fl.venue_vs_ledger(venue_qty, inv.up + inv.dn)
+    # OWNER 2026-09-17 P0: compare WHOLE-MARKET against WHOLE-MARKET.
+    #
+    # This line used to pass `inv.up + inv.dn` -- the SESSION's inventory --
+    # against the venue's CUMULATIVE traded quantity for the market. On a
+    # resumed session the two coincide, because the session rebuilt itself
+    # from the ledger. On a FRESH session they do not, and on 2026-09-17 at
+    # 12:59:31Z that produced "venue 0.9900 vs ledger 0.19, delta 0.8000,
+    # agrees false" on a market where nothing whatsoever was wrong: the 0.80
+    # was three prior sessions' fills, sitting in the durable ledger the whole
+    # time. recovered_qty was 0 on every session of that cohort -- the
+    # reconciler has never recovered a share.
+    #
+    # A false disagreement is not harmless. It pins may_assert_flat False, so
+    # it blocks settlement-pending release; and it trains a reader to discount
+    # the one signal that must never be discounted. The durable ledger is the
+    # account's position, so that is what the venue gets compared against.
+    #
+    # SESSION-LOCAL INVENTORY STILL DRIVES SESSION LOGIC -- pricing, the pair
+    # invariant, this session's own sizing. It just may never again stand in
+    # for account exposure in a SAFETY comparison. Fails closed: if the
+    # durable rebuild raises, we keep the session figure rather than assert
+    # agreement we cannot support.
+    _ledger_inv = None
+    try:
+        _ledger_inv = held_inventory_from_ledger(slug)
+    except Exception as _exc:                           # noqa: BLE001
+        audit["durable_inventory_error"] = f"{type(_exc).__name__}:{str(_exc)[:60]}"
+    _whole = (_ledger_inv.up + _ledger_inv.dn) if _ledger_inv is not None \
+        else (inv.up + inv.dn)
+    audit["ledger_qty_basis"] = ("durable_whole_market" if _ledger_inv is not None
+                                 else "session_local_FALLBACK")
+    audit["session_local_qty"] = str(inv.up + inv.dn)
+    audit["venue_vs_ledger"] = fl.venue_vs_ledger(venue_qty, _whole)
     if audit["venue_vs_ledger"].get("agrees") is False:
         # LIVE 01:44Z 09-11, aec-county-not-ham-2026-09-08: venue 774.6200
         # against ledger 45.01, a 729.61 gap on a measure that reconciled
@@ -2125,7 +2181,12 @@ def _reconcile_fills(t: Transport, slug: str, ledger, inv: Inventory) -> dict:
         audit["may_assert_flat"] = False
         audit["contradictions"] = ledger.contradictions
     audit["provenance"] = getattr(ledger, "provenance", [])[-16:]
-    _attest_matched_flat(slug, inv, audit)
+    # OWNER 2026-09-17 P0: attest from the DURABLE whole-market inventory, and
+    # only when that rebuild succeeded. A fresh session must never be able to
+    # release the concurrency slot on the strength of its own local view --
+    # that is precisely the case where local and account inventory diverge.
+    if _ledger_inv is not None:
+        _attest_matched_flat(slug, _ledger_inv, audit)
     return audit
 
 

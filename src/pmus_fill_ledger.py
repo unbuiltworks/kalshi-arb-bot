@@ -207,11 +207,22 @@ class FillLedger:
         added: Dict[str, str] = {}
         unreadable: List[str] = []
         closed: List[str] = []
+        # OWNER 2026-09-17 P0: keep WHY each read failed. `unreadable` used to
+        # be a bare list of ids, so a 2026-09-17 forensics question -- were
+        # these timeouts, rate limits, or the venue refusing rejected orders?
+        # -- could not be answered from the record at all, and had to be
+        # inferred from how long the loop took. The exception type and its
+        # bounded message are kept per id; the classification is unchanged.
+        why: Dict[str, str] = {}
         for oid in ids:
             try:
                 order = read_order(oid)
-            except Exception:                           # noqa: BLE001
+            except Exception as exc:                    # noqa: BLE001
                 unreadable.append(oid)
+                code = getattr(exc, "code", None)
+                why[oid] = "%s:%s:%s" % (type(exc).__name__,
+                                         code if code is not None else "-",
+                                         str(exc)[:160])
                 continue
             delta = self.ingest(oid, order)
             if delta > 0:
@@ -222,6 +233,11 @@ class FillLedger:
             "checked": len(ids), "recovered_fills": added,
             "recovered_qty": str(sum((D(v) for v in added.values()), D("0"))),
             "closed": closed, "unreadable": unreadable,
+            # OWNER 2026-09-17 P0: the actual failure per unreadable id,
+            # "<ExceptionType>:<http code or ->:<bounded message>", so a
+            # future read failure is diagnosable from the record instead of
+            # inferred from loop timing.
+            "unreadable_why": why,
             "still_open": self.open_orders(),
             "contradictions": len(self.contradictions),
         }
