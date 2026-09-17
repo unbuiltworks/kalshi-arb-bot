@@ -106,7 +106,8 @@ def replay_market(obs: list, cfg: dict) -> dict:
     protect = D(cfg.get("min_matched_to_protect", "0.30"))
 
     ext_req = ext_restable = ext_cross = ext_wait = 0
-    cmp_req = cmp_exec = cmp_wait = cmp_cross = 0
+    cmp_req = cmp_exec = cmp_wait = cmp_cross = cmp_restable = 0
+    rest_diag: list = []
     supp_fired = gate_blocked = cap_blocked = 0
     pair_costs: list = []
     one_sided = 0
@@ -118,7 +119,7 @@ def replay_market(obs: list, cfg: dict) -> dict:
     stale = 0
     prev_touch: Optional[D] = None
 
-    for r in obs:
+    for idx, r in enumerate(obs):
         bid, ask = _d(r.get("bid")), _d(r.get("ask"))
         if bid is None or ask is None:
             one_sided += 1
@@ -157,6 +158,16 @@ def replay_market(obs: list, cfg: dict) -> dict:
                 residual -= unit           # PERMITTED, not filled
                 run += 1
                 max_res = max(max_res, abs(residual))
+                # DIAGNOSTIC ONLY (owner 2026-09-17 item 2). RESTABLE is not
+                # FILLED and this does not make it one. The question it
+                # answers is narrower and worth answering on its own: does a
+                # book-aware price merely dodge rejection, or does it sit
+                # where flow actually is? A quote 30 ticks from the touch is
+                # legal and useless -- which is exactly what the live
+                # COMPLETEs were. Nothing here feeds behaviour or ranking.
+                _px = _d(p.get("px"))
+                if _px is not None and bid is not None:
+                    rest_diag.append({"at": idx, "px": _px, "bid_at_quote": bid})
             else:
                 ext_wait += 1
 
@@ -174,6 +185,38 @@ def replay_market(obs: list, cfg: dict) -> dict:
                 cmp_cross += 1
             else:
                 cmp_wait += 1
+                if cp.get("px") is not None:
+                    cmp_restable += 1      # legal price, refused on economics
+
+    # ---- RESTABLE diagnostic, computed after the walk so it can look
+    # forward. DIAGNOSTIC ONLY: none of this becomes a fill, and none of it
+    # feeds ranking. It answers "was the quote anywhere near the flow?", which
+    # rejection rate alone cannot.
+    diag = []
+    for q in rest_diag:
+        i, px = q["at"], q["px"]
+        stale_after = None
+        moved = D("0")
+        touched = False
+        for j in range(i + 1, len(obs)):
+            b2 = _d(obs[j].get("bid"))
+            if b2 is None:
+                continue
+            moved = max(moved, abs(b2 - q["bid_at_quote"]))
+            # the quote becomes marketable once the bid reaches it: that is
+            # the moment a resting NO buy would have been interacted with
+            if not touched and b2 <= px:
+                touched = True
+                stale_after = j - i
+        diag.append({"ticks_from_touch": int(abs(
+                        (q["bid_at_quote"] - px) / C.TICK)),
+                     "obs_until_marketable": stale_after,
+                     "max_subsequent_touch_move": str(moved),
+                     "book_reached_the_quote": touched})
+    reached = [d for d in diag if d["book_reached_the_quote"]]
+    ticks = [d["ticks_from_touch"] for d in diag]
+    waits = [d["obs_until_marketable"] for d in reached
+             if d["obs_until_marketable"] is not None]
 
     n = len(obs) or 1
     return {
@@ -194,8 +237,26 @@ def replay_market(obs: list, cfg: dict) -> dict:
         "complete_executable": cmp_exec,
         "complete_cross": cmp_cross,
         "complete_wait": cmp_wait,
+        "complete_restable_but_uneconomic": cmp_restable,
         "complete_executable_rate": (round(cmp_exec / cmp_req, 4)
                                      if cmp_req else None),
+        "restable_diagnostic": {
+            "quotes": len(diag),
+            "median_ticks_from_touch": (sorted(ticks)[len(ticks) // 2]
+                                        if ticks else None),
+            "max_ticks_from_touch": max(ticks) if ticks else None,
+            "book_later_reached_the_quote": len(reached),
+            "share_reached": (round(len(reached) / len(diag), 4)
+                              if diag else None),
+            "median_obs_until_marketable": (sorted(waits)[len(waits) // 2]
+                                            if waits else None),
+            "labels": ("DIAGNOSTIC ONLY. `book_later_reached_the_quote` means "
+                       "the touch subsequently moved to or through our price "
+                       "-- evidence the quote was near real flow. It is NOT a "
+                       "fill: we would have queued behind makers this tape "
+                       "does not name, and no count here is ever converted "
+                       "into one."),
+        },
         "pair_completions": len(pair_costs),
         "pair_cost_mean": (str(sum(pair_costs, ZERO) / len(pair_costs))[:6]
                            if pair_costs else None),
