@@ -49,16 +49,40 @@ surface as it ran, not reconstructed):
 | trade_flow | **0** | **0** |
 
 `sell_ever_placed: true`. The sell side is placed *more often than the buy
-side*, rests more, and reaches the book comparably. Nothing traded through
-**either** side in this window, at a **median spread of 0.22**.
+side* at this point, rests more, and reaches the book comparably. Nothing had
+traded through either side yet, at a median spread of 0.22 — but that segment
+was ~2 minutes old, and the next report supersedes it.
 
-**Verdict: `BUY_ONLY_FILLS_SELL_RESTED_UNFILLED`.** The sell side is working.
-The venue simply did not trade through our quotes.
+**Segment `20260917T214616Z` at 22:07:38Z** (656 rows, 641 observations):
 
-Caveat stated rather than buried: the second segment is ~2 minutes old at the
-time of this report. The placement asymmetry (122 > 80) is structural and
-robust at that size; `trade_flow 0` on both sides is a small sample and says
-only that this window was quiet.
+| | BUY | SELL |
+|---|---|---|
+| placed | 209 | 89 |
+| restable | 719 | 601 |
+| book_reached | 499 | 407 |
+| **trade_flow** | 0 | **20** |
+| evidenced fills | 2 | **0** |
+
+`sell_ever_placed: true`, median spread 0.26.
+
+**Verdict: `BUY_ONLY_FILLS_SELL_RESTED_UNFILLED`, and the reason is the
+QUEUE, not the market.** Trade flow went *through* a sell quote **20 times**
+and produced **zero** sell fills. The sell side is not merely placed and
+resting — it is being traded through, and what stops the fill is
+`volume_ahead` never clearing.
+
+This supersedes the earlier reading. At 21:47 the honest statement was "the
+venue did not trade through our quotes"; with 641 observations it is "the
+venue trades through them and we are behind the queue". The two point to
+different remedies — waiting for a busier market versus quoting earlier, finer,
+or smaller — so the distinction is the finding, not a detail.
+
+Measurement note, so the BUY column is not misread: `rungs_side` counts LIVE
+quotes per observation, and a filled quote is popped from `st.quotes`, so the
+flow that produced a fill is not counted in the live tally afterwards. The two
+BUY fills are carried by `BUY|VOLUME_AHEAD_CLEARED`, not by `BUY_trade_flow`.
+`BUY_trade_flow 0` means no *currently resting* buy quote has flow through it,
+not that the buy fills came from nowhere.
 
 ---
 
@@ -160,7 +184,11 @@ the conjunction, and **Gemini reads `can_propose_canary: true`,
 
 ## What each lane needs next
 
-**Lane B (Gemini) — closest.** One blocker: authoritative settlement. It needs
+**Lane B (Gemini) — closest.** One blocker: authoritative settlement. And one
+newly sharpened research question that is *not* a blocker: the sell side is
+queue-bound, not flow-starved, so the next passive-surface question is where in
+the queue a sell quote would have to sit to clear — which bears directly on the
+`min_order_size 0.01` finding, since a smaller lot clears a queue sooner. It needs
 an authenticated read of `/v1/mytrades`, `/v1/balances` and `/v1/transfers`
 across a window expiry, run where the Gemini credentials already live, to turn
 `src/gemini_settlement.py` from BLOCKED to OPEN. No order is involved. That is

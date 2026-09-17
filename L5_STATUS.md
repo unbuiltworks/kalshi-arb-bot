@@ -137,9 +137,13 @@ about the instrument, not the behaviour. `observed_here` is EMPTY for both.
 artifact of the obsolete one-shot architecture (`gemini_l5_shadow_v2.py`,
 untouched, not running) and **not** a broken complement. From the surface's own
 per-side counters: SELL placed **122** vs BUY **80**, restable 368 vs 356,
-book_reached 239 vs 276, trade_flow **0 on both sides** at a median spread of
-0.22. Verdict `BUY_ONLY_FILLS_SELL_RESTED_UNFILLED` — the sell side is placed,
-rests, and reaches the book; the venue did not trade through it.
+book_reached 239 vs 276. At 641 observations: placed 209/89, restable 719/601,
+book_reached 499/407, and **SELL trade_flow 20 against BUY 0** — flow went
+through a sell quote twenty times and produced **zero** sell fills. Verdict
+`BUY_ONLY_FILLS_SELL_RESTED_UNFILLED`, and the cause is the **QUEUE, not the
+market**: the sell side is placed, rests, reaches the book and is traded
+through, and `volume_ahead` never clears. (An earlier 2-minute read said the
+venue did not trade through it; 641 observations supersede that.)
 
 **LANE B BLOCKER — settlement.** Four expired BTC5m windows (578s–3878s past
 expiry): all `status=closed`, empty book, public tape intact, and **no terminal
