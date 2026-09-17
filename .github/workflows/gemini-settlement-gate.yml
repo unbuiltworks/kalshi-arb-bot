@@ -1,0 +1,117 @@
+# Read-only Gemini SETTLEMENT gate evidence.
+#
+# WHY THIS EXISTS. The Gemini lane can evidence every stage a bounded canary
+# PROPOSAL needs and cannot score one: an expired BTC5m contract closes with
+# an empty book and the venue publishes NO terminal value anywhere public
+# (measured 2026-09-17 across four expired windows; one last-printed 0.97 and
+# another 0.17, and a last print is not a settlement). Only the authenticated
+# account surface can close it.
+#
+# WHERE THE CREDENTIALS ARE. This repo already holds Gemini credentials as
+# Actions secrets -- the same established mechanism gemini-subsidy-verify.yml
+# uses. No AWS host, no SSH, no fallback. If this fails, it fails.
+#
+# WHAT IT ANSWERS. Whether an authoritative settlement/outcome read exists for
+# our account at all, and how far the required proof chain gets:
+#
+#   contract -> expiry -> authoritative outcome -> position
+#            -> settlement cashflow -> fees -> ledger reconciliation
+#
+# A 404 on a settlement candidate is a RESULT, not a failure: it establishes
+# the credit does not live there, which nobody had established.
+#
+# NO ORDER IS SUBMITTED. The probe has no order transport and cannot reach one;
+# the structural guard below proves it over the AST before any secret is in
+# scope.
+name: Gemini Settlement Gate (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Comma-separated GEMI symbols; blank = recent BTC5m expiries"
+        required: false
+        default: ""
+
+# One at a time. A second run could commit evidence over the first.
+concurrency:
+  group: gemini-settlement-gate
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/l5-execution-instrumentation-io6nzi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The guards run BEFORE any credential is in scope: if the read-only
+      # contract is broken, the job dies without ever holding a secret.
+      - name: Structural guard -- no order transport, no credential read
+        run: |
+          python -m pytest tests/test_gemini_settlement_probe.py \
+                           tests/test_gemini_settlement.py -q
+
+      - name: Choose symbols
+        id: syms
+        env:
+          INPUT_SYMBOLS: ${{ github.event.inputs.symbols }}
+        run: |
+          if [ -n "$INPUT_SYMBOLS" ]; then
+            echo "symbols=$INPUT_SYMBOLS" >> "$GITHUB_OUTPUT"
+          else
+            # the last six EXPIRED BTC5m windows: settlement is only a
+            # question once a contract has actually expired
+            echo "symbols=$(python3 scripts/gemini_recent_expiries.py -n 6)" \
+              >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Settlement gate probe (read-only; no order transport)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          set -o pipefail
+          # stdout carries the gate report only; the module never prints secrets.
+          python -m src.gemini_settlement_probe \
+            --symbols "${{ steps.syms.outputs.symbols }}" | tee /tmp/gate.json
+          # fail closed: NO_CREDENTIALS is a real answer, not a silent zero,
+          # and we do NOT fall back to another credential source.
+          if grep -q '"verdict": *"NO_CREDENTIALS"' /tmp/gate.json; then
+            echo "::error::Gemini secrets absent or invalid -- failing closed."
+            exit 1
+          fi
+
+      - name: Report the gate, without deciding anything
+        run: python3 scripts/gemini_settlement_gate_report.py /tmp/gate.json
+
+      - name: Commit ONLY the evidence artifact
+        run: |
+          git config user.name  "gemini-settlement-gate[bot]"
+          git config user.email "gemini-settlement-gate@users.noreply.github.com"
+          # analysis/gemini/ ONLY. No source, config or live-service change
+          # may originate from this runtime job.
+          git add -- 'analysis/gemini/settlement_gate_*.json'
+          if git diff --cached --quiet; then
+            echo "no new evidence artifact"; exit 0
+          fi
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/settlement_gate_[0-9TZ]+\.json$'; then
+            # [skip ci] so the evidence commit cannot re-trigger anything
+            git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
+            git push origin HEAD:claude/l5-execution-instrumentation-io6nzi
+          else
+            echo "::error::refusing to commit files outside analysis/gemini/"
+            git diff --cached --name-only; exit 1
+          fi
