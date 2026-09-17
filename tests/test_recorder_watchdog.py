@@ -324,7 +324,11 @@ def test_every_ordinary_start_carries_provenance_too(tmp_path, monkeypatch):
         sup.start(name)
     starts = [r for r in _markers(sup.root)
               if r["kind"] in ("stream_start", "stream_restart")]
-    assert len(starts) == len(S.STREAMS)
+    # a stream the launch gate legitimately HELD did not start, and that is
+    # the gate working rather than a missing provenance record
+    held = [n for n in S.STREAMS if not sup._launchable(n)]
+    assert {r["stream"] for r in starts} == set(S.STREAMS) - set(held)
+    assert len(starts) == len(S.STREAMS) - len(held)
     for r in starts:
         pv = r["provenance"]
         assert pv["command"] == sup._cmd(r["stream"])

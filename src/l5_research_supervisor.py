@@ -734,6 +734,26 @@ class Supervisor:
                         flush=True)
         return rep
 
+    def report_surface_shadow(self) -> Optional[dict]:
+        """What the prospective ADAPTED surface did, from its own tape.
+
+        A REPORT. The shadow places nothing, and this reads what it wrote.
+        Stages are reported separately on purpose: the distance between
+        BOOK_REACHED and EVIDENCED_FILL is the measurement, not an
+        inconvenience to average away.
+        """
+        d = os.path.join(self.root, "l5-surface-shadow")
+        try:
+            from analysis.l5.surface_shadow import report as SR
+            rep = SR.report(d)
+        except Exception as exc:                              # noqa: BLE001
+            print("L5_SURFACE_SHADOW " + json.dumps(
+                {"ok": False, "err": f"{type(exc).__name__}: {exc}"[:300]}),
+                flush=True)
+            return None
+        print("L5_SURFACE_SHADOW " + json.dumps(rep, default=str), flush=True)
+        return rep
+
     def run(self) -> int:
         self.boot()
         # once, with the per-parent detail: the tapes cannot be read from
@@ -765,6 +785,7 @@ class Supervisor:
                 self.report_dual_clock()
                 self.report_pairs()
                 self.report_window_surface()
+                self.report_surface_shadow()
             time.sleep(2.0)
         self.stop()
         return 0
