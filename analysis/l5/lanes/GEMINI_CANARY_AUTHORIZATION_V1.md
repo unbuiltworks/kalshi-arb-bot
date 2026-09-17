@@ -154,3 +154,52 @@ fees, incentives, total confirmed realized.
 - No change to `FIDELITY_OBSERVABLE_V1` (`d583fa4005d1b815…`) or to
   `L5_ADAPTED_GEMINI_CRYPTO` (`62d004d80b4af8b9…`).
 - No R1 involvement of any kind.
+
+---
+
+# Appendix — the exact preflight
+
+Produced by `src/gemini_canary_preflight.py` in the authorized environment
+(run 4, artifact `analysis/gemini/canary_preflight_20260917T234110Z.json`).
+It places nothing; it has no order transport and imports none.
+
+| # | item | value |
+|---|---|---|
+| 1 | **instrument** | `GEMI-BTC05M2609172345-UP` |
+| 2 | **side** | `BUY` (first leg; no automatic complement) |
+| 3 | **limit price** | `0.63` — the touch, tick offset **0** |
+| 4 | **quantity** | `0.01` contracts (venue minimum) |
+| 5 | **maximum cash exposure** | **$0.0063** |
+| 6 | **current BBO** | `0.63 × 238.0` / `0.90 × 10.0`, 3 bid / 3 ask levels, `source_ts 1789688470` |
+| 7 | **post-only / restability** | `restable: true` — a BUY below the ask rests. Post-only is **venue-enforced**: `status: limit_only` |
+| 8 | **TTE** | `229.9 s`, expiry `2026-09-17T23:45:00Z` |
+| 9 | **fee treatment** | `api_maker_fee_bps: 60`, `api_taker_fee_bps: 120`. Fees are their own line, never netted into a price; rebates/rewards stay in separate ledgers |
+| 10 | **balance sufficiency** | `true` for the required `$0.0063`. **Amount withheld by design** |
+| 11 | **kill / deadman** | `armed: false`, `submission_reachable: false`; existing risk/deadman protections unmodified; fail-closed, no relaunch |
+| 12 | **durable intent path** | written **before** the venue mutation (`src.l5_surface_exec.adapter`) |
+| 13 | **authoritative order/fill read** | `/v1/mytrades` — **200**, reachable |
+| 14 | **settlement / position read** | `/v1/prediction-markets/positions` — **200**, reachable |
+| 15 | **cash reconciliation** | `/v1/balances` **200** + `/v1/transfers` **200** |
+| 16 | **status ladder** | `SUBMITTED → FILLED_OR_UNFILLED → EXPIRED_OR_SETTLED → RECONCILED → REALIZED` |
+
+**Two things that must be read before authorizing.**
+
+1. **`api_maker_fee_bps` is 60 — a maker FEE of 0.6%, not a rebate.** At this
+   size it is ~$0.00004 and irrelevant; at any scale it is not. This is the
+   account's reported schedule from `/v1/notionalvolume` and may not be the
+   prediction-market-specific one; it is recorded as read, unconfirmed for
+   these instruments.
+
+2. **The fill prospect is poor, by construction.** `238.0` contracts rest ahead
+   of us at `0.63`, against our `0.01`, at a `0.27` spread. Under
+   `VOLUME_AHEAD_CLEARED` all 238 must clear before we fill — and that model is
+   a *lower* bound, since real priority is unpublished and may be better.
+   An unfilled order leaves the settlement question untouched.
+
+**The instrument is time-bound.** That window expired at 23:45Z. The concrete
+symbol, price and BBO must be **re-derived at the moment of authorization** by
+re-running the preflight; the envelope, the paths and the ladder are stable.
+The table above is the exact mechanism and a worked example of its output, not
+a standing order.
+
+**STATUS: STOPPED FOR OWNER AUTHORIZATION. Nothing submitted.**
