@@ -413,3 +413,47 @@ def test_recycling_requires_fills_on_both_sides():
     r = EV.recycling([a, b], [5, 30])
     assert r["n_fills"] == 1
     assert r["n_opposite_within_30s"] == 0
+
+
+def test_the_walk_resumes_rather_than_restarting_each_tick():
+    """In a live loop every rung is re-walked on every tick. A walk that
+    restarted from DESIRED_SURFACE would raise on the second tick; one that
+    reset the stage would throw away evidence already established."""
+    e = _rung("0.50", "100")
+    kw = dict(restable=True, queue_ahead="0", placed_at=0.0)
+
+    # tick 1: the touch has not reached us and nothing has traded
+    EV.walk(e, touch_reached=False, prints=[], observed_until=10.0,
+            coverage_complete=True, **kw)
+    assert e.stage == EV.RESTABLE
+
+    # tick 2: the touch arrives. It must ADVANCE, not start over
+    EV.walk(e, touch_reached=True, prints=[], observed_until=20.0,
+            coverage_complete=True, **kw)
+    assert e.stage == EV.BOOK_REACHED
+    assert e.reached == [EV.DESIRED_SURFACE, EV.RESTABLE, EV.BOOK_REACHED]
+
+    # tick 3: volume trades through and covers us
+    EV.walk(e, touch_reached=True,
+            prints=[{"t": 15.0, "price": "0.49", "size": "150"}],
+            observed_until=30.0, coverage_complete=True, **kw)
+    assert e.stage == EV.EVIDENCED_FILL and e.is_fill()
+    assert e.filled_qty() == D("100")
+
+    # tick 4: re-walking a filled rung changes nothing and raises nothing
+    EV.walk(e, touch_reached=True,
+            prints=[{"t": 16.0, "price": "0.49", "size": "150"}],
+            observed_until=40.0, coverage_complete=True, **kw)
+    assert e.stage == EV.EVIDENCED_FILL and e.filled_qty() == D("100")
+
+
+def test_a_gate_that_failed_earlier_can_still_pass_later():
+    """Evidence accumulates. A rung whose book was unreadable on one tick is
+    not condemned to stay there."""
+    e = _rung("0.50", "100")
+    EV.walk(e, restable=None, touch_reached=True, prints=[], queue_ahead="0",
+            placed_at=0.0, observed_until=10.0)
+    assert e.stage == EV.DESIRED_SURFACE
+    EV.walk(e, restable=True, touch_reached=True, prints=[], queue_ahead="0",
+            placed_at=0.0, observed_until=20.0)
+    assert e.stage == EV.BOOK_REACHED

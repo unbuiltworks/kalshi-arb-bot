@@ -125,6 +125,10 @@ class RungEvidence:
                 ]}
 
 
+def _needs(e: RungEvidence, stage: str) -> bool:
+    return STAGES.index(e.stage) < STAGES.index(stage)
+
+
 def walk(rung_ev: RungEvidence, *, restable: Optional[bool],
          touch_reached: Optional[bool], prints: Optional[Sequence[dict]],
          queue_ahead: Any, placed_at: float, observed_until: float,
@@ -134,17 +138,24 @@ def walk(rung_ev: RungEvidence, *, restable: Optional[bool],
     Each step is gated on its own witness, and the walk STOPS at the first
     stage whose witness is absent or unreadable. It never jumps to the end
     because the end looks likely.
+
+    RESUMABLE, because in a live loop every rung is re-walked on every tick as
+    the tape arrives. A gate already passed is not re-entered, so evidence
+    ACCUMULATES up the ladder instead of restarting from the bottom -- and a
+    gate that failed earlier can still pass later, which is the whole reason
+    to keep asking.
     """
-    if not restable:
+    if _needs(rung_ev, RESTABLE) and not restable:
         rung_ev.detail[RESTABLE] = {
             "satisfied": False,
             "why": ("the venue would not accept a passive order at this price"
                     if restable is False else "restability not established"),
         }
         return rung_ev
-    rung_ev.advance(RESTABLE, satisfied=True)
+    if _needs(rung_ev, RESTABLE):
+        rung_ev.advance(RESTABLE, satisfied=True)
 
-    if not touch_reached:
+    if _needs(rung_ev, BOOK_REACHED) and not touch_reached:
         rung_ev.detail[BOOK_REACHED] = {
             "satisfied": False,
             "why": ("the touch never reached our price"
@@ -152,7 +163,10 @@ def walk(rung_ev: RungEvidence, *, restable: Optional[bool],
                     else "the book was not readable over the interval"),
         }
         return rung_ev
-    rung_ev.advance(BOOK_REACHED, satisfied=True)
+    if _needs(rung_ev, BOOK_REACHED):
+        rung_ev.advance(BOOK_REACHED, satisfied=True)
+    if not _needs(rung_ev, EVIDENCED_FILL):
+        return rung_ev            # already as far as the ladder goes here
 
     ev = MK.evidence_for_quote(
         quote_px=rung_ev.price, quote_qty=rung_ev.desired_qty,
@@ -160,7 +174,7 @@ def walk(rung_ev: RungEvidence, *, restable: Optional[bool],
         observed_until=observed_until, coverage_complete=coverage_complete)
     crit = ev.get("fill_criteria") or {}
     flow = bool(crit.get("TRADE_AT_PRICE") or crit.get("TRADE_THROUGH"))
-    if not flow:
+    if _needs(rung_ev, TRADE_FLOW) and not flow:
         rung_ev.detail[TRADE_FLOW] = {
             "satisfied": False, "criteria": crit,
             "why": ("no volume executed at or through the price. "
@@ -168,9 +182,10 @@ def walk(rung_ev: RungEvidence, *, restable: Optional[bool],
                     "is not a fill"),
         }
         return rung_ev
-    rung_ev.advance(TRADE_FLOW, satisfied=True, criteria=crit,
-                    volume_at_price=crit.get("volume_at_price"),
-                    volume_through=crit.get("volume_through"))
+    if _needs(rung_ev, TRADE_FLOW):
+        rung_ev.advance(TRADE_FLOW, satisfied=True, criteria=crit,
+                        volume_at_price=crit.get("volume_at_price"),
+                        volume_through=crit.get("volume_through"))
 
     if ev.get("evidenced_fill") is not True:
         rung_ev.detail[EVIDENCED_FILL] = {
