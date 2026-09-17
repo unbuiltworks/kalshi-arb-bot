@@ -63,6 +63,13 @@ OUTCOME_PROXY_UP = D("0.80")     # final mid >= 0.80 -> UP won (proxy)
 OUTCOME_PROXY_DOWN = D("0.20")
 
 CA_BUNDLE = "/root/.ccr/ca-bundle.crt"
+def _ssl_ctx(cand: str) -> "ssl.SSLContext":
+    """An SSL context that works in every container we deploy into."""
+    import os as _os
+    for p in (_os.environ.get("SSL_CERT_FILE"), cand):
+        if p and _os.path.exists(p):
+            return ssl.create_default_context(cafile=p)
+    return ssl.create_default_context()
 TRADES_URL = "https://api.gemini.com/v1/trades/{symbol}?limit_trades=500"
 
 
@@ -229,7 +236,10 @@ def fetch_prints(symbols: Iterable[str], out_path: Path,
                 done.add(json.loads(line)["symbol"])
             except (json.JSONDecodeError, KeyError):
                 continue
-    ctx = ssl.create_default_context(cafile=CA_BUNDLE)
+    # Prefer a bundle that EXISTS. Pinning this session's agent-proxy
+    # bundle broke the deployed image silently: the context raised, a
+    # bare except swallowed it, and every chain read returned None.
+    ctx = _ssl_ctx(CA_BUNDLE)
     stats = {"fetched": 0, "cached": 0, "errors": 0}
     with gzip.open(out_path, "at", encoding="utf-8") as sink:
         for sym in symbols:

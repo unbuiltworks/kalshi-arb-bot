@@ -52,12 +52,22 @@ FIRST_WAIT_S = 180.0
 STOP_BEFORE_SLOT_END_S = 25.0
 
 CA_BUNDLE = "/root/.ccr/ca-bundle.crt"
+def _ssl_ctx(cand: str) -> "ssl.SSLContext":
+    """An SSL context that works in every container we deploy into."""
+    import os as _os
+    for p in (_os.environ.get("SSL_CERT_FILE"), cand):
+        if p and _os.path.exists(p):
+            return ssl.create_default_context(cafile=p)
+    return ssl.create_default_context()
 GAMMA = "https://gamma-api.polymarket.com"
 DATA = "https://data-api.polymarket.com"
 
 
 def _get(url: str):
-    ctx = ssl.create_default_context(cafile=CA_BUNDLE)
+    # Prefer a bundle that EXISTS. Pinning this session's agent-proxy
+    # bundle broke the deployed image silently: the context raised, a
+    # bare except swallowed it, and every chain read returned None.
+    ctx = _ssl_ctx(CA_BUNDLE)
     req = urllib.request.Request(url, headers={"User-Agent": "research"})
     with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
         return json.loads(r.read())

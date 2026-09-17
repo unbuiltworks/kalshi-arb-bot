@@ -41,11 +41,21 @@ from analysis.l5.causal import order_id_forensics as OF
 LABEL = "CLUSTER_SIZE_FORENSICS_V1"
 L5 = OF.L5
 CA = "/root/.ccr/ca-bundle.crt"
+def _ssl_ctx(cand: str) -> "ssl.SSLContext":
+    """An SSL context that works in every container we deploy into."""
+    import os as _os
+    for p in (_os.environ.get("SSL_CERT_FILE"), cand):
+        if p and _os.path.exists(p):
+            return ssl.create_default_context(cafile=p)
+    return ssl.create_default_context()
 DATA = "https://data-api.polymarket.com"
 
 
 def _ctx():
-    return ssl.create_default_context(cafile=CA)
+    # Prefer a bundle that EXISTS. Pinning this session's agent-proxy
+    # bundle broke the deployed image silently: the context raised, a
+    # bare except swallowed it, and every chain read returned None.
+    return _ssl_ctx(CA)
 
 
 def recent_fills(pages: int = 6, limit: int = 500) -> List[dict]:

@@ -82,7 +82,21 @@ CLASSES = ("SAME_PARENT_ORDER", "MULTIPLE_PARENT_ORDERS", "UNRESOLVABLE")
 
 
 def _ctx():
-    return ssl.create_default_context(cafile=CA)
+    """An SSL context that works in BOTH containers.
+
+    CA is this session container's agent-proxy bundle. It does not exist in
+    the deployed image, and pinning it there raised inside rpc()'s bare
+    `except`, so every receipt came back None and every parent was recorded
+    with ZERO chain legs -- silently, because an empty leg list is also what a
+    genuine no-L5-order receipt looks like. The chain observer already got
+    this right; this now does the same: prefer a bundle that exists, else the
+    system default.
+    """
+    import os as _os
+    for cand in (_os.environ.get("SSL_CERT_FILE"), CA):
+        if cand and _os.path.exists(cand):
+            return ssl.create_default_context(cafile=cand)
+    return ssl.create_default_context()
 
 
 def rpc(method: str, params: list, tries: int = 2) -> Any:
