@@ -111,12 +111,24 @@ def analyze_gemini(paths: list, out_dir: Path) -> dict:
     return result
 
 
+def analyze_pmus(paths: list, out_dir: Path) -> dict:
+    """The frozen ADAPTED sweep. Definitions and grid were committed before
+    this tape closed; this only runs them."""
+    from analysis.l5.sweep import evaluate as ev
+    out = ev.sweep(paths)
+    out["ranked"] = ev.rank(out)
+    (out_dir / "adapted_sweep_result.json").write_text(
+        json.dumps(out, indent=2), encoding="utf-8")
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dir", required=True)
     ap.add_argument("--pattern", default="tape_*.jsonl")
     ap.add_argument("--label", required=True)
-    ap.add_argument("--analysis", choices=("gemini", "none"), default="none")
+    ap.add_argument("--analysis", choices=("gemini", "pmus", "none"),
+                    default="none")
     ap.add_argument("--timeout-s", type=float, default=7200.0)
     a = ap.parse_args()
 
@@ -133,6 +145,20 @@ def main() -> int:
     if a.analysis == "gemini":
         res = analyze_gemini(paths, d)
         print("ON_CLOSE_VERDICT " + json.dumps(res["verdict"]), flush=True)
+    elif a.analysis == "pmus":
+        res = analyze_pmus(paths, d)
+        print("ON_CLOSE_SWEEP " + json.dumps(
+            {"tape_rows": res["tape_rows"], "markets": res["markets_in_tape"],
+             "combinations": res["combinations"],
+             "top": [{k: r["config"][k] for k in
+                      ("extend_placement", "complete_max_pair_cost",
+                       "extend_suppression", "acquisition_gate",
+                       "proposed_residual_cap")}
+                     | {"extend_rejection_rate": r.get("extend_rejection_rate"),
+                        "complete_requests": r.get("complete_requests"),
+                        "complete_executable_rate":
+                            r.get("complete_executable_rate")}
+                     for r in res["ranked"][:5]]}), flush=True)
     return 0
 
 
