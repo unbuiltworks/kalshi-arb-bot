@@ -77,7 +77,7 @@ def test_the_queue_is_read_from_the_bid_side_not_the_ask():
 
 def _rung(px="0.50", qty="100", outcome="Up", idx=0):
     return E.Rung(outcome=outcome, side="BUY", rung_index=idx,
-                  ticks_behind_ask=1, max_acceptable_price=px,
+                  ticks_behind_bid=1, max_acceptable_price=px,
                   desired_qty=qty, role="BASE")
 
 

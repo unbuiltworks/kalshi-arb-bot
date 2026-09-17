@@ -100,6 +100,12 @@ COPY src/l5_passive_surface_shadow.py src/l5_passive_surface_shadow.py
 # it reads tapes already written and promotes nothing.
 COPY analysis/l5/window_forensics/eligibility.py analysis/l5/window_forensics/eligibility.py
 COPY analysis/l5/window_forensics/prospective.py analysis/l5/window_forensics/prospective.py
+# the surface engine and its prospective shadow, plus the FROZEN specs
+# it loads. Reporting/observation only: no client, no signer, no
+# submit path, and a test asserts the import closure in a subprocess.
+COPY src/l5_surface/ src/l5_surface/
+COPY artifacts/l5_surface/ artifacts/l5_surface/
+COPY analysis/l5/window_forensics/spec.py analysis/l5/window_forensics/spec.py
 COPY deploy/l5_exec_shadow/RELEASE RELEASE
 
 CMD ["python", "-m", "src.l5_research_supervisor", \

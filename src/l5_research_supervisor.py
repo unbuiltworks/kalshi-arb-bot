@@ -82,6 +82,16 @@ STREAMS: Dict[str, tuple] = {
     # the container took it down mid-capture. The argv is EXACTLY the frozen
     # one it was relaunched with; nothing about the procedure changes by
     # running it under a supervisor.
+    # OWNER 2026-09-17. The prospective ADAPTED surface shadow, running the
+    # FROZEN L5_ADAPTED_V1 spec (sha fe9d6557...). Non-money-moving: no
+    # client, no signer, no submit path, asserted by test in a fresh
+    # subprocess. It records a desired surface BEFORE each interaction and
+    # walks the evidence ladder as the tape arrives.
+    "surface_shadow": ("src.l5_surface.shadow", "l5-surface-shadow",
+                       "surface_shadow_*.jsonl",
+                       ["--minutes", "1440", "--interval", "2.0",
+                        "--cohorts", "BTC15m,BTC5m",
+                        "--spec", "L5_ADAPTED_V1"]),
     "window_forensics": ("src.l5_window_forensics", "l5-window-forensics",
                          "seg_*/window_*.jsonl",
                          ["--windows", "3", "--lead-s", "120",

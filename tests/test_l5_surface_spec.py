@@ -158,7 +158,7 @@ def test_a_populated_spec_can_actually_drive_the_engine():
     assert r["emitted"] is True, r.get("blocked_by")
     s = r["surface"]
     assert [x.max_acceptable_price for x in s.rungs
-            if x.outcome == "Up"] == ["0.51", "0.50"]
+            if x.outcome == "Up"] == ["0.50", "0.49"]
     assert [x.desired_qty for x in s.rungs if x.outcome == "Up"] == ["100",
                                                                      "25.0"]
 
@@ -214,3 +214,70 @@ def test_the_first_adapted_shadow_uses_the_declared_conservative_policies():
     b = SP.build(other, kind="ADAPTED")["spec"]
     assert b.params["inventory_price_skew"] == a.params["inventory_price_skew"]
     assert b.params["withdrawal_policy"] == a.params["withdrawal_policy"]
+
+
+# ------------------------------------------------------- the frozen artifacts
+
+def test_the_frozen_specs_load_and_still_hash_to_what_was_frozen():
+    sets = PR.load_frozen()
+    assert set(sets) >= {"FIDELITY_OBSERVABLE_V1", "L5_ADAPTED_V1"}
+    for label, sp in sets.items():
+        blob = json.load(io.open("artifacts/l5_surface/%s.json" % label))
+        assert sp.spec_sha256() == blob["spec_sha256"], label
+
+
+def test_an_edited_frozen_spec_is_refused_rather_than_loaded():
+    """A spec whose stored hash no longer matches has been edited since
+    review, and loading it would silently run something else."""
+    blob = json.load(io.open("artifacts/l5_surface/L5_ADAPTED_V1.json"))
+    blob["params"]["max_residual"]["value"] = "999"
+    with pytest.raises(ValueError) as e:
+        PR.from_json(blob)
+    assert "edited since it was frozen" in str(e.value)
+
+
+def test_the_frozen_adapted_spec_is_executable_and_passive():
+    from src.l5_surface import engine as E
+    from src.l5_surface import shadow as S
+    a = PR.load_frozen()["L5_ADAPTED_V1"]
+    assert a.unresolved() == []
+    st = {"cohort": "BTC15m", "market_key": "m", "state_id": "s",
+          "t_utc": 1.0, "tte_s": 600.0,
+          "outcomes": {"Up": {"bid": 0.50, "ask": 0.51, "tick": 0.01},
+                       "Down": {"bid": 0.49, "ask": 0.50, "tick": 0.01}},
+          "inventory": {}}
+    r = E.desired_surface(st, a)
+    assert r["emitted"] is True
+    terms = {"tick": "0.01", "order_min_size": 5}
+    books = {"Up": {"bids": [{"price": "0.50", "size": "9"}],
+                    "asks": [{"price": "0.51", "size": "9"}]},
+             "Down": {"bids": [{"price": "0.49", "size": "9"}],
+                      "asks": [{"price": "0.50", "size": "9"}]}}
+    for rung in r["surface"].rungs:
+        chk = S.restable(float(rung.max_acceptable_price),
+                         float(rung.desired_qty), terms,
+                         books[rung.outcome])
+        assert chk["restable"] is True, (rung.outcome, chk)
+
+
+def test_the_frozen_fidelity_spec_records_the_boundary_not_a_failure():
+    f = PR.load_frozen()["FIDELITY_OBSERVABLE_V1"]
+    assert f.l5_evidence_fields() == [
+        "rung_count", "tick_offsets", "secondary_rung_qty",
+        "both_sides_policy", "refresh_policy", "TTE_policy"]
+    assert f.kind == "FIDELITY"
+    for k in PR.FIELDS:
+        assert f.params[k].status != PR.OURS_ADAPTED
+
+
+def test_the_freeze_records_that_the_mechanism_was_unresolved():
+    """A global UNRESOLVED must not be quietly dropped from the provenance of
+    fields frozen underneath it."""
+    for label in ("FIDELITY_OBSERVABLE_V1", "L5_ADAPTED_V1"):
+        blob = json.load(io.open("artifacts/l5_surface/%s.json" % label))
+        fr = blob["frozen_from"]
+        assert fr["mechanism_verdict"] == "UNRESOLVED"
+        assert fr["study"] == "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+        assert len(fr["eligible_windows"]) == 3
+        assert fr["chain_proven_parents"] == 208
+        assert "does not erase them" in fr["labels"]

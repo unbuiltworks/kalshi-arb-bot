@@ -347,8 +347,14 @@ def build(rep: Dict[str, Any], *, kind: str = "FIDELITY") -> Dict[str, Any]:
         # the two the study can never reach. FIDELITY leaves them open and is
         # therefore unrunnable, which is the honest answer for a
         # reconstruction of L5; ADAPTED supplies OUR choices and says so.
-        for f in ("inventory_price_skew", "withdrawal_policy"):
-            fields[f] = PR.ADAPTED_V0.params[f]
+        # every LOAD-BEARING field the study did not establish becomes OUR
+        # declared policy, so the observable mechanism is executable. Fields
+        # the study DID establish are never overwritten.
+        for f in ("inventory_price_skew", "withdrawal_policy",
+                  "base_parent_qty", "inventory_size_skew",
+                  "replenishment_policy"):
+            if fields[f].status == PR.UNRESOLVED:
+                fields[f] = PR.ADAPTED_V0.params[f]
     if kind == "FIDELITY":
         fields["minimum_rest_time"] = _u(
             "minimum_rest_time", "a risk choice, not a finding; see ADAPTED")

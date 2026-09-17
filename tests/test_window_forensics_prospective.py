@@ -612,10 +612,15 @@ def test_enrichment_recovers_legs_from_the_recorded_tx():
              "L5_EVENT_CLOCK": 2.0}]
     leg = {"order_hash": "0xA", "maker_asset_id": 0, "taker_asset_id": 1,
            "maker_amount_filled": 1, "taker_amount_filled": 1, "fee": 0}
-    got = P.enrich_chain(rows, fetch=lambda tx: [leg])
+    got = P.enrich_chain(rows, fetch=lambda tx: (P.RECEIPT_OK, [leg]))
     assert got["recovered"] == 2 and got["distinct_tx"] == 1
+    assert got["receipt_attempts"] == 1, "one tx, fetched once"
     assert rows[0]["parents"][0]["order_hash"] == "0xA"
     assert rows[0]["chain_recovery"] == P.CHAIN_RECOVERED
+    assert rows[0]["receipt_status"] == P.RECEIPT_OK
+    (pr,) = got["provenance"]
+    assert pr == {"tx": "0x1", "status": P.RECEIPT_OK,
+                  "n_l5_order_fills": 1, "order_hashes": ["0xA"]}
 
 
 def test_an_unreadable_receipt_is_not_a_receipt_without_an_l5_order():
@@ -624,18 +629,41 @@ def test_an_unreadable_receipt_is_not_a_receipt_without_an_l5_order():
     rows = [{"kind": "l5_parent_execution", "tx": "0x1", "parents": [],
              "outcome": "Up", "price": 0.5, "qty": 10.0,
              "L5_EVENT_CLOCK": 1.0}]
-    got = P.enrich_chain(rows, fetch=lambda tx: None)
-    assert got["recovered"] == 0 and got["unreadable"] == 1
-    assert rows[0]["parents"] == []
-    assert rows[0]["chain_recovery"] == "UNREADABLE"
-    assert "only one is a finding" in got["labels"]
+    for status in (P.RECEIPT_UNAVAILABLE, P.RPC_ERROR, P.DECODE_ERROR):
+        r = [dict(rows[0])]
+        got = P.enrich_chain(r, fetch=lambda tx, s=status: (s, None))
+        assert got["recovered"] == 0 and got["missing_evidence"] == 1
+        assert got["no_l5_parent"] == 0, "not knowing is not absence"
+        assert r[0]["parents"] == []
+        assert r[0]["receipt_status"] == status
+        assert "chain_recovery" not in r[0]
+    assert "never added together" in got["labels"]
 
+    # a receipt we READ that carries no L5 order is a different answer
     empty = [{"kind": "l5_parent_execution", "tx": "0x2", "parents": [],
               "outcome": "Up", "price": 0.5, "qty": 10.0,
               "L5_EVENT_CLOCK": 1.0}]
-    got2 = P.enrich_chain(empty, fetch=lambda tx: [])
-    assert got2["recovered"] == 1 and got2["unreadable"] == 0
-    assert empty[0]["chain_recovery"] == P.CHAIN_RECOVERED
+    got2 = P.enrich_chain(empty, fetch=lambda tx: (P.NO_L5_PARENT, []))
+    assert got2["no_l5_parent"] == 1 and got2["missing_evidence"] == 0
+    assert empty[0]["receipt_status"] == P.NO_L5_PARENT
+
+
+def test_a_raising_fetch_is_an_rpc_error_not_an_absence():
+    def boom(tx):
+        raise RuntimeError("connection reset")
+    rows = [{"kind": "l5_parent_execution", "tx": "0x1", "parents": [],
+             "outcome": "Up", "price": 0.5, "qty": 1.0, "L5_EVENT_CLOCK": 1.0}]
+    got = P.enrich_chain(rows, fetch=boom)
+    assert got["by_status"][P.RPC_ERROR] == 1
+    assert got["no_l5_parent"] == 0 and got["missing_evidence"] == 1
+
+
+def test_an_execution_with_no_tx_is_counted_not_dropped():
+    rows = [{"kind": "l5_parent_execution", "parents": [], "outcome": "Up",
+             "price": 0.5, "qty": 1.0, "L5_EVENT_CLOCK": 1.0}]
+    got = P.enrich_chain(rows, fetch=lambda tx: (P.RECEIPT_OK, []))
+    assert got["executions_without_tx"] == 1
+    assert rows[0]["receipt_status"] == P.RECEIPT_UNAVAILABLE
 
 
 def test_a_window_reports_fills_and_parents_as_different_units(tmp_path):

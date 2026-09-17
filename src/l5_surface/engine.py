@@ -57,7 +57,12 @@ class Rung:
     outcome: str
     side: str                 # "BUY" -- a passive surface here is bids
     rung_index: int
-    ticks_behind_ask: int
+    #: ticks BEHIND THE BID, matching how the prospective scorer measures
+    #: `ticks_from_touch` for a resting BUY: 0 joins the best bid, 1 sits one
+    #: tick behind it. Reading a bid-relative offset as ask-relative would put
+    #: rung 0 ON THE ASK -- a crossing taker order, in a module whose entire
+    #: purpose is a passive surface.
+    ticks_behind_bid: int
     max_acceptable_price: str
     desired_qty: str
     role: str                 # "BASE" or "SECONDARY"
@@ -172,7 +177,10 @@ def desired_surface(state: Mapping[str, Any], sp: PR.SurfaceParams
         if not o or o.get("ask") is None:
             continue
         tick = _tick(o)
-        ask = D(str(o["ask"]))
+        bid = o.get("bid")
+        if bid is None:
+            continue
+        bid = D(str(bid))
         # which direction does holding MORE of this outcome push the residual?
         widening = (res > 0 and outcome == "Up") or (res < 0
                                                      and outcome == "Down")
@@ -185,7 +193,7 @@ def desired_surface(state: Mapping[str, Any], sp: PR.SurfaceParams
             # observation, and 0 means "no skew supported"
             shift = int((px_skew or {}).get(
                 "widening_ticks" if widening else "reducing_ticks", 0) or 0)
-            px = ask - (off + shift) * tick
+            px = bid - (off + shift) * tick
             if px <= 0 or px >= 1:
                 continue
             q = base_q if i == 0 else sec_q
@@ -199,7 +207,7 @@ def desired_surface(state: Mapping[str, Any], sp: PR.SurfaceParams
                        "widen it" % (abs(res), max_res))
             rungs.append(Rung(
                 outcome=outcome, side="BUY", rung_index=i,
-                ticks_behind_ask=off + shift,
+                ticks_behind_bid=off + shift,
                 max_acceptable_price=str(px),
                 desired_qty=str(q),
                 role=("BASE" if i == 0 else "SECONDARY"),
@@ -269,9 +277,9 @@ def to_intents(surf: DesiredSurface, *, model_version: str,
             max_acceptable_price=r.max_acceptable_price,
             current_matched=str(matched), residual=str(res),
             model_version=model_version,
-            notes=("surface rung %d of %s, %d ticks behind ask; "
+            notes=("surface rung %d of %s, %d ticks behind bid; "
                    "INFERRED_SURFACE" % (r.rung_index, surf.spec_label,
-                                         r.ticks_behind_ask)),
+                                         r.ticks_behind_bid)),
             extra={"surface_id": surf.surface_id(),
                    "spec_sha256": surf.spec_sha256,
                    "rung_index": r.rung_index, "rung_role": r.role,

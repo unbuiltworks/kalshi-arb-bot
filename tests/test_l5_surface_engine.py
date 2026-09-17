@@ -109,7 +109,8 @@ def test_adapted_resolves_only_the_fields_that_are_genuinely_ours():
     in any feed we have. Supplying them is a deployment choice, so they are
     OURS_ADAPTED and can never be cited as evidence about L5."""
     ours = {"max_residual", "minimum_rest_time", "inventory_price_skew",
-            "withdrawal_policy"}
+            "withdrawal_policy", "base_parent_qty", "inventory_size_skew",
+            "replenishment_policy"}
     assert set(PR.ADAPTED_V0.resolved()) == ours
     for f in ours:
         p = PR.ADAPTED_V0.params[f]
@@ -143,8 +144,8 @@ def test_the_ladder_is_built_behind_the_ask_on_both_outcomes():
     s = r["surface"]
     up = [x for x in s.rungs if x.outcome == "Up"]
     dn = [x for x in s.rungs if x.outcome == "Down"]
-    assert [x.max_acceptable_price for x in up] == ["0.50", "0.49", "0.48"]
-    assert [x.max_acceptable_price for x in dn] == ["0.49", "0.48", "0.47"]
+    assert [x.max_acceptable_price for x in up] == ["0.49", "0.48", "0.47"]
+    assert [x.max_acceptable_price for x in dn] == ["0.48", "0.47", "0.46"]
     assert [x.desired_qty for x in up] == ["100", "25", "25"]
     assert [x.role for x in up] == ["BASE", "SECONDARY", "SECONDARY"]
     assert all(x.side == "BUY" for x in s.rungs)
@@ -172,8 +173,8 @@ def test_the_price_skew_shifts_only_the_widening_side():
     s = E.desired_surface(_state(inventory={"Up": 50, "Down": 0}), sp)["surface"]
     up = [x for x in s.rungs if x.outcome == "Up"]
     dn = [x for x in s.rungs if x.outcome == "Down"]
-    assert [x.max_acceptable_price for x in up] == ["0.48", "0.47", "0.46"]
-    assert [x.max_acceptable_price for x in dn] == ["0.49", "0.48", "0.47"]
+    assert [x.max_acceptable_price for x in up] == ["0.47", "0.46", "0.45"]
+    assert [x.max_acceptable_price for x in dn] == ["0.48", "0.47", "0.46"]
 
 
 def test_the_size_skew_scales_only_the_widening_side():
@@ -345,7 +346,7 @@ def test_replay_the_adjacent_tick_pair_geometry_reproduces():
     st = _state(outcomes={"Up": {"bid": 0.90, "ask": 0.91, "tick": 0.01}})
     s = E.desired_surface(st, sp)["surface"]
     assert [(r.max_acceptable_price, r.desired_qty) for r in s.rungs] == [
-        ("0.90", "100"), ("0.89", "33.38")]
+        ("0.89", "100"), ("0.88", "33.38")]
     assert s.spec_label == "TEST_GEOMETRY_ONLY"
 
 
@@ -466,3 +467,35 @@ def test_a_gate_that_failed_earlier_can_still_pass_later():
     EV.walk(e, restable=True, touch_reached=True, prints=[], queue_ahead="0",
             placed_at=0.0, observed_until=20.0)
     assert e.stage == EV.BOOK_REACHED
+
+
+
+def test_rung_zero_joins_the_bid_and_is_therefore_passive():
+    """The scorer measures ticks_from_touch against the BID for a resting BUY,
+    so an offset of 0 means "at the best bid". Reading that as ask-relative
+    would put rung 0 ON THE ASK -- a crossing taker order, in the module whose
+    whole purpose is a passive surface."""
+    sp = _test_params(rung_count=_p("rung_count", 1),
+                      tick_offsets=_p("tick_offsets", [0]),
+                      max_residual=_p("max_residual", "9999"))
+    s = E.desired_surface(_state(), sp)["surface"]
+    up = [x for x in s.rungs if x.outcome == "Up"][0]
+    dn = [x for x in s.rungs if x.outcome == "Down"][0]
+    assert up.max_acceptable_price == "0.50"   # the bid, not the 0.51 ask
+    assert dn.max_acceptable_price == "0.49"
+    assert up.ticks_behind_bid == 0
+    # and it really is passive at the venue
+    from src.l5_surface import shadow as S
+    book = {"bids": [{"price": "0.50", "size": "10"}],
+            "asks": [{"price": "0.51", "size": "12"}]}
+    chk = S.restable(float(up.max_acceptable_price), 100,
+                     {"tick": "0.01", "order_min_size": 5}, book)
+    assert chk["restable"] is True
+
+
+def test_an_outcome_with_no_bid_is_skipped_rather_than_priced_off_the_ask():
+    sp = _test_params(max_residual=_p("max_residual", "9999"))
+    st = _state(outcomes={"Up": {"bid": None, "ask": 0.51, "tick": 0.01},
+                          "Down": {"bid": 0.49, "ask": 0.50, "tick": 0.01}})
+    s = E.desired_surface(st, sp)["surface"]
+    assert {x.outcome for x in s.rungs} == {"Down"}

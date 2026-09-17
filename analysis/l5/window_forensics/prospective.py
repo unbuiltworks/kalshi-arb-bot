@@ -226,6 +226,35 @@ def _at(books: Sequence[Book], when: float) -> Optional[Book]:
 
 CHAIN_RECOVERED = "CHAIN_RECOVERED"
 
+#: every way a receipt lookup can end. RPC failure must never again be
+#: indistinguishable from a receipt that genuinely carries no L5 order.
+RECEIPT_OK = "RECEIPT_OK"                  # decoded, and L5 owns >=1 order
+NO_L5_PARENT = "NO_L5_PARENT"              # decoded, and L5 owns none
+RECEIPT_UNAVAILABLE = "RECEIPT_UNAVAILABLE"  # the node returned nothing
+RPC_ERROR = "RPC_ERROR"                    # the call itself failed
+DECODE_ERROR = "DECODE_ERROR"              # a receipt we could not parse
+RECEIPT_STATUSES = (RECEIPT_OK, NO_L5_PARENT, RECEIPT_UNAVAILABLE, RPC_ERROR,
+                    DECODE_ERROR)
+#: the two that mean "we do not know", as opposed to "we looked and it is not
+#: there". Only the latter is evidence.
+MISSING_EVIDENCE = (RECEIPT_UNAVAILABLE, RPC_ERROR, DECODE_ERROR)
+
+
+def _fetch_receipt(tx: str):
+    """(status, legs). Never raises, and never conflates failure with absence."""
+    from analysis.l5.causal import order_id_forensics as OF
+    try:
+        rc = OF.rpc("eth_getTransactionReceipt", [tx])
+    except Exception:                                         # noqa: BLE001
+        return RPC_ERROR, None
+    if rc is None:
+        return RECEIPT_UNAVAILABLE, None
+    try:
+        legs = OF.l5_orders_in(rc)
+    except Exception:                                         # noqa: BLE001
+        return DECODE_ERROR, None
+    return (RECEIPT_OK if legs else NO_L5_PARENT), legs
+
 
 def enrich_chain(rows: Sequence[dict], *, fetch=None) -> Dict[str, Any]:
     """Recover the chain legs the recorder failed to write, from the tapes.
@@ -241,48 +270,58 @@ def enrich_chain(rows: Sequence[dict], *, fetch=None) -> Dict[str, Any]:
     never presented as a receipt containing no L5 order, because those two
     look identical and only one of them is a finding.
     """
-    if fetch is None:
-        from analysis.l5.causal import order_id_forensics as OF
-
-        def fetch(tx):
-            rc = OF.rpc("eth_getTransactionReceipt", [tx])
-            return OF.l5_orders_in(rc) if rc else None
-
+    fetch = fetch or _fetch_receipt
     seen: Dict[str, Any] = {}
-    already = recovered = failed = 0
+    prov: List[Dict[str, Any]] = []
+    already = attempts = 0
+    by_status: Dict[str, int] = {k: 0 for k in RECEIPT_STATUSES}
+    no_tx = 0
     for r in rows:
         if r.get("kind") != "l5_parent_execution":
             continue
         if r.get("parents"):
             already += 1
+            r.setdefault("receipt_status", RECEIPT_OK)
             continue
         tx = r.get("tx")
         if not tx:
-            failed += 1
+            no_tx += 1
+            r["receipt_status"] = RECEIPT_UNAVAILABLE
             continue
         if tx not in seen:
+            attempts += 1
             try:
                 seen[tx] = fetch(tx)
             except Exception:                                 # noqa: BLE001
-                seen[tx] = None
-        legs = seen[tx]
-        if legs is None:
-            r["chain_recovery"] = "UNREADABLE"
-            failed += 1
-            continue
-        r["parents"] = [{"order_hash": x["order_hash"],
-                         "maker_asset_id": str(x["maker_asset_id"]),
-                         "taker_asset_id": str(x["taker_asset_id"]),
-                         "maker_amount_filled": str(x["maker_amount_filled"]),
-                         "taker_amount_filled": str(x["taker_amount_filled"]),
-                         "fee": str(x["fee"])} for x in legs]
-        r["chain_recovery"] = CHAIN_RECOVERED
-        recovered += 1
-    return {"already_had_legs": already, "recovered": recovered,
-            "unreadable": failed, "distinct_tx": len(seen),
-            "labels": ("an UNREADABLE receipt is not a receipt with no L5 "
-                       "order in it; the two look identical and only one is "
-                       "a finding")}
+                seen[tx] = (RPC_ERROR, None)
+            st, legs = seen[tx]
+            prov.append({"tx": tx, "status": st,
+                         "n_l5_order_fills": (None if legs is None
+                                              else len(legs)),
+                         "order_hashes": ([x["order_hash"] for x in legs]
+                                          if legs else [])})
+        status, legs = seen[tx]
+        by_status[status] = by_status.get(status, 0) + 1
+        r["receipt_status"] = status
+        if legs:
+            r["parents"] = [{"order_hash": x["order_hash"],
+                             "maker_asset_id": str(x["maker_asset_id"]),
+                             "taker_asset_id": str(x["taker_asset_id"]),
+                             "maker_amount_filled": str(x["maker_amount_filled"]),
+                             "taker_amount_filled": str(x["taker_amount_filled"]),
+                             "fee": str(x["fee"])} for x in legs]
+            r["chain_recovery"] = CHAIN_RECOVERED
+    missing = sum(by_status.get(k, 0) for k in MISSING_EVIDENCE)
+    return {"already_had_legs": already,
+            "recovered": by_status.get(RECEIPT_OK, 0),
+            "no_l5_parent": by_status.get(NO_L5_PARENT, 0),
+            "missing_evidence": missing, "executions_without_tx": no_tx,
+            "by_status": by_status, "receipt_attempts": attempts,
+            "distinct_tx": len(seen), "provenance": prov,
+            "labels": ("RECEIPT_UNAVAILABLE / RPC_ERROR / DECODE_ERROR mean we "
+                       "do not know. NO_L5_PARENT means we looked and it is "
+                       "not there. Only the second is evidence, and the two "
+                       "are never added together.")}
 
 
 def collapse_to_parents(fills: Sequence[dict]) -> Dict[str, Any]:
@@ -1088,6 +1127,31 @@ def integrity(el: Dict[str, Any], windows: Sequence[Dict[str, Any]],
         "frozen_module_sha256": sha,
         "gates_per_capture": gates,
         "supervisor_coverage": cov,
+        "chain_recovery_counts": {
+            "public_fills": sum(w["counts"]["public_fills"] for w in windows),
+            "unique_tx": sum((w.get("chain_enrichment") or {}).get(
+                "distinct_tx", 0) for w in windows),
+            "receipt_attempts": sum((w.get("chain_enrichment") or {}).get(
+                "receipt_attempts", 0) for w in windows),
+            "receipt_ok": sum((w.get("chain_enrichment") or {}).get(
+                "recovered", 0) for w in windows),
+            "no_l5_parent": sum((w.get("chain_enrichment") or {}).get(
+                "no_l5_parent", 0) for w in windows),
+            "missing_evidence": sum((w.get("chain_enrichment") or {}).get(
+                "missing_evidence", 0) for w in windows),
+            "decoded_l5_executions": sum(
+                w["counts"]["public_fills"]
+                - (w.get("chain_enrichment") or {}).get("missing_evidence", 0)
+                - (w.get("chain_enrichment") or {}).get("no_l5_parent", 0)
+                for w in windows),
+            "proven_parents": sum(w["collapse"]["n_chain_proven"]
+                                  for w in windows),
+            "unresolved_units": sum(w["collapse"]["n_unproven_fills"]
+                                    for w in windows),
+            "labels": ("missing_evidence is NOT absence. A unit counted there "
+                       "is one we could not read, and it is never merged with "
+                       "no_l5_parent, which is one we read and found empty."),
+        },
         "chain_units": [
             {"window_start": w["window_start"],
              "public_fills": w["counts"]["public_fills"],

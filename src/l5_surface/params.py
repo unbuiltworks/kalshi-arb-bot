@@ -25,8 +25,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 SCHEMA = "l5_passive_surface_params/v1"
 
@@ -264,12 +265,39 @@ ADAPTED_V0 = SurfaceParams(
     params={
         **{k: v for k, v in FIDELITY_V0.params.items()
            if k not in ("max_residual", "minimum_rest_time",
-                        "inventory_price_skew", "withdrawal_policy")},
+                        "inventory_price_skew", "withdrawal_policy",
+                        "base_parent_qty", "inventory_size_skew",
+                        "replenishment_policy")},
         "max_residual": Param(
             "max_residual", OURS_ADAPTED, value="3.00",
             evidence=None,
             prior_evidence="V2E matched-preservation was the leading ADAPTED "
                            "hypothesis and is NOT promoted to live.",
+        ),
+        # OUR ORDER SIZE IS OURS. The prospective sample shows a 100 mode at
+        # ~26.5% of parents -- a mode, not a rule, so it does not establish a
+        # base lot. But the size WE rest is a deployment decision in any case.
+        # 100 mirrors his observed mode so our surface stays comparable to his
+        # parents in shadow. A LIVE PROBE MUST REPLACE THIS with a bounded
+        # size; it is not a probe quantity.
+        "base_parent_qty": Param(
+            "base_parent_qty", OURS_ADAPTED, value="100",
+            prior_evidence="OURS. Mirrors the 26.5% exact-100 mode observed "
+                           "over 238 chain-collapsed parents so the shadow is "
+                           "comparable to his parents. NOT a live probe size.",
+        ),
+        "inventory_size_skew": Param(
+            "inventory_size_skew", OURS_ADAPTED,
+            value={"widening_multiplier": 1, "reducing_multiplier": 1},
+            prior_evidence="OURS. No skew, chosen because nothing established "
+                           "one; measured as an axis rather than assumed.",
+        ),
+        "replenishment_policy": Param(
+            "replenishment_policy", OURS_ADAPTED,
+            value={"mode": "REPLACE_AFTER_FILL"},
+            prior_evidence="OURS. Replace a filled rung, because a surface "
+                           "that does not replace is not a surface. The "
+                           "prospective +5s statistic did not resolve it.",
         ),
         # TWO FIELDS NO STUDY OF PUBLIC DATA CAN EVER REACH, so if we want a
         # runnable surface at all, WE supply them and say plainly that they
@@ -302,4 +330,45 @@ ADAPTED_V0 = SurfaceParams(
     },
 )
 
+FROZEN_DIR = "artifacts/l5_surface"
+
+
+def to_json(sp: SurfaceParams) -> Dict[str, Any]:
+    return {"label": sp.label, "kind": sp.kind, "notes": sp.notes,
+            "spec_sha256": sp.spec_sha256(),
+            "params": {k: asdict(sp.params[k]) for k in FIELDS}}
+
+
+def from_json(blob: Mapping[str, Any]) -> SurfaceParams:
+    """Rebuild a frozen set, and REFUSE it if its hash moved.
+
+    A spec whose stored sha no longer matches the set it describes has been
+    edited since it was frozen, and loading it would silently run something
+    other than what was reviewed."""
+    sp = SurfaceParams(
+        label=blob["label"], kind=blob["kind"], notes=blob.get("notes"),
+        params={k: Param(**v) for k, v in blob["params"].items()})
+    want = blob.get("spec_sha256")
+    if want and want != sp.spec_sha256():
+        raise ValueError(
+            "%s was frozen at %s but now hashes to %s: it has been edited "
+            "since it was frozen" % (sp.label, want[:16],
+                                     sp.spec_sha256()[:16]))
+    return sp
+
+
+def load_frozen(directory: str = FROZEN_DIR) -> Dict[str, SurfaceParams]:
+    import glob as _g
+    out: Dict[str, SurfaceParams] = {}
+    for f in sorted(_g.glob(os.path.join(directory, "*.json"))):
+        try:
+            with open(f, "r", encoding="utf-8") as fh:
+                sp = from_json(json.load(fh))
+        except (OSError, KeyError, TypeError, ValueError):
+            continue
+        out[sp.label] = sp
+    return out
+
+
 SETS = {s.label: s for s in (FIDELITY_V0, ADAPTED_V0)}
+SETS.update(load_frozen())
