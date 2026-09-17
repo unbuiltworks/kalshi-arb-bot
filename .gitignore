@@ -23,6 +23,17 @@ data/l5/raw/activity_gap.jsonl
 # 2026-09-04 and 2026-09-05 tapes are committed in their .gz form.
 data/policy_d_port/tape_*.jsonl
 
+# Same rule, same reason, for the 2026-09-17 measurement runs: the Gemini
+# hot-window tape and the PMUS book tape are both written continuously by a
+# live collector, so the raw JSONL is a growing file that would cost a fresh
+# multi-MB blob on every commit while the run is in flight. The RAW TAPE IS
+# PRESERVED ON DISK for the collector and for provenance, and the GZIPPED
+# tape is committed once the run completes -- which is also the only point at
+# which the file is a complete, citable artifact rather than a partial one.
+data/policy_d_port_hot/tape_*.jsonl
+data/policy_d_port_hot/canonical_*.jsonl
+data/pmus_book_tape/pmus_book_*.jsonl
+
 # prospective FIDELITY rows are runtime research state, not source code.
 # The v0 snapshots already committed stay committed; nothing is rewritten.
 analysis/l5/fidelity/prospective/*.jsonl
