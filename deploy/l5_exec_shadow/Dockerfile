@@ -5,6 +5,9 @@
 #                   evidence, resolved from venue prints only)
 #   gemini_depth    Gemini websocket book + paired REST evidence
 #   chain_validate  chain observer settled-window cross-validation
+#   book_context    Polymarket BTC5m/BTC15m full-book + print tape + chain
+#                   parent receipts, recorded continuously
+#   gemini_surface  Gemini passive quote-surface shadow
 #
 # and records its OWN downtime as downtime, so an absence of observations can
 # never be read as NO ACTION or NO FILL.
@@ -68,6 +71,18 @@ COPY analysis/l5/adapted/collect.py analysis/l5/adapted/collect.py
 COPY analysis/l5/adapted/prospective.py analysis/l5/adapted/prospective.py
 COPY analysis/l5/adapted/failure.py analysis/l5/adapted/failure.py
 COPY analysis/l5/coverage.py analysis/l5/coverage.py
+# P0 2026-09-17: the two prospective recorders, moved here after they died
+# twice inside the session container. Their import closure was checked in a
+# fresh subprocess and contains no order verb, no signer and no credential
+# reader; tests/test_recorder_watchdog.py asserts that every module the
+# supervisor can spawn is actually present in this list, so a stream cannot be
+# registered and then silently fail to import in the image.
+COPY src/l5_book_context.py src/l5_book_context.py
+COPY src/gemini_l5_surface_shadow.py src/gemini_l5_surface_shadow.py
+COPY src/l5_residual_episode_clock.py src/l5_residual_episode_clock.py
+COPY analysis/l5/causal/order_id_forensics.py analysis/l5/causal/order_id_forensics.py
+COPY analysis/l5/residual_exit/forensics.py analysis/l5/residual_exit/forensics.py
+COPY analysis/l5/redemption/audit.py analysis/l5/redemption/audit.py
 
 CMD ["python", "-m", "src.l5_research_supervisor", \
      "--state-root", "/state/l5-research"]
