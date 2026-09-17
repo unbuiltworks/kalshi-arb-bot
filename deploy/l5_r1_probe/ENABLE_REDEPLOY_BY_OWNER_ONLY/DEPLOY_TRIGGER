@@ -576,3 +576,82 @@ deploy and why the owner asked for it.
             residual, and one result is not a reason to move the controller.
 
             Record: analysis/l5/authorization/ACTIVATION_4_LIVE_SHORT_HORIZON_2026-09-17.md
+
+2026-09-17T11:5xZ — ACTIVATE: RESTORE FIDELITY ACTION SELECTION, then the
+            second 10-market LIVE SHORT-HORIZON SPORTS cohort.
+
+            OWNER AUTHORIZATION 2026-09-17 "RESTORE FIDELITY ACTION SELECTION",
+            reviewed through test commit 0b6705ba. Live action selection moves
+            from modal to stochastic USING THE SAMPLER THAT ALREADY EXISTS. No
+            new sampler was written. No model probability was altered.
+
+            THE DEFECT, measured not inferred: on the live market COMPLETE
+            carried p=0.2563-0.3682 on 76 of 77 decisions and the production
+            modal selector chose it ZERO times, producing one unbroken EXTEND
+            run of 76 while L5 completes 46-54% from the same imb1-10 states.
+            The argmax of a stochastic policy cannot select a minority relation
+            at any price in any state. With p(complete)=0.3214, zero completes
+            across 77 decisions has probability 0.6786**77, about 4e-14.
+
+            THE INTENDED SEMANTICS come from the frozen artifact, not from
+            preference: the gate scores behavioral fidelity on l1_sampled_vs_l5,
+            "what the frozen model wanted to do (sampled draw)", and executable
+            fidelity separately on l1_acted_vs_l5. Live agreed with that split
+            -- behavioral passed at L1 0.0104 while executable failed at 0.5572.
+            This is a FIDELITY implementation correction. It was not chosen by
+            P&L and is not expected to be profitable on its own.
+
+            WHAT CHANGED: exactly one executable line, and it is not in src/.
+            PMUS_SPRING_ACTION_SELECTION=stochastic is pinned in the IMAGE ENV
+            block. Pinned in the image rather than as a service variable because
+            os.getenv(ACTION_SELECTION_ENV, "modal") makes an UNSET variable the
+            DEFECT rather than a neutral state; list-variables confirms no
+            service variable of that name exists, so the image value is
+            authoritative and unshadowed. git diff of src/ is EMPTY.
+
+            A SAMPLED COMPLETE THE SHELL REFUSES IS RECORDED, NEVER REWRITTEN:
+            FIDELITY_COMPLETE -> EXECUTION_REFUSED:<reason>. It is never
+            silently substituted with EXTEND. The residual cap guards on
+            relation == "extend", so it cannot capture a drawn COMPLETE.
+
+            UNCHANGED AND INDEPENDENTLY VERIFIED: target $0.10, max leg $0.125,
+            k 0.00619, maker/post-only, the authenticated-book freshness gate,
+            rest/requote, pair ceiling 0.98, residual cap, monetary mandate,
+            the LIVE_SHORT_HORIZON cohort, the ACT/WAIT model and the transition
+            probabilities. The draw selects WHICH relation; every safety gate
+            then applies to the drawn relation exactly as before.
+
+            PRE-ACTIVATION VERIFIED: lineage ACCEPTANCE True, 37 of 38 COPY
+            sources byte-identical to reviewed artifact 2366aa3b and the 38th
+            the pinned authorization directory; FORBIDDEN_CLASSES UNCHANGED and
+            the baseline NOT advanced, because no COPYed file moved; lineage 14
+            passed; deployment tests prove the RUNTIME resolves
+            action_selection == stochastic, not merely that the string appears;
+            full suite green with zero failures; zero unresolved exposure
+            (campaign_end settled 3, pending 0, position_net 0, afterNet
+            0.0000). Fresh mandate
+            OWNER-2026-09-17-CP1-STOCHASTIC-SELECTOR-COHORT, SAME envelope as
+            the campaign it replaces: 1 concurrent, 10 total, $5.00/market,
+            $15.00 total, residual 3, -$6.00 daily stop, expiry 23:45:17Z. No
+            monetary increase accompanies a behavioral correction.
+
+            PRESERVED UNREWRITTEN: lifecycle 1 REALIZED -$0.1836, lifecycle 2
+            REALIZED -$0.3783, cumulative new-engine confirmed realized
+            -$0.5619, matched-pair realized $0.00, directional-residual realized
+            -$0.5619. Neither losing lifecycle was hedged, closed by hand or
+            re-labelled after the fact.
+
+            FILED SEPARATELY AND DELIBERATELY NOT REPAIRED HERE: lifecycle 2
+            reached residual 3.8636 against a cap of 3, because the cap is a
+            pre-trade admission test on the next action rather than a bound on
+            the resulting position. It breached no monetary control. The owner
+            asked that its repair not be combined with this deployment.
+            Record: analysis/l5/live_probe/SAFETY_RESIDUAL_CAP_OVERSHOOT_2026-09-17.md
+
+            FOR THIS RUN: do not tune. Record for every sampled relation the
+            probability vector, seed/u, sampled relation, execution result, fill
+            and inventory. Freshness and cohort skips are never scored as model
+            WAIT. No complement is manufactured by hand. HALT on any hard safety
+            condition.
+
+            Record: analysis/l5/authorization/ACTIVATION_5_STOCHASTIC_SELECTOR_2026-09-17.md
