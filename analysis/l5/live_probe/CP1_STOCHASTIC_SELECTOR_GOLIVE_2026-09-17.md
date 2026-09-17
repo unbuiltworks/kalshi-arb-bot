@@ -81,3 +81,46 @@ rows, so it is **not** counted as realized and belongs to an earlier
 authorization regardless.
 
 Nothing in the current cohort is realized. There is an open position.
+
+---
+
+## Settlement evidence — the market resolved with no auditor running
+
+Observed read-only at 12:29Z from the **public** venue record, no credentials used:
+
+```
+slug           aec-itfme-artkuk-egople-2026-09-17
+status         MARKET_STATUS_RESOLVED
+ep3Status      EXPIRED
+outcomes       ["Artur Kukasian", "Egor Pleshivtsev"]
+outcomePrices  ["0", "1"]
+closed         true
+updatedAt      2026-09-17T12:24:39Z
+bbo            state MARKET_STATE_EXPIRED, settlementPx 0.0000, no bid/ask
+```
+
+The long/YES leg (Kukasian) settled to **0**; the opposing leg to **1**.
+
+**The timing is the finding.** The campaign halted at **12:00:30Z**. The market
+resolved at approximately **12:24:39Z** — 24 minutes later. The settlement audit
+is performed by the probe process, and the probe was already gone. So:
+
+- There is **no `POSITION_RESOLUTION` activity row**, no `realized_confirmed`,
+  and **no realized figure** for this position.
+- The ledger still carries it at full downside against the daily stop.
+
+This is precisely the condition the runtime alarm named at 12:00:09Z:
+
+> "if the market did resolve, we are over-stating loss and withholding realized
+> cashflow until the settlement audit records it."
+
+**Nothing here is realized and no figure is computed from the 0.92 cost basis.**
+The public record says what the *market* did. It does not say what *our account*
+received, and only the authenticated settlement audit can establish that.
+
+The first matched pair this engine ever held has therefore resolved **unmeasured**
+— which is the one thing the position existed to measure. Recording it requires
+running the probe's settlement audit, and that is an owner decision, not a
+watch action: the probe cannot be started read-only, because the live mandate
+runs to 23:45:17Z and a started probe would immediately select markets and place
+orders. Not taken.
