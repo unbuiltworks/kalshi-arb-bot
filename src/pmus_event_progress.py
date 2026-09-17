@@ -158,6 +158,18 @@ def proximity(period: Optional[str], sport_type: Optional[str] = None,
     return None, "unrecognised_period_token"
 
 
+def _league_of(e: Mapping[str, Any]) -> Optional[str]:
+    """The venue's `primaryTag` slug ("mlb", "cfb", "wta", ...), or None.
+
+    Read-only and tolerant: an event without a primaryTag yields None, which
+    every caller must treat as UNKNOWN and never as a match."""
+    tag = e.get("primaryTag")
+    if isinstance(tag, Mapping):
+        slug = tag.get("slug")
+        return str(slug) if slug else None
+    return str(tag) if isinstance(tag, str) and tag else None
+
+
 def progress_table(rows, now: Optional[float] = None) -> dict:
     """market_slug -> the venue-served progress of the event it belongs to."""
     now = time.time() if now is None else now
@@ -185,6 +197,11 @@ def progress_table(rows, now: Optional[float] = None) -> dict:
             "score": e.get("score"), "ended": ended,
             "hours_since_event_start": elapsed_h,
             "game_proximity": prox, "proximity_basis": basis,
+            # The venue's own league key, carried through so a cohort
+            # restriction can be keyed on what the venue says rather than on
+            # a slug substring. `sport_type` is too coarse for this: it reads
+            # "baseball" for MLB, NPB and KBO alike.
+            "league": _league_of(e),
             "labels": "venue-served game position; NOT a settlement time",
         }
         for m in (e.get("markets") or []):

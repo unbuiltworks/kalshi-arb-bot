@@ -685,6 +685,68 @@ def shadow_rank_held_cycle(now: float, held_all, concurrency: int, model,
     }
 
 
+def _tally(items) -> dict:
+    """{value: count}, sorted, without pulling a module-level import in."""
+    out: dict = {}
+    for k in items:
+        out[k] = out.get(k, 0) + 1
+    return dict(sorted(out.items()))
+
+
+COHORT_ENV = "PMUS_L5_COHORT"
+COHORT_CLASS = "venue_execution_adaptation:cohort_horizon"
+
+
+def cohort_league() -> str:
+    """The league this cohort is restricted to, or "" for no restriction.
+
+    UNSET IS THE DEFAULT AND MEANS UNCHANGED BEHAVIOUR. The restriction is
+    opt-in per authorization and is carried by the image, exactly as the rung
+    and the market allowance are, so no Railway variable decides the cohort.
+    """
+    return (os.getenv(COHORT_ENV) or "").strip().lower()
+
+
+def cohort_reason(progress: Optional[Mapping[str, Any]],
+                  league: str) -> Optional[str]:
+    """Why this market is not in the authorized cohort. None = eligible.
+
+    L5_ADAPTED venue/market SELECTION. It decides which markets execution may
+    look at; it never touches what the model does with one. No price, size,
+    rest, pair ceiling, residual or ACT/WAIT behaviour is reachable from here.
+
+    THE HORIZON RULE IS FAIL CLOSED, and it is machine-verifiable end to end:
+    a market is eligible only when the venue itself says the event is UNDER WAY
+    and we recognise the period token it served. Every other case -- not in the
+    live feed (not started, already ended, or the feed is down), an
+    unrecognised period token, or an explicit ended flag -- is an UNKNOWN
+    horizon, and unknown is refused rather than assumed short.
+
+    This is deliberately NOT built on `market.endDate`: measured 2026-09-17,
+    endDate is a fixed gameStartTime + 14.00 d contract expiry across 18/18
+    live sports events (a Bot-9th game reads 333 h), the offset is a per-sport
+    convention rather than a constant, and on a resolved market it is rewritten
+    to before gameStartTime. It carries no settlement information at all.
+    Neither does this function manufacture a settlement time -- it reports the
+    venue's game position and nothing more, which is the same discipline
+    pmus_event_progress already holds itself to.
+    """
+    if not league:
+        return None                      # no cohort restriction configured
+    if not progress:
+        # covers not-yet-started, already-ended, and a live-feed outage
+        return "cohort:not_in_live_feed"
+    got = (progress.get("league") or "").strip().lower()
+    if got != league:
+        return "cohort:not_%s:%s" % (league, got or "unknown")
+    if progress.get("ended"):
+        return "cohort:event_ended"
+    if progress.get("game_proximity") is None:
+        return "cohort:unknown_progress:%s" % (
+            progress.get("proximity_basis") or "no_basis")
+    return None
+
+
 def rank_candidates(status: Mapping[str, Any], now: float,
                     model: Optional[Mapping[str, Any]] = None,
                     exclude: Optional[Mapping[str, float]] = None,
@@ -706,6 +768,7 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         progress_by_slug, progress_diag = {}, {
             "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
     admitted, refused = [], []
+    _cohort = cohort_league()
     for row in status.get("spring_watch") or []:
         if not isinstance(row, Mapping) or not row.get("slug"):
             continue
@@ -732,6 +795,11 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         until = exclude.get(slug)
         if reason is None and until is not None and now < until:
             reason = f"cooldown_until:{round(until - now, 1)}s"
+        if reason is None:
+            # L5_ADAPTED cohort/horizon eligibility, evaluated last so that a
+            # market refused on evidence is still reported for the reason it
+            # was actually refused on.
+            reason = cohort_reason(progress_by_slug.get(slug), _cohort)
         if reason is None:
             admitted.append(item)
         else:
@@ -783,7 +851,13 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         x["rank"] = i
         x["cfb"] = _is_cfb(x["slug"])
     return {"admitted": admitted, "refused": refused,
-            "status_t": status.get("t"), "progress_diag": progress_diag}
+            "status_t": status.get("t"), "progress_diag": progress_diag,
+            "cohort": (_cohort or None),
+            "cohort_refused": sum(1 for r in refused
+                                  if str(r.get("reason") or "").startswith("cohort:")),
+            "cohort_refusal_reasons": _tally(
+                str(r.get("reason")) for r in refused
+                if str(r.get("reason") or "").startswith("cohort:"))}
 
 
 CFB_LEAGUE_TOKENS = frozenset({"cfb", "ncaaf", "ncaafb"})
