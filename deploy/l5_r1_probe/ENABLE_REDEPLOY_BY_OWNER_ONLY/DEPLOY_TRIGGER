@@ -655,3 +655,84 @@ deploy and why the owner asked for it.
             condition.
 
             Record: analysis/l5/authorization/ACTIVATION_5_STOCHASTIC_SELECTOR_2026-09-17.md
+
+2026-09-17T12:4xZ — ACTIVATE: the settlement-pending concurrency repair, then
+            the third 10-market LIVE SHORT-HORIZON SPORTS cohort.
+
+            OWNER P0 2026-09-17 "FIX SETTLED-PENDING FULLY-MATCHED CONCURRENCY
+            DEADLOCK".
+
+            THE FAILURE THIS REPAIRS, and it cost a whole cohort. Market A
+            reached YES 0.34 / NO 0.34, residual exactly 0, every order
+            terminal, venue traded quantity 0.68 equal to the ledger's. The
+            SCHEDULER released it -- correctly, there was no work left. The
+            MANDATE did not, because it saw fills. The campaign selected market
+            B, admission refused it max_concurrent_markets_exhausted, the
+            session HALTed, and the campaign ended 24 MINUTES BEFORE A ACTUALLY
+            RESOLVED -- so the first matched pair this engine ever held settled
+            with no auditor running. Two counters held different opinions about
+            one market and the tie-break was a stop.
+
+            WHAT CHANGED: economic/risk exposure and settlement/accounting
+            obligation become two sets instead of one. A market releases the
+            ACQUISITION SLOT only when ALL of: no live or unresolved order; a
+            reconciliation attestation written by the session that actually
+            held the venue transport; that attestation asserting venue/ledger
+            agreement AND may_assert_flat; the attested quantities still equal
+            to what the mandate re-derives from the fill rows at read time; and
+            YES == NO > 0 with residual exactly zero.
+
+            WHAT IT KEEPS: the durable ledger row, its place in
+            max_total_markets, its risk-set charge against the daily stop, its
+            settlement watch, and its un-realized status. ONLY the slot is
+            freed.
+
+            NO LIMIT MOVED. max_markets 1, max_total_markets 10, $5.00/market,
+            $15.00 campaign, residual 3.00, daily stop -$6.00, sizing
+            0.10/0.125, k 0.00619 -- every one unchanged. A test pins that a
+            pending-settlement market STILL exhausts max_total_markets, so
+            releasing the slot can never become unlimited market scanning.
+
+            FAIL CLOSED, PROVEN BY MUTATION: residual != 0, unmatched
+            inventory, an unresolved order, missing terminal evidence,
+            venue/ledger disagreement, an unreadable ledger, a stale
+            attestation and unknown exposure each KEEP the slot and still
+            refuse B. Disabling the release predicate fails 6 of the 26 tests
+            including the reproduction, so they are not passing vacuously.
+
+            THE ATTESTATION IS EVIDENCE, NEVER A PERMIT. consumption() cannot
+            call the venue, so the session writes the one fact it cannot
+            compute. Everything else is re-derived at read time, so a fill
+            arriving afterwards invalidates it rather than inheriting its
+            permission -- including when the later fills are themselves matched
+            and residual returns to zero.
+
+            THE STOCHASTIC SELECTOR IS UNTOUCHED.
+            PMUS_SPRING_ACTION_SELECTION=stochastic stays pinned in the image.
+
+            PRE-ACTIVATION VERIFIED: lineage ACCEPTANCE True with REVIEWED
+            advanced to the exact green artifact 8b46565d and FORBIDDEN_CLASSES
+            UNCHANGED (still EXECUTION, DECISION, SIZING, SUBMISSION -- nothing
+            relabelled to fit); lineage 14 passed; targeted mandate/concurrency/
+            risk-set 138 passed plus 26 new adversarial; full suite 5094 passed,
+            ZERO failures. Fresh mandate
+            OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT, envelope identical
+            field for field to the cohort it follows.
+
+            CARRIED IN, NOT REWRITTEN: aec-itfme-artkuk-egople-2026-09-17,
+            matched 0.34/0.34, residual 0.00, cost basis 0.92, venue_vs_ledger
+            agrees, may_assert_flat true. Venue-resolved but NEVER AUDITED:
+            PENDING_SETTLEMENT, realized_confirmed false, NO realized figure.
+            This deploy's settlement auditor is what finally records it. Nothing
+            about it is rewritten and nothing is called realized.
+
+            FILED, NOT REPAIRED HERE, at the owner's instruction: the
+            matched-pair ceiling finding (the GATE is correct and intentionally
+            covers EXTEND; the LABEL is wrong at two mark_noop call sites that
+            classify twice) and the residual-cap overshoot.
+
+            FOR THIS RUN: do not tune. Record the draw for every sampled
+            relation. Freshness and cohort skips are never scored as model WAIT.
+            HALT on any hard safety condition.
+
+            Record: analysis/l5/authorization/ACTIVATION_6_SETTLEMENT_PENDING_2026-09-17.md
