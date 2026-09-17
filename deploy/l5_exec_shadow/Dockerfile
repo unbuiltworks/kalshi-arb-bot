@@ -8,6 +8,8 @@
 #   book_context    Polymarket BTC5m/BTC15m full-book + print tape + chain
 #                   parent receipts, recorded continuously
 #   gemini_surface  Gemini passive quote-surface shadow
+#   window_forensics  L5_WINDOW_FORENSICS_V1, the frozen preregistered window
+#                   study -- run verbatim, one fresh segment per start
 #
 # and records its OWN downtime as downtime, so an absence of observations can
 # never be read as NO ACTION or NO FILL.
@@ -83,6 +85,16 @@ COPY src/l5_residual_episode_clock.py src/l5_residual_episode_clock.py
 COPY analysis/l5/causal/order_id_forensics.py analysis/l5/causal/order_id_forensics.py
 COPY analysis/l5/residual_exit/forensics.py analysis/l5/residual_exit/forensics.py
 COPY analysis/l5/redemption/audit.py analysis/l5/redemption/audit.py
+# The frozen preregistered window study, moved here 2026-09-17 after the
+# session container killed it mid-capture. Its module is UNCHANGED -- sha256
+# 48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6 -- and the
+# supervisor runs it with its exact frozen argv. Its closure adds only the
+# passive-surface hypotheses it predicts from; no order verb, no credential.
+COPY src/l5_window_forensics.py src/l5_window_forensics.py
+COPY src/l5_passive_surface_shadow.py src/l5_passive_surface_shadow.py
+# what this image was built from, for provenance. No .git ships, and
+# the supervisor reads no environment variable.
+COPY deploy/l5_exec_shadow/RELEASE RELEASE
 
 CMD ["python", "-m", "src.l5_research_supervisor", \
      "--state-root", "/state/l5-research"]

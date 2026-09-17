@@ -1,0 +1,5 @@
+{
+  "service": "l5-exec-shadow",
+  "code_sha": "5c51708f8180d8b156d8bd865a253d79f679ccd0",
+  "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one."
+}

@@ -78,7 +78,36 @@ STREAMS: Dict[str, tuple] = {
     "gemini_surface": ("src.gemini_l5_surface_shadow", "gemini-surface",
                        "gemini_surface_*.jsonl",
                        ["--minutes", "1440", "--interval", "2.0"]),
+    # OWNER 2026-09-17. The frozen preregistered window study, moved here after
+    # the container took it down mid-capture. The argv is EXACTLY the frozen
+    # one it was relaunched with; nothing about the procedure changes by
+    # running it under a supervisor.
+    "window_forensics": ("src.l5_window_forensics", "l5-window-forensics",
+                         "seg_*/window_*.jsonl",
+                         ["--windows", "3", "--lead-s", "120",
+                          "--follow-s", "300"]),
 }
+
+#: streams whose every start gets its OWN dated out-dir.
+#:
+#: The window study names its tape after the WINDOW, not the start time, and
+#: opens it with mode "a". Two runs that target the same boundary would
+#: therefore append into one file and silently splice two partial captures
+#: into something that reads like a complete window. A fresh directory per
+#: start makes that impossible: the second run writes a different file, both
+#: partials stay visible as partials, and nothing merges them.
+SEGMENT_PER_START = frozenset({"window_forensics"})
+
+#: per-stream override of STALE_AFTER_S, for streams with long LEGITIMATE
+#: silences. The window study sleeps until the next boundary minus its lead --
+#: up to ~780s of correct, intended quiet. Watching it at 300s would restart it
+#: mid-wait forever and it would never capture anything. Process death is still
+#: caught immediately by reap(); this threshold only bounds how long a wedged
+#: but living process can hide.
+STALE_OVERRIDE_S = {"window_forensics": 1200.0}
+
+#: streams that exit 0 as part of working correctly, rather than by failing.
+COMPLETES_NORMALLY = frozenset({"window_forensics"})
 
 #: a stream whose newest row is older than this is STALE even if its process is
 #: alive. Conservative on purpose: a real recorder writes every few seconds, so
@@ -142,6 +171,8 @@ class Supervisor:
         self.procs: Dict[str, subprocess.Popen] = {}
         self.fails: Dict[str, int] = {n: 0 for n in STREAMS}
         self._size_seen: Dict[str, tuple] = {}
+        self._segdir: Dict[str, Optional[str]] = {}
+        self._starts: Dict[str, int] = {}
         self._commit_sha: Any = _UNSET
         self._last_reason: Dict[str, Optional[str]] = {n: None for n in STREAMS}
         self.next_try: Dict[str, float] = {n: 0.0 for n in STREAMS}
@@ -252,18 +283,63 @@ class Supervisor:
 
     # ------------------------------------------------------------ children
 
+    def _out_dir(self, name: str) -> str:
+        """Where this stream's CURRENT start writes.
+
+        For a segment-per-start stream that is a fresh dated directory, minted
+        once in start() and reused by every later call, so the provenance
+        record names the directory the child is really writing into."""
+        base = os.path.join(self.root, STREAMS[name][1])
+        if name not in SEGMENT_PER_START:
+            return base
+        seg = self._segdir.get(name)
+        if not seg:
+            # the COUNTER, not the clock, is what makes this unique. Two starts
+            # inside one second -- a failed spawn retried immediately, say --
+            # would otherwise land on the same directory name and append into
+            # one tape, which is the exact splice this mechanism exists to
+            # prevent.
+            self._starts[name] = self._starts.get(name, 0) + 1
+            seg = "seg_%s_%03d" % (
+                time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()),
+                self._starts[name])
+            self._segdir[name] = seg
+        return os.path.join(base, seg)
+
+    def _launchable(self, name: str) -> bool:
+        """False while starting this stream would produce a capture that is
+        not a complete preregistered window.
+
+        The window study's first act is to sleep until the next boundary minus
+        its lead. Start it at boundary-30s and it begins capturing IMMEDIATELY
+        with 30s of pre-window coverage instead of the preregistered 120s --
+        an incomplete window that nothing in the tape would flag at write
+        time. Holding until the boundary passes costs one window and buys a
+        correct one, which is the trade the owner asked for explicitly.
+        """
+        if name not in SEGMENT_PER_START:
+            return True
+        from src import l5_window_forensics as W   # lazy: the supervisor's own
+        argv = STREAMS[name][3]                    # closure stays minimal
+        lead = float(argv[argv.index("--lead-s") + 1])
+        now = time.time()
+        return ((((int(now) // W.DUR) + 1) * W.DUR) - lead - now) > 0
+
     def _cmd(self, name: str) -> List[str]:
         spec = STREAMS[name]
-        mod, sub = spec[0], spec[1]
         extra = list(spec[3]) if len(spec) > 3 else []
-        return ([sys.executable, "-m", mod, "--out-dir",
-                 os.path.join(self.root, sub)] + extra)
+        return ([sys.executable, "-m", spec[0], "--out-dir",
+                 self._out_dir(name)] + extra)
 
     def start(self, name: str) -> None:
         if time.time() < self.next_try[name]:
             return
-        sub = STREAMS[name][1]
-        os.makedirs(os.path.join(self.root, sub), exist_ok=True)
+        if not self._launchable(name):
+            return
+        if name in SEGMENT_PER_START:
+            self._segdir[name] = None      # this start gets its OWN segment
+        out = self._out_dir(name)
+        os.makedirs(out, exist_ok=True)
         try:
             p = subprocess.Popen(self._cmd(name), stdout=sys.stdout,
                                  stderr=subprocess.STDOUT)
@@ -278,7 +354,7 @@ class Supervisor:
         # opened, so any two segments can be compared for equivalence without
         # anyone having to assume the code was the same across them.
         self.mark("stream_restart" if self.fails[name] else "stream_start",
-                  stream=name, pid=p.pid, out_dir=os.path.join(self.root, sub),
+                  stream=name, pid=p.pid, out_dir=out,
                   consecutive_failures=self.fails[name],
                   provenance=self.provenance(name, self._cmd(name)),
                   labels="resumed against the existing store; nothing reset")
@@ -286,7 +362,13 @@ class Supervisor:
     def _commit(self) -> Optional[str]:
         """Resolved ONCE. A running process cannot change the commit it is
         running, and re-shelling out on every restart would put a subprocess
-        spawn on the recovery path."""
+        spawn on the recovery path.
+
+        In the deployed image there is no `.git`, so `git rev-parse` returns
+        nothing and the answer is the RELEASE file the image ships instead --
+        written at promotion time and copied in, so it needs no environment
+        variable and nothing here can be configured by one.
+        """
         if self._commit_sha is not _UNSET:
             return self._commit_sha
         try:
@@ -295,6 +377,15 @@ class Supervisor:
                 stderr=subprocess.DEVNULL).decode().strip() or None
         except Exception:                                     # noqa: BLE001
             self._commit_sha = None
+        if not self._commit_sha:
+            for cand in ("RELEASE", "/app/RELEASE"):
+                try:
+                    with open(cand, "r", encoding="utf-8") as fh:
+                        self._commit_sha = (json.load(fh).get("code_sha")
+                                            or None)
+                    break
+                except Exception:                             # noqa: BLE001
+                    continue
         return self._commit_sha
 
     def provenance(self, name: str, cmd: List[str]) -> Dict[str, Any]:
@@ -314,6 +405,8 @@ class Supervisor:
         return {"stream": name, "commit": commit, "module": spec[0],
                 "module_sha256": sha, "command": cmd,
                 "state_subdir": spec[1], "dating_glob": spec[2],
+                "out_dir": self._out_dir(name),
+                "segment_per_start": name in SEGMENT_PER_START,
                 "extra_argv": list(spec[3]) if len(spec) > 3 else [],
                 "labels": ("equivalence evidence for this segment. A new "
                            "segment after a restart is a NEW segment and is "
@@ -368,21 +461,25 @@ class Supervisor:
                 continue          # only the rotating recorders are watched here
             if h["segment"] is None and not h["process_alive"]:
                 continue          # never started here; the boot path owns that
+            if not h["process_alive"] and not self._launchable(name):
+                continue          # deliberately held for a clean window, not
+                                  # dead -- reap() already recorded the exit
             age = h["output_age_seconds"]
             sage = h["size_age_seconds"]
             dead = not h["process_alive"]
-            row_stale = age is not None and age > STALE_AFTER_S
+            limit = STALE_OVERRIDE_S.get(name, STALE_AFTER_S)
+            row_stale = age is not None and age > limit
             # a recorder that opened a segment and then wrote nothing into it
             # has no row old enough to be stale, so the BYTES are the only
             # witness left. This is the shape the second death actually took.
-            size_stale = sage is not None and sage > STALE_AFTER_S
+            size_stale = sage is not None and sage > limit
             if not (dead or row_stale or size_stale):
                 continue
             if time.time() < self.next_try.get(name, 0.0):
                 continue
             basis = ("process_gone" if dead else
-                     "rows_stopped>%ds" % int(STALE_AFTER_S) if row_stale else
-                     "file_not_growing>%ds" % int(STALE_AFTER_S))
+                     "rows_stopped>%ds" % int(limit) if row_stale else
+                     "file_not_growing>%ds" % int(limit))
             self.mark("RECORDER_STALE", stream=name, stale_basis=basis,
                       last_good_output_utc=h["latest_output_timestamp"],
                       output_age_seconds=age, size_age_seconds=sage,
@@ -419,10 +516,17 @@ class Supervisor:
             if rc is None:
                 continue
             self.procs.pop(name, None)
-            self.fails[name] += 1
-            self.next_try[name] = time.time() + self._backoff(name)
+            # A stream that is SUPPOSED to finish is not failing when it does.
+            # The window study exits 0 after its batch of windows; counting
+            # that as a failure would climb the backoff and make a healthy
+            # cadence read as a restart loop in recorder_health.
+            clean = rc == 0 and name in COMPLETES_NORMALLY
+            if not clean:
+                self.fails[name] += 1
+                self.next_try[name] = time.time() + self._backoff(name)
             self.mark("stream_exit", stream=name, pid=p.pid, returncode=rc,
                       consecutive_failures=self.fails[name],
+                      completed_normally=clean,
                       labels=("this stream stopped observing at this instant; "
                               "the interval until stream_restart is a coverage "
                               "gap"))
