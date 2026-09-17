@@ -118,6 +118,71 @@ recorded unranked and unarmed.
 * **Gemini**: P1, collecting, untouched.
 * **Polymarket.com**: observation/reference only.
 
+### Parallel lanes (2026-09-17, evening) — SHADOW/MEASUREMENT only
+
+Full detail: `analysis/l5/lanes/LANE_FINDINGS_2026-09-17.md`. Nothing below is
+realized profit; no order was placed; nothing here authorizes a canary.
+
+Two ADAPTED lane specs derived from `FIDELITY_OBSERVABLE_V1` (unchanged,
+`d583fa4005d1b815…`). Each inherits 4 fields as `TRANSFERRED` — a status that
+requires `transferred_from` and whose `is_l5_evidence()` is False, so a
+Polymarket BTC15m observation can never be cited as one about another venue.
+`TTE_policy` and `secondary_rung_qty` are never transferred: those numbers are
+about the instrument, not the behaviour. `observed_here` is EMPTY for both.
+
+* `L5_ADAPTED_PMUS_SPORTS` `2237304d81ac63f5…` TTE [0, 86400]
+* `L5_ADAPTED_GEMINI_CRYPTO` `62d004d80b4af8b9…` TTE [0, 300]
+
+**LANE B P0 — ANSWERED.** The 17-fills/0-complements result is **not** an
+artifact of the obsolete one-shot architecture (`gemini_l5_shadow_v2.py`,
+untouched, not running) and **not** a broken complement. From the surface's own
+per-side counters: SELL placed **122** vs BUY **80**, restable 368 vs 356,
+book_reached 239 vs 276, trade_flow **0 on both sides** at a median spread of
+0.22. Verdict `BUY_ONLY_FILLS_SELL_RESTED_UNFILLED` — the sell side is placed,
+rests, and reaches the book; the venue did not trade through it.
+
+**LANE B BLOCKER — settlement.** Four expired BTC5m windows (578s–3878s past
+expiry): all `status=closed`, empty book, public tape intact, and **no terminal
+value published anywhere**. One last-printed 0.97 and another 0.17; a last
+print is not a settlement. The finding is CANNOT, not not-yet.
+`src/gemini_settlement.py` states the five requirements and reports **BLOCKED**,
+`NOT_EXERCISED` rather than PASS. `src/gemini_settlement_probe.py` is the
+read-only, fail-closed probe that would close it, to be run where the Gemini
+credentials live — it refuses here, as it must.
+
+Gemini venue terms, measured: tick 0.01, **`min_order_size` 0.01** (the
+shadow's `UNIT=1` is 100× the venue minimum), **`status: limit_only`** (the
+venue itself rejects non-limit orders on this instrument).
+
+**LANE A — books yes, prints no.** 150 of a 602-market live slate: two-sided
+BBO 23/150 = 0.153, and **23/23 of those have depth on both sides**, median 13
+book levels, median spread 0.030, 10 of 23 with fee-safe pair cost ≤ 0.96. But
+`/trades`, `/history`, `/ohlc`, `/price-history` and `/v1/trades?marketSlug`
+**all 404** — re-verified. `sharesTraded` is cumulative *per market* and cannot
+say a trade happened at OUR price, which is what `VOLUME_AHEAD_CLEARED`
+requires. `src/l5_surface/pmus_prints.py` now joins the authenticated WS tape
+to the ladder (with coverage rules that forfeit vouching on a wrapped 500-trade
+ring or a late subscription), so what remains is wiring the live feed.
+
+**THE RACE — neither lane is canary-ready** (`src/l5_surface/lane_gates.py`):
+
+| lane | propose | score | blocked by |
+|---|---|---|---|
+| Gemini crypto | yes | **no** | SETTLED, REALIZED |
+| PMUS sports | **no** | no | TRADE_FLOW, EVIDENCED_FILL, OPPOSITE_RECYCLING, SETTLED, REALIZED |
+
+Proposal- and scoring-readiness are tracked separately because they fail
+separately: a lane that can place a canary but cannot settle it spends real
+money on a result nobody can read, which under settlement-only realized
+labelling is an unscored loss, not a canary. Gemini is **closest**, blocked
+only on settlement accounting.
+
+Also: G-P8 had been reading **REFUSED** since `e063e54c` — A4 caught two
+unclassified record kinds, exactly as designed. Both are non-terminal; it
+PASSes again. And `deploy/l5_exec_shadow/RELEASE` now records every served
+module's SHA256, with a test that fails on drift, after its `code_sha` was
+found naming a commit whose Gemini shadow lacked the counters it was serving.
+
 ## Consolidation lineage (Phase 1 audit result)
 
 | Source branch | What was taken | Where it lives now |
