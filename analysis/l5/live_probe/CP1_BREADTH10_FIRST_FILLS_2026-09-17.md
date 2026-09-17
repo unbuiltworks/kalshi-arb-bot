@@ -16,7 +16,7 @@ max_total_spend 15.00 / max_residual 3.00 / max_daily_realized_loss 6.00`.
 |---|---|
 | ARMED | YES — 2026-09-17T01:30:24Z |
 | SUBMITTED | YES — 27 orders across 5 markets |
-| FILLED | **YES — 2 orders, 0.36 contracts total, venue-confirmed** |
+| FILLED | **YES — 3 orders, 0.48 contracts total, venue-confirmed** |
 | SETTLED | **NO** — still `MARKET_STATUS_OPEN` at 01:55Z |
 | REALIZED | **NO — nothing here is realized profit and none may be labelled as such** |
 
@@ -29,9 +29,9 @@ max_total_spend 15.00 / max_residual 3.00 / max_daily_realized_loss 6.00`.
 > resolves in hours, not weeks. See
 > `analysis/l5/selection/SETTLEMENT_HORIZON_2026-09-17.md`.
 
-Cash committed: **$0.1584** filled notional, $0.2394 including the in-flight
-admission reserve. Remaining: $14.76 of the $15.00 campaign cap, $4.76 of the
-$5.00 market cap. Residual **−0.36 units** against a cap of 3.00.
+Cash committed: **$0.1836** filled notional. Remaining: **$14.7574** of the
+$15.00 campaign cap, $4.7574 of the $5.00 market cap. Residual **−0.48 units**
+against a cap of 3.00.
 
 ## The two fills
 
@@ -41,26 +41,30 @@ Both on `aec-itfwo-erishi-jiahan-2026-09-17` (ITF women's tennis), side NO.
 |---|---|---|---|---|---|---|---|
 | 1 | `CHQ5YQT34VNJ` | `spring_open_1` | NO | 0.43 | 0.18 | **27.33** | **filled** |
 | 2 | `CHQ7CAEW2VNQ` | `spring_extend_3` | NO | 0.45 | 0.18 | **23.69** | **filled** |
+| 3 | `CHQDF60BAVNP` | `spring_extend_6` | NO | 0.21 | 0.12 | **18.90** | **filled** |
 
 Fill #1 closed the session ending 01:32:02.657Z (`filled_actions: 1`).
 Fill #2 closed the session ending 01:36:20.134Z (`filled_actions: 1`).
+Fill #3 closed the session ending 01:47:15.851Z (`filled_actions: 1`), `relation:
+extend`, `touch_join: true`.
 
 ### Venue reconciliation — independent of our ledger
 
 `fill_reconciliation.venue_vs_ledger` after fill #2:
 
 ```
-venue_qty "0.3600"  ledger_qty "0.36"  delta "0.0000"  agrees true
+venue_qty "0.4800"  ledger_qty "0.48"  delta "0.0000"  agrees true
 why "the venue's traded quantity matches ours"
 ```
 
 `venue_qty` comes from `settlement_auditor.traded_qty_with_evidence`, which walks
 **our own account activity feed** and totals `ACTIVITY_TYPE_TRADE` rows for the
 slug. It is not our order record restated: it is the venue's account-scoped
-traded quantity, and it agrees to zero at both checkpoints (0.1800 then 0.3600).
+traded quantity, and it agrees to zero at every checkpoint (0.1800, 0.3600,
+then 0.4800).
 
-Inventory now `up 0 / dn 0.36 / matched 0 / residual −0.36 / spent 0.158400 /
-avg_dn 0.4400`.
+Inventory now `up 0 / dn 0.48 / matched 0 / residual −0.48 / spent 0.183600 /
+avg_dn 0.3825`.
 
 ### This is OPEN → EXTEND, produced by the controller
 
@@ -93,6 +97,13 @@ Partitioning the 27 orders by how long they actually sat:
 One-sided Fisher exact **p = 0.029**. n = 27, and the five long rests are
 concentrated in one market, so this is suggestive, not established: market
 identity and rest time are confounded here and this sample cannot separate them.
+
+**UPDATE 2026-09-17T02:14Z.** Fill #3 is consistent: it rested **18.90 s**. All
+three fills so far rested at least 18.9 s, and no order resting under 5 s has
+filled. I have deliberately NOT recomputed the significance figure across the
+later sessions, because doing so would mean selecting the statistic after seeing
+the result it is meant to test. The n = 27 figure above stands as first
+measured; the accumulating sample is for the next authorization to judge.
 
 The mechanism is nonetheless legible — every sub-5-second termination was one of
 two things, and neither is a queue outcome:
