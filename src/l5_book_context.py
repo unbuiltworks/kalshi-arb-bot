@@ -53,10 +53,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.l5_shadow import venues as V
 from src.l5_chain_observer import observer as OB
 from src import l5_residual_episode_clock as CLK
+from analysis.l5.causal import order_id_forensics as OF
 
 LABEL = "L5_BOOK_CONTEXT_V1"
 LOOKBACK_S = (1, 5, 10, 30, 60)
 FOLLOW_S = 60
+FOLLOW_MARKS_S = (1, 5, 10, 30, 60)
+
+#: EXTENSION 2026-09-17 (owner, P0). Four SYNCHRONIZED sources per market:
+#:   1 full UP book   2 full DOWN book   3 public prints   4 L5 chain-proven
+#: parent executions with reconstructed inventory.
+#: Books are now recorded CONTINUOUSLY and in FULL, not only around L5
+#: activity -- otherwise the tape only exists where he traded, which is the
+#: selection bias that made the habitat measure unusable.
+#: Both outcomes go in ONE row so they are synchronized by construction: two
+#: separately-timestamped rows cannot be aligned after the fact to the
+#: precision this needs.
+FULL_BOOK_INTERVAL_S = 2.0
+PRINTS_INTERVAL_S = 4.0
 RING_S = 200.0                    # keep enough for 60s back + 60s forward
 UNRESOLVED = "UNOBSERVABLE_OR_UNRESOLVED"
 
@@ -116,6 +130,38 @@ def summarize(book: Optional[dict]) -> Optional[dict]:
     }
 
 
+def ladder(book: Optional[dict], side: str) -> List[List[float]]:
+    """[[price, size], ...] exactly as served, no truncation."""
+    out = []
+    for lv in (book or {}).get("bids" if side == "bid" else "asks") or []:
+        p, z = _f(lv.get("price")), _f(lv.get("size"))
+        if p is not None:
+            out.append([p, z or 0.0])
+    return out
+
+
+def size_at(book: Optional[dict], side: str, px: float,
+            tol: float = 1e-9) -> Optional[float]:
+    """Displayed size at one price level, or None when the book is unreadable.
+
+    None and 0.0 ARE DIFFERENT and are kept apart: 0.0 means the level was
+    served and empty, None means we could not see."""
+    if not book:
+        return None
+    tot = 0.0
+    for p, z in ladder(book, side):
+        if abs(p - px) <= tol:
+            tot += z
+    return tot
+
+
+def _f(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 class Ring:
     """Per-token snapshot history, indexed by MARKET_STATE_CLOCK where the
     venue served one and by our observation clock where it did not -- and the
@@ -144,6 +190,78 @@ class Ring:
 
     def after(self, t0: float, t1: float) -> List[tuple]:
         return [(ts, basis, b) for ts, basis, b in self.snaps if t0 < ts <= t1]
+
+
+def reconstruct(ring: "Ring", *, side: str, px: float, event_t: float
+                ) -> Dict[str, Any]:
+    """Was the level L5 eventually executed at visibly present beforehand, and
+    who moved -- the market into him, or him into the market?
+
+    EVERY FIELD HERE IS ABOUT ANONYMOUS PUBLIC LIQUIDITY. That size at that
+    price may be L5's order or anyone's. Nothing below asserts ownership; the
+    row carries `identity: NOT_ESTABLISHED` and the fingerprint is a
+    CANDIDATE."""
+    marks: Dict[str, Any] = {}
+    sizes: List[Tuple[float, Optional[float]]] = []
+    for k in sorted(set(LOOKBACK_S)):
+        hit = ring.at_or_before(event_t - k)
+        b = hit[2] if hit else None
+        sm = summarize(b)
+        sz = size_at(b, side, px)
+        sizes.append((-k, sz))
+        touch = (sm or {}).get("bid" if side == "bid" else "ask")
+        opp = (sm or {}).get("ask" if side == "bid" else "bid")
+        mid = ((sm["bid"] + sm["ask"]) / 2.0
+               if sm and sm.get("bid") is not None and sm.get("ask") is not None
+               else None)
+        marks["t_minus_%ds" % k] = {
+            "snapshot_clock": hit[0] if hit else None,
+            "clock_basis": hit[1] if hit else None,
+            "size_at_level": sz,
+            "level_present": (None if sz is None else sz > 0),
+            "touch": touch, "opposite_touch": opp, "mid": mid,
+            "ticks_from_touch": (None if (touch is None) else
+                                 round(abs(touch - px) / 0.01, 2)),
+            "ticks_from_mid": (None if mid is None else
+                               round(abs(mid - px) / 0.01, 2)),
+        }
+    present = [(k, v) for k, v in marks.items() if v["level_present"]]
+    first_seen = None
+    for k in sorted(LOOKBACK_S, reverse=True):
+        if marks["t_minus_%ds" % k]["level_present"]:
+            first_seen = -k
+            break
+    # replenishment: size at the level RISING between consecutive marks
+    seq = [z for _t, z in sorted(sizes) if z is not None]
+    replen = sum(1 for a, b in zip(seq, seq[1:]) if b > a + 1e-9)
+    drains = sum(1 for a, b in zip(seq, seq[1:]) if b < a - 1e-9)
+    # who moved first: did the touch come TO the level, or the level to the touch?
+    tk = [marks["t_minus_%ds" % k]["ticks_from_touch"] for k in
+          sorted(LOOKBACK_S, reverse=True)]
+    tk = [x for x in tk if x is not None]
+    verdict = "INDETERMINATE"
+    if first_seen is not None and len(tk) >= 2:
+        if first_seen <= -30 and tk[0] > tk[-1] + 0.5:
+            verdict = "MARKET_MOVED_INTO_THE_LEVEL"
+        elif first_seen >= -5:
+            verdict = "LEVEL_APPEARED_LATE"
+        elif tk[0] <= tk[-1] + 0.5:
+            verdict = "LEVEL_TRACKED_THE_TOUCH"
+    return {
+        "side": side, "price": px,
+        "marks": marks,
+        "level_first_seen_s_before": first_seen,
+        "marks_with_level_present": len(present),
+        "persistence_marks": len(present),
+        "replenishments": replen, "drains": drains,
+        "ticks_from_touch_over_time": tk,
+        "who_moved": verdict,
+        "identity": "NOT_ESTABLISHED",
+        "labels": ("size at a price is ANONYMOUS public liquidity. It may be "
+                   "L5's order or anyone's, and nothing here asserts which. "
+                   "who_moved compares when the level first became visible "
+                   "against how the touch approached it."),
+    }
 
 
 def outcome_tokens(market_key: str) -> Optional[dict]:
@@ -213,7 +331,12 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
     deadline = time.time() + minutes * 60.0
     last_activity = 0.0
     last_summary = 0.0
+    last_full = 0.0
+    last_prints = 0.0
     n_books = n_events = 0
+    prints_seen: Dict[str, set] = collections.defaultdict(set)
+    receipts: Dict[str, Any] = {}
+    parents_by_tx: Dict[str, List[dict]] = {}
 
     while time.time() < deadline:
         loop_t = time.time()
@@ -257,6 +380,60 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
                                         "about L5's orders."})
             if loop_t - last_summary >= 5.0:
                 last_summary = loop_t
+
+            # ---- SOURCES 1 AND 2: both full books in ONE row, so the two
+            # outcomes are synchronized by construction rather than aligned
+            # after the fact
+            if loop_t - last_full >= FULL_BOOK_INTERVAL_S:
+                joint = {}
+                for oc, tok in (m.get("token_by_outcome") or {}).items():
+                    hit = rings[str(tok)].at_or_before(time.time())
+                    b = hit[2] if hit else None
+                    joint[oc] = {
+                        "token": str(tok),
+                        "MARKET_STATE_CLOCK": (b or {}).get("source_ts"),
+                        "L5_OBSERVATION_CLOCK": (b or {}).get("observed_at"),
+                        "bids": ladder(b, "bid"), "asks": ladder(b, "ask"),
+                        "summary": summarize(b)}
+                if joint:
+                    emit({"kind": "book_full_joint", "slug": mk,
+                          "cohort": m.get("cohort"),
+                          "tte_s": round(m["window_end"] - loop_t, 1),
+                          "outcomes": joint,
+                          "labels": "FULL public ladders, both outcomes, one "
+                                    "row. Never a fill and no claim about "
+                                    "whose orders these are."})
+
+        if loop_t - last_full >= FULL_BOOK_INTERVAL_S:
+            last_full = loop_t
+
+        # ---- SOURCE 3: public prints for the whole market, not just L5's
+        if loop_t - last_prints >= PRINTS_INTERVAL_S:
+            last_prints = loop_t
+            for mk, m in list(meta.items()):
+                cid = m.get("condition_id")
+                if not cid:
+                    continue
+                tr = V.pm_trades(cid) or []
+                fresh = []
+                for x in tr:
+                    k = "%s|%s|%s|%s" % (x["t"], x["price"], x["size"],
+                                         x.get("asset"))
+                    if k in prints_seen[mk]:
+                        continue
+                    prints_seen[mk].add(k)
+                    fresh.append({"t": float(x["t"]), "price": str(x["price"]),
+                                  "size": str(x["size"]),
+                                  "side": x.get("side"),
+                                  "asset": x.get("asset")})
+                if fresh:
+                    emit({"kind": "print_tape", "slug": mk,
+                          "condition_id": cid, "n": len(fresh),
+                          "prints": fresh,
+                          "L5_OBSERVATION_CLOCK": time.time(),
+                          "labels": "EVERYONE's prints in this market, not "
+                                    "L5's. A print is a trade, never a book "
+                                    "movement."})
 
         # --- L5 activity
         if loop_t - last_activity >= activity_interval:
@@ -313,6 +490,34 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
                                   "slug": slug, "marks_s": list(CLK.MARKS_S),
                                   "L5_EVENT_CLOCK": float(f.get("ts") or 0),
                                   "L5_OBSERVATION_CLOCK": obs_clock})
+                        # ---- SOURCE 4: the CHAIN-PROVEN parent order behind
+                        # this public fill. One receipt answers for every fill
+                        # in the transaction, so it is fetched once and cached.
+                        if tx not in receipts:
+                            rc = OF.rpc("eth_getTransactionReceipt", [tx])
+                            receipts[tx] = rc if rc is not None else False
+                            parents_by_tx[tx] = (OF.l5_orders_in(rc)
+                                                 if rc else [])
+                            emit({"kind": "l5_parent_execution", "tx": tx,
+                                  "slug": slug,
+                                  "receipt_available": bool(rc),
+                                  "parents": [{
+                                      "order_hash": x["order_hash"],
+                                      "maker": x["maker"], "taker": x["taker"],
+                                      "maker_asset_id": str(x["maker_asset_id"]),
+                                      "taker_asset_id": str(x["taker_asset_id"]),
+                                      "maker_amount_filled": str(x["maker_amount_filled"]),
+                                      "taker_amount_filled": str(x["taker_amount_filled"]),
+                                      "fee": str(x["fee"])}
+                                      for x in parents_by_tx[tx]],
+                                  "inventory_after_session_local": dict(inv[slug]),
+                                  "L5_EVENT_CLOCK": float(f.get("ts") or 0),
+                                  "L5_OBSERVATION_CLOCK": obs_clock,
+                                  "labels": ("CHAIN-PROVEN. order_hash is the "
+                                             "parent order; fee>0 is the "
+                                             "fee-bearing label and NOT a "
+                                             "maker/taker claim. Inventory is "
+                                             "SESSION-LOCAL.")})
                         emit({"kind": "l5_event_seen",
                               "tx": tx, "fill_index": i, "slug": slug,
                               "L5_EVENT_CLOCK": float(f.get("ts") or 0),
@@ -392,8 +597,35 @@ def run(out_dir: str, *, minutes: float, book_interval: float,
                         for ts, basis, b in r.after(et, et + FOLLOW_S)]
                 ctx[str(tok)] = {"preceding": pre, "subsequent": post,
                                  "n_subsequent": len(post)}
+            # the reconstruction the owner asked for, on BOTH outcomes, at
+            # the price L5 actually executed
+            recon = {}
+            try:
+                same = (m.get("token_by_outcome") or {}).get(ev["outcome"]) \
+                    if ev.get("outcome") else None
+                other_oc = ("Down" if ev.get("outcome") == "Up" else "Up")
+                oth = (m.get("token_by_outcome") or {}).get(other_oc)
+                if same:
+                    recon["same_outcome"] = reconstruct(
+                        rings[str(same)], side="bid",
+                        px=float(ev.get("price") or 0), event_t=et)
+                if oth:
+                    recon["opposite_outcome_complement"] = reconstruct(
+                        rings[str(oth)], side="bid",
+                        px=round(1.0 - float(ev.get("price") or 0), 4),
+                        event_t=et)
+                recon["forward_marks"] = {}
+                for k in FOLLOW_MARKS_S:
+                    fwd = {}
+                    for oc2, tok2 in (m.get("token_by_outcome") or {}).items():
+                        hit2 = rings[str(tok2)].at_or_before(et + k)
+                        fwd[oc2] = summarize(hit2[2]) if hit2 else None
+                    recon["forward_marks"]["t_plus_%ds" % k] = fwd
+            except Exception as exc:                          # noqa: BLE001
+                recon = {"reconstruction_failed": str(exc)}
             emit({"kind": "l5_event_context", **ev,
                   "market": m, "book_context_by_token": ctx,
+                  "reconstruction": recon,
                   "l5_resting_orders": UNRESOLVED,
                   "labels": ("The book states are OBSERVED and public. Whether "
                              "L5 had a resting order anywhere in them is "
