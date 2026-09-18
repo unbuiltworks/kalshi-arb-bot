@@ -178,13 +178,41 @@ async def venue_evidence(symbol: str, client_order_id: str,
         out["history_readable"] = hist.get("readable") is not False
         out["history_verdict"] = hist.get("verdict")
         out["history_total_rows"] = hist.get("total_rows")
-        rows: List[Dict[str, Any]] = []
+        # RECORD EVERY ROW, THEN FILTER -- never the other way round. The
+        # first version stored only the matched rows, so an empty result could
+        # not be told apart from a BROKEN MATCHER, and the "no non-zero fill"
+        # clause would have been vacuous rather than satisfied. That is the
+        # same shape as every fixture-kinder-than-the-venue defect here.
+        allrows: List[Dict[str, Any]] = []
         for p in (hist.get("per_status") or []):
             for o in (p.get("orders") or []):
-                if (str(o.get("clientOrderId")) == str(client_order_id)
-                        or str(o.get("orderId")) == str(order_id)):
-                    rows.append(o)
+                allrows.append(o)
+        out["history_rows_symbol"] = [
+            {k: o.get(k) for k in
+             ("orderId", "clientOrderId", "globalOrderId", "symbol", "status",
+              "side", "outcome", "price", "quantity", "filledQuantity",
+              "remainingQuantity", "createdAt", "updatedAt")}
+            for o in allrows]
+        out["history_row_keys_seen"] = sorted(
+            {k for o in allrows for k in o.keys()})
+
+        def _matches(o: Mapping[str, Any]) -> bool:
+            wanted_c = str(client_order_id)
+            wanted_o = str(order_id)
+            for key in ("clientOrderId", "client_order_id", "clientOrderID"):
+                if str(o.get(key)) == wanted_c:
+                    return True
+            for key in ("orderId", "order_id", "orderID", "globalOrderId"):
+                if str(o.get(key)) == wanted_o:
+                    return True
+            return False
+
+        rows = [o for o in allrows if _matches(o)]
         out["history_rows_for_target"] = rows
+        out["history_match_diagnostic"] = {
+            "symbol_rows": len(allrows), "matched": len(rows),
+            "why": ("every row returned for this symbol is recorded above, so "
+                    "an empty match is auditable rather than assumed")}
     except Exception as exc:                                   # noqa: BLE001
         out["history_readable"] = False
         out["history_error"] = "%s: %s" % (type(exc).__name__, exc)
@@ -230,6 +258,16 @@ def verdict_for(rejection: Mapping[str, Any], observed: Mapping[str, Any],
         if str(row.get("filledQuantity") or "0") not in ("0", "0.0", ""):
             reasons.append("the targeted order has a non-zero filledQuantity "
                            "in history; this is not a no-op")
+
+    # Any row on this symbol with a fill is disqualifying even if it did not
+    # match the target, because an unmatched row means either it is not ours
+    # or the matcher missed it -- and only one of those is safe.
+    for row in (venue.get("history_rows_symbol") or []):
+        if str(row.get("filledQuantity") or "0") not in ("0", "0.0", ""):
+            reasons.append("a row on this symbol carries a non-zero "
+                           "filledQuantity (orderId %s); the account is not "
+                           "flat here and nothing is closed on a guess"
+                           % row.get("orderId"))
 
     if reasons:
         return {"verdict": MUTATED if not any("UNREADABLE" in r
