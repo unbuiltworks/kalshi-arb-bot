@@ -681,8 +681,14 @@ async def authoritative_state(symbol: str) -> Dict[str, Any]:
     # fetched. Best effort: a reader that fails leaves its key None, which is
     # UNREADABLE and never mistaken for "no evidence".
     try:
-        th = await MD.order_history(symbol=symbol,
-                                    statuses=("cancelled", "closed", "expired"),
+        # ONLY THE STATUS FILTER THE VENUE ACTUALLY SERVES. Asking for
+        # ("cancelled","closed","expired") made the WHOLE read unreadable --
+        # `order_history` reports readable:false if ANY requested status
+        # fails -- so the gate lost its terminal evidence silently. C6's own
+        # reconciliation showed a venue-closed order coming back under the
+        # `cancelled` filter with row status "closed", so this one filter
+        # covers cancellation and expiry both.
+        th = await MD.order_history(symbol=symbol, statuses=("cancelled",),
                                     limit=100, include_rows=True)
         rows = []
         for pstat in (th.get("per_status") or []):
