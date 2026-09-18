@@ -278,17 +278,19 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # DISARMED AGAIN. CONTINUOUS-5 RAN AND IS SPENT: its latch is on disk
-      # in state INTENT_PERSISTED, its cohort ledger carries 3 of 6 slots,
-      # and the window terminated SUBMISSION_UNKNOWN_RECONCILE_REQUIRED on a
-      # cancel the venue rejected -1013. The auth id below is the sentinel
-      # and the driver constants are None, so this step cannot arm.
+      # ARMED FOR CONTINUOUS-6, authorized 2026-09-18 after the cancel
+      # defect C5 exposed was fixed at the normalization boundary. C5 stays
+      # spent at 3 of 6 with its UNKNOWN intact; C6 is a FRESH cohort.
       #
-      # The authorization that ran, for the record:
-      # OWNER-2026-09-18-GEMINI-CONTINUOUS-5, naming
-      #   executable_sha 3194e691...abf1   (UNCHANGED since review)
+      # NOTE FOR WHOEVER READS THIS NEXT: STOP stops the CONTROLLER. C5's
+      # NO leg filled 57 seconds AFTER its window terminated, because a
+      # fail-closed stop does not withdraw orders the venue already
+      # accepted. Do not read "stopped" as "flat".
+      #
+      # OWNER-2026-09-18-GEMINI-CONTINUOUS-6, naming
+      #   executable_sha 7dc3daae...01ff   (the canonical orderId fix)
       #   envelope_sha   b3bff654...aa17   (UNCHANGED: no bound moved)
-      #   bundle_sha     61c7abf3...8c61   (the decision capture)
+      #   bundle_sha     3bd2872f...497d
       #
       # ONE window. The latch makes that durable across runners, the cohort
       # bounds it to 6 mutations, and neither is reusable.
@@ -328,12 +330,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-6" \
             --cohort  "COHORT-2026-09-18-C6" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \

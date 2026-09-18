@@ -398,37 +398,44 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     assert "COHORT-2026-09-18-C5" not in armed.split("run:", 1)[1]
 
 
-def test_continuous_5_is_spent_and_the_workflow_is_disarmed_again():
-    """CONTINUOUS-5 RAN. Its latch is on disk, its cohort ledger carries the
-    slots it spent, and the authorization is therefore finished.
-
-    This assertion has now been all three things in one day, which is the
-    point rather than churn: it forbade a preparation commit from arming, it
-    pinned the armed window while that window was authorized, and it now
-    pins the spent state. What must never hold is an armed tree with no live
-    authorization behind it.
-    """
+def test_the_workflow_is_armed_for_exactly_the_authorized_window():
+    """ARMED for CONTINUOUS-6. This guard has now pinned "cannot arm",
+    "armed", "spent and disarmed" and "armed again" in one day -- it tracks
+    the real posture, and what must never hold is an armed tree with no live
+    authorization behind it."""
     from src.gemini_execution import arming as ARM
     from src.gemini_execution import bundle as BUN
     from src.gemini_execution import ws_continuous as WCX
 
+    auth = "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
     wf = WF.read_text()
-    # exactly one step in the whole workflow may assign the arm variable
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+
     assert len(re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)) == 1
-    # and with the sentinel in place it cannot arm
-    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in wf
-    assert ARM.EXPECTED_AUTH_ID == "NO-AUTHORIZATION-IN-FORCE"
-    assert WCX.REQUIRED_AUTH_ID is None
-    assert WCX.AUTHORIZED_SHA is None
-    assert BUN.AUTHORIZED_BUNDLE is None
+    assert 'GEMINI_CANARY_AUTH: "%s"' % auth in armed
+    assert '--auth-id "%s"' % auth in armed
+    assert "COHORT-2026-09-18-C6" in armed
 
-    # every executable --auth-id in the workflow is the sentinel
-    ids = re.findall(r'--auth-id "([^"]+)"', wf)
-    assert ids and set(ids) == {"NO-AUTHORIZATION-IN-FORCE"}, ids
-
-    # the envelope did not move across the window
-    assert WCX.envelope_sha() == (
+    # the code and the workflow name the SAME authorization, and the
+    # signature sits on the hashes actually in the tree
+    assert WCX.REQUIRED_AUTH_ID == auth and ARM.EXPECTED_AUTH_ID == auth
+    assert WCX.AUTHORIZED_SHA == WCX.executable_sha()
+    assert WCX.AUTHORIZED_ENVELOPE == WCX.envelope_sha()
+    assert BUN.AUTHORIZED_BUNDLE == BUN.bundle_sha()
+    assert WCX.AUTHORIZED_SHA == (
+        "7dc3daaefcbc39488611fbb94efdb3830c84f760aa866d53dcfaeb99b2aa01ff")
+    assert WCX.AUTHORIZED_ENVELOPE == (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+    assert BUN.AUTHORIZED_BUNDLE == (
+        "3bd2872fdb462ea48aa28dc04b299232c9df6da45f88030af96faca5f993497d")
+
+    # the read-only proof step must stay unarmed
+    block = wf.split("Unarmed production path (real readers", 1)[1].split(
+        "ONE authorized Gemini continuous window", 1)[0]
+    unarmed = "\n".join(l for l in block.splitlines()
+                        if not l.strip().startswith("#"))
+    assert '--auth-id "NO-AUTHORIZATION-IN-FORCE"' in unarmed
+    assert "GEMINI_CANARY_LIVE" not in unarmed and auth not in unarmed
 
 
 def test_the_continuous_5_latch_is_durable_and_unreusable():
