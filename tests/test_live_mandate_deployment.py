@@ -245,18 +245,39 @@ def test_the_shipped_mandate_is_exactly_the_authorized_envelope():
 def test_the_shipped_mandate_is_current_and_expires_within_a_day():
     """A mandate that has expired, or that was written with a runaway expiry,
     is the 2026-09-16 failure in a different costume: an authorization that
-    outlives the decision behind it."""
+    outlives the decision behind it.
+
+    HALT SPLITS THIS INTO TWO DIFFERENT CLAIMS, AND ONLY ONE OF THEM IS ABOUT
+    DANGER. How the mandate was WRITTEN is always checkable and always
+    checked: a 24h-from-authorization ceiling, below, holds in every state.
+    Whether it is still CURRENT only matters while the service could act on
+    it. With HALT committed the service is halted whatever the mandate says --
+    the parametrised cases above pin that -- and an expired mandate sitting
+    beside HALT is not a live authorization, it is the spent residue of one,
+    kept because this file is the authorization of record and deleting
+    evidence to make a test pass is the wrong direction entirely.
+
+    So the currency assertions apply UN-HALTED, which is the only state in
+    which a stale expiry could authorize anything. Un-halted with an expired
+    mandate additionally fails
+    `test_the_halt_and_the_authorization_are_consistent`, so nothing that
+    could enable trading is relaxed here: it is checked twice.
+    """
     f = AUTH_DIR / "live_mandate.json"
     if not f.exists():
         return
     m, why = M.parse_mandate(f.read_text(encoding="utf-8"))
     assert m is not None, why
     now = datetime.now(timezone.utc)
-    assert not m.expired(now), f"the shipped mandate is already expired: {m.expiry}"
     exp = M._parse_ts(m.expiry)
     auth = M._parse_ts(m.authorized_at)
+    # ALWAYS: the shape of the authorization, whatever state we are in
     assert exp - auth <= timedelta(hours=24), (
         f"expiry is {exp - auth} after authorization; the owner authorized 24h")
+    if (AUTH_DIR / "HALT").exists():
+        return
+    # UN-HALTED ONLY: the service could act on this, so it must be current
+    assert not m.expired(now), f"the shipped mandate is already expired: {m.expiry}"
     assert exp <= now + timedelta(hours=24)
 
 
