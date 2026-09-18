@@ -110,13 +110,36 @@ def preflight_now(symbol: str,
         "expiry": terms.get("expiry") or terms.get("expiryDate"),
         "maker_tif": spec.WS_TIF_MAKER_ONLY,
     })
+    # TERMS: THE READER MAY BE ASYNC, AND THIS FUNCTION IS NOT.
+    # MD.terms_status is a coroutine function. Calling it here without
+    # awaiting returns a coroutine object whose .get() raises AttributeError,
+    # which the except below turned into terms_accepted=None -- a DISCREPANCY,
+    # so the probe failed closed on every single run and could never trade.
+    # That is safe and it is still wrong, and it cost a live authorization to
+    # find because no test ever passed the REAL async reader.
+    #
+    # A sync function cannot await, so the fix is not here: an async caller
+    # must await the read and pass the VALUE in `readers`. What this does is
+    # make the mistake loud instead of silent.
+    import inspect as _inspect
     try:
-        ts = r["terms_status"]() or {}
+        ts = r["terms_status"]()
+        if _inspect.iscoroutine(ts) or _inspect.isawaitable(ts):
+            try:
+                ts.close()
+            except Exception:                                  # noqa: BLE001
+                pass
+            raise TypeError(
+                "terms_status returned a coroutine. preflight_now is "
+                "synchronous and cannot await it; an async caller must await "
+                "the read and pass the VALUE in readers['terms_status'].")
+        ts = ts or {}
         out["terms_accepted"] = bool(ts.get("hasAcceptedLatest"))
         out["terms_version"] = ts.get("acceptedVersion")
     except Exception as exc:                                   # noqa: BLE001
         out["terms_accepted"] = None
-        out["terms_why"] = "terms unreadable: %s" % type(exc).__name__
+        out["terms_why"] = "terms unreadable: %s: %s" % (type(exc).__name__,
+                                                         exc)
     try:
         out["book"] = r["outcome_book"](symbol)
     except Exception as exc:                                   # noqa: BLE001

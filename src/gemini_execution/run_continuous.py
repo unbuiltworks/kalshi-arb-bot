@@ -29,6 +29,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src.gemini_execution import continuous_preflight as PF
 from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import metadata as MD
 from src.gemini_execution import ws_continuous as WC
@@ -183,6 +184,42 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
         rep["why"] = "not authorized: %s" % "; ".join(auth["why_not"])
         return rep
 
+    # ------------------------------------------------- PREFLIGHT, THEN LATCH
+    # THE READS ARE DONE HERE AND PASSED IN AS VALUES. MD.terms_status is a
+    # COROUTINE FUNCTION; the driver's preflight is synchronous and cannot
+    # await it, so handing it the function meant handing it a coroutine whose
+    # .get() raises -- which read as "terms unreadable", which is a
+    # DISCREPANCY, which failed the probe closed on every run. It cost a live
+    # authorization to find, because no test had ever passed the real reader.
+    ts_value: Dict[str, Any]
+    try:
+        ts_value = await MD.terms_status() or {}
+    except Exception as exc:                                   # noqa: BLE001
+        ts_value = {}
+        rep["terms_read_error"] = "%s: %s" % (type(exc).__name__, exc)
+    readers = {"terms_for": MD.terms_for,
+               "terms_status": (lambda: ts_value),
+               "outcome_book": MD.outcome_book}
+    rep["terms_status"] = ts_value
+
+    # THE PREFLIGHT RUNS BEFORE THE LATCH IS SPENT. A preflight is a READ, not
+    # a mutation, so "consume the latch before the first mutation" does not
+    # mean "before the first read" -- and consuming it first meant a
+    # fail-closed preflight burned the one authorization without an order ever
+    # being attempted. That is exactly what happened on 2026-09-18T13:33Z.
+    pf = PF.preflight_now(symbol, readers=readers)
+    agrees, bad = PF.check_frozen(pf)
+    rep["preflight"] = {"agrees": agrees, "discrepancies": bad,
+                        "checked_before_latch": True}
+    if not agrees:
+        rep["state"] = WC.DO_NOT_TRADE
+        rep["why"] = ("fresh preflight differs from the frozen assumptions: %s"
+                      % json.dumps(bad, default=str))
+        rep["latch"] = {"consumed": False,
+                        "why": "the preflight refused BEFORE the latch was "
+                               "spent, so the authorization is untouched"}
+        return rep
+
     # ---------------------------------------------------------------- LATCH
     # ONE AUTHORIZATION, ONE WINDOW, AND THE LATCH IS WHAT MAKES THAT DURABLE.
     # The driver's MutationLedger bounds mutations WITHIN a window; it cannot
@@ -245,6 +282,7 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
             venue_fills=st.get("fills"),
             venue_open=st.get("open_orders"),
             venue_orders=st.get("orders_seen"),
+            readers=readers,
             interval_s=5.0)
         rep["window"] = out
     except Exception as exc:                                   # noqa: BLE001

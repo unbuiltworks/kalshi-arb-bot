@@ -134,3 +134,91 @@ def test_the_latch_records_the_authorized_shas():
     src = open(RC.__file__, encoding="utf-8").read()
     assert '"executable_sha": WC.executable_sha()' in src
     assert '"envelope_sha": WC.envelope_sha()' in src
+
+
+# ===================== THE THREE DEFECTS THE FIRST LIVE RUN EXPOSED =========
+
+def test_REGRESSION_an_async_terms_reader_is_loud_not_a_silent_none():
+    """THE DEFECT THAT COST A LIVE AUTHORIZATION.
+
+    MD.terms_status is a coroutine function. preflight_now is synchronous, so
+    calling it there returned a coroutine whose .get() raised AttributeError,
+    which the handler recorded as terms_accepted=None -- and an unread value
+    is a DISCREPANCY, so the probe failed closed on EVERY run and could never
+    have traded. Safe, and still completely broken.
+
+    No test caught it because every test injected plain lambdas. This one
+    passes the REAL reader.
+    """
+    from src.gemini_execution import continuous_preflight as PF
+    from src.gemini_execution import metadata as MD
+    import inspect
+    assert inspect.iscoroutinefunction(MD.terms_status), (
+        "if this ever becomes sync, the guard below stops testing anything")
+    out = PF.preflight_now("SYM", readers={
+        "terms_for": lambda s: {"quantityMinimum": "0.01",
+                                "quantityIncrement": "0.01",
+                                "priceMinimum": "0.01",
+                                "priceIncrement": "0.01",
+                                "contract_status": "active",
+                                "market_state": "open"},
+        "terms_status": MD.terms_status,
+        "outcome_book": lambda s: {}})
+    assert out["terms_accepted"] is None
+    assert "coroutine" in out["terms_why"], out["terms_why"]
+    assert "must await" in out["terms_why"]
+
+
+def test_an_awaited_terms_value_makes_the_preflight_agree():
+    from src.gemini_execution import continuous_preflight as PF
+    out = PF.preflight_now("SYM", readers={
+        "terms_for": lambda s: {"quantityMinimum": "0.01",
+                                "quantityIncrement": "0.01",
+                                "priceMinimum": "0.01",
+                                "priceIncrement": "0.01",
+                                "contract_status": "active",
+                                "market_state": "open"},
+        "terms_status": lambda: {"hasAcceptedLatest": True,
+                                 "acceptedVersion": 1},
+        "outcome_book": lambda s: {}})
+    assert out["terms_accepted"] is True
+    assert out["frozen_comparison"]["verdict"] == PF.AGREES
+
+
+def test_the_invoker_awaits_the_terms_read_and_passes_a_value():
+    src = open(RC.__file__, encoding="utf-8").read()
+    assert "await MD.terms_status()" in src
+    assert '"terms_status": (lambda: ts_value)' in src
+
+
+def test_REGRESSION_the_preflight_runs_before_the_latch_is_spent():
+    """A preflight is a READ. Consuming the latch first meant a fail-closed
+    preflight burned the one authorization with no order ever attempted --
+    which is what happened at 2026-09-18T13:33Z."""
+    src = open(RC.__file__, encoding="utf-8").read()
+    i_pf = src.index("pf = PF.preflight_now(symbol")
+    i_latch = src.index("latch.consume(auth_id")
+    i_conn = src.index("await session.connect()")
+    assert i_pf < i_latch < i_conn
+    assert "the authorization is untouched" in src
+
+
+def test_a_refused_preflight_reports_the_latch_as_unspent():
+    src = open(RC.__file__, encoding="utf-8").read()
+    i_pf = src.index("pf = PF.preflight_now(symbol")
+    i_latch = src.index("latch.consume(auth_id")
+    between = src[i_pf:i_latch]
+    assert '"consumed": False' in between
+    assert "return rep" in between, "it must return, not fall through"
+
+
+def test_REGRESSION_the_evidence_commit_survives_a_missing_artifact():
+    """A window that attempts no mutation writes no ledger. `git add` on a
+    missing pathspec exits 128, which killed the job and discarded the
+    evidence it HAD gathered -- the record of a refusal."""
+    import pathlib
+    wf = pathlib.Path(".github/workflows/gemini-settlement-gate.yml").read_text()
+    i = wf.index("Commit ONLY the evidence artifact")
+    step = wf[i:i + 2500]
+    assert 'if [ -e "$f" ]; then git add -- "$f"; fi' in step
+    assert "git add -- 'analysis/gemini/continuous_ledger.jsonl'" not in step

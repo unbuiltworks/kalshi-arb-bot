@@ -221,13 +221,21 @@ jobs:
           git config user.email "gemini-settlement-gate@users.noreply.github.com"
           # analysis/gemini/ ONLY. No source, config or live-service change
           # may originate from this runtime job.
-          git add -- 'analysis/gemini/settlement_gate_*.json' \
-                     'analysis/gemini/canary_preflight_*.json' \
-                     'analysis/gemini/execution_readiness_*.json' \
-                     'analysis/gemini/ws_dry_run_*.json' \
-                     'analysis/gemini/continuous_run_*.json' \
-                     'analysis/gemini/continuous_ledger.jsonl' \
-                     'analysis/gemini/canary_latch/*.json'
+          # A pathspec that matches nothing is NORMAL, not an error: a
+          # window that attempted no mutation writes no ledger, and a run that
+          # refused before the driver writes no run artifact. `git add` on a
+          # missing pathspec exits 128, which killed the job and threw away
+          # the evidence it HAD gathered -- losing the record of a refusal,
+          # which is exactly the record worth keeping.
+          for f in analysis/gemini/settlement_gate_*.json \
+                   analysis/gemini/canary_preflight_*.json \
+                   analysis/gemini/execution_readiness_*.json \
+                   analysis/gemini/ws_dry_run_*.json \
+                   analysis/gemini/continuous_run_*.json \
+                   analysis/gemini/continuous_ledger.jsonl \
+                   analysis/gemini/canary_latch/*.json; do
+            if [ -e "$f" ]; then git add -- "$f"; fi
+          done
           if git diff --cached --quiet; then
             echo "no new evidence artifact"; exit 0
           fi
