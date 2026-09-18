@@ -416,25 +416,73 @@ def test_the_dry_run_never_constructs_a_session():
 
 # --------------------------------------------- only one path can submit
 
-def test_exactly_one_function_in_the_package_can_send_an_order_frame():
+#: the ONLY functions in this package permitted to put a place frame on a
+#: socket, each one reviewed and each one owner-authorized in its own right:
+#:   ws_canary.submit_once_ws   the one-shot canary (MAX_ORDERS = 1)
+#:   ws_continuous.Driver.place the continuous driver, owner-authorized
+#:                              2026-09-18 to be BUILT -- still unarmed
+#: Adding a name here is not enough to make it legal: the test below also
+#: proves each one gates itself, which is the property the list stands for.
+PERMITTED_SENDERS = {
+    ("src/gemini_execution/ws_canary.py", "submit_once_ws"),
+    ("src/gemini_execution/ws_continuous.py", "place"),
+}
+
+#: a call by any of these names counts as an authorization gate
+AUTH_GATES = {"require", "require_authorization"}
+
+
+def _senders():
+    """(file, function) for every function that sends a place frame."""
     import ast
     import pathlib
-    senders = []
-    for p in pathlib.Path("src/gemini_execution").glob("*.py"):
+    out = []
+    for p in sorted(pathlib.Path("src/gemini_execution").glob("*.py")):
         tree = ast.parse(p.read_text())
-        for n in ast.walk(tree):
-            if not isinstance(n, ast.Call):
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            fn = n.func
-            name = (fn.attr if isinstance(fn, ast.Attribute)
-                    else getattr(fn, "id", ""))
-            if name != "request":
-                continue
-            for a in n.args:
-                if (isinstance(a, ast.Attribute)
-                        and a.attr == "WS_PLACE_METHOD"):
-                    senders.append(str(p))
-    assert senders == ["src/gemini_execution/ws_canary.py"], senders
+            sends = False
+            for n in ast.walk(fn):
+                if not isinstance(n, ast.Call):
+                    continue
+                f = n.func
+                name = (f.attr if isinstance(f, ast.Attribute)
+                        else getattr(f, "id", ""))
+                if name != "request":
+                    continue
+                if any(isinstance(a, ast.Attribute)
+                       and a.attr == "WS_PLACE_METHOD" for a in n.args):
+                    sends = True
+            if sends:
+                gates = {(c.func.attr if isinstance(c.func, ast.Attribute)
+                          else getattr(c.func, "id", ""))
+                         for c in ast.walk(fn) if isinstance(c, ast.Call)}
+                out.append((str(p), fn.name, gates & AUTH_GATES))
+    return out
+
+
+def test_only_reviewed_functions_can_send_an_order_frame():
+    """The list is closed, and being on it is not what makes a sender legal.
+
+    This guard caught a rogue second order path once already (the removed
+    src/gemini_l5_ws_canary.py, whose only gate was a non-empty authorization
+    STRING). So widening it for the continuous driver widens the PROOF too:
+    every permitted sender must call an authorization gate in its own body,
+    not merely rely on something upstream having checked.
+    """
+    found = {(f, name) for f, name, _ in _senders()}
+    assert found == PERMITTED_SENDERS, (
+        "an unreviewed order path appeared, or a reviewed one moved: %s"
+        % sorted(found ^ PERMITTED_SENDERS))
+
+
+def test_every_permitted_sender_gates_itself():
+    for path, name, gates in _senders():
+        assert gates, (
+            "%s.%s can send a place frame and calls no authorization gate in "
+            "its own body; relying on an upstream check is how a second "
+            "order path gets in" % (path, name))
 
 
 def test_no_module_outside_the_execution_package_names_the_ws_method():

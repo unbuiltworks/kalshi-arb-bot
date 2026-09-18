@@ -339,8 +339,27 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 ALLOWED: Dict[str, Dict[str, str]] = {
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
-        "sha": "35e9ace92e16856b95dd72ce477aede6604035bd",
-        "why": ("RE-PINNED 2026-09-17 for the SETTLEMENT-PENDING CONCURRENCY "
+        "sha": "c2551101d730257a2dfa45fab5c449a897c4c673",
+        "why": ("RE-PINNED 2026-09-18 because HALT WAS RESTORED. The delta is "
+                "the addition of analysis/l5/authorization/HALT and nothing "
+                "else: prose, not code, and it moves the tree in the "
+                "FAIL-CLOSED direction, which is the only direction this "
+                "directory may move without a fresh owner authorization. "
+                "The mandate OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT "
+                "EXPIRED at 2026-09-18T00:41:20Z, and HALT had not been put "
+                "back, so the committed state read 'un-halted, no valid "
+                "authorization' for 11.3 hours -- caught by "
+                "test_the_halt_and_the_authorization_are_consistent, which is "
+                "exactly what that invariant is for. Nothing traded in that "
+                "window and nothing could have: l5-r1-probe ended itself at "
+                "2026-09-17T13:36:57Z with CAMPAIGN_STOP:HALT, ~11 hours "
+                "before the expiry, and an expired mandate is NO_MANDATE at "
+                "the wire. The expired live_mandate.json is KEPT beside HALT "
+                "as the spent authorization of record; deleting evidence to "
+                "make a check pass is the wrong direction. This pin therefore "
+                "covers a HALTED tree with no authorization in force. "
+                "PREVIOUSLY pinned 35e9ace92e16856b95dd72ce477aede6604035bd "
+                "for the SETTLEMENT-PENDING CONCURRENCY "
                 "REPAIR (OWNER P0 'FIX SETTLED-PENDING FULLY-MATCHED "
                 "CONCURRENCY DEADLOCK'), adding "
                 "ACTIVATION_6_SETTLEMENT_PENDING_2026-09-17.md -- the record, "
