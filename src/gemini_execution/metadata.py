@@ -505,3 +505,104 @@ async def terms_status() -> Dict[str, Any]:
                     "NOT evidence that the terms are unaccepted -- it is the "
                     "absence of evidence either way, and it blocks an order "
                     "for that reason alone.")}
+
+
+ORDER_HISTORY_PATH = "/v1/prediction-markets/orders/history"
+
+
+async def order_history(*, since_ms: Optional[int] = None,
+                        until_ms: Optional[int] = None,
+                        symbol: Optional[str] = None,
+                        statuses: tuple = ("filled", "cancelled", "open"),
+                        limit: int = 100) -> Dict[str, Any]:
+    """FORENSIC, READ-ONLY: has this account ever had a prediction-market order?
+
+    The question this answers is whether any previous Gemini live work left a
+    venue-side record on the credentials we hold. /v1/mytrades returning zero
+    rows does not answer it: mytrades is the classic SPOT trades endpoint, and
+    zero rows there is equally consistent with "no trades" and with "wrong
+    endpoint for this product". This is the endpoint the prior q1 code itself
+    used to reconcile its own orders, so it is the one that would carry them.
+
+    Asked once per status, because `status` is a scalar in the documented
+    request body rather than a list. A non-200 is reported as unreadable and
+    never as an empty history.
+    """
+    from src.gemini_prediction_auth import has_credentials, private_rest_json
+    if not has_credentials():
+        return {"readable": False, "verdict": "NO_CREDENTIALS"}
+    import time as _t
+    now_ms = int(_t.time() * 1000)
+    lo = since_ms if since_ms is not None else now_ms - 45 * 86400 * 1000
+    hi = until_ms if until_ms is not None else now_ms + 60000
+    per: List[Dict[str, Any]] = []
+    total = 0
+    unreadable = []
+    for st in statuses:
+        body: Dict[str, Any] = {"status": st, "limit": limit, "offset": 0,
+                                "from": lo, "to": hi}
+        if symbol:
+            body["symbol"] = symbol
+        try:
+            r = await private_rest_json("POST", ORDER_HISTORY_PATH,
+                                        params=body, timeout=20.0)
+        except Exception as exc:                               # noqa: BLE001
+            per.append({"status_filter": st, "http": None,
+                        "err": type(exc).__name__})
+            unreadable.append(st)
+            continue
+        try:
+            payload = r.json()
+        except ValueError:
+            payload = None
+        rows = None
+        if isinstance(payload, dict):
+            for k in ("orders", "results", "data"):
+                if isinstance(payload.get(k), list):
+                    rows = payload[k]
+                    break
+        elif isinstance(payload, list):
+            rows = payload
+        entry = {"status_filter": st, "http": r.status_code,
+                 "rows": (len(rows) if rows is not None else None),
+                 "body_keys": (sorted(payload) if isinstance(payload, dict)
+                               else None)}
+        if r.status_code != 200 or rows is None:
+            unreadable.append(st)
+            entry["unreadable"] = True
+            entry["detail"] = (payload if isinstance(payload, dict)
+                               else str(r.text)[:200])
+        else:
+            total += len(rows)
+            # first row's SHAPE and identifiers only -- enough to prove an
+            # order existed and to compare its fields, without dumping an
+            # account's whole history into an artifact.
+            if rows:
+                keep = ("orderId", "clientOrderId", "symbol", "side",
+                        "outcome", "orderType", "price", "quantity",
+                        "filledQuantity", "remainingQuantity", "status",
+                        "timestamp", "timestampms", "createdAt")
+                entry["sample"] = {k: rows[0].get(k) for k in keep
+                                   if isinstance(rows[0], dict)
+                                   and k in rows[0]}
+                entry["row_keys"] = sorted(rows[0]) if isinstance(
+                    rows[0], dict) else None
+        per.append(entry)
+    return {
+        "readable": not unreadable,
+        "verdict": ("UNREADABLE" if unreadable
+                    else ("ORDERS_FOUND" if total else "NO_ORDERS_ON_RECORD")),
+        "path": ORDER_HISTORY_PATH,
+        "window_ms": [lo, hi],
+        "window_utc": [datetime.fromtimestamp(lo / 1000, timezone.utc
+                                              ).isoformat(),
+                       datetime.fromtimestamp(hi / 1000, timezone.utc
+                                              ).isoformat()],
+        "symbol": symbol,
+        "total_rows": total,
+        "per_status": per,
+        "unreadable_statuses": unreadable,
+        "labels": ("NO_ORDERS_ON_RECORD is a statement about THESE "
+                   "credentials in THIS window, never about other accounts "
+                   "or hosts. UNREADABLE is not an empty history."),
+    }

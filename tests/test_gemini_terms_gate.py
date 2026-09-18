@@ -227,3 +227,85 @@ def test_the_two_probe_tickers_are_never_the_same():
     for mins in (0, 4, 5, 59):
         tk = MD.current_btc5m_ticker(_at(2026, 9, 18, 1, mins, 0))
         assert MD.sibling_ticker(tk) != tk
+
+
+# ------------------------------------------------ forensic order history
+#
+# Whether any previous Gemini live work left a venue-side record on the
+# credentials we hold. /v1/mytrades returning zero rows does not answer it:
+# mytrades is the classic SPOT trades endpoint, and zero rows there is equally
+# consistent with "no trades" and with "wrong endpoint for this product".
+
+class _HR:
+    def __init__(self, status, body):
+        self.status_code, self._b = status, body
+        self.text = json.dumps(body) if body is not None else ""
+
+    def json(self):
+        if self._b is None:
+            raise ValueError("not json")
+        return self._b
+
+
+def _history(monkeypatch, by_status):
+    seen = []
+
+    async def fake(method, path, *, params=None, timeout=20.0):
+        seen.append((method, path, (params or {}).get("status")))
+        return by_status[(params or {}).get("status")]
+
+    import src.gemini_prediction_auth as A
+    monkeypatch.setattr(A, "private_rest_json", fake)
+    return seen
+
+
+def test_an_order_on_record_is_reported_with_its_fields(monkeypatch, creds):
+    row = {"orderId": "abc", "clientOrderId": "x-1", "symbol": "GEMI-X-UP",
+           "side": "buy", "outcome": "yes", "price": "0.42", "quantity": "1",
+           "status": "filled", "filledQuantity": "1"}
+    _history(monkeypatch, {
+        "filled": _HR(200, {"orders": [row]}),
+        "cancelled": _HR(200, {"orders": []}),
+        "open": _HR(200, {"orders": []})})
+    out = _run(MD.order_history())
+    assert out["verdict"] == "ORDERS_FOUND"
+    assert out["total_rows"] == 1
+    sample = [e for e in out["per_status"] if e["status_filter"] == "filled"
+              ][0]["sample"]
+    assert sample["orderId"] == "abc" and sample["price"] == "0.42"
+
+
+def test_an_empty_history_is_scoped_to_these_credentials(monkeypatch, creds):
+    _history(monkeypatch, {s: _HR(200, {"orders": []})
+                           for s in ("filled", "cancelled", "open")})
+    out = _run(MD.order_history())
+    assert out["verdict"] == "NO_ORDERS_ON_RECORD"
+    assert "never about other accounts" in out["labels"]
+
+
+def test_an_unreadable_history_is_never_an_empty_one(monkeypatch, creds):
+    _history(monkeypatch, {"filled": _HR(400, {"reason": "InvalidRequest"}),
+                           "cancelled": _HR(200, {"orders": []}),
+                           "open": _HR(200, {"orders": []})})
+    out = _run(MD.order_history())
+    assert out["verdict"] == "UNREADABLE"
+    assert out["verdict"] != "NO_ORDERS_ON_RECORD"
+    assert out["unreadable_statuses"] == ["filled"]
+
+
+def test_every_status_is_asked_separately(monkeypatch, creds):
+    """`status` is a scalar in the documented body, not a list, so a single
+    call could only ever see one third of the history."""
+    seen = _history(monkeypatch, {s: _HR(200, {"orders": []})
+                                  for s in ("filled", "cancelled", "open")})
+    _run(MD.order_history())
+    assert sorted(s for _, _, s in seen) == ["cancelled", "filled", "open"]
+    assert {p for _, p, _ in seen} == {MD.ORDER_HISTORY_PATH}
+
+
+def test_the_history_read_never_touches_a_mutation_path(monkeypatch, creds):
+    from src.gemini_execution import spec
+    seen = _history(monkeypatch, {s: _HR(200, {"orders": []})
+                                  for s in ("filled", "cancelled", "open")})
+    _run(MD.order_history())
+    assert not ({p for _, p, _ in seen} & set(spec.MUTATION_PATHS))

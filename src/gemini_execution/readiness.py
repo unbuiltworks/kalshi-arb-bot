@@ -116,6 +116,11 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
         "verdict": MD.RESOLUTION_UNREADABLE, "why": "no eligible instrument"}
     res_prev = MD.most_recent_settled(sym or "GEMI--UP", now=now)
 
+    # FORENSIC, read-only: does any previous Gemini order exist on these
+    # credentials? Reported, never gated on -- it is evidence about the past,
+    # not a precondition for the canary.
+    hist = await MD.order_history()
+
     gates = {
         "preflight_ok": bool(pf.get("ok")),
         "VENUE_WRITE_PATH": wp["VENUE_WRITE_PATH"],
@@ -158,6 +163,7 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
                        "what our account received, so nothing here is "
                        "realized P&L."),
         },
+        "account_order_history": hist,
         "terms_status": tstat,
         "latest_terms_version": tver,
         "request_transport": xport,
