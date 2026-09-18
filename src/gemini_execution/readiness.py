@@ -89,10 +89,13 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
     # take no fields at all, so the classic empty-body form looked correct
     # right up to the first request that carried any.
     from src.gemini_execution import transport as T
-    tk_a = MD.event_ticker(sym) if sym else None
+    # from the CLOCK, not from the preflight's choice: the transport question
+    # is about the venue, not about whether a window happens to be tradeable
+    # right now, and tying it to eligibility left it unanswered on a run.
+    tk_a = MD.event_ticker(sym) if sym else MD.current_btc5m_ticker(now)
     tk_b = MD.sibling_ticker(tk_a) if tk_a else None
     xport = (await T.probe_field_transport(tk_a, tk_b) if (tk_a and tk_b)
-             else {"verdict": "UNRESOLVED", "why": "no eligible instrument"})
+             else {"verdict": "UNRESOLVED", "why": "no ticker to probe with"})
 
     gates = {
         "preflight_ok": bool(pf.get("ok")),

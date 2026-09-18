@@ -46,6 +46,28 @@ def event_ticker(symbol: str) -> Optional[str]:
     return parts[1] if len(parts) >= 3 else None
 
 
+BTC5M_PREFIX = "BTC05M"
+
+
+def current_btc5m_ticker(now: Optional[float] = None) -> str:
+    """The ticker of the BTC5m window currently running, from the clock alone.
+
+    The transport diagnostic must not depend on a window being ELIGIBLE to
+    trade: eligibility is a narrow band inside each 5-minute cycle, so tying
+    the diagnostic to it means the question goes unanswered on most runs --
+    which is exactly what happened on the first attempt.
+    """
+    import math
+    import time as _t
+    t = datetime.fromtimestamp(now if now is not None else _t.time(),
+                               tz=timezone.utc)
+    from datetime import timedelta
+    minute = int(math.ceil((t.minute + t.second / 60.0) / 5.0) * 5)
+    end = t.replace(minute=0, second=0, microsecond=0) + timedelta(
+        minutes=minute)
+    return BTC5M_PREFIX + end.strftime("%y%m%d%H%M")
+
+
 def sibling_ticker(ticker: str, minutes: int = 5) -> Optional[str]:
     """The ticker of an ADJACENT window, e.g. BTC05M2609180100 -> ...0055.
 

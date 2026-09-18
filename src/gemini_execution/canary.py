@@ -257,7 +257,7 @@ async def submit_once(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
     res = await tr.place(symbol=intent["symbol"], side=intent["side"],
                          outcome=intent["outcome"], price=intent["price"],
                          quantity=intent["quantity"],
-                         client_order_id=intent["intent_id"], now=now)
+                         now=now)
 
     # 9 classify. Ambiguity is terminal and becomes reconciliation work.
     cls = res.get("classification")
@@ -319,8 +319,11 @@ async def reconcile(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
     rec = latch.read(auth_id, state_dir)
     if rec is None:
         return {"resolved": False, "why": "no latch for this authorization"}
+    # No client id to match on: the request schema does not admit one. With
+    # venue_order_id unknown -- the ambiguous-send case this exists for --
+    # find_order falls back to symbol scope, which the zero-orders-before
+    # gate makes unambiguous.
     found = await tr.find_order(symbol=rec.get("symbol"),
-                                client_order_id=rec.get("intent_id"),
                                 order_id=rec.get("venue_order_id"))
     return {"resolved": bool(found.get("resolved")), "latch_state":
             rec.get("state"), "venue": found,

@@ -307,3 +307,79 @@ def test_an_unreadable_order_book_is_not_an_empty_one(monkeypatch):
     out = _run(RC.no_existing_canary_exposure("GEMI-X-UP"))
     assert out["clear"] is False
     assert "unreadable" in out["why"]
+
+
+# ------------------------------------------- undocumented request fields
+#
+# The OrderRequest schema admits symbol, orderType, side, quantity, price,
+# outcome, stopPrice, timeInForce and makerOrCancel. clientOrderId is in the
+# RESPONSE schema only. Canary #1 sent one, and a schema that rejects unknown
+# properties answers 400 -- the status we received.
+
+def test_the_order_body_carries_only_documented_fields(wire, monkeypatch):
+    from src.gemini_execution import arming
+    monkeypatch.setenv(arming.LIVE_ENV, "YES")
+    monkeypatch.setenv(arming.AUTH_ENV, arming.EXPECTED_AUTH_ID)
+    monkeypatch.setenv(arming.EXPIRY_ENV, "2099-01-01T00:00:00Z")
+    _run(T.place(symbol="GEMI-X-UP", side="buy", outcome="yes",
+                 price="0.02", quantity="0.01"))
+    body = json.loads(wire.seen[-1]["content"].decode())
+    assert set(body) <= set(spec.ORDER_REQUEST_FIELDS), set(body)
+    assert "clientOrderId" not in body
+
+
+def test_a_client_order_id_is_refused_before_the_wire(wire, monkeypatch):
+    from src.gemini_execution import arming
+    monkeypatch.setenv(arming.LIVE_ENV, "YES")
+    monkeypatch.setenv(arming.AUTH_ENV, arming.EXPECTED_AUTH_ID)
+    monkeypatch.setenv(arming.EXPIRY_ENV, "2099-01-01T00:00:00Z")
+    with pytest.raises(T.VenueError) as e:
+        _run(T.place(symbol="GEMI-X-UP", side="buy", outcome="yes",
+                     price="0.02", quantity="0.01",
+                     client_order_id="canary-deadbeef"))
+    assert "RESPONSE schema only" in str(e.value)
+    assert wire.seen == []          # refused BEFORE anything is sent
+
+
+def test_the_documented_field_set_matches_the_schema():
+    assert set(spec.ORDER_REQUEST_FIELDS) == {
+        "symbol", "orderType", "side", "quantity", "price", "outcome",
+        "stopPrice", "timeInForce", "makerOrCancel"}
+
+
+# --------------------------------------- reconciliation without a client id
+
+def _orders(*os):
+    async def fake(symbol=None):
+        return {"ok": True, "body": list(os)}
+    return fake
+
+
+def test_one_active_order_is_ours_because_there_were_none_before(monkeypatch):
+    monkeypatch.setattr(T, "active_orders", _orders({"orderId": "77"}))
+    out = _run(T.find_order(symbol="GEMI-X-UP"))
+    assert out["found"] is True and out["order"]["orderId"] == "77"
+    assert "zero-orders-before" in out["matched_by"]
+
+
+def test_two_active_orders_are_not_attributable_and_refuse(monkeypatch):
+    monkeypatch.setattr(T, "active_orders",
+                        _orders({"orderId": "77"}, {"orderId": "78"}))
+    out = _run(T.find_order(symbol="GEMI-X-UP"))
+    assert out["resolved"] is False
+    assert out["found"] is None          # never True, and never plain False
+    assert "attributable" in out["why"]
+
+
+def test_no_active_orders_is_still_not_a_reason_to_resubmit(monkeypatch):
+    monkeypatch.setattr(T, "active_orders", _orders())
+    out = _run(T.find_order(symbol="GEMI-X-UP"))
+    assert out["resolved"] is True and out["found"] is False
+    assert "submit again" in out["why"]
+
+
+def test_an_explicit_order_id_still_wins_over_the_symbol_fallback(monkeypatch):
+    monkeypatch.setattr(T, "active_orders",
+                        _orders({"orderId": "77"}, {"orderId": "78"}))
+    out = _run(T.find_order(symbol="GEMI-X-UP", order_id="78"))
+    assert out["found"] is True and out["order"]["orderId"] == "78"

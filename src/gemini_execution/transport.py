@@ -99,7 +99,17 @@ async def place(*, symbol: str, side: str, outcome: str, price: str,
         "makerOrCancel": True,               # post-only, enforced by the venue
     }
     if client_order_id:
-        body["clientOrderId"] = client_order_id
+        # Not sent by default, and refused outright unless a caller opts in
+        # with a documented reason: the OrderRequest schema does not admit it.
+        raise VenueError(
+            "clientOrderId is not a documented OrderRequest field -- it "
+            "appears in the RESPONSE schema only. Canary #1 sent one and was "
+            "answered 400. Reconcile by symbol under the one-order invariant "
+            "instead of re-adding it.")
+    unknown = [k for k in body if k not in spec.ORDER_REQUEST_FIELDS]
+    if unknown:
+        raise VenueError("undocumented request field(s) %s; a schema that "
+                         "rejects unknown properties answers 400" % unknown)
     res = await _post(spec.PLACE_PATH, body)
     res["request"] = body
     return res
@@ -158,11 +168,25 @@ async def find_order(*, symbol: str, client_order_id: Optional[str] = None,
     if not res.get("ok"):
         return {"resolved": False, "why": "active-orders read failed",
                 "read": {k: res.get(k) for k in ("status", "classification")}}
-    for o in _orders_of(res):
+    orders = _orders_of(res)
+    for o in orders:
         if order_id is not None and str(o.get(spec.ORDER_ID_FIELD)) == str(order_id):
             return {"resolved": True, "found": True, "order": o}
         if client_order_id and str(o.get("clientOrderId")) == str(client_order_id):
             return {"resolved": True, "found": True, "order": o}
+    if order_id is None and not client_order_id:
+        # SYMBOL-SCOPED, and sound only because of the gate that ran first:
+        # the canary refuses to submit unless this symbol had ZERO active
+        # orders, so a single one found here is necessarily ours. Two are not
+        # attributable and this refuses rather than guess.
+        if len(orders) == 1:
+            return {"resolved": True, "found": True, "order": orders[0],
+                    "matched_by": "symbol under the zero-orders-before gate"}
+        if len(orders) > 1:
+            return {"resolved": False, "found": None,
+                    "why": ("%d active orders on this symbol; without a "
+                            "client id none of them is attributable"
+                            % len(orders))}
     return {"resolved": True, "found": False,
             "why": ("no matching ACTIVE order. It may never have been "
                     "accepted, or it may have already filled or cancelled -- "

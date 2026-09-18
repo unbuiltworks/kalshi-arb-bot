@@ -66,6 +66,16 @@ STATUS_FILLED: Final = "filled"
 STATUS_CANCELLED: Final = "cancelled"
 TERMINAL_STATUSES: Final = (STATUS_FILLED, STATUS_CANCELLED)
 
+#: EXACTLY the fields the documented OrderRequest schema admits. clientOrderId
+#: is NOT among them: it appears in the RESPONSE schema only. Canary #1 sent
+#: one anyway, and a schema that rejects unknown properties answers 400 --
+#: which is the status we received. Nothing may be added here because another
+#: venue accepts it, or because a response carries it.
+ORDER_REQUEST_FIELDS: Final = (
+    "symbol", "orderType", "side", "quantity", "price", "outcome",
+    "stopPrice", "timeInForce", "makerOrCancel",
+)
+
 #: response fields we depend on
 ORDER_ID_FIELD: Final = "orderId"
 STATUS_FIELD: Final = "status"

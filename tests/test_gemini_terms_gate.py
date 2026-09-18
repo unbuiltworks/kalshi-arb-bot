@@ -180,3 +180,50 @@ def test_the_guard_would_actually_catch_it(tmp_path):
     consts = _string_constants(ast.parse(f.read_text()))
     assert ACCEPT_PATH in consts
     assert not any(c.startswith("Docstring") for c in consts)
+
+
+# ------------------------------------------------ clock-derived tickers
+#
+# The transport diagnostic must not depend on a window being ELIGIBLE to
+# trade. Eligibility is a narrow band inside each 5-minute cycle, so tying the
+# diagnostic to it means the question goes unanswered on most runs -- which is
+# what happened on the first attempt (run 35293857313: "no eligible
+# instrument", transport UNRESOLVED, nothing learned).
+
+import datetime as _dt
+
+
+def _at(*a):
+    return _dt.datetime(*a, tzinfo=_dt.timezone.utc).timestamp()
+
+
+@pytest.mark.parametrize("when,expected", [
+    ((2026, 9, 18, 1, 4, 21), "BTC05M2609180105"),
+    ((2026, 9, 18, 1, 0, 1), "BTC05M2609180105"),
+    ((2026, 9, 18, 0, 47, 0), "BTC05M2609180050"),
+    # the rollover: a window that ends after midnight belongs to the next day
+    ((2026, 9, 17, 23, 58, 30), "BTC05M2609180000"),
+])
+def test_the_current_window_is_derived_from_the_clock(when, expected):
+    assert MD.current_btc5m_ticker(_at(*when)) == expected
+
+
+@pytest.mark.parametrize("ticker,expected", [
+    ("BTC05M2609180100", "BTC05M2609180055"),
+    ("BTC05M2609180000", "BTC05M2609172355"),   # back across midnight
+])
+def test_the_sibling_is_the_adjacent_window(ticker, expected):
+    assert MD.sibling_ticker(ticker) == expected
+
+
+@pytest.mark.parametrize("bad", ["", "SHORT", "FED260318", None])
+def test_an_unparseable_ticker_has_no_sibling(bad):
+    assert MD.sibling_ticker(bad) is None
+
+
+def test_the_two_probe_tickers_are_never_the_same():
+    """Two identical tickers would make the probe compare a payload with
+    itself and report INCONCLUSIVE forever."""
+    for mins in (0, 4, 5, 59):
+        tk = MD.current_btc5m_ticker(_at(2026, 9, 18, 1, mins, 0))
+        assert MD.sibling_ticker(tk) != tk
