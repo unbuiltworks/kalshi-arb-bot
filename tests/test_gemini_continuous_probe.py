@@ -390,3 +390,204 @@ def test_the_probe_quotes_at_both_outcomes_own_bids(monkeypatch):
     frames = CP.frames_for(CP.plan(st, inv), "GEMI-BTC05M2609181115-UP")
     got = {f["leg"]: f["frame"]["params"]["price"] for f in frames}
     assert got == {"YES": "0.19", "NO": "0.50"}
+
+
+# ================================================= END-OF-WINDOW BEHAVIOUR
+#
+# The lane set alone would quote to expiry: TTE_policy [0,300] and
+# withdrawal_policy tte_floor_s = 0. Correct for a fidelity shadow, wrong for
+# a probe holding real inventory, because an OPEN or EXTEND placed with
+# seconds left manufactures residual that cannot be complemented -- the leg
+# with measured negative OOS expectancy.
+
+def _leaning():
+    inv = CP.Inventory()
+    inv.apply_fill("YES", "0.01", "0.40", source="t")
+    return inv
+
+
+@pytest.mark.parametrize("tte,phase", [
+    (250, CP.WINDOW_OPEN), (61, CP.WINDOW_OPEN),
+    (59, CP.WINDOW_COMPLETE_ONLY), (31, CP.WINDOW_COMPLETE_ONLY),
+    (29, CP.WINDOW_WITHDRAWN), (0, CP.WINDOW_WITHDRAWN),
+    (None, CP.WINDOW_WITHDRAWN),
+])
+def test_the_window_phase_follows_the_lanes_own_rest_cycle(tte, phase):
+    assert CP.window_phase(tte) == phase
+    assert CP.NO_NEW_OPEN_EXTEND_TTE_S == 2 * CP.STALE_ORDER_S
+    assert CP.WITHDRAW_ALL_TTE_S == CP.STALE_ORDER_S
+
+
+def test_no_new_open_or_extend_without_time_to_complement():
+    p = CP.plan(_state(tte_s=45.0), _leaning())
+    assert [a["action"] for a in p["actions"]] == [CP.COMPLETE]
+    held = [h for h in p["holds"] if h["held_by"] == "END_OF_WINDOW"]
+    assert held and "could not be complemented" in held[0]["why"]
+
+
+def test_open_is_blocked_from_flat_near_the_end_too():
+    p = CP.plan(_state(tte_s=45.0), CP.Inventory())
+    assert p["actions"] == []
+    assert all(h["held_by"] == "END_OF_WINDOW" for h in p["holds"])
+
+
+def test_complete_survives_until_nothing_can_rest():
+    """Reducing residual is the behaviour that should still be trying."""
+    assert [a["action"] for a in CP.plan(_state(tte_s=31.0),
+                                         _leaning())["actions"]] == [CP.COMPLETE]
+
+
+def test_below_one_rest_cycle_everything_is_withdrawn():
+    p = CP.plan(_state(tte_s=29.0), _leaning())
+    assert p["actions"] == [] and p["cancel_all"] is True
+    assert "withdraw every working order" in p["why_no_surface"]
+
+
+def test_an_unknown_tte_withdraws_rather_than_quoting():
+    p = CP.plan(_state(tte_s=None), _leaning())
+    assert p["cancel_all"] is True and p["actions"] == []
+
+
+def test_no_taker_cross_is_introduced_to_flatten():
+    """The most expensive historical exit. Every action stays a BUY at the
+    outcome's own bid under MOC, at every phase."""
+    for tte in (250, 59, 31):
+        p = CP.plan(_state(tte_s=float(tte)), _leaning())
+        for f in CP.frames_for(p, "GEMI-BTC05M2609181055-UP"):
+            params = f["frame"]["params"]
+            assert params["side"] == "BUY"
+            assert params["timeInForce"] == "MOC"
+            assert params["type"] == "LIMIT"
+    import ast
+    import pathlib
+    tree = ast.parse(pathlib.Path(
+        "src/gemini_execution/continuous_probe.py").read_text())
+    docs = {ast.get_docstring(n, clean=False) for n in ast.walk(tree)
+            if isinstance(n, (ast.Module, ast.FunctionDef, ast.ClassDef,
+                              ast.AsyncFunctionDef))}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str):
+            if n.value in docs:
+                continue
+            assert n.value.upper() not in ("SELL", "TAKER", "IOC", "FOK")
+
+
+# ------------------------------------------------- one window, then stop
+
+def test_the_guard_refuses_a_different_contract():
+    g = CP.WindowGuard("GEMI-BTC05M2609181055-UP", auth_id="OWNER-X")
+    with pytest.raises(CP.ProbeStop):
+        g.check_symbol("GEMI-BTC05M2609181100-UP")
+    assert g.state == CP.PROBE_STOPPED
+    assert "does not roll forward" in g.stopped_because
+
+
+def test_the_guard_refuses_a_non_btc5m_contract():
+    with pytest.raises(CP.ProbeStop):
+        CP.WindowGuard("GEMI-ETH05M2609181055-UP", auth_id="OWNER-X")
+
+
+def test_the_probe_stops_when_the_window_withdraws():
+    g = CP.WindowGuard("GEMI-BTC05M2609181055-UP", auth_id="OWNER-X")
+    st = _state(tte_s=10.0, market_key="GEMI-BTC05M2609181055-UP")
+    out = g.step(st, _leaning())
+    assert g.state == CP.PROBE_STOPPED
+    assert "no continuation into the next" in g.stopped_because
+    assert out["actions"] == []
+
+
+def test_stopped_is_terminal_and_quotes_nothing_further():
+    g = CP.WindowGuard("GEMI-BTC05M2609181055-UP", auth_id="OWNER-X")
+    g.stop("because")
+    out = g.step(_state(market_key="GEMI-BTC05M2609181055-UP"),
+                 CP.Inventory())
+    assert out["actions"] == [] and out["probe_state"] == CP.PROBE_STOPPED
+
+
+def test_the_action_budget_stops_the_probe():
+    g = CP.WindowGuard("GEMI-BTC05M2609181055-UP", auth_id="OWNER-X")
+    for _ in range(CP.MAX_ACTIONS):
+        g.record({"action": CP.OPEN, "leg": "YES"})
+    assert g.state == CP.PROBE_STOPPED
+    assert "max_actions" in g.stopped_because
+
+
+# ------------------------------------------------------ restart recovery
+
+def test_a_restart_rebuilds_inventory_from_venue_fills():
+    inv, err = CP.recover("OWNER-X", "GEMI-BTC05M2609181055-UP", [
+        {"leg": "YES", "qty": "0.01", "price": "0.40"},
+        {"leg": "NO", "qty": "0.01", "price": "0.55"}])
+    assert err is None
+    assert inv.yes_qty == D("0.01") and inv.no_qty == D("0.01")
+    assert inv.matched() == D("0.01")
+
+
+def test_an_unreadable_restart_never_assumes_flat():
+    inv, err = CP.recover("OWNER-X", "GEMI-BTC05M2609181055-UP", None)
+    assert inv is None
+    assert "never assumes flat" in err
+
+
+def test_an_empty_fill_list_is_a_real_answer():
+    inv, err = CP.recover("OWNER-X", "GEMI-BTC05M2609181055-UP", [])
+    assert err is None and inv.yes_qty == 0 and inv.no_qty == 0
+
+
+# ---------------------------------------------- settlement, kept separate
+
+def _settled(side="yes"):
+    return {"verdict": "SETTLED", "status": "settled", "resolutionSide": side,
+            "resolvedAt": "2026-09-18T11:55:07Z",
+            "settlementValue": "78153.47",
+            "instrumentSymbol": "GEMI-BTC05M2609181155-UP"}
+
+
+def test_matched_and_residual_are_reported_apart():
+    inv = CP.Inventory()
+    inv.apply_fill("YES", "0.02", "0.40", source="venue")
+    inv.apply_fill("NO", "0.01", "0.55", source="venue")
+    r = CP.settlement_report(inv, _settled("yes"))
+    assert r["matched_pair_economics"]["matched_qty"] == "0.01"
+    assert r["matched_pair_economics"]["effective_pair_cost"] == "0.95"
+    assert r["directional_residual_pnl"]["directional_residual"] == "0.01"
+    assert r["directional_residual_pnl"]["label"] == "DIRECTIONAL_EXPOSURE"
+    assert r["realized"] is None
+    assert r["settlement_cashflow"] is None
+
+
+def test_the_residual_is_never_folded_into_the_matched_leg():
+    inv = CP.Inventory()
+    inv.apply_fill("YES", "0.02", "0.40", source="venue")
+    inv.apply_fill("NO", "0.01", "0.55", source="venue")
+    r = CP.settlement_report(inv, _settled("yes"))
+    assert "residual" not in json.dumps(r["matched_pair_economics"]).lower()
+    assert "NEVER matched economics" in r["directional_residual_pnl"]["labels"]
+
+
+def test_a_losing_residual_is_reported_as_such():
+    inv = CP.Inventory()
+    inv.apply_fill("YES", "0.01", "0.40", source="venue")
+    r = CP.settlement_report(inv, _settled("no"))["directional_residual_pnl"]
+    assert r["redeems_per_unit"] == "0"
+    assert D(r["gross_usd"]) < 0
+
+
+def test_nothing_is_realized_by_settlement_alone():
+    inv = CP.Inventory()
+    inv.apply_fill("YES", "0.01", "0.10", source="venue")
+    inv.apply_fill("NO", "0.01", "0.10", source="venue")
+    r = CP.settlement_report(inv, _settled("yes"))
+    assert r["realized"] is None
+    assert r["matched_pair_economics"]["status"].endswith(
+        "NOT_YET_CASH_CONFIRMED")
+    assert "never summed into one number" in r["accounting_labels"]
+
+
+def test_fees_and_rebates_are_their_own_lines():
+    inv = CP.Inventory()
+    inv.apply_fill("YES", "0.01", "0.40", source="venue")
+    inv.apply_fill("NO", "0.01", "0.55", source="venue")
+    r = CP.settlement_report(inv, _settled(), fees="0.0001")
+    assert r["fees"] == "0.0001"
+    assert r["rebates_rewards"] is None      # not assumed until credited

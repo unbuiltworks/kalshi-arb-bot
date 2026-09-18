@@ -83,6 +83,52 @@ STALE_ORDER_S = 30.0
 #: no market-state update for this long and the probe withdraws and stops
 DEADMAN_S = 20.0
 
+# ------------------------------------------------------- end of window
+#
+# THE LANE SET DOES NOT STOP QUOTING BEFORE EXPIRY. Its TTE_policy is
+# [0, 300] and its withdrawal_policy is WITHDRAW_ON_TTE_FLOOR with
+# tte_floor_s = 0, so the surface would stand right down to settlement. For a
+# FIDELITY shadow that is correct -- it is what was measured. For a probe
+# holding real inventory it is not, because an OPEN or EXTEND placed with
+# seconds left creates residual that has no time left to be complemented, and
+# carried residual is the leg with measured NEGATIVE out-of-sample expectancy
+# (+$1,631 TRAIN, -$12,971 OOS; -$144,065 across the sample).
+#
+# So the probe adds an end-of-window floor. It is NOT a new strategy and not a
+# tuned number: both values come from the lane's own minimum_rest_time.
+#
+#   below 2 x rest  a new OPEN or EXTEND cannot get one rest cycle for itself
+#                   AND one for the complement that would match it, so it can
+#                   only manufacture residual. OPEN and EXTEND stop.
+#                   COMPLETE continues, because it REDUCES residual and is
+#                   exactly what should still be trying to happen here.
+#   below 1 x rest  nothing can meaningfully rest at all. Everything is
+#                   withdrawn and nothing new is quoted.
+#
+# WHAT IS DELIBERATELY NOT DONE: no taker crossing is introduced to flatten.
+# Whatever residual survives is CARRIED and labelled directional exposure. A
+# forced cross would buy a flat book at the far touch, which is the most
+# expensive exit historically measured and would be manufacturing a number
+# rather than observing one.
+NO_NEW_OPEN_EXTEND_TTE_S = 2 * STALE_ORDER_S     # 60.0
+WITHDRAW_ALL_TTE_S = STALE_ORDER_S               # 30.0
+
+WINDOW_OPEN = "WINDOW_OPEN"
+WINDOW_COMPLETE_ONLY = "COMPLETE_ONLY"
+WINDOW_WITHDRAWN = "WITHDRAWN"
+
+
+def window_phase(tte_s: Any) -> str:
+    """Which end-of-window phase this TTE is in. Unknown TTE withdraws."""
+    if tte_s is None:
+        return WINDOW_WITHDRAWN
+    t = float(tte_s)
+    if t < WITHDRAW_ALL_TTE_S:
+        return WINDOW_WITHDRAWN
+    if t < NO_NEW_OPEN_EXTEND_TTE_S:
+        return WINDOW_COMPLETE_ONLY
+    return WINDOW_OPEN
+
 COHORT_PREFIX = "GEMI-BTC05M"
 
 #: the engine's frozen outcome scope is ["Up", "Down"]. Handing it YES/NO
@@ -330,6 +376,20 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
     state = dict(state)
     state["inventory"] = {LEG_TO_OUTCOME["YES"]: str(inv.yes_qty),
                           LEG_TO_OUTCOME["NO"]: str(inv.no_qty)}
+    tte = state.get("tte_s")
+    phase = window_phase(tte)
+    if phase == WINDOW_WITHDRAWN:
+        return {"stop": None, "actions": [], "holds": [],
+                "window_phase": phase, "cancel_all": True,
+                "surface": None,
+                "why_no_surface": (
+                    "tte %s is under one maker-rest cycle (%.1fs): withdraw "
+                    "every working order and quote nothing. Residual that "
+                    "survives is CARRIED and reported as directional "
+                    "exposure; no taker cross is used to flatten it."
+                    % (tte, WITHDRAW_ALL_TTE_S)),
+                "inventory": inv.report()}
+
     got = ENG.desired_surface(state, sp)
     if not got.get("emitted"):
         return {"stop": None, "actions": [], "holds": [],
@@ -355,11 +415,24 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
             holds.append({**base, "action": HOLD, "held_by": "ENVELOPE",
                           "why": breach})
             continue
-        actions.append({**base, "action": classify(r.outcome, inv),
-                        "stage": DECIDED})
+        act = classify(r.outcome, inv)
+        # END OF WINDOW. A COMPLETE reduces residual and stays allowed until
+        # nothing can rest at all; an OPEN or EXTEND with no time left for a
+        # complement can only manufacture the leg with negative expectancy.
+        if phase == WINDOW_COMPLETE_ONLY and act in (OPEN, EXTEND):
+            holds.append({**base, "action": HOLD, "held_by": "END_OF_WINDOW",
+                          "why": ("tte %.1fs is under %.1fs, which is two "
+                                  "maker-rest cycles: a new %s could not be "
+                                  "complemented before expiry"
+                                  % (float(tte), NO_NEW_OPEN_EXTEND_TTE_S,
+                                     act))})
+            continue
+        actions.append({**base, "action": act, "stage": DECIDED})
     return {"stop": None, "actions": actions, "holds": holds,
             "surface": got.get("report"),
             "inventory": inv.report(),
+            "window_phase": phase,
+            "cancel_all": phase == WINDOW_WITHDRAWN,
             "actions_remaining": MAX_ACTIONS - actions_taken}
 
 
@@ -449,4 +522,169 @@ def state_from_venue(symbol: str, tte_s: float, inv: "Inventory", *,
             "Down": {"bid": b["no"]["bid"], "ask": b["no"]["ask"],
                      "tick": tick}},
         "book": b,
+    }
+
+
+# ------------------------------------------------- one window, and then stop
+
+PROBE_RUNNING, PROBE_STOPPED = "RUNNING", "STOPPED"
+
+
+class WindowGuard:
+    """Binds the probe to ONE BTC5m contract and makes a second impossible.
+
+    WHY THIS EXISTS AS AN OBJECT. Until it did, "stops after exactly one
+    contract" and "cannot roll residual into the next window" were properties
+    of the ENVELOPE DESCRIPTION and of nothing that runs. `plan()` took an
+    `actions_taken` count from a caller that did not exist. A description is
+    not a control.
+
+    It refuses rather than adapts: a different symbol, an exhausted action
+    budget or a withdrawn window all move it to STOPPED, and STOPPED is
+    terminal. Nothing here re-arms, re-authorizes or selects a next contract.
+    """
+
+    def __init__(self, symbol: str, *, auth_id: str) -> None:
+        if not str(symbol).startswith(COHORT_PREFIX):
+            raise ProbeStop("%s is not a %s contract" % (symbol, COHORT_PREFIX))
+        self.symbol = str(symbol)
+        self.auth_id = str(auth_id)
+        self.state = PROBE_RUNNING
+        self.actions_taken = 0
+        self.stopped_because: Optional[str] = None
+        self.log: List[Dict[str, Any]] = []
+
+    def stop(self, why: str) -> None:
+        if self.state != PROBE_STOPPED:
+            self.state = PROBE_STOPPED
+            self.stopped_because = why
+            self.log.append({"event": "STOP", "why": why})
+
+    def check_symbol(self, symbol: str) -> None:
+        """A different contract is the ONE thing that must never be quietly
+        accepted: it is how a one-window probe becomes a continuous one."""
+        if str(symbol) != self.symbol:
+            self.stop("symbol changed from %s to %s; this authorization is "
+                      "for ONE contract and does not roll forward"
+                      % (self.symbol, symbol))
+            raise ProbeStop(self.stopped_because or "symbol changed")
+
+    def record(self, action: Mapping[str, Any]) -> None:
+        self.actions_taken += 1
+        self.log.append({"event": DECIDED, "action": dict(action)})
+        if self.actions_taken >= MAX_ACTIONS:
+            self.stop("max_actions %d reached" % MAX_ACTIONS)
+
+    def step(self, state: Mapping[str, Any], inv: Inventory,
+             **kw: Any) -> Dict[str, Any]:
+        """One turn, with the window binding enforced around it."""
+        if self.state == PROBE_STOPPED:
+            return {"stop": self.stopped_because or "stopped", "actions": [],
+                    "holds": [], "surface": None, "probe_state": self.state}
+        self.check_symbol(state.get("market_key") or "")
+        out = plan(state, inv, actions_taken=self.actions_taken, **kw)
+        if out.get("window_phase") == WINDOW_WITHDRAWN:
+            self.stop("window withdrawn at tte %s; one contract only, no "
+                      "continuation into the next" % state.get("tte_s"))
+        if out.get("stop"):
+            self.stop(out["stop"])
+        out["probe_state"] = self.state
+        out["actions_taken"] = self.actions_taken
+        return out
+
+
+def recover(auth_id: str, symbol: str, venue_fills: Optional[List[Mapping]],
+            ) -> Tuple[Optional[Inventory], Optional[str]]:
+    """Rebuild inventory from AUTHORITATIVE fills after a restart.
+
+    A restart must never look flat. `venue_fills is None` means the read did
+    not succeed, which is UNREADABLE, not empty -- and unreadable stops the
+    probe. An empty LIST is a real answer: the venue says there were no fills.
+    """
+    if venue_fills is None:
+        return None, ("venue fills unreadable on restart; inventory cannot be "
+                      "established and a restart never assumes flat")
+    inv = Inventory()
+    for f in venue_fills:
+        leg = str(f.get("leg") or
+                  ("YES" if str(f.get("outcome", "")).lower() == "yes"
+                   else "NO"))
+        inv.apply_fill(leg, f.get("qty") or f.get("filledQuantity"),
+                       f.get("price"), source="venue_restart")
+    return inv, None
+
+
+# --------------------------------------------------------- settlement
+
+def settlement_report(inv: Inventory, resolution: Mapping[str, Any],
+                      *, fees: Any = None,
+                      rebates_confirmed: Any = None) -> Dict[str, Any]:
+    """Matched-pair economics and directional-residual P&L, kept APART.
+
+    The residual is labelled DIRECTIONAL_EXPOSURE and never folded into the
+    matched leg. Nothing is REALIZED here: a settled contract states what it
+    resolved to, and only a venue-confirmed cash movement makes it realized.
+    """
+    side = resolution.get("resolutionSide")
+    settled = resolution.get("verdict") == "SETTLED"
+    matched = inv.matched()
+    pair = inv.effective_matched_pair_cost()
+    res = inv.residual()
+
+    matched_econ = None
+    if matched > 0 and pair is not None:
+        # a matched pair redeems at exactly 1.00 per unit whichever side wins
+        matched_econ = {
+            "matched_qty": str(matched),
+            "effective_pair_cost": str(pair),
+            "gross_per_unit_vs_par": str(D("1") - pair),
+            "gross_usd": str((D("1") - pair) * matched),
+            "status": ("SETTLED_NOT_YET_CASH_CONFIRMED" if settled
+                       else "PENDING_SETTLEMENT"),
+            "labels": ("a cost basis against par. NOT realized until the "
+                       "venue's own cash movement is read back."),
+        }
+
+    residual_econ = {
+        "directional_residual": str(res),
+        "leg": (None if res == 0 else ("YES" if res > 0 else "NO")),
+        "label": "DIRECTIONAL_EXPOSURE",
+        "resolution_side": side,
+        "outcome_known": settled,
+        "labels": (
+            "carried directional exposure, NEVER matched economics. The "
+            "historical measurement of this leg is negative out of sample "
+            "(+$1,631 TRAIN, -$12,971 OOS), so it is reported on its own and "
+            "never netted into the matched result."),
+    }
+    if settled and res != 0 and side in ("yes", "no"):
+        won = (res > 0 and side == "yes") or (res < 0 and side == "no")
+        qty = abs(res)
+        basis = (inv.avg_yes() if res > 0 else inv.avg_no()) or D("0")
+        residual_econ["redeems_per_unit"] = "1" if won else "0"
+        residual_econ["cost_basis_per_unit"] = str(basis)
+        residual_econ["gross_usd"] = str(((D("1") if won else D("0")) - basis)
+                                         * qty)
+        residual_econ["status"] = "SETTLED_NOT_YET_CASH_CONFIRMED"
+
+    return {
+        "label": "%s/settlement" % LABEL,
+        "contract": resolution.get("instrumentSymbol"),
+        "settlement": {k: resolution.get(k) for k in
+                       ("verdict", "status", "resolutionSide", "resolvedAt",
+                        "settlementValue")},
+        "inventory": inv.report(),
+        "matched_pair_economics": matched_econ,
+        "directional_residual_pnl": residual_econ,
+        "fees": (None if fees is None else str(fees)),
+        "rebates_rewards": (None if rebates_confirmed is None
+                            else str(rebates_confirmed)),
+        "settlement_cashflow": None,
+        "realized": None,
+        "accounting_labels": (
+            "matched-pair economics, directional-residual P&L, fees, rebates "
+            "and settlement cashflow are SEPARATE lines and are never summed "
+            "into one number here. realized stays null until a venue-confirmed "
+            "cash movement is read; a cost basis, a resolution side and a "
+            "mark are none of them realized."),
     }
