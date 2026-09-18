@@ -7,38 +7,46 @@ Project `arb-ev-wallet-shadow` (`50fb7357-…`), environment `production`
 **Read-only. NOTHING WAS STOPPED, SCALED, DELETED OR REDEPLOYED.** Classification
 first, as instructed.
 
-## The headline: storage is provisioned ~9x larger than it is used
+## CORRECTION (17:1xZ): my first headline was wrong
 
-Every volume is provisioned at **50 GB**. Measured usage (1-hour averaging
-window):
+I first reported "700 GB provisioned, 76.1 GB used, 624 GB paid-for and empty"
+and called it the largest line on the bill. **That is not a cost.** Railway's
+own reference says:
 
-| service | used GB | of 50 |
-|---|---:|---:|
-| pmus-ws-evidence-recorder | 27.12 | 54% |
-| l5-exec-shadow | 24.83 | 50% |
-| pmus-sports-forward-collector | 4.24 | 8% |
-| l5-5m-recorder | 3.67 | 7% |
-| l5-v1-1-shadow | 3.17 | 6% |
-| l5-v1-shadow | 2.38 | 5% |
-| pmus-shadow-breadth | 1.61 | 3% |
-| kalshi-l5-shadow | 1.60 | 3% |
-| gemini-5m-collector | 1.52 | 3% |
-| l5-shadow-loop | 1.37 | 3% |
-| gemini-l5-shadow | 1.34 | 3% |
-| pmus-spring-l5-probe (HALTED) | 1.30 | 3% |
-| l5-fidelity-runner | 1.09 | 2% |
-| l5-r1-probe (HALTED) | 0.84 | 2% |
+> "You are only charged for the amount of storage **used** by your volumes."
+> "Down-sizing a volume is not currently supported, but increasing size is
+> supported"
 
-**700 GB provisioned, 76.1 GB used — 10.9%. 624 GB is paid-for and empty.**
+So the 50 GB figure is simply the **Pro-plan default volume size**, not an
+over-provision anybody chose, the idle 624 GB is billed at nothing, and
+shrinking is both unnecessary and unsupported. The recommendation to shrink
+twelve volumes is withdrawn entirely.
 
-Two services account for 68% of all bytes actually stored, and both are ones we
-want. The other twelve hold ~1–4 GB each on 50 GB volumes.
+Storage actually billed is the **76.1 GB used**, and two services we want are
+68% of it: `pmus-ws-evidence-recorder` (27.1 GB) and `l5-exec-shadow` (24.8 GB).
+There is no storage saving available here worth pursuing.
 
-This is almost certainly the single largest line on the bill, and it is
-addressable without stopping a single service. Caveat worth checking before
-acting: Railway volumes generally resize UP easily and DOWN not at all, so the
-realistic move may be create-small / migrate / delete-large per service rather
-than an in-place shrink. **Not attempted.**
+### What the measured numbers actually say
+
+Sampling settles which services cost anything at all:
+
+| service | class | CPU | memory | running? |
+|---|---|---:|---:|---|
+| `r5ft-recon-7b75689c-buildcheck` | ONE-OFF | 0.0 | 0.0 GB | **no** |
+| `polymarket-l5-replay-once` | ONE-OFF (crashed) | 0.0 | 0.0 GB | **no** |
+| `kalshi-incentive-shadow` | SUPERSEDED (cron) | 0.0023 | **0.080 GB** | **yes** |
+
+Two corrections follow from that.
+
+**The ONE-OFF services cost nothing.** They are not running -- zero CPU and
+zero memory across all 61 samples. Deleting them is hygiene and clarity, not
+saving. That also means they are not urgent.
+
+**The cron-dormant services are NOT dormant.** A schedule of `0 0 1 1 *` fires
+once a year, but the containers are up continuously at ~80 MB each. Eleven of
+them is roughly **0.9 GB of memory held around the clock** for work that runs
+on January 1. This is the one genuine, ongoing saving in the project, and it is
+the opposite of where I first pointed.
 
 ## Classification
 
@@ -96,12 +104,45 @@ Two whose latest deployment **CRASHED** and was never revived:
 
 ## What I would do next, in cost order
 
-1. **Shrink the 12 over-provisioned volumes.** 624 GB idle, no service stops.
-   Biggest saving, lowest risk. Verify the resize-down constraint first.
-2. **Delete the 7 ONE-OFF services.** No volumes, no dependents, two already
-   crashed. Pure cleanup.
-3. **Stop the 11 cron-dormant SUPERSEDED services.** They fire once a year.
-4. **Resolve the 4 UNKNOWNs** before touching them.
+1. **Stop the 11 cron-family SUPERSEDED services.** ~0.9 GB of memory held
+   continuously for work scheduled once a year. This is the only material
+   ongoing saving found. None has a volume; none is referenced by running code.
+2. **Delete the 7 ONE-OFF services.** Zero saving -- they are already not
+   running -- but they are dead surface that reads as live. Two crashed weeks
+   ago; five are buildchecks on merged or abandoned branches.
+3. **Resolve the 4 UNKNOWNs** before touching them.
+4. **Volumes: no action.** Billed on used bytes, and downsizing is unsupported.
 
-Nothing in this list is actioned. Stopping anything is the owner's call, and
 `pmus-spring-l5-probe` and `l5-r1-probe` are excluded from all of it.
+`pmus-spring-l5-probe` additionally holds a preserved position
+(`aec-atp-blaell-hirmor-2026-09-13`) and a long settlement-pending list on its
+volume, so it is not a deletion candidate on any timescale.
+
+Nothing here is actioned. Stopping anything is the owner's call.
+
+## Why `pmus-spring-l5-probe` consumes CPU while halted
+
+Answered from its own logs. Every ~12.4 minutes it wakes, runs a shutdown
+cycle and emits:
+
+```
+PMUS_L5_CAMPAIGN {"kind":"shutdown_idle","verdict":"SHUTDOWN_VERIFIED",
+                  "held_preserved":["aec-atp-blaell-hirmor-2026-09-13"], ...}
+PMUS_MIGRATION_CLOSE {"stage":"migration_close",
+                      "state":"REFUSED_PRECONDITION","flat":false, ...}
+```
+
+It is **not trading**. It is a verified-shutdown loop that also retries a
+`migration_close` its own preconditions refuse, forever. That wake-verify burst
+every 12 minutes is the CPU: current 0, average 0.45, peak 1.24 vCPU, with disk
+flat at 1.300 GB (1,300,217,856 -> 1,300,234,240 bytes over the hour, i.e. not
+writing). The halt is holding and re-asserting itself on every cycle.
+
+The endless refused retry is wasted work, but stopping it is not free: the
+service holds preserved inventory and a pending-settlement ledger. Left alone.
+
+## Relationship to the 2026-09-15 audit
+
+`deploy/DEPLOYMENT_COST_AUDIT.md` addressed **build** cost -- push fan-out,
+fixed with watch patterns. This one addresses **runtime** cost. They are
+complementary; nothing here contradicts it.
