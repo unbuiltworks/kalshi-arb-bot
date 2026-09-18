@@ -46,6 +46,24 @@ def event_ticker(symbol: str) -> Optional[str]:
     return parts[1] if len(parts) >= 3 else None
 
 
+def sibling_ticker(ticker: str, minutes: int = 5) -> Optional[str]:
+    """The ticker of an ADJACENT window, e.g. BTC05M2609180100 -> ...0055.
+
+    Used to give a read-only probe two different values for the same field,
+    which is the only way to tell "the venue honoured the field" from "the
+    endpoint ignores it".
+    """
+    if not ticker or len(ticker) < 10:
+        return None
+    prefix, stamp = ticker[:-10], ticker[-10:]
+    try:
+        t = datetime.strptime(stamp, "%y%m%d%H%M").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    from datetime import timedelta
+    return prefix + (t - timedelta(minutes=minutes)).strftime("%y%m%d%H%M")
+
+
 def fetch_event(ticker: str, *, timeout: float = 15.0) -> Dict[str, Any]:
     """PUBLIC read of one event and its contracts."""
     from src.l5_shadow import venues as V

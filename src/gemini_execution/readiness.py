@@ -89,8 +89,10 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
     # take no fields at all, so the classic empty-body form looked correct
     # right up to the first request that carried any.
     from src.gemini_execution import transport as T
-    xport = (await T.probe_field_transport(sym) if sym
-             else {"verdict": "UNRESOLVED", "note": "no eligible instrument"})
+    tk_a = MD.event_ticker(sym) if sym else None
+    tk_b = MD.sibling_ticker(tk_a) if tk_a else None
+    xport = (await T.probe_field_transport(tk_a, tk_b) if (tk_a and tk_b)
+             else {"verdict": "UNRESOLVED", "why": "no eligible instrument"})
 
     gates = {
         "preflight_ok": bool(pf.get("ok")),
@@ -103,8 +105,11 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
         "quantity_valid": q_ok.get("valid") is True,
         "price_valid": p_ok.get("valid") is True,
         "terms_accepted": tstat.get("hasAcceptedLatest") is True,
-        "request_transport_accepted": xport.get("verdict") in (
-            "JSON_BODY_REQUIRED", "BOTH_ACCEPTED"),
+        # OUR shape works -- which is the gate. Which shape the venue reads
+        # the field OUT of is a separate question, carried as `verdict` and
+        # deliberately not collapsed into a pass/fail.
+        "request_transport_accepted": bool(
+            (xport.get("json_a") or {}).get("status") == 200),
     }
     blocking = [k for k, v in gates.items() if v is not True
                 and k != "VENUE_WRITE_PATH"]

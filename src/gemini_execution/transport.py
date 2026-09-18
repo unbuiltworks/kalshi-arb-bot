@@ -116,11 +116,26 @@ async def cancel(order_id: Any, *, now: Optional[float] = None
 
 async def active_orders(symbol: Optional[str] = None) -> Dict[str, Any]:
     """POST /v1/prediction-markets/orders/active. A READ; no arm required,
-    because reconciliation must work while disarmed."""
+    because reconciliation must work while disarmed.
+
+    It asks in the documented JSON-body shape and, if the venue rejects that,
+    asks again in the classic shape. Which one this venue wants is exactly
+    what is not yet established, and a reconciliation read is the wrong place
+    to find out the hard way: an unreadable read here is what makes an
+    ambiguous submission unresolvable.
+    """
     params: Dict[str, Any] = {}
     if symbol:
         params["symbol"] = symbol
-    return await _post(spec.ACTIVE_PATH, params or None)
+    res = await _post(spec.ACTIVE_PATH, params or None, json_body=True)
+    if res.get("ok"):
+        res["request_shape"] = "json_body"
+        return res
+    alt = await _post(spec.ACTIVE_PATH, params or None, json_body=False)
+    alt["request_shape"] = "header_payload"
+    alt["json_body_attempt"] = {k: res.get(k) for k in
+                                ("status", "classification", "error")}
+    return alt
 
 
 def _orders_of(res: Mapping[str, Any]) -> list:
@@ -175,42 +190,66 @@ async def cancel_and_confirm(order_id: Any, symbol: str, *,
                     "unreadable cancel is not a cancellation")}
 
 
-async def probe_field_transport(symbol: str) -> Dict[str, Any]:
-    """Which request shape does a fields-carrying prediction-markets POST need?
+VOLUME_PATH = "/v1/prediction-markets/metrics/volume"
 
-    READ-ONLY, and deliberately so: it asks the question on the active-orders
-    endpoint, which takes the same kind of JSON body as the write path and
-    changes nothing. It is the only way to establish the transport without
-    spending an authorization on it.
 
-    Both forms are sent with identical signed auth headers, so the only
-    variable is where the fields live. Reading `symbol` back from an empty
-    account proves nothing about filtering -- what is being compared is
-    whether the venue ACCEPTS each shape.
+async def probe_field_transport(ticker_a: str, ticker_b: str) -> Dict[str, Any]:
+    """Does the venue read a request field out of X-GEMINI-PAYLOAD, or only
+    out of a JSON body? READ-ONLY, and a genuine discriminator.
+
+    WHY THE OBVIOUS PROBE IS NOT ONE. Asking active-orders both ways returns
+    200 both ways and settles nothing: its `symbol` is an OPTIONAL filter, so
+    an empty body is a perfectly valid request meaning "all orders", and on an
+    empty account both answers are the same empty list. A first version of
+    this function did exactly that and reported BOTH_ACCEPTED, which reads
+    like a finding and is not one.
+
+    So it asks metrics/volume, whose eventTicker actually SELECTS something,
+    with two different tickers:
+
+      json(A) == json(B)   the endpoint ignores the field -> INCONCLUSIVE,
+                           the probe is wrong, not the venue
+      header(A) == json(A) the field WAS read from the signed header
+      otherwise            only the body is read, which is what would have
+                           silently emptied canary #1's order
     """
-    body = {"symbol": symbol, "limit": 50, "offset": 0}
-    as_json = await _post(spec.ACTIVE_PATH, dict(body), json_body=True)
-    as_header = await _post(spec.ACTIVE_PATH, dict(body), json_body=False)
-    verdict = "UNRESOLVED"
-    if as_json.get("ok") and not as_header.get("ok"):
-        verdict = "JSON_BODY_REQUIRED"
-    elif as_json.get("ok") and as_header.get("ok"):
-        verdict = "BOTH_ACCEPTED"
-    elif as_header.get("ok") and not as_json.get("ok"):
-        verdict = "HEADER_PAYLOAD_REQUIRED"
-    elif as_json.get("status") is None and as_header.get("status") is None:
-        verdict = "UNREADABLE"
+    async def ask(tk, json_body):
+        r = await _post(VOLUME_PATH, {"eventTicker": tk}, json_body=json_body)
+        return r
+
+    ja, jb, ha = (await ask(ticker_a, True), await ask(ticker_b, True),
+                  await ask(ticker_a, False))
+    brief = lambda r: {k: r.get(k) for k in                      # noqa: E731
+                       ("status", "classification", "error")}
+    out = {"path": VOLUME_PATH, "ticker_a": ticker_a, "ticker_b": ticker_b,
+           "json_a": brief(ja), "json_b": brief(jb), "header_a": brief(ha)}
+
+    if not (ja.get("ok") and jb.get("ok")):
+        out["verdict"] = ("NEITHER_ACCEPTED" if ha.get("status") is not None
+                          and not ha.get("ok") else "UNREADABLE")
+        out["why"] = ("the JSON-body reads did not succeed, so nothing can be "
+                      "concluded about the header form")
+        return out
+    if ja.get("body") == jb.get("body"):
+        out["verdict"] = "INCONCLUSIVE"
+        out["why"] = ("two different tickers returned the same payload, so "
+                      "this endpoint does not discriminate on the field and "
+                      "cannot answer the question")
+        return out
+    out["field_is_honoured"] = True
+    if ha.get("ok") and ha.get("body") == ja.get("body"):
+        out["verdict"] = "HEADER_PAYLOAD_ALSO_READ"
+        out["why"] = ("the venue read eventTicker out of the signed header, "
+                      "so an empty body does NOT by itself explain the 400")
+    elif ha.get("ok") and ha.get("body") == jb.get("body"):
+        out["verdict"] = "JSON_BODY_REQUIRED"
+        out["why"] = "the header form returned the OTHER ticker's payload"
+    elif ha.get("ok"):
+        out["verdict"] = "JSON_BODY_REQUIRED"
+        out["why"] = ("the header form succeeded but returned neither "
+                      "ticker's payload, so the field was not applied")
     else:
-        verdict = "NEITHER_ACCEPTED"
-    return {
-        "verdict": verdict,
-        "path": spec.ACTIVE_PATH,
-        "json_body": {k: as_json.get(k) for k in
-                      ("status", "classification", "error")},
-        "header_payload": {k: as_header.get(k) for k in
-                           ("status", "classification", "error")},
-        "note": ("a READ endpoint that takes the same kind of JSON body as "
-                 "the write path. BOTH_ACCEPTED means the venue tolerates "
-                 "either and the transport is not what rejected canary #1; "
-                 "JSON_BODY_REQUIRED means it is."),
-    }
+        out["verdict"] = "JSON_BODY_REQUIRED"
+        out["why"] = ("the header form was rejected outright while the same "
+                      "field in a JSON body was accepted")
+    return out

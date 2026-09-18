@@ -91,6 +91,18 @@ async def no_existing_canary_exposure(symbol: str) -> Dict[str, Any]:
     """Owner gate: no existing canary order or residual before submitting."""
     from src.gemini_execution import transport as T
     active = await T.active_orders(symbol)
+    if not active.get("ok"):
+        # UNREADABLE IS NOT EMPTY. _orders_of returns [] for a failed read as
+        # much as for an empty account, so without this the gate reports
+        # "clear" on a read that never happened -- and "0 active orders" in
+        # the run-6 record is, for that reason, not evidence the read worked.
+        return {"clear": False,
+                "why": "active orders unreadable (%s %s); an unread order "
+                       "book is not an empty one"
+                       % (active.get("status"), active.get("classification")),
+                "read": {k: active.get(k) for k in
+                         ("status", "classification", "error",
+                          "request_shape", "json_body_attempt")}}
     orders = T._orders_of(active)
     from src.gemini_prediction_auth import private_rest_request
     try:

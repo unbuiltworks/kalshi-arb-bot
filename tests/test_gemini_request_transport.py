@@ -164,46 +164,146 @@ def test_a_disarmed_place_never_reaches_the_wire(wire, monkeypatch):
 
 
 # ------------------------------------------------- the read-only discriminator
+#
+# The first version of this probe asked active-orders both ways, got 200 both
+# ways, and reported BOTH_ACCEPTED. That reads like a finding and is not one:
+# active-orders' `symbol` is an OPTIONAL filter, so an empty body is a valid
+# request meaning "all orders", and on an empty account both answers are the
+# same empty list. These tests pin the replacement, which asks a field that
+# actually selects something -- and which reports INCONCLUSIVE rather than
+# inventing an answer when it cannot tell.
 
-@pytest.mark.parametrize("js,hdr,verdict", [
-    (200, 400, "JSON_BODY_REQUIRED"),
-    (200, 200, "BOTH_ACCEPTED"),
-    (400, 200, "HEADER_PAYLOAD_REQUIRED"),
-    (400, 400, "NEITHER_ACCEPTED"),
-])
-def test_the_transport_probe_classifies_each_outcome(monkeypatch, js, hdr,
-                                                     verdict):
+def _probe(monkeypatch, table):
+    """table: (ticker, json_body) -> dict merged over a 200 default."""
+    seen = []
+
+    async def fake(path, params=None, timeout=15.0, *, json_body=True):
+        tk = (params or {}).get("eventTicker")
+        seen.append((path, tk, json_body))
+        r = dict(table.get((tk, json_body), {}))
+        r.setdefault("status", 200)
+        r.setdefault("ok", r["status"] == 200)
+        r.setdefault("classification", "ACCEPTED" if r["ok"] else "REJECTED")
+        return r
+
+    monkeypatch.setattr(T, "_post", fake)
+    return seen
+
+
+def test_a_header_form_that_returns_the_same_payload_means_it_was_read(
+        monkeypatch):
+    """The venue read the field out of the signed header, so an empty body
+    does NOT by itself explain the 400."""
+    _probe(monkeypatch, {("A", True): {"body": {"v": 1}},
+                         ("B", True): {"body": {"v": 2}},
+                         ("A", False): {"body": {"v": 1}}})
+    out = _run(T.probe_field_transport("A", "B"))
+    assert out["verdict"] == "HEADER_PAYLOAD_ALSO_READ"
+    assert "does NOT by itself explain" in out["why"]
+
+
+def test_a_header_form_that_ignores_the_field_means_the_body_is_required(
+        monkeypatch):
+    _probe(monkeypatch, {("A", True): {"body": {"v": 1}},
+                         ("B", True): {"body": {"v": 2}},
+                         ("A", False): {"body": {"v": 2}}})
+    assert _run(T.probe_field_transport("A", "B"))["verdict"] == \
+        "JSON_BODY_REQUIRED"
+
+
+def test_a_rejected_header_form_means_the_body_is_required(monkeypatch):
+    _probe(monkeypatch, {("A", True): {"body": {"v": 1}},
+                         ("B", True): {"body": {"v": 2}},
+                         ("A", False): {"status": 400}})
+    assert _run(T.probe_field_transport("A", "B"))["verdict"] == \
+        "JSON_BODY_REQUIRED"
+
+
+def test_an_endpoint_that_ignores_the_field_is_inconclusive_not_a_verdict(
+        monkeypatch):
+    """The exact trap the first probe fell into: identical answers are the
+    absence of a discriminator, never evidence that both shapes work."""
+    _probe(monkeypatch, {("A", True): {"body": {"v": 9}},
+                         ("B", True): {"body": {"v": 9}},
+                         ("A", False): {"body": {"v": 9}}})
+    out = _run(T.probe_field_transport("A", "B"))
+    assert out["verdict"] == "INCONCLUSIVE"
+    assert "field_is_honoured" not in out
+
+
+def test_an_unreadable_venue_is_never_a_verdict(monkeypatch):
+    _probe(monkeypatch, {("A", True): {"status": None, "ok": False},
+                         ("B", True): {"status": None, "ok": False},
+                         ("A", False): {"status": None, "ok": False}})
+    out = _run(T.probe_field_transport("A", "B"))
+    assert out["verdict"] in ("UNREADABLE", "NEITHER_ACCEPTED")
+    assert out["verdict"] not in ("HEADER_PAYLOAD_ALSO_READ",
+                                 "JSON_BODY_REQUIRED")
+
+
+def test_the_probe_only_touches_a_read_path(monkeypatch):
+    seen = _probe(monkeypatch, {("A", True): {"body": {"v": 1}},
+                                ("B", True): {"body": {"v": 2}},
+                                ("A", False): {"body": {"v": 1}}})
+    _run(T.probe_field_transport("A", "B"))
+    paths = {p for p, _, _ in seen}
+    assert paths == {T.VOLUME_PATH}
+    assert not (paths & set(spec.MUTATION_PATHS))
+
+
+def test_the_probe_compares_two_different_tickers(monkeypatch):
+    seen = _probe(monkeypatch, {("A", True): {"body": {"v": 1}},
+                                ("B", True): {"body": {"v": 2}},
+                                ("A", False): {"body": {"v": 1}}})
+    _run(T.probe_field_transport("A", "B"))
+    assert sorted({tk for _, tk, _ in seen}) == ["A", "B"]
+    assert ("%s" % T.VOLUME_PATH, "A", False) in seen
+
+
+# ----------------------------------------------- the reconciliation read
+
+def test_active_orders_falls_back_when_the_documented_shape_is_rejected(
+        monkeypatch):
+    """An unreadable reconciliation read is what makes an ambiguous
+    submission unresolvable, so it asks both ways before giving up."""
     calls = []
 
     async def fake(path, params=None, timeout=15.0, *, json_body=True):
         calls.append(json_body)
-        st = js if json_body else hdr
-        return {"status": st, "ok": st == 200,
-                "classification": "ACCEPTED" if st == 200 else "REJECTED"}
+        return ({"status": 400, "ok": False} if json_body
+                else {"status": 200, "ok": True, "body": []})
 
     monkeypatch.setattr(T, "_post", fake)
-    out = _run(T.probe_field_transport("GEMI-X-UP"))
-    assert out["verdict"] == verdict
-    assert sorted(calls) == [False, True]     # both shapes, exactly once each
+    out = _run(T.active_orders("GEMI-X-UP"))
+    assert out["ok"] is True
+    assert out["request_shape"] == "header_payload"
+    assert out["json_body_attempt"]["status"] == 400
+    assert calls == [True, False]
 
 
-def test_the_transport_probe_only_touches_a_read_path(monkeypatch):
-    seen = []
+def test_active_orders_does_not_ask_twice_when_the_first_shape_works(
+        monkeypatch):
+    calls = []
 
     async def fake(path, params=None, timeout=15.0, *, json_body=True):
-        seen.append(path)
-        return {"status": 200, "ok": True}
+        calls.append(json_body)
+        return {"status": 200, "ok": True, "body": []}
 
     monkeypatch.setattr(T, "_post", fake)
-    _run(T.probe_field_transport("GEMI-X-UP"))
-    assert set(seen) == {spec.ACTIVE_PATH}
-    assert not any(p in spec.MUTATION_PATHS for p in seen)
+    assert _run(T.active_orders("GEMI-X-UP"))["request_shape"] == "json_body"
+    assert calls == [True]
 
 
-def test_an_unreachable_venue_is_unresolved_not_a_verdict(monkeypatch):
-    async def fake(path, params=None, timeout=15.0, *, json_body=True):
-        return {"status": None, "ok": False, "classification": T.AMBIGUOUS,
-                "error": "ConnectError"}
+def test_an_unreadable_order_book_is_not_an_empty_one(monkeypatch):
+    """_orders_of returns [] for a FAILED read as much as for an empty
+    account. Without the ok check the exposure gate reports clear on a read
+    that never happened."""
+    from src.gemini_execution import run_canary as RC
 
-    monkeypatch.setattr(T, "_post", fake)
-    assert _run(T.probe_field_transport("GEMI-X-UP"))["verdict"] == "UNREADABLE"
+    async def fake_active(symbol=None):
+        return {"ok": False, "status": 401, "classification": "REJECTED"}
+
+    monkeypatch.setattr(T, "active_orders", fake_active)
+    out = _run(RC.no_existing_canary_exposure("GEMI-X-UP"))
+    assert out["clear"] is False
+    assert "unreadable" in out["why"]
