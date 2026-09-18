@@ -4,12 +4,21 @@ Operational north star, as of **2026-09-17**. Read with `L5_STATUS.md`, which
 preserves evidence and history; this file states what we are doing now. Never
 rewrite historical evidence to fit current priorities.
 
-> **If you are a fresh session, read this first.** As of **2026-09-17T10:53Z
-> the live executor is RUNNING and ARMED** under a current owner authorization.
-> Anything below or in `L5_STATUS.md` describing it as HALTED, unauthorized, or
-> blocked on an arming decision is **the superseded 2026-09-16 state**. Verify
-> against Railway before acting on any of it — runtime evidence outranks these
-> files. The old R1→R2→R3 rung/campaign program is still **retired**; do not
+> **If you are a fresh session, read this first.** As of **2026-09-18T12:00Z**
+> the live money executor `l5-r1-probe` is **STOPPED and HALTED**. It ended
+> itself at 2026-09-17T13:36:57Z with `CAMPAIGN_STOP:HALT`, its mandate
+> **expired at 2026-09-18T00:41:20Z**, and `HALT` was restored on 2026-09-18.
+> Anything below, or in `L5_STATUS.md`, describing it as RUNNING, ARMED or
+> under a current authorization is **the superseded 2026-09-17 state**.
+> Verify against Railway before acting on any of it — runtime evidence
+> outranks these files.
+>
+> **Both P0 lanes are execution lanes now, and they run in parallel.** PMUS is
+> past its tape blocker and is proving EVIDENCED_FILL; Gemini is past its
+> transport question and is one reviewed module away from a bounded live
+> probe. Gemini is **not** "P1, collecting" — that line was stale and is gone.
+>
+> The old R1→R2→R3 rung/campaign program is still **retired**; do not
 > resurrect it, and do not clear a latch or set a dual key to "unblock"
 > anything.
 
@@ -26,42 +35,89 @@ Stop expanding infrastructure unless it is required to reach that.
 
 ## P0 — Polymarket US sports
 
-### Live money executor: RUNNING AND ARMED (2026-09-17)
+### Live money executor: STOPPED AND HALTED (2026-09-18)
 
 `l5-r1-probe` (`6111a5d4-a2d9-4762-a057-31f02d07586f`), deployment
-**`75c3cef1-6e45-4ba9-9e69-5f77de1387bf`**, serving SHA
-**`2368fb6fe4c0eb71eda81467c514cb4b3799336c`** — verified from the runtime
-`campaign_start` record, not from a build result. `mode: ARMED`.
-
-**Authorization: `OWNER-2026-09-17-CP1-LIVE-SHORT-HORIZON-COHORT`**, authorized
-2026-09-17T10:46:53Z, **expires 2026-09-17T22:46:53Z**.
+**`490ce8ac-4a73-4776-b7fa-0a5608f8d285`**, commit `64909c5cb0b6`,
+`restartPolicyType: NEVER`. From the runtime `campaign_end` record, not from a
+build result:
 
 ```
-cohort *      concurrency 1      total markets 10
-$5.00/market  $15.00 campaign    residual 3      daily stop -$6.00
-target $0.10  max leg $0.125     k 0.00619       maker/post-only
+ended      2026-09-17T13:36:57Z   CAMPAIGN_STOP:HALT
+sessions   21    filled_markets 0    settled 10    pending 1
+realized   -$0.0832               realized_confirmed_by_venue true
+next       "none: this status is an owner decision or a stop, and is
+            never auto-restarted"
 ```
 
-**LIVE_SHORT_HORIZON_SPORTS cohort.** Eligibility is fail-closed and generic:
-an event must be present in the authoritative live feed, not ended, and carry a
-progress token the existing rules genuinely recognise. Unknown progress, feed
-unavailable, not started and ended are all refused. **`endDate` is never used as
-a settlement horizon** — it is a fixed `gameStartTime + 14.00 d` contract expiry
-(measured 18/18 live events) and carries no settlement information. No
-per-sport duration is invented anywhere.
+**The mandate `OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT` EXPIRED at
+2026-09-18T00:41:20Z.** No authorization exists for this service.
 
-Cricket, esports and NPB/KBO are excluded because their progress evidence is
-insufficient — **never because of their names**. They become eligible the day
-the existing rules can read their tokens, with no authorization change.
+**HALT was restored 2026-09-18**, and the reason matters more than the act.
+`test_the_halt_and_the_authorization_are_consistent` went RED on this branch
+with `HALT removed without a valid authorization: mandate_expired`. HALT had
+been removed on 2026-09-17 while the mandate was live; the mandate then expired
+and nothing put HALT back, so for 11.3 hours the committed state read
+"un-halted, no valid authorization". The test caught exactly what it exists to
+catch.
 
-Cohort refusals are **L5_ADAPTED** execution selection, counted via
-`cohort_refused` / `cohort_refusal_reasons`, and are **never scored as model
-WAIT**.
+**No order was placed under an expired mandate and none could have been** — an
+expired mandate is `NO_MANDATE` at the wire, the same refusal as an absent one,
+and the process had already been gone for ~11 hours when it expired. The HALT
+file is belt to that brace, because the serving image carries no HALT and
+`PMUS_SPRING_LIVE` / `PMUS_SPRING_ARM` are still set on the service: the
+process is gone, a redeploy is not.
 
-The safety architecture below is unchanged and still load-bearing: HALT is read
-before `armed()`, an absent `live_mandate.json` still means `NO_MANDATE`, and
-spending is still admitted at the **wire** by economic effect. What changed is
-that a current mandate exists and HALT is absent — both reviewed commits.
+Re-arming requires a NEW owner authorization: a new `live_mandate.json` with
+its own `authorization_id`/`authorized_at`/`expiry`, committed by a human,
+removing `HALT` in the same reviewed change. A session, restart, settlement or
+`advance_gate` may do neither.
+
+### P0 NOW: prove or refute EVIDENCED_FILL on live sports markets
+
+**The tape blocker is CLOSED.** The recorder's authenticated WS trade flow is
+working — measured 2026-09-18T12:00Z on `pmus-ws-evidence-recorder`
+(`71b6ea99-…`, deployment `ae712b6d`): `trades_300s` 140 → 192 across
+consecutive status lines, `counts.trade` 142 per connection cycle,
+`books_300s` ~4,850. Do **not** reopen the old `trades_300s: 0`
+investigation, and do not substitute gateway `sharesTraded` for it — that
+counter is cumulative per market and cannot say a trade happened at our price.
+
+The ladder is the whole question now:
+
+```
+PLACED -> RESTABLE -> BOOK_REACHED -> TRADE_FLOW -> EVIDENCED_FILL
+```
+
+Every stage was already implemented in `src/l5_surface/evidence.py` and
+`src/pmus_l5_surface_shadow.py`. What was missing was a NETWORK source
+carrying the tape: `AUTHENTICATED` needs the recorder's state in-process, and
+`STATUS_HTTP` carries the authenticated book with trade AGGREGATES only, so a
+deployed run stopped at `BOOK_REACHED` for want of a join rather than for want
+of a ladder.
+
+**`TRADES_HTTP` is that join** (`src/pmus_l5_surface_runner.py`): the
+recorder's `/status` book joined to its `/trades` tail over Railway's private
+network. It runs as the `pmus_surface` stream on `l5-exec-shadow`
+(`5dced43a-…`), which is inside that network and carries **no PMUS credential
+and no order transport** — zero-order isolation preserved, asserted over the
+module AST by `tests/test_pmus_trades_http_join.py`.
+
+Two truncation holes were closed on the way, because the HTTP path defeats the
+in-process coverage rule: the recorder serves the newest **200** rows of a
+**500**-deep ring, so `len(trades) >= RING_CAPACITY` can never fire over the
+wire and a wrapped ring would have read as complete coverage. `ring_full` and
+`served_cap` now travel with the data and either one makes coverage UNVOUCHED.
+
+**UNREADABLE IS NOT EMPTY**, at every level: a market with no tape carries
+`trades: None`, never `[]`. `None` stops the ladder at `BOOK_REACHED`; `[]`
+asserts nobody traded and would manufacture a confident no-fill on exactly the
+busy markets where it is most wrong.
+
+The open question is now genuinely empirical, and either answer is a result:
+**do our own passive rungs clear the queue ahead of them on live sports
+markets, or do they not?** Flow that does not clear the queue is not a fill and
+is never to be reported as one.
 
 ### The 2026-09-16 authorization breach — happened, fixed, tested
 
@@ -170,6 +226,57 @@ recorder's eligible universe every cycle to `universe.jsonl` with the
 recorder's own timestamp beside our receipt time. Collection only — it labels
 nothing entered or declined and infers no negative.
 
+## P0 — Gemini BTC5m continuous inventory
+
+**Not P1, and not collecting.** The transport question is CLOSED and is not to
+be reopened: the authenticated WebSocket `order.place` path is the one every
+accepted order on these credentials was placed through, recovered into
+`src/gemini_execution/ws_session.py` from commit `2bc6c04c`, with
+venue-confirmed FILLED order `145828835409069189` behind it. Do not rediscover
+whether Gemini trading works and do not rebuild the transport. No REST order
+has ever succeeded on these credentials; that lane stays closed.
+
+**What exists and is reviewed** (`src/gemini_execution/continuous_probe.py`,
+frozen at `6342171e`): the L5 surface bounded to one BTC5m window — the
+OPEN/EXTEND/COMPLETE classifier driven by inventory only, the hard envelope
+(action 0.01, max 12 actions, residual 0.04, imbalance 0.04, YES/NO 0.10,
+spend $0.15), the end-of-window floors derived from the lane's own
+`minimum_rest_time` (no new OPEN/EXTEND under 60s, everything withdrawn under
+30s), `WindowGuard` binding exactly one contract with a terminal STOP,
+`recover()` that treats an unreadable read as UNREADABLE and never as flat, and
+`settlement_report()` keeping matched-pair and directional-residual apart with
+`realized` withheld until venue-confirmed cash.
+
+**What does not exist: the driver.** Measured by AST walk over the frozen
+blobs, `continuous_probe` declares no coroutine, has no entry point, imports
+neither `asyncio` nor the session, and is imported by nothing. Its two
+transport-shaped calls, `build_ws_order` and `sanitized_ws_frame`, are
+RENDERERS — they return the frame "as it would go on the socket" and hand it
+back. The only order-capable module, `ws_canary.py`, is hard-bounded
+`MAX_ORDERS = 1` / `MAX_RESIDUAL = "0.01"` with one send call and no loop:
+both **below** the continuous envelope, so arming it would execute a
+different, smaller thing under the wrong latch identity.
+
+So the controller can decide a whole window and cannot place one order of it.
+`analysis/gemini/CONTINUOUS_PROBE_1_FAIL_CLOSED.md` records the fail-closed
+stop against that gap, with the fresh preflight that passed beside it.
+
+**The arm is structurally narrow and stays that way.** `arming.EXPECTED_AUTH_ID`
+is the constant `OWNER-2026-09-17-GEMINI-CANARY-1` — already spent, state
+`REJECTED`. `armed()` requires an exact match, so this build **cannot** arm for
+a continuous probe by setting an environment variable. A new authorization
+means a human editing that constant in a reviewed commit. Preserve this.
+
+**Next step, and it is a build, not a button-press:** write
+`src/gemini_execution/ws_continuous.py` UNARMED — fresh preflight compared
+against the frozen assumptions rather than merely required to succeed, durable
+latch consumed before the first mutation, authoritative exposure read,
+`WindowGuard`-bound loop, reconciliation by `clientOrderId`, ambiguity recorded
+UNKNOWN and never as "no order", end-of-window cancel, residual CARRIED and
+labelled with no taker cross to flatten it. Then a NEW owner authorization
+naming the SHA that contains it. Probe #1's authorization named `6342171e` and
+expired against a terminal STOP state that `6342171e` cannot reach.
+
 ## Scaling hypothesis — frequency and breadth, not size
 
 From 763,966 unique historical fills. L5's continuous-inventory shape is
@@ -222,15 +329,25 @@ incentives are accrued, never income.
   transfers with no market or motif linkage, so they cannot be attributed to a
   specific trade. None of this is realized profit for us and none of it unlocks
   mature incentive-era behaviour; it stays separate from trading P&L.
-- **Gemini**: P1, collecting, untouched.
+- **Gemini**: **P0, execution lane** — see the section above. The old
+  "P1, collecting, untouched" line was stale and is retired.
 - **Polymarket.com**: observation/reference only.
 - No generic arbitrage, no R/S/D or cap5/8/13 revivals, no new rung strategies.
 
 ## What would actually move us forward
 
-A. V1 ACT/WAIT — done, diagnosed; controller unchanged pending a decision.
-B. Deployed mandate boundary — verified on commit `9fc7f32d`.
-C. Smallest shape-preserving continuous envelope — candidates offered, owner
-   chooses.
-D. Open question: whether a single $0.05 plumbing regression adds anything the
-   adversarial and ledger-prefix tests do not already establish.
+Two execution lanes, in parallel, and nothing else. No new strategy
+workstreams: the goal is one continuous L5 system, not more experiments.
+
+**PMUS.** Let the `pmus_surface` stream run against live sports markets and
+read the ladder it produces. The result is `EVIDENCED_FILL` counts against
+`TRADE_FLOW` counts per side — do our passive rungs clear the queue ahead of
+them, or not? A refutation is as useful as a confirmation and is to be reported
+as one; flow that does not clear the queue is not a fill.
+
+**Gemini.** Build `ws_continuous.py` unarmed, review it, then authorize against
+its SHA. Until it exists there is nothing to authorize.
+
+Carried over, unchanged: V1 ACT/WAIT is diagnosed and the controller stays
+unchanged pending an owner decision; the deployed mandate boundary is verified
+on commit `9fc7f32d`.

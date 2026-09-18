@@ -3,41 +3,59 @@
 Subject: Polymarket trader `l5zn1bwom8etsk`
 (`0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68`).
 
-**This repository now contains a money-moving path.** It is HALTED and
-unauthorized (see below). The research/replay paths remain public-data
-GET-only; the live path is `l5-r1-probe` and is gated by a committed HALT file
-and a committed mandate whose absence is the safe state.
+**This repository now contains money-moving paths on two venues.** Both are
+unarmed. PMUS `l5-r1-probe` is HALTED with an EXPIRED mandate; Gemini has a
+reviewed controller and no driver, and its arm constant names an
+already-spent authorization. The research/replay paths remain public-data
+GET-only.
 
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
-## Current Live Transfer / Handoff (2026-09-17, for fresh sessions)
+## Current Live Transfer / Handoff (2026-09-18, for fresh sessions)
 
 Labels are strict: HISTORICAL (source data), SHADOW/MODELED (never realized),
 LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 
-> **As of 2026-09-17T22:15Z the live executor is STOPPED.** It ran under
-> deployment `490ce8ac-4a73-4776-b7fa-0a5608f8d285` (serving SHA
-> `64909c5cb0b65bd9c602778241da2ee0f41b471f`, `mode: ARMED`,
-> `action_selection: stochastic`) from 12:48:57Z and ended at **13:36:57Z with
-> `CAMPAIGN_STOP:HALT`**, reason `MandateRefusal:max_concurrent_markets_exhausted`.
-> It has emitted nothing since — verified 22:10Z, no log entries for 8h33m, one
-> `Starting Container`, no crash, no restart loop. `campaign_end` records
-> `"next": "none: this status is an owner decision or a stop, and is never
-> auto-restarted"`.
+> **As of 2026-09-18T12:00Z the live executor is STOPPED and HALTED, and its
+> authorization has EXPIRED.** `l5-r1-probe` ran under deployment
+> `490ce8ac-4a73-4776-b7fa-0a5608f8d285` (SHA `64909c5cb0b6`, `mode: ARMED`)
+> and ended at **2026-09-17T13:36:57Z with `CAMPAIGN_STOP:HALT`** — 21
+> sessions, 0 filled markets, 10 settled, realized **−$0.0832**,
+> venue-confirmed. `campaign_end` records `"next": "none: this status is an
+> owner decision or a stop, and is never auto-restarted"`, and
+> `restartPolicyType` is `NEVER`.
 >
-> The mandate `OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT` (authorized
-> 12:41:20Z, **expires 2026-09-18T00:41:20Z**) is still within its window but
-> nothing is running under it. Earlier text in this file naming a 10:46:53Z
-> mandate expiring 22:46:53Z, deployment `75c3cef1`, or SHA `2368fb6f` is
-> SUPERSEDED. Verify against Railway before acting on any of it, because
-> runtime evidence outranks this file. The old R1→R2→R3 rung/campaign program is still
-> RETIRED — do not resurrect it, and do not clear a latch or set a dual key to
-> "unblock" anything. Read `L5_CURRENT_PRIORITY.md` first.
+> The mandate `OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT` **expired
+> 2026-09-18T00:41:20Z**. `HALT` was restored 2026-09-18 after
+> `test_the_halt_and_the_authorization_are_consistent` went red with
+> `mandate_expired` — the committed state had read "un-halted, no valid
+> authorization" for 11.3 hours. No order was placed under an expired mandate
+> and none could have been: an expired mandate is `NO_MANDATE` at the wire,
+> and the process had been gone ~11 hours before it expired.
+>
+> Earlier text in this file naming a 10:46:53Z or 12:41:20Z mandate as
+> CURRENT, deployment `75c3cef1`, SHA `2368fb6f`, or the executor as RUNNING
+> AND ARMED is SUPERSEDED. Verify against Railway before acting on any of it.
+> The old R1→R2→R3 rung/campaign program is still RETIRED — do not resurrect
+> it, and do not clear a latch or set a dual key to "unblock" anything. Read
+> `L5_CURRENT_PRIORITY.md` first.
+>
+> **PMUS's authenticated trade tape is WORKING** (measured 2026-09-18T12:00Z:
+> `trades_300s` 140→192, `counts.trade` 142/cycle). The old `trades_300s: 0`
+> blocker is CLOSED; do not reopen it and do not substitute gateway
+> `sharesTraded`. P0 moved downstream to the evidence ladder: **PLACED →
+> RESTABLE → BOOK_REACHED → TRADE_FLOW → EVIDENCED_FILL**.
+>
+> **Gemini is a P0 execution lane, not P1 collecting.** Transport is proven
+> and closed; the gap is a driver. See `L5_CURRENT_PRIORITY.md` and
+> `analysis/gemini/CONTINUOUS_PROBE_1_FAIL_CLOSED.md`.
 
 ### P0: Polymarket US sports
 
-**Live executor — RUNNING AND ARMED (2026-09-17).** `l5-r1-probe`
+**Live executor — STOPPED AND HALTED (2026-09-18); the text in this paragraph
+describes the 2026-09-17 authorization that has since expired and is kept as
+history, not as current state.** Previously RUNNING AND ARMED: `l5-r1-probe`
 (`6111a5d4-a2d9-4762-a057-31f02d07586f`), deployment
 `75c3cef1-6e45-4ba9-9e69-5f77de1387bf`, **serving SHA
 `2368fb6fe4c0eb71eda81467c514cb4b3799336c`** verified from the runtime
@@ -160,7 +178,7 @@ recorded unranked and unarmed.
 * **Legacy PMUS** `pmus-spring-l5-probe` (`d84d9a68-…`): **HALTED, do not clear
   the latch.** Its Railway startCommand rewrites source with `sed -i` at boot,
   so the running code is not the reviewed artifact even when the hash matches.
-* **Gemini**: P1, collecting, untouched.
+* **Gemini**: **P0, execution lane.** Transport is proven and closed (authenticated WS `order.place`); the gap is a driver, not a venue question. See `L5_CURRENT_PRIORITY.md`, `analysis/gemini/CONTINUOUS_PROBE_1_FAIL_CLOSED.md` and `analysis/gemini/CONTINUOUS_CONTROLLER_WALK_FINDINGS.md`. The old "P1, collecting, untouched" line was stale and is retired.
 * **Polymarket.com**: observation/reference only.
 
 ### Parallel lanes (2026-09-17, evening) — SHADOW/MEASUREMENT only
