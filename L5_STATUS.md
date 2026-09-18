@@ -48,8 +48,29 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > RESTABLE → BOOK_REACHED → TRADE_FLOW → EVIDENCED_FILL**.
 >
 > **Gemini is a P0 execution lane, not P1 collecting.** Transport is proven
-> and closed; the gap is a driver. See `L5_CURRENT_PRIORITY.md` and
-> `analysis/gemini/CONTINUOUS_PROBE_1_FAIL_CLOSED.md`.
+> and closed, and the driver now exists: **seven bounded windows have run
+> (CONTINUOUS-1..7, all spent).** See `L5_CURRENT_PRIORITY.md`,
+> `analysis/gemini/CONTINUOUS_PROBE_1_FAIL_CLOSED.md` and
+> `CONTINUOUS_{5,6,7}_RESULT.md`.
+>
+> **As of CONTINUOUS-7 (2026-09-18T23:29Z) the binding constraint is no
+> longer plumbing — it is FILL RATE.** C7 ran 12 clean cycles, spent all 6
+> cohort slots, had every mutation accepted, explained a real double
+> order-disappearance from authoritative terminal evidence on the first read,
+> and terminated with ZERO orders live (the first window to do so). It filled
+> nothing. Across four windows that produced decisions, the two entering
+> before ~200s TTE filled once each and the two entering after did not fill
+> at all (n=4, correlation only). Entry TTE is currently not chosen — it
+> falls out of when the workflow runs against the 5-minute grid.
+>
+> **Gemini REALIZED is $0.00 across all seven windows.** Three settlements
+> carry EXPECTED P&L — C4 −$0.0006 (matched pair), C5 −$0.0046 and C6
+> −$0.0021 (unmatched directional residual). These are EXPECTED, never
+> REALIZED, and matched-pair and directional-residual are never summed. C7
+> contributes nothing to any of them: no fill, no position, no economics.
+>
+> **The target chain — FILL → COHERENT REFRESH → INVENTORY CHANGE → CHANGED
+> L5 ACTION — is still UNPROVEN live.**
 
 ### P0: Polymarket US sports
 
