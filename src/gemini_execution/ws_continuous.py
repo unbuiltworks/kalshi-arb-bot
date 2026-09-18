@@ -248,6 +248,10 @@ def require_authorization(now: Optional[float] = None) -> None:
 # ------------------------------------------------------- DURABLE MUTATION LEDGER
 
 PLACE, CANCEL = "PLACE", "CANCEL"
+#: a SAFETY mutation, counted apart from the strategy budget. It can
+#: only cancel, so it can never create exposure; `consumed()` ignores it
+#: deliberately, and it carries its own hard bound instead.
+CLEANUP_CANCEL = "CLEANUP_CANCEL"
 ATTEMPTED, ACCEPTED, REJECTED, UNKNOWN = ("ATTEMPTED", "ACCEPTED", "REJECTED",
                                           "UNKNOWN")
 
@@ -505,6 +509,68 @@ class WorkingOrders:
                 % (len(fresh), added or "none", gone or "none"))
 
 
+def _ids_of(rows: Any) -> set:
+    """Every identifier a venue row might carry for one order, canonicalized.
+
+    Both forms are collected because the venue is not consistent about which
+    it returns: order history keys on `orderId`, /v1/mytrades on `order_id`
+    and `client_order_id`. Matching on only one of them is how a fill goes
+    unrecognised.
+    """
+    out: set = set()
+    for r in (rows or []):
+        if not isinstance(r, Mapping):
+            continue
+        for k in ("orderId", "order_id", "globalOrderId"):
+            v = r.get(k)
+            if v not in (None, "", 0):
+                try:
+                    out.add(canonical_order_id(v))
+                except ReconcileRequired:
+                    pass
+        for k in ("clientOrderId", "client_order_id"):
+            v = r.get(k)
+            if v not in (None, ""):
+                out.add(str(v))
+    return out
+
+
+def unexplained_disappearances(known: Mapping[str, Mapping[str, Any]],
+                               st: Mapping[str, Any]
+                               ) -> List[Dict[str, Any]]:
+    """Orders that left `active_orders` with nothing to say why.
+
+    CONTINUOUS-6, to the millisecond: a real fill landed at 22:12:44.125, the
+    order was gone from `active_orders` by 22:12:44.392, and
+    `order_history(filled)` had still not published it. Inventory therefore
+    read FLAT and the controller emitted OPEN 985ms after the fill.
+
+    The two halves of the authoritative read do not share a clock. This
+    computes the disagreement rather than papering over it, and it does NOT
+    treat disappearance as a fill: disappearance is a QUESTION, and the
+    answer has to come from the venue's own fill or terminal record.
+    """
+    active = _ids_of(st.get("open_orders"))
+    filled = _ids_of(st.get("orders_seen")) | _ids_of(st.get("trades"))
+    terminal = _ids_of(st.get("terminal_seen"))
+    out: List[Dict[str, Any]] = []
+    for coid, row in (known or {}).items():
+        oid = row.get("venue_order_id")
+        ids = {str(coid)} | ({str(oid)} if oid else set())
+        if ids & active:
+            continue                      # still resting: nothing to explain
+        if ids & filled:
+            continue                      # explained: the venue filled it
+        if ids & terminal:
+            continue                      # explained: cancelled or expired
+        out.append({"client_order_id": str(coid), "venue_order_id": oid,
+                    "leg": row.get("leg"), "price": row.get("price"),
+                    "why": ("left active_orders with no fill row and no "
+                            "terminal row; the venue has not said whether it "
+                            "filled")})
+    return out
+
+
 def diff_surface(desired: Sequence[Mapping[str, Any]],
                  working: WorkingOrders) -> Dict[str, List[Dict[str, Any]]]:
     """Controller's desired surface vs what is actually resting.
@@ -555,8 +621,32 @@ WITHDRAWING = "WITHDRAWING"
 STOPPED = "STOPPED"
 DO_NOT_TRADE = "DO_NOT_TRADE"
 RECONCILE = "SUBMISSION_UNKNOWN_RECONCILE_REQUIRED"
+#: an order left the book and the venue has not yet said why. NOT terminal on
+#: its own: it is the state the driver sits in WHILE re-reading.
+PENDING_RECONCILIATION = "PENDING_RECONCILIATION"
+#: the disappearance was never explained inside the bound. Terminal.
+UNKNOWN_TERMINAL = "UNKNOWN_TERMINAL"
+#: cleanup ran and the venue confirms nothing of ours is resting
+STOPPED_FLAT_ORDERS = "STOPPED_FLAT_ORDERS"
+#: cleanup could not establish that. NEVER describe this as inert.
+STOPPED_WITH_LIVE_ORDERS = "STOPPED_WITH_LIVE_ORDERS"
+CLEANUP_UNCONFIRMED = "CLEANUP_UNCONFIRMED"
 
-TERMINAL = (STOPPED, DO_NOT_TRADE, RECONCILE)
+TERMINAL = (STOPPED, DO_NOT_TRADE, RECONCILE, UNKNOWN_TERMINAL,
+            STOPPED_FLAT_ORDERS, STOPPED_WITH_LIVE_ORDERS)
+
+#: How many authoritative re-reads a single unexplained disappearance may
+#: cost, and how long it may take. A DEADMAN, not a sleep: each attempt is a
+#: fresh venue read, and the bound exists so an unexplained order stops the
+#: window instead of stalling it forever.
+MAX_RECONCILE_ATTEMPTS = 6
+MAX_RECONCILE_SECONDS = 30.0
+
+#: Cleanup mutations are SAFETY mutations and are counted SEPARATELY from the
+#: strategy budget. They may only cancel; they can never place, sell, cross or
+#: flatten, so they cannot create exposure. Their own hard bound.
+MAX_CLEANUP_MUTATIONS = 8
+MAX_CLEANUP_SECONDS = 45.0
 
 
 class Driver:
@@ -581,6 +671,9 @@ class Driver:
         self.inv: Optional[CP.Inventory] = None
         self.guard: Optional[CP.WindowGuard] = None
         self.budget_consumed: Optional[int] = None
+        #: SAFETY mutations, bounded separately from the strategy
+        #: budget so cleanup can still run when strategy slots are 0.
+        self.cleanup_consumed = 0
         self.log: List[Dict[str, Any]] = []
         # A COHORT MAY TIGHTEN THE ENVELOPE, NEVER EXTEND IT. A request above
         # CP.MAX_ACTIONS is REFUSED rather than clamped: silently granting
@@ -916,6 +1009,140 @@ class Driver:
         self.stop(RECONCILE, "cancel of %s was not acknowledged OK" % coid)
         raise ReconcileRequired(self.why or "cancel unknown")
 
+    # --------------------------------------------------------- terminal cleanup
+
+    async def withdraw_orders(self, session: Any,
+                              refresh_fn: Optional[Callable] = None
+                              ) -> Dict[str, Any]:
+        """Cancel what this strategy still has resting, then PROVE it is gone.
+
+        WHY THIS EXISTS. STOP stopped the controller and nothing else.
+        CONTINUOUS-5 stopped fail-closed on an ambiguous cancel and one of its
+        resting maker orders FILLED 57 seconds later, on a contract that then
+        resolved against it. CONTINUOUS-6 stopped on budget with NO 0.69 still
+        live for a further 2m13s. A stopped window is not a flat one, and
+        saying "STOPPED" while an order is still executable is a claim we had
+        no right to make.
+
+        BOUNDED AND SAFETY-ONLY. It cancels; it never places, sells, crosses,
+        flattens inventory or touches the surface, so it cannot create
+        exposure. Its mutations are counted SEPARATELY from the strategy
+        budget -- C6 ended with zero strategy slots left, and a cleanup that
+        borrowed from that budget could never run when it is most needed.
+
+        IT ENDS IN A DEFINITE STATE. Either the venue confirms nothing of ours
+        is resting, or the result says so loudly and stays visible.
+        """
+        started = self.now_fn()
+        rep: Dict[str, Any] = {
+            "label": "TERMINAL_WITHDRAWAL",
+            "started": started,
+            "cleanup_budget": MAX_CLEANUP_MUTATIONS,
+            "cancelled": [], "failed": [], "rounds": 0,
+            "labels": ("cleanup mutations are SAFETY mutations, bounded "
+                       "separately from the strategy budget. This path can "
+                       "only cancel: no place, no SELL, no crossing, no "
+                       "forced flatten, no change to inventory or strategy."),
+        }
+        while True:
+            rep["rounds"] += 1
+            resting = list(self.working.rungs())
+            if not resting:
+                break
+            if self.cleanup_consumed >= MAX_CLEANUP_MUTATIONS:
+                rep["why"] = ("cleanup budget of %d exhausted with %d order(s) "
+                              "still known resting"
+                              % (MAX_CLEANUP_MUTATIONS, len(resting)))
+                break
+            if (self.now_fn() - started) >= MAX_CLEANUP_SECONDS:
+                rep["why"] = ("cleanup deadman at %.0fs with %d order(s) still "
+                              "known resting"
+                              % (MAX_CLEANUP_SECONDS, len(resting)))
+                break
+            for o in resting:
+                if self.cleanup_consumed >= MAX_CLEANUP_MUTATIONS:
+                    break
+                try:
+                    r = await self._cleanup_cancel(session, o)
+                    rep["cancelled"].append(r)
+                except Exception as exc:                       # noqa: BLE001
+                    rep["failed"].append(
+                        {"client_order_id": o.get("client_order_id"),
+                         "error": "%s: %s" % (type(exc).__name__, exc)})
+            # THE VENUE DECIDES WHETHER THEY ARE GONE, not the acks. C4's
+            # cancels returned 200 over orders that had already filled.
+            if refresh_fn is None:
+                rep["why"] = ("no authoritative reader available, so the "
+                              "disappearance of these orders cannot be "
+                              "confirmed")
+                break
+            try:
+                st = await refresh_fn()
+            except Exception as exc:                           # noqa: BLE001
+                rep["why"] = "authoritative re-read failed: %s" % exc
+                break
+            if st.get("open_orders") is None:
+                rep["why"] = ("open orders unreadable, so nothing can be "
+                              "confirmed gone")
+                break
+            try:
+                self.working.reconcile(st.get("open_orders"), self.now_fn())
+            except ReconcileRequired as exc:
+                rep["why"] = str(exc)
+                break
+
+        remaining = [dict(o) for o in self.working.rungs()]
+        rep["remaining"] = remaining
+        rep["cleanup_consumed"] = self.cleanup_consumed
+        rep["elapsed_s"] = round(self.now_fn() - started, 3)
+        if remaining or rep["failed"]:
+            rep["verdict"] = CLEANUP_UNCONFIRMED
+            rep["state"] = STOPPED_WITH_LIVE_ORDERS
+            rep["ALARM"] = (
+                "%d strategy-owned order(s) may still be EXECUTABLE. This "
+                "window is STOPPED but NOT inert; a resting order can still "
+                "fill and settle against us." % len(remaining))
+        else:
+            rep["verdict"] = "CLEANUP_CONFIRMED"
+            rep["state"] = STOPPED_FLAT_ORDERS
+            rep["note"] = ("the venue's own open-order list is empty of this "
+                           "strategy's orders; FLAT ORDERS is not flat "
+                           "INVENTORY and says nothing about fills already "
+                           "taken")
+        self.state = rep["state"]
+        self.why = rep.get("ALARM") or rep.get("note")
+        return rep
+
+    async def _cleanup_cancel(self, session: Any, order: Mapping[str, Any]
+                              ) -> Dict[str, Any]:
+        """One safety cancel. Counted apart; identical wire shape otherwise."""
+        require_authorization(self.now_fn())
+        coid = str(order.get("client_order_id"))
+        oid = order.get("venue_order_id")
+        if oid in (None, "", 0):
+            raise ReconcileRequired(
+                "no venue orderId for %s; a cancel cannot be formed" % coid)
+        slot = self.ledger.attempt(CLEANUP_CANCEL,
+                                   {"client_order_id": coid,
+                                    spec.ORDER_ID_FIELD: oid})
+        self.cleanup_consumed += 1
+        try:
+            ack = await session.request(spec.WS_CANCEL_METHOD,
+                                        {spec.ORDER_ID_FIELD: oid},
+                                        timeout=5.0)
+        except Exception as exc:                               # noqa: BLE001
+            self.ledger.resolve(slot, UNKNOWN,
+                                {"error": "%s: %s" % (type(exc).__name__, exc)})
+            raise
+        status = (ack or {}).get("status")
+        ok = status is not None and int(status) == spec.WS_ACK_OK
+        self.ledger.resolve(slot, ACCEPTED if ok else REJECTED,
+                            {"status": status})
+        return {"client_order_id": coid, spec.ORDER_ID_FIELD: oid,
+                "status": status, "accepted": ok,
+                "note": ("an ack is a receipt. Whether the order is gone is "
+                         "decided by the authoritative re-read below.")}
+
     # ------------------------------------------------------------- the window
 
     def _drain_events(self, session: Any, report: Dict[str, Any]) -> None:
@@ -962,7 +1189,41 @@ class Driver:
         UNREADABLE STOPS THE WINDOW. Mid-window is no more entitled to assume a
         flat account than a restart is.
         """
-        st = await refresh_fn()
+        known = {r["client_order_id"]: r for r in self.working.rungs()}
+        pending: List[Dict[str, Any]] = []
+        st: Dict[str, Any] = {}
+        t0 = self.now_fn()
+        attempts = 0
+
+        # RE-READ UNTIL THE VENUE EXPLAINS ITSELF. Each pass is a fresh
+        # authoritative read; nothing sleeps and nothing is assumed.
+        while True:
+            attempts += 1
+            st = await refresh_fn()
+            if st.get("fills") is None or st.get("open_orders") is None:
+                self.stop(DO_NOT_TRADE,
+                          "authoritative state unreadable mid-window; an "
+                          "unread venue is never an empty one")
+                return None
+            pending = unexplained_disappearances(known, st)
+            if not pending:
+                break
+            if (attempts >= MAX_RECONCILE_ATTEMPTS
+                    or (self.now_fn() - t0) >= MAX_RECONCILE_SECONDS):
+                # THE DEADMAN. An order left the book, the venue never said
+                # why, and the one thing we must not do is call the
+                # controller with an inventory we know may be wrong.
+                self.stop(UNKNOWN_TERMINAL,
+                          "%d working order(s) left active_orders and no "
+                          "authoritative fill or terminal evidence explained "
+                          "them within %d read(s): %s. Deciding now would "
+                          "hand the controller an inventory that may already "
+                          "be stale."
+                          % (len(pending), attempts,
+                             ", ".join(sorted(p["client_order_id"]
+                                              for p in pending))))
+                return None
+
         inv, why = CP.recover(self._auth_id, self._symbol, st.get("fills"))
         if inv is None:
             self.stop(DO_NOT_TRADE, why or "inventory unreadable mid-window")
@@ -976,6 +1237,7 @@ class Driver:
         self.inv = inv
         after = inv.report()
         return {"working": note, "changed": before != after,
+                "coherent": True, "reconcile_attempts": attempts,
                 "n_fills": after.get("n_fills"),
                 "yes_qty": after.get("yes_qty"),
                 "no_qty": after.get("no_qty"),
@@ -1068,6 +1330,29 @@ class Driver:
         finally:
             if self.state == RUNNING:
                 self.stop(STOPPED, "cycle budget exhausted")
+            # WHY THE CONTROLLER STOPPED, kept before cleanup rewrites the
+            # state: the two facts are different and both matter.
+            report["stop_state"] = self.state
+            report["stop_why"] = self.why
+            # TERMINAL CLEANUP. The controller has stopped; the ORDERS have
+            # not. Every exit runs this, including the fail-closed ones,
+            # because a fail-closed exit is exactly when an order is most
+            # likely to be left resting.
+            try:
+                report["withdrawal"] = await self.withdraw_orders(
+                    session, refresh_fn)
+            except Exception as exc:                           # noqa: BLE001
+                report["withdrawal"] = {
+                    "label": "TERMINAL_WITHDRAWAL",
+                    "verdict": CLEANUP_UNCONFIRMED,
+                    "state": STOPPED_WITH_LIVE_ORDERS,
+                    "error": "%s: %s" % (type(exc).__name__, exc),
+                    "remaining": [dict(o) for o in self.working.rungs()],
+                    "ALARM": ("cleanup itself failed, so whether anything of "
+                              "this strategy is still executable is UNKNOWN"),
+                }
+                self.state = STOPPED_WITH_LIVE_ORDERS
+                self.why = report["withdrawal"]["ALARM"]
         return self._finish(report)
 
     def _finish(self, report: Dict[str, Any]) -> Dict[str, Any]:
@@ -1082,6 +1367,14 @@ class Driver:
         report["residual_note"] = (
             "any residual is CARRIED directional exposure, reconciled through "
             "settlement. No taker cross was introduced to flatten it.")
+        w = report.get("withdrawal") or {}
+        report["orders_live_after_stop"] = len(w.get("remaining") or [])
+        report["inert"] = (w.get("state") == STOPPED_FLAT_ORDERS)
+        report["inert_note"] = (
+            "FLAT ORDERS is not flat INVENTORY. inert:false means at least "
+            "one strategy-owned order may still be executable; inert:true "
+            "means the venue showed none resting and says nothing about "
+            "fills already taken.")
         report["realized"] = None
         report["realized_note"] = (
             "REALIZED stays null until a venue-confirmed cash movement is "

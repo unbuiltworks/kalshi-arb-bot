@@ -394,8 +394,9 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     assert "--cohort" in armed, "the armed step must bind a mutation cohort"
     # the FRESH cohort. C5 is spent at 3/6 and its three unused slots stay
     # unused; rebinding it would be recycling a spent budget.
-    assert "COHORT-2026-09-18-C6" in armed
-    assert "COHORT-2026-09-18-C5" not in armed.split("run:", 1)[1]
+    assert "COHORT-2026-09-18-C7" in armed
+    for spent in ("COHORT-2026-09-18-C5", "COHORT-2026-09-18-C6"):
+        assert spent not in armed.split("run:", 1)[1], spent
 
 
 def test_continuous_6_is_spent_and_the_workflow_is_disarmed():
@@ -413,12 +414,14 @@ def test_continuous_6_is_spent_and_the_workflow_is_disarmed():
     assert ARM.EXPECTED_AUTH_ID == "NO-AUTHORIZATION-IN-FORCE"
     assert WCX.REQUIRED_AUTH_ID is None and WCX.AUTHORIZED_SHA is None
     assert BUN.AUTHORIZED_BUNDLE is None
-    # the envelope did not move across the window
+    # THE ENVELOPE NEVER MOVES. That is the invariant worth pinning here.
     assert WCX.envelope_sha() == (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    # nor did the executable: C6 needed no code change
-    assert WCX.executable_sha() == (
-        "7dc3daaefcbc39488611fbb94efdb3830c84f760aa866d53dcfaeb99b2aa01ff")
+    # The executable hash is deliberately NOT pinned in this test. It pinned
+    # 7dc3daae... and broke the moment an authorized fix landed -- a test
+    # asserting that no fix may ever land. The hash belongs in the
+    # authorization, which is exactly what invalidates it on a change.
+    assert len(WCX.executable_sha()) == 64
 
 
 def test_one_latch_per_authorization_and_no_latch_without_one():
@@ -467,8 +470,14 @@ def test_c5_stays_frozen_while_c6_spends_its_own_budget():
     assert outcomes == {0: "ACCEPTED", 1: "ACCEPTED", 2: "UNKNOWN"}, outcomes
 
     c6 = CO.state("COHORT-2026-09-18-C6")
-    assert c6["budget"] == 6
-    assert 0 <= c6["consumed"] <= 6
+    assert c6["budget"] == 6 and c6["consumed"] == 6 and c6["remaining"] == 0
+    c7 = CO.state("COHORT-2026-09-18-C7")
+    assert c7["budget"] == 6
+    assert 0 <= c7["consumed"] <= 6
+    assert c7["predecessor"]["predecessor_ledger"].endswith(
+        "COHORT-2026-09-18-C6/ledger.jsonl")
+    assert c7["predecessor"]["recorded_consumed"] == 6
+    assert c7["predecessor"]["intact"] is True
     assert c6["consumed"] + c6["remaining"] == c6["budget"]
     # the chain: C6 records C5's ledger, so a rewrite of C5 is detectable
     assert c6["predecessor"]["predecessor_ledger"].endswith(

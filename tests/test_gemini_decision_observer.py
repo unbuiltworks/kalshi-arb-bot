@@ -170,8 +170,10 @@ def test_the_window_is_byte_equivalent_with_and_without_the_observer(
     assert _canon([json.loads(l) for l in plain_led.splitlines() if l]) == \
         _canon([json.loads(l) for l in obs_led.splitlines() if l])
 
-    # and the run was a real one: it cancelled and placed
-    assert [m for m, _ in obs_sent] == ["order.cancel", "order.place"]
+    # and the run was a real one: it cancelled, placed, and then the
+    # TERMINAL WITHDRAWAL cancelled what was still resting
+    assert [m for m, _ in obs_sent] == ["order.cancel", "order.place",
+                                        "order.cancel"]
     assert obs_rep["budget_consumed"] == 2
 
 
@@ -183,6 +185,7 @@ def test_the_observer_adds_no_decision_and_no_frame(tmp_path, monkeypatch):
 
     assert obs.decide_calls == obs_rep["cycles"] == plain_rep["cycles"] == 1
     assert len(obs_sent) == len(plain_sent)
+    # 2 strategy mutations plus the terminal withdrawal's safety cancel
     assert obs.summary()["mutations_observed"] == 2      # observed, not caused
 
 
@@ -526,5 +529,9 @@ def test_the_observer_has_a_caller_and_its_output_reaches_the_report(
     # and the mutations were observed with the inventory in force at the call
     assert rep["mutations_observed"]
     assert rep["mutations_observed"][0]["inventory_at_call"]["no_qty"] == "0.01"
-    assert rep["decision_capture"]["decide_calls"] == rep["window"]["cycles"]
+    # ONE DECIDE PER COHERENT CYCLE. It is no longer one per cycle: the
+    # coherence gate can end a cycle before `decide` is reached, which is
+    # precisely the C6 fix, so the invariant is that a decision never
+    # outnumbers the cycles.
+    assert 1 <= rep["decision_capture"]["decide_calls"] <= rep["window"]["cycles"]
     assert rep["decision_capture"]["action_labels"].get(CP.COMPLETE, 0) >= 1

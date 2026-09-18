@@ -500,15 +500,41 @@ class DecisionObserver:
         papered over with a guess.
         """
         rows = list(refreshes or [])
-        if len(rows) != len(self.reads):
+        # ONE REFRESH IS NO LONGER ONE READ. The coherence gate re-reads until
+        # the venue explains a disappearance, so a refresh reports how many
+        # reads it cost; the terminal withdrawal then reads again after the
+        # last refresh. The join consumes exactly that many per refresh and
+        # labels whatever is left as cleanup.
+        i = 0
+        for ref in rows:
+            n = int(ref.get("reconcile_attempts") or 1)
+            for _ in range(max(1, n)):
+                if i >= len(self.reads):
+                    return {"linked": False,
+                            "why": ("driver refreshes account for more reads "
+                                    "than the observer saw (%d); phases left "
+                                    "unlabelled rather than guessed"
+                                    % len(self.reads))}
+                self.reads[i]["when"] = ref.get("when")
+                self.reads[i]["driver_cycle"] = ref.get("cycle")
+                i += 1
+        if i == 0 and self.reads:
+            # no refresh to attribute anything to: calling every read
+            # "cleanup" would be a guess, which is the one thing this is for
             return {"linked": False,
-                    "why": ("driver recorded %d refresh(es), observer saw %d; "
-                            "phases left unlabelled rather than guessed"
-                            % (len(rows), len(self.reads)))}
-        for read, ref in zip(self.reads, rows):
-            read["when"] = ref.get("when")
-            read["driver_cycle"] = ref.get("cycle")
-        return {"linked": True, "reads": len(rows)}
+                    "why": ("observer saw %d read(s) and the driver recorded "
+                            "no refresh; phases left unlabelled rather than "
+                            "guessed" % len(self.reads))}
+        trailing = 0
+        for read in self.reads[i:]:
+            read["when"] = "terminal_withdrawal"
+            read["driver_cycle"] = None
+            trailing += 1
+        return {"linked": True, "reads": len(self.reads),
+                "refreshes": len(rows), "cleanup_reads": trailing,
+                "note": ("reads are attributed by each refresh's own "
+                         "reconcile_attempts; any read after the last refresh "
+                         "belongs to terminal withdrawal")}
 
     def summary(self) -> Dict[str, Any]:
         labels: Dict[str, int] = {}
@@ -646,6 +672,41 @@ async def authoritative_state(symbol: str) -> Dict[str, Any]:
         out["fills"] = None
         out["orders_seen"] = None
         out["order_history_error"] = "%s: %s" % (type(exc).__name__, exc)
+
+    # TERMINAL ROWS AND TRADES. CONTINUOUS-6 showed the two halves of this
+    # read do not share a clock: an order was gone from active_orders 267ms
+    # after it filled while order_history(filled) still returned nothing. The
+    # coherence gate needs to ask "did it fill, or did it end another way?",
+    # so both the terminal statuses and the venue's own trade record are
+    # fetched. Best effort: a reader that fails leaves its key None, which is
+    # UNREADABLE and never mistaken for "no evidence".
+    try:
+        th = await MD.order_history(symbol=symbol,
+                                    statuses=("cancelled", "closed", "expired"),
+                                    limit=100, include_rows=True)
+        rows = []
+        for pstat in (th.get("per_status") or []):
+            if isinstance(pstat.get("orders"), list):
+                rows.extend(pstat["orders"])
+        out["terminal_seen"] = rows if th.get("readable") is not False else None
+    except Exception as exc:                                   # noqa: BLE001
+        out["terminal_seen"] = None
+        out["terminal_history_error"] = "%s: %s" % (type(exc).__name__, exc)
+
+    # /v1/mytrades is the venue's OWN trade record and a DIFFERENT read from
+    # order history, which is the point: when the two halves disagree, a
+    # third authority is what resolves it. Its rows carry order_id and
+    # client_order_id, so a fill can be matched to the order that caused it.
+    try:
+        from src.gemini_prediction_auth import private_rest_request
+        resp = await private_rest_request(
+            "POST", "/v1/mytrades", timeout=15.0,
+            params={"symbol": symbol, "limit_trades": 200})
+        body = resp.json()
+        out["trades"] = body if isinstance(body, list) else None
+    except Exception as exc:                                   # noqa: BLE001
+        out["trades"] = None
+        out["trades_error"] = "%s: %s" % (type(exc).__name__, exc)
 
     try:
         act = await T.active_orders(symbol)

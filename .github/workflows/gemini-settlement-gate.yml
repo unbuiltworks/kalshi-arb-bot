@@ -282,7 +282,7 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort "COHORT-2026-09-18-C6" \
+            --cohort "COHORT-2026-09-18-C7" \
             --ledger analysis/gemini/continuous_ledger.jsonl \
             --out    analysis/gemini/continuous_unarmed_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire   /tmp/unarmed_wire.json \
@@ -317,11 +317,10 @@ jobs:
       # ledger, which is 12/12 permanently spent, and an authorized run would
       # die on budget rather than trade.
       #
-      # COHORT-2026-09-18-C6 is FRESH, not a recycling of C5. C5 is spent at
-      # 3 of 6 including the UNKNOWN cancel, and its three unused slots stay
-      # unused: budget is not regained by rewriting an UNKNOWN. C6 records
-      # C5's LEDGER as its predecessor rather than the historical one, so any
-      # rewrite of C5's evidence makes this cohort refuse before the latch.
+      # COHORT-2026-09-18-C7 is FRESH. C6 is spent at 6 of 6 and C5 at
+      # 3 of 6 with an UNKNOWN; neither is recycled. C7 records C6's LEDGER
+      # as its predecessor, so a rewrite anywhere down that chain makes this
+      # cohort refuse before the latch.
       # A cohort may only TIGHTEN the envelope, never extend it.
       #
       # EVERY bound -- 12 mutation slots (tightened to the cohort's 6), $0.15
@@ -354,7 +353,7 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort  "COHORT-2026-09-18-C6" \
+            --cohort  "COHORT-2026-09-18-C7" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \

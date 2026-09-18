@@ -213,19 +213,46 @@ def test_unreadable_open_orders_stop_the_window(tmp_path):
 
 def test_working_orders_follow_the_venue_not_our_memory(tmp_path):
     """An order we think is resting but the venue does not list is gone; one
-    the venue lists that we forgot is ours again."""
+    the venue lists that we forgot is ours again.
+
+    CONTINUOUS-6 added a precondition: "gone" now has to be EXPLAINED. The
+    venue's terminal row supplies that here, so the replacement still
+    happens; without one the driver stops instead, which the next test pins.
+    """
     d = _driver(tmp_path)
     d.working.add("stale", leg="YES", price="0.50", qty="0.01", now=1.0,
                   venue_order_id="1")
 
     async def refresh():
-        return {"fills": [], "open_orders": [
-            {"clientOrderId": "real", "outcome": "no", "price": "0.04",
-             "quantity": "0.01", "orderId": 145828836246614326}]}
+        return {"fills": [], "orders_seen": [],
+                "terminal_seen": [{"orderId": 1, "clientOrderId": "stale",
+                                   "status": "closed",
+                                   "filledQuantity": "0"}],
+                "open_orders": [
+                    {"clientOrderId": "real", "outcome": "no", "price": "0.04",
+                     "quantity": "0.01", "orderId": 145828836246614326}]}
 
     _run(d._refresh(refresh))
     ids = [r["client_order_id"] for r in d.working.rungs()]
     assert ids == ["real"]
+
+
+def test_a_vanished_order_the_venue_will_not_explain_stops_the_window(
+        tmp_path):
+    """THE C6 DEFECT, as a contract. An order that leaves active_orders with
+    no fill row and no terminal row is PENDING_RECONCILIATION, and the
+    controller is never handed the book while it is."""
+    d = _driver(tmp_path)
+    d.working.add("stale", leg="YES", price="0.50", qty="0.01", now=1.0,
+                  venue_order_id="1")
+
+    async def refresh():
+        return {"fills": [], "open_orders": [], "orders_seen": [],
+                "terminal_seen": [], "trades": []}
+
+    assert _run(d._refresh(refresh)) is None
+    assert d.state == WC.UNKNOWN_TERMINAL
+    assert "stale" in (d.why or "")
 
 
 # ==================================== THE REPLAY: WHAT THE FIX ACTUALLY CHANGES
