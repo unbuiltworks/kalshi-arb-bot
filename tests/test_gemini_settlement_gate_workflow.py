@@ -28,6 +28,19 @@ def _step(name):
     return rest[:m.start() + 1] if m else rest
 
 
+
+def _sets_the_arm(step):
+    """Does this step ASSIGN the arm, as opposed to naming it in a comment?
+
+    The disarmed steps mention GEMINI_CANARY_LIVE precisely in order to say
+    they do not set it, so a substring check flags the documentation instead
+    of the behaviour. This is the second time that trap was walked into in
+    this file; asserting on the assignment closes it for every caller.
+    """
+    import re as _re
+    return bool(_re.search(r"^\s*GEMINI_CANARY_LIVE:\s*\S+", step, _re.M))
+
+
 def test_every_symbol_it_returns_has_already_expired():
     """Settlement is only a question once a contract has expired; asking about
     a live window reads the venue's silence as a finding."""
@@ -214,10 +227,11 @@ def test_the_ws_dry_run_step_is_disarmed_and_cannot_submit():
     """It runs in the credentialed job, so its inability to send has to be
     structural rather than a matter of which flags the step happens to pass."""
     step = _step("L5 WS canary DRY RUN")
-    assert "GEMINI_CANARY_LIVE" not in step
-    assert "GEMINI_CANARY_AUTH" not in step
+    assert not _sets_the_arm(step)
+    assert "GEMINI_CANARY_AUTH:" not in step
     assert "|| true" in step                 # a missing window is a result
     assert "ws_dry_run_" in step
+    assert not _sets_the_arm(step)
 
 
 def test_the_arm_is_SET_exactly_once_in_the_whole_workflow():
@@ -241,8 +255,7 @@ def test_the_dry_run_retries_into_the_next_btc5m_window():
     step = _step("L5 WS canary DRY RUN")
     assert "for attempt in 1 2 3 4 5" in step
     assert "sleep 45" in step
-    # still disarmed, still cannot submit
-    assert "GEMINI_CANARY_LIVE" not in step
+    assert not _sets_the_arm(step)   # still disarmed, still cannot submit
 
 
 def test_the_retry_is_bounded_and_still_writes_a_negative_result():
@@ -251,3 +264,22 @@ def test_the_retry_is_bounded_and_still_writes_a_negative_result():
     step = _step("L5 WS canary DRY RUN")
     assert 'attempt" = "5"' in step          # bounded
     assert 'if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi' in step
+
+
+def test_the_readiness_step_also_retries_into_a_live_window():
+    """Gates that read false because no window was open are worse than no
+    gates: run 35336015691 reported four of them false at 10:43:25Z and the
+    dry run succeeded 21 seconds later."""
+    step = _step("Execution readiness")
+    assert "for attempt in 1 2 3 4 5" in step
+    assert "sleep 45" in step
+    assert "preflight_ok" in step          # it retries on the real condition
+    assert not _sets_the_arm(step)
+
+
+def test_both_window_dependent_steps_use_the_same_bound():
+    """One retry budget, so a dispatch cannot take arbitrarily long."""
+    for name in ("Execution readiness", "L5 WS canary DRY RUN"):
+        step = _step(name)
+        assert 'attempt" = "5"' in step, name
+        assert "sleep 45" in step, name

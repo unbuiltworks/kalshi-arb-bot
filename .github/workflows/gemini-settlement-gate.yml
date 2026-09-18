@@ -126,12 +126,24 @@ jobs:
           # it carries the authoritative contract metadata, the terms gate and
           # the request-transport verdict, and a log expires. A run that finds
           # no eligible window still writes what it could read.
+          # SAME DEAD ZONE AS THE DRY RUN. Run 35336015691 reported
+          # preflight_ok/contract_tradeable/quantity_valid/price_valid all
+          # FALSE at 10:43:25Z and the dry run 21 seconds later succeeded --
+          # the gates were false for TIMING, not for substance, which is the
+          # most misleading way for a gate report to be wrong. It retries on
+          # the same bounded schedule so the gates describe a real window.
           TS="$(date -u +%Y%m%dT%H%M%SZ)"
-          python -m src.gemini_execution.readiness \
-            > "analysis/gemini/execution_readiness_${TS}.json" || true
-          if [ ! -s "analysis/gemini/execution_readiness_${TS}.json" ]; then
-            rm -f "analysis/gemini/execution_readiness_${TS}.json"
-          fi
+          OUT="analysis/gemini/execution_readiness_${TS}.json"
+          for attempt in 1 2 3 4 5; do
+            python -m src.gemini_execution.readiness > "$OUT" || true
+            if python3 -c "import json,sys; d=json.load(open('$OUT')); sys.exit(0 if (d.get('gates') or {}).get('preflight_ok') else 1)" 2>/dev/null; then
+              echo "gates evaluated against a live window on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt: no eligible BTC5m window; waiting 45s"
+            [ "$attempt" = "5" ] || sleep 45
+          done
+          if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi
 
       - name: L5 WS canary DRY RUN (renders the frame; opens no socket)
         env:
