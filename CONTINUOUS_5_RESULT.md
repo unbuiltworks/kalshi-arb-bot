@@ -206,3 +206,54 @@ hash.
 
 **Nothing else should change.** No controller tuning, no pair-cost gate, no
 sizing change, no orderUpdate parser.
+
+---
+
+# CORRECTION, 2026-09-18T21:46Z — one order DID fill
+
+**My earlier statement "FILLED: none / cash committed $0.00" was true at the
+post-window read (21:05:33) and is now superseded.** A read-only reconciliation
+of the two orders CONTINUOUS-5 left resting shows one of them filled **after**
+the window had already stopped.
+
+Evidence: `analysis/gemini/reconcile_slot_20260918T214547Z_c5s0.json` and
+`…214606Z_c5s1.json`, Actions run 35398258335. No `--apply-from`, so nothing
+was written to the C5 ledger; the C5 authorization stays spent and untouched.
+
+| order | leg | price | outcome |
+|---|---|---|---|
+| `145828836250441357` | **NO 0.01 @ 0.46** | 0.46 | **FILLED** — `filledQuantity 0.01`, `remainingQuantity 0`, `status filled`, `updatedAt 21:06:29.459Z` |
+| `145828836250441342` | YES 0.01 @ 0.26 | 0.26 | **never filled** — `filledQuantity 0`, `status closed`, `cancelledAt 21:10:00.166Z` (the venue closed it at expiry) |
+
+Both are gone from the active list (`active_orders: 0`). The contract
+**SETTLED**: `resolutionSide "yes"` at **21:10:09.929Z**, `marketState closed`.
+
+## What that means, in the strict labels
+
+* **FILLED: 1.** NO 0.01 @ 0.46 at 21:06:29Z, venue-confirmed — **57 seconds
+  after the window terminated at 21:05:32.**
+* **Position: an unmatched NO 0.01.** Pure **directional residual**. There is
+  no matched pair here and nothing to report as matched-pair economics.
+* **SETTLED against it.** The contract resolved **YES**; a NO leg pays $0.00.
+* **EXPECTED settlement P&L −$0.0046** — cost $0.0046, payout $0.00. This is
+  **EXPECTED, not REALIZED**, on the same footing as CONTINUOUS-4's −$0.0006:
+  no attributable cashflow has ever been observed on this venue.
+* **REALIZED remains $0.00.**
+
+## The lesson, which is not the one I drew first
+
+I wrote that the window "committed $0.00" and that nothing was at risk. That
+was wrong in an instructive way. **A fail-closed stop stops the controller, not
+the orders.** The driver refused to guess about an ambiguous cancel and halted
+— correctly — but the two maker orders it had already placed stayed live on the
+venue. One of them was hit a minute later, and it settled against us.
+
+So the cancel defect did not merely cost a window. It cost the window *and*
+left an unhedged leg resting, on a contract that then resolved the other way.
+The YES leg the controller was trying to reprice — the one whose cancel was
+rejected — is the leg that would have been the complement.
+
+This is a **risk property to see plainly**, not a strategy conclusion, and I am
+not proposing a change to it here. Stopping with orders live is still safer
+than guessing at a venue state we cannot read. But "failed closed" and "no
+exposure" are not the same sentence, and I stated them as if they were.
