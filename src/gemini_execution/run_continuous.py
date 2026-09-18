@@ -853,7 +853,23 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     rep["authoritative_state"] = {
         "fills": st.get("fills"), "open_orders": st.get("open_orders"),
         "order_history": st.get("order_history_raw"),
-        "active": st.get("active_raw")}
+        "active": st.get("active_raw"),
+        # THE COHERENCE GATE'S OWN EVIDENCE SOURCES, reported so a reader
+        # that silently stopped working is visible here rather than as a
+        # window that stalls on every disappearance. None is UNREADABLE and
+        # is never the same claim as an empty list.
+        "terminal_seen": (None if st.get("terminal_seen") is None
+                          else len(st["terminal_seen"])),
+        "trades": (None if st.get("trades") is None else len(st["trades"])),
+        "coherence_readers": {
+            "terminal_history_readable": st.get("terminal_seen") is not None,
+            "trades_readable": st.get("trades") is not None,
+            "terminal_history_error": st.get("terminal_history_error"),
+            "trades_error": st.get("trades_error"),
+            "why": ("the gate explains a disappearance from these two reads "
+                    "plus filled history; if either is unreadable, an "
+                    "unexplained order stops the window instead of being "
+                    "assumed away")}}
 
     # A THROWAWAY Driver. recover() writes nothing -- not the ledger, not the
     # venue -- it only populates the instance it is called on, so a separate
