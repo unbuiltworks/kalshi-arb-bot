@@ -99,10 +99,29 @@ def test_a_member_losing_an_authorization_constant_is_refused(monkeypatch):
         B.bundle_sha()
 
 
-def test_no_bundle_authorization_is_installed_right_now():
-    assert B.AUTHORIZED_BUNDLE is None
+def test_an_installed_bundle_authorization_names_the_running_bundle():
+    """THE DURABLE INVARIANT.
+
+    This asserted AUTHORIZED_BUNDLE is None, which was true of one hour rather
+    than of the mechanism -- installing CONTINUOUS-4 turned it red, which is
+    the system working. What must hold always: the constant is either absent,
+    or it names the bundle that is actually running. Naming a DIFFERENT one is
+    the only failure that matters, and it is what the gate exists to catch.
+    """
+    assert B.AUTHORIZED_BUNDLE is None or B.AUTHORIZED_BUNDLE == B.bundle_sha()
+    if B.AUTHORIZED_BUNDLE is None:
+        assert B.authorized() is False
+        assert "no bundle authorization" in " ".join(B.state()["why_not"])
+    else:
+        assert B.authorized() is True
+        assert B.state()["why_not"] == []
+
+
+def test_a_bundle_authorization_naming_other_code_is_refused(monkeypatch):
+    """The converse, which no state of the repository can make vacuous."""
+    monkeypatch.setattr(B, "AUTHORIZED_BUNDLE", "f" * 64)
     assert B.authorized() is False
-    assert "no bundle authorization" in " ".join(B.state()["why_not"])
+    assert "different bundle" in " ".join(B.state()["why_not"])
 
 
 def test_the_bundle_gate_can_open(monkeypatch):
