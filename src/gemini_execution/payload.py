@@ -197,3 +197,127 @@ def sanitized_decoded(order: Mapping[str, Any], *,
                               "reads the fields from either place (measured "
                               "2026-09-18)"),
     }
+
+
+# =====================================================================
+# THE WEBSOCKET DIALECT -- the transport this account has actually used.
+#
+# Same order model, different spelling: upper-case side and outcome, `type`
+# rather than `orderType`, `eventOutcome` rather than `outcome`, and
+# maker-only as timeInForce "MOC" rather than a boolean. The venue normalises
+# its own records to the REST spelling, so these are two dialects over one
+# model -- which is exactly why sending one dialect's field names down the
+# other's transport has to be refused by name rather than hoped against.
+
+#: EXACTLY the params of the known-good frame. Equality, not subset.
+WS_ALLOWED_FIELDS = spec.WS_ORDER_FIELDS
+
+#: REST spellings, which are wrong HERE, and the spot shapes, which are wrong
+#: everywhere. Each refuses by name so a refusal explains itself.
+WS_FORBIDDEN = {
+    "orderType": 'the REST spelling; this transport takes `type`',
+    "outcome": 'the REST spelling; this transport takes `eventOutcome`',
+    "makerOrCancel": 'the REST boolean; here maker-only is timeInForce "MOC"',
+    "options": "the SPOT maker-or-cancel array, not this API's",
+    "amount": "the SPOT size field; this API takes `quantity`",
+    "stopPrice": "belongs to stop orders; this canary is a limit order",
+}
+
+
+def build_ws_order(*, symbol: str, price: str, quantity: str,
+                   client_order_id: str, outcome: str = spec.WS_OUTCOME_YES,
+                   side: str = spec.WS_SIDE_BUY) -> Dict[str, Any]:
+    """The params of the known-good frame, in its field order.
+
+    clientOrderId IS sent here, unlike on REST. It is not a guess: it is in
+    the recovered frame, and the venue stores and returns it on this
+    account's own orders -- which is what makes reconciliation authoritative
+    rather than positional.
+    """
+    return {
+        "symbol": symbol,
+        "side": side,
+        "type": spec.WS_TYPE_LIMIT,
+        "timeInForce": spec.WS_TIF_MAKER_ONLY,
+        "price": str(price),
+        "quantity": str(quantity),
+        "eventOutcome": outcome,
+        "clientOrderId": str(client_order_id),
+    }
+
+
+def assert_ws_types(params: Mapping[str, Any]) -> Dict[str, str]:
+    cid = params.get("clientOrderId")
+    checks = {
+        "symbol": (isinstance(params.get("symbol"), str)
+                   and bool(params.get("symbol"))),
+        "side": params.get("side") in (spec.WS_SIDE_BUY, "SELL"),
+        "type": params.get("type") == spec.WS_TYPE_LIMIT,
+        # MAKER-ONLY IS THE WHOLE POINT. good-til-cancel, IOC and FOK are all
+        # valid values here and none of them is post-only; both recovered
+        # historical rows were fill-or-kill, i.e. takers.
+        "timeInForce": params.get("timeInForce") == spec.WS_TIF_MAKER_ONLY,
+        "price": _is_decimal_string(params.get("price")),
+        "quantity": _is_decimal_string(params.get("quantity")),
+        "eventOutcome": params.get("eventOutcome") in (spec.WS_OUTCOME_YES,
+                                                       spec.WS_OUTCOME_NO),
+        "clientOrderId": (isinstance(cid, str) and 0 < len(cid)
+                          <= spec.WS_CLIENT_ID_MAX),
+    }
+    bad = [k for k, ok in checks.items() if not ok]
+    if bad:
+        raise PayloadViolation(
+            "WS field(s) %s fail their type/value assertion: %s"
+            % (bad, {k: repr(params.get(k)) for k in bad}))
+    return {
+        "symbol": "string",
+        "side": 'string, exactly "BUY"',
+        "type": 'string, exactly "LIMIT"',
+        "timeInForce": 'string, exactly "MOC" -- maker-only, not GTC/IOC/FOK',
+        "price": "decimal string, aligned to contract metadata",
+        "quantity": "decimal string, from contract metadata",
+        "eventOutcome": 'string, exactly "%s"' % params["eventOutcome"],
+        "clientOrderId": "string, 1..%d chars" % spec.WS_CLIENT_ID_MAX,
+    }
+
+
+def validate_ws_structure(params: Mapping[str, Any]) -> Dict[str, Any]:
+    keys = set(params)
+    allowed = set(WS_ALLOWED_FIELDS)
+    unknown = sorted(keys - allowed)
+    missing = sorted(allowed - keys)
+    named = {k: WS_FORBIDDEN[k] for k in unknown if k in WS_FORBIDDEN}
+    if unknown:
+        raise PayloadViolation(
+            "unknown WS param(s) %s%s" % (unknown, (" -- " + json.dumps(named))
+                                          if named else ""))
+    if missing:
+        raise PayloadViolation("missing WS param(s) %s" % missing)
+    return {"unknown": [], "missing": [], "allowed": list(WS_ALLOWED_FIELDS)}
+
+
+def sanitized_ws_frame(params: Mapping[str, Any], *,
+                       request_id: str = "<uuid4 hex, per request>",
+                       method: str = spec.WS_PLACE_METHOD) -> Dict[str, Any]:
+    """The exact frame, as it would go on the socket, with nothing removed.
+
+    SANITIZED is close to a no-op here and that is the point: unlike the REST
+    path there is no per-message nonce, payload or signature to redact. The
+    socket was authenticated once, at the handshake, so the frame carries no
+    credential material of any kind.
+    """
+    validate_ws_structure(params)
+    types = assert_ws_types(params)
+    frame = {"id": request_id, "method": method, "params": dict(params)}
+    return {
+        "frame": frame,
+        "frame_json": json.dumps(frame, separators=(",", ":")),
+        "types": types,
+        "structure": validate_ws_structure(params),
+        "auth_note": ("no per-message nonce, payload or signature: the socket "
+                      "is authenticated once at the handshake by "
+                      "websocket_auth_headers, and the frame carries no "
+                      "credential material"),
+        "ack_contract": "accepted iff the ack's `status` is %d"
+                        % spec.WS_ACK_OK,
+    }

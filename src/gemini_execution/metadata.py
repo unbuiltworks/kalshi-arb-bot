@@ -606,6 +606,34 @@ async def order_history(*, since_ms: Optional[int] = None,
                                else str(r.text)[:200])
         else:
             total += len(rows)
+            # AGGREGATES over the whole page, not just the sample: what
+            # timeInForce this venue has actually accepted from us, what
+            # quantities, and whether any BTC5m contract appears at all.
+            # "historical orders were quantity 1" is a fact about MLB rows
+            # unless the rows say otherwise.
+            tifs: Dict[str, int] = {}
+            qtys: Dict[str, int] = {}
+            btc = 0
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                t = str(row.get("timeInForce"))
+                tifs[t] = tifs.get(t, 0) + 1
+                q = str(row.get("quantity"))
+                qtys[q] = qtys.get(q, 0) + 1
+                if str(row.get("symbol") or "").startswith("GEMI-BTC"):
+                    btc += 1
+            entry["timeInForce_counts"] = tifs
+            entry["quantity_counts"] = dict(sorted(
+                qtys.items(), key=lambda kv: -kv[1])[:12])
+            entry["btc_rows"] = btc
+            entry["btc_samples"] = [
+                {k: r.get(k) for k in ("symbol", "side", "outcome",
+                                       "orderType", "timeInForce", "price",
+                                       "quantity", "filledQuantity",
+                                       "status", "createdAt")}
+                for r in rows if isinstance(r, dict)
+                and str(r.get("symbol") or "").startswith("GEMI-BTC")][:3]
             # first row's SHAPE and identifiers only -- enough to prove an
             # order existed and to compare its fields, without dumping an
             # account's whole history into an artifact.

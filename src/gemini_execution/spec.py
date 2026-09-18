@@ -94,6 +94,50 @@ RESOLUTION_FIELDS: Final = ("status", "resolutionSide", "resolvedAt",
                             "settlementValue")
 STATUS_SETTLED: Final = "settled"
 
+# =====================================================================
+# THE WEBSOCKET ORDER TRANSPORT -- the one this account has actually used.
+#
+# Recovered 2026-09-18 from the repository's own history and confirmed
+# against the venue: every accepted order on these credentials was placed
+# with method `order.place` over the authenticated socket, not over REST.
+# The REST path has exactly one attempt against it and it was rejected.
+#
+# The frame is a plain JSON message on an ALREADY-authenticated socket:
+#
+#     {"id": "<request id>", "method": "order.place", "params": {...}}
+#
+# There is no per-message nonce, payload or signature. Authentication
+# happens once, in the connection handshake, via websocket_auth_headers.
+#
+# The params use a DIFFERENT dialect from REST for the same order model:
+# upper-case side and outcome, `type` rather than `orderType`,
+# `eventOutcome` rather than `outcome`, and maker-only expressed as the
+# timeInForce "MOC" rather than a separate boolean. The venue's own order
+# records normalise all of it to the REST spelling, so these are two
+# dialects over one model rather than two models.
+WS_PLACE_METHOD: Final = "order.place"
+WS_CANCEL_METHOD: Final = "order.cancel"
+#: a BLANKET cancel. Recovered with the rest of the session and deliberately
+#: NOT adopted: this canary cancels one known order or reports OUTSTANDING.
+WS_CANCEL_SESSION_METHOD: Final = "order.cancel_session"
+WS_MUTATION_METHODS: Final = (WS_PLACE_METHOD, WS_CANCEL_METHOD,
+                              WS_CANCEL_SESSION_METHOD)
+WS_SUBSCRIBE_METHOD: Final = "SUBSCRIBE"
+WS_ORDERS_CHANNEL: Final = "orders@account"
+
+#: EXACTLY the params of the known-good frame, in its field order.
+WS_ORDER_FIELDS: Final = ("symbol", "side", "type", "timeInForce", "price",
+                          "quantity", "eventOutcome", "clientOrderId")
+WS_SIDE_BUY: Final = "BUY"
+WS_TYPE_LIMIT: Final = "LIMIT"
+WS_TIF_MAKER_ONLY: Final = "MOC"
+WS_OUTCOME_YES: Final = "YES"
+WS_OUTCOME_NO: Final = "NO"
+#: the historical path truncated client ids at 36 characters
+WS_CLIENT_ID_MAX: Final = 36
+#: acceptance is an ack whose `status` is 200
+WS_ACK_OK: Final = 200
+
 #: response fields we depend on
 ORDER_ID_FIELD: Final = "orderId"
 STATUS_FIELD: Final = "status"

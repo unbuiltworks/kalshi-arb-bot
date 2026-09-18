@@ -20,12 +20,18 @@ from src.gemini_execution import spec
 #: the only package permitted to reach a mutation path
 EXECUTION_PKG = "src/gemini_execution"
 
-#: strings that constitute reaching the venue's mutation surface
-MUTATION_MARKERS = tuple(spec.MUTATION_PATHS) + (
+#: strings that constitute reaching the venue's mutation surface.
+#: The WebSocket METHOD NAMES are in here too, as of 2026-09-18: that
+#: transport is the one this account has actually placed orders through, so
+#: leaving it unguarded would have protected the path that has never worked
+#: while ignoring the one that has.
+MUTATION_MARKERS = tuple(spec.MUTATION_PATHS) + tuple(
+    spec.WS_MUTATION_METHODS) + (
     "/v1/order/new", "/v1/order/cancel", "order/new", "neworder")
 
 #: the write-capable entry points
-MUTATION_CALLS = ("place", "cancel", "cancel_and_confirm", "submit_once")
+MUTATION_CALLS = ("place", "cancel", "cancel_and_confirm", "submit_once",
+                  "submit_once_ws")
 
 
 def _gemini_modules():

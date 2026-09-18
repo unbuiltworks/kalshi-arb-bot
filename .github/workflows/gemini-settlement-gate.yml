@@ -133,6 +133,22 @@ jobs:
             rm -f "analysis/gemini/execution_readiness_${TS}.json"
           fi
 
+      - name: L5 WS canary DRY RUN (renders the frame; opens no socket)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          # DISARMED, and structurally unable to send: dry_run never
+          # constructs a session, and the session refuses mutation methods
+          # without an arm. It prints what the L5 adapter WOULD put on the
+          # wire, over the transport this account has actually used.
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          python -m src.gemini_execution.ws_canary \
+            > "analysis/gemini/ws_dry_run_${TS}.json" || true
+          if [ ! -s "analysis/gemini/ws_dry_run_${TS}.json" ]; then
+            rm -f "analysis/gemini/ws_dry_run_${TS}.json"
+          fi
+
       # ==================================================================
       # THE ONE AUTHORIZED CANARY. Runs only when armed_canary=true is
       # passed on dispatch; otherwise every step above is read-only and
@@ -166,11 +182,12 @@ jobs:
           git add -- 'analysis/gemini/settlement_gate_*.json' \
                      'analysis/gemini/canary_preflight_*.json' \
                      'analysis/gemini/execution_readiness_*.json' \
+                     'analysis/gemini/ws_dry_run_*.json' \
                      'analysis/gemini/canary_latch/*.json'
           if git diff --cached --quiet; then
             echo "no new evidence artifact"; exit 0
           fi
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness)_[0-9TZ]+|canary_latch/latch_[A-Za-z0-9_-]+)\.json$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run)_[0-9TZ]+|canary_latch/latch_[A-Za-z0-9_-]+)\.json$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

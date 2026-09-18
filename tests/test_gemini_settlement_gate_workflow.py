@@ -151,6 +151,7 @@ def _commit_filter():
     ("analysis/gemini/settlement_gate_20260918T004500Z.json", True),
     ("analysis/gemini/canary_preflight_20260918T004500Z.json", True),
     ("analysis/gemini/execution_readiness_20260918T004500Z.json", True),
+    ("analysis/gemini/ws_dry_run_20260918T004500Z.json", True),
     ("analysis/gemini/canary_latch/latch_OWNER-2026-09-17-X.json", True),
     # everything else stays out, whatever the job happens to leave behind
     ("src/gemini_execution/transport.py", False),
@@ -191,3 +192,29 @@ def test_the_latch_path_may_be_committed():
     wf = WF.read_text()
     assert "analysis/gemini/canary_latch/" in wf
     assert "canary_latch/latch_" in wf
+
+
+def test_the_ws_dry_run_step_is_disarmed_and_cannot_submit():
+    """It runs in the credentialed job, so its inability to send has to be
+    structural rather than a matter of which flags the step happens to pass."""
+    wf = WF.read_text()
+    i = wf.index("L5 WS canary DRY RUN")
+    step = wf[i:i + 900]
+    assert "GEMINI_CANARY_LIVE" not in step
+    assert "GEMINI_CANARY_AUTH" not in step
+    assert "|| true" in step                 # a missing window is a result
+    assert "ws_dry_run_" in step
+
+
+def test_the_arm_is_SET_exactly_once_in_the_whole_workflow():
+    """Counting mentions was wrong: the disarmed steps name the variable in a
+    comment in order to say they do not set it, and that comment is the
+    documentation, not a second arm. What must be unique is the ASSIGNMENT."""
+    import re
+    wf = WF.read_text()
+    assigns = re.findall(r'^\s*GEMINI_CANARY_LIVE:\s*\S+', wf, re.M)
+    assert len(assigns) == 1, assigns
+    i = wf.index(assigns[0])
+    assert "ONE authorized Gemini canary" in wf[:i]
+    # and that one assignment sits under the armed-only conditional
+    assert "github.event.inputs.armed_canary == 'true'" in wf[:i]
