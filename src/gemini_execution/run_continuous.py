@@ -27,7 +27,8 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import (Any, Callable, Dict, List, Mapping,
+                    Optional, Sequence)
 
 from src.gemini_execution import bundle as BUNDLE
 from src.gemini_execution import continuous_preflight as PF
@@ -220,6 +221,316 @@ def observed_place_acks(wire: Sequence[Mapping[str, Any]]
                          "NO ACK: the request did not return a reply"),
         })
     return out
+
+
+# ------------------------------------------------------------ DECISION CAPTURE
+# WHAT WAS MISSING. The research question CONTINUOUS-5 exists to answer is
+# whether a real fill changes the L5 ACTION: OPEN -> COMPLETE. The driver's
+# report recorded `_plan_summary(out["plan"])` -- four integers -- and dropped
+# `out["turn"]`, which is where the classification lives. `WindowGuard.record`,
+# which would have logged each decided action, has no caller in the live path.
+# So the one field the experiment turns on was not written down anywhere, and
+# the reasons a cycle did nothing (OSCILLATOR, ENVELOPE with its literal
+# `would_breach` string, END_OF_WINDOW) were lost entirely.
+#
+# WHY IT IS CAPTURED HERE. `decide()` already RETURNS the turn. Recording an
+# already-returned value at the seam this file owns leaves the authorized
+# driver byte-for-byte what was reviewed -- executable_sha and envelope_sha do
+# not move -- which is the same resolution that captured the place acks.
+#
+# EVIDENCE ONLY. Each wrapper makes the SAME call with the SAME arguments,
+# returns the SAME object, propagates every exception untouched, and adds no
+# decision and no mutation of its own. A failure to RECORD is written into the
+# row instead of raised, because evidence capture must never be able to change
+# what the window does.
+
+
+class DecisionObserver:
+    """Transparent per-cycle recorder for the continuous window.
+
+    It wraps three seams and changes none of them:
+
+      `refresh`        this file's own authoritative re-read -- gives the
+                       newly reconciled fills and the read that precedes a
+                       place;
+      `driver.decide`  the decision itself -- inventory it saw, the desired
+                       rungs with their OPEN/EXTEND/COMPLETE labels, every
+                       HOLD with its literal reason, and the resulting plan;
+      `driver.place` / `driver.cancel`
+                       the inventory in force AT the mutation and what the
+                       call returned.
+
+    Nothing here holds a credential, opens a socket or builds a frame. The
+    mutation still happens inside the driver, under the driver's own bounds.
+    """
+
+    def __init__(self) -> None:
+        self.cycles: List[Dict[str, Any]] = []
+        self.reads: List[Dict[str, Any]] = []
+        self.mutations: List[Dict[str, Any]] = []
+        self.decide_calls = 0
+        self.errors: List[str] = []
+        self._prev_fills: Optional[List[Dict[str, Any]]] = None
+        self._prev_order_ids: set = set()
+
+    # ------------------------------------------------------- safe accessors
+    # Every one of these is wrapped: a recorder that can raise is a recorder
+    # that can stop a live window, which is worse than no recorder at all.
+
+    def _safe(self, fn: Callable, default: Any = None) -> Any:
+        try:
+            return fn()
+        except Exception as exc:                               # noqa: BLE001
+            self.errors.append("%s: %s" % (type(exc).__name__, exc))
+            return default
+
+    def _inventory(self, driver: Any) -> Optional[Dict[str, Any]]:
+        return self._safe(
+            lambda: sanitize(driver.inv.report()) if driver.inv else None)
+
+    def _working(self, driver: Any) -> Optional[List[Dict[str, Any]]]:
+        return self._safe(lambda: sanitize(driver.working.rungs()))
+
+    def _budget(self, driver: Any) -> Dict[str, Any]:
+        return self._safe(lambda: {
+            "consumed": driver.budget_consumed,
+            "remaining": driver.budget_left(),
+            "cohort_budget": getattr(driver, "_max_actions", None)}, {})
+
+    # ------------------------------------------------------------- recorders
+
+    def _record_read(self, driver: Any, st: Any,
+                     inventory_before: Optional[Dict[str, Any]]) -> None:
+        row: Dict[str, Any] = {
+            "read_seq": len(self.reads) + 1,
+            "utc": datetime.now(timezone.utc).isoformat(),
+            "decide_calls_so_far": self.decide_calls,
+            "inventory_before_this_read": inventory_before,
+        }
+        try:
+            fills = (st or {}).get("fills")
+            seen = (st or {}).get("orders_seen")
+            openo = (st or {}).get("open_orders")
+            # UNREADABLE IS NOT EMPTY, and the row must say which it was:
+            # None means the read failed, [] means the venue said nothing.
+            row["fills_readable"] = fills is not None
+            row["open_orders_readable"] = openo is not None
+            row["fills"] = None if fills is None else sanitize(fills)
+            row["n_fills"] = None if fills is None else len(fills)
+            row["open_order_ids"] = None if openo is None else sanitize(
+                [o.get("clientOrderId") or o.get("client_order_id")
+                 for o in openo])
+            ids = set()
+            if isinstance(seen, list):
+                ids = {str(o.get("orderId") or o.get("order_id"))
+                       for o in seen if isinstance(o, Mapping)}
+            row["new_fill_order_ids"] = sorted(ids - self._prev_order_ids)
+            row["new_fills"] = self._new_fills(fills)
+            if fills is not None:
+                self._prev_fills = list(fills)
+                self._prev_order_ids |= ids
+        except Exception as exc:                               # noqa: BLE001
+            row["record_error"] = "%s: %s" % (type(exc).__name__, exc)
+        self.reads.append(row)
+
+    def _new_fills(self, fills: Any) -> Optional[List[Dict[str, Any]]]:
+        """Fills present now that were not present at the previous read.
+
+        A MULTISET difference, not a set one: two identical 0.01 @ 0.14 fills
+        are two fills, and collapsing them would hide exactly the second fill
+        this experiment is watching for.
+        """
+        if fills is None:
+            return None
+        if self._prev_fills is None:
+            return sanitize(list(fills))
+        rest = [dict(f) for f in self._prev_fills]
+        new = []
+        for f in fills:
+            match = next((i for i, p in enumerate(rest) if p == f), None)
+            if match is None:
+                new.append(f)
+            else:
+                rest.pop(match)
+        return sanitize(new)
+
+    def _record_decision(self, driver: Any, pre: Dict[str, Any],
+                         out: Any) -> None:
+        row = dict(pre)
+        try:
+            turn = (out or {}).get("turn") or {}
+            plan = (out or {}).get("plan") or {}
+            actions = list(turn.get("actions") or [])
+            holds = list(turn.get("holds") or [])
+            row.update({
+                "state": (out or {}).get("state"),
+                "window_phase": ((out or {}).get("window_phase")
+                                 or turn.get("window_phase")),
+                "why": (out or {}).get("why"),
+                # THE FIELD THE EXPERIMENT TURNS ON. Each entry carries the
+                # leg, the price, the quantity and the L5 label.
+                "actions": sanitize(actions),
+                "classification": [str(a.get("action")) for a in actions],
+                # and every rung that was NOT acted on, with its literal
+                # reason: OSCILLATOR, ENVELOPE (the would_breach string) or
+                # END_OF_WINDOW.
+                "holds": sanitize(holds),
+                "held_by": [str(h.get("held_by")) for h in holds],
+                "plan": {
+                    "keep": sanitize([k.get("order") for k in
+                                      (plan.get("keep") or [])]),
+                    "place": sanitize([p.get("rung") for p in
+                                       (plan.get("place") or [])]),
+                    "cancel": sanitize([c.get("order") for c in
+                                        (plan.get("cancel") or [])]),
+                    "mutations": plan.get("mutations"),
+                },
+                "turn": {k: sanitize(turn.get(k)) for k in
+                         ("actions_remaining", "probe_state", "stop",
+                          "why_no_surface", "blocked_by")},
+                "budget_after_decision": self._budget(driver),
+            })
+        except Exception as exc:                               # noqa: BLE001
+            row["record_error"] = "%s: %s" % (type(exc).__name__, exc)
+        self.cycles.append(row)
+
+    def _record_mutation(self, kind: str, driver: Any, target: Any,
+                         at_call: Dict[str, Any], result: Any,
+                         error: Optional[str]) -> None:
+        """`at_call` is taken BEFORE the inner call and passed in.
+
+        It has to be. The driver spends the slot before the frame goes out,
+        so a budget read after the call is the budget AFTER the spend, and
+        the inventory can move under a fill. Both readings are kept: the one
+        the mutation was made against, and the one it left behind.
+        """
+        row: Dict[str, Any] = {
+            "mutation_seq": len(self.mutations) + 1,
+            "utc": datetime.now(timezone.utc).isoformat(),
+            "kind": kind,
+            "cycle": self.decide_calls,
+        }
+        try:
+            row["target"] = sanitize(target)
+            row.update(at_call)
+            row["budget_after_call"] = self._budget(driver)
+            row["result"] = None if result is None else sanitize(result)
+            if error is not None:
+                row["error"] = error
+        except Exception as exc:                               # noqa: BLE001
+            row["record_error"] = "%s: %s" % (type(exc).__name__, exc)
+        self.mutations.append(row)
+
+    def _at_call(self, driver: Any) -> Dict[str, Any]:
+        """THE STATE IN FORCE AT THE MUTATION -- not at the decision.
+
+        A post-cancel refresh sits between the two, and CONTINUOUS-4's $1.06
+        pair is exactly what a stale answer to this question looks like.
+        """
+        return {"inventory_at_call": self._inventory(driver),
+                "budget_at_call": self._budget(driver)}
+
+    # ------------------------------------------------------------- the seams
+
+    def attach(self, driver: Any, refresh_fn: Callable) -> Callable:
+        """Install the wrappers and return the observed `refresh`.
+
+        The inner callables are bound BEFORE the attributes are replaced, so
+        each wrapper calls the driver's own original method exactly once.
+        """
+        inner_decide = driver.decide
+        inner_place = driver.place
+        inner_cancel = driver.cancel
+
+        async def refresh(*a: Any, **kw: Any) -> Any:
+            before = self._inventory(driver)
+            st = await refresh_fn(*a, **kw)
+            self._record_read(driver, st, before)
+            return st
+
+        def decide(*a: Any, **kw: Any) -> Any:
+            self.decide_calls += 1
+            pre = {
+                "cycle": self.decide_calls,
+                "utc": datetime.now(timezone.utc).isoformat(),
+                "tte_s": a[0] if a else kw.get("tte_s"),
+                "inventory_before_decision": self._inventory(driver),
+                "working_orders_before": self._working(driver),
+                "budget_before_decision": self._budget(driver),
+            }
+            out = inner_decide(*a, **kw)
+            self._record_decision(driver, pre, out)
+            return out
+
+        async def place(*a: Any, **kw: Any) -> Any:
+            target = a[1] if len(a) > 1 else kw.get("rung")
+            at = self._at_call(driver)
+            try:
+                res = await inner_place(*a, **kw)
+            except BaseException as exc:                       # noqa: BLE001
+                self._record_mutation("PLACE", driver, target, at, None,
+                                      "%s: %s" % (type(exc).__name__, exc))
+                raise
+            self._record_mutation("PLACE", driver, target, at, res, None)
+            return res
+
+        async def cancel(*a: Any, **kw: Any) -> Any:
+            target = a[1] if len(a) > 1 else kw.get("order")
+            at = self._at_call(driver)
+            try:
+                res = await inner_cancel(*a, **kw)
+            except BaseException as exc:                       # noqa: BLE001
+                self._record_mutation("CANCEL", driver, target, at, None,
+                                      "%s: %s" % (type(exc).__name__, exc))
+                raise
+            self._record_mutation("CANCEL", driver, target, at, res, None)
+            return res
+
+        driver.decide = decide
+        driver.place = place
+        driver.cancel = cancel
+        return refresh
+
+    def link_refreshes(self, refreshes: Any) -> Dict[str, Any]:
+        """Copy the driver's OWN `when` label onto each observed read.
+
+        The phase could be inferred from call order, but the driver already
+        states it. Joining the authoritative label beats inferring one, and
+        when the two lists do not line up that is itself recorded rather than
+        papered over with a guess.
+        """
+        rows = list(refreshes or [])
+        if len(rows) != len(self.reads):
+            return {"linked": False,
+                    "why": ("driver recorded %d refresh(es), observer saw %d; "
+                            "phases left unlabelled rather than guessed"
+                            % (len(rows), len(self.reads)))}
+        for read, ref in zip(self.reads, rows):
+            read["when"] = ref.get("when")
+            read["driver_cycle"] = ref.get("cycle")
+        return {"linked": True, "reads": len(rows)}
+
+    def summary(self) -> Dict[str, Any]:
+        labels: Dict[str, int] = {}
+        for c in self.cycles:
+            for lab in (c.get("classification") or []):
+                labels[lab] = labels.get(lab, 0) + 1
+            for lab in (c.get("held_by") or []):
+                labels["HOLD:" + lab] = labels.get("HOLD:" + lab, 0) + 1
+        return {
+            "decide_calls": self.decide_calls,
+            "cycles_recorded": len(self.cycles),
+            "authoritative_reads": len(self.reads),
+            "mutations_observed": len(self.mutations),
+            "action_labels": labels,
+            "record_errors": self.errors[:20],
+            "note": ("EVIDENCE ONLY. Each wrapper makes the same call with "
+                     "the same arguments, returns the same object and "
+                     "propagates every exception. It adds no decision, no "
+                     "mutation and no bound; every limit is still enforced "
+                     "inside ws_continuous.Driver, whose executable_sha is "
+                     "unchanged by this capture."),
+        }
 
 
 def _expiry_epoch(symbol: str) -> Optional[float]:
@@ -595,6 +906,13 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # the observer wraps the real session; the arm gate and every bound
     # still run inside the objects it delegates to.
     session = RecordingSession(GeminiMakerSession(id_prefix="l5cp"))
+    # BOUND BEFORE THE WINDOW RUNS, not after it, so a window that dies
+    # mid-cycle still leaves every decision it had already made on disk.
+    # These are the observer's own lists, so later appends land in `rep`.
+    decisions = DecisionObserver()
+    rep["decisions"] = decisions.cycles
+    rep["authoritative_reads"] = decisions.reads
+    rep["mutations_observed"] = decisions.mutations
     try:
         await session.connect()
         rep["session"] = "connected"
@@ -607,15 +925,21 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         async def refresh() -> Dict[str, Any]:
             return await authoritative_state(symbol)
 
+        # EVIDENCE ONLY: same decide call, same returned object, same plan,
+        # same ordering. `attach` returns the observed refresh; the driver is
+        # otherwise untouched and its executable_sha does not move.
+        observed_refresh = decisions.attach(driver, refresh)
+
         out = await driver.run_window(
             session, tte_of=tte_of(symbol),
             venue_fills=st.get("fills"),
             venue_open=st.get("open_orders"),
             venue_orders=st.get("orders_seen"),
             readers=readers,
-            refresh_fn=refresh,
+            refresh_fn=observed_refresh,
             interval_s=5.0)
         rep["window"] = out
+        rep["refresh_link"] = decisions.link_refreshes(out.get("refreshes"))
     except Exception as exc:                                   # noqa: BLE001
         rep["window_error"] = "%s: %s" % (type(exc).__name__, exc)
         rep["state"] = driver.state
@@ -624,6 +948,7 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         # BEFORE close(), and in `finally`, because the whole point is to
         # still have the ack when the window ends badly.
         rep["wire"] = session.wire
+        rep["decision_capture"] = decisions.summary()
         rep["place_acks_observed"] = observed_place_acks(session.wire)
         rep["place_ack_note"] = (
             "OBSERVED, not inferred: each ack below is the venue's own "

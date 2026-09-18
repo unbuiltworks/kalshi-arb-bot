@@ -9,10 +9,14 @@ sole research question is:
 ## Hashes
 
 ```
-executable_sha  3194e6912c343a41c4aefe975f8ac7f5c975be5bb6cbb7bfe5ae9f535ac3abf1   NEW
+executable_sha  3194e6912c343a41c4aefe975f8ac7f5c975be5bb6cbb7bfe5ae9f535ac3abf1   UNCHANGED
 envelope_sha    b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17   UNCHANGED
-bundle_sha      48f7f1f44ed7537f1baf5c73c91b0b4a4f9293fc9758dea3bad0259ad44ca56f   NEW
+bundle_sha      61c7abf3f82d2c2fee30b544fa7ac23b0e4550a5a46cf5b4229743d61dec8c61   NEW
 ```
+
+The bundle moved once more, and **only** the bundle: the decision capture
+lives in `run_continuous.py`, which is a bundle member. `48f7f1f4…a56f` is
+superseded.
 
 `envelope_sha` is unchanged because **no bound moved**. The driver hash moved
 for one reason: `Driver` gained `max_actions`, which a cohort may use to
@@ -95,54 +99,64 @@ is for. `tests/test_gemini_cohort_and_cycle.py::
 test_no_pair_cost_gate_exists_in_this_path` pins the absence of every
 enumerated ceiling — 0.96, 0.98, 1.00, 1.05 — so one cannot reappear silently.
 
-## What the window will and will not capture
+## What the window captures — the gap is closed
 
-The objective is `REAL FILL → AUTHORITATIVE REFRESH → CHANGED INVENTORY →
-CHANGED L5 ACTION`, so what the artifacts hold decides whether it can be
-answered at all. Measured against the ten required per-cycle items:
+`DecisionObserver` in `run_continuous.py` wraps three seams and changes none
+of them. Each wrapper makes the **same call with the same arguments, returns
+the same object** (asserted by identity, not equality), propagates every
+exception untouched, and adds no decision, no frame and no bound. A failure to
+*record* is written into the row rather than raised, because a recorder that
+can stop a live window is worse than no recorder.
 
-| required per cycle | captured? | where |
-|---|---|---|
-| authoritative YES/NO inventory before decision | **yes** | `refreshes[when="pre_decide"]`, `turns[].inventory` |
-| working orders | **count only** | `refreshes[].resting`, `refreshes[].working`; full list at terminal `working_orders` |
-| new fills since prior cycle | **derivable** | `refreshes[].n_fills` delta + `changed`; identities only in `after` |
-| **L5 OPEN/EXTEND/COMPLETE/HOLD classification** | **NO** | — see below |
-| prices and quantities | **placed only** | `wire[]`, ledger rows; the decided-but-held surface is dropped |
-| effective matched-pair cost | **yes** | `turns[].inventory.effective_matched_pair_cost` |
-| mutation plan | **counts only** | `turns[].plan` = `{keep, place, cancel, mutations}` |
-| KEEP/CANCEL/PLACE results | **place/cancel yes** | `wire[]` acks + append-only ledger; KEEP is a count |
-| remaining cohort budget | **yes** | `turns[].budget_left` |
-| risk state | **inputs only** | inventory carries residual/imbalance/spend; `would_breach` strings on held rungs are dropped |
+| required per cycle | where it now lands |
+|---|---|
+| cycle / timestamp / TTE | `decisions[].cycle`, `.utc`, `.tte_s` |
+| authoritative pre-decision YES/NO inventory | `decisions[].inventory_before_decision` — read at the call, after the `pre_decide` refresh |
+| matched inventory and directional residual | same record: `matched_qty`, `directional_residual` |
+| imbalance and total spend | same record: `inventory_imbalance`, `total_spend_usd`, plus `effective_matched_pair_cost` |
+| current working orders | `decisions[].working_orders_before` — full rungs, not a count |
+| newly reconciled fills | `authoritative_reads[].new_fills` (**multiset** difference) and `.new_fill_order_ids` |
+| desired rung side / price / quantity | `decisions[].actions[]` — `leg`, `outcome`, `price`, `qty`, `rung_index`, `ticks_behind_bid` |
+| exact OPEN / EXTEND / COMPLETE | `decisions[].actions[].action` and `.classification` |
+| every HOLD with price and literal reason | `decisions[].holds[]` — `held_by` ∈ `OSCILLATOR` / `ENVELOPE` / `END_OF_WINDOW`, and for `ENVELOPE` the verbatim `would_breach` sentence |
+| resulting KEEP / CANCEL / PLACE plan | `decisions[].plan` — itemized, not counted |
+| post-cancel authoritative refresh | `authoritative_reads[]` with the driver's **own** `when` label joined on |
+| inventory used for any subsequent PLACE | `mutations_observed[].inventory_at_call`, read *before* the inner call |
+| mutation slots consumed / remaining | `budget_before_decision`, `budget_after_decision`, `budget_at_call`, `budget_after_call` |
 
-**The gap is real and it sits on the load-bearing field.** `decide()` builds the
-turn — `actions` carrying `OPEN`/`EXTEND`/`COMPLETE` with leg, price, qty, and
-`holds` carrying `HOLD` with `held_by` `OSCILLATOR`/`ENVELOPE`/`END_OF_WINDOW`
-and, for `ENVELOPE`, the literal `would_breach` reason. `run_window` records
-`_plan_summary(out["plan"])` — four integers — and discards `out["turn"]`.
-`WindowGuard.record()`, which would have logged each decided action, has no
-caller in the live path (only `continuous_preflight`), so `guard.log` holds
-nothing but STOP events.
+**Why `at_call` is read before the call and not after.** The driver spends the
+slot *before* the frame goes out, so a budget read afterwards is the budget
+after the spend, and inventory can move under a fill in between. Both readings
+are kept.
 
-**What that costs.** The label is *reconstructible* for actioned rungs:
-`classify()` is pure in the inventory residual, the residual is recorded per
-cycle, so `classify(leg, recorded_inventory)` is exact. What is **not**
-recoverable is why a cycle did nothing — OSCILLATOR suppression, an ENVELOPE
-breach, or the end-of-window floor — and the prices of rungs that were decided
-and then held.
+**Why the phase label is joined, not inferred.** The read order could be used
+to infer `pre_decide` / `post_cancel`, but the driver already states it, so the
+observer copies the authoritative label across. When the two lists do not line
+up, `refresh_link` says so instead of guessing.
 
-**Why it is not fixed in this proposal.** Both fixes move a hash that has been
-pinned for verification:
+**Unreadable is still not empty** in the capture: a failed read records
+`fills_readable: false` and `new_fills: null`, never `[]`.
 
-* recording `out["turn"]` inside `ws_continuous.run_window` moves
-  `executable_sha` **and** `bundle_sha`;
-* wrapping `driver.decide` with a transparent observer in the invoker — the
-  same already-returned-value pattern that captured the place acks — leaves
-  `executable_sha` and `envelope_sha` untouched and moves **only**
-  `bundle_sha`.
+### The regression that makes it evidence
 
-The second is about ten lines and changes no control flow. It is offered, not
-taken: changing a hash the owner pinned is the owner's call, and the standing
-resolution is that evidence capture never edits the authorized executable.
+`tests/test_gemini_decision_observer.py` — 17 tests. The load-bearing one runs
+the **same scripted window twice**, once observed and once not, and compares
+all three durable surfaces **byte for byte**: the driver's own report, the
+frames that reached the session, and the append-only mutation ledger. Only
+uuid4 client-order-ids and wall-clock stamps are canonicalised, renamed in
+first-appearance order so that how many orders, in what order, at what prices
+still has to match. The run is a real one — it cancels and places, and spends
+2 slots.
+
+Alongside it: `decide` returns the driver's own object by identity; exceptions
+propagate untouched (the driver's RECONCILE path depends on seeing them); an
+exploding recorder does not stop the window; one `decide` call per cycle and
+not one extra frame; and a structural check that the recorder composes no
+frame, reads no credential and restates no envelope bound.
+
+The classification test runs the **real** controller at the CONTINUOUS-4 state
+— holding NO 0.01 @ 0.14 it records `COMPLETE` for YES 0.90 and `EXTEND` for
+NO 0.07, with the inventory the decision actually saw.
 
 ## Unarmed production-shaped verification — the eight required checks
 
@@ -225,7 +239,7 @@ reconstruction is never labelled realized.
 > authorization ID `OWNER-2026-09-18-GEMINI-CONTINUOUS-5`, executable SHA
 > `3194e6912c343a41c4aefe975f8ac7f5c975be5bb6cbb7bfe5ae9f535ac3abf1`, envelope
 > SHA `b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17`,
-> bundle SHA `48f7f1f44ed7537f1baf5c73c91b0b4a4f9293fc9758dea3bad0259ad44ca56f`,
+> bundle SHA `61c7abf3f82d2c2fee30b544fa7ac23b0e4550a5a46cf5b4229743d61dec8c61`,
 > and mutation cohort `COHORT-2026-09-18-C5` with its bounded budget of 6
 > slots. Its sole purpose is to observe real fill → authoritative refresh →
 > changed inventory → changed L5 action. No second window, rollover, budget
