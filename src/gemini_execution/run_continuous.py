@@ -408,34 +408,6 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                                "spent, so the authorization is untouched"}
         return rep
 
-    # ----------------------------------------------------- AUTHORIZATION
-    # THE ORDER IS FIXED AND IT MATTERS:
-    #   read-only preflight -> READY -> authorization -> durable latch ->
-    #   ledger intent/fsync -> socket mutation
-    # Authorization is validated AFTER the preflight because a preflight is a
-    # read and must be free, and BEFORE the latch because spending an
-    # authorization we were never going to be able to use is pure loss.
-    auth = WC.authorization_state()
-    rep["authorization"] = auth
-    if not auth["authorized"]:
-        rep["state"] = READY_BUT_UNAUTHORIZED
-        rep["why"] = "not authorized: %s" % "; ".join(auth["why_not"])
-        rep["latch"] = {"consumed": False,
-                        "why": "authorization was refused BEFORE the latch "
-                               "was spent; the authorization is untouched"}
-        return rep
-
-    rep["bundle"] = BUNDLE.state()
-    if not rep["bundle"]["authorized"]:
-        rep["state"] = READY_BUT_UNAUTHORIZED
-        rep["why"] = ("bundle not authorized: %s"
-                      % "; ".join(rep["bundle"]["why_not"]))
-        rep["latch"] = {"consumed": False,
-                        "why": "the bundle authorization was refused BEFORE "
-                               "the latch was spent; the authorization is "
-                               "untouched"}
-        return rep
-
     # ------------------------------------- AUTHORITATIVE READ, THEN RECOVERY
     # BOTH BEFORE THE LATCH, AND THAT ORDERING IS THE WHOLE POINT OF THIS
     # BLOCK. CONTINUOUS-3 reached this line with every gate open, spent its
@@ -461,7 +433,14 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
     pre = probe.recover(venue_fills=st.get("fills"),
                         venue_open=st.get("open_orders"),
                         venue_orders=st.get("orders_seen"))
-    rep["pre_latch_recovery"] = {"checked_before_latch": True, **pre}
+    rep["ledger_unresolved"] = [
+        {k: r.get(k) for k in ("kind", "slot", "auth_id",
+                               "client_order_id", "outcome")}
+        for r in probe.ledger.unresolved()]
+    rep["ledger_consumed_slots"] = probe.ledger.consumed()
+    rep["pre_latch_recovery"] = {"checked_before_latch": True,
+                                 "checked_before_authorization": True,
+                                 **pre}
     if probe.state in WC.TERMINAL or not pre.get("recovered"):
         rep["state"] = probe.state
         rep["why"] = (probe.why or pre.get("why")
@@ -471,6 +450,38 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                                "so the authorization is untouched. A known "
                                "stale ledger row never costs an "
                                "authorization again."}
+        return rep
+
+    # ----------------------------------------------------- AUTHORIZATION
+    # THE ORDER IS FIXED AND IT MATTERS:
+    #   read-only preflight -> READY -> authorization -> durable latch ->
+    #   ledger intent/fsync -> socket mutation
+    # EVERY READ HAS NOW HAPPENED AND ALL OF THEM WERE FREE: preflight,
+    # authoritative venue state, and recovery. Authorization is validated
+    # after them and before the latch, because spending an authorization we
+    # were never going to be able to use is pure loss -- and because an
+    # UNARMED run can then exercise and REPORT the whole read-only path
+    # instead of stopping at a gate before it, which is what makes a
+    # production-path verification worth anything.
+    auth = WC.authorization_state()
+    rep["authorization"] = auth
+    if not auth["authorized"]:
+        rep["state"] = READY_BUT_UNAUTHORIZED
+        rep["why"] = "not authorized: %s" % "; ".join(auth["why_not"])
+        rep["latch"] = {"consumed": False,
+                        "why": "authorization was refused BEFORE the latch "
+                               "was spent; the authorization is untouched"}
+        return rep
+
+    rep["bundle"] = BUNDLE.state()
+    if not rep["bundle"]["authorized"]:
+        rep["state"] = READY_BUT_UNAUTHORIZED
+        rep["why"] = ("bundle not authorized: %s"
+                      % "; ".join(rep["bundle"]["why_not"]))
+        rep["latch"] = {"consumed": False,
+                        "why": "the bundle authorization was refused BEFORE "
+                               "the latch was spent; the authorization is "
+                               "untouched"}
         return rep
 
     # ---------------------------------------------------------------- LATCH

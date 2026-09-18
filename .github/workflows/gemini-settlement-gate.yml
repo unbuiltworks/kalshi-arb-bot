@@ -235,6 +235,29 @@ jobs:
             --out analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/reconcile.txt
 
+      # THE UNARMED PRODUCTION-PATH VERIFICATION. This is run_continuous
+      # ITSELF -- the same entry point the armed step calls -- with real
+      # credentials, the real metadata readers, the real authoritative
+      # account reads and the real recovery, and with NO arm and NO
+      # authorization installed. It must walk the whole read-only path and
+      # then be refused by the authorization gate alone, having consumed no
+      # latch and sent no frame. A mocked preflight would prove nothing.
+      - name: Unarmed production path (real readers; refused, sends nothing)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.run_continuous \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --ledger analysis/gemini/continuous_ledger.jsonl \
+            --out    analysis/gemini/continuous_unarmed_$(date -u +%Y%m%dT%H%M%SZ).json \
+            --wire   /tmp/unarmed_wire.json \
+            2>&1 | tee /tmp/unarmed.txt
+          # the latch directory must be untouched by a refused run
+          git diff --quiet -- analysis/gemini/canary_latch/ \
+            || { echo 'FAIL: a refused run touched the latch store'; exit 1; }
+
       # ==================================================================
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
@@ -292,6 +315,7 @@ jobs:
                    analysis/gemini/continuous_run_*.json \
                    analysis/gemini/continuous_wire_*.json \
                    analysis/gemini/reconcile_slot_*.json \
+                   analysis/gemini/continuous_unarmed_*.json \
                    analysis/gemini/premutation_proof_*.json \
                    analysis/gemini/continuous_ledger.jsonl \
                    analysis/gemini/canary_latch/*.json; do
@@ -305,7 +329,7 @@ jobs:
           # and not the other, so a job that gathered its evidence correctly
           # then refused to commit it as "outside analysis/gemini/" -- which it
           # was not. A test now asserts the two lists agree.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|reconcile_slot|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|reconcile_slot|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

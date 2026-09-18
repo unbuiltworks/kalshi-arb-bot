@@ -305,11 +305,11 @@ def test_the_full_ordering_chain_is_fixed():
     """
     src = open(RC.__file__, encoding="utf-8").read()
     steps = [("preflight", src.index("pf = PF.preflight_now(symbol")),
-             ("authorization", src.index("auth = WC.authorization_state()")),
-             ("bundle", src.index("rep[\"bundle\"] = BUNDLE.state()")),
              ("authoritative read",
               src.index("await authoritative_state(symbol)")),
              ("recovery", src.index("probe.recover(")),
+             ("authorization", src.index("auth = WC.authorization_state()")),
+             ("bundle", src.index("rep[\"bundle\"] = BUNDLE.state()")),
              ("latch", src.index("latch.consume(auth_id")),
              ("connect", src.index("await session.connect()"))]
     positions = [i for _, i in steps]
