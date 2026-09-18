@@ -1,12 +1,7 @@
 {
-  "captured_at": "2026-09-18T00:27:16.456627+00:00",
-  "failures": [
-    {
-      "error": "TimeoutError:The read operation timed out",
-      "series": "KXBTC15M"
-    }
-  ],
-  "markets_captured": 1,
+  "captured_at": "2026-09-18T05:03:54.814651+00:00",
+  "failures": [],
+  "markets_captured": 2,
   "note": "Raw tape only. Public quote/trade evidence never implies hypothetical queue fill certainty.",
   "order_entry": false,
   "read_only": true,
@@ -15,6 +10,6 @@
     "KXBTC15M",
     "KXETH15M"
   ],
-  "status": "partial",
-  "trades_captured_with_6m_overlap": 500
+  "status": "ok",
+  "trades_captured_with_6m_overlap": 1000
 }
