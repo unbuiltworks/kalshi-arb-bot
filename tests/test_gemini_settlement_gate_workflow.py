@@ -395,64 +395,72 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     assert "COHORT-2026-09-18-C5" in armed
 
 
-def test_the_armed_step_names_exactly_the_authorized_window():
-    """ARMED for CONTINUOUS-5, and coherently so.
+def test_continuous_5_is_spent_and_the_workflow_is_disarmed_again():
+    """CONTINUOUS-5 RAN. Its latch is on disk, its cohort ledger carries the
+    slots it spent, and the authorization is therefore finished.
 
-    This test used to assert the opposite -- that no preparation commit could
-    install an authorization. The owner authorized the window on 2026-09-18,
-    so the guard now pins the property that matters once armed: the workflow
-    and the code must name the SAME authorization, and the signature must sit
-    on the hashes that were actually reviewed.
-
-    Installing an authorization is hash-neutral by construction: the
-    assignment lines are normalized away before hashing, so an approval
-    cannot be carried onto code nobody read. That is what makes the equality
-    below meaningful rather than circular -- the constants name the hashes,
-    and the hashes are computed from the files as they stand.
+    This assertion has now been all three things in one day, which is the
+    point rather than churn: it forbade a preparation commit from arming, it
+    pinned the armed window while that window was authorized, and it now
+    pins the spent state. What must never hold is an armed tree with no live
+    authorization behind it.
     """
     from src.gemini_execution import arming as ARM
     from src.gemini_execution import bundle as BUN
     from src.gemini_execution import ws_continuous as WCX
 
-    auth = "OWNER-2026-09-18-GEMINI-CONTINUOUS-5"
     wf = WF.read_text()
-    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
-
-    # exactly one step in the whole workflow may arm the transport
+    # exactly one step in the whole workflow may assign the arm variable
     assert len(re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)) == 1
-    # and it is this one, naming the authorized window and its cohort
-    assert 'GEMINI_CANARY_AUTH: "%s"' % auth in armed
-    assert '--auth-id "%s"' % auth in armed
-    assert "COHORT-2026-09-18-C5" in armed and "--cohort" in armed
+    # and with the sentinel in place it cannot arm
+    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in wf
+    assert ARM.EXPECTED_AUTH_ID == "NO-AUTHORIZATION-IN-FORCE"
+    assert WCX.REQUIRED_AUTH_ID is None
+    assert WCX.AUTHORIZED_SHA is None
+    assert BUN.AUTHORIZED_BUNDLE is None
 
-    # the code agrees with the workflow, and the signature is on THIS code
-    assert WCX.REQUIRED_AUTH_ID == auth
-    assert ARM.EXPECTED_AUTH_ID == auth
-    assert WCX.AUTHORIZED_SHA == WCX.executable_sha()
-    assert WCX.AUTHORIZED_ENVELOPE == WCX.envelope_sha()
-    assert BUN.AUTHORIZED_BUNDLE == BUN.bundle_sha()
+    # every executable --auth-id in the workflow is the sentinel
+    ids = re.findall(r'--auth-id "([^"]+)"', wf)
+    assert ids and set(ids) == {"NO-AUTHORIZATION-IN-FORCE"}, ids
 
-    # the exact hashes the owner authorized, spelled out so a silent
-    # re-signature onto different code fails here rather than at the venue
-    assert WCX.AUTHORIZED_SHA == (
-        "3194e6912c343a41c4aefe975f8ac7f5c975be5bb6cbb7bfe5ae9f535ac3abf1")
-    assert WCX.AUTHORIZED_ENVELOPE == (
+    # the envelope did not move across the window
+    assert WCX.envelope_sha() == (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    assert BUN.AUTHORIZED_BUNDLE == (
-        "61c7abf3f82d2c2fee30b544fa7ac23b0e4550a5a46cf5b4229743d61dec8c61")
 
 
-def test_the_unarmed_step_still_cannot_arm():
-    """The read-only proof step must stay read-only now that a real
-    authorization exists: it names the sentinel, not the authorized id, and
-    sets no arm variable of its own."""
-    wf = WF.read_text()
-    block = wf.split("Unarmed production path (real readers", 1)[1].split(
-        "ONE authorized Gemini continuous window", 1)[0]
-    # the armed step's explanatory comment sits inside this slice and names
-    # the authorization; only EXECUTABLE lines decide whether a step can arm.
-    unarmed = "\n".join(l for l in block.splitlines()
-                        if not l.strip().startswith("#"))
-    assert '--auth-id "NO-AUTHORIZATION-IN-FORCE"' in unarmed
-    assert "GEMINI_CANARY_LIVE" not in unarmed
-    assert "OWNER-2026-09-18-GEMINI-CONTINUOUS-5" not in unarmed
+def test_the_continuous_5_latch_is_durable_and_unreusable():
+    """One authorization, one window, and the latch is what makes that
+    survive a fresh runner with a clean disk."""
+    import json
+    import pathlib
+    p = pathlib.Path(
+        "analysis/gemini/canary_latch/"
+        "latch_OWNER-2026-09-18-GEMINI-CONTINUOUS-5.json")
+    assert p.exists(), "the window ran; its latch must be committed"
+    rec = json.loads(p.read_text())
+    blob = json.dumps(rec)
+    assert "OWNER-2026-09-18-GEMINI-CONTINUOUS-5" in blob
+    # five predecessors plus this one; a seventh would be a window nobody
+    # authorized
+    latches = sorted(pathlib.Path("analysis/gemini/canary_latch").glob("*.json"))
+    assert len(latches) == 6, [x.name for x in latches]
+
+
+def test_the_cohort_ledger_records_what_the_window_spent():
+    """The slots CONTINUOUS-5 spent are durable, not runner-local.
+
+    The evidence commit staged the historical ledger but not the cohort's
+    own, so an armed window would have spent its budget and thrown the
+    record away -- and the next window would have read 0 consumed. Fixed
+    before arming; this pins the outcome.
+    """
+    import json
+    import pathlib
+    p = pathlib.Path("analysis/gemini/cohorts/COHORT-2026-09-18-C5/ledger.jsonl")
+    rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+    attempts = [r for r in rows if r.get("kind") in ("PLACE", "CANCEL")]
+    assert len(attempts) == 3, attempts
+    assert [r["kind"] for r in attempts] == ["PLACE", "PLACE", "CANCEL"]
+    # the rejected cancel is recorded UNKNOWN and is NEVER silently resolved
+    resolves = {r["slot"]: r["outcome"] for r in rows if r.get("kind") == "RESOLVE"}
+    assert resolves == {0: "ACCEPTED", 1: "ACCEPTED", 2: "UNKNOWN"}, resolves

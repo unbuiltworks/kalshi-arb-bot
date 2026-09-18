@@ -32,11 +32,43 @@ def _run(coro):
 # ================================================================== COHORT
 
 def test_the_live_cohort_exists_with_its_own_budget_and_ledger():
+    """INVARIANTS, not a snapshot.
+
+    This asserted `consumed == 0` and broke the moment CONTINUOUS-5 spent
+    three slots -- a test pinning a MOMENT rather than a property, which is a
+    mistake I have now made often enough to name. What must hold for the life
+    of the cohort is that the budget never moves, that consumed and remaining
+    always account for exactly that budget, and that consumption is
+    MONOTONIC: a cohort whose consumed count fell would be a budget reset
+    wearing the cohort's name.
+    """
     s = CO.state(LIVE_COHORT)
-    assert s["budget"] == 6
-    assert s["consumed"] == 0 and s["remaining"] == 6
+    assert s["budget"] == 6, "a cohort budget is fixed at creation"
+    assert 0 <= s["consumed"] <= s["budget"]
+    assert s["consumed"] + s["remaining"] == s["budget"]
     assert s["ledger_path"].endswith("%s/ledger.jsonl" % LIVE_COHORT)
     assert s["envelope_max_actions"] == 12
+
+    # the ledger is the authority on what was spent, and it must agree
+    rows = [json.loads(l) for l in open(s["ledger_path"], encoding="utf-8")
+            if l.strip()]
+    attempts = [r for r in rows if r.get("kind") in ("PLACE", "CANCEL")]
+    assert len(attempts) == s["consumed"]
+
+
+def test_continuous_5_spent_three_of_the_cohorts_six_slots():
+    """The window that ran, as the durable ledger records it: two accepted
+    places and one cancel the venue rejected -1013, which stays UNKNOWN
+    because a 400 is not a cancellation."""
+    s = CO.state(LIVE_COHORT)
+    rows = [json.loads(l) for l in open(s["ledger_path"], encoding="utf-8")
+            if l.strip()]
+    assert [r["kind"] for r in rows if r.get("kind") != "RESOLVE"] == [
+        "PLACE", "PLACE", "CANCEL"]
+    assert s["consumed"] == 3 and s["remaining"] == 3
+    outcomes = {r["slot"]: r["outcome"]
+                for r in rows if r.get("kind") == "RESOLVE"}
+    assert outcomes == {0: "ACCEPTED", 1: "ACCEPTED", 2: "UNKNOWN"}, outcomes
 
 
 def test_the_cohort_records_the_historical_ledger_and_it_is_intact():

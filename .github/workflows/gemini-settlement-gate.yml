@@ -263,13 +263,13 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # ARMED FOR CONTINUOUS-5. The owner authorized this window on
-      # 2026-09-18, naming the three hashes below and the cohort. Installing
-      # the authorization is hash-neutral BY CONSTRUCTION: the three
-      # assignment lines are normalized away before hashing, so a signature
-      # cannot be carried onto code nobody read, and the hashes here are
-      # byte-identical to the ones that were reviewed.
+      # DISARMED AGAIN. CONTINUOUS-5 RAN AND IS SPENT: its latch is on disk
+      # in state INTENT_PERSISTED, its cohort ledger carries 3 of 6 slots,
+      # and the window terminated SUBMISSION_UNKNOWN_RECONCILE_REQUIRED on a
+      # cancel the venue rejected -1013. The auth id below is the sentinel
+      # and the driver constants are None, so this step cannot arm.
       #
+      # The authorization that ran, for the record:
       # OWNER-2026-09-18-GEMINI-CONTINUOUS-5, naming
       #   executable_sha 3194e691...abf1   (UNCHANGED since review)
       #   envelope_sha   b3bff654...aa17   (UNCHANGED: no bound moved)
@@ -310,12 +310,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-5"
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-5" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
             --cohort  "COHORT-2026-09-18-C5" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
