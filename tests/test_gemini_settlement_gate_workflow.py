@@ -222,7 +222,11 @@ def test_no_spent_authorization_can_still_be_dispatched():
     wf = WF.read_text()
     for spent in ("OWNER-2026-09-17-GEMINI-CANARY-1",
                   "OWNER-2026-09-18-GEMINI-CONTINUOUS-1",
-                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"):
+                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-3",
+                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
+                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"):
         assert 'GEMINI_CANARY_AUTH: "%s"' % spent not in wf, spent
         assert '--auth-id "%s"' % spent not in wf, spent
 
@@ -399,21 +403,44 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
         assert spent not in armed.split("run:", 1)[1], spent
 
 
-def test_continuous_6_is_spent_and_the_workflow_is_disarmed():
-    """CONTINUOUS-6 ran; the tree is disarmed again. What must never hold is
-    an armed tree with no live authorization behind it."""
+#: the ONE authorization the tree may be armed for right now. When C7 is
+#: spent this becomes None again and the assertions below flip back to the
+#: disarmed shape without any other edit.
+LIVE_AUTHORIZATION = "OWNER-2026-09-18-GEMINI-CONTINUOUS-7"
+
+
+def test_the_tree_is_armed_for_exactly_one_named_authorization():
+    """What must never hold is an armed tree with no live authorization
+    behind it, or an armed tree naming a DIFFERENT authorization than the
+    code does. Set LIVE_AUTHORIZATION to None to assert the disarmed shape.
+    """
     from src.gemini_execution import arming as ARM
     from src.gemini_execution import bundle as BUN
     from src.gemini_execution import ws_continuous as WCX
 
     wf = WF.read_text()
     assert len(re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)) == 1
-    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in wf
-    ids = re.findall(r'--auth-id "([^"]+)"', wf)
-    assert ids and set(ids) == {"NO-AUTHORIZATION-IN-FORCE"}, ids
-    assert ARM.EXPECTED_AUTH_ID == "NO-AUTHORIZATION-IN-FORCE"
-    assert WCX.REQUIRED_AUTH_ID is None and WCX.AUTHORIZED_SHA is None
-    assert BUN.AUTHORIZED_BUNDLE is None
+
+    sentinel = "NO-AUTHORIZATION-IN-FORCE"
+    want = LIVE_AUTHORIZATION or sentinel
+    assert 'GEMINI_CANARY_AUTH: "%s"' % want in wf
+    assert ARM.EXPECTED_AUTH_ID == want
+    ids = set(re.findall(r'--auth-id "([^"]+)"', wf))
+    # the UNARMED production-path step keeps the sentinel: it exists to be
+    # refused, and an armed one would prove nothing.
+    assert ids <= {want, sentinel} and sentinel in ids, ids
+    if LIVE_AUTHORIZATION is None:
+        assert ids == {sentinel}, ids
+        assert WCX.REQUIRED_AUTH_ID is None and WCX.AUTHORIZED_SHA is None
+        assert BUN.AUTHORIZED_BUNDLE is None
+    else:
+        assert want in ids, ids
+        assert WCX.REQUIRED_AUTH_ID == want
+        # the constants must name the RUNNING code, not a remembered hash:
+        # an authorization naming something else cannot arm, by design.
+        assert WCX.AUTHORIZED_SHA == WCX.executable_sha()
+        assert BUN.AUTHORIZED_BUNDLE == BUN.bundle_sha()
+        assert WCX.AUTHORIZED_ENVELOPE == WCX.envelope_sha()
     # THE ENVELOPE NEVER MOVES. That is the invariant worth pinning here.
     assert WCX.envelope_sha() == (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
@@ -443,6 +470,7 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+        "OWNER-2026-09-18-GEMINI-CONTINUOUS-7",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
