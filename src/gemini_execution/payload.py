@@ -152,8 +152,15 @@ def signing_payload(order: Mapping[str, Any], *, path: str = spec.PLACE_PATH,
     assert_types(order)
     if nonce is not None and type(nonce) is not int:
         raise PayloadViolation("nonce must be an int, got %r" % type(nonce))
-    out: Dict[str, Any] = {"request": path,
-                           "nonce": nonce if nonce is not None else 0}
+    if nonce is None:
+        # A REAL epoch-seconds value, not 0. The point of rendering this is to
+        # show what would actually be signed, and a placeholder that could
+        # never be sent is not that. Read from the clock rather than from
+        # next_nonce(), because rendering a payload must not advance the
+        # signer's nonce counter as a side effect.
+        import time as _t
+        nonce = int(_t.time())
+    out: Dict[str, Any] = {"request": path, "nonce": nonce}
     out.update(order)
     extra = sorted(set(out) - set(spec.AUTH_PAYLOAD_FIELDS)
                    - set(ALLOWED_ORDER_FIELDS))

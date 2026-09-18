@@ -162,3 +162,20 @@ def test_the_guard_notices_if_the_allowed_set_drifts_off_schema(monkeypatch):
     with pytest.raises(P.PayloadViolation) as e:
         P.validate_structure(_order(inventedField="x"))
     assert "drifted off the documented schema" in str(e.value)
+
+
+def test_the_default_nonce_is_a_real_epoch_not_a_placeholder():
+    """Rendering shows what would actually be signed. A 0 could never be
+    sent, so showing one misrepresents the payload it claims to be exact
+    about."""
+    body = P.signing_payload(_order())
+    assert type(body["nonce"]) is int
+    assert body["nonce"] > 1_700_000_000        # a plausible epoch-seconds
+
+
+def test_rendering_does_not_advance_the_signers_nonce():
+    """A read must not have a side effect on the thing that signs."""
+    import src.gemini_prediction_auth as A
+    before = A._last_nonce
+    P.sanitized_decoded(_order())
+    assert A._last_nonce == before
