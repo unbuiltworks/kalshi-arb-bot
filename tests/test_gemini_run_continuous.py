@@ -98,13 +98,72 @@ def test_the_invoker_enforces_no_bound_of_its_own():
             "%s looks like an envelope bound restated in the invoker" % bound)
 
 
-def test_the_invoker_cannot_send_an_order_itself():
+def _enclosing(tree):
+    """node -> "Class.func" of the definition containing it."""
+    where = {}
+
+    def walk(node, label):
+        for child in ast.iter_child_nodes(node):
+            lab = label
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                  ast.ClassDef)):
+                lab = "%s.%s" % (label, child.name) if label else child.name
+            where[child] = lab
+            walk(child, lab)
+    walk(tree, "")
+    return where
+
+
+def test_the_invoker_cannot_originate_an_order_itself():
+    """The invoker must go through Driver.place/cancel, where the budget
+    ledger and the authorization gate live.
+
+    This used to assert that `.request(` appeared NOWHERE in the file. The
+    place-ack capture made that false without making it unsafe: the observer
+    DELEGATES a request the driver already decided to make. So the guard now
+    pins the property the old one was standing in for -- the invoker may RELAY
+    a call, never COMPOSE one -- which also catches bypasses the old scan
+    would have missed.
+    """
     tree = ast.parse(open(RC.__file__, encoding="utf-8").read())
-    called = {n.func.attr for n in ast.walk(tree)
-              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
-    assert "request" not in called, (
-        "the invoker must go through Driver.place/cancel, which is where the "
-        "budget ledger and the authorization gate live")
+    where = _enclosing(tree)
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "request"]
+    assert calls, "expected the observer's single delegating call"
+    for call in calls:
+        assert where.get(call) == "RecordingSession.request", (
+            "a .request( call outside the transparent observer: %s"
+            % where.get(call))
+        first = call.args[0] if call.args else None
+        assert isinstance(first, ast.Name) and first.id == "method", (
+            "the observer must FORWARD the method it was handed; composing "
+            "one would let the invoker originate a mutation")
+
+
+def test_the_invoker_never_names_a_mutation_method():
+    """Belt and braces: even a relay cannot become an originator if no
+    mutation method name exists in this file to relay."""
+    text = open(RC.__file__, encoding="utf-8").read()
+    tree = ast.parse(text)
+    consts = {n.value for n in ast.walk(tree)
+              if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    for method in ("order.place", "order.cancel", "order.cancel_session"):
+        assert method not in consts, (
+            "%s is named in the invoker; mutation methods belong to the "
+            "driver and the session" % method)
+    attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    for name in ("WS_PLACE_METHOD", "WS_CANCEL_METHOD",
+                 "WS_CANCEL_SESSION_METHOD"):
+        used_in_call = [
+            n for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            for a in n.args
+            if isinstance(a, ast.Attribute) and a.attr == name]
+        assert not used_in_call, (
+            "%s is passed as a call argument in the invoker" % name)
+    assert "send" not in attrs or "ws" not in text.split("send")[0][-40:], (
+        "the invoker must not reach a raw socket send")
 
 
 def test_the_latch_is_consumed_before_the_session_connects():

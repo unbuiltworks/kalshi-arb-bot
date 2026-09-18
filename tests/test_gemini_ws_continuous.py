@@ -13,9 +13,10 @@ un-patched module.
 """
 import ast
 import asyncio
-import json
+import hashlib
 import json
 import os
+import re
 
 import pytest
 
@@ -90,32 +91,78 @@ def _run(coro):
 
 # ============================================================ AUTHORIZATION
 
-def test_the_spent_authorization_no_longer_binds_the_changed_executable():
-    """THE MECHANISM DOING ITS JOB, not a defect.
+def test_editing_the_driver_invalidates_its_authorization():
+    """THE DURABLE INVARIANT, proved by SIMULATING an edit.
 
-    OWNER-2026-09-18-GEMINI-CONTINUOUS-2 was spent on the first live window.
-    The cancel defect that window exposed has since been fixed, which changed
-    the executable -- so AUTHORIZED_SHA no longer names what is running, and
-    the driver refuses. That is exactly what naming the executable by hash is
-    for: approval attaches to code that was read, and this code has changed.
+    This test used to assert AUTHORIZED_SHA != executable_sha(), because the
+    cancel fix had changed the driver after CONTINUOUS-2 was granted. That was
+    a statement about one afternoon, not about the mechanism -- renewing the
+    authorization against the fixed executable turned it red, and a test that
+    fails when the system does exactly what it was built to do is pinning the
+    wrong thing.
+
+    What must hold forever: code that changed after review cannot inherit the
+    approval. So edit the body and show the hash moves.
     """
-    assert WC.AUTHORIZED_SHA != WC.executable_sha(), (
-        "the driver changed after its authorization; the hash must diverge")
-    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha(), (
-        "no BOUND moved -- only the cancel path did")
-    st = WC.authorization_state()
-    assert st["authorized"] is False
-    assert any("different executable" in w for w in st["why_not"]), st["why_not"]
+    edited = hashlib.sha256(
+        (WC.executable_body() + "\n# a single added line\n").encode("utf-8")
+    ).hexdigest()
+    assert edited != WC.executable_sha()
+    assert edited != WC.AUTHORIZED_SHA, (
+        "a one-line edit must not still satisfy the authorization")
+
+
+def test_installing_an_authorization_does_not_move_the_hash():
+    """The other half, and the reason the normalizer exists: binding the three
+    authorization constants is hash-neutral, so an authorization CAN be
+    satisfied. Without this the driver would be unarmable rather than unarmed."""
+    body = WC.executable_body()
+    # count the normalized ASSIGNMENT LINES, not raw occurrences: the
+    # placeholder's own definition is source text and contains the token too.
+    lines = re.findall(
+        r"^(?:REQUIRED_AUTH_ID|AUTHORIZED_SHA|AUTHORIZED_ENVELOPE)"
+        r": Optional\[str\] = <AUTHORIZATION>$", body, re.MULTILINE)
+    assert len(lines) == 3, lines
+    assert WC.REQUIRED_AUTH_ID not in body
+    assert str(WC.AUTHORIZED_SHA) not in body
 
 
 def test_no_environment_can_revive_a_superseded_authorization(monkeypatch):
+    """A full dual key must NOT arm an executable the authorization does not
+    name. Simulated by moving the running hash, which is what a code edit does.
+    """
+    monkeypatch.setattr(WC, "executable_sha", lambda: "0" * 64)
     monkeypatch.setattr(WC.arming, "EXPECTED_AUTH_ID", WC.REQUIRED_AUTH_ID)
     monkeypatch.setenv("GEMINI_CANARY_LIVE", "YES")
     monkeypatch.setenv("GEMINI_CANARY_AUTH", str(WC.REQUIRED_AUTH_ID))
     monkeypatch.setenv("GEMINI_CANARY_AUTH_EXPIRES", "2099-01-01T00:00:00Z")
-    assert WC.authorized() is False, (
-        "a full dual key must still not arm an executable the authorization "
-        "does not name")
+    assert WC.authorized() is False
+    st = WC.authorization_state()
+    assert any("different executable" in w for w in st["why_not"]), st["why_not"]
+
+
+def test_the_gate_is_reachable_and_not_merely_always_closed(monkeypatch):
+    """CORRECTLY FAIL-CLOSED vs PERMANENTLY INCAPABLE.
+
+    Every refusal test above is worthless if the gate can never open: a driver
+    that always says no would pass all of them. With the executable the current
+    authorization names, and a full dual key, authorization MUST succeed.
+    """
+    monkeypatch.setattr(WC.arming, "EXPECTED_AUTH_ID", WC.REQUIRED_AUTH_ID)
+    monkeypatch.setenv("GEMINI_CANARY_LIVE", "YES")
+    monkeypatch.setenv("GEMINI_CANARY_AUTH", str(WC.REQUIRED_AUTH_ID))
+    monkeypatch.setenv("GEMINI_CANARY_AUTH_EXPIRES", "2099-01-01T00:00:00Z")
+    assert WC.AUTHORIZED_SHA == WC.executable_sha()
+    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+    assert WC.authorized() is True, WC.authorization_state()["why_not"]
+
+
+def test_the_envelope_did_not_move_across_the_renewal():
+    """CONTINUOUS-3 renewed the EXECUTABLE. No bound changed, and the envelope
+    hash is what proves it rather than a promise that none did."""
+    assert WC.envelope_sha() == (
+        "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
 
 
 def test_without_the_transport_arm_no_mutation_is_possible(monkeypatch):

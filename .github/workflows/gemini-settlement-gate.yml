@@ -221,8 +221,8 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # OWNER-2026-09-18-GEMINI-CONTINUOUS-2, naming executable_sha
-      # 2793c4cd...8d5d and envelope_sha b3bff654...aa17. EVERY bound --
+      # OWNER-2026-09-18-GEMINI-CONTINUOUS-3, naming executable_sha
+      # 84268511...6ad4 and envelope_sha b3bff654...aa17. EVERY bound --
       # 12 mutation slots, $0.15 exposure, 0.04 residual and imbalance,
       # 0.10 per leg, the end-of-window floors, the terminal one-window
       # binding -- is enforced inside ws_continuous.Driver and is covered by
@@ -241,14 +241,15 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-3"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-2" \
+            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-3" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
+            --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/continuous.txt
 
       - name: Report the gate, without deciding anything
@@ -271,6 +272,7 @@ jobs:
                    analysis/gemini/execution_readiness_*.json \
                    analysis/gemini/ws_dry_run_*.json \
                    analysis/gemini/continuous_run_*.json \
+                   analysis/gemini/continuous_wire_*.json \
                    analysis/gemini/premutation_proof_*.json \
                    analysis/gemini/continuous_ledger.jsonl \
                    analysis/gemini/canary_latch/*.json; do
@@ -284,7 +286,7 @@ jobs:
           # and not the other, so a job that gathered its evidence correctly
           # then refused to commit it as "outside analysis/gemini/" -- which it
           # was not. A test now asserts the two lists agree.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

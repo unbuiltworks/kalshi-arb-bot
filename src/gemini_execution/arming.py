@@ -40,7 +40,15 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: that then failed closed at preflight with zero orders placed. A spent
 #: authorization never arms again, so the identifier moves rather than the
 #: latch being cleared.
-EXPECTED_AUTH_ID = "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"
+#: MOVED AGAIN 2026-09-18. CONTINUOUS-2 is SPENT: it placed two real orders
+#: (venue orderIds 145828836242288478 and 145828836242288483) at 14:31:00Z,
+#: both acknowledged 200, NEITHER FILLED, realized $0.00. Its latch is on disk.
+#: A spent authorization never arms again, so the identifier moves rather than
+#: the latch being cleared. CONTINUOUS-3 is granted against executable_sha
+#: 842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4, which
+#: carries the cancel-seam fix (order.cancel now sends the venue orderId, not
+#: the clientOrderId that the venue rejected -1013 during CONTINUOUS-2).
+EXPECTED_AUTH_ID = "OWNER-2026-09-18-GEMINI-CONTINUOUS-3"
 
 
 class NotArmed(Exception):

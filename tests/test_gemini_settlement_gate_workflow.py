@@ -206,9 +206,35 @@ def test_the_armed_step_is_off_unless_explicitly_armed():
 
 
 def test_the_armed_step_names_the_exact_authorization():
+    """Derived from arming.EXPECTED_AUTH_ID rather than restated, so the
+    workflow and the code cannot name different authorizations -- which is a
+    way to spend one authorization under the label of another."""
+    from src.gemini_execution import arming
     wf = WF.read_text()
-    assert 'GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"' in wf
+    assert 'GEMINI_CANARY_AUTH: "%s"' % arming.EXPECTED_AUTH_ID in wf
+    assert '--auth-id "%s"' % arming.EXPECTED_AUTH_ID in wf
     assert "GEMINI_CANARY_AUTH_EXPIRES" in wf
+
+
+def test_no_spent_authorization_can_still_be_dispatched():
+    """Every identifier that has been spent stays out of the workflow. A
+    dispatchable spent identifier is live-path surface that reads as usable."""
+    wf = WF.read_text()
+    for spent in ("OWNER-2026-09-17-GEMINI-CANARY-1",
+                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-1",
+                  "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"):
+        assert 'GEMINI_CANARY_AUTH: "%s"' % spent not in wf, spent
+        assert '--auth-id "%s"' % spent not in wf, spent
+
+
+def test_the_wire_artifact_is_collected_with_the_run():
+    """The place-ack capture is worthless if the artifact never leaves the
+    runner. The add-list and the allow-list must BOTH know it -- they drifted
+    once before and a job threw away evidence it had correctly gathered."""
+    wf = WF.read_text()
+    assert "--wire    analysis/gemini/continuous_wire_" in wf
+    assert "analysis/gemini/continuous_wire_*.json" in wf
+    assert "continuous_wire" in wf.split("grep -qvE")[1][:400]
 
 
 def test_the_spent_canary_step_is_gone_and_stays_gone():
