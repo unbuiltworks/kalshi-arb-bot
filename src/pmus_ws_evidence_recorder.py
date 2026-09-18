@@ -894,6 +894,62 @@ def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# Per-market authenticated trade tail for the PMUS passive L5 surface.
+# OFF by default; GET-only; same recorder process/port; no order capability.
+TRADES_HTTP_PATH = "/trades"
+TRADES_ENV = "PMUS_WS_TRADES_HTTP"
+TRADES_PER_MARKET = 200
+_LIVE_TRADES: dict[str, Any] = {"line": None, "utc": None, "n": 0}
+
+
+def trades_http_enabled() -> bool:
+    """OFF unless explicitly turned on."""
+    return str(os.getenv(TRADES_ENV, "")).strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def trades_payload(state: Mapping[str, Any], now: float) -> dict:
+    """Per-market trade tail: {t, px, qty, dir}, newest last."""
+    markets: dict = {}
+    for slug, s in (state or {}).items():
+        raw = list((s or {}).get("trades") or [])
+        markets[slug] = {
+            "trades": [{"t": t.get("t"), "px": t.get("px"),
+                        "qty": t.get("qty"), "dir": t.get("dir")}
+                       for t in raw[-TRADES_PER_MARKET:]],
+            "ring_full": len(raw) >= 500,
+            "bad_trade_rows": (s or {}).get("bad_trade_rows", 0),
+        }
+    return {"t": datetime.now(timezone.utc).isoformat(), "now": now,
+            "markets": markets,
+            "labels": ("AUTHENTICATED trade tape, read-only. ring_full means "
+                       "older trades in an interval may have been dropped, so "
+                       "an empty result no longer means nobody traded.")}
+
+
+def publish_live_trades(state: Mapping[str, Any], now: float) -> None:
+    """Publish the newest trade tail for the HTTP handler. Never raises."""
+    if not trades_http_enabled():
+        return
+    try:
+        line = json.dumps(trades_payload(state, now),
+                          separators=(",", ":"), default=str)
+        _LIVE_TRADES["line"] = (line + "\n").encode("utf-8")
+        _LIVE_TRADES["utc"] = datetime.now(timezone.utc).isoformat()
+        _LIVE_TRADES["n"] = int(_LIVE_TRADES.get("n") or 0) + 1
+    except Exception:
+        pass
+
+
+def live_trades_bytes() -> Optional[bytes]:
+    """Newest published trade tail, or None when unset/disabled."""
+    if not trades_http_enabled():
+        return None
+    v = _LIVE_TRADES.get("line")
+    return v if isinstance(v, (bytes, bytearray)) else None
+
+
 # Read-only status handoff over Railway's private network. The spring
 # probe and the recorder sit on different volumes, so the status document
 # cannot be shared as a file; this serves the SAME document the recorder
@@ -983,6 +1039,18 @@ def serve_status_doc(root: Path, port: int):
 
         def do_GET(self) -> None:                     # noqa: N802
             path = self.path.split("?", 1)[0]
+            if path == TRADES_HTTP_PATH:
+                blob = live_trades_bytes()
+                if blob is None:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(blob)))
+                self.end_headers()
+                self.wfile.write(blob)
+                return
             if path == SHADOW_HTTP_PATH:
                 # the read-only multi-market L5 shadow report (same
                 # handoff pattern as the status document)
@@ -1411,6 +1479,7 @@ async def run(minutes: Optional[float]) -> int:
                 print("PMUS_WS_STATUS " + json.dumps(
                     st, separators=(",", ":"), default=str), flush=True)
                 write_status_doc(root, st)
+                publish_live_trades(snap, time.time())
                 try:
                     from src import pmus_sports_collector as col
                     xs = gateway_xcheck(
