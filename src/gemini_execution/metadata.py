@@ -513,8 +513,9 @@ ORDER_HISTORY_PATH = "/v1/prediction-markets/orders/history"
 async def order_history(*, since_ms: Optional[int] = None,
                         until_ms: Optional[int] = None,
                         symbol: Optional[str] = None,
-                        statuses: tuple = ("filled", "cancelled", "open"),
-                        limit: int = 100) -> Dict[str, Any]:
+                        statuses: tuple = ("filled", "cancelled"),
+                        limit: int = 100,
+                        timeout: float = 45.0) -> Dict[str, Any]:
     """FORENSIC, READ-ONLY: has this account ever had a prediction-market order?
 
     The question this answers is whether any previous Gemini live work left a
@@ -527,6 +528,14 @@ async def order_history(*, since_ms: Optional[int] = None,
     Asked once per status, because `status` is a scalar in the documented
     request body rather than a list. A non-200 is reported as unreadable and
     never as an empty history.
+
+    "open" IS NOT A VALID STATUS HERE. The venue answers 400 InvalidStatus,
+    "Use /orders/active for open orders" -- measured 2026-09-18. Asking for it
+    cost a third of the read and taught nothing, so it is gone; active orders
+    have their own path and their own caller.
+
+    The rows come paginated, so a full page is a FLOOR on the count and never
+    the total; `pagination` is carried through rather than discarded.
     """
     from src.gemini_prediction_auth import has_credentials, private_rest_json
     if not has_credentials():
@@ -545,7 +554,7 @@ async def order_history(*, since_ms: Optional[int] = None,
             body["symbol"] = symbol
         try:
             r = await private_rest_json("POST", ORDER_HISTORY_PATH,
-                                        params=body, timeout=20.0)
+                                        params=body, timeout=timeout)
         except Exception as exc:                               # noqa: BLE001
             per.append({"status_filter": st, "http": None,
                         "err": type(exc).__name__})
@@ -565,6 +574,9 @@ async def order_history(*, since_ms: Optional[int] = None,
             rows = payload
         entry = {"status_filter": st, "http": r.status_code,
                  "rows": (len(rows) if rows is not None else None),
+                 "page_is_full": (rows is not None and len(rows) >= limit),
+                 "pagination": (payload.get("pagination")
+                                if isinstance(payload, dict) else None),
                  "body_keys": (sorted(payload) if isinstance(payload, dict)
                                else None)}
         if r.status_code != 200 or rows is None:

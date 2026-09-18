@@ -263,10 +263,8 @@ def test_an_order_on_record_is_reported_with_its_fields(monkeypatch, creds):
     row = {"orderId": "abc", "clientOrderId": "x-1", "symbol": "GEMI-X-UP",
            "side": "buy", "outcome": "yes", "price": "0.42", "quantity": "1",
            "status": "filled", "filledQuantity": "1"}
-    _history(monkeypatch, {
-        "filled": _HR(200, {"orders": [row]}),
-        "cancelled": _HR(200, {"orders": []}),
-        "open": _HR(200, {"orders": []})})
+    _history(monkeypatch, {"filled": _HR(200, {"orders": [row]}),
+                           "cancelled": _HR(200, {"orders": []})})
     out = _run(MD.order_history())
     assert out["verdict"] == "ORDERS_FOUND"
     assert out["total_rows"] == 1
@@ -277,7 +275,7 @@ def test_an_order_on_record_is_reported_with_its_fields(monkeypatch, creds):
 
 def test_an_empty_history_is_scoped_to_these_credentials(monkeypatch, creds):
     _history(monkeypatch, {s: _HR(200, {"orders": []})
-                           for s in ("filled", "cancelled", "open")})
+                           for s in ("filled", "cancelled")})
     out = _run(MD.order_history())
     assert out["verdict"] == "NO_ORDERS_ON_RECORD"
     assert "never about other accounts" in out["labels"]
@@ -285,8 +283,7 @@ def test_an_empty_history_is_scoped_to_these_credentials(monkeypatch, creds):
 
 def test_an_unreadable_history_is_never_an_empty_one(monkeypatch, creds):
     _history(monkeypatch, {"filled": _HR(400, {"reason": "InvalidRequest"}),
-                           "cancelled": _HR(200, {"orders": []}),
-                           "open": _HR(200, {"orders": []})})
+                           "cancelled": _HR(200, {"orders": []})})
     out = _run(MD.order_history())
     assert out["verdict"] == "UNREADABLE"
     assert out["verdict"] != "NO_ORDERS_ON_RECORD"
@@ -294,18 +291,43 @@ def test_an_unreadable_history_is_never_an_empty_one(monkeypatch, creds):
 
 
 def test_every_status_is_asked_separately(monkeypatch, creds):
-    """`status` is a scalar in the documented body, not a list, so a single
-    call could only ever see one third of the history."""
+    """`status` is a scalar in the documented body, not a list, so one call
+    could only ever see part of the history."""
     seen = _history(monkeypatch, {s: _HR(200, {"orders": []})
-                                  for s in ("filled", "cancelled", "open")})
+                                  for s in ("filled", "cancelled")})
     _run(MD.order_history())
-    assert sorted(s for _, _, s in seen) == ["cancelled", "filled", "open"]
+    assert sorted(s for _, _, s in seen) == ["cancelled", "filled"]
     assert {p for _, p, _ in seen} == {MD.ORDER_HISTORY_PATH}
+
+
+def test_open_is_not_asked_for_because_the_venue_refuses_it(monkeypatch,
+                                                            creds):
+    """Measured 2026-09-18: 400 InvalidStatus, "Use /orders/active for open
+    orders". Asking cost a third of the read and taught nothing."""
+    import inspect
+    default = inspect.signature(MD.order_history).parameters[
+        "statuses"].default
+    assert "open" not in default, default
+    seen = _history(monkeypatch, {s: _HR(200, {"orders": []})
+                                  for s in ("filled", "cancelled")})
+    _run(MD.order_history())
+    assert "open" not in [s for _, _, s in seen]
+
+
+def test_a_full_page_is_reported_as_a_floor_not_a_total(monkeypatch, creds):
+    rows = [{"orderId": i} for i in range(100)]
+    _history(monkeypatch, {
+        "filled": _HR(200, {"orders": rows, "pagination": {"total": 812}}),
+        "cancelled": _HR(200, {"orders": []})})
+    out = _run(MD.order_history(limit=100))
+    e = [x for x in out["per_status"] if x["status_filter"] == "filled"][0]
+    assert e["page_is_full"] is True
+    assert e["pagination"] == {"total": 812}
 
 
 def test_the_history_read_never_touches_a_mutation_path(monkeypatch, creds):
     from src.gemini_execution import spec
     seen = _history(monkeypatch, {s: _HR(200, {"orders": []})
-                                  for s in ("filled", "cancelled", "open")})
+                                  for s in ("filled", "cancelled")})
     _run(MD.order_history())
     assert not ({p for _, p, _ in seen} & set(spec.MUTATION_PATHS))
