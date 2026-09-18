@@ -183,10 +183,21 @@ async def venue_evidence(symbol: str, client_order_id: str,
         # not be told apart from a BROKEN MATCHER, and the "no non-zero fill"
         # clause would have been vacuous rather than satisfied. That is the
         # same shape as every fixture-kinder-than-the-venue defect here.
+        # THE RAW STRUCTURE, VERBATIM. `order_history` aggregates its rows
+        # into counts and samples and DISCARDS the list -- there is no
+        # per_status[].orders key at all. Iterating one produced an empty set
+        # on every call, which read as "the venue returned nothing" when it
+        # actually meant "this code read a key that does not exist". Recording
+        # the structure is what makes that distinguishable.
+        out["history_per_status_raw"] = hist.get("per_status")
         allrows: List[Dict[str, Any]] = []
         for p in (hist.get("per_status") or []):
-            for o in (p.get("orders") or []):
-                allrows.append(o)
+            for key in ("orders", "results", "data", "btc_samples"):
+                got = p.get(key)
+                if isinstance(got, list):
+                    allrows.extend(x for x in got if isinstance(x, dict))
+            if isinstance(p.get("sample"), dict):
+                allrows.append(p["sample"])
         out["history_rows_symbol"] = [
             {k: o.get(k) for k in
              ("orderId", "clientOrderId", "globalOrderId", "symbol", "status",
