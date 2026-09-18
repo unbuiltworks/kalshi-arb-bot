@@ -270,3 +270,21 @@ def test_metadata_is_in_the_bundle():
     """It feeds authoritative recovery, so a change to it is a change to a
     safety property and an authorization must see it."""
     assert "metadata.py" in B.MEMBERS
+
+
+def test_the_report_is_written_even_when_the_run_refuses(tmp_path,
+                                                         monkeypatch):
+    """Every refusal returns early. The artifact write used to sit after the
+    window, so exactly the runs worth recording wrote nothing."""
+    out = tmp_path / "rep.json"
+    monkeypatch.setattr(RC, "eligible_symbol",
+                        lambda *a, **k: {"eligible": False,
+                                         "why": "nothing in the band"})
+    rep = _run(RC.main_async("AUTH-TEST", state_dir=str(tmp_path),
+                             ledger_path=str(tmp_path / "l.jsonl"),
+                             out_path=str(out)))
+    assert rep["state"] == WC.DO_NOT_TRADE
+    assert out.exists(), "a refused run must still leave its report on disk"
+    on_disk = json.loads(out.read_text(encoding="utf-8"))
+    assert on_disk["why"] == "nothing in the band"
+    assert "finished_utc" in on_disk

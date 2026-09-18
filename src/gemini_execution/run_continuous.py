@@ -350,6 +350,31 @@ async def authoritative_state(symbol: str) -> Dict[str, Any]:
 async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                      out_path: str,
                      wire_path: Optional[str] = None) -> Dict[str, Any]:
+    """Always writes its report, however it exits.
+
+    EVERY REFUSAL PATH RETURNS EARLY, and the artifact write used to sit after
+    the window -- so the runs worth recording, the ones that refused and sent
+    nothing, wrote no artifact at all. That is the same mistake as the evidence
+    commit that died on a missing pathspec: the record of a refusal is the
+    record most worth keeping.
+    """
+    rep: Dict[str, Any] = {}
+    try:
+        rep = await _build(auth_id, state_dir=state_dir,
+                           ledger_path=ledger_path, wire_path=wire_path)
+        return rep
+    finally:
+        rep.setdefault("finished_utc",
+                       datetime.now(timezone.utc).isoformat())
+        try:
+            with open(out_path, "w", encoding="utf-8") as fh:
+                json.dump(rep, fh, indent=2, default=str)
+        except OSError:
+            pass
+
+
+async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
+                 wire_path: Optional[str] = None) -> Dict[str, Any]:
     from src.gemini_execution.ws_session import GeminiMakerSession
 
     rep: Dict[str, Any] = {
@@ -581,8 +606,6 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
     rep["after"] = await authoritative_state(symbol)
     rep["resolution"] = MD.resolution_for(symbol)
     rep["finished_utc"] = datetime.now(timezone.utc).isoformat()
-    with open(out_path, "w", encoding="utf-8") as fh:
-        json.dump(rep, fh, indent=2, default=str)
     return rep
 
 
