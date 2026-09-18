@@ -461,9 +461,25 @@ def test_the_venue_is_authoritative_for_what_is_resting(tmp_path):
     d.state = WC.AUTHORIZED
     d.recover(venue_fills=[], venue_orders=[], venue_open=[
         {"clientOrderId": "theirs", "outcome": "no", "price": "0.40",
-         "quantity": "0.01"}])
+         "quantity": "0.01", "orderId": 145828836250441357}])
     ids = [o["client_order_id"] for o in d.working.rungs()]
     assert ids == ["theirs"], "our local view never outranks the venue's"
+
+
+def test_a_resting_venue_order_we_cannot_address_stops_the_probe(tmp_path):
+    """The row above now carries an orderId, because CONTINUOUS-5 made the
+    id load-bearing: an order the venue says is resting that we cannot
+    cancel is not a row to accept quietly. Refusing is fail-closed, and the
+    probe stops rather than continuing against a view it cannot act on."""
+    d = _driver(tmp_path)
+    d.working.add("ours", leg="YES", price="0.55", qty="0.01", now=0.0)
+    d.state = WC.AUTHORIZED
+    out = d.recover(venue_fills=[], venue_orders=[], venue_open=[
+        {"clientOrderId": "theirs", "outcome": "no", "price": "0.40",
+         "quantity": "0.01"}])
+    assert out["recovered"] is False
+    assert d.state in WC.TERMINAL
+    assert "orderId" in (d.why or "")
 
 
 # =================================================================== FILLS
@@ -887,7 +903,8 @@ def test_REGRESSION_cancel_uses_orderId_not_clientOrderId(tmp_path,
     _run(d.cancel(s, d.working.rungs()[0]))
     sent = [m for m in s.sent if m["method"] == "order.cancel"]
     assert len(sent) == 1
-    assert sent[0]["params"] == {"orderId": 145828836242288478}, sent[0]
+    # CANONICAL STRING since CONTINUOUS-5: the venue rejected the int -1013
+    assert sent[0]["params"] == {"orderId": "145828836242288478"}, sent[0]
     assert "clientOrderId" not in sent[0]["params"]
 
 

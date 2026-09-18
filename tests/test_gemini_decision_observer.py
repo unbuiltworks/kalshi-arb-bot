@@ -373,11 +373,15 @@ def test_a_mismatched_join_is_reported_rather_than_guessed(tmp_path):
 
 # ================================================================= THE HASHES
 
-def test_the_capture_did_not_move_the_executable_or_the_envelope():
-    """The authorization names the DRIVER. Capturing evidence in the invoker
-    is what keeps that hash byte-for-byte what was reviewed."""
-    assert WC.executable_sha() == (
-        "3194e6912c343a41c4aefe975f8ac7f5c975be5bb6cbb7bfe5ae9f535ac3abf1")
+def test_the_capture_did_not_move_the_envelope():
+    """The capture lives in the invoker, so it never touched a BOUND.
+
+    This pinned the executable hash too, which was right while the capture
+    was the only change in flight. The CONTINUOUS-5 cancel fix has since
+    moved the driver deliberately, so pinning that hash here would assert
+    that no authorized fix may ever land. What the capture must never move
+    is the envelope, and that is what this now says.
+    """
     assert WC.AUTHORIZED_ENVELOPE == (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
     assert str(CP.MAX_ACTIONS) == "12" and str(CP.MAX_RESIDUAL) == "0.04"

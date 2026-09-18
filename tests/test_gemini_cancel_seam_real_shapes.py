@@ -65,7 +65,7 @@ def test_the_cancel_sends_the_venue_orderId_and_not_the_client_id(tmp_path,
 
     sent = [m for m in s.sent if m["method"] == spec.WS_CANCEL_METHOD]
     assert len(sent) == 1
-    assert sent[0]["params"] == {"orderId": 145828836242288478}
+    assert sent[0]["params"] == {"orderId": "145828836242288478"}
     assert "clientOrderId" not in sent[0]["params"], (
         "clientOrderId is OURS and is what reconciliation matches on; orderId "
         "is the VENUE'S and is what order.cancel takes"
@@ -126,7 +126,7 @@ def test_a_moved_price_CANCELS_by_orderId_then_REPLACES(tmp_path, _authorized):
     assert d.budget_consumed == 4
 
     cancels = [m for m in s2.sent if m["method"] == spec.WS_CANCEL_METHOD]
-    assert cancels[0]["params"] == {"orderId": YES_ROW["orderId"]}
+    assert cancels[0]["params"] == {"orderId": str(YES_ROW["orderId"])}
     # the KEPT rung was never touched
     assert NO_ROW["orderId"] not in [
         m["params"].get("orderId") for m in cancels]
@@ -176,8 +176,11 @@ def test_the_recorded_open_orders_reconcile_into_working_state(tmp_path):
     note = d.working.reconcile(SHAPES["open_orders"], now=0.0)
     assert "2 resting" in note
     by_leg = {o["leg"]: o for o in d.working.rungs()}
-    assert by_leg["YES"]["venue_order_id"] == YES_ROW["orderId"]
-    assert by_leg["NO"]["venue_order_id"] == NO_ROW["orderId"]
+    # BOTH canonical strings. These rows are the venue's own recorded
+    # listing, where orderId is an INT -- the shape that killed CONTINUOUS-5.
+    assert by_leg["YES"]["venue_order_id"] == str(YES_ROW["orderId"])
+    assert by_leg["NO"]["venue_order_id"] == str(NO_ROW["orderId"])
+    assert all(isinstance(o["venue_order_id"], str) for o in d.working.rungs())
     assert by_leg["YES"]["price"] == "0.03"
     assert by_leg["NO"]["price"] == "0.68"
 
@@ -191,7 +194,7 @@ def test_a_reconciled_order_can_be_cancelled_by_its_venue_id(tmp_path,
     s = FakeSession(default={"status": 200})
     _run(d.cancel(s, d.working.by_id[YES_ROW["clientOrderId"]]))
     sent = [m for m in s.sent if m["method"] == spec.WS_CANCEL_METHOD]
-    assert sent[0]["params"] == {"orderId": YES_ROW["orderId"]}
+    assert sent[0]["params"] == {"orderId": str(YES_ROW["orderId"])}
 
 
 def test_the_place_ack_shape_is_labelled_as_unobserved():

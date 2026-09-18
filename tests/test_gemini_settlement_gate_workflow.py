@@ -392,7 +392,10 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     wf = WF.read_text()
     armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
     assert "--cohort" in armed, "the armed step must bind a mutation cohort"
-    assert "COHORT-2026-09-18-C5" in armed
+    # the FRESH cohort. C5 is spent at 3/6 and its three unused slots stay
+    # unused; rebinding it would be recycling a spent budget.
+    assert "COHORT-2026-09-18-C6" in armed
+    assert "COHORT-2026-09-18-C5" not in armed.split("run:", 1)[1]
 
 
 def test_continuous_5_is_spent_and_the_workflow_is_disarmed_again():
@@ -464,3 +467,37 @@ def test_the_cohort_ledger_records_what_the_window_spent():
     # the rejected cancel is recorded UNKNOWN and is NEVER silently resolved
     resolves = {r["slot"]: r["outcome"] for r in rows if r.get("kind") == "RESOLVE"}
     assert resolves == {0: "ACCEPTED", 1: "ACCEPTED", 2: "UNKNOWN"}, resolves
+
+
+def test_the_c5_orders_are_reconciled_read_only():
+    """CONTINUOUS-5 left two orders resting and its authorization is SPENT.
+
+    They may be READ and must not be touched: no --apply-from (which would
+    write the C5 ledger) and no cancel path anywhere near them.
+    """
+    wf = WF.read_text()
+    block = wf.split("Reconcile historical ledger slot", 1)[1].split(
+        "- name:", 1)[0]
+    # the step's own comment explains what it does NOT do, so only the
+    # EXECUTABLE lines decide whether it writes anything
+    step = "\n".join(l for l in block.splitlines()
+                     if not l.strip().startswith("#"))
+    assert "145828836250441342" in step and "145828836250441357" in step
+    assert "COHORT-2026-09-18-C5/ledger.jsonl" in step
+    assert "--apply-from" not in step, (
+        "reading what became of them must never write the C5 ledger")
+    assert "order.cancel" not in step and "GEMINI_CANARY_LIVE" not in step
+
+
+def test_the_c5_cohort_keeps_its_three_unused_slots_unused():
+    """Budget is not regained by rewriting an UNKNOWN."""
+    from src.gemini_execution import cohort as CO
+    c5 = CO.state("COHORT-2026-09-18-C5")
+    assert c5["budget"] == 6 and c5["consumed"] == 3 and c5["remaining"] == 3
+    c6 = CO.state("COHORT-2026-09-18-C6")
+    assert c6["budget"] == 6 and c6["consumed"] == 0
+    # C6 is chained to C5, so C5's evidence cannot be rewritten unnoticed
+    assert c6["predecessor"]["predecessor_ledger"].endswith(
+        "COHORT-2026-09-18-C5/ledger.jsonl")
+    assert c6["predecessor"]["recorded_consumed"] == 3
+    assert c6["predecessor"]["intact"] is True

@@ -384,18 +384,84 @@ def reconstruct_budget(ledger: MutationLedger,
 KEEP = "KEEP"
 
 
+def canonical_order_id(value: Any) -> str:
+    """The venue's orderId in ONE representation: a string.
+
+    WHY THIS EXISTS. Gemini publishes the same orderId in two types.
+    `order.place`'s ack returns it as a STRING; the open-orders LISTING
+    returns it as an INT. CONTINUOUS-5 placed from the ack (string), then a
+    mid-window refresh rebuilt the working set from the listing (int), and
+    the cancel sent the int. The venue answered 400 / -1013 "Invalid
+    parameters" and the window failed closed with the order still resting.
+
+    REPRESENTATION ONLY. The digits are never touched: an int is rendered,
+    a string is returned as it came apart from surrounding whitespace, so a
+    leading zero or any future non-numeric id survives intact. Nothing is
+    parsed and re-emitted, because re-emitting is how a float turns
+    145828836250441342 into 1.4582883625044134e+17.
+
+    UNUSABLE IS REFUSED, NEVER INVENTED. A missing, empty, boolean, float or
+    structured id cannot address an order, and guessing one would send a
+    cancel at whatever it guessed.
+    """
+    # bool BEFORE int: True is an int in Python, and "orderId: true" is a
+    # malformed payload, not order number one.
+    if isinstance(value, bool):
+        raise ReconcileRequired(
+            "venue orderId arrived as a boolean (%r), which addresses no "
+            "order; refusing rather than inventing one" % (value,))
+    if isinstance(value, int):
+        if value <= 0:
+            raise ReconcileRequired(
+                "venue orderId %d is not a usable identifier" % value)
+        return str(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ReconcileRequired(
+                "venue orderId was empty or blank; an unread id is never a "
+                "usable one")
+        try:
+            if int(text) <= 0:
+                raise ReconcileRequired(
+                    "venue orderId %r is not a usable identifier" % text)
+        except ValueError:
+            # not numeric: kept VERBATIM. The venue's id is the venue's to
+            # choose, and refusing a shape we have not seen would be this
+            # package inventing a rule rather than reading one.
+            pass
+        return text
+    raise ReconcileRequired(
+        "venue orderId arrived as %s (%r), which is not an identifier this "
+        "package can address an order with" % (type(value).__name__, value))
+
+
 class WorkingOrders:
-    """Authoritative view of what is resting, keyed by clientOrderId."""
+    """Authoritative view of what is resting, keyed by clientOrderId.
+
+    EVERY WRITE PATH CANONICALIZES. `add` and `reconcile` are the only two,
+    and both put the venue orderId through `canonical_order_id`, so the
+    working set cannot hold an id in a shape `order.cancel` will reject. The
+    invariant lives here rather than at the cancel, because a cancel that
+    repaired its own argument would leave the wrong shape in the set for
+    everything else to read.
+    """
 
     def __init__(self) -> None:
         self.by_id: Dict[str, Dict[str, Any]] = {}
 
     def add(self, client_order_id: str, *, leg: str, price: str, qty: str,
             now: float, venue_order_id: Any = None) -> None:
+        # None is allowed HERE and only here: a place ack that carried no
+        # orderId leaves the order resting with its id unknown, and `cancel`
+        # already refuses that case by sending the operator to the venue's
+        # own open-order list. Turning it into an exception would remove a
+        # recovery path that works.
         self.by_id[str(client_order_id)] = {
             "client_order_id": str(client_order_id), "leg": str(leg),
             "price": str(price), "qty": str(qty), "resting_since": float(now),
-            "venue_order_id": venue_order_id}
+            "venue_order_id": (None if venue_order_id is None
+                               else canonical_order_id(venue_order_id))}
 
     def drop(self, client_order_id: str) -> None:
         self.by_id.pop(str(client_order_id), None)
@@ -415,6 +481,11 @@ class WorkingOrders:
             coid = o.get("clientOrderId") or o.get("client_order_id")
             if not coid:
                 continue
+            # PRESENCE, NOT TRUTHINESS. `a or b` fell through to the second
+            # key whenever the first was 0 or "", which is how an unusable id
+            # becomes a plausible-looking one.
+            raw = (o.get(spec.ORDER_ID_FIELD) if spec.ORDER_ID_FIELD in o
+                   else o.get("order_id"))
             fresh[str(coid)] = {
                 "client_order_id": str(coid),
                 "leg": ("YES" if str(o.get("outcome", o.get("eventOutcome", "")
@@ -422,7 +493,10 @@ class WorkingOrders:
                 "price": str(o.get("price")),
                 "qty": str(o.get("quantity", o.get("qty"))),
                 "resting_since": float(o.get("resting_since") or now),
-                "venue_order_id": o.get("orderId") or o.get("order_id"),
+                # THE FIX. An order the venue says is resting MUST be
+                # addressable, so an unusable id here stops the window
+                # rather than entering the working set.
+                "venue_order_id": canonical_order_id(raw),
             }
         before, self.by_id = set(self.by_id), fresh
         gone = sorted(before - set(fresh))

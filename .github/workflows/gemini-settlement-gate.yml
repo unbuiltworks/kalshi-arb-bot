@@ -235,6 +235,21 @@ jobs:
             --out analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/reconcile.txt
 
+          # THE TWO ORDERS CONTINUOUS-5 LEFT RESTING. Its cancel was rejected
+          # -1013 and the window stopped, so YES 0.26 and NO 0.46 were still
+          # open on a contract that has since expired. This READS what became
+          # of them -- filled, cancelled/expired, or still open. It does NOT
+          # mutate them: the C5 authorization is spent, and no --apply-from is
+          # passed, so the C5 ledger is not written either.
+          for pair in "0 145828836250441342" "1 145828836250441357"; do
+            set -- $pair
+            python -m src.gemini_execution.reconcile_slot \
+              --ledger analysis/gemini/cohorts/COHORT-2026-09-18-C5/ledger.jsonl \
+              --slot "$1" --order-id "$2" \
+              --out analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ)_c5s$1.json \
+              2>&1 | tee -a /tmp/reconcile_c5.txt || true
+          done
+
       # THE UNARMED PRODUCTION-PATH VERIFICATION. This is run_continuous
       # ITSELF -- the same entry point the armed step calls -- with real
       # credentials, the real metadata readers, the real authoritative
@@ -250,7 +265,7 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort "COHORT-2026-09-18-C5" \
+            --cohort "COHORT-2026-09-18-C6" \
             --ledger analysis/gemini/continuous_ledger.jsonl \
             --out    analysis/gemini/continuous_unarmed_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire   /tmp/unarmed_wire.json \
@@ -278,12 +293,15 @@ jobs:
       # ONE window. The latch makes that durable across runners, the cohort
       # bounds it to 6 mutations, and neither is reusable.
       #
-      # --cohort IS LOAD-BEARING AND WAS MISSING. Without it the window binds
-      # the HISTORICAL ledger, which is 12/12 permanently spent by
-      # CONTINUOUS-2, -3 and -4, and an authorized run would die on budget
-      # rather than trade. COHORT-2026-09-18-C5 carries its own bounded
-      # budget of 6 and its own ledger, records the historical ledger's
-      # sha256 as its predecessor, and is verified INTACT before the latch.
+      # --cohort IS LOAD-BEARING. Without it the window binds the HISTORICAL
+      # ledger, which is 12/12 permanently spent, and an authorized run would
+      # die on budget rather than trade.
+      #
+      # COHORT-2026-09-18-C6 is FRESH, not a recycling of C5. C5 is spent at
+      # 3 of 6 including the UNKNOWN cancel, and its three unused slots stay
+      # unused: budget is not regained by rewriting an UNKNOWN. C6 records
+      # C5's LEDGER as its predecessor rather than the historical one, so any
+      # rewrite of C5's evidence makes this cohort refuse before the latch.
       # A cohort may only TIGHTEN the envelope, never extend it.
       #
       # EVERY bound -- 12 mutation slots (tightened to the cohort's 6), $0.15
@@ -316,7 +334,7 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort  "COHORT-2026-09-18-C5" \
+            --cohort  "COHORT-2026-09-18-C6" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \
@@ -368,7 +386,7 @@ jobs:
           # thrown the record away -- and the NEXT window would have read a
           # cohort with 0 consumed. That is a budget reset by accident, which
           # is the one thing the cohort mechanism exists to make impossible.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|reconcile_slot|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_c5s[0-9])?\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other
