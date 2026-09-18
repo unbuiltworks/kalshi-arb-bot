@@ -158,58 +158,52 @@ The classification test runs the **real** controller at the CONTINUOUS-4 state
 — holding NO 0.01 @ 0.14 it records `COMPLETE` for YES 0.90 and `EXTEND` for
 NO 0.07, with the inventory the decision actually saw.
 
-## Unarmed production-shaped verification — the eight required checks
+## Final unarmed production-shaped verification — the eight expected outcomes
 
-`analysis/gemini/continuous_unarmed_20260918T200252Z.json`, committed by
-Actions run 35389107398 on `70b0243a`. Real credentials, real readers, the same
-entry point the armed step calls, contract `GEMI-BTC05M2609182005-UP` at TTE
-127.9s. Terms `ACCEPTED`, `blocks_orders: false`.
+`analysis/gemini/continuous_unarmed_20260918T203645Z.json`, Actions run
+35392268587 on `99531517`. Real credentials, real readers, the same entry
+point the armed step calls, on `GEMI-BTC05M2609182040-UP` at TTE 194.7s.
 
-| # | required before live execution | evidence in the artifact |
-|---|---|---|
-| 1 | executable SHA `3194e691…abf1` | `driver_executable_sha` matches exactly |
-| 2 | envelope SHA `b3bff654…aa17` | `driver_envelope_sha` and `authorization.envelope_sha` both match, and equal `authorized_envelope` |
-| 3 | bundle SHA `48f7f1f4…a56f` | `bundle_sha` matches exactly |
-| 4 | cohort `COHORT-2026-09-18-C5` | `cohort.cohort_id` |
-| 5 | budget 6/6 | `budget 6, consumed 0, remaining 6`; `pre_latch_recovery.budget_left 6`; cohort ledger 0 rows |
-| 6 | historical ledger byte-identical, 12/12 spent | `predecessor.recorded_sha256 == current_sha256 == 89cf9de6…`, `recorded_consumed == current_consumed == 12`, `intact: true` |
-| 7 | reconciliation before every decision, and after ambiguous cancels when a place is pending | **partly** — see below |
-| 8 | no authorization, no CONTINUOUS-5 latch | `authorization.authorized false` with all three reasons; `latch.consumed false`; 5 latch files, no sixth |
+| expected | result |
+|---|---|
+| executable SHA stays `3194e691…abf1` | `driver_executable_sha` matches |
+| envelope SHA stays `b3bff654…aa17` | `driver_envelope_sha` matches |
+| bundle SHA changes | **`61c7abf3…8c61`**, was `48f7f1f4…a56f` |
+| cohort `COHORT-2026-09-18-C5`, 6/6 | budget 6, consumed 0, remaining 6 |
+| historical ledger pinned and 12/12 | recorded == current == `89cf9de6…`, 12 == 12, `intact: true` |
+| zero mutation frames | no session was ever constructed |
+| no C5 latch consumed | `latch.consumed false`; 5 latch files, no sixth |
+| terminal `READY_TO_MUTATE_BUT_UNAUTHORIZED` | exactly that |
 
-Terminal state **`READY_TO_MUTATE_BUT_UNAUTHORIZED`**, refused for exactly three
-reasons and nothing else: `REQUIRED_AUTH_ID is None`, `AUTHORIZED_SHA is None`,
-`GEMINI_CANARY_LIVE is not YES`. Preflight `agrees: true, discrepancies: []`.
-Authoritative reads all succeeded — `order_history readable: true`
-(`NO_ORDERS_ON_RECORD`, 0 rows), `active ok: true, status 200`, fills 0,
-open orders 0 — so the fail-closed branch was reachable and simply had nothing
-to refuse. 6,324 tests pass.
+Refused for three reasons and nothing else: `REQUIRED_AUTH_ID is None`,
+`AUTHORIZED_SHA is None`, `GEMINI_CANARY_LIVE is not YES`. Preflight
+`agrees: true, discrepancies: []`; pre-latch recovery `recovered: true`,
+`budget_left 6`, `checked_before_latch` and `checked_before_authorization`
+both true. **6,342 tests pass.**
 
-**On check 7, stated precisely rather than claimed.** What this run
-*demonstrates* is the pre-latch half: `pre_latch_recovery` carries
-`checked_before_latch: true` and `checked_before_authorization: true`, so
-recovery ran before the authorization latch could be spent. The *per-cycle*
-half cannot be demonstrated by an unarmed run, because the driver refuses
-before it ever reaches `RUNNING` and no cycle executes. It is pinned by test
-instead:
+**What this artifact does NOT show, stated plainly.** It contains no
+`decisions` key — and that is correct. The run refuses at the authorization
+gate *before* the Driver is constructed, so the observer is never attached and
+its absence from an unarmed artifact proves nothing either way. A capture that
+is only exercised by unit tests is `apply_fill` again: correct code with no
+caller for a whole live window.
 
-* `test_run_window_records_every_refresh_for_audit` — one refresh per cycle,
-  each `when == "pre_decide"`;
-* `test_a_fill_between_cancel_and_replace_is_seen_before_the_place` — the
-  second refresh, `when == "post_cancel"`, only when a place is pending;
-* `test_turns_carry_the_inventory_the_decision_used` — the report shows which
-  inventory each decision saw;
-* `test_repeated_refreshes_apply_each_fill_exactly_once` and
-  `test_a_restart_recovers_the_same_state_a_refresh_produces` — idempotent by
-  construction;
-* `test_unreadable_fills_stop_the_window_rather_than_read_as_flat` and
-  `test_unreadable_open_orders_stop_the_window` — unreadable stops the window;
-* `test_an_empty_cancel_result_does_not_erase_the_order` and
-  `test_the_slot_is_still_spent_on_an_ambiguous_cancel` — the ambiguous cancel
-  that caused CONTINUOUS-4;
-* `test_risk_gates_run_against_reconciled_inventory_not_zero` — the bounds bind
-  real inventory.
+So the wiring is proven separately, by an integration test that drives the
+**real `_build`** past every gate with fakes and runs the **real Driver**
+through a real window at the CONTINUOUS-4 state. It asserts the report
+actually carries `decisions`, `authoritative_reads`, `mutations_observed`,
+`decision_capture` and `refresh_link`; that cycle 1 saw `no_qty 0.01` and
+`directional_residual -0.01`; that the YES rung is labelled **`COMPLETE`** at
+0.90; that the read carries the driver's own `pre_decide` label with
+`n_fills 1`; and that the mutation recorded `no_qty 0.01` as the inventory in
+force at the call.
 
-The first live window is what converts that from pinned to observed.
+### Reconciliation with the earlier checks
+
+Checks 4, 5, 6 and 8 from the previous run are re-verified above. Checks 1 and
+2 are re-verified and unchanged; check 3 has deliberately moved. Check 7's
+pre-latch half is in this artifact; its per-cycle half is still pinned by test
+and is what the first authorized window converts to observed.
 
 ## The armed step was not ready, and now is
 

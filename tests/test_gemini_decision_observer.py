@@ -406,3 +406,121 @@ def test_the_observer_owns_no_transport_and_no_bound():
                       "CP.classify(", ".request(", "session.", "T.",
                       "MD."):
         assert forbidden not in code, forbidden
+
+
+# ============================================ THE WIRING, NOT JUST THE CLASS
+
+def test_the_observer_has_a_caller_and_its_output_reaches_the_report(
+        tmp_path, monkeypatch):
+    """A recorder nothing calls is the CONTINUOUS-4 defect wearing a new hat.
+
+    `apply_fill` existed, was correct, and had no caller in the live loop for
+    a whole window. The unarmed production proof cannot catch the same thing
+    here, because it refuses at the authorization gate BEFORE the driver is
+    built -- so `rep["decisions"]` is legitimately absent from every unarmed
+    artifact and its absence proves nothing either way.
+
+    This drives the REAL `_build` past every gate with fakes, runs the REAL
+    Driver through a REAL window against the real controller, and asserts the
+    capture reaches the report.
+    """
+    from src.gemini_execution import latch as LATCH
+    from src.gemini_execution import metadata as MD
+    from src.gemini_execution import run_canary as RUNCAN
+    from src.gemini_execution import ws_session as WS
+
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+    monkeypatch.setattr(RC, "eligible_symbol", lambda *a, **k: {
+        "eligible": True, "chosen": {"symbol": SYMBOL, "tte_s": 150.0}})
+    # 150s for the first decision, then under the 30s withdraw floor so the
+    # window winds itself down instead of burning every slot at 5s a cycle.
+    ttes = iter([150.0])
+
+    def _tte(sym):
+        return lambda: next(ttes, 20.0)
+    monkeypatch.setattr(RC, "tte_of", _tte)
+
+    async def _terms_status():
+        return {"readable": True, "verdict": "ACCEPTED", "blocks_orders": False}
+    monkeypatch.setattr(MD, "terms_status", _terms_status)
+    monkeypatch.setattr(MD, "terms_for", lambda *a, **k: {
+        "priceIncrement": "0.01"})
+    monkeypatch.setattr(MD, "outcome_book", lambda *a, **k: BOOK)
+    monkeypatch.setattr(MD, "resolution_for", lambda *a, **k: {})
+
+    monkeypatch.setattr(RC.PF, "preflight_now", lambda *a, **k: {"ok": True})
+    monkeypatch.setattr(RC.PF, "check_frozen", lambda pf: (True, []))
+
+    # THE VENUE ALREADY HOLDS NO 0.01 @ 0.14 -- the CONTINUOUS-4 state, so the
+    # controller must classify the YES rung COMPLETE rather than OPEN.
+    async def _auth_state(sym):
+        return {"symbol": sym,
+                "fills": [{"leg": "NO", "qty": "0.01", "price": "0.14"}],
+                "open_orders": [], "orders_seen": [],
+                "order_history_raw": {"readable": True},
+                "active_raw": {"ok": True}}
+    monkeypatch.setattr(RC, "authoritative_state", _auth_state)
+
+    monkeypatch.setattr(WC, "authorization_state", lambda *a, **k: {
+        "authorized": True, "why_not": [], "required_auth_id": "AUTH-WIRING"})
+    monkeypatch.setattr(RC.BUNDLE, "state", lambda: {
+        "authorized": True, "why_not": []})
+    monkeypatch.setattr(LATCH, "consume", lambda *a, **k: {
+        "intent_id": "test", "state": "CONSUMED"})
+    monkeypatch.setattr(RUNCAN, "make_durable", lambda *a, **k: None)
+    monkeypatch.setattr(RUNCAN, "durable_check", lambda *a, **k: True)
+
+    class FakeSession:
+        events = None
+
+        def __init__(self, **kw):
+            self.sent = []
+
+        async def connect(self):
+            return None
+
+        async def close(self):
+            return None
+
+        async def request(self, method, params, **kw):
+            self.sent.append((method, params))
+            return PLACE_ACK
+    monkeypatch.setattr(WS, "GeminiMakerSession", FakeSession)
+
+    led = tmp_path / "hist.jsonl"
+    led.write_text("", encoding="utf-8")
+    rep = _run(RC._build("AUTH-WIRING", state_dir=str(tmp_path),
+                         ledger_path=str(led), wire_path=None,
+                         cohort_id=None))
+
+    # the window really ran
+    assert rep.get("session") == "connected", rep.get("why")
+    assert "window" in rep, rep.get("window_error") or rep.get("why")
+    assert rep["window"]["cycles"] >= 1
+
+    # ---- and the capture is IN the report
+    for key in ("decisions", "authoritative_reads", "mutations_observed",
+                "decision_capture", "refresh_link"):
+        assert key in rep, key
+
+    first = rep["decisions"][0]
+    assert first["cycle"] == 1 and first["tte_s"] == 150.0
+    # the inventory the decision SAW came from the authoritative re-read
+    assert first["inventory_before_decision"]["no_qty"] == "0.01"
+    assert first["inventory_before_decision"]["directional_residual"] == "-0.01"
+    # THE FIELD THE EXPERIMENT TURNS ON, in the artifact, not reconstructed
+    assert CP.COMPLETE in first["classification"]
+    yes = next(a for a in first["actions"] if a["leg"] == "YES")
+    assert yes["action"] == CP.COMPLETE and yes["price"] == "0.90"
+    assert first["budget_before_decision"]["remaining"] >= 1
+
+    # the reads carry the DRIVER's own phase label, joined not inferred
+    assert rep["refresh_link"]["linked"] is True
+    assert rep["authoritative_reads"][0]["when"] == "pre_decide"
+    assert rep["authoritative_reads"][0]["n_fills"] == 1
+
+    # and the mutations were observed with the inventory in force at the call
+    assert rep["mutations_observed"]
+    assert rep["mutations_observed"][0]["inventory_at_call"]["no_qty"] == "0.01"
+    assert rep["decision_capture"]["decide_calls"] == rep["window"]["cycles"]
+    assert rep["decision_capture"]["action_labels"].get(CP.COMPLETE, 0) >= 1
