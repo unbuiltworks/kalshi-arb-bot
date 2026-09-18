@@ -664,3 +664,89 @@ def test_the_first_flat_state_decision_is_two_maker_buys(tmp_path,
     for m in s.sent:
         assert m["params"]["side"] == "BUY"
         assert m["params"]["timeInForce"] == "MOC"
+
+
+# ====================================== THE AUTHORIZATION HASH MUST BE BINDABLE
+
+def _sha_of(text):
+    import hashlib
+    body, n = WC._AUTH_LINES.subn(WC._AUTH_PLACEHOLDER, text)
+    assert n == 3, n
+    return hashlib.sha256(body.encode()).hexdigest()
+
+
+def _armed_source():
+    src = open(WC.__file__, encoding="utf-8").read()
+    src = src.replace('REQUIRED_AUTH_ID: Optional[str] = None',
+                      'REQUIRED_AUTH_ID: Optional[str] = "OWNER-X"')
+    src = src.replace('AUTHORIZED_SHA: Optional[str] = None',
+                      'AUTHORIZED_SHA: Optional[str] = "%s"' % WC.executable_sha())
+    src = src.replace('AUTHORIZED_ENVELOPE: Optional[str] = None',
+                      'AUTHORIZED_ENVELOPE: Optional[str] = "%s"' % WC.envelope_sha())
+    return src
+
+
+def test_REGRESSION_binding_the_authorization_does_not_change_the_hash():
+    """The defect that made the first driver UNARMABLE.
+
+    executable_sha() originally hashed the whole file, authorization constants
+    included. So an authorization naming executable_sha() could never be
+    satisfied: installing it changed the file, which changed the hash, which
+    invalidated the authorization being installed. Satisfying it would have
+    required a 64-hex string X whose embedding in this file hashes to X -- a
+    self-referential SHA-256 preimage. Not unset: UNARMABLE, and no commit
+    could have fixed it. It was caught by trying to issue a real
+    authorization against it.
+    """
+    assert _sha_of(_armed_source()) == WC.executable_sha(), (
+        "installing an authorization must be a no-op for the executable hash, "
+        "or the authorization can never be installed at all")
+
+
+def test_a_logic_change_still_invalidates_the_authorization():
+    src = open(WC.__file__, encoding="utf-8").read()
+    tampered = src.replace("if self.budget_left() < 1:",
+                           "if self.budget_left() < 0:", 1)
+    assert tampered != src, "the anchor for this test moved"
+    assert _sha_of(tampered) != WC.executable_sha(), (
+        "the exclusion must cover the authorization block and NOTHING else")
+
+
+def test_only_the_three_authorization_lines_normalize():
+    src = open(WC.__file__, encoding="utf-8").read()
+    assert len(WC._AUTH_LINES.findall(src)) == 3
+    # count the SUBSTITUTIONS, not the token: the placeholder's own definition
+    # contains the token too, which is why counting it reads 4
+    _, n = WC._AUTH_LINES.subn(WC._AUTH_PLACEHOLDER, src)
+    assert n == 3
+    body = WC.executable_body()
+    # and the real values are gone from the hashed body
+    assert "REQUIRED_AUTH_ID: Optional[str] = None" not in body
+    assert "AUTHORIZED_SHA: Optional[str] = None" not in body
+
+
+@pytest.mark.parametrize("pattern,n", [
+    (r"^NOTHING_MATCHES$", 0),                       # too few
+    (r"^(import) .*$", None),                        # far too many
+])
+def test_a_malformed_authorization_block_refuses_to_hash(monkeypatch, pattern,
+                                                          n):
+    """A normalization that matched more or fewer lines than intended would be
+    a way to hide code from the hash, so it is refused rather than guessed."""
+    import re as _re
+    monkeypatch.setattr(WC, "_AUTH_LINES", _re.compile(pattern, _re.MULTILINE))
+    monkeypatch.setattr(WC, "_AUTH_PLACEHOLDER", "<AUTHORIZATION>")
+    with pytest.raises(WC.NormalizationFailed):
+        WC.executable_body()
+
+
+def test_the_envelope_hash_is_unaffected_by_the_authorization():
+    before = WC.envelope_sha()
+    assert before == _sha_env()
+    assert WC.envelope()["max_actions"] == "12"
+
+
+def _sha_env():
+    import hashlib, json
+    return hashlib.sha256(
+        json.dumps(WC.envelope(), sort_keys=True).encode()).hexdigest()

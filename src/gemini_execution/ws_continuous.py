@@ -62,6 +62,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import tempfile
 import time
 import uuid
@@ -103,10 +104,54 @@ class ReconcileRequired(RuntimeError):
     """The venue's state is unknown to us. STOP and read it back."""
 
 
+#: the three authorization assignments, matched at line start and nowhere else
+_AUTH_LINES = re.compile(
+    r"^(REQUIRED_AUTH_ID|AUTHORIZED_SHA|AUTHORIZED_ENVELOPE)"
+    r": Optional\[str\] = .*$", re.MULTILINE)
+
+#: what those lines are replaced with before hashing
+_AUTH_PLACEHOLDER = r"\1: Optional[str] = <AUTHORIZATION>"
+
+
+class NormalizationFailed(RuntimeError):
+    """The authorization block is not the shape the hash assumes."""
+
+
+def executable_body() -> str:
+    """This module's source with the AUTHORIZATION BLOCK normalized away.
+
+    WHY THIS EXCLUSION EXISTS, and why it is not a loophole. The first version
+    hashed the whole file, including the three authorization constants -- so
+    an authorization naming `executable_sha()` could never be satisfied:
+    binding the constants changes the file, which changes the hash, which
+    invalidates the very authorization being installed. Satisfying it would
+    have meant finding a 64-hex string X such that embedding X in this file
+    yields sha256 == X, a self-referential preimage of SHA-256. The driver was
+    therefore not "unarmed pending a commit"; it was UNARMABLE, and no commit
+    could have fixed it.
+
+    This is the standard detached-signature shape: the signature field is
+    excluded from the payload it signs. Everything else in the file is still
+    hashed, so any change to LOGIC still invalidates an authorization -- which
+    is the property the check exists to provide. Exactly three lines may
+    normalize, and if that is not true the hash is refused rather than
+    guessed, because a normalization that silently matched more than intended
+    would be a way to hide code from review.
+    """
+    with open(__file__, "r", encoding="utf-8") as fh:
+        src = fh.read()
+    body, n = _AUTH_LINES.subn(_AUTH_PLACEHOLDER, src)
+    if n != 3:
+        raise NormalizationFailed(
+            "expected exactly 3 authorization lines, normalized %d; the hash "
+            "is refused rather than computed over an unknown shape" % n)
+    return body
+
+
 def executable_sha() -> str:
-    """sha256 of this module's source, as it will actually run."""
-    with open(__file__, "rb") as fh:
-        return hashlib.sha256(fh.read()).hexdigest()
+    """sha256 of the executable body, independent of which authorization
+    (if any) is installed in it."""
+    return hashlib.sha256(executable_body().encode("utf-8")).hexdigest()
 
 
 def envelope() -> Dict[str, str]:

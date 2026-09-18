@@ -1,5 +1,22 @@
 # GEMINI_L5_CONTINUOUS_DRIVER_READY
 
+> **SUPERSEDED IN ONE FIELD, 2026-09-18.** The `executable_sha` below was
+> `55467cca48b730369d522db8478d656bf6f1ce3d6d7110cb703a410ca89b9e73` when this
+> card was written. Issuing a real authorization against that artifact proved
+> it **UNARMABLE**: `executable_sha()` hashed the whole file INCLUDING the
+> three authorization constants, so installing an authorization changed the
+> file, which changed the hash, which invalidated the authorization being
+> installed. Satisfying it needed a 64-hex string X whose embedding in the
+> file hashes to X — a self-referential SHA-256 preimage. Not unset:
+> unarmable, and no commit could have fixed it.
+>
+> The hash now excludes the authorization block and nothing else, the way a
+> detached signature excludes the signature field. Measured: installing an
+> authorization is a no-op for the hash, and a one-character logic change
+> still invalidates it. **Everything else in this card stands unchanged.**
+> See `analysis/gemini/CONTINUOUS_WINDOW_1_FAIL_CLOSED.md`.
+
+
 **NO ORDER SUBMITTED. NOT ARMED. NO LATCH CONSUMED.**
 Built under owner authorization 2026-09-18 to *implement the software*, which
 that instruction stated is **not** authorization to submit a live order.
@@ -10,7 +27,7 @@ that instruction stated is **not** authorization to submit a live order.
 
 ```
 file             src/gemini_execution/ws_continuous.py
-executable_sha   55467cca48b730369d522db8478d656bf6f1ce3d6d7110cb703a410ca89b9e73
+executable_sha   2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d   <-- SUPERSEDES 55467cca...9e73
 envelope_sha     b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17
 ```
 
@@ -210,7 +227,7 @@ authorization enumerated, plus the regression above:
 | missing authorization blocks mutation | `test_without_authorization_no_mutation_is_possible`, `test_no_environment_variable_can_supply_an_authorization` |
 | expired/consumed authorization blocks | `test_an_expired_authorization_cannot_mutate`, `test_an_edited_executable_invalidates_the_authorization`, `test_a_widened_envelope_invalidates_the_authorization` |
 
-**Full repository suite: 6128 passed, 27 skipped, 1 xfailed, 0 failed.**
+**Full repository suite: 6134 passed, 27 skipped, 1 xfailed, 0 failed.**
 
 The package's "exactly one sender" guard fired on this driver, as designed. It
 was not widened by name: it now enumerates both reviewed senders **and proves
@@ -221,7 +238,7 @@ the list always stood for. That guard previously caught a real rogue order path.
 
 ## What a future authorization must name
 
-1. `executable_sha` `55467cca…9e73` — set as `AUTHORIZED_SHA`
+1. `executable_sha` `2793c4cd…8d5d` — set as `AUTHORIZED_SHA`
 2. `envelope_sha` `b3bff654…aa17` — set as `AUTHORIZED_ENVELOPE`
 3. an `authorization_id` — set as `REQUIRED_AUTH_ID`, and matched in
    `arming.EXPECTED_AUTH_ID`
