@@ -1,0 +1,19 @@
+{
+  "authorization_id": "OWNER-2026-09-17-GEMINI-CANARY-1",
+  "intent_id": "canary-8021f31ef1d6476b",
+  "symbol": "GEMI-BTC05M2609180020-UP",
+  "side": "buy",
+  "outcome": "yes",
+  "price": "0.02",
+  "amount": "0.01",
+  "created_at": 1789690613.9198785,
+  "state": "INTENT_PERSISTED",
+  "venue_order_id": null,
+  "history": [
+    {
+      "state": "INTENT_PERSISTED",
+      "t": 1789690613.9198792
+    }
+  ],
+  "labels": "consumed BEFORE the mutation. A lost order is preferred to a double order, because only one of them is recoverable."
+}
