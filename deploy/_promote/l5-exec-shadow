@@ -35,3 +35,4 @@ promote gemini surface report: split the evidenced fills by side to answer the P
 promote gemini placement split: which of the two BUY_ONLY_FILLS means, plus queue-ahead both sides
 promote gemini queue diagnosis: why a quote that is traded through still does not fill
 promote pmus_surface: the L5 evidence ladder against the authenticated trade tape (TRADES_HTTP)
+promote pmus_surface heartbeat: the tape-coverage facts have to reach the log, not only the volume

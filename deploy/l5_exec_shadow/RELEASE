@@ -101,7 +101,7 @@
       },
       "pmus_surface": {
         "module": "src.pmus_l5_surface_runner",
-        "module_sha256": "23bc549683b96758c2beb66b340e2d68c9daa1bae4d7a4f0826dd9f1e7fd735a"
+        "module_sha256": "a64b7feba3df1bc626ffe75045e899e8e8684b4ee39091e5e54f2835e1c96064"
       }
     }
   }

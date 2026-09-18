@@ -339,6 +339,12 @@ def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
 
     deadline = time.time() + minutes * 60.0
     obs = 0
+    # the newest tape-coverage facts, kept for the stdout heartbeat. The
+    # evidence rows go to the volume, which nothing outside the container can
+    # read -- so the few facts that say whether this stream is WORKING have to
+    # reach the log too, or "is the tape arriving?" is unanswerable from
+    # outside without shelling into the service.
+    cov: Dict[str, Any] = {"tape": "NOT_YET_READ"}
     while time.time() < deadline:
         t0 = time.time()
         served: Dict[str, Dict[str, Any]] = {}
@@ -356,6 +362,7 @@ def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
                 if doc is None:
                     # the books are still usable; the ladder simply stops at
                     # BOOK_REACHED this cycle, which is what trades=None means
+                    cov = {"tape": "UNREACHABLE", "url": trades_url}
                     emit({"kind": "trades_unreachable", "t": time.time(),
                           "url": trades_url,
                           "labels": ("UNREADABLE, not empty: every market "
@@ -369,6 +376,13 @@ def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
                                   if m.get("trades") is not None)
                     wrapped = sum(1 for m in served.values()
                                   if m.get("ring_full"))
+                    cov = {"tape": "SERVED", "markets_in_tape": len(doc),
+                           "joined": covered,
+                           "book_only": len(served) - covered,
+                           "ring_full": wrapped,
+                           "prints": sum(len(m.get("trades") or [])
+                                         for m in served.values()
+                                         if m.get("trades") is not None)}
                     # summarised on the progress cadence, not every cycle: at
                     # 5s intervals a per-cycle row is ~17k lines a day of
                     # counts, and the LADDER rows are the evidence. An
@@ -410,8 +424,17 @@ def run(out_dir: str, *, minutes: float = 30.0, interval: float = 5.0,
                 emit(row)
         obs += 1
         if obs % 6 == 0:
-            emit({"kind": "progress", "t": time.time(), "cycles": obs,
-                  **SS.report(surfaces)})
+            rep = SS.report(surfaces)
+            emit({"kind": "progress", "t": time.time(), "cycles": obs, **rep})
+            # ONE compact line to stdout: whether the tape arrived, and how
+            # far the ladder has actually climbed. Ladder counts are reported
+            # as measured -- EVIDENCED_FILL is never inferred from the others.
+            print("PMUS_SURFACE " + json.dumps(
+                {"kind": "heartbeat", "cycles": obs, "source": source,
+                 "watching": len(surfaces), "tape_join": cov,
+                 "per_side": rep.get("per_side"),
+                 "tape": rep.get("tape"), "verdict": rep.get("verdict")},
+                default=str), flush=True)
         sleep = interval - (time.time() - t0)
         if sleep > 0:
             time.sleep(sleep)
