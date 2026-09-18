@@ -199,3 +199,74 @@ def test_the_pre_latch_probe_does_not_write_to_the_ledger(
     _run(RC.main_async("AUTH-TEST", state_dir=str(tmp_path), ledger_path=led,
                        out_path=str(tmp_path / "out.json")))
     assert open(led, encoding="utf-8").read() == before
+
+
+# ------------------------------- THE AUTHORITATIVE READ MUST ACTUALLY READ
+
+def test_order_history_returns_rows_only_when_asked():
+    """Default OFF keeps every existing caller summarising. The continuous
+    path opts in because it must reconstruct inventory from the rows."""
+    import inspect
+    from src.gemini_execution import metadata as MD
+    sig = inspect.signature(MD.order_history)
+    assert sig.parameters["include_rows"].default is False
+
+
+def test_the_invoker_opts_in_to_rows():
+    """Without include_rows the extraction below reads a key that is never
+    produced, and fills comes back [] on every call."""
+    src = open(RC.__file__, encoding="utf-8").read()
+    i = src.index("MD.order_history(")
+    assert "include_rows=True" in src[i:i + 200], (
+        "authoritative_state must ask for the rows it then extracts")
+
+
+def test_readable_but_not_extractable_is_unreadable_not_empty(monkeypatch):
+    """THE DEFECT THAT HID FOR THREE WINDOWS. order_history reported
+    total_rows 2 while the extraction found none, and the result was scored as
+    'no fills' rather than 'this read did not work'."""
+    async def _hist(**kw):
+        # the SHAPE order_history really returns without include_rows:
+        # counts and samples, and no row list at all
+        return {"readable": True, "verdict": "ORDERS_FOUND", "total_rows": 2,
+                "per_status": [{"status_filter": "filled", "rows": 2,
+                                "btc_rows": 2, "sample": {"orderId": 1}}]}
+    from src.gemini_execution import transport as T
+    monkeypatch.setattr(RC.MD, "order_history", _hist)
+
+    async def _active(symbol):
+        return {"ok": True, "result": []}
+    monkeypatch.setattr(T, "active_orders", _active)
+    monkeypatch.setattr(T, "_orders_of", lambda r: [])
+
+    st = _run(RC.authoritative_state(SYMBOL))
+    assert st["fills"] is None, (
+        "a read that could not be extracted must be UNREADABLE, so recovery "
+        "refuses instead of assuming the account is flat")
+
+
+def test_extractable_rows_are_used(monkeypatch):
+    """The positive counterpart: when the rows ARE there they reach the
+    Driver as fills, or the fix would be a permanent refusal."""
+    async def _hist(**kw):
+        assert kw.get("include_rows") is True
+        return {"readable": True, "total_rows": 1, "per_status": [
+            {"status_filter": "filled", "rows": 1, "orders": [
+                {"outcome": "yes", "filledQuantity": "0.01", "price": "0.03"}]}]}
+    from src.gemini_execution import transport as T
+    monkeypatch.setattr(RC.MD, "order_history", _hist)
+
+    async def _active(symbol):
+        return {"ok": True, "result": []}
+    monkeypatch.setattr(T, "active_orders", _active)
+    monkeypatch.setattr(T, "_orders_of", lambda r: [])
+
+    st = _run(RC.authoritative_state(SYMBOL))
+    assert st["fills"] == [{"leg": "YES", "qty": "0.01", "price": "0.03"}]
+    assert len(st["orders_seen"]) == 1
+
+
+def test_metadata_is_in_the_bundle():
+    """It feeds authoritative recovery, so a change to it is a change to a
+    safety property and an authorization must see it."""
+    assert "metadata.py" in B.MEMBERS

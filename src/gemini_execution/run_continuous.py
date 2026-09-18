@@ -306,14 +306,27 @@ async def authoritative_state(symbol: str) -> Dict[str, Any]:
 
     out: Dict[str, Any] = {"symbol": symbol}
     try:
+        # include_rows=True IS LOAD-BEARING. Without it order_history returns
+        # counts and samples but never the row list, so this extraction read a
+        # key that does not exist and produced [] on every call -- fills always
+        # empty, orders_seen always empty, and therefore "a restart never
+        # assumes flat" quietly untrue and the venue half of
+        # reconstruct_budget vacuous. Found 2026-09-18 while reconciling
+        # CONTINUOUS-2 slot 2.
         hist = await MD.order_history(symbol=symbol, statuses=("filled",),
-                                      limit=100)
+                                      limit=100, include_rows=True)
         rows = None
         if hist.get("readable") is not False:
             per = hist.get("per_status") or []
             rows = []
+            extractable = False
             for p in per:
-                rows.extend(p.get("orders") or [])
+                if isinstance(p.get("orders"), list):
+                    extractable = True
+                    rows.extend(p["orders"])
+            # readable BUT not extractable is UNREADABLE, never empty.
+            if not extractable and (hist.get("total_rows") or 0) > 0:
+                rows = None
         out["fills"] = None if rows is None else _legs_from_orders(rows)
         out["orders_seen"] = None if rows is None else rows
         out["order_history_raw"] = {k: hist.get(k) for k in

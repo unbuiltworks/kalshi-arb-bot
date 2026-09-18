@@ -515,7 +515,8 @@ async def order_history(*, since_ms: Optional[int] = None,
                         symbol: Optional[str] = None,
                         statuses: tuple = ("filled", "cancelled"),
                         limit: int = 100,
-                        timeout: float = 45.0) -> Dict[str, Any]:
+                        timeout: float = 45.0,
+                        include_rows: bool = False) -> Dict[str, Any]:
     """FORENSIC, READ-ONLY: has this account ever had a prediction-market order?
 
     The question this answers is whether any previous Gemini live work left a
@@ -648,6 +649,15 @@ async def order_history(*, since_ms: Optional[int] = None,
                                    and k in rows[0]}
                 entry["row_keys"] = sorted(rows[0]) if isinstance(
                     rows[0], dict) else None
+            # OPT-IN, DEFAULT OFF. This function summarises by design so an
+            # account's whole history does not land in an artifact, and every
+            # existing caller keeps that behaviour. But a CALLER THAT MUST
+            # RECONSTRUCT INVENTORY needs the rows themselves: reading a key
+            # that is never produced returned [] on every call, which is
+            # "readable and empty" -- exactly the substitution that makes a
+            # restart assume flat when it is not.
+            if include_rows:
+                entry["orders"] = [r for r in rows if isinstance(r, dict)]
         per.append(entry)
     return {
         "readable": not unreadable,

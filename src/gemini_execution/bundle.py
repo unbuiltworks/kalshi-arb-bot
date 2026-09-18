@@ -37,6 +37,7 @@ MEMBERS = (
     "run_continuous.py",       # ordering: preflight/recovery before the latch
     "continuous_probe.py",     # the frozen controller and its envelope
     "continuous_preflight.py",  # the authoritative preflight
+    "metadata.py",             # the authoritative venue reads recovery uses
     "arming.py",               # the transport arm and the identifier
     "bundle.py",               # this file, so the member list cannot be edited
 )
@@ -59,6 +60,7 @@ EXPECTED_AUTH_LINES = {
     "run_continuous.py": 0,
     "continuous_probe.py": 0,
     "continuous_preflight.py": 0,
+    "metadata.py": 0,
     "arming.py": 1,
     "bundle.py": 1,
 }
