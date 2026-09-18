@@ -218,6 +218,65 @@ on the accounting split. Those remain the useful output.
 observations. Whether the relationships survive is decided by the preregistered
 prospective residual-episode diagnostics at 5/15/30/60/120/300 s.
 
+## 2d. OWNER DECISION 2026-09-18 — NO pair-cost ceiling on the Gemini live path
+
+**Ruling (owner, 2026-09-18).** For CONTINUOUS-5 the controller behaviour is
+preserved unchanged. A `COMPLETE` above $1.00 is **permitted** when the existing
+L5 controller chooses it and all existing absolute risk limits pass. **No 0.96,
+0.98, 1.00, 1.05 or other pair-cost ceiling is added.** `<= 0.96` is classified
+as a **RISK OVERLAY**, not strategy fidelity.
+
+**Evidence the ruling rests on** — `analysis/l5/complete_boundary_report.json`,
+`analysis/l5/complete_boundary_choice.json`, written up in
+`L5_COMPLETE_BOUNDARY_FINDINGS.md`. Independently reproduces
+`l5_completion_ceiling.json` (n, p10, p25, p50, p75, p99, max all identical).
+
+* **33,765 historical COMPLETE actions** analysed, 2,216 windows, 2026-03-19 → 08-31.
+* **42.75%** of L5 COMPLETEs were **>$1.00**.
+* **33.60%** were **>$1.05**.
+* In **cheap-held-leg** states shaped like ours, expensive completion is
+  *especially* common: held leg 0.10–0.25 → median pair **1.0939**, median
+  completing price **0.90**, 66.1% above 1.05.
+* In the **narrow comparable state** (held 0.08–0.22 and completing price
+  0.82–0.97, n=1,125), **78.76%** were **>$1.05**; p10 is already above $1.00.
+* **BTC-5m**, our exact venue analogue, shows substantial >$1.05 completion
+  behaviour: **40.46%** of its completes, and only 51.7% at or below $1.00.
+* Expensive completes were **usually followed by further fills** (97.21%) and
+  **usually ended with improved final pair economics** (96.78% of windows end
+  better than the expensive complete itself).
+* **Therefore preventing a 1.05 COMPLETE would materially alter the behaviour we
+  are attempting to validate.** At 0.96 the gate would forbid roughly four
+  completes in five in this configuration, leaving inventory one-sided and
+  carrying directional residual.
+* **This does NOT establish that >$1 COMPLETEs are profitable on Gemini.** That
+  is precisely what live evidence must measure. Fidelity to L5 and profitability
+  on our venue are separate claims and neither implies the other.
+
+**Corroboration from §2b(5).** Scored by what the shares actually earned, the
+1.00–1.02 *instantaneous* band was the BEST in both periods (+98 / +61 bp) while
+`<= 0.96` was NEGATIVE in both (−28 / −119 bp). An instantaneous pair-cost
+ceiling is not the same object as the window-level effective-pair finding, and
+the instantaneous version does not survive scoring.
+
+**Scope, stated precisely so it is not over-read.**
+
+* This governs the **Gemini continuous-inventory live path**, which contains no
+  pair-cost gate and is not to be given one.
+* `CLAUDE.md`'s spring discipline — "prefers materially cheaper pair completion
+  (roughly `<= 0.96` **where the venue implementation uses that target**)" — is
+  unchanged and uncontradicted: the Gemini venue implementation does not use
+  that target. The PMUS spring path is untouched by this ruling.
+* This is **not** permission to complete at any price. The absolute bounds still
+  apply and still fail closed: `max_residual 0.04`, `max_imbalance 0.04`,
+  `max_yes/max_no 0.10`, `max_total_spend_usd 0.15`, `action_size 0.01`,
+  12-slot envelope tightened to the cohort's 6.
+* Any future ceiling must be **labelled a risk overlay**, set as a bound rather
+  than a behavioural claim, and carry its stated cost.
+
+**Pinned by test.** `tests/test_gemini_cohort_and_cycle.py::
+test_no_pair_cost_gate_exists_in_this_path` asserts the absence of every
+enumerated ceiling, so a gate cannot reappear silently.
+
 ## 3. Measured historical evolution
 
 Artifact: `analysis/l5/l5_ramp_analysis.json`  
@@ -374,6 +433,8 @@ Same-side extension is a first-class action. Prefer increasing **frequency befor
 Apr 6–10's defining improvement was longer waiting for materially cheaper complements. Persistent residual management should outlive an arbitrary 300-second shell when risk and time-to-settlement allow it.
 
 However, public/theoretical BBO availability is not proof of an executable fill. Preserve that distinction.
+
+Waiting is not the same as a **ceiling**. On the Gemini continuous-inventory path the owner has ruled that no pair-cost ceiling exists and a `COMPLETE` above $1.00 is permitted when the controller chooses it and the absolute bounds pass — see **§2d**. R4 prices the wait; it does not forbid paying up.
 
 ### R5 — Bounded imbalance
 

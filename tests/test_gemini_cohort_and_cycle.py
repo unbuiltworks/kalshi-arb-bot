@@ -323,16 +323,35 @@ def test_classification_comes_from_inventory_alone_not_price():
 
 
 def test_no_pair_cost_gate_exists_in_this_path():
-    """RECORDED, NOT FIXED. `would_breach` bounds imbalance, per-leg size and
-    total spend -- and nothing bounds what a COMPLETE costs relative to the
-    leg it completes. A COMPLETE at 0.91 against a NO held at 0.14 is a 1.05
-    pair, and this path would allow it.
+    """DELIBERATE, AND NOW RULED ON. `would_breach` bounds imbalance, per-leg
+    size and total spend -- and nothing bounds what a COMPLETE costs relative
+    to the leg it completes. A COMPLETE at 0.91 against a NO held at 0.14 is a
+    1.05 pair, and this path allows it.
 
-    Adding such a gate is a risk-limit change and is deliberately NOT done
-    here. This test exists so the absence is explicit rather than discovered
-    by another live window.
+    OWNER DECISION 2026-09-18: no pair-cost ceiling is added for CONTINUOUS-5.
+    `<= 0.96` is classified a RISK OVERLAY, not strategy fidelity. Of 33,765
+    canonical L5 COMPLETEs, 42.75% were above $1.00 and 33.60% above $1.05;
+    in the narrow state shaped like ours 78.76% were above $1.05. Preventing a
+    1.05 COMPLETE would materially alter the behaviour being validated. See
+    L5_OPERATING_MODEL.md section 2d and L5_COMPLETE_BOUNDARY_FINDINGS.md.
+
+    This test pins the ABSENCE of every ceiling the decision enumerates, so a
+    gate cannot reappear silently and be mistaken for L5 fidelity. Fidelity is
+    not a profitability claim: whether >$1 completes pay on Gemini is what the
+    live window must measure.
     """
     inv = CP.Inventory()
     inv.apply_fill("NO", "0.01", "0.14", source="venue_restart")
     assert CP.would_breach("YES", "0.91", inv) is None
     assert D("0.91") + D("0.14") == D("1.05") > D("1.00")
+
+    # every enumerated ceiling is absent, not merely the 0.96 one. Each price
+    # below completes the held 0.14 leg at a pair above one of the candidate
+    # ceilings, and the risk gate admits all of them.
+    for price, pair in (("0.83", "0.97"), ("0.85", "0.99"),
+                        ("0.87", "1.01"), ("0.91", "1.05"), ("0.95", "1.09")):
+        assert CP.would_breach("YES", price, inv) is None, price
+        assert D(price) + D("0.14") == D(pair)
+    # and the classification of the dear rung is still COMPLETE: the decision
+    # changes no label, it declines to add a bound.
+    assert CP.classify("Up", inv) == CP.COMPLETE

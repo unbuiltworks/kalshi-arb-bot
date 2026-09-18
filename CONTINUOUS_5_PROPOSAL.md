@@ -64,25 +64,85 @@ the behavioural model itself. `classify()` takes *no price argument*: a
 controller handed a fictitious flat book cannot classify correctly however
 good its pricing is. That is why the reconciliation fix is the whole story.
 
-## Something you should decide before authorizing
+## The pair-cost question: RULED ON 2026-09-18 — no ceiling
 
-**There is no pair-cost gate anywhere in this path.** `would_breach` bounds
-imbalance, per-leg size and total spend. Nothing bounds what a `COMPLETE`
-costs relative to the leg it completes.
+**There is no pair-cost gate anywhere in this path, and by owner decision none
+is added.** `would_breach` bounds imbalance, per-leg size and total spend.
+Nothing bounds what a `COMPLETE` costs relative to the leg it completes, and
+that is now deliberate rather than merely unexamined.
 
-In the replay above, the corrected controller emits `COMPLETE` for YES at
-**0.91** against a NO held at **0.14** — a **1.05 pair**, still above $1.00.
-The `<= 0.96` discipline is policy in `CLAUDE.md`, not code here; the only
-`0.96` in the tree is a measured statistic about PMUS books in
-`lane_gates.py`, which nothing imports.
+The corrected controller emits `COMPLETE` for YES at **0.91** against a NO held
+at **0.14** — a **1.05 pair**. It is permitted.
 
-So the fix makes the controller **see** the inventory and **label** the action
-correctly. It does **not** stop it completing a pair above $1.00. CONTINUOUS-4's
-outcome could recur with the controller fully informed.
+Why, in one line each — full evidence in `L5_COMPLETE_BOUNDARY_FINDINGS.md`,
+recorded durably in `L5_OPERATING_MODEL.md` §2d:
 
-Adding a gate is a risk-limit change and is **deliberately out of scope** here.
-A test now pins the absence so it cannot be discovered by another live window.
-**This is a decision for you, not an engineering default.**
+* 33,765 canonical L5 COMPLETEs analysed; **42.75% above $1.00**, **33.60%
+  above $1.05**.
+* Cheap held leg (0.10–0.25) → median pair **1.0939**, median completing price
+  **0.90**.
+* Our narrow comparable state (n=1,125) → **78.76% above 1.05**; p10 already
+  above $1.00.
+* BTC-5m, our venue analogue → **40.46%** of completes above 1.05.
+* Expensive completes were **usually worked down**: 97.21% followed by more
+  fills, 96.78% in windows ending better.
+* So a `<= 0.96` gate would forbid roughly four completes in five here — a
+  **fidelity regression**, and a **RISK OVERLAY** if imposed anyway.
+
+**This does not claim >$1 completes are profitable on Gemini.** Fidelity and
+profitability are separate claims. Measuring the second is what the live window
+is for. `tests/test_gemini_cohort_and_cycle.py::
+test_no_pair_cost_gate_exists_in_this_path` pins the absence of every
+enumerated ceiling — 0.96, 0.98, 1.00, 1.05 — so one cannot reappear silently.
+
+## What the window will and will not capture
+
+The objective is `REAL FILL → AUTHORITATIVE REFRESH → CHANGED INVENTORY →
+CHANGED L5 ACTION`, so what the artifacts hold decides whether it can be
+answered at all. Measured against the ten required per-cycle items:
+
+| required per cycle | captured? | where |
+|---|---|---|
+| authoritative YES/NO inventory before decision | **yes** | `refreshes[when="pre_decide"]`, `turns[].inventory` |
+| working orders | **count only** | `refreshes[].resting`, `refreshes[].working`; full list at terminal `working_orders` |
+| new fills since prior cycle | **derivable** | `refreshes[].n_fills` delta + `changed`; identities only in `after` |
+| **L5 OPEN/EXTEND/COMPLETE/HOLD classification** | **NO** | — see below |
+| prices and quantities | **placed only** | `wire[]`, ledger rows; the decided-but-held surface is dropped |
+| effective matched-pair cost | **yes** | `turns[].inventory.effective_matched_pair_cost` |
+| mutation plan | **counts only** | `turns[].plan` = `{keep, place, cancel, mutations}` |
+| KEEP/CANCEL/PLACE results | **place/cancel yes** | `wire[]` acks + append-only ledger; KEEP is a count |
+| remaining cohort budget | **yes** | `turns[].budget_left` |
+| risk state | **inputs only** | inventory carries residual/imbalance/spend; `would_breach` strings on held rungs are dropped |
+
+**The gap is real and it sits on the load-bearing field.** `decide()` builds the
+turn — `actions` carrying `OPEN`/`EXTEND`/`COMPLETE` with leg, price, qty, and
+`holds` carrying `HOLD` with `held_by` `OSCILLATOR`/`ENVELOPE`/`END_OF_WINDOW`
+and, for `ENVELOPE`, the literal `would_breach` reason. `run_window` records
+`_plan_summary(out["plan"])` — four integers — and discards `out["turn"]`.
+`WindowGuard.record()`, which would have logged each decided action, has no
+caller in the live path (only `continuous_preflight`), so `guard.log` holds
+nothing but STOP events.
+
+**What that costs.** The label is *reconstructible* for actioned rungs:
+`classify()` is pure in the inventory residual, the residual is recorded per
+cycle, so `classify(leg, recorded_inventory)` is exact. What is **not**
+recoverable is why a cycle did nothing — OSCILLATOR suppression, an ENVELOPE
+breach, or the end-of-window floor — and the prices of rungs that were decided
+and then held.
+
+**Why it is not fixed in this proposal.** Both fixes move a hash that has been
+pinned for verification:
+
+* recording `out["turn"]` inside `ws_continuous.run_window` moves
+  `executable_sha` **and** `bundle_sha`;
+* wrapping `driver.decide` with a transparent observer in the invoker — the
+  same already-returned-value pattern that captured the place acks — leaves
+  `executable_sha` and `envelope_sha` untouched and moves **only**
+  `bundle_sha`.
+
+The second is about ten lines and changes no control flow. It is offered, not
+taken: changing a hash the owner pinned is the owner's call, and the standing
+resolution is that evidence capture never edits the authorized executable.
 
 ## Unarmed production-shaped verification
 

@@ -263,15 +263,36 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # OWNER-2026-09-18-GEMINI-CONTINUOUS-4, naming executable_sha
-      # 84268511...6ad4, envelope_sha b3bff654...aa17 and bundle_sha
-      # 7e31d5c3...e0b4. Budget starts at 3 consumed / 9 remaining from the
-      # durable ledger, not 12. EVERY bound --
-      # 12 mutation slots, $0.15 exposure, 0.04 residual and imbalance,
-      # 0.10 per leg, the end-of-window floors, the terminal one-window
-      # binding -- is enforced inside ws_continuous.Driver and is covered by
-      # that executable_sha. The invoker only picks the contract and hands
-      # the driver authoritative venue state.
+      # PREPARED FOR CONTINUOUS-5 AND DELIBERATELY UNARMABLE. The auth id
+      # below is the sentinel NO-AUTHORIZATION-IN-FORCE and the driver
+      # constants are None, so this step reaches the mutation boundary and is
+      # refused exactly like the unarmed step above. Installing an
+      # authorization is a separate, explicit edit.
+      #
+      # The hashes CONTINUOUS-5 would be authorized against:
+      #   executable_sha 3194e691...abf1
+      #   envelope_sha   b3bff654...aa17   (UNCHANGED: no bound moved)
+      #   bundle_sha     48f7f1f4...a56f
+      #
+      # --cohort IS LOAD-BEARING AND WAS MISSING. Without it the window binds
+      # the HISTORICAL ledger, which is 12/12 permanently spent by
+      # CONTINUOUS-2, -3 and -4, and an authorized run would die on budget
+      # rather than trade. COHORT-2026-09-18-C5 carries its own bounded
+      # budget of 6 and its own ledger, records the historical ledger's
+      # sha256 as its predecessor, and is verified INTACT before the latch.
+      # A cohort may only TIGHTEN the envelope, never extend it.
+      #
+      # EVERY bound -- 12 mutation slots (tightened to the cohort's 6), $0.15
+      # exposure, 0.04 residual and imbalance, 0.10 per leg, the end-of-window
+      # floors, the terminal one-window binding -- is enforced inside
+      # ws_continuous.Driver and is covered by that executable_sha. The
+      # invoker only picks the contract, supplies the authoritative re-read
+      # and hands the driver venue state.
+      #
+      # NO PAIR-COST CEILING EXISTS HERE, BY OWNER DECISION 2026-09-18. A
+      # COMPLETE above $1.00 is permitted when the controller chooses it and
+      # the absolute bounds pass; `<= 0.96` is a RISK OVERLAY, not L5
+      # fidelity. See L5_OPERATING_MODEL.md section 2d.
       #
       # The driver refuses unless AUTHORIZED_SHA equals its own running
       # executable_sha, so any change to the driver after this authorization
@@ -291,6 +312,7 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --cohort  "COHORT-2026-09-18-C5" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \

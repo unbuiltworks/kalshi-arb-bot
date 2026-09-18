@@ -371,3 +371,32 @@ def test_the_allow_list_still_rejects_anything_outside_the_evidence_dir():
                 "analysis/l5/authorization/HALT",
                 "analysis/gemini/something_else.json"):
         assert not re.match(pattern, bad), bad
+
+
+def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
+    """The armed step was invoking run_continuous WITHOUT --cohort.
+
+    The historical ledger is 12/12 permanently spent by CONTINUOUS-2, -3 and
+    -4. An authorized window that binds it would refuse on budget at the
+    moment it matters, and the repair would be improvised under arm-time
+    pressure. CONTINUOUS-5's budget lives in COHORT-2026-09-18-C5, so the
+    armed step must name it.
+    """
+    wf = WF.read_text()
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+    assert "--cohort" in armed, "the armed step must bind a mutation cohort"
+    assert "COHORT-2026-09-18-C5" in armed
+
+
+def test_nothing_in_the_workflow_arms_continuous_5():
+    """PREPARED, NOT ARMED. Exactly one step may assign GEMINI_CANARY_LIVE,
+    and the authorization id it carries must still be the sentinel: wiring the
+    cohort must not have installed an authorization as a side effect."""
+    wf = WF.read_text()
+    assignments = re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)
+    assert len(assignments) == 1, assignments
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in armed
+    assert '--auth-id "NO-AUTHORIZATION-IN-FORCE"' in armed
+    assert "CONTINUOUS-5" not in armed.split("run:", 1)[1], (
+        "an authorization id must never be installed by a preparation commit")
