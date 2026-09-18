@@ -119,7 +119,9 @@ def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None
 
 async def submit_once(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
                       now: Optional[float] = None,
-                      preflight=None, transport=None) -> Dict[str, Any]:
+                      preflight=None, transport=None,
+                      durable_check=None, make_durable=None
+                      ) -> Dict[str, Any]:
     """Place exactly one order, or explain precisely why it did not.
 
     `preflight` and `transport` are injectable for tests ONLY; the defaults
@@ -137,7 +139,14 @@ async def submit_once(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
         return {"submitted": False, "state": "NOT_ARMED", "why": str(exc),
                 "arming": arming.state(now)}
 
-    # 2 a prior latch is reconciliation work, never a resubmission
+    # 2 a prior latch is reconciliation work, never a resubmission.
+    # DURABLE storage is consulted first: on an ephemeral host the local
+    # filesystem has no memory of a previous run.
+    if durable_check is not None and durable_check(auth_id):
+        return {"submitted": False, "state": "ALREADY_CONSUMED",
+                "why": ("this authorization is recorded consumed in durable "
+                        "storage. Reconcile; there is no retry."),
+                "durable": True}
     if latch.consumed(auth_id, state_dir):
         rec = latch.read(auth_id, state_dir) or {}
         return {"submitted": False, "state": "ALREADY_CONSUMED",
@@ -162,10 +171,25 @@ async def submit_once(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
 
     # 7 consume BEFORE the mutation
     try:
-        latch.consume(auth_id, intent, state_dir)
+        rec0 = latch.consume(auth_id, intent, state_dir,
+                             durable_check=durable_check)
     except latch.AlreadyConsumed as exc:
         return {"submitted": False, "state": "ALREADY_CONSUMED",
                 "why": str(exc)}
+
+    # 7b MAKE IT DURABLE BEFORE THE VENUE SEES ANYTHING.
+    # If this fails we have NOT sent, so aborting is safe and a later retry
+    # places exactly one order. The unsafe ordering is the other one: sending
+    # first and failing to record it would let a retry send a second.
+    if make_durable is not None:
+        try:
+            make_durable(auth_id, rec0)
+        except Exception as exc:                               # noqa: BLE001
+            return {"submitted": False, "state": "DURABILITY_REFUSED",
+                    "why": ("the authorization could not be recorded in "
+                            "durable storage, so nothing was sent: %s: %s"
+                            % (type(exc).__name__, str(exc)[:200])),
+                    "sent": False}
 
     # 8 send, exactly once
     res = await tr.place(symbol=intent["symbol"], side=intent["side"],

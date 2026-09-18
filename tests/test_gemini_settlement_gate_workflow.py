@@ -142,3 +142,31 @@ def test_the_preflight_artifact_is_committable():
     wf = WF.read_text()
     assert "canary_preflight_" in wf
     assert "(settlement_gate|canary_preflight)" in wf
+
+
+# ------------------------------------------- the one authorized canary step
+
+def test_the_canary_step_is_off_unless_explicitly_armed():
+    wf = WF.read_text()
+    i = wf.index("ONE authorized Gemini canary")
+    step = wf[i:i + 1200]
+    assert "github.event.inputs.armed_canary == 'true'" in step
+    assert 'default: "false"' in wf
+
+
+def test_the_canary_step_names_the_exact_authorization():
+    wf = WF.read_text()
+    assert 'GEMINI_CANARY_AUTH: "OWNER-2026-09-17-GEMINI-CANARY-1"' in wf
+    assert "GEMINI_CANARY_AUTH_EXPIRES" in wf
+
+
+def test_no_other_step_arms_execution():
+    """Every read-only step must run with the arm absent."""
+    wf = WF.read_text()
+    assert wf.count('GEMINI_CANARY_LIVE: "YES"') == 1
+
+
+def test_the_latch_path_may_be_committed():
+    wf = WF.read_text()
+    assert "analysis/gemini/canary_latch/" in wf
+    assert "canary_latch/latch_" in wf

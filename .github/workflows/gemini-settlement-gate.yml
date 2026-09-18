@@ -32,6 +32,10 @@ on:
         description: "Comma-separated GEMI symbols; blank = recent BTC5m expiries"
         required: false
         default: ""
+      armed_canary:
+        description: "Set to true to ARM the ONE authorized canary. Default false."
+        required: false
+        default: "false"
 
 # One at a time. A second run could commit evidence over the first.
 concurrency:
@@ -119,6 +123,27 @@ jobs:
           # This reports the gates only.
           python -m src.gemini_execution.readiness || true
 
+      # ==================================================================
+      # THE ONE AUTHORIZED CANARY. Runs only when armed_canary=true is
+      # passed on dispatch; otherwise every step above is read-only and
+      # the execution package is structurally unable to mutate.
+      #
+      # OWNER-2026-09-17-GEMINI-CANARY-1. One order. The latch is bound to
+      # git BEFORE the venue sees anything, because a retried runner has a
+      # clean disk and a local latch would not survive it.
+      # ==================================================================
+      - name: ONE authorized Gemini canary
+        if: ${{ github.event.inputs.armed_canary == 'true' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-17-GEMINI-CANARY-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-18T06:00:00Z"
+          GEMINI_CANARY_STATE_DIR: "/tmp/gemini-canary"
+        run: |
+          python -m src.gemini_execution.run_canary | tee /tmp/canary.json
+
       - name: Report the gate, without deciding anything
         run: python3 scripts/gemini_settlement_gate_report.py /tmp/gate.json
 
@@ -129,11 +154,12 @@ jobs:
           # analysis/gemini/ ONLY. No source, config or live-service change
           # may originate from this runtime job.
           git add -- 'analysis/gemini/settlement_gate_*.json' \
-                     'analysis/gemini/canary_preflight_*.json'
+                     'analysis/gemini/canary_preflight_*.json' \
+                     'analysis/gemini/canary_latch/*.json'
           if git diff --cached --quiet; then
             echo "no new evidence artifact"; exit 0
           fi
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/(settlement_gate|canary_preflight)_[0-9TZ]+\.json$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight)_[0-9TZ]+|canary_latch/latch_[A-Za-z0-9_-]+)\.json$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

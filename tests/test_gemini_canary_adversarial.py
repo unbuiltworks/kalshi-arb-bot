@@ -350,3 +350,56 @@ def test_there_is_no_cancel_all():
     consts = {n.value for n in ast.walk(tree)
               if isinstance(n, ast.Constant) and isinstance(n.value, str)}
     assert "/v1/prediction-markets/orders/cancel" not in consts
+
+
+# ============================ durability on an ephemeral host (CI runners)
+
+def test_durable_storage_is_consulted_before_the_local_filesystem(
+        state_dir, armed):
+    """A retried workflow gets a CLEAN disk. If only the local latch were
+    checked, the one-shot guarantee would evaporate exactly when needed."""
+    tr = _TR()
+    r = _submit_hooks(_pf(), tr, state_dir,
+                      durable_check=lambda a: True)
+    assert r["state"] == "ALREADY_CONSUMED" and r.get("durable") is True
+    assert tr.calls == []
+
+
+def test_nothing_is_sent_if_the_authorization_cannot_be_made_durable(
+        state_dir, armed):
+    """Aborting here is SAFE: we have not sent, so a later retry places
+    exactly one order. Sending first and failing to record it is the unsafe
+    ordering."""
+    tr = _TR()
+
+    def _boom(auth, rec):
+        raise RuntimeError("push rejected")
+
+    r = _submit_hooks(_pf(), tr, state_dir, make_durable=_boom)
+    assert r["state"] == "DURABILITY_REFUSED"
+    assert r["sent"] is False
+    assert tr.calls == [], "the venue must not be reached"
+
+
+def test_the_durable_record_is_written_before_the_send(state_dir, armed):
+    order = []
+    tr = _TR()
+
+    def _dur(auth, rec):
+        order.append("durable")
+
+    class _Ordered(_TR):
+        async def place(self, **kw):
+            order.append("send")
+            return await _TR.place(self, **kw)
+
+    _submit_hooks(_pf(), _Ordered(), state_dir, make_durable=_dur)
+    assert order == ["durable", "send"], order
+
+
+def _submit_hooks(pf, tr, state_dir, *, durable_check=None,
+                  make_durable=None, auth=AUTH):
+    return _run(C.submit_once(auth, state_dir=state_dir, now=NOW,
+                              preflight=_PF(pf), transport=tr,
+                              durable_check=durable_check,
+                              make_durable=make_durable))

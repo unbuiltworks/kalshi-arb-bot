@@ -56,12 +56,22 @@ def _path(directory: str, auth_id: str) -> str:
 
 
 def consume(auth_id: str, intent: Dict[str, Any],
-            directory: str = DEFAULT_DIR) -> Dict[str, Any]:
+            directory: str = DEFAULT_DIR,
+            durable_check=None) -> Dict[str, Any]:
     """Atomically spend the authorization and persist the intent.
 
     Raises AlreadyConsumed if it was ever spent before -- including by a run
     that then crashed. Returns the persisted record.
     """
+    # A LOCAL latch is only as durable as the filesystem under it. On an
+    # ephemeral runner a retry gets a clean disk, the local latch is gone and
+    # the one-shot guarantee evaporates exactly when it is needed. Callers on
+    # such hosts pass a durable_check that consults storage which OUTLIVES the
+    # process, and it is asked FIRST.
+    if durable_check is not None and durable_check(auth_id):
+        raise AlreadyConsumed(
+            "authorization %s is recorded consumed in DURABLE storage; a "
+            "fresh filesystem does not make it unspent" % auth_id)
     os.makedirs(directory, exist_ok=True)
     path = _path(directory, auth_id)
     rec = {
