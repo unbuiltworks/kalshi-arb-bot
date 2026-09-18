@@ -279,7 +279,12 @@ jobs:
           if git diff --cached --quiet; then
             echo "no new evidence artifact"; exit 0
           fi
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run)_[0-9TZ]+|canary_latch/latch_[A-Za-z0-9_-]+)\.json$'; then
+          # The ALLOW-LIST and the add-list above must name the SAME files.
+          # They drifted: premutation_proof_/continuous_run_ were added to one
+          # and not the other, so a job that gathered its evidence correctly
+          # then refused to commit it as "outside analysis/gemini/" -- which it
+          # was not. A test now asserts the two lists agree.
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

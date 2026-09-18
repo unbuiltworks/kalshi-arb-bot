@@ -296,3 +296,52 @@ def test_both_window_dependent_steps_use_the_same_bound():
         step = _step(name)
         assert 'attempt" = "5"' in step, name
         assert "sleep 45" in step, name
+
+
+def test_REGRESSION_the_add_list_and_the_allow_list_name_the_same_files():
+    """They drifted, and a job that gathered its evidence correctly then
+    refused to commit it as "outside analysis/gemini/" -- which it was not.
+    Every path the step stages must be accepted by the guard that follows."""
+    import re
+    wf = WF.read_text()
+    i = wf.index("Commit ONLY the evidence artifact")
+    step = wf[i:i + 3200]
+    pattern = re.search(r"grep -qvE '([^']+)'", step).group(1)
+
+    # every pathspec the `for` loop stages, as a concrete filename
+    samples = {
+        "analysis/gemini/settlement_gate_*.json":
+            "analysis/gemini/settlement_gate_20260918T140310Z.json",
+        "analysis/gemini/canary_preflight_*.json":
+            "analysis/gemini/canary_preflight_20260918T140314Z.json",
+        "analysis/gemini/execution_readiness_*.json":
+            "analysis/gemini/execution_readiness_20260918T140314Z.json",
+        "analysis/gemini/ws_dry_run_*.json":
+            "analysis/gemini/ws_dry_run_20260918T140331Z.json",
+        "analysis/gemini/continuous_run_*.json":
+            "analysis/gemini/continuous_run_20260918T133310Z.json",
+        "analysis/gemini/premutation_proof_*.json":
+            "analysis/gemini/premutation_proof_20260918T140514Z.json",
+        "analysis/gemini/continuous_ledger.jsonl":
+            "analysis/gemini/continuous_ledger.jsonl",
+        "analysis/gemini/canary_latch/*.json":
+            "analysis/gemini/canary_latch/latch_OWNER-2026-09-18-X.json",
+    }
+    for spec, example in samples.items():
+        assert spec in step, "the add-list no longer stages %s" % spec
+        assert re.match(pattern, example), (
+            "%s is staged but the allow-list rejects it" % example)
+
+
+def test_the_allow_list_still_rejects_anything_outside_the_evidence_dir():
+    import re
+    wf = WF.read_text()
+    i = wf.index("Commit ONLY the evidence artifact")
+    pattern = re.search(r"grep -qvE '([^']+)'",
+                        wf[i:i + 3200]).group(1)
+    for bad in ("src/gemini_execution/ws_continuous.py",
+                ".github/workflows/gemini-settlement-gate.yml",
+                "analysis/gemini/../../src/x.py",
+                "analysis/l5/authorization/HALT",
+                "analysis/gemini/something_else.json"):
+        assert not re.match(pattern, bad), bad
