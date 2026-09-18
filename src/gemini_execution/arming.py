@@ -29,7 +29,13 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 
 #: the identifier this build will honour. A different one is refused, so an
 #: authorization for a different probe cannot be spent here.
-EXPECTED_AUTH_ID = "OWNER-2026-09-17-GEMINI-CANARY-1"
+#:
+#: MOVED 2026-09-18 from OWNER-2026-09-17-GEMINI-CANARY-1, which is SPENT (its
+#: latch is on disk in state REJECTED). Exactly one authorization is current at
+#: a time and this is it: the one-window continuous probe. Retiring the canary
+#: identifier is itself fail-closed -- the canary path can no longer arm at
+#: all, so a stale workflow input naming it is now inert rather than dangerous.
+EXPECTED_AUTH_ID = "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"
 
 
 class NotArmed(Exception):

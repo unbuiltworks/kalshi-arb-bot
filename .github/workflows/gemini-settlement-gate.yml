@@ -32,8 +32,8 @@ on:
         description: "Comma-separated GEMI symbols; blank = recent BTC5m expiries"
         required: false
         default: ""
-      armed_canary:
-        description: "Set to true to ARM the ONE authorized canary. Default false."
+      armed_continuous:
+        description: "Set to true to ARM the ONE authorized continuous window. Default false."
         required: false
         default: "false"
 
@@ -179,25 +179,38 @@ jobs:
           if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi
 
       # ==================================================================
-      # THE ONE AUTHORIZED CANARY. Runs only when armed_canary=true is
-      # passed on dispatch; otherwise every step above is read-only and
-      # the execution package is structurally unable to mutate.
+      # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
+      # armed_continuous=true is passed on dispatch.
       #
-      # OWNER-2026-09-17-GEMINI-CANARY-1. One order. The latch is bound to
-      # git BEFORE the venue sees anything, because a retried runner has a
-      # clean disk and a local latch would not survive it.
+      # OWNER-2026-09-18-GEMINI-CONTINUOUS-1, naming executable_sha
+      # 2793c4cd...8d5d and envelope_sha b3bff654...aa17. EVERY bound --
+      # 12 mutation slots, $0.15 exposure, 0.04 residual and imbalance,
+      # 0.10 per leg, the end-of-window floors, the terminal one-window
+      # binding -- is enforced inside ws_continuous.Driver and is covered by
+      # that executable_sha. The invoker only picks the contract and hands
+      # the driver authoritative venue state.
+      #
+      # The driver refuses unless AUTHORIZED_SHA equals its own running
+      # executable_sha, so any change to the driver after this authorization
+      # disarms it automatically. The dual key is still required and its live
+      # half is NOT in the repository.
       # ==================================================================
-      - name: ONE authorized Gemini canary
-        if: ${{ github.event.inputs.armed_canary == 'true' }}
+      - name: ONE authorized Gemini continuous window
+        if: ${{ github.event.inputs.armed_continuous == 'true' }}
+        timeout-minutes: 12
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-17-GEMINI-CANARY-1"
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-18T06:00:00Z"
-          GEMINI_CANARY_STATE_DIR: "/tmp/gemini-canary"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
-          python -m src.gemini_execution.run_canary | tee /tmp/canary.json
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.run_continuous \
+            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-1" \
+            --ledger  analysis/gemini/continuous_ledger.jsonl \
+            --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/continuous.txt
 
       - name: Report the gate, without deciding anything
         run: python3 scripts/gemini_settlement_gate_report.py /tmp/gate.json
@@ -212,6 +225,8 @@ jobs:
                      'analysis/gemini/canary_preflight_*.json' \
                      'analysis/gemini/execution_readiness_*.json' \
                      'analysis/gemini/ws_dry_run_*.json' \
+                     'analysis/gemini/continuous_run_*.json' \
+                     'analysis/gemini/continuous_ledger.jsonl' \
                      'analysis/gemini/canary_latch/*.json'
           if git diff --cached --quiet; then
             echo "no new evidence artifact"; exit 0

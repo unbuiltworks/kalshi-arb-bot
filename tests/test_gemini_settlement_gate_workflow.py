@@ -197,18 +197,31 @@ def test_only_evidence_artifacts_are_committable(name, allowed):
 
 # ------------------------------------------- the one authorized canary step
 
-def test_the_canary_step_is_off_unless_explicitly_armed():
+def test_the_armed_step_is_off_unless_explicitly_armed():
     wf = WF.read_text()
-    i = wf.index("ONE authorized Gemini canary")
-    step = wf[i:i + 1200]
-    assert "github.event.inputs.armed_canary == 'true'" in step
+    i = wf.index("ONE authorized Gemini continuous window")
+    step = wf[i:i + 2000]
+    assert "github.event.inputs.armed_continuous == 'true'" in step
     assert 'default: "false"' in wf
 
 
-def test_the_canary_step_names_the_exact_authorization():
+def test_the_armed_step_names_the_exact_authorization():
     wf = WF.read_text()
-    assert 'GEMINI_CANARY_AUTH: "OWNER-2026-09-17-GEMINI-CANARY-1"' in wf
+    assert 'GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"' in wf
     assert "GEMINI_CANARY_AUTH_EXPIRES" in wf
+
+
+def test_the_spent_canary_step_is_gone_and_stays_gone():
+    """OWNER-2026-09-17-GEMINI-CANARY-1 is spent: its latch is on disk in
+    state REJECTED and arming.EXPECTED_AUTH_ID has moved on, so the step could
+    no longer arm anything. A dead armed step is worse than no step -- it is
+    live-path surface that reads as usable -- so it was removed with its
+    dispatch input rather than left switched off."""
+    wf = WF.read_text()
+    assert "ONE authorized Gemini canary" not in wf
+    assert "run_canary" not in wf
+    assert "armed_canary" not in wf
+    assert "OWNER-2026-09-17-GEMINI-CANARY-1" not in wf
 
 
 def test_no_other_step_arms_execution():
@@ -243,9 +256,9 @@ def test_the_arm_is_SET_exactly_once_in_the_whole_workflow():
     assigns = re.findall(r'^\s*GEMINI_CANARY_LIVE:\s*\S+', wf, re.M)
     assert len(assigns) == 1, assigns
     i = wf.index(assigns[0])
-    assert "ONE authorized Gemini canary" in wf[:i]
+    assert "ONE authorized Gemini continuous window" in wf[:i]
     # and that one assignment sits under the armed-only conditional
-    assert "github.event.inputs.armed_canary == 'true'" in wf[:i]
+    assert "github.event.inputs.armed_continuous == 'true'" in wf[:i]
 
 
 def test_the_dry_run_retries_into_the_next_btc5m_window():

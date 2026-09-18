@@ -82,18 +82,18 @@ LABEL = "GEMINI_L5_WS_CONTINUOUS_V1"
 #: default to be overridden at runtime: nothing reads an environment variable
 #: to fill it in. A human edits it in a reviewed commit, or the driver cannot
 #: mutate anything, ever.
-REQUIRED_AUTH_ID: Optional[str] = None
+REQUIRED_AUTH_ID: Optional[str] = "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"
 
 #: The sha256 of THIS FILE as reviewed under that authorization. An
 #: authorization names the exact executable it was granted against, so editing
 #: the driver afterwards invalidates it automatically rather than silently
 #: carrying it forward onto code nobody reviewed.
-AUTHORIZED_SHA: Optional[str] = None
+AUTHORIZED_SHA: Optional[str] = "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d"  # noqa: E501
 
 #: The sha256 of the frozen risk envelope the authorization was granted
 #: against. Changing any bound changes this, and the authorization stops
 #: applying -- so an envelope cannot be widened under an old approval.
-AUTHORIZED_ENVELOPE: Optional[str] = None
+AUTHORIZED_ENVELOPE: Optional[str] = "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17"  # noqa: E501
 
 
 class NotAuthorized(RuntimeError):

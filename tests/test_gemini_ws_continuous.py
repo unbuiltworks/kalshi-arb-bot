@@ -86,15 +86,40 @@ def _run(coro):
 
 # ============================================================ AUTHORIZATION
 
-def test_without_authorization_no_mutation_is_possible():
-    """The shipped module, unpatched."""
+def test_the_installed_authorization_binds_the_reviewed_artifact_exactly():
+    """An authorization is installed (OWNER 2026-09-18, one window). It must
+    name THIS executable and THIS envelope, or it is not an authorization for
+    what is running."""
+    assert WC.REQUIRED_AUTH_ID == "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"
+    assert WC.AUTHORIZED_SHA == WC.executable_sha(), (
+        "the installed authorization does not name the running executable")
+    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+    assert WC.AUTHORIZED_SHA == (
+        "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d")
+    assert WC.AUTHORIZED_ENVELOPE == (
+        "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+
+
+def test_without_the_transport_arm_no_mutation_is_possible(monkeypatch):
+    """The dual key is still required, and it is the half that is NOT in the
+    repository. An installed authorization on its own arms nothing."""
+    monkeypatch.delenv("GEMINI_CANARY_LIVE", raising=False)
+    monkeypatch.delenv("GEMINI_CANARY_AUTH", raising=False)
+    monkeypatch.delenv("GEMINI_CANARY_AUTH_EXPIRES", raising=False)
     st = WC.authorization_state()
     assert st["authorized"] is False
-    assert WC.REQUIRED_AUTH_ID is None
-    assert WC.AUTHORIZED_SHA is None
-    assert WC.AUTHORIZED_ENVELOPE is None
+    assert any("transport arm" in w for w in st["why_not"]), st["why_not"]
     with pytest.raises(WC.NotAuthorized):
         WC.require_authorization()
+
+
+def test_the_spent_canary_authorization_can_no_longer_arm(monkeypatch):
+    monkeypatch.setenv("GEMINI_CANARY_LIVE", "YES")
+    monkeypatch.setenv("GEMINI_CANARY_AUTH",
+                       "OWNER-2026-09-17-GEMINI-CANARY-1")
+    monkeypatch.setenv("GEMINI_CANARY_AUTH_EXPIRES", "2099-01-01T00:00:00Z")
+    assert WC.authorization_state()["authorized"] is False, (
+        "a spent authorization must not arm anything, ever")
 
 
 def test_no_environment_variable_can_supply_an_authorization(monkeypatch):
