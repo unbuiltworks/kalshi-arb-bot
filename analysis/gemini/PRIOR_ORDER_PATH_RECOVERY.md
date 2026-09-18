@@ -74,10 +74,44 @@ Plus at least 100 `cancelled` orders (a full page, not a total), e.g.
 order code anywhere in this repository: `/v1/order/new` appears only inside
 two test BAN-lists whose purpose is to keep it out.
 
-Note what the sample is NOT: both recovered rows are **fill-or-kill**, i.e.
-taker orders. A venue-accepted **MOC maker** order is not among them, so
-maker acceptance remains unproven from this evidence even though the maker
-code path is the one that was written.
+### Correction, from the aggregate (run 35299351141)
+
+The two rows above are both **fill-or-kill**, and on that basis I first wrote
+that maker acceptance was unproven. Reading the whole page instead of its
+first row shows that is wrong, and in the most relevant way possible.
+
+Across 100 `filled` rows: `maker-or-cancel` **57**, `fill-or-kill` 41,
+`immediate-or-cancel` 1, `good-til-cancel` 1. **41 of those rows are BTC
+contracts**, and the BTC5m ones are filled MOC orders:
+
+```json
+{"symbol": "GEMI-BTC05M2609021210-UP", "side": "buy", "outcome": "yes",
+ "orderType": "limit", "timeInForce": "maker-or-cancel",
+ "price": "0.47", "quantity": "1", "filledQuantity": "1",
+ "status": "filled", "createdAt": "2026-09-02T12:05:06.153Z"}
+```
+
+So **maker-only semantics are venue-proven on this account, on a BTC5m
+contract, and they filled.** That is the single most load-bearing fact for
+the L5 canary, and sampling one row had hidden it.
+
+### Quantity: what the history does and does not say
+
+Across the same 200 rows the accepted quantities are `1` (93 filled, 99
+cancelled), `10` (6), `36.85` (1) and `3` (1). Two things follow, and only
+two:
+
+- **Fractional quantities are accepted** — `36.85` is not an integer, so
+  there is no integers-only rule to run into.
+- **Nothing below 1 has ever been sent from this account.** 0.01 is not
+  refuted by the history; it is simply untested by it.
+
+The contract's own `quantityMinimum` for BTC5m is `0.01` and that is the
+authoritative, per-contract source. It admits the size. But "the venue
+accepts 0.01 on BTC5m" remains a claim only a submission can settle, and
+the honest statement is that metadata permits it while our own record is
+silent. Counting pages: each status returns a page of 100, so these are
+floors, not totals.
 
 ## 3. Known-good versus GEMINI_CANARY_V2
 
