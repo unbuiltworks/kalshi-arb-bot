@@ -384,3 +384,39 @@ def test_hydration_reads_across_daily_and_hourly_parts_newest_first(tmp_path):
     # the byte bound takes the NEWEST bytes across parts
     one = list(rec.iter_recent_tape_rows(tmp_path, now, max_bytes=90))
     assert [m["tag"] for _, m in one] == ["h01"]
+
+
+def test_trade_export_is_off_by_default(monkeypatch):
+    monkeypatch.delenv(rec.TRADES_ENV, raising=False)
+    assert rec.trades_http_enabled() is False
+    assert rec.live_trades_bytes() is None
+
+
+def test_trade_export_is_bounded_and_sanitized(monkeypatch):
+    monkeypatch.setenv(rec.TRADES_ENV, "1")
+    trades = [{"t": i, "px": ".50", "qty": "1", "dir": "buy",
+               "secret": "must-not-export"} for i in range(250)]
+    payload = rec.trades_payload({"m": {"trades": trades}}, 999.0)
+    rows = payload["markets"]["m"]["trades"]
+    assert len(rows) == rec.TRADES_PER_MARKET == 200
+    assert rows[0]["t"] == 50
+    assert all(set(x) == {"t", "px", "qty", "dir"} for x in rows)
+
+
+def test_trade_export_ring_full_is_fail_closed(monkeypatch):
+    monkeypatch.setenv(rec.TRADES_ENV, "true")
+    trades = [{"t": i, "px": ".50", "qty": "1", "dir": "buy"}
+              for i in range(500)]
+    payload = rec.trades_payload({"m": {"trades": trades}}, 999.0)
+    assert payload["markets"]["m"]["ring_full"] is True
+
+
+def test_trade_export_does_not_add_order_capability():
+    source = inspect.getsource(rec)
+    # The recorder's outbound structural allow-list remains unchanged.
+    assert rec.OUTBOUND_FRAME_KEYS == frozenset(
+        {"subscribe", "unsubscribe", "heartbeat"})
+    trade_section = source[source.index("TRADES_HTTP_PATH"):
+                           source.index("# Read-only status handoff")]
+    assert "order.place" not in trade_section
+    assert "POST" not in trade_section
