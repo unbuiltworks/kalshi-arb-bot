@@ -30,7 +30,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from decimal import Decimal as D
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
+
+from src.gemini_execution import spec
 
 EVENTS_PATH = "/v1/prediction-markets/events"
 TERMS_STATUS_PATH = "/v1/prediction-markets/terms/status"
@@ -140,6 +142,216 @@ def terms_for(symbol: str) -> Dict[str, Any]:
         "why": (None if not missing
                 else "the contract omits %s; nothing is defaulted" % missing),
     }
+
+
+#: a settlement is irreversible, so N reads are taken and any ONE settled
+#: reading wins over any number of `active` ones.
+RESOLUTION_READS = 3
+
+SETTLED = "SETTLED"
+PENDING = "PENDING"
+UNCONFIRMED = "UNCONFIRMED"
+RESOLUTION_UNREADABLE = "UNREADABLE"
+
+
+def resolution_for(symbol: str, *, reads: int = RESOLUTION_READS,
+                   now: Optional[float] = None) -> Dict[str, Any]:
+    """Terminal resolution, from the authoritative CONTRACT object. PUBLIC.
+
+    CORRECTING AN EARLIER FINDING. The settlement gate recorded that this
+    venue "publishes NO terminal value anywhere public", measured across four
+    expired BTC5m windows. That was measured on the BOOK and the print tape,
+    which do go empty at expiry -- and the conclusion was drawn about the
+    venue rather than about where I had looked. The contract object carries
+    status, resolutionSide, resolvedAt and settlementValue, and it carried
+    them for all four of those same windows.
+
+    THIS ENDPOINT FLAPS. Measured 2026-09-18: GEMI-BTC05M2609180100-UP,
+    polled ten times over twenty seconds, answered settled/yes/76525.56 three
+    times and then active/null/null seven times -- for a contract whose
+    expiry was fifteen minutes in the past. So a single `active` reading is
+    NOT evidence that a contract has not settled; it is a stale read, and
+    reporting it as unsettled would be the unreadable-versus-empty mistake in
+    a new place.
+
+    The rule that follows: a settlement is irreversible, so N reads are taken
+    and ONE settled reading wins over any number of `active` ones. An expired
+    contract that never reads settled is UNCONFIRMED, which is the absence of
+    the evidence, never a claim that it did not settle.
+
+    A RESOLUTION IS NOT A REALIZED P&L. This is the OUTCOME leg. The cash leg
+    still requires the authenticated account surface, and nothing here may be
+    labelled realized.
+    """
+    tk = event_ticker(symbol)
+    if not tk:
+        return {"readable": False, "verdict": RESOLUTION_UNREADABLE,
+                "why": "symbol carries no event ticker"}
+
+    observations: List[Dict[str, Any]] = []
+    for _ in range(max(1, reads)):
+        got = fetch_event(tk)
+        if not got.get("readable"):
+            observations.append({"readable": False, "why": got.get("err")})
+            continue
+        ev = got["event"]
+        c = contract_of(ev, symbol)
+        if c is None:
+            observations.append({"readable": False,
+                                 "why": "no contract with that symbol"})
+            continue
+        observations.append({
+            "readable": True,
+            "status": c.get("status"),
+            "resolutionSide": c.get("resolutionSide"),
+            "resolvedAt": c.get("resolvedAt"),
+            "settlementValue": c.get("settlementValue"),
+            "marketState": c.get("marketState"),
+            "expiryDate": c.get("expiryDate"),
+            "event_status": ev.get("status"),
+            "_contract": c,
+        })
+
+    readable = [o for o in observations if o.get("readable")]
+    if not readable:
+        return {"readable": False, "verdict": RESOLUTION_UNREADABLE,
+                "instrumentSymbol": symbol, "ticker": tk, "reads": len(
+                    observations),
+                "why": "no read of the contract object succeeded"}
+
+    settled = [o for o in readable if o.get("status") == spec.STATUS_SETTLED
+               and o.get("resolutionSide") is not None
+               and o.get("resolvedAt") is not None]
+    chosen = settled[0] if settled else readable[0]
+    contract = chosen.pop("_contract", {})
+    for o in readable:
+        o.pop("_contract", None)
+
+    expiry = chosen.get("expiryDate")
+    expired = _is_past(expiry, now)
+    if settled:
+        verdict = SETTLED
+    elif expired is True:
+        verdict = UNCONFIRMED
+    else:
+        verdict = PENDING
+
+    distinct = sorted({"%s/%s" % (o.get("status"), o.get("resolutionSide"))
+                       for o in readable})
+    out: Dict[str, Any] = {
+        "readable": True,
+        "verdict": verdict,
+        "instrumentSymbol": symbol,
+        "ticker": tk,
+        "status": chosen.get("status"),
+        "resolutionSide": chosen.get("resolutionSide"),
+        "resolvedAt": chosen.get("resolvedAt"),
+        "settlementValue": chosen.get("settlementValue"),
+        "marketState": chosen.get("marketState"),
+        "expiryDate": expiry,
+        "event_status": chosen.get("event_status"),
+        "is_terminal": verdict == SETTLED,
+        "expired": expired,
+        "reads": len(observations),
+        "reads_readable": len(readable),
+        "reads_settled": len(settled),
+        "distinct_readings": distinct,
+        "flapped": len(distinct) > 1,
+        "observations": readable,
+        "missing_fields": [f for f in spec.RESOLUTION_FIELDS
+                           if chosen.get(f) in (None, "")],
+        "strike_check": _strike_check(contract),
+        "source": "%s/{eventTicker} contract object (PUBLIC)" % EVENTS_PATH,
+        "labels": (
+            "the OUTCOME leg only. A settled contract says what it resolved "
+            "to, never what our account received; realized P&L still "
+            "requires authenticated cash reconciliation. UNCONFIRMED means "
+            "no read showed a settlement, NOT that none occurred."),
+    }
+    return out
+
+
+def _is_past(iso: Any, now: Optional[float] = None) -> Optional[bool]:
+    """None means UNKNOWN -- never False by default."""
+    if not iso:
+        return None
+    import time as _t
+    txt = str(iso).replace("Z", "+00:00")
+    try:
+        t = datetime.fromisoformat(txt)
+    except ValueError:
+        return None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
+    return t.timestamp() < (now if now is not None else _t.time())
+
+
+def most_recent_settled(symbol: str, *, look_back: int = 4,
+                        reads: int = RESOLUTION_READS,
+                        now: Optional[float] = None) -> Dict[str, Any]:
+    """Walk back from this instrument's window until one reads SETTLED.
+
+    A CAPABILITY check: can the four terminal fields be read at all, right
+    now, for a contract that has certainly settled. One window is not enough
+    to answer that, because this endpoint flaps and because the window that
+    just expired may genuinely not be settled yet -- both would make a
+    single-window check fail for reasons that say nothing about the
+    capability.
+    """
+    # FROM THE CLOCK, not from the quoted instrument's window. That window
+    # can be well in the future -- stepping back from it lands on windows
+    # that have not expired yet, and four PENDING readings say nothing about
+    # whether the terminal fields are readable.
+    tk = current_btc5m_ticker(now)
+    own = event_ticker(symbol) or ""
+    suffix = symbol[symbol.index(own) + len(own):] if own and own in symbol \
+        else "-UP"
+    tried = []
+    for step in range(1, max(1, look_back) + 1):
+        prev = sibling_ticker(tk, minutes=5 * step)
+        if not prev:
+            break
+        cand = "GEMI-%s%s" % (prev, suffix)
+        r = resolution_for(cand, reads=reads, now=now)
+        tried.append({"symbol": cand, "verdict": r.get("verdict"),
+                      "flapped": r.get("flapped")})
+        if r.get("verdict") == SETTLED:
+            r["windows_tried"] = tried
+            return r
+    return {"readable": False, "verdict": UNCONFIRMED, "windows_tried": tried,
+            "why": ("no window in the last %d read as settled; that is the "
+                    "absence of the evidence, not a claim that none settled"
+                    % look_back)}
+
+
+def _strike_check(contract: Mapping[str, Any]) -> Dict[str, Any]:
+    """Does the published resolutionSide agree with settlementValue vs strike?
+
+    A CONSISTENCY CHECK, not a second source of truth: resolutionSide is
+    authoritative and this only says whether the two published numbers tell
+    the same story. Verified to AGREE on four settled BTC5m contracts
+    (2026-09-18). A disagreement is a flag to stop on, not a value to prefer.
+    """
+    side = contract.get("resolutionSide")
+    sv = contract.get("settlementValue")
+    strike = contract.get("strike") or {}
+    k = strike.get("value") if isinstance(strike, Mapping) else None
+    sym = str(contract.get("instrumentSymbol") or "")
+    if side is None or sv in (None, "") or k in (None, ""):
+        return {"available": False,
+                "why": "not settled yet, or no strike published"}
+    if not sym.endswith("-UP"):
+        return {"available": False,
+                "why": "the >= rule is stated for the UP contract; not "
+                       "assumed for %s" % sym}
+    try:
+        expected = "yes" if D(str(sv)) >= D(str(k)) else "no"
+    except Exception:                                          # noqa: BLE001
+        return {"available": False, "why": "unparseable settlement or strike"}
+    return {"available": True, "agrees": expected == side,
+            "published_resolutionSide": side, "implied_by_strike": expected,
+            "settlementValue": str(sv), "strike": str(k),
+            "rule": "UP resolves yes when settlementValue >= strike.value"}
 
 
 def smallest_valid_quantity(terms: Dict[str, Any]) -> Optional[str]:

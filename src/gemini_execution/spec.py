@@ -58,6 +58,7 @@ ACTIVE_PATH: Final = "/v1/prediction-markets/orders/active"
 MUTATION_PATHS: Final = (PLACE_PATH, CANCEL_PATH)
 
 ORDER_TYPE_LIMIT: Final = "limit"
+TIME_IN_FORCE_GTC: Final = "good-til-cancel"
 SIDE_BUY: Final = "buy"
 SIDE_SELL: Final = "sell"
 OUTCOME_YES: Final = "yes"
@@ -78,6 +79,20 @@ ORDER_REQUEST_FIELDS: Final = (
     "symbol", "orderType", "side", "quantity", "price", "outcome",
     "stopPrice", "timeInForce", "makerOrCancel",
 )
+
+#: the AUTH fields Gemini's signing protocol requires in the payload, and
+#: nothing else. `request` is the path being signed; `nonce` guarantees
+#: freshness. The API key, the signature and the secret travel in headers of
+#: their own and never appear in the payload.
+AUTH_PAYLOAD_FIELDS: Final = ("request", "nonce")
+
+#: terminal-resolution fields on the CONTRACT object -- verified 2026-09-18
+#: against four settled BTC5m contracts, all four self-consistent against
+#: their own strike. status enumerates approved/active/closed/under_review/
+#: settled/invalid.
+RESOLUTION_FIELDS: Final = ("status", "resolutionSide", "resolvedAt",
+                            "settlementValue")
+STATUS_SETTLED: Final = "settled"
 
 #: response fields we depend on
 ORDER_ID_FIELD: Final = "orderId"

@@ -97,6 +97,25 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
     xport = (await T.probe_field_transport(tk_a, tk_b) if (tk_a and tk_b)
              else {"verdict": "UNRESOLVED", "why": "no ticker to probe with"})
 
+    # THE EXACT BYTES, built and checked before anything could sign them.
+    # A hypothetical order: nothing here signs, sends or arms.
+    from src.gemini_execution import payload as PL
+    try:
+        order = (PL.build_order(symbol=sym, price=str(price),
+                                quantity=str(smallest))
+                 if (sym and price and smallest) else None)
+        pay = (PL.sanitized_decoded(order, nonce=int(now) if now else None)
+               if order else {"why": "no eligible instrument"})
+        payload_ok = order is not None
+    except PL.PayloadViolation as exc:
+        pay = {"refused": str(exc)}
+        payload_ok = False
+
+    # PERMANENT terminal-resolution evidence, from the contract object.
+    res_now = MD.resolution_for(sym) if sym else {
+        "verdict": MD.RESOLUTION_UNREADABLE, "why": "no eligible instrument"}
+    res_prev = MD.most_recent_settled(sym or "GEMI--UP", now=now)
+
     gates = {
         "preflight_ok": bool(pf.get("ok")),
         "VENUE_WRITE_PATH": wp["VENUE_WRITE_PATH"],
@@ -113,6 +132,10 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
         # deliberately not collapsed into a pass/fail.
         "request_transport_accepted": bool(
             (xport.get("json_a") or {}).get("status") == 200),
+        "order_payload_valid": payload_ok,
+        "terminal_resolution_readable": (
+            res_prev.get("verdict") == MD.SETTLED
+            and not res_prev.get("missing_fields")),
     }
     blocking = [k for k, v in gates.items() if v is not True
                 and k != "VENUE_WRITE_PATH"]
@@ -127,6 +150,14 @@ async def report(auth_id: str = arming.EXPECTED_AUTH_ID,
         "price_check": p_ok,
         "max_cash_exposure_usd": (MD.max_cash_exposure(smallest, price)
                                   if (smallest and price) else None),
+        "order_payload": pay,
+        "terminal_resolution": {
+            "quoted_instrument": res_now,
+            "most_recent_settled": res_prev,
+            "labels": ("the OUTCOME leg. A settled contract never states "
+                       "what our account received, so nothing here is "
+                       "realized P&L."),
+        },
         "terms_status": tstat,
         "latest_terms_version": tver,
         "request_transport": xport,

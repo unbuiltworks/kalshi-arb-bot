@@ -5,6 +5,7 @@ venue: the transport is injected, and the arm is off unless a test sets it.
 """
 import asyncio
 import copy
+import json
 import os
 import tempfile
 
@@ -278,14 +279,23 @@ def test_the_module_has_no_retry_loop():
 
 
 def test_the_request_is_maker_only_and_a_limit(state_dir, armed):
-    """The venue-level protection the envelope depends on."""
-    import inspect
-    from src.gemini_execution import transport as T
-    src = inspect.getsource(T.place)
-    assert '"makerOrCancel": True' in src
-    assert "spec.ORDER_TYPE_LIMIT" in src
-    # and it is a boolean, not a timeInForce value, per the API
-    assert "maker-or-cancel" not in src
+    """The venue-level protection the envelope depends on.
+
+    Asserted on the CONSTRUCTED payload, not on the source text of place().
+    Reading the source only ever proved a literal was present in a function,
+    which stops being true the moment the body is built somewhere else -- and
+    would have kept passing if that somewhere else built it wrongly.
+    """
+    from src.gemini_execution import payload as P
+    body = P.build_order(symbol="GEMI-X-UP", price="0.02", quantity="0.01")
+    assert body["makerOrCancel"] is True
+    assert type(body["makerOrCancel"]) is bool      # not 1, not "true"
+    assert body["orderType"] == spec.ORDER_TYPE_LIMIT
+    # a boolean field, NOT a timeInForce value: the spot API's
+    # options: ["maker-or-cancel"] shape must not appear anywhere in it
+    assert "options" not in body
+    assert "maker-or-cancel" not in json.dumps(body)
+    assert body["timeInForce"] == spec.TIME_IN_FORCE_GTC
 
 
 # ====================================================== cancellation closes

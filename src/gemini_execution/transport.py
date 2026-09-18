@@ -20,7 +20,7 @@ import json
 from decimal import Decimal as D
 from typing import Any, Dict, Mapping, Optional
 
-from src.gemini_execution import arming, spec
+from src.gemini_execution import arming, payload, spec
 
 #: a response we could not classify. Never a success and never a retry.
 AMBIGUOUS = "AMBIGUOUS"
@@ -96,27 +96,26 @@ async def place(*, symbol: str, side: str, outcome: str, price: str,
     below, and the next rejection body will say whether it was the cause.
     """
     arming.require(now)                      # structural: no arm, no request
-    body: Dict[str, Any] = {
-        "symbol": symbol,
-        "orderType": spec.ORDER_TYPE_LIMIT,
-        "side": side,
-        "outcome": outcome,
-        "price": str(price),                 # strings, per the API
-        "quantity": str(quantity),
-        "makerOrCancel": True,               # post-only, enforced by the venue
-    }
     if client_order_id:
-        # Not sent by default, and refused outright unless a caller opts in
-        # with a documented reason: the OrderRequest schema does not admit it.
+        # Refused outright rather than dropped quietly: the OrderRequest
+        # schema does not admit it, and a caller passing one has a wrong
+        # model of the request that silence would preserve.
         raise VenueError(
             "clientOrderId is not a documented OrderRequest field -- it "
             "appears in the RESPONSE schema only. Canary #1 sent one and was "
             "answered 400. Reconcile by symbol under the one-order invariant "
             "instead of re-adding it.")
-    unknown = [k for k in body if k not in spec.ORDER_REQUEST_FIELDS]
-    if unknown:
-        raise VenueError("undocumented request field(s) %s; a schema that "
-                         "rejects unknown properties answers 400" % unknown)
+    # ONE source of truth for the bytes. build/validate/assert all live in
+    # `payload`, between construction and signing, so nothing can reach the
+    # wire without having been checked field by field.
+    body = payload.build_order(symbol=symbol, price=str(price),
+                               quantity=str(quantity), side=side,
+                               outcome=outcome)
+    try:
+        payload.validate_structure(body)
+        payload.assert_types(body)
+    except payload.PayloadViolation as exc:
+        raise VenueError(str(exc)) from exc
     res = await _post(spec.PLACE_PATH, body)
     res["request"] = body
     return res
