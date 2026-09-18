@@ -1,0 +1,25 @@
+{
+  "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
+  "intent_id": "cont-20260918T210520Z",
+  "symbol": "GEMI-BTC05M2609182110-UP",
+  "side": "buy",
+  "outcome": "both",
+  "price": null,
+  "amount": "0.01",
+  "created_at": 1789765520.7710226,
+  "state": "INTENT_PERSISTED",
+  "venue_order_id": null,
+  "history": [
+    {
+      "state": "INTENT_PERSISTED",
+      "t": 1789765520.7710233
+    }
+  ],
+  "envelope": {
+    "max_orders": 12,
+    "max_residual": "0.04",
+    "maker_only": true,
+    "transport": "WEBSOCKET"
+  },
+  "labels": "consumed BEFORE the mutation. A lost order is preferred to a double order, because only one of them is recoverable."
+}
