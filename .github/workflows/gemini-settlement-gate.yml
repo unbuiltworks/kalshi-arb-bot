@@ -295,17 +295,22 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # ARMED ONCE, FOR CONTINUOUS-7 ONLY. Disarm again immediately after the
-      # window: restore the sentinel here and set the driver constants back
-      # to None. C6 is spent at 6 of 6 and C5 at 3 of 6 with an UNKNOWN.
+      # DISARMED AGAIN. CONTINUOUS-7 RAN AND IS SPENT: 12 cycles, all 6
+      # slots, every cancel accepted, and the FIRST window to terminate with
+      # ZERO orders live -- orders_live_after_stop 0, STOPPED_FLAT_ORDERS.
+      # C7 is 6 of 6, C6 6 of 6, C5 frozen 3 of 6 with its UNKNOWN. The auth
+      # id below is the sentinel and the driver constants are None, so this
+      # step cannot arm.
       #
       # NOTE FOR WHOEVER READS THIS NEXT: STOP stops the CONTROLLER. C5's
       # NO leg filled 57 seconds AFTER its window terminated, because a
       # fail-closed stop does not withdraw orders the venue already
-      # accepted. Do not read "stopped" as "flat". C7 carries the bounded
-      # TERMINAL WITHDRAWAL that answers this, and its cleanup cancels are
-      # accounted SEPARATELY from the 6 strategy slots -- cleanup may CANCEL
-      # and nothing else.
+      # accepted. Do not read "stopped" as "flat" -- and note that C7's own
+      # FLAT ORDERS still says nothing about fills already taken. The
+      # terminal withdrawal added for C7 needed no cleanup mutation here
+      # (cleanup_consumed 0): the controller's own end-of-window cancels had
+      # already cleared the book. That is the good case, not proof the
+      # cleanup path works under one that has orders left.
       #
       # OWNER-2026-09-18-GEMINI-CONTINUOUS-7, naming
       #   executable_sha a5ff9175...56ef   (coherent refresh + withdrawal)
@@ -349,12 +354,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-7"
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-7" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
             --cohort  "COHORT-2026-09-18-C7" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \

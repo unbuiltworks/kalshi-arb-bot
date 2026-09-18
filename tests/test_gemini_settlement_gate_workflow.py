@@ -406,7 +406,7 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = "OWNER-2026-09-18-GEMINI-CONTINUOUS-7"
+LIVE_AUTHORIZATION = None
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
