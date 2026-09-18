@@ -310,3 +310,83 @@ def test_queue_position_is_not_churned_below_the_minimum_rest_time():
     out = CP.stale_orders(resting, now, {"YES": "0.64"})
     assert out[0]["cancel"] is False
     assert "minimum_rest_time" in out[0]["why"]
+
+
+# -------------------------------------------- the book is READ, not derived
+
+def _contract(**over):
+    c = {"instrumentSymbol": "GEMI-BTC05M2609181115-UP",
+         "prices": {"buy": {"yes": "0.50", "no": "0.81"},
+                    "sell": {"yes": "0.19", "no": "0.50"},
+                    "bestBid": "0.19", "bestAsk": "0.50",
+                    "lastTradePrice": "0.35"}}
+    c.update(over)
+    return c
+
+
+def _feed_book(monkeypatch, contract):
+    from src.gemini_execution import metadata as MD
+    monkeypatch.setattr(MD, "fetch_event", lambda tk, timeout=15.0: {
+        "readable": True, "ticker": tk,
+        "event": {"contracts": [contract] if contract else []}})
+    monkeypatch.setattr(MD, "terms_for", lambda s: {"priceIncrement": "0.01"})
+
+
+def test_both_outcomes_are_read_from_the_contract(monkeypatch):
+    from src.gemini_execution import metadata as MD
+    _feed_book(monkeypatch, _contract())
+    b = MD.outcome_book("GEMI-BTC05M2609181115-UP")
+    assert b["readable"] is True
+    assert b["yes"] == {"bid": "0.19", "ask": "0.50"}
+    assert b["no"] == {"bid": "0.50", "ask": "0.81"}
+    # a resting BUY joins the outcome's SELL side
+    assert b["passive_pair_cost"] == "0.69"
+    assert b["crossing_pair_cost"] == "1.31"
+    assert b["identity_consistent"] is True
+
+
+def test_a_book_that_breaks_the_complement_identity_is_flagged(monkeypatch):
+    from src.gemini_execution import metadata as MD
+    bad = _contract(prices={"buy": {"yes": "0.50", "no": "0.90"},
+                            "sell": {"yes": "0.19", "no": "0.50"}})
+    _feed_book(monkeypatch, bad)
+    b = MD.outcome_book("GEMI-BTC05M2609181115-UP")
+    assert b["identity_consistent"] is False
+
+
+def test_an_inconsistent_book_stops_the_probe_rather_than_quoting(monkeypatch):
+    bad = _contract(prices={"buy": {"yes": "0.50", "no": "0.90"},
+                            "sell": {"yes": "0.19", "no": "0.50"}})
+    _feed_book(monkeypatch, bad)
+    inv = CP.Inventory()
+    st = CP.state_from_venue("GEMI-BTC05M2609181115-UP", 200.0, inv)
+    assert st["inventory_known"] is False
+    p = CP.plan(st, inv)
+    assert p["stop"] and "never assumes flat" in p["stop"]
+    assert p["actions"] == []
+
+
+def test_a_missing_outcome_price_is_never_derived(monkeypatch):
+    from src.gemini_execution import metadata as MD
+    half = _contract(prices={"buy": {"yes": "0.50"}, "sell": {"yes": "0.19"}})
+    _feed_book(monkeypatch, half)
+    b = MD.outcome_book("GEMI-BTC05M2609181115-UP")
+    assert b["readable"] is False
+    assert "nothing is derived in their place" in b["why"]
+
+
+def test_the_state_carries_the_venues_own_prices(monkeypatch):
+    _feed_book(monkeypatch, _contract())
+    st = CP.state_from_venue("GEMI-BTC05M2609181115-UP", 200.0, CP.Inventory())
+    assert st["inventory_known"] is True
+    assert st["outcomes"]["Up"]["bid"] == "0.19"
+    assert st["outcomes"]["Down"]["bid"] == "0.50"
+
+
+def test_the_probe_quotes_at_both_outcomes_own_bids(monkeypatch):
+    _feed_book(monkeypatch, _contract())
+    inv = CP.Inventory()
+    st = CP.state_from_venue("GEMI-BTC05M2609181115-UP", 200.0, inv)
+    frames = CP.frames_for(CP.plan(st, inv), "GEMI-BTC05M2609181115-UP")
+    got = {f["leg"]: f["frame"]["params"]["price"] for f in frames}
+    assert got == {"YES": "0.19", "NO": "0.50"}

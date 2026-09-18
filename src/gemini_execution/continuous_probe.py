@@ -413,3 +413,40 @@ def stale_orders(resting: List[Mapping[str, Any]], now: float,
                     "why": "surface moved to %s and it has rested %.1fs"
                            % (want, rested)})
     return out
+
+
+def state_from_venue(symbol: str, tte_s: float, inv: "Inventory", *,
+                     now: Optional[float] = None,
+                     book: Optional[Mapping[str, Any]] = None
+                     ) -> Dict[str, Any]:
+    """Market state for the engine, built from the venue's OWN per-outcome
+    book rather than from the complement identity.
+
+    The identity happens to hold exactly on this venue, but deriving the NO
+    side from the YES side would put an inferred number where an observed one
+    is published -- the substitution this whole program refuses. An
+    inconsistent or unreadable book yields inventory_known=False, which STOPS
+    the probe rather than quoting into something we cannot read.
+    """
+    from src.gemini_execution import metadata as MD
+    import time as _t
+    b = book if book is not None else MD.outcome_book(symbol)
+    if not b.get("readable") or not b.get("identity_consistent"):
+        return {"market_key": symbol, "state_id": "unreadable",
+                "t_utc": now if now is not None else _t.time(),
+                "tte_s": tte_s, "cohort": "BTC5m",
+                "inventory_known": False, "outcomes": {},
+                "book": b}
+    tick = (MD.terms_for(symbol) or {}).get("priceIncrement") or "0.01"
+    t = now if now is not None else _t.time()
+    return {
+        "market_key": symbol, "state_id": "%s@%d" % (symbol, int(t)),
+        "t_utc": t, "state_age_s": 0.0, "tte_s": tte_s, "cohort": "BTC5m",
+        "inventory_known": True,
+        "outcomes": {
+            "Up": {"bid": b["yes"]["bid"], "ask": b["yes"]["ask"],
+                   "tick": tick},
+            "Down": {"bid": b["no"]["bid"], "ask": b["no"]["ask"],
+                     "tick": tick}},
+        "book": b,
+    }

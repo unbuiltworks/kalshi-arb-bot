@@ -667,3 +667,60 @@ async def order_history(*, since_ms: Optional[int] = None,
                    "credentials in THIS window, never about other accounts "
                    "or hosts. UNREADABLE is not an empty history."),
     }
+
+
+def outcome_book(symbol: str) -> Dict[str, Any]:
+    """Both outcomes' bids and asks, READ from the contract rather than
+    derived from the complement identity.
+
+    The contract object publishes them directly:
+
+        prices: {buy:  {yes, no},      <- what it costs to BUY each outcome
+                 sell: {yes, no},      <- what a SELL of each outcome receives
+                 bestBid, bestAsk, lastTradePrice}
+
+    So a resting BUY on an outcome joins that outcome's SELL side, and the
+    passive pair cost is sell.yes + sell.no -- measured 0.19 + 0.50 = 0.69 on
+    GEMI-BTC05M2609181115-UP at 11:15Z, against 1.31 to cross both asks.
+
+    THE IDENTITY IS CHECKED, NOT ASSUMED. no_bid should equal 1 - yes_ask and
+    no_ask should equal 1 - yes_bid; when it does not, that is reported rather
+    than smoothed over, because a book that violates it is not a book we
+    understand well enough to quote into.
+    """
+    tk = event_ticker(symbol)
+    if not tk:
+        return {"readable": False, "why": "symbol carries no event ticker"}
+    got = fetch_event(tk)
+    if not got.get("readable"):
+        return {"readable": False, "ticker": tk, "why": got.get("err")}
+    c = contract_of(got["event"], symbol)
+    if c is None:
+        return {"readable": False, "ticker": tk,
+                "why": "the event lists no contract with that symbol"}
+    px = c.get("prices") or {}
+    buy, sell = px.get("buy") or {}, px.get("sell") or {}
+    need = (buy.get("yes"), buy.get("no"), sell.get("yes"), sell.get("no"))
+    if any(v in (None, "") for v in need):
+        return {"readable": False, "ticker": tk, "prices": px,
+                "why": "the contract does not publish both outcomes' prices; "
+                       "nothing is derived in their place"}
+    yes_bid, yes_ask = D(str(sell["yes"])), D(str(buy["yes"]))
+    no_bid, no_ask = D(str(sell["no"])), D(str(buy["no"]))
+    ident = {"no_bid_vs_1_minus_yes_ask": str(no_bid - (D("1") - yes_ask)),
+             "no_ask_vs_1_minus_yes_bid": str(no_ask - (D("1") - yes_bid))}
+    consistent = all(D(v) == 0 for v in ident.values())
+    return {
+        "readable": True, "ticker": tk, "instrumentSymbol": symbol,
+        "yes": {"bid": str(yes_bid), "ask": str(yes_ask)},
+        "no": {"bid": str(no_bid), "ask": str(no_ask)},
+        "passive_pair_cost": str(yes_bid + no_bid),
+        "crossing_pair_cost": str(yes_ask + no_ask),
+        "last_trade_price": px.get("lastTradePrice"),
+        "complement_identity": ident,
+        "identity_consistent": consistent,
+        "source": "%s/{eventTicker} contract prices (PUBLIC)" % EVENTS_PATH,
+        "labels": ("a resting BUY joins the outcome's SELL side, so the "
+                   "passive pair cost is what a maker surface can reach. It "
+                   "is a cost basis, never a realized profit."),
+    }
