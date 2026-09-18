@@ -1,0 +1,1115 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-18T17:27:50.889104+00:00",
+  "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+  "driver_executable_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+  "driver_envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+  "bundle_sha": "7e31d5c305f3b0c1695e3b2dbe38162ca63acf60efa6bfbc7dfb979c0ff6e0b4",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609181730-UP",
+      "tte_s": 129.10925793647766,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "tte_s": 129.10925793647766,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "preflight": {
+    "agrees": true,
+    "discrepancies": [],
+    "checked_before_latch": true
+  },
+  "authoritative_state": {
+    "fills": [],
+    "open_orders": [],
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    }
+  },
+  "ledger_unresolved": [],
+  "ledger_consumed_slots": 3,
+  "pre_latch_recovery": {
+    "checked_before_latch": true,
+    "checked_before_authorization": true,
+    "recovered": true,
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "working": "venue authoritative: 0 resting (+none / -none)",
+    "budget_consumed": 3,
+    "budget_note": "max(ledger 3, venue 0): a disagreement is always read upward",
+    "budget_left": 9
+  },
+  "authorization": {
+    "authorized": true,
+    "required_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+    "authorized_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+    "executable_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+    "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "arming": {
+      "armed": true,
+      "live_flag": true,
+      "auth_id_present": true,
+      "auth_id_matches": true,
+      "expiry_supplied": true,
+      "expired": false,
+      "expected_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "why_not": null
+    },
+    "why_not": [],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "bundle": {
+    "authorized": true,
+    "bundle_sha": "7e31d5c305f3b0c1695e3b2dbe38162ca63acf60efa6bfbc7dfb979c0ff6e0b4",
+    "authorized_bundle": "7e31d5c305f3b0c1695e3b2dbe38162ca63acf60efa6bfbc7dfb979c0ff6e0b4",
+    "members": [
+      "ws_continuous.py",
+      "run_continuous.py",
+      "continuous_probe.py",
+      "continuous_preflight.py",
+      "metadata.py",
+      "arming.py",
+      "bundle.py"
+    ],
+    "member_shas": {
+      "ws_continuous.py": "b8367eca06f8997630be523d78d804517abffc0d71ffa33cfe4bb15e95af1548",
+      "run_continuous.py": "d4824e5ecbda2e02bd40bf094cdcad9fca39753b2316c76429f3a1bc890e4afa",
+      "continuous_probe.py": "ba7fae6a55e782ba2246c769678edef606641af8414cb352cee9007f0d9c60c2",
+      "continuous_preflight.py": "48f108eb96135fb5df36f4b43c0a94f26cbce1515fece2e58c1bf5ecc61647d5",
+      "metadata.py": "435f3b818eab150d9c1393f82d182b493f32a0d7d1f6e145c7287f3a0653930e",
+      "arming.py": "686fcfd0c05c341d1cd8b194e090d9637765b77251b545359b5025dca51e9946",
+      "bundle.py": "a81cd29f484e421ea8039c8934b0eb2c7e06e6c2b4f0ee2a252787b61497b75d"
+    },
+    "why_not": [],
+    "labels": "executable_sha covers the driver's BOUNDS; bundle_sha covers the ORDERING too. Both are named by an authorization, because undoing either has cost a live authorization before."
+  },
+  "latch": {
+    "consumed": true,
+    "intent_id": "cont-20260918T172754Z",
+    "state": "INTENT_PERSISTED",
+    "when": "BEFORE the session connected"
+  },
+  "session": "connected",
+  "window": {
+    "label": "GEMINI_L5_WS_CONTINUOUS_V1",
+    "symbol": "GEMI-BTC05M2609181730-UP",
+    "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+    "started": 1789752477.2840593,
+    "cycles": 7,
+    "turns": [
+      {
+        "cycle": 1,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 0,
+          "place": 2,
+          "cancel": 0,
+          "mutations": 2
+        },
+        "budget_left": 9
+      },
+      {
+        "cycle": 2,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 0,
+          "place": 2,
+          "cancel": 2,
+          "mutations": 4
+        },
+        "budget_left": 7
+      },
+      {
+        "cycle": 3,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 1,
+          "place": 1,
+          "cancel": 1,
+          "mutations": 2
+        },
+        "budget_left": 3
+      },
+      {
+        "cycle": 4,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 2,
+          "place": 0,
+          "cancel": 0,
+          "mutations": 0
+        },
+        "budget_left": 1
+      },
+      {
+        "cycle": 5,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 2,
+          "place": 0,
+          "cancel": 0,
+          "mutations": 0
+        },
+        "budget_left": 1
+      },
+      {
+        "cycle": 6,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 2,
+          "place": 0,
+          "cancel": 0,
+          "mutations": 0
+        },
+        "budget_left": 1
+      },
+      {
+        "cycle": 7,
+        "state": "STOPPED",
+        "window_phase": null,
+        "plan": {
+          "keep": 0,
+          "place": 2,
+          "cancel": 2,
+          "mutations": 4
+        },
+        "budget_left": 1
+      }
+    ],
+    "preflight": {
+      "preflight": {
+        "label": "GEMINI_L5_CONTINUOUS_PREFLIGHT_V1",
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "t": 1789752477.2840662,
+        "readable": true,
+        "quantityMinimum": "0.01",
+        "quantityIncrement": "0.01",
+        "priceMinimum": "0.01",
+        "priceIncrement": "0.01",
+        "contract_status": "active",
+        "market_state": "open",
+        "expiry": "2026-09-18T17:30:00.000Z",
+        "maker_tif": "MOC",
+        "terms_accepted": true,
+        "terms_version": 1,
+        "book": {
+          "readable": true,
+          "ticker": "BTC05M2609181730",
+          "instrumentSymbol": "GEMI-BTC05M2609181730-UP",
+          "yes": {
+            "bid": "0.77",
+            "ask": "0.86"
+          },
+          "no": {
+            "bid": "0.14",
+            "ask": "0.23"
+          },
+          "passive_pair_cost": "0.91",
+          "crossing_pair_cost": "1.09",
+          "last_trade_price": "0.86",
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "identity_consistent": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "labels": "a resting BUY joins the outcome's SELL side, so the passive pair cost is what a maker surface can reach. It is a cost basis, never a realized profit."
+        },
+        "frozen_comparison": {
+          "verdict": "AGREES",
+          "discrepancies": [],
+          "labels": "a preflight that merely SUCCEEDS is not the same claim as one that AGREES; only the second licenses the envelope"
+        }
+      },
+      "agrees": true,
+      "discrepancies": []
+    },
+    "authorization": {
+      "authorized": true,
+      "required_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "authorized_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+      "executable_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+      "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+      "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+      "arming": {
+        "armed": true,
+        "live_flag": true,
+        "auth_id_present": true,
+        "auth_id_matches": true,
+        "expiry_supplied": true,
+        "expired": false,
+        "expected_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+        "why_not": null
+      },
+      "why_not": [],
+      "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+    },
+    "recovery": {
+      "recovered": true,
+      "inventory": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working": "venue authoritative: 0 resting (+none / -none)",
+      "budget_consumed": 3,
+      "budget_note": "max(ledger 3, venue 0): a disagreement is always read upward",
+      "budget_left": 9
+    },
+    "binding": {
+      "bound": true,
+      "symbol": "GEMI-BTC05M2609181730-UP",
+      "actions_taken": 3
+    },
+    "state": "STOPPED",
+    "why": "budget: 4 mutation(s) required, 1 slot(s) left of 12",
+    "budget_consumed": 12,
+    "budget_left": 0,
+    "max_actions": 12,
+    "working_orders": [
+      {
+        "client_order_id": "l5cp-owner-2026-no-2c5cf1cd",
+        "leg": "NO",
+        "price": "0.04",
+        "qty": "0.01",
+        "resting_since": 1789752492.49255,
+        "venue_order_id": "145828836246614326"
+      }
+    ],
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "residual_note": "any residual is CARRIED directional exposure, reconciled through settlement. No taker cross was introduced to flatten it.",
+    "realized": null,
+    "realized_note": "REALIZED stays null until a venue-confirmed cash movement is read back. settlement_report keeps matched-pair and directional-residual apart."
+  },
+  "wire": [
+    {
+      "utc": "2026-09-18T17:27:59.440852+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0802,
+      "params": {
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.77",
+        "quantity": "0.01",
+        "eventOutcome": "YES",
+        "clientOrderId": "l5cp-owner-2026-yes-62555938"
+      },
+      "ack": {
+        "id": "l5cp-2d556f92ab2747b28853f617ec49b6e2",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246611817",
+          "transactTime": 1789752479401782254,
+          "price": "0.7700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:27:59.521132+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0779,
+      "params": {
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.14",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-261020b6"
+      },
+      "ack": {
+        "id": "l5cp-4a9ba07c164c4768aae839dc03cab61d",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246611835",
+          "transactTime": 1789752479483305407,
+          "price": "0.1400",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:28:05.645973+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0795,
+      "params": {
+        "orderId": "145828836246611817"
+      },
+      "ack": {
+        "id": "l5cp-3ea8e1249b5341789f7688cbed007f28",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:28:05.759610+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0801,
+      "params": {
+        "orderId": "145828836246611835"
+      },
+      "ack": {
+        "id": "l5cp-df173bcf2e0f4d11bc420523eaf28fa7",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:28:05.977080+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0773,
+      "params": {
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.92",
+        "quantity": "0.01",
+        "eventOutcome": "YES",
+        "clientOrderId": "l5cp-owner-2026-yes-2a23dd67"
+      },
+      "ack": {
+        "id": "l5cp-9103d0dca3a4410ebe880738eb6aa3be",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246613472",
+          "transactTime": 1789752485939836352,
+          "price": "0.9200",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:28:06.206921+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0856,
+      "params": {
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.01",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-743b1403"
+      },
+      "ack": {
+        "id": "l5cp-9cfe156656114325bafa60eca28ed849",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246613510",
+          "transactTime": 1789752486164930394,
+          "price": "0.0100",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:28:12.376652+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0937,
+      "params": {
+        "orderId": "145828836246613510"
+      },
+      "ack": {
+        "id": "l5cp-75bf68ba9ea3407599035a8fe138bb55",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:28:12.491808+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0842,
+      "params": {
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.04",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-2c5cf1cd"
+      },
+      "ack": {
+        "id": "l5cp-926b8cf086a7409b8f95f82fa7897a0c",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246614326",
+          "transactTime": 1789752492448121924,
+          "price": "0.0400",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-18T17:28:38.473253+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0814,
+      "params": {
+        "orderId": "145828836246613472"
+      },
+      "ack": {
+        "id": "l5cp-209c7f90a7be4f2fb18c6f1c93de6363",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    }
+  ],
+  "place_acks_observed": [
+    {
+      "utc": "2026-09-18T17:27:59.440852+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-yes-62555938",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836246611817",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-2d556f92ab2747b28853f617ec49b6e2",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246611817",
+          "transactTime": 1789752479401782254,
+          "price": "0.7700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-18T17:27:59.521132+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-261020b6",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836246611835",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-4a9ba07c164c4768aae839dc03cab61d",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246611835",
+          "transactTime": 1789752479483305407,
+          "price": "0.1400",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-18T17:28:05.977080+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-yes-2a23dd67",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836246613472",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-9103d0dca3a4410ebe880738eb6aa3be",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246613472",
+          "transactTime": 1789752485939836352,
+          "price": "0.9200",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-18T17:28:06.206921+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-743b1403",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836246613510",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-9cfe156656114325bafa60eca28ed849",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246613510",
+          "transactTime": 1789752486164930394,
+          "price": "0.0100",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-18T17:28:12.491808+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-2c5cf1cd",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836246614326",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-926b8cf086a7409b8f95f82fa7897a0c",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609181730-UP",
+          "orderId": "145828836246614326",
+          "transactTime": 1789752492448121924,
+          "price": "0.0400",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    }
+  ],
+  "place_ack_note": "OBSERVED, not inferred: each ack below is the venue's own reply recorded at the socket seam, with credential-shaped values redacted and key names and types preserved. An empty list means no order.place was ever sent.",
+  "after": {
+    "symbol": "GEMI-BTC05M2609181730-UP",
+    "fills": [
+      {
+        "leg": "YES",
+        "qty": "0.01",
+        "price": "0.92"
+      },
+      {
+        "leg": "NO",
+        "qty": "0.01",
+        "price": "0.14"
+      }
+    ],
+    "orders_seen": [
+      {
+        "orderId": 145828836246613472,
+        "hashOrderId": "Z21YpYnN2KkY",
+        "clientOrderId": "l5cp-owner-2026-yes-2a23dd67",
+        "globalOrderId": "145828836246613472",
+        "status": "filled",
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "buy",
+        "outcome": "yes",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0.01",
+        "remainingQuantity": "0",
+        "price": "0.92",
+        "avgExecutionPrice": "0.92",
+        "createdAt": "2026-09-18T17:28:05.939Z",
+        "updatedAt": "2026-09-18T17:28:33.389Z",
+        "contractMetadata": {
+          "contractId": "642682",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609181730",
+          "eventName": "BTC price today at 1:30pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609181730-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-18T17:30:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 1:30pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-18T17:25:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "80694.84",
+            "availableAt": "2026-09-18T17:25:00.000Z"
+          }
+        }
+      },
+      {
+        "orderId": 145828836246611835,
+        "hashOrderId": "Klj272YNlx6R",
+        "clientOrderId": "l5cp-owner-2026-no-261020b6",
+        "globalOrderId": "145828836246611835",
+        "status": "filled",
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0.01",
+        "remainingQuantity": "0",
+        "price": "0.14",
+        "avgExecutionPrice": "0.14",
+        "createdAt": "2026-09-18T17:27:59.483Z",
+        "updatedAt": "2026-09-18T17:27:59.492Z",
+        "contractMetadata": {
+          "contractId": "642682",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609181730",
+          "eventName": "BTC price today at 1:30pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609181730-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-18T17:30:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 1:30pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-18T17:25:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "80694.84",
+            "availableAt": "2026-09-18T17:25:00.000Z"
+          }
+        }
+      }
+    ],
+    "order_history_raw": {
+      "readable": true,
+      "verdict": "ORDERS_FOUND",
+      "total_rows": 2
+    },
+    "open_orders": [
+      {
+        "orderId": 145828836246614326,
+        "hashOrderId": "x26zqzEk240K",
+        "clientOrderId": "l5cp-owner-2026-no-2c5cf1cd",
+        "globalOrderId": "145828836246614326",
+        "status": "open",
+        "symbol": "GEMI-BTC05M2609181730-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.04",
+        "createdAt": "2026-09-18T17:28:12.448Z",
+        "updatedAt": "2026-09-18T17:28:12.448Z",
+        "contractMetadata": {
+          "contractId": "642682",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609181730",
+          "eventName": "BTC price today at 1:30pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609181730-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-18T17:30:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 1:30pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-18T17:25:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "80694.84",
+            "availableAt": "2026-09-18T17:25:00.000Z"
+          }
+        },
+        "fundsOnHold": "0.0004"
+      }
+    ],
+    "active_raw": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    }
+  },
+  "resolution": {
+    "readable": true,
+    "verdict": "PENDING",
+    "instrumentSymbol": "GEMI-BTC05M2609181730-UP",
+    "ticker": "BTC05M2609181730",
+    "status": "active",
+    "resolutionSide": null,
+    "resolvedAt": null,
+    "settlementValue": null,
+    "marketState": "open",
+    "expiryDate": "2026-09-18T17:30:00.000Z",
+    "event_status": "active",
+    "is_terminal": false,
+    "expired": false,
+    "reads": 3,
+    "reads_readable": 3,
+    "reads_settled": 0,
+    "distinct_readings": [
+      "active/None"
+    ],
+    "flapped": false,
+    "observations": [
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-18T17:30:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-18T17:30:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-18T17:30:00.000Z",
+        "event_status": "active"
+      }
+    ],
+    "missing_fields": [
+      "resolutionSide",
+      "resolvedAt",
+      "settlementValue"
+    ],
+    "strike_check": {
+      "available": false,
+      "why": "not settled yet, or no strike published"
+    },
+    "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+    "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred."
+  },
+  "finished_utc": "2026-09-18T17:28:41.481813+00:00"
+}
