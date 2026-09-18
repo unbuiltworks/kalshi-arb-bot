@@ -117,6 +117,22 @@ def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None
             "bbo_age_s": round(age, 3)}
 
 
+def _rejection_reason(res: Dict[str, Any]) -> Dict[str, Any]:
+    """Whatever the venue said about WHY, without inventing structure.
+
+    Gemini returns {result, reason, message} on an error; other shapes are
+    reported as-is rather than forced into that one.
+    """
+    body = res.get("body")
+    if isinstance(body, dict):
+        named = {k: body.get(k) for k in ("result", "reason", "message")
+                 if body.get(k) is not None}
+        return named or {"body_keys": sorted(body)}
+    if body is None and res.get("unparseable"):
+        return {"unparseable": str(res.get("unparseable"))[:300]}
+    return {"body": str(body)[:300]}
+
+
 async def submit_once(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
                       now: Optional[float] = None,
                       preflight=None, transport=None,
@@ -205,19 +221,39 @@ async def submit_once(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
         rec = latch.advance(auth_id, latch.SUBMITTED, venue_order_id=oid,
                             detail={"status": body.get(spec.STATUS_FIELD)},
                             directory=state_dir)
+        if make_durable is not None:
+            try:
+                make_durable(auth_id, rec)
+            except Exception:                                  # noqa: BLE001
+                pass          # the order is placed; the pre-send record stands
         return {"submitted": True, "state": latch.SUBMITTED,
                 "venue_order_id": oid,
                 "venue_status": body.get(spec.STATUS_FIELD),
                 "intent_id": intent["intent_id"], "intent": intent,
                 "record": rec}
     if cls == "REJECTED":
+        # CAPTURE THE REASON. A rejection whose cause was not recorded teaches
+        # nothing, and the cause is the single most valuable thing a rejection
+        # carries. Recording only the status code was a real defect: the first
+        # canary came back 400 and left no way to say why.
+        reason = _rejection_reason(res)
         rec = latch.advance(auth_id, latch.REJECTED,
-                            detail={"status": res.get("status")},
+                            detail={"status": res.get("status"),
+                                    "venue_reason": reason},
                             directory=state_dir)
-        return {"submitted": False, "state": latch.REJECTED,
-                "why": ("the venue refused the order. The authorization is "
-                        "still spent; that is deliberate."),
-                "venue_status": res.get("status"), "record": rec}
+        out = {"submitted": False, "state": latch.REJECTED,
+               "why": ("the venue refused the order. The authorization is "
+                       "still spent; that is deliberate."),
+               "venue_status": res.get("status"),
+               "venue_reason": reason,
+               "request_sent": res.get("request"),
+               "record": rec}
+        if make_durable is not None:
+            try:
+                make_durable(auth_id, rec)
+            except Exception:                                  # noqa: BLE001
+                out["durable_outcome_write"] = "FAILED"
+        return out
     rec = latch.advance(auth_id, latch.SUBMISSION_UNKNOWN,
                         detail={"error": res.get("error"),
                                 "status": res.get("status")},

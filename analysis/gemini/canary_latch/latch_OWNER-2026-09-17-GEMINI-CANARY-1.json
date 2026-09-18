@@ -7,13 +7,23 @@
   "price": "0.02",
   "amount": "0.01",
   "created_at": 1789690613.9198785,
-  "state": "INTENT_PERSISTED",
+  "state": "REJECTED",
   "venue_order_id": null,
   "history": [
     {
       "state": "INTENT_PERSISTED",
       "t": 1789690613.9198792
+    },
+    {
+      "state": "REJECTED",
+      "t": 1789690616.1636434,
+      "detail": {
+        "status": 400,
+        "venue_reason": "NOT_CAPTURED -- the first canary recorded only the status code. Fixed for any future attempt; this record cannot be back-filled.",
+        "source": "run 35290417454, step 'ONE authorized Gemini canary'"
+      }
     }
   ],
-  "labels": "consumed BEFORE the mutation. A lost order is preferred to a double order, because only one of them is recoverable."
+  "labels": "consumed BEFORE the mutation. A lost order is preferred to a double order, because only one of them is recoverable.",
+  "outcome_note": "VENUE-CONFIRMED REJECTED, HTTP 400. The authorization is consumed by the first mutation ATTEMPT, not the first fill, so it is spent. No second order without new owner authorization."
 }

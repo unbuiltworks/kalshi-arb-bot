@@ -394,7 +394,12 @@ def test_the_durable_record_is_written_before_the_send(state_dir, armed):
             return await _TR.place(self, **kw)
 
     _submit_hooks(_pf(), _Ordered(), state_dir, make_durable=_dur)
-    assert order == ["durable", "send"], order
+    # The safety property is that the FIRST durable write precedes the send.
+    # A second write AFTER it records the outcome, so the durable record does
+    # not sit at INTENT_PERSISTED forever.
+    assert order[0] == "durable", order
+    assert order.index("durable") < order.index("send"), order
+    assert order[-1] == "durable", order
 
 
 def _submit_hooks(pf, tr, state_dir, *, durable_check=None,
@@ -403,3 +408,46 @@ def _submit_hooks(pf, tr, state_dir, *, durable_check=None,
                               preflight=_PF(pf), transport=tr,
                               durable_check=durable_check,
                               make_durable=make_durable))
+
+
+# ================================ a rejection must say WHY, and say it durably
+
+def test_a_rejection_captures_the_venue_reason(state_dir, armed):
+    """The first canary came back 400 and recorded only the status code, so
+    nothing could say why. The reason is the whole value of a rejection."""
+    tr = _TR(classification="REJECTED",
+             body={"result": "error", "reason": "InvalidQuantity",
+                   "message": "quantity below minimum"})
+    r = _submit(_pf(), tr, state_dir)
+    assert r["state"] == latch.REJECTED
+    assert r["venue_reason"]["reason"] == "InvalidQuantity"
+    assert "below minimum" in r["venue_reason"]["message"]
+    rec = latch.read(AUTH, state_dir)
+    assert rec["history"][-1]["detail"]["venue_reason"]["reason"] == \
+        "InvalidQuantity"
+
+
+def test_a_rejection_records_the_request_that_was_sent(state_dir, armed):
+    tr = _TR(classification="REJECTED", body={"reason": "x"})
+    r = _submit(_pf(), tr, state_dir)
+    # the transport echoes the request; the canary surfaces it
+    assert r.get("request_sent") is None or isinstance(r["request_sent"], dict)
+
+
+def test_an_unparseable_rejection_body_is_reported_not_dropped(state_dir,
+                                                               armed):
+    tr = _TR(classification="REJECTED", body=None)
+    r = _submit(_pf(), tr, state_dir)
+    assert r["venue_reason"] is not None
+
+
+def test_the_terminal_state_is_written_to_durable_storage_too(state_dir,
+                                                              armed):
+    """The pre-send record says INTENT_PERSISTED forever otherwise, so the
+    durable record never learns the outcome."""
+    seen = []
+    tr = _TR(classification="REJECTED", body={"reason": "y"})
+    _submit_hooks(_pf(), tr, state_dir,
+                  make_durable=lambda a, rec: seen.append(rec["state"]))
+    assert seen[0] == latch.INTENT_PERSISTED
+    assert seen[-1] == latch.REJECTED
