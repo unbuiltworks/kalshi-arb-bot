@@ -296,3 +296,49 @@ def test_transport_evidence_does_not_overclaim():
     assert ev["venue_write_path"] == "PROVEN"
     assert ev["fractional_quantity_over_this_transport"] == "UNPROVEN"
     assert ev["maker_only_over_this_transport"] == "UNPROVEN"
+
+
+# ------------------------------------- field-by-field vs the known-good frame
+def test_frame_shape_matches_the_known_good_maker_frame():
+    """Same field names and same fixed enums as the frame this socket took."""
+    from src.gemini_execution import ws_readiness as R
+    c = R.compare_to_known_good(W.sanitized_ws_frame(
+        symbol="GEMI-BTC05M2609180200-UP", price="0.39", quantity="0.01"))
+    assert c["unexpected_differences"] == []
+    assert c["shape_matches_known_good"] is True
+    assert {r["field"] for r in c["rows"]} == set(
+        W.HISTORICAL_KNOWN_GOOD_FRAME)
+
+
+def test_quantity_is_the_one_declared_difference():
+    """Historical runs sent "1"; we send the contract's own quantityMinimum."""
+    from src.gemini_execution import ws_readiness as R
+    c = R.compare_to_known_good(W.sanitized_ws_frame(
+        symbol="GEMI-BTC05M2609180200-UP", price="0.39", quantity="0.01"))
+    by_design = {r["field"] for r in c["differences_by_design"]}
+    assert by_design == {"quantity"}
+    assert W.HISTORICAL_KNOWN_GOOD_FRAME["quantity"] == "1"
+
+
+def test_the_confirmed_filled_order_is_taker_and_says_so():
+    """It proves the socket, not the maker semantics."""
+    o = W.VENUE_CONFIRMED_FILLED_ORDER
+    assert o["timeInForce"] == "fill-or-kill" and o["status"] == "filled"
+    assert o["timeInForce"] != W.WS_MAKER_TIF
+
+
+# ------------------------------------------------- submission reachability
+def test_only_the_one_shot_canary_can_submit():
+    from src.gemini_execution import ws_readiness as R
+    sr = R.submission_reachability()
+    assert sr["unguarded_mutation_functions"] == []
+    assert sr["all_inside_execution_package"] is True
+    assert sr["verdict"] == "ONLY_THE_ONE_SHOT_CANARY_CAN_SUBMIT"
+
+
+def test_reachability_scan_actually_finds_the_mutation_modules():
+    """A proof that scans nothing proves nothing."""
+    from src.gemini_execution import ws_readiness as R
+    holders = R.submission_reachability()["modules_holding_a_mutation_path"]
+    assert "src/gemini_execution/ws_transport.py" in holders
+    assert "src/gemini_execution/transport.py" in holders

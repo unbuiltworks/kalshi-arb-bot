@@ -1,0 +1,430 @@
+{
+  "label": "GEMINI_L5_WS_CANARY_READY",
+  "generated_utc": "2026-09-18T02:22:30.509822+00:00",
+  "transport": "WEBSOCKET wss://ws.gemini.com method order.place",
+  "transport_evidence": {
+    "venue_write_path": "PROVEN",
+    "proven_by": {
+      "orderId": "145828835409069189",
+      "symbol": "GEMI-MLB-2608192240-STL-CIN-PPHITS-NCHURCHO1",
+      "status": "filled",
+      "price": "0.64",
+      "quantity": "1",
+      "createdAt": "2026-08-19T23:42:58.121Z"
+    },
+    "fractional_quantity_over_this_transport": "UNPROVEN",
+    "fractional_quantity_why": "the BTC5m contract's own metadata admits 0.01 (quantityMinimum 0.01, quantityIncrement 0.01), so the SIZE is contract-valid. But every order ever accepted on these credentials was quantity '1', and no fractional quantity has traversed this socket. Contract-valid is not transport-proven, and the two are recorded apart.",
+    "maker_only_over_this_transport": "UNPROVEN",
+    "maker_only_why": "both recovered rows are fill-or-kill, i.e. TAKER orders. The MOC maker path is the one the live modules were written against, but a venue-ACCEPTED MOC order is not in the recovered evidence.",
+    "labels": "'PROVEN' here means only that this socket has carried an accepted order. It does not extend to the size or the maker semantics this canary would use; those are the two things the canary would newly establish."
+  },
+  "arming": {
+    "armed": false,
+    "live_flag": false,
+    "auth_id_present": false,
+    "auth_id_matches": false,
+    "expiry_supplied": false,
+    "expired": null,
+    "expected_auth_id": "OWNER-2026-09-17-GEMINI-CANARY-1",
+    "why_not": "GEMINI_CANARY_LIVE is not YES"
+  },
+  "submitted": false,
+  "armed": false,
+  "preflight": {
+    "ok": true,
+    "verdict": null,
+    "why": null,
+    "generated_utc": "2026-09-18T02:22:31.364443+00:00",
+    "instrument": "GEMI-BTC05M2609180225-UP",
+    "limit_price": "0.58",
+    "quantity": "0.01",
+    "maximum_cash_exposure_usd": "0.005800",
+    "tte_s": 149.5,
+    "expiry_utc": "2026-09-18T02:25:00+00:00",
+    "current_bbo": {
+      "bid": "0.58",
+      "bid_qty": "258.0",
+      "ask": "0.69",
+      "ask_qty": "5.0",
+      "levels": "5 bid / 4 ask",
+      "source_ts": 1789698151.0
+    },
+    "restability": {
+      "restable": true,
+      "why": "a BUY below the ask rests; at or above it would cross and take",
+      "tick_offset_from_touch": 0,
+      "queue_priority_note": "joins the touch exactly as the shadow did. NOTHING here is intended to improve queue priority, because a placement change would make this first live result incomparable with the observations that justified running it."
+    },
+    "venue_terms": {
+      "readable": true,
+      "tick_size": 0.01,
+      "quote_increment": 0.01,
+      "min_order_size": "0.01",
+      "status": "limit_only"
+    },
+    "rejected_windows": [
+      {
+        "symbol": "GEMI-BTC05M2609180230-UP",
+        "tte_s": 449.5,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180235-UP",
+        "tte_s": 749.5,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180240-UP",
+        "tte_s": 1049.5,
+        "why": "TTE outside [60.0, 300.0]"
+      }
+    ]
+  },
+  "instrument_metadata": {
+    "readable": true,
+    "ticker": "BTC05M2609180225",
+    "instrumentSymbol": "GEMI-BTC05M2609180225-UP",
+    "quantityMinimum": "0.01",
+    "quantityIncrement": "0.01",
+    "priceMinimum": "0.01",
+    "priceIncrement": "0.01",
+    "priceMaximum": null,
+    "quantityMaximum": null,
+    "contract_status": "active",
+    "market_state": "open",
+    "event_status": "active",
+    "expiry": "2026-09-18T02:25:00.000Z",
+    "missing_fields": [],
+    "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+    "why": null
+  },
+  "envelope_intent": {
+    "symbol": "GEMI-BTC05M2609180225-UP",
+    "side": "buy",
+    "outcome": "yes",
+    "price": "0.58",
+    "quantity": "0.01",
+    "authorized_envelope_quantity": "0.01",
+    "quantity_source": "contract quantityMinimum/quantityIncrement",
+    "bbo_age_s": 0.689
+  },
+  "ws_frame": {
+    "id": "<request-id>",
+    "method": "order.place",
+    "params": {
+      "symbol": "GEMI-BTC05M2609180225-UP",
+      "side": "BUY",
+      "type": "LIMIT",
+      "timeInForce": "MOC",
+      "price": "0.58",
+      "quantity": "0.01",
+      "eventOutcome": "YES",
+      "clientOrderId": "<client-order-id>"
+    }
+  },
+  "frame_comparison": {
+    "field_count": 8,
+    "rows": [
+      {
+        "field": "clientOrderId",
+        "historical": "<trade_id[:36]>",
+        "ours": "<client-order-id>",
+        "verdict": "PER_RUN"
+      },
+      {
+        "field": "eventOutcome",
+        "historical": "YES",
+        "ours": "YES",
+        "verdict": "IDENTICAL"
+      },
+      {
+        "field": "price",
+        "historical": "<quote>",
+        "ours": "0.58",
+        "verdict": "PER_RUN"
+      },
+      {
+        "field": "quantity",
+        "historical": "1",
+        "ours": "0.01",
+        "verdict": "DIFFERS_BY_DESIGN"
+      },
+      {
+        "field": "side",
+        "historical": "BUY",
+        "ours": "BUY",
+        "verdict": "IDENTICAL"
+      },
+      {
+        "field": "symbol",
+        "historical": "GEMI-BTC05M<window>-UP",
+        "ours": "GEMI-BTC05M2609180225-UP",
+        "verdict": "PER_RUN"
+      },
+      {
+        "field": "timeInForce",
+        "historical": "MOC",
+        "ours": "MOC",
+        "verdict": "IDENTICAL"
+      },
+      {
+        "field": "type",
+        "historical": "LIMIT",
+        "ours": "LIMIT",
+        "verdict": "IDENTICAL"
+      }
+    ],
+    "unexpected_differences": [],
+    "differences_by_design": [
+      {
+        "field": "quantity",
+        "historical": "1",
+        "ours": "0.01",
+        "verdict": "DIFFERS_BY_DESIGN"
+      }
+    ],
+    "shape_matches_known_good": true,
+    "labels": "the historical frame is the canonical first-leg params from gemini_short_crypto_btc5m_maker_canary_q1, the maker frame every live module sent through this socket. The one venue-CONFIRMED FILLED order is a different shape again -- fill-or-kill, outcome no -- so it proves the socket, not the maker semantics.",
+    "venue_confirmed_filled_order": {
+      "orderId": "145828835409069189",
+      "clientOrderId": "mlbgkm-sup-0819-233943-15-g",
+      "symbol": "GEMI-MLB-2608192240-STL-CIN-PPHITS-NCHURCHO1",
+      "side": "buy",
+      "outcome": "no",
+      "orderType": "limit",
+      "timeInForce": "fill-or-kill",
+      "price": "0.64",
+      "quantity": "1",
+      "filledQuantity": "1",
+      "remainingQuantity": "0",
+      "status": "filled",
+      "createdAt": "2026-08-19T23:42:58.121Z"
+    }
+  },
+  "submission_reachability": {
+    "modules_holding_a_mutation_path": [
+      "src/gemini_execution/metadata.py",
+      "src/gemini_execution/spec.py",
+      "src/gemini_execution/transport.py",
+      "src/gemini_execution/ws_readiness.py",
+      "src/gemini_execution/ws_transport.py"
+    ],
+    "all_inside_execution_package": true,
+    "unguarded_mutation_functions": [],
+    "arm_gate": {
+      "both_keys_required": [
+        "GEMINI_CANARY_LIVE",
+        "GEMINI_CANARY_AUTH"
+      ],
+      "expiry_required": "GEMINI_CANARY_AUTH_EXPIRES",
+      "expected_authorization": "OWNER-2026-09-17-GEMINI-CANARY-1",
+      "armed_now": false
+    },
+    "one_shot": {
+      "mechanism": "O_EXCL latch consumed BEFORE the mutation",
+      "implementation": "src/gemini_execution/latch.py",
+      "durable_across_ephemeral_hosts": "durable_check consults git-committed state first, so a fresh CI disk does not make a spent authorization unspent",
+      "states": [
+        "INTENT_PERSISTED",
+        "SUBMITTED",
+        "SUBMISSION_UNKNOWN_RECONCILE_REQUIRED",
+        "REJECTED",
+        "UNFILLED",
+        "FILLED",
+        "EXPIRED_OR_SETTLED",
+        "RECONCILED",
+        "REALIZED"
+      ]
+    },
+    "verdict": "ONLY_THE_ONE_SHOT_CANARY_CAN_SUBMIT"
+  },
+  "queue_ahead": {
+    "volume_ahead_at_our_price": "258.0",
+    "our_quantity": "0.01",
+    "must_clear_before_we_fill": "258.0",
+    "spread": "0.11",
+    "model": "VOLUME_AHEAD_CLEARED: assumes we joined behind everything resting, so it is a LOWER bound. Real priority is unpublished and may be better.",
+    "caveat": "an UNKNOWN queue can never be shown to clear, and zero is never substituted for it"
+  },
+  "maximum_cash_exposure_usd": "0.005800",
+  "credentialed": false,
+  "existing_exposure": {
+    "clear": false,
+    "unreadable_reason": "NO_CREDENTIALS_ON_THIS_HOST",
+    "why": "the account could not be read from here at all, so existing exposure is UNKNOWN, not zero. This gate has to be satisfied on the credentialed runner before any submission; an unread order book is not an empty one."
+  },
+  "settlement_evidence": {
+    "quoted_instrument": {
+      "readable": true,
+      "verdict": "PENDING",
+      "instrumentSymbol": "GEMI-BTC05M2609180225-UP",
+      "ticker": "BTC05M2609180225",
+      "status": "active",
+      "resolutionSide": null,
+      "resolvedAt": null,
+      "settlementValue": null,
+      "marketState": "open",
+      "expiryDate": "2026-09-18T02:25:00.000Z",
+      "event_status": "active",
+      "is_terminal": false,
+      "expired": false,
+      "reads": 3,
+      "reads_readable": 3,
+      "reads_settled": 0,
+      "distinct_readings": [
+        "active/None"
+      ],
+      "flapped": false,
+      "observations": [
+        {
+          "readable": true,
+          "status": "active",
+          "resolutionSide": null,
+          "resolvedAt": null,
+          "settlementValue": null,
+          "marketState": "open",
+          "expiryDate": "2026-09-18T02:25:00.000Z",
+          "event_status": "active"
+        },
+        {
+          "readable": true,
+          "status": "active",
+          "resolutionSide": null,
+          "resolvedAt": null,
+          "settlementValue": null,
+          "marketState": "open",
+          "expiryDate": "2026-09-18T02:25:00.000Z",
+          "event_status": "active"
+        },
+        {
+          "readable": true,
+          "status": "active",
+          "resolutionSide": null,
+          "resolvedAt": null,
+          "settlementValue": null,
+          "marketState": "open",
+          "expiryDate": "2026-09-18T02:25:00.000Z",
+          "event_status": "active"
+        }
+      ],
+      "missing_fields": [
+        "resolutionSide",
+        "resolvedAt",
+        "settlementValue"
+      ],
+      "strike_check": {
+        "available": false,
+        "why": "not settled yet, or no strike published"
+      },
+      "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+      "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred."
+    },
+    "most_recent_settled": {
+      "readable": true,
+      "verdict": "SETTLED",
+      "instrumentSymbol": "GEMI-BTC05M2609180220-UP",
+      "ticker": "BTC05M2609180220",
+      "status": "settled",
+      "resolutionSide": "no",
+      "resolvedAt": "2026-09-18T02:20:06.570Z",
+      "settlementValue": "76698.32239999999",
+      "marketState": "closed",
+      "expiryDate": "2026-09-18T02:20:00.000Z",
+      "event_status": "settled",
+      "is_terminal": true,
+      "expired": true,
+      "reads": 3,
+      "reads_readable": 3,
+      "reads_settled": 3,
+      "distinct_readings": [
+        "settled/no"
+      ],
+      "flapped": false,
+      "observations": [
+        {
+          "readable": true,
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-18T02:20:06.570Z",
+          "settlementValue": "76698.32239999999",
+          "marketState": "closed",
+          "expiryDate": "2026-09-18T02:20:00.000Z",
+          "event_status": "settled"
+        },
+        {
+          "readable": true,
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-18T02:20:06.570Z",
+          "settlementValue": "76698.32239999999",
+          "marketState": "closed",
+          "expiryDate": "2026-09-18T02:20:00.000Z",
+          "event_status": "settled"
+        },
+        {
+          "readable": true,
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-18T02:20:06.570Z",
+          "settlementValue": "76698.32239999999",
+          "marketState": "closed",
+          "expiryDate": "2026-09-18T02:20:00.000Z",
+          "event_status": "settled"
+        }
+      ],
+      "missing_fields": [],
+      "strike_check": {
+        "available": true,
+        "agrees": true,
+        "published_resolutionSide": "no",
+        "implied_by_strike": "no",
+        "settlementValue": "76698.32239999999",
+        "strike": "76698.95",
+        "rule": "UP resolves yes when settlementValue >= strike.value"
+      },
+      "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+      "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred.",
+      "windows_tried": [
+        {
+          "symbol": "GEMI-BTC05M2609180220-UP",
+          "verdict": "SETTLED",
+          "flapped": false
+        }
+      ]
+    },
+    "labels": "terminal contract evidence LATCHES: this endpoint can return a stale `active` reading after expiry, so an absent settlement stays UNCONFIRMED rather than being read as unsettled."
+  },
+  "maker_only": {
+    "field": "timeInForce",
+    "value": "MOC",
+    "why": "MOC is post-only in the WS dialect. makerOrCancel is the REST boolean and has no meaning on this socket, so sending it would post with no post-only protection at all.",
+    "venue_level_backstop": "limit_only"
+  },
+  "gates": {
+    "preflight_ok": true,
+    "envelope_ok": true,
+    "instrument_metadata_readable": true,
+    "contract_tradeable": true,
+    "maker_only_expressible": true,
+    "venue_write_path_proven": true,
+    "reconciliation_reads_active_orders_first": true,
+    "rejection_reason_captured": true,
+    "durable_one_shot_latch": true,
+    "armed": false,
+    "frame_matches_known_good_shape": true,
+    "only_the_one_shot_canary_can_submit": true,
+    "no_existing_exposure": false,
+    "fractional_quantity_proven_on_this_transport": false,
+    "maker_only_proven_on_this_transport": false
+  },
+  "blocking": [
+    "no_existing_exposure"
+  ],
+  "verdict": "READY_PENDING_CREDENTIALED_RUNNER",
+  "verdict_why": "every structural gate passes; no_existing_exposure can only be satisfied where the account is readable. Re-run this report on the credentialed runner to close it.",
+  "what_is_still_unproven": [
+    "the BTC5m contract's own metadata admits 0.01 (quantityMinimum 0.01, quantityIncrement 0.01), so the SIZE is contract-valid. But every order ever accepted on these credentials was quantity '1', and no fractional quantity has traversed this socket. Contract-valid is not transport-proven, and the two are recorded apart.",
+    "both recovered rows are fill-or-kill, i.e. TAKER orders. The MOC maker path is the one the live modules were written against, but a venue-ACCEPTED MOC order is not in the recovered evidence."
+  ],
+  "arming_note": "NOT ARMED. This is the intended state: submission requires an explicit, unexpired owner authorization that is not already spent. OWNER-2026-09-17-GEMINI-CANARY-1 was consumed by canary #1 and cannot be reused."
+}

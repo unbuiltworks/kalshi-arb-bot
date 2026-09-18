@@ -28,6 +28,118 @@ from src.gemini_execution import arming, canary, latch, ws_transport
 
 LABEL = "GEMINI_L5_WS_CANARY_READY"
 
+#: the WS mutation verb, named once so the reachability scan and the
+#: isolation guard agree on what counts as reaching the venue.
+WS_PLACE_MARKER = "order.place"
+
+
+def compare_to_known_good(frame: Dict[str, Any]) -> Dict[str, Any]:
+    """Field by field against the historical frame this socket accepted.
+
+    The comparison is on FIELD NAMES and FIXED ENUM VALUES. `price`,
+    `quantity`, `symbol` and `clientOrderId` are per-run by construction, so
+    they are reported as `per_run` rather than as differences -- calling a
+    fresh price a "mismatch" would bury the one difference that matters.
+    """
+    known = ws_transport.HISTORICAL_KNOWN_GOOD_FRAME
+    ours = dict(frame.get("params") or {})
+    per_run = {"symbol", "price", "clientOrderId"}
+    rows = []
+    for key in sorted(set(known) | set(ours)):
+        k_val, o_val = known.get(key), ours.get(key)
+        if key not in known:
+            verdict = "ADDED_BY_US"
+        elif key not in ours:
+            verdict = "DROPPED_BY_US"
+        elif key in per_run:
+            verdict = "PER_RUN"
+        elif key == "quantity":
+            # THE one substantive difference, and the reason it is safe:
+            # historical runs sent "1"; we send the BTC5m contract's own
+            # quantityMinimum. Not a mismatch to fix -- a change to declare.
+            verdict = ("DIFFERS_BY_DESIGN" if k_val != o_val else "IDENTICAL")
+        else:
+            verdict = "IDENTICAL" if k_val == o_val else "DIFFERS"
+        rows.append({"field": key, "historical": k_val, "ours": o_val,
+                     "verdict": verdict})
+    differs = [r for r in rows if r["verdict"] in
+               ("DIFFERS", "ADDED_BY_US", "DROPPED_BY_US")]
+    by_design = [r for r in rows if r["verdict"] == "DIFFERS_BY_DESIGN"]
+    return {
+        "field_count": len(rows),
+        "rows": rows,
+        "unexpected_differences": differs,
+        "differences_by_design": by_design,
+        "shape_matches_known_good": not differs,
+        "labels": (
+            "the historical frame is the canonical first-leg params from "
+            "gemini_short_crypto_btc5m_maker_canary_q1, the maker frame every "
+            "live module sent through this socket. The one venue-CONFIRMED "
+            "FILLED order is a different shape again -- fill-or-kill, outcome "
+            "no -- so it proves the socket, not the maker semantics."),
+        "venue_confirmed_filled_order":
+            ws_transport.VENUE_CONFIRMED_FILLED_ORDER,
+    }
+
+
+def submission_reachability() -> Dict[str, Any]:
+    """Proof that only the one-shot canary can reach a submission.
+
+    Structural and repo-wide, not a claim about intent: every module that can
+    reach a venue mutation path is enumerated from the source, and each
+    mutation entry point is checked for the arm gate. A reader should be able
+    to disprove this by finding a path it missed, which is the point of
+    listing them rather than asserting a count.
+    """
+    import ast
+    import pathlib
+
+    from src.gemini_execution import spec
+
+    markers = tuple(spec.MUTATION_PATHS) + (WS_PLACE_MARKER,)
+    holders, unguarded = [], []
+    for p in sorted(pathlib.Path("src").rglob("*.py")):
+        txt = p.read_text(encoding="utf-8")
+        if not any(m in txt for m in markers):
+            continue
+        holders.append(str(p))
+        tree = ast.parse(txt)
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            body = ast.dump(node)
+            sends = ("order.place" in body and "ws.send" in body) or \
+                    any(m in body for m in spec.MUTATION_PATHS)
+            if not sends:
+                continue
+            # the arm gate must be inside the function that can mutate
+            if "arming" not in body and "require" not in body:
+                unguarded.append("%s:%s" % (p, node.name))
+    return {
+        "modules_holding_a_mutation_path": holders,
+        "all_inside_execution_package": all(
+            h.startswith("src/gemini_execution") for h in holders),
+        "unguarded_mutation_functions": unguarded,
+        "arm_gate": {
+            "both_keys_required": [arming.LIVE_ENV, arming.AUTH_ENV],
+            "expiry_required": arming.EXPIRY_ENV,
+            "expected_authorization": arming.EXPECTED_AUTH_ID,
+            "armed_now": arming.armed(),
+        },
+        "one_shot": {
+            "mechanism": "O_EXCL latch consumed BEFORE the mutation",
+            "implementation": "src/gemini_execution/latch.py",
+            "durable_across_ephemeral_hosts": (
+                "durable_check consults git-committed state first, so a fresh "
+                "CI disk does not make a spent authorization unspent"),
+            "states": list(latch.STATES),
+        },
+        "verdict": ("ONLY_THE_ONE_SHOT_CANARY_CAN_SUBMIT"
+                    if (not unguarded and all(
+                        h.startswith("src/gemini_execution") for h in holders))
+                    else "REACHABILITY_NOT_ESTABLISHED"),
+    }
+
 
 async def report(auth_id: Optional[str] = None,
                  state_dir: str = latch.DEFAULT_DIR) -> Dict[str, Any]:
@@ -89,6 +201,70 @@ async def report(auth_id: Optional[str] = None,
         quantity=intent["quantity"], side=intent["side"],
         outcome=intent["outcome"])
 
+    # FIELD BY FIELD against the frame this socket is known to have accepted.
+    out["frame_comparison"] = compare_to_known_good(out["ws_frame"])
+
+    # Proof, from the source, that nothing else can reach a submission.
+    out["submission_reachability"] = submission_reachability()
+
+    # QUEUE AHEAD and MAXIMUM EXPOSURE, the two numbers that say what this
+    # order risks and how likely it is to do anything.
+    fp = pf.get("fill_prospect") or {}
+    out["queue_ahead"] = {
+        "volume_ahead_at_our_price": fp.get("volume_ahead_at_our_price"),
+        "our_quantity": fp.get("our_quantity"),
+        "must_clear_before_we_fill": fp.get("must_clear_before_we_fill"),
+        "spread": fp.get("spread"),
+        "model": fp.get("model"),
+        "caveat": fp.get("caveat"),
+    }
+    out["maximum_cash_exposure_usd"] = pf.get("maximum_cash_exposure_usd")
+
+    # FAIL-CLOSED EXISTING-EXPOSURE CHECK. Reused from run_canary, where the
+    # rule is already reviewed: an UNREADABLE order book is not an empty one,
+    # so an unreadable read reports clear=False.
+    from src.gemini_prediction_auth import has_credentials
+    credentialed = has_credentials()
+    out["credentialed"] = credentialed
+    if not credentialed:
+        # Say WHICH it is. "not clear" with no reason reads as "there is an
+        # existing order", and that is a different and much more alarming
+        # claim than "this host cannot see the account".
+        out["existing_exposure"] = {
+            "clear": False,
+            "unreadable_reason": "NO_CREDENTIALS_ON_THIS_HOST",
+            "why": ("the account could not be read from here at all, so "
+                    "existing exposure is UNKNOWN, not zero. This gate has to "
+                    "be satisfied on the credentialed runner before any "
+                    "submission; an unread order book is not an empty one."),
+        }
+    else:
+        try:
+            from src.gemini_execution.run_canary import (
+                no_existing_canary_exposure)
+            out["existing_exposure"] = await no_existing_canary_exposure(sym)
+        except Exception as exc:                               # noqa: BLE001
+            out["existing_exposure"] = {
+                "clear": False,
+                "unreadable_reason": type(exc).__name__,
+                "why": "exposure read failed; unreadable is not clear"}
+
+    # SETTLEMENT CONTRACT EVIDENCE -- the outcome leg. A settled contract
+    # never states what OUR account received, so nothing here is realized P&L.
+    try:
+        out["settlement_evidence"] = {
+            "quoted_instrument": MD.resolution_for(sym),
+            "most_recent_settled": MD.most_recent_settled(sym),
+            "labels": ("terminal contract evidence LATCHES: this endpoint can "
+                       "return a stale `active` reading after expiry, so an "
+                       "absent settlement stays UNCONFIRMED rather than being "
+                       "read as unsettled."),
+        }
+    except Exception as exc:                                   # noqa: BLE001
+        out["settlement_evidence"] = {
+            "readable": False,
+            "why": "%s: %s" % (type(exc).__name__, str(exc)[:200])}
+
     out["maker_only"] = {
         "field": "timeInForce",
         "value": ws_transport.WS_MAKER_TIF,
@@ -122,16 +298,38 @@ async def report(auth_id: Optional[str] = None,
         "rejection_reason_captured": True,
         "durable_one_shot_latch": True,
         "armed": arming.armed(),
+        "frame_matches_known_good_shape": bool(
+            out["frame_comparison"]["shape_matches_known_good"]),
+        "only_the_one_shot_canary_can_submit": (
+            out["submission_reachability"]["verdict"]
+            == "ONLY_THE_ONE_SHOT_CANARY_CAN_SUBMIT"),
+        "no_existing_exposure": bool(
+            (out.get("existing_exposure") or {}).get("clear")),
         "fractional_quantity_proven_on_this_transport": False,
         "maker_only_proven_on_this_transport": False,
     }
     out["gates"] = gates
-    out["verdict"] = "READY_TO_SUBMIT_ON_OWNER_AUTHORIZATION"
+
+    # Three gates are EXPECTED false and are not blockers:
+    #   armed -- the whole point is that it is not armed yet;
+    #   the two *_proven_on_this_transport -- what a canary would establish.
+    expected_false = {"armed", "fractional_quantity_proven_on_this_transport",
+                      "maker_only_proven_on_this_transport"}
+    blocking = [k for k, v in gates.items()
+                if v is not True and k not in expected_false]
+    out["blocking"] = blocking
+    out["verdict"] = ("READY_TO_SUBMIT_ON_OWNER_AUTHORIZATION" if not blocking
+                      else "READY_PENDING_CREDENTIALED_RUNNER")
+    out["verdict_why"] = (
+        None if not blocking else
+        ("every structural gate passes; %s can only be satisfied where the "
+         "account is readable. Re-run this report on the credentialed runner "
+         "to close it." % ", ".join(blocking)))
     out["what_is_still_unproven"] = [
         ws_transport.WS_TRANSPORT_EVIDENCE["fractional_quantity_why"],
         ws_transport.WS_TRANSPORT_EVIDENCE["maker_only_why"],
     ]
-    out["blocking"] = (
+    out["arming_note"] = (
         "NOT ARMED. This is the intended state: submission requires an "
         "explicit, unexpired owner authorization that is not already spent. "
         "OWNER-2026-09-17-GEMINI-CANARY-1 was consumed by canary #1 and "

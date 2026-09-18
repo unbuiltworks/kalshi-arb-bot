@@ -83,6 +83,34 @@ ACTIVE_PATH = "/v1/prediction-markets/orders/active"
 HISTORY_PATH = "/v1/prediction-markets/orders/history"
 HISTORY_STATUSES = ("filled", "cancelled")
 
+#: The historical known-good MAKER frame, transcribed from
+#: `gemini_short_crypto_btc5m_maker_canary_q1` -- the canonical first-leg
+#: params every live module sent through this socket. Held as DATA so the
+#: comparison against what we would send is checkable, not prose.
+#:
+#: `price` and `quantity` are the per-run values, kept here as the literals
+#: those runs used; the field NAMES and the fixed enum values are the part
+#: that matters.
+HISTORICAL_KNOWN_GOOD_FRAME: Dict[str, Any] = {
+    "symbol": "GEMI-BTC05M<window>-UP", "side": "BUY", "type": "LIMIT",
+    "timeInForce": "MOC", "price": "<quote>", "quantity": "1",
+    "eventOutcome": "YES", "clientOrderId": "<trade_id[:36]>",
+}
+
+#: The one venue-CONFIRMED filled order on these credentials, as the venue's
+#: own order history returned it. Note it is FOK/NO -- a TAKER order, and a
+#: different shape from the maker frame above. It proves the socket, not the
+#: maker semantics.
+VENUE_CONFIRMED_FILLED_ORDER: Dict[str, Any] = {
+    "orderId": "145828835409069189",
+    "clientOrderId": "mlbgkm-sup-0819-233943-15-g",
+    "symbol": "GEMI-MLB-2608192240-STL-CIN-PPHITS-NCHURCHO1",
+    "side": "buy", "outcome": "no", "orderType": "limit",
+    "timeInForce": "fill-or-kill", "price": "0.64", "quantity": "1",
+    "filledQuantity": "1", "remainingQuantity": "0", "status": "filled",
+    "createdAt": "2026-08-19T23:42:58.121Z",
+}
+
 #: What the recovered evidence does and does not establish about THIS
 #: transport. Stated as data so a report cannot quietly round it up to
 #: "proven"; see `analysis/gemini/PRIOR_ORDER_PATH_RECOVERY.md`.
