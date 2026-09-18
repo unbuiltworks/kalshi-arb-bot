@@ -121,7 +121,17 @@ jobs:
           # DISARMED: no GEMINI_CANARY_LIVE and no GEMINI_CANARY_AUTH are set
           # here, so the execution package is structurally unable to mutate.
           # This reports the gates only.
-          python -m src.gemini_execution.readiness || true
+          #
+          # The report is kept as an ARTIFACT rather than left in a job log:
+          # it carries the authoritative contract metadata, the terms gate and
+          # the request-transport verdict, and a log expires. A run that finds
+          # no eligible window still writes what it could read.
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          python -m src.gemini_execution.readiness \
+            > "analysis/gemini/execution_readiness_${TS}.json" || true
+          if [ ! -s "analysis/gemini/execution_readiness_${TS}.json" ]; then
+            rm -f "analysis/gemini/execution_readiness_${TS}.json"
+          fi
 
       # ==================================================================
       # THE ONE AUTHORIZED CANARY. Runs only when armed_canary=true is
@@ -155,11 +165,12 @@ jobs:
           # may originate from this runtime job.
           git add -- 'analysis/gemini/settlement_gate_*.json' \
                      'analysis/gemini/canary_preflight_*.json' \
+                     'analysis/gemini/execution_readiness_*.json' \
                      'analysis/gemini/canary_latch/*.json'
           if git diff --cached --quiet; then
             echo "no new evidence artifact"; exit 0
           fi
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight)_[0-9TZ]+|canary_latch/latch_[A-Za-z0-9_-]+)\.json$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness)_[0-9TZ]+|canary_latch/latch_[A-Za-z0-9_-]+)\.json$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

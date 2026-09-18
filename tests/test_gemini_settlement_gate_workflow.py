@@ -138,10 +138,31 @@ def test_the_preflight_step_cannot_fail_the_job_for_having_no_window():
     assert "|| true" in wf[i:i + 900]
 
 
-def test_the_preflight_artifact_is_committable():
+def _commit_filter():
+    """The allowlist regex the job applies to its own staged files."""
+    import re
     wf = WF.read_text()
-    assert "canary_preflight_" in wf
-    assert "(settlement_gate|canary_preflight)" in wf
+    m = re.search(r"grep -qvE '(\^analysis/gemini/[^']+)'", wf)
+    assert m, "the commit step no longer applies a path allowlist"
+    return re.compile(m.group(1))
+
+
+@pytest.mark.parametrize("name,allowed", [
+    ("analysis/gemini/settlement_gate_20260918T004500Z.json", True),
+    ("analysis/gemini/canary_preflight_20260918T004500Z.json", True),
+    ("analysis/gemini/execution_readiness_20260918T004500Z.json", True),
+    ("analysis/gemini/canary_latch/latch_OWNER-2026-09-17-X.json", True),
+    # everything else stays out, whatever the job happens to leave behind
+    ("src/gemini_execution/transport.py", False),
+    ("analysis/gemini/notes.json", False),
+    ("analysis/gemini/execution_readiness_20260918T004500Z.json.bak", False),
+    (".github/workflows/gemini-settlement-gate.yml", False),
+])
+def test_only_evidence_artifacts_are_committable(name, allowed):
+    """Asserted by MATCHING the filter, not by quoting it: a test that pins
+    the regex's text has to be edited every time a legitimate artifact is
+    added, which trains you to edit it without checking what it now admits."""
+    assert bool(_commit_filter().match(name)) is allowed, name
 
 
 # ------------------------------------------- the one authorized canary step
