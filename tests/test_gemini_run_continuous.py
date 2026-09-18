@@ -222,3 +222,43 @@ def test_REGRESSION_the_evidence_commit_survives_a_missing_artifact():
     step = wf[i:i + 2500]
     assert 'if [ -e "$f" ]; then git add -- "$f"; fi' in step
     assert "git add -- 'analysis/gemini/continuous_ledger.jsonl'" not in step
+
+
+def test_the_full_ordering_chain_is_fixed():
+    """READ-ONLY PREFLIGHT -> READY -> authorization -> durable latch ->
+    ledger intent/fsync -> socket mutation.
+
+    Each step is free until the one after it. A preflight costs nothing, so it
+    goes first; an authorization we cannot use costs an authorization, so it is
+    validated before the latch is spent; the ledger row is written inside
+    Driver.place BEFORE the frame, which is why the socket is last.
+    """
+    src = open(RC.__file__, encoding="utf-8").read()
+    steps = [("preflight", src.index("pf = PF.preflight_now(symbol")),
+             ("authorization", src.index("auth = WC.authorization_state()")),
+             ("latch", src.index("latch.consume(auth_id")),
+             ("driver", src.index("WC.Driver(auth_id")),
+             ("connect", src.index("await session.connect()"))]
+    positions = [i for _, i in steps]
+    assert positions == sorted(positions), (
+        "the ordering chain is out of order: %s"
+        % [n for n, _ in sorted(steps, key=lambda x: x[1])])
+
+
+def test_an_unauthorized_run_reaches_READY_without_spending_the_latch():
+    src = open(RC.__file__, encoding="utf-8").read()
+    i_auth = src.index("auth = WC.authorization_state()")
+    i_latch = src.index("latch.consume(auth_id")
+    between = src[i_auth:i_latch]
+    assert "READY_BUT_UNAUTHORIZED" in between
+    assert '"consumed": False' in between
+    assert "the authorization is untouched" in between
+    assert RC.READY_BUT_UNAUTHORIZED == "READY_TO_MUTATE_BUT_UNAUTHORIZED"
+
+
+def test_the_ready_token_is_not_added_to_the_authorized_executable():
+    """Naming it in ws_continuous would change executable_sha, and the
+    authorization names that hash."""
+    from src.gemini_execution import ws_continuous as WC2
+    assert not hasattr(WC2, "READY_BUT_UNAUTHORIZED")
+    assert WC2.executable_sha() == WC2.AUTHORIZED_SHA

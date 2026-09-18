@@ -179,6 +179,45 @@ jobs:
           if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi
 
       # ==================================================================
+      # UNARMED PRODUCTION-PATH PROOF. Real credentials, real readers, real
+      # awaited async terms read, real account and open-order reads, real
+      # symbol selection, real TTE, real recovery, real controller, real
+      # working-order diff -- and NO ARM. GEMINI_CANARY_LIVE is deliberately
+      # absent here, which is what makes the mutation impossible.
+      #
+      # It asks to mutate at the end and must be REFUSED by the authorization
+      # gate. Proving the block by ASKING and being refused is evidence;
+      # reading the code and asserting it would refuse is what was done twice
+      # before, and it was wrong twice.
+      #
+      # Exit 1 when the path does NOT reach the boundary, so a regression that
+      # makes the driver permanently incapable again fails this job.
+      # ==================================================================
+      - name: Unarmed production-path proof (sends nothing; must be refused)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          for attempt in 1 2 3 4 5; do
+            if python -m src.gemini_execution.premutation_probe \
+                 --out analysis/gemini/premutation_proof_$(date -u +%Y%m%dT%H%M%SZ).json \
+                 2>&1 | tee /tmp/premutation.txt; then
+              exit 0
+            fi
+            # the eligible entry band is TTE 90..300s, so part of every 5-minute
+            # cycle has no eligible window. That is timing, not a defect.
+            if ! grep -q "no BTC5m contract is inside the entry band" /tmp/premutation.txt; then
+              echo "::error::the production path did not reach the boundary"
+              exit 1
+            fi
+            echo "no eligible window (attempt $attempt); waiting"
+            sleep 45
+          done
+          echo "::error::no eligible window after 5 attempts"
+          exit 1
+
+      # ==================================================================
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
@@ -232,6 +271,7 @@ jobs:
                    analysis/gemini/execution_readiness_*.json \
                    analysis/gemini/ws_dry_run_*.json \
                    analysis/gemini/continuous_run_*.json \
+                   analysis/gemini/premutation_proof_*.json \
                    analysis/gemini/continuous_ledger.jsonl \
                    analysis/gemini/canary_latch/*.json; do
             if [ -e "$f" ]; then git add -- "$f"; fi

@@ -36,6 +36,11 @@ from src.gemini_execution import ws_continuous as WC
 
 LABEL = "GEMINI_L5_CONTINUOUS_RUN_V1"
 
+#: reached the boundary, refused only by the authorization gate. Defined
+#: HERE and not in ws_continuous because adding a name there would change
+#: the authorized executable_sha, and the authorization names that hash.
+READY_BUT_UNAUTHORIZED = "READY_TO_MUTATE_BUT_UNAUTHORIZED"
+
 #: a window is worth entering only if the normal surface can still act, i.e.
 #: at least one full maker-rest cycle above the OPEN/EXTEND floor
 MIN_ENTRY_TTE_S = CP.NO_NEW_OPEN_EXTEND_TTE_S + CP.STALE_ORDER_S   # 90.0
@@ -177,13 +182,6 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
         return rep
     symbol = sel["chosen"]["symbol"]
 
-    auth = WC.authorization_state()
-    rep["authorization"] = auth
-    if not auth["authorized"]:
-        rep["state"] = WC.DO_NOT_TRADE
-        rep["why"] = "not authorized: %s" % "; ".join(auth["why_not"])
-        return rep
-
     # ------------------------------------------------- PREFLIGHT, THEN LATCH
     # THE READS ARE DONE HERE AND PASSED IN AS VALUES. MD.terms_status is a
     # COROUTINE FUNCTION; the driver's preflight is synchronous and cannot
@@ -218,6 +216,23 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
         rep["latch"] = {"consumed": False,
                         "why": "the preflight refused BEFORE the latch was "
                                "spent, so the authorization is untouched"}
+        return rep
+
+    # ----------------------------------------------------- AUTHORIZATION
+    # THE ORDER IS FIXED AND IT MATTERS:
+    #   read-only preflight -> READY -> authorization -> durable latch ->
+    #   ledger intent/fsync -> socket mutation
+    # Authorization is validated AFTER the preflight because a preflight is a
+    # read and must be free, and BEFORE the latch because spending an
+    # authorization we were never going to be able to use is pure loss.
+    auth = WC.authorization_state()
+    rep["authorization"] = auth
+    if not auth["authorized"]:
+        rep["state"] = READY_BUT_UNAUTHORIZED
+        rep["why"] = "not authorized: %s" % "; ".join(auth["why_not"])
+        rep["latch"] = {"consumed": False,
+                        "why": "authorization was refused BEFORE the latch "
+                               "was spent; the authorization is untouched"}
         return rep
 
     # ---------------------------------------------------------------- LATCH
