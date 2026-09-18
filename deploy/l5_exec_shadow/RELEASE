@@ -98,6 +98,10 @@
       "window_forensics": {
         "module": "src.l5_window_forensics",
         "module_sha256": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6"
+      },
+      "pmus_surface": {
+        "module": "src.pmus_l5_surface_runner",
+        "module_sha256": "23bc549683b96758c2beb66b340e2d68c9daa1bae4d7a4f0826dd9f1e7fd735a"
       }
     }
   }

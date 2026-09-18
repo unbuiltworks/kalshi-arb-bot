@@ -109,6 +109,13 @@ COPY analysis/l5/window_forensics/spec.py analysis/l5/window_forensics/spec.py
 COPY analysis/l5/surface_shadow/report.py analysis/l5/surface_shadow/report.py
 COPY analysis/l5/gemini_surface/report.py analysis/l5/gemini_surface/report.py
 COPY analysis/l5/gemini_surface/queue_diagnosis.py analysis/l5/gemini_surface/queue_diagnosis.py
+# The PMUS surface walking its evidence ladder against the AUTHENTICATED trade
+# tape (stream pmus_surface, --source TRADES_HTTP). It reads the recorder over
+# the private network and holds NO credential and no order transport; the
+# gateway client is imported lazily by the PUBLIC path only, so it is not here
+# and this image cannot reach the venue's REST surface at all.
+COPY src/pmus_l5_surface_runner.py src/pmus_l5_surface_runner.py
+COPY src/pmus_l5_surface_shadow.py src/pmus_l5_surface_shadow.py
 COPY deploy/l5_exec_shadow/RELEASE RELEASE
 
 CMD ["python", "-m", "src.l5_research_supervisor", \

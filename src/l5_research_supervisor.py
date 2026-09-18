@@ -96,6 +96,22 @@ STREAMS: Dict[str, tuple] = {
                          "seg_*/window_*.jsonl",
                          ["--windows", "3", "--lead-s", "120",
                           "--follow-s", "300"]),
+    # OWNER 2026-09-18 P0. The PMUS surface walking its evidence ladder
+    # against the AUTHENTICATED trade tape. It belongs here and nowhere else:
+    # the tape reaches the ladder only over Railway's private network
+    # (pmus-ws-evidence-recorder.railway.internal), and this supervisor is
+    # the process that already sits inside it. TRADES_HTTP joins the
+    # recorder's /status book to its /trades tail, which is the only network
+    # source that can reach TRADE_FLOW and therefore EVIDENCED_FILL --
+    # STATUS_HTTP carries trade AGGREGATES and stops at BOOK_REACHED.
+    #
+    # ZERO-ORDER ISOLATION IS PRESERVED AND TESTED. This image holds no PMUS
+    # credential, and the runner has no order transport; both are asserted by
+    # tests/test_pmus_trades_http_join.py over the module AST.
+    "pmus_surface": ("src.pmus_l5_surface_runner", "pmus-l5-surface",
+                     "pmus_surface_*.jsonl",
+                     ["--minutes", "1440", "--interval", "5.0",
+                      "--cap", "40", "--source", "TRADES_HTTP"]),
 }
 
 #: streams whose every start gets its OWN dated out-dir.

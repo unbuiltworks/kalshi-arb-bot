@@ -70,11 +70,27 @@ def to_prints(trades: Optional[Sequence[Mapping[str, Any]]]
 
 def coverage(trades: Optional[Sequence[Mapping[str, Any]]],
              *, subscribed_at: Optional[float], placed_at: float,
-             observed_until: float) -> Dict[str, Any]:
+             observed_until: float, ring_full: Optional[bool] = None,
+             served_cap: Optional[int] = None) -> Dict[str, Any]:
     """Can we vouch for having watched the WHOLE interval?
 
     Returns {complete, why}. `complete` is True only when every doubt is
     ruled out; True is a claim about our own observation, not about the venue.
+
+    TWO WAYS THE TAPE CAN BE SHORT, AND COUNTING ROWS ONLY CATCHES ONE. The
+    length test below works when the caller holds the recorder's own ring.
+    A caller reading the ring over HTTP does not: the recorder serves the
+    newest `TRADES_PER_MARKET` (200) of a 500-deep ring, so a wrapped ring
+    arrives as 200 rows and `len(trades) >= RING_CAPACITY` can never fire.
+    Both truncations therefore travel as explicit flags:
+
+      ring_full   the recorder's ring wrapped -- older trades in the interval
+                  were dropped before they were ever served.
+      served_cap  the transport served a capped TAIL, so hitting the cap means
+                  the view itself may be truncated even on an unwrapped ring.
+
+    Either one makes coverage UNVOUCHED. Passing neither preserves the
+    in-process behaviour exactly.
     """
     if trades is None:
         return {"complete": None, "why": "the trade tape could not be read"}
@@ -87,6 +103,19 @@ def coverage(trades: Optional[Sequence[Mapping[str, Any]]],
                 "why": ("the subscription began %.1fs AFTER the quote was "
                         "placed; the start of the interval was not watched"
                         % (subscribed_at - placed_at))}
+    if ring_full:
+        return {"complete": None,
+                "why": ("the recorder reported its trade ring FULL, so older "
+                        "trades in this interval were dropped before being "
+                        "served. Row count cannot detect this over a capped "
+                        "transport, which is why the flag travels with the "
+                        "data.")}
+    if served_cap is not None and len(trades) >= int(served_cap):
+        return {"complete": None,
+                "why": ("the tape arrived as a capped tail of %d rows and is "
+                        "full at that cap, so it may be truncated: an empty "
+                        "or short result no longer covers the interval."
+                        % int(served_cap))}
     if len(trades) >= RING_CAPACITY:
         return {"complete": None,
                 "why": ("the recorder's %d-trade ring is full, so older "

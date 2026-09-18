@@ -38,13 +38,101 @@ def test_the_supervisor_imports_no_order_path():
     assert not banned, f"order path reachable from the supervisor: {banned}"
 
 
+#: `pmus_` modules this image MAY ship, each admitted by the structural proof
+#: below rather than by being named here. The name ban stays for everything
+#: else because it is a cheap proxy for a real property -- but a proxy is not
+#: the property, and the 2026-09-16 breach was an allow-list of NAMES that let
+#: a complement BUY through. So this list buys no exemption on its own:
+#: test_the_allowed_pmus_modules_really_carry_no_order_path re-proves each one
+#: over its import closure, and an entry that stops being true fails there.
+PMUS_ALLOWED = (
+    "src/pmus_l5_surface_runner.py",
+    "src/pmus_l5_surface_shadow.py",
+)
+
+
 def test_the_image_ships_no_order_path():
     import pathlib
     df = pathlib.Path("deploy/l5_exec_shadow/Dockerfile").read_text()
     copies = [l for l in df.splitlines() if l.strip().startswith("COPY ")]
     for banned in ("l5_adapters/evaluate.py", "l5_venue_adapter", "pmus_",
                    "kalshi_"):
-        assert not [l for l in copies if banned in l], banned
+        offenders = [l for l in copies if banned in l]
+        if banned == "pmus_":
+            offenders = [l for l in offenders
+                         if not any(a in l for a in PMUS_ALLOWED)]
+        assert not offenders, "%s: %s" % (banned, offenders)
+
+
+def test_the_allowed_pmus_modules_really_carry_no_order_path():
+    """The property the name ban was standing in for, asserted directly.
+
+    For each admitted module: import it in a FRESH subprocess, take the whole
+    `src.` closure it actually pulls in, and check every file in that closure
+    for a credential read, a signer or an order verb. This is strictly more
+    than the name ban gave us -- the ban never looked inside anything, and
+    would have waved through a module with an order path under a different
+    name.
+    """
+    import ast
+    import pathlib
+    import subprocess
+    import sys as _sys
+
+    CREDENTIALS = ("PMUS_API_SECRET_KEY", "PMUS_API_KEY_ID",
+                   "GEMINI_API_SECRET", "private_key")
+    SIGNERS = ("hmac", "hashlib.sha384", "_sign", "signature")
+    ORDER_VERBS = ("/v1/orders", "submit_order", "place_order", "order.place",
+                   "makerOrCancel", "cancel_order")
+
+    for mod in PMUS_ALLOWED:
+        name = mod[len("src/"):-len(".py")]
+        code = ("import os, sys, importlib;"
+                "importlib.import_module('src.%s');"
+                "print(' '.join(sorted(m for m in sys.modules "
+                "if m.startswith('src.'))))" % name)
+        out = subprocess.run([_sys.executable, "-c", code],
+                             capture_output=True, text=True, timeout=120)
+        assert out.returncode == 0, out.stderr[-500:]
+        closure = out.stdout.split()
+        assert closure, mod
+
+        for m in closure:
+            f = pathlib.Path(m.replace(".", "/") + ".py")
+            if not f.exists():
+                f = pathlib.Path(m.replace(".", "/") + "/__init__.py")
+            if not f.exists():
+                continue
+            src = f.read_text(encoding="utf-8")
+            # strings and identifiers only -- never comments or docstrings,
+            # which is where a scan like this normally goes wrong by flagging
+            # the very prose that explains the rule
+            tree = ast.parse(src)
+            literals = {n.value for n in ast.walk(tree)
+                        if isinstance(n, ast.Constant)
+                        and isinstance(n.value, str)}
+            docstrings = set()
+            for n in ast.walk(tree):
+                if isinstance(n, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                  ast.AsyncFunctionDef)):
+                    d = ast.get_docstring(n, clean=False)
+                    if d:
+                        docstrings.add(d)
+            literals -= docstrings
+            names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+            names |= {n.attr for n in ast.walk(tree)
+                      if isinstance(n, ast.Attribute)}
+            names |= {a.name.split(".")[0] for n in ast.walk(tree)
+                      if isinstance(n, ast.Import) for a in n.names}
+            names |= {(n.module or "").split(".")[0] for n in ast.walk(tree)
+                      if isinstance(n, ast.ImportFrom)}
+            surface = literals | names
+
+            for bad in CREDENTIALS + ORDER_VERBS:
+                assert not any(bad in str(x) for x in surface), (
+                    "%s reaches %s, which carries %r" % (mod, m, bad))
+            assert not (names & set(SIGNERS)), (
+                "%s reaches %s, which can sign" % (mod, m))
 
 
 def test_the_railway_json_declares_that_it_configures_nothing():
