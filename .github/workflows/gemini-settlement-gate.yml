@@ -221,7 +221,7 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # OWNER-2026-09-18-GEMINI-CONTINUOUS-1, naming executable_sha
+      # OWNER-2026-09-18-GEMINI-CONTINUOUS-2, naming executable_sha
       # 2793c4cd...8d5d and envelope_sha b3bff654...aa17. EVERY bound --
       # 12 mutation slots, $0.15 exposure, 0.04 residual and imbalance,
       # 0.10 per leg, the end-of-window floors, the terminal one-window
@@ -241,12 +241,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-1" \
+            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-2" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/continuous.txt

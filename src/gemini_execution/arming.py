@@ -35,7 +35,12 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: a time and this is it: the one-window continuous probe. Retiring the canary
 #: identifier is itself fail-closed -- the canary path can no longer arm at
 #: all, so a stale workflow input naming it is now inert rather than dangerous.
-EXPECTED_AUTH_ID = "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"
+#: MOVED AGAIN 2026-09-18. CONTINUOUS-1 is SPENT: its latch is on disk in
+#: state INTENT_PERSISTED with venue_order_id null, consumed at 13:33Z by a run
+#: that then failed closed at preflight with zero orders placed. A spent
+#: authorization never arms again, so the identifier moves rather than the
+#: latch being cleared.
+EXPECTED_AUTH_ID = "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"
 
 
 class NotArmed(Exception):

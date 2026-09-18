@@ -207,7 +207,7 @@ def test_the_armed_step_is_off_unless_explicitly_armed():
 
 def test_the_armed_step_names_the_exact_authorization():
     wf = WF.read_text()
-    assert 'GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"' in wf
+    assert 'GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"' in wf
     assert "GEMINI_CANARY_AUTH_EXPIRES" in wf
 
 

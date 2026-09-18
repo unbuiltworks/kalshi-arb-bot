@@ -90,7 +90,7 @@ def test_the_installed_authorization_binds_the_reviewed_artifact_exactly():
     """An authorization is installed (OWNER 2026-09-18, one window). It must
     name THIS executable and THIS envelope, or it is not an authorization for
     what is running."""
-    assert WC.REQUIRED_AUTH_ID == "OWNER-2026-09-18-GEMINI-CONTINUOUS-1"
+    assert WC.REQUIRED_AUTH_ID == "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"
     assert WC.AUTHORIZED_SHA == WC.executable_sha(), (
         "the installed authorization does not name the running executable")
     assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
@@ -113,13 +113,22 @@ def test_without_the_transport_arm_no_mutation_is_possible(monkeypatch):
         WC.require_authorization()
 
 
-def test_the_spent_canary_authorization_can_no_longer_arm(monkeypatch):
+#: every authorization that has ever been issued and is now SPENT. None may
+#: arm anything again; the identifier moves forward, the latch is never cleared.
+SPENT_AUTHORIZATIONS = (
+    "OWNER-2026-09-17-GEMINI-CANARY-1",       # latch REJECTED
+    "OWNER-2026-09-18-GEMINI-CONTINUOUS-1",   # latch INTENT_PERSISTED, no order
+)
+
+
+@pytest.mark.parametrize("spent", SPENT_AUTHORIZATIONS)
+def test_a_spent_authorization_can_never_arm_again(monkeypatch, spent):
     monkeypatch.setenv("GEMINI_CANARY_LIVE", "YES")
-    monkeypatch.setenv("GEMINI_CANARY_AUTH",
-                       "OWNER-2026-09-17-GEMINI-CANARY-1")
+    monkeypatch.setenv("GEMINI_CANARY_AUTH", spent)
     monkeypatch.setenv("GEMINI_CANARY_AUTH_EXPIRES", "2099-01-01T00:00:00Z")
     assert WC.authorization_state()["authorized"] is False, (
-        "a spent authorization must not arm anything, ever")
+        "%s is spent and must not arm anything, ever" % spent)
+    assert spent != WC.REQUIRED_AUTH_ID
 
 
 def test_no_environment_variable_can_supply_an_authorization(monkeypatch):
