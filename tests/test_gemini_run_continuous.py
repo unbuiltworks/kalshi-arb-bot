@@ -167,14 +167,25 @@ def test_the_invoker_never_names_a_mutation_method():
 
 
 def test_the_latch_is_consumed_before_the_session_connects():
-    """Ordering is the whole guarantee: a mutation whose authorization is not
-    durably spent is the one state that cannot be reconciled."""
+    """Ordering is the whole guarantee: a MUTATION whose authorization is not
+    durably spent is the one state that cannot be reconciled.
+
+    This used to also assert the latch preceded every venue READ. That
+    conflated reads with mutations. A read changes nothing, so paying an
+    authorization for the privilege of reading is pure loss -- and it is
+    exactly how CONTINUOUS-3 was spent: the authoritative read and the
+    recovery that refuses on it both sat after the latch. They are now before
+    it, deliberately, and the assertion is inverted to pin that.
+    """
     src = open(RC.__file__, encoding="utf-8").read()
     i_latch = src.index("latch.consume(auth_id")
     i_conn = src.index("await session.connect()")
     i_state = src.index("await authoritative_state(symbol)")
+    i_rec = src.index("probe.recover(")
     assert i_latch < i_conn, "the latch must be spent before the socket opens"
-    assert i_latch < i_state, "and before any venue read for this window"
+    assert i_state < i_latch, "the authoritative read is free; it goes first"
+    assert i_rec < i_latch, (
+        "deterministic recovery must refuse BEFORE the latch is spent")
 
 
 def test_an_already_consumed_authorization_refuses_to_run_again():
@@ -295,8 +306,11 @@ def test_the_full_ordering_chain_is_fixed():
     src = open(RC.__file__, encoding="utf-8").read()
     steps = [("preflight", src.index("pf = PF.preflight_now(symbol")),
              ("authorization", src.index("auth = WC.authorization_state()")),
+             ("bundle", src.index("rep[\"bundle\"] = BUNDLE.state()")),
+             ("authoritative read",
+              src.index("await authoritative_state(symbol)")),
+             ("recovery", src.index("probe.recover(")),
              ("latch", src.index("latch.consume(auth_id")),
-             ("driver", src.index("WC.Driver(auth_id")),
              ("connect", src.index("await session.connect()"))]
     positions = [i for _, i in steps]
     assert positions == sorted(positions), (

@@ -123,18 +123,28 @@ def test_installing_an_authorization_does_not_move_the_hash():
         r"^(?:REQUIRED_AUTH_ID|AUTHORIZED_SHA|AUTHORIZED_ENVELOPE)"
         r": Optional\[str\] = <AUTHORIZATION>$", body, re.MULTILINE)
     assert len(lines) == 3, lines
-    assert WC.REQUIRED_AUTH_ID not in body
-    assert str(WC.AUTHORIZED_SHA) not in body
+    # whatever is installed -- an identifier, a hash, or None -- must not
+    # survive into the hashed body, or the hash would depend on it
+    for value in (WC.REQUIRED_AUTH_ID, WC.AUTHORIZED_SHA,
+                  WC.AUTHORIZED_ENVELOPE):
+        if value is not None:
+            assert value not in body, value
 
 
 def test_no_environment_can_revive_a_superseded_authorization(monkeypatch):
     """A full dual key must NOT arm an executable the authorization does not
     name. Simulated by moving the running hash, which is what a code edit does.
     """
+    # install a COMPLETE simulated authorization, then move the running hash
+    # the way a code edit would. The dual key is fully satisfied; only the
+    # executable differs, and that alone must be enough to refuse.
+    fake = "SIMULATED-AUTHORIZATION-FOR-TEST-ONLY"
+    monkeypatch.setattr(WC, "REQUIRED_AUTH_ID", fake)
+    monkeypatch.setattr(WC, "AUTHORIZED_SHA", WC.executable_sha())
     monkeypatch.setattr(WC, "executable_sha", lambda: "0" * 64)
-    monkeypatch.setattr(WC.arming, "EXPECTED_AUTH_ID", WC.REQUIRED_AUTH_ID)
+    monkeypatch.setattr(WC.arming, "EXPECTED_AUTH_ID", fake)
     monkeypatch.setenv("GEMINI_CANARY_LIVE", "YES")
-    monkeypatch.setenv("GEMINI_CANARY_AUTH", str(WC.REQUIRED_AUTH_ID))
+    monkeypatch.setenv("GEMINI_CANARY_AUTH", fake)
     monkeypatch.setenv("GEMINI_CANARY_AUTH_EXPIRES", "2099-01-01T00:00:00Z")
     assert WC.authorized() is False
     st = WC.authorization_state()
@@ -148,12 +158,17 @@ def test_the_gate_is_reachable_and_not_merely_always_closed(monkeypatch):
     that always says no would pass all of them. With the executable the current
     authorization names, and a full dual key, authorization MUST succeed.
     """
-    monkeypatch.setattr(WC.arming, "EXPECTED_AUTH_ID", WC.REQUIRED_AUTH_ID)
+    # No authorization is installed in the shipped file -- CONTINUOUS-3 is
+    # spent -- so install a simulated one naming the CURRENT hashes. If the
+    # gate still refuses, it is incapable rather than merely closed.
+    fake = "SIMULATED-AUTHORIZATION-FOR-TEST-ONLY"
+    monkeypatch.setattr(WC, "REQUIRED_AUTH_ID", fake)
+    monkeypatch.setattr(WC, "AUTHORIZED_SHA", WC.executable_sha())
+    monkeypatch.setattr(WC, "AUTHORIZED_ENVELOPE", WC.envelope_sha())
+    monkeypatch.setattr(WC.arming, "EXPECTED_AUTH_ID", fake)
     monkeypatch.setenv("GEMINI_CANARY_LIVE", "YES")
-    monkeypatch.setenv("GEMINI_CANARY_AUTH", str(WC.REQUIRED_AUTH_ID))
+    monkeypatch.setenv("GEMINI_CANARY_AUTH", fake)
     monkeypatch.setenv("GEMINI_CANARY_AUTH_EXPIRES", "2099-01-01T00:00:00Z")
-    assert WC.AUTHORIZED_SHA == WC.executable_sha()
-    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
     assert WC.authorized() is True, WC.authorization_state()["why_not"]
 
 

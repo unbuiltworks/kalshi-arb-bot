@@ -48,7 +48,12 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: 842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4, which
 #: carries the cancel-seam fix (order.cancel now sends the venue orderId, not
 #: the clientOrderId that the venue rejected -1013 during CONTINUOUS-2).
-EXPECTED_AUTH_ID = "OWNER-2026-09-18-GEMINI-CONTINUOUS-3"
+#: MOVED AGAIN 2026-09-18. CONTINUOUS-3 is SPENT: its latch is on disk in
+#: state INTENT_PERSISTED, consumed at 16:15:40Z by a run that then refused
+#: inside run_window on a stale ledger row and sent NOTHING. No
+#: authorization is in force, and this sentinel matches no environment
+#: value, so the transport cannot arm at all until a human installs one.
+EXPECTED_AUTH_ID = "NO-AUTHORIZATION-IN-FORCE"
 
 
 class NotArmed(Exception):

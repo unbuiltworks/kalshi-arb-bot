@@ -217,12 +217,30 @@ jobs:
           echo "::error::no eligible window after 5 attempts"
           exit 1
 
+      # Reconcile the ONE historical ledger slot that blocks every window.
+      # READ-ONLY: no arm, no order path. CONTINUOUS-3 reached the mutation
+      # boundary with every gate open and then refused because slot 2 of
+      # CONTINUOUS-2 -- a CANCEL the venue rejected 400/-1013 -- was still
+      # recorded UNKNOWN. This gathers the venue evidence; it does NOT
+      # write the ledger. Applying is a separate, reviewed step.
+      - name: Reconcile historical ledger slot (read-only; writes nothing)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.reconcile_slot \
+            --ledger analysis/gemini/continuous_ledger.jsonl \
+            --slot 2 --order-id 145828836242288478 \
+            --out analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/reconcile.txt
+
       # ==================================================================
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # OWNER-2026-09-18-GEMINI-CONTINUOUS-3, naming executable_sha
-      # 84268511...6ad4 and envelope_sha b3bff654...aa17. EVERY bound --
+      # NO AUTHORIZATION IS IN FORCE. CONTINUOUS-3 is spent, so this step
+      # names a sentinel that matches nothing and cannot arm. EVERY bound --
       # 12 mutation slots, $0.15 exposure, 0.04 residual and imbalance,
       # 0.10 per leg, the end-of-window floors, the terminal one-window
       # binding -- is enforced inside ws_continuous.Driver and is covered by
@@ -241,12 +259,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-3"
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-3" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \
@@ -273,6 +291,7 @@ jobs:
                    analysis/gemini/ws_dry_run_*.json \
                    analysis/gemini/continuous_run_*.json \
                    analysis/gemini/continuous_wire_*.json \
+                   analysis/gemini/reconcile_slot_*.json \
                    analysis/gemini/premutation_proof_*.json \
                    analysis/gemini/continuous_ledger.jsonl \
                    analysis/gemini/canary_latch/*.json; do
@@ -286,7 +305,7 @@ jobs:
           # and not the other, so a job that gathered its evidence correctly
           # then refused to commit it as "outside analysis/gemini/" -- which it
           # was not. A test now asserts the two lists agree.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|reconcile_slot|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

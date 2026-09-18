@@ -29,6 +29,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src.gemini_execution import bundle as BUNDLE
 from src.gemini_execution import continuous_preflight as PF
 from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import metadata as MD
@@ -343,6 +344,7 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
         "authorization_id": auth_id,
         "driver_executable_sha": WC.executable_sha(),
         "driver_envelope_sha": WC.envelope_sha(),
+        "bundle_sha": BUNDLE.bundle_sha(),
         "invoker_note": ("this invoker is NOT covered by the authorized "
                          "executable_sha, which covers the driver. It holds "
                          "no bound of its own; every limit is enforced inside "
@@ -410,6 +412,54 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                                "was spent; the authorization is untouched"}
         return rep
 
+    rep["bundle"] = BUNDLE.state()
+    if not rep["bundle"]["authorized"]:
+        rep["state"] = READY_BUT_UNAUTHORIZED
+        rep["why"] = ("bundle not authorized: %s"
+                      % "; ".join(rep["bundle"]["why_not"]))
+        rep["latch"] = {"consumed": False,
+                        "why": "the bundle authorization was refused BEFORE "
+                               "the latch was spent; the authorization is "
+                               "untouched"}
+        return rep
+
+    # ------------------------------------- AUTHORITATIVE READ, THEN RECOVERY
+    # BOTH BEFORE THE LATCH, AND THAT ORDERING IS THE WHOLE POINT OF THIS
+    # BLOCK. CONTINUOUS-3 reached this line with every gate open, spent its
+    # authorization, connected, and then refused inside run_window because a
+    # CANCEL from CONTINUOUS-2 was still recorded UNKNOWN in the durable
+    # ledger. Nothing was ever sent. A refusal that is DETERMINISTIC and
+    # READ-ONLY must not cost an authorization, and recovery is exactly that:
+    # it reads the ledger and authoritative venue state and cannot mutate
+    # either. The preflight was moved here after CONTINUOUS-1 was lost the
+    # same way; this is the same lesson one step further down.
+    st = await authoritative_state(symbol)
+    rep["authoritative_state"] = {
+        "fills": st.get("fills"), "open_orders": st.get("open_orders"),
+        "order_history": st.get("order_history_raw"),
+        "active": st.get("active_raw")}
+
+    # A THROWAWAY Driver. recover() writes nothing -- not the ledger, not the
+    # venue -- it only populates the instance it is called on, so a separate
+    # instance can answer "would recovery succeed?" with no side effect. The
+    # window below builds its own Driver and recovers again authoritatively;
+    # this one exists solely to refuse before the latch.
+    probe = WC.Driver(auth_id, symbol, ledger_path=ledger_path)
+    pre = probe.recover(venue_fills=st.get("fills"),
+                        venue_open=st.get("open_orders"),
+                        venue_orders=st.get("orders_seen"))
+    rep["pre_latch_recovery"] = {"checked_before_latch": True, **pre}
+    if probe.state in WC.TERMINAL or not pre.get("recovered"):
+        rep["state"] = probe.state
+        rep["why"] = (probe.why or pre.get("why")
+                      or "recovery refused before the latch")
+        rep["latch"] = {"consumed": False,
+                        "why": "recovery refused BEFORE the latch was spent, "
+                               "so the authorization is untouched. A known "
+                               "stale ledger row never costs an "
+                               "authorization again."}
+        return rep
+
     # ---------------------------------------------------------------- LATCH
     # ONE AUTHORIZATION, ONE WINDOW, AND THE LATCH IS WHAT MAKES THAT DURABLE.
     # The driver's MutationLedger bounds mutations WITHIN a window; it cannot
@@ -455,12 +505,6 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                       % (type(exc).__name__, exc))
         rep["latch"] = {"consumed": False, "durable": False}
         return rep
-
-    st = await authoritative_state(symbol)
-    rep["authoritative_state"] = {
-        "fills": st.get("fills"), "open_orders": st.get("open_orders"),
-        "order_history": st.get("order_history_raw"),
-        "active": st.get("active_raw")}
 
     driver = WC.Driver(auth_id, symbol, ledger_path=ledger_path)
     # the observer wraps the real session; the arm gate and every bound
