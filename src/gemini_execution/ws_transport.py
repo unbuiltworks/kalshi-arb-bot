@@ -241,6 +241,23 @@ def _ack_reason(ack: Mapping[str, Any]) -> Dict[str, Any]:
     return named or {"ack_keys": sorted(str(k) for k in ack)}
 
 
+def reconcile_queries(symbol: str, *, now: Optional[float] = None
+                      ) -> list:
+    """The authoritative reads, IN ORDER. Active orders first.
+
+    Exposed rather than inlined so the ordering is checkable: a readiness
+    report that merely asserted "active is asked first" would be asserting its
+    own comment.
+    """
+    now_ms = int((now if now is not None else time.time()) * 1000)
+    queries = [(ACTIVE_PATH, {"symbol": symbol, "limit": 100, "offset": 0})]
+    for status in HISTORY_STATUSES:
+        queries.append((HISTORY_PATH, {
+            "status": status, "symbol": symbol, "limit": 100,
+            "from": now_ms - 120000, "to": now_ms + 2000}))
+    return queries
+
+
 async def _order_by_client(client_id: str, symbol: str, *,
                            rest=None) -> Optional[Dict[str, Any]]:
     """Authoritative order-history lookup. Active orders FIRST.
@@ -251,13 +268,7 @@ async def _order_by_client(client_id: str, symbol: str, *,
     """
     if rest is None:
         from src.gemini_prediction_auth import private_rest_request as rest
-    now_ms = int(time.time() * 1000)
-    queries = [(ACTIVE_PATH, {"symbol": symbol, "limit": 100, "offset": 0})]
-    for status in HISTORY_STATUSES:
-        queries.append((HISTORY_PATH, {
-            "status": status, "symbol": symbol, "limit": 100,
-            "from": now_ms - 120000, "to": now_ms + 2000}))
-    for path, params in queries:
+    for path, params in reconcile_queries(symbol):
         try:
             response = await rest("POST", path, params=params, timeout=4.0)
         except Exception:                                      # noqa: BLE001

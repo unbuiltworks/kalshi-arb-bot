@@ -147,6 +147,13 @@ async def test_resting_maker_order_is_found_via_active_orders(armed):
     assert rest.seen[0][0] == W.ACTIVE_PATH, "active orders must be asked FIRST"
 
 
+def test_reconcile_query_order_puts_active_first():
+    q = W.reconcile_queries("GEMI-BTC05M2609180200-UP")
+    assert q[0][0] == W.ACTIVE_PATH
+    assert [p for p, _ in q[1:]] == [W.HISTORY_PATH] * len(W.HISTORY_STATUSES)
+    assert [pa["status"] for _, pa in q[1:]] == list(W.HISTORY_STATUSES)
+
+
 @pytest.mark.asyncio
 async def test_accepted_but_unreadable_is_accepted_not_ambiguous(armed):
     """An ack of 200 means the order exists. A failed READ does not undo that."""
