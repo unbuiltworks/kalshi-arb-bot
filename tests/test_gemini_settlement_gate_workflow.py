@@ -352,6 +352,13 @@ def test_REGRESSION_the_add_list_and_the_allow_list_name_the_same_files():
             "analysis/gemini/continuous_ledger.jsonl",
         "analysis/gemini/canary_latch/*.json":
             "analysis/gemini/canary_latch/latch_OWNER-2026-09-18-X.json",
+        # THE COHORT LEDGER. It records the slots an armed window spends; a
+        # run that does not commit it discards its own budget accounting and
+        # leaves the next window reading 0 consumed.
+        "analysis/gemini/cohorts/*/ledger.jsonl":
+            "analysis/gemini/cohorts/COHORT-2026-09-18-C5/ledger.jsonl",
+        "analysis/gemini/cohorts/*/cohort.json":
+            "analysis/gemini/cohorts/COHORT-2026-09-18-C5/cohort.json",
     }
     for spec, example in samples.items():
         assert spec in step, "the add-list no longer stages %s" % spec
@@ -388,15 +395,64 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     assert "COHORT-2026-09-18-C5" in armed
 
 
-def test_nothing_in_the_workflow_arms_continuous_5():
-    """PREPARED, NOT ARMED. Exactly one step may assign GEMINI_CANARY_LIVE,
-    and the authorization id it carries must still be the sentinel: wiring the
-    cohort must not have installed an authorization as a side effect."""
+def test_the_armed_step_names_exactly_the_authorized_window():
+    """ARMED for CONTINUOUS-5, and coherently so.
+
+    This test used to assert the opposite -- that no preparation commit could
+    install an authorization. The owner authorized the window on 2026-09-18,
+    so the guard now pins the property that matters once armed: the workflow
+    and the code must name the SAME authorization, and the signature must sit
+    on the hashes that were actually reviewed.
+
+    Installing an authorization is hash-neutral by construction: the
+    assignment lines are normalized away before hashing, so an approval
+    cannot be carried onto code nobody read. That is what makes the equality
+    below meaningful rather than circular -- the constants name the hashes,
+    and the hashes are computed from the files as they stand.
+    """
+    from src.gemini_execution import arming as ARM
+    from src.gemini_execution import bundle as BUN
+    from src.gemini_execution import ws_continuous as WCX
+
+    auth = "OWNER-2026-09-18-GEMINI-CONTINUOUS-5"
     wf = WF.read_text()
-    assignments = re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)
-    assert len(assignments) == 1, assignments
     armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
-    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in armed
-    assert '--auth-id "NO-AUTHORIZATION-IN-FORCE"' in armed
-    assert "CONTINUOUS-5" not in armed.split("run:", 1)[1], (
-        "an authorization id must never be installed by a preparation commit")
+
+    # exactly one step in the whole workflow may arm the transport
+    assert len(re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)) == 1
+    # and it is this one, naming the authorized window and its cohort
+    assert 'GEMINI_CANARY_AUTH: "%s"' % auth in armed
+    assert '--auth-id "%s"' % auth in armed
+    assert "COHORT-2026-09-18-C5" in armed and "--cohort" in armed
+
+    # the code agrees with the workflow, and the signature is on THIS code
+    assert WCX.REQUIRED_AUTH_ID == auth
+    assert ARM.EXPECTED_AUTH_ID == auth
+    assert WCX.AUTHORIZED_SHA == WCX.executable_sha()
+    assert WCX.AUTHORIZED_ENVELOPE == WCX.envelope_sha()
+    assert BUN.AUTHORIZED_BUNDLE == BUN.bundle_sha()
+
+    # the exact hashes the owner authorized, spelled out so a silent
+    # re-signature onto different code fails here rather than at the venue
+    assert WCX.AUTHORIZED_SHA == (
+        "3194e6912c343a41c4aefe975f8ac7f5c975be5bb6cbb7bfe5ae9f535ac3abf1")
+    assert WCX.AUTHORIZED_ENVELOPE == (
+        "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+    assert BUN.AUTHORIZED_BUNDLE == (
+        "61c7abf3f82d2c2fee30b544fa7ac23b0e4550a5a46cf5b4229743d61dec8c61")
+
+
+def test_the_unarmed_step_still_cannot_arm():
+    """The read-only proof step must stay read-only now that a real
+    authorization exists: it names the sentinel, not the authorized id, and
+    sets no arm variable of its own."""
+    wf = WF.read_text()
+    block = wf.split("Unarmed production path (real readers", 1)[1].split(
+        "ONE authorized Gemini continuous window", 1)[0]
+    # the armed step's explanatory comment sits inside this slice and names
+    # the authorization; only EXECUTABLE lines decide whether a step can arm.
+    unarmed = "\n".join(l for l in block.splitlines()
+                        if not l.strip().startswith("#"))
+    assert '--auth-id "NO-AUTHORIZATION-IN-FORCE"' in unarmed
+    assert "GEMINI_CANARY_LIVE" not in unarmed
+    assert "OWNER-2026-09-18-GEMINI-CONTINUOUS-5" not in unarmed

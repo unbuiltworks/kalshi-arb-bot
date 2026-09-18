@@ -95,13 +95,13 @@ LABEL = "GEMINI_L5_WS_CONTINUOUS_V1"
 #: default to be overridden at runtime: nothing reads an environment variable
 #: to fill it in. A human edits it in a reviewed commit, or the driver cannot
 #: mutate anything, ever.
-REQUIRED_AUTH_ID: Optional[str] = None
+REQUIRED_AUTH_ID: Optional[str] = "OWNER-2026-09-18-GEMINI-CONTINUOUS-5"
 
 #: The sha256 of THIS FILE as reviewed under that authorization. An
 #: authorization names the exact executable it was granted against, so editing
 #: the driver afterwards invalidates it automatically rather than silently
 #: carrying it forward onto code nobody reviewed.
-AUTHORIZED_SHA: Optional[str] = None
+AUTHORIZED_SHA: Optional[str] = "3194e6912c343a41c4aefe975f8ac7f5c975be5bb6cbb7bfe5ae9f535ac3abf1"  # noqa: E501
 
 #: The sha256 of the frozen risk envelope the authorization was granted
 #: against. Changing any bound changes this, and the authorization stops

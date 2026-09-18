@@ -263,16 +263,20 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # PREPARED FOR CONTINUOUS-5 AND DELIBERATELY UNARMABLE. The auth id
-      # below is the sentinel NO-AUTHORIZATION-IN-FORCE and the driver
-      # constants are None, so this step reaches the mutation boundary and is
-      # refused exactly like the unarmed step above. Installing an
-      # authorization is a separate, explicit edit.
+      # ARMED FOR CONTINUOUS-5. The owner authorized this window on
+      # 2026-09-18, naming the three hashes below and the cohort. Installing
+      # the authorization is hash-neutral BY CONSTRUCTION: the three
+      # assignment lines are normalized away before hashing, so a signature
+      # cannot be carried onto code nobody read, and the hashes here are
+      # byte-identical to the ones that were reviewed.
       #
-      # The hashes CONTINUOUS-5 would be authorized against:
-      #   executable_sha 3194e691...abf1
+      # OWNER-2026-09-18-GEMINI-CONTINUOUS-5, naming
+      #   executable_sha 3194e691...abf1   (UNCHANGED since review)
       #   envelope_sha   b3bff654...aa17   (UNCHANGED: no bound moved)
-      #   bundle_sha     48f7f1f4...a56f
+      #   bundle_sha     61c7abf3...8c61   (the decision capture)
+      #
+      # ONE window. The latch makes that durable across runners, the cohort
+      # bounds it to 6 mutations, and neither is reusable.
       #
       # --cohort IS LOAD-BEARING AND WAS MISSING. Without it the window binds
       # the HISTORICAL ledger, which is 12/12 permanently spent by
@@ -306,12 +310,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-5"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-5" \
             --cohort  "COHORT-2026-09-18-C5" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
@@ -343,6 +347,8 @@ jobs:
                    analysis/gemini/continuous_unarmed_*.json \
                    analysis/gemini/premutation_proof_*.json \
                    analysis/gemini/continuous_ledger.jsonl \
+                   analysis/gemini/cohorts/*/ledger.jsonl \
+                   analysis/gemini/cohorts/*/cohort.json \
                    analysis/gemini/canary_latch/*.json; do
             if [ -e "$f" ]; then git add -- "$f"; fi
           done
@@ -354,7 +360,15 @@ jobs:
           # and not the other, so a job that gathered its evidence correctly
           # then refused to commit it as "outside analysis/gemini/" -- which it
           # was not. A test now asserts the two lists agree.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|reconcile_slot|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|continuous_ledger\.jsonl)$'; then
+          #
+          # THE COHORT LEDGER DRIFTED THE SAME WAY, and it matters more. A
+          # cohort supplies its OWN ledger, and that file is where the slots a
+          # window spends are durably recorded. Neither list knew about it, so
+          # an armed window would have spent its budget on a runner and then
+          # thrown the record away -- and the NEXT window would have read a
+          # cohort with 0 consumed. That is a budget reset by accident, which
+          # is the one thing the cohort mechanism exists to make impossible.
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|reconcile_slot|premutation_proof)_[0-9TZ]+\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other
