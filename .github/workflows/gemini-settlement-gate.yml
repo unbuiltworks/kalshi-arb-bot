@@ -109,6 +109,16 @@ jobs:
           # not fail the job.
           python -m src.gemini_canary_preflight || true
 
+      - name: Execution readiness (read-only; VENUE_WRITE_PATH gate)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          # DISARMED: no GEMINI_CANARY_LIVE and no GEMINI_CANARY_AUTH are set
+          # here, so the execution package is structurally unable to mutate.
+          # This reports the gates only.
+          python -m src.gemini_execution.readiness || true
+
       - name: Report the gate, without deciding anything
         run: python3 scripts/gemini_settlement_gate_report.py /tmp/gate.json
 
