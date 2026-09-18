@@ -331,3 +331,53 @@ def test_the_history_read_never_touches_a_mutation_path(monkeypatch, creds):
                                   for s in ("filled", "cancelled")})
     _run(MD.order_history())
     assert not ({p for _, p, _ in seen} & set(spec.MUTATION_PATHS))
+
+
+def test_a_5xx_is_retried_more_cheaply_before_being_called_unreadable(
+        monkeypatch, creds):
+    """A wide `filled` window came back 503 "upstream connect error", and
+    before that a read timeout. Neither is an empty history: both are cost
+    signals, so the same question is asked again with a smaller limit."""
+    calls = []
+
+    async def fake(method, path, *, params=None, timeout=45.0):
+        calls.append((params["status"], params["limit"], params["from"]))
+        if params["status"] == "filled" and params["limit"] == 100:
+            return _HR(503, None)
+        return _HR(200, {"orders": [{"orderId": 9, "filledQuantity": "1"}]})
+
+    import src.gemini_prediction_auth as A
+    monkeypatch.setattr(A, "private_rest_json", fake)
+    out = _run(MD.order_history(statuses=("filled",)))
+    assert out["verdict"] == "ORDERS_FOUND"
+    assert [c[1] for c in calls] == [100, 5]
+    # the WINDOW is preserved on the cheaper retry; narrowing it is what
+    # would hide an old fill
+    assert calls[0][2] == calls[1][2]
+
+
+def test_the_window_only_narrows_as_a_last_resort(monkeypatch, creds):
+    calls = []
+
+    async def fake(method, path, *, params=None, timeout=45.0):
+        calls.append((params["limit"], params["from"]))
+        return _HR(503, None) if len(calls) < 3 else _HR(200, {"orders": []})
+
+    import src.gemini_prediction_auth as A
+    monkeypatch.setattr(A, "private_rest_json", fake)
+    _run(MD.order_history(statuses=("filled",)))
+    assert len(calls) == 3
+    assert calls[0][1] == calls[1][1]        # same window, cheaper page
+    assert calls[2][1] > calls[1][1]         # only then a shorter window
+
+
+def test_every_attempt_failing_is_still_unreadable(monkeypatch, creds):
+    async def fake(method, path, *, params=None, timeout=45.0):
+        return _HR(503, None)
+
+    import src.gemini_prediction_auth as A
+    monkeypatch.setattr(A, "private_rest_json", fake)
+    out = _run(MD.order_history(statuses=("filled",)))
+    assert out["verdict"] == "UNREADABLE"
+    assert out["total_rows"] == 0
+    assert out["verdict"] != "NO_ORDERS_ON_RECORD"

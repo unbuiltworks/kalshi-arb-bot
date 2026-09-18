@@ -548,16 +548,35 @@ async def order_history(*, since_ms: Optional[int] = None,
     total = 0
     unreadable = []
     for st in statuses:
-        body: Dict[str, Any] = {"status": st, "limit": limit, "offset": 0,
-                                "from": lo, "to": hi}
-        if symbol:
-            body["symbol"] = symbol
-        try:
-            r = await private_rest_json("POST", ORDER_HISTORY_PATH,
-                                        params=body, timeout=timeout)
-        except Exception as exc:                               # noqa: BLE001
+        # A WIDE `filled` window came back 503 "upstream connect error" and,
+        # before that, a read timeout. Neither is an empty history, and both
+        # are cost signals rather than answers -- so the same question is
+        # asked again more cheaply before it is called unreadable. The WINDOW
+        # is preserved as long as possible, because narrowing it is what
+        # would actually hide an old fill.
+        attempts_for_status = [(limit, lo), (5, lo),
+                               (5, max(lo, now_ms - 14 * 86400 * 1000))]
+        r = payload = None
+        tried: List[Dict[str, Any]] = []
+        for lim, since in attempts_for_status:
+            body: Dict[str, Any] = {"status": st, "limit": lim, "offset": 0,
+                                    "from": since, "to": hi}
+            if symbol:
+                body["symbol"] = symbol
+            try:
+                r = await private_rest_json("POST", ORDER_HISTORY_PATH,
+                                            params=body, timeout=timeout)
+            except Exception as exc:                           # noqa: BLE001
+                tried.append({"limit": lim, "http": None,
+                              "err": type(exc).__name__})
+                r = None
+                continue
+            tried.append({"limit": lim, "http": r.status_code})
+            if r.status_code == 200:
+                break
+        if r is None:
             per.append({"status_filter": st, "http": None,
-                        "err": type(exc).__name__})
+                        "attempts": tried, "unreadable": True})
             unreadable.append(st)
             continue
         try:
@@ -573,6 +592,7 @@ async def order_history(*, since_ms: Optional[int] = None,
         elif isinstance(payload, list):
             rows = payload
         entry = {"status_filter": st, "http": r.status_code,
+                 "attempts": tried,
                  "rows": (len(rows) if rows is not None else None),
                  "page_is_full": (rows is not None and len(rows) >= limit),
                  "pagination": (payload.get("pagination")
@@ -590,10 +610,11 @@ async def order_history(*, since_ms: Optional[int] = None,
             # order existed and to compare its fields, without dumping an
             # account's whole history into an artifact.
             if rows:
-                keep = ("orderId", "clientOrderId", "symbol", "side",
-                        "outcome", "orderType", "price", "quantity",
-                        "filledQuantity", "remainingQuantity", "status",
-                        "timestamp", "timestampms", "createdAt")
+                keep = ("orderId", "globalOrderId", "clientOrderId",
+                        "symbol", "side", "outcome", "orderType",
+                        "timeInForce", "price", "quantity", "filledQuantity",
+                        "remainingQuantity", "status", "createdAt",
+                        "updatedAt", "cancelledAt")
                 entry["sample"] = {k: rows[0].get(k) for k in keep
                                    if isinstance(rows[0], dict)
                                    and k in rows[0]}
