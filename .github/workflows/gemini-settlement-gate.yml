@@ -142,12 +142,29 @@ jobs:
           # constructs a session, and the session refuses mutation methods
           # without an arm. It prints what the L5 adapter WOULD put on the
           # wire, over the transport this account has actually used.
+          # A BTC5m window is only ELIGIBLE for part of each 5-minute cycle:
+          # the band is TTE 60..300s, so the last 60 seconds before an expiry
+          # has no eligible window at all and the next one is not open yet.
+          # Run 35335282701 landed in exactly that gap at 10:34:25Z and
+          # reported NO_ELIGIBLE_WINDOW -- a scheduling miss, not a defect,
+          # and one that would recur on roughly one dispatch in five.
+          #
+          # So it retries into the next window instead of reporting a dead
+          # zone as a result. Bounded at 5 attempts, and it still writes the
+          # last attempt when none succeeds, because "no window" IS the
+          # honest answer when it is really true.
           TS="$(date -u +%Y%m%dT%H%M%SZ)"
-          python -m src.gemini_execution.ws_canary \
-            > "analysis/gemini/ws_dry_run_${TS}.json" || true
-          if [ ! -s "analysis/gemini/ws_dry_run_${TS}.json" ]; then
-            rm -f "analysis/gemini/ws_dry_run_${TS}.json"
-          fi
+          OUT="analysis/gemini/ws_dry_run_${TS}.json"
+          for attempt in 1 2 3 4 5; do
+            python -m src.gemini_execution.ws_canary > "$OUT" || true
+            if python3 -c "import json,sys; sys.exit(0 if json.load(open('$OUT')).get('ok') else 1)" 2>/dev/null; then
+              echo "eligible window found on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt: no eligible BTC5m window; waiting 45s"
+            [ "$attempt" = "5" ] || sleep 45
+          done
+          if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi
 
       # ==================================================================
       # THE ONE AUTHORIZED CANARY. Runs only when armed_canary=true is

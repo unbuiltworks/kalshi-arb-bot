@@ -1,6 +1,7 @@
 """The pieces the settlement-gate workflow runs, and the order it runs them in."""
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -11,6 +12,21 @@ WF = pathlib.Path(".github/workflows/gemini-settlement-gate.yml")
 
 
 # ------------------------------------------------------- expiry selection
+
+
+def _step(name):
+    """Exactly ONE step's text: from its name to the next step's name.
+
+    A fixed character window was wrong -- it ran past the end of the step and
+    into the ARMED canary that follows, so "this step does not set
+    GEMINI_CANARY_LIVE" was reading the step that does.
+    """
+    wf = WF.read_text()
+    i = wf.index(name)
+    rest = wf[i:]
+    m = re.search(r"\n      - name: ", rest[1:])
+    return rest[:m.start() + 1] if m else rest
+
 
 def test_every_symbol_it_returns_has_already_expired():
     """Settlement is only a question once a contract has expired; asking about
@@ -197,9 +213,7 @@ def test_the_latch_path_may_be_committed():
 def test_the_ws_dry_run_step_is_disarmed_and_cannot_submit():
     """It runs in the credentialed job, so its inability to send has to be
     structural rather than a matter of which flags the step happens to pass."""
-    wf = WF.read_text()
-    i = wf.index("L5 WS canary DRY RUN")
-    step = wf[i:i + 900]
+    step = _step("L5 WS canary DRY RUN")
     assert "GEMINI_CANARY_LIVE" not in step
     assert "GEMINI_CANARY_AUTH" not in step
     assert "|| true" in step                 # a missing window is a result
@@ -218,3 +232,22 @@ def test_the_arm_is_SET_exactly_once_in_the_whole_workflow():
     assert "ONE authorized Gemini canary" in wf[:i]
     # and that one assignment sits under the armed-only conditional
     assert "github.event.inputs.armed_canary == 'true'" in wf[:i]
+
+
+def test_the_dry_run_retries_into_the_next_btc5m_window():
+    """The eligible band is TTE 60..300s, so the last 60s of every 5-minute
+    cycle has no eligible window. Run 35335282701 hit exactly that and
+    reported NO_ELIGIBLE_WINDOW; roughly one dispatch in five would."""
+    step = _step("L5 WS canary DRY RUN")
+    assert "for attempt in 1 2 3 4 5" in step
+    assert "sleep 45" in step
+    # still disarmed, still cannot submit
+    assert "GEMINI_CANARY_LIVE" not in step
+
+
+def test_the_retry_is_bounded_and_still_writes_a_negative_result():
+    """"No window" is the honest answer when it is really true, so a run that
+    never finds one must still leave an artifact rather than nothing."""
+    step = _step("L5 WS canary DRY RUN")
+    assert 'attempt" = "5"' in step          # bounded
+    assert 'if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi' in step

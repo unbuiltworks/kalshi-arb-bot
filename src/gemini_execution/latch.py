@@ -86,6 +86,13 @@ def consume(auth_id: str, intent: Dict[str, Any],
         "state": INTENT_PERSISTED,
         "venue_order_id": None,
         "history": [{"state": INTENT_PERSISTED, "t": time.time()}],
+        # WHAT WAS AUTHORIZED, not only what was sent. Without this the record
+        # shows one order's fields and nothing about the bound they sit
+        # inside, so an audit after the fact cannot tell a one-order envelope
+        # from an unbounded one that happened to send once.
+        "envelope": {k: intent[k] for k in
+                     ("max_orders", "max_residual", "maker_only", "transport")
+                     if k in intent},
         "labels": ("consumed BEFORE the mutation. A lost order is preferred "
                    "to a double order, because only one of them is "
                    "recoverable."),

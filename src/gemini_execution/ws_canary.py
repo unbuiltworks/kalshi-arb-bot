@@ -38,6 +38,14 @@ from src.gemini_execution import (arming, canary as REST, latch, payload,
 COHORT_PREFIX = REST.COHORT_PREFIX
 COHORT_SUFFIX = REST.COHORT_SUFFIX
 
+#: THE BOUNDED ENVELOPE, recorded in the intent so the durable record states
+#: what was authorized rather than only what was sent. MAX_RESIDUAL is carried
+#: over from the parallel implementation this file absorbed: a one-order
+#: canary at quantity 0.01 can leave at most 0.01 of residual, and saying so
+#: in the latch is what makes the bound auditable after the fact.
+MAX_ORDERS = 1
+MAX_RESIDUAL = "0.01"
+
 ACCOUNTING = ("SUBMITTED", "FILLED", "SETTLED", "RECONCILED", "REALIZED")
 
 
@@ -163,6 +171,9 @@ async def submit_once_ws(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
     intent["client_order_id"] = client_order_id(intent["intent_id"])
     intent["amount"] = intent["quantity"]
     intent["transport"] = "WEBSOCKET"
+    intent["max_orders"] = MAX_ORDERS
+    intent["max_residual"] = MAX_RESIDUAL
+    intent["maker_only"] = True
 
     # 6 consume BEFORE the mutation, and make it durable before the venue
     # sees anything. A failed durable write means nothing was sent, so a

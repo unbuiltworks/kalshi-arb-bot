@@ -448,3 +448,62 @@ def test_no_module_outside_the_execution_package_names_the_ws_method():
             if spec.WS_PLACE_METHOD in p.read_text():
                 offenders.append(str(p))
     assert not offenders, offenders
+
+
+# ------------------------------------- absorbed from the parallel adapter
+#
+# src/gemini_l5_ws_canary.py landed on this branch from a parallel session
+# and was REMOVED rather than kept, because it was a second submission path
+# outside the guarded package whose only gate was a non-empty authorization
+# STRING -- no arm, no exposure check, a latch that could not survive an
+# ephemeral runner, and a rejection recorded as a bare status code. These
+# tests carry over every property it did assert, so nothing it protected is
+# lost by consolidating onto the gated path.
+
+def test_the_envelope_is_exactly_one_btc5m_maker_order():
+    assert WC.MAX_ORDERS == 1 and WC.MAX_RESIDUAL == "0.01"
+    p = _params()
+    assert p["type"] == "LIMIT" and p["timeInForce"] == "MOC"
+    assert p["symbol"].startswith("GEMI-BTC05M")
+    assert p["quantity"] == "0.01"
+
+
+def test_the_bounded_envelope_is_recorded_in_the_durable_intent(
+        state_dir, armed, monkeypatch):
+    """The latch should state what was AUTHORIZED, not only what was sent."""
+    exp = _wire(monkeypatch)
+    _run(WC.submit_once_ws(AUTH, state_dir=state_dir, now=NOW, session=_Sess(),
+                           exposure_check=exp))
+    env = (latch.read(AUTH, state_dir) or {}).get("envelope") or {}
+    assert env["max_orders"] == 1
+    assert env["max_residual"] == "0.01"
+    assert env["maker_only"] is True
+    assert env["transport"] == "WEBSOCKET"
+
+
+def test_a_non_resting_price_is_refused(state_dir, armed, monkeypatch):
+    exp = _wire(monkeypatch, pf=_pf(restability={"restable": False,
+                                                 "tick_offset_from_touch": 0}))
+    s = _Sess()
+    out = _run(WC.submit_once_ws(AUTH, state_dir=state_dir, now=NOW,
+                                 session=s, exposure_check=exp))
+    assert out["state"] == "ENVELOPE_REFUSED"
+    assert "rest" in out["why"].lower()
+    assert s.sent == []
+
+
+def test_a_wrong_quantity_is_refused(state_dir, armed, monkeypatch):
+    exp = _wire(monkeypatch, pf=_pf(quantity="1"))
+    s = _Sess()
+    out = _run(WC.submit_once_ws(AUTH, state_dir=state_dir, now=NOW,
+                                 session=s, exposure_check=exp))
+    assert out["state"] == "ENVELOPE_REFUSED"
+    assert s.sent == []
+
+
+def test_the_removed_adapter_is_gone_and_stays_gone():
+    """A second submission path is the thing the isolation guard exists to
+    prevent, so its absence is asserted rather than assumed."""
+    import pathlib
+    assert not pathlib.Path("src/gemini_l5_ws_canary.py").exists()
+    assert not pathlib.Path("tests/test_gemini_l5_ws_canary.py").exists()
