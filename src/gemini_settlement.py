@@ -168,6 +168,10 @@ class Leg:
     fee: str
     source: str                # the endpoint that produced it
     trade_id: Optional[str] = None
+    #: the VENUE order id this fill belongs to. Kept distinct from trade_id,
+    #: which is the trade's own id: the outcome join keys on the ORDER, and
+    #: conflating the two silently joins nothing.
+    order_id: Optional[str] = None
     #: WHICH SIDE OF THE CONTRACT. "yes" or "no", lowercased as the venue
     #: writes it, or None when the row did not say. Without it a YES leg and a
     #: NO leg are indistinguishable, and a two-sided position reconstructs as

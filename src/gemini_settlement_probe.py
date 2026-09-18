@@ -101,7 +101,8 @@ def legs_from_mytrades(symbol: str, body: Any) -> List[S.Leg]:
                 fee=str(row.get("fee_amount") or "0"),
                 source="/v1/mytrades",
                 trade_id=str(row.get("tid") or row.get("order_id") or "")
-                or None))
+                or None,
+                order_id=str(row.get("order_id") or "") or None))
         except (TypeError, ValueError):
             continue
     return legs
@@ -235,6 +236,44 @@ async def probe(symbols: Sequence[str]) -> Dict[str, Any]:
     for sym in symbols:
         r = await _read("/v1/mytrades", {"symbol": sym, "limit_trades": 500})
         legs = legs_from_mytrades(sym, r.get("body"))
+
+        # WHICH SIDE EACH FILL IS ON, FROM THE VENUE. /v1/mytrades does NOT
+        # say: its rows carry symbol, order_id, client_order_id, price,
+        # amount, fee and flags, and no outcome at all (row keys captured
+        # 2026-09-18). Order HISTORY does carry the venue's own `outcome`, so
+        # the side is joined in by order_id rather than read off our own
+        # clientOrderId -- our label is our label, and the venue's is evidence.
+        outcome_join: Dict[str, Any] = {"attempted": False}
+        try:
+            from src.gemini_execution import metadata as MD
+            hist = await MD.order_history(symbol=sym,
+                                          statuses=("filled", "cancelled"),
+                                          limit=100, include_rows=True)
+            by_order: Dict[str, str] = {}
+            for p in (hist.get("per_status") or []):
+                for o in (p.get("orders") or []):
+                    oid = o.get("orderId")
+                    out = o.get("outcome")
+                    if oid is not None and out:
+                        by_order[str(oid)] = str(out).lower()
+            hit = 0
+            for l in legs:
+                got = by_order.get(str(l.order_id))
+                if got:
+                    l.outcome = got
+                    hit += 1
+            outcome_join = {"attempted": True,
+                            "readable": hist.get("readable") is not False,
+                            "orders_with_outcome": len(by_order),
+                            "legs": len(legs), "legs_labelled": hit,
+                            "source": "/v1/orders/history joined on orderId",
+                            "why": ("mytrades carries no outcome field; the "
+                                    "side comes from the venue's order "
+                                    "history, not from our clientOrderId")}
+        except Exception as exc:                                # noqa: BLE001
+            outcome_join = {"attempted": True, "readable": False,
+                            "why": "%s: %s" % (type(exc).__name__, exc)}
+
         st = S.Settlement(sym, legs=legs)
 
         # THE OUTCOME LEG, WHICH NOTHING USED TO READ. `resolution_for` is a
@@ -275,6 +314,8 @@ async def probe(symbols: Sequence[str]) -> Dict[str, Any]:
                             "expired", "is_terminal", "flapped",
                             "strike_check", "source")},
             "resolution_applied": applied,
+            "outcome_join": outcome_join,
+            "leg_outcomes": [l.outcome for l in legs],
             "payout": (str(st.payout()) if st.payout() is not None else None),
             "reconstructed": (str(st.reconstructed())
                               if st.reconstructed() is not None else None),

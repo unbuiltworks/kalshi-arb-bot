@@ -223,3 +223,46 @@ def test_reconstructed_is_labelled_as_arithmetic_not_cash():
     assert S.CASH_CONFIRMED in st.missing()
     assert any("reconstructed_cash is arithmetic" in s
                for s in rep["labels"]), rep["labels"]
+
+
+# ============================= THE OUTCOME JOIN: mytrades CANNOT say the side
+
+#: the REAL /v1/mytrades row keys, captured 2026-09-18. There is no outcome
+#: field here, which is why the side must be joined in from order history.
+MYTRADES_ROW_KEYS = ['aggressor', 'amount', 'client_order_id', 'exchange',
+                     'fee_amount', 'fee_currency', 'is_auction_fill',
+                     'is_clearing_fill', 'order_id', 'price', 'symbol', 'tid',
+                     'timestamp', 'timestampms', 'type']
+
+
+def test_mytrades_carries_no_outcome_field():
+    """Captured from the live account. If this ever changes, the join below
+    can be simplified -- but not before."""
+    assert "outcome" not in MYTRADES_ROW_KEYS
+    assert "eventOutcome" not in MYTRADES_ROW_KEYS
+    assert "order_id" in MYTRADES_ROW_KEYS, "the join key must exist"
+
+
+def test_legs_from_mytrades_keeps_order_id_distinct_from_trade_id():
+    """`tid` is the TRADE's id and `order_id` is the ORDER's. The outcome join
+    keys on the order, so conflating them joins nothing at all."""
+    from src import gemini_settlement_probe as P
+    rows = [{"type": "Buy", "amount": "0.01", "price": "0.92",
+             "fee_amount": "0", "tid": 555, "order_id": 145828836246613472,
+             "client_order_id": "l5cp-owner-2026-yes-2a23dd67"}]
+    legs = P.legs_from_mytrades(SYMBOL, rows)
+    assert len(legs) == 1
+    assert legs[0].trade_id == "555"
+    assert legs[0].order_id == "145828836246613472"
+
+
+def test_the_side_comes_from_the_venue_not_from_our_client_order_id():
+    """Our clientOrderId spells the leg -- l5cp-owner-2026-yes-... -- and it
+    would have been the easy join. It is OUR label. The venue's order history
+    carries its own `outcome`, and that is the evidence."""
+    from src import gemini_settlement_probe as P
+    import inspect
+    src = inspect.getsource(P.probe)
+    assert "by_order" in src and "orderId" in src
+    assert "client_order_id" not in src.split("outcome_join")[1][:1200], (
+        "the outcome must not be parsed out of our own clientOrderId")
