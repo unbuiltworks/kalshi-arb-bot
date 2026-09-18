@@ -21,8 +21,27 @@ fill-or-kill -- none of which mean post-only. If this field were mis-set the
 order could cross and take, which is the one thing the canary envelope forbids
 at the venue level.
 
-The API key needs the Trader role for these paths; a key without it fails
-closed with an authorization error rather than placing anything.
+The API key needs the NewOrder permission for the write paths and OrderStatus
+for the reads; a key without them fails closed with an authorization error
+rather than placing anything.
+
+RE-VERIFIED 2026-09-18, after canary #1 was rejected with HTTP 400:
+
+  * The fields go in a JSON REQUEST BODY with Content-Type: application/json.
+    Every prediction-markets endpoint that takes fields documents them that
+    way. This is NOT the classic Gemini private convention of an empty body
+    with the JSON in X-GEMINI-PAYLOAD, and the difference is invisible until
+    a request actually carries a field: the account reads we had already
+    proven -- positions, settled positions -- take none.
+  * Documented response codes are 201, 400, 401, 422, 500 and 503. A 400 is
+    request validation. TERMS_NOT_ACCEPTED is a 422, so the rejection we
+    received was NOT a terms problem.
+  * timeInForce exists and enumerates good-til-cancel (default),
+    immediate-or-cancel and fill-or-kill. makerOrCancel is a separate
+    boolean defaulting to false. orderType also admits stop-limit.
+  * The account WebSocket exposes a different order schema again
+    (method order.place, with type/eventOutcome and an upper-case side).
+    It is a second transport, not this one, and nothing here uses it.
 """
 from __future__ import annotations
 

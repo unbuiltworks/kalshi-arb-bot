@@ -196,3 +196,48 @@ async def verify_authenticated_ws(timeout: float = 5.0) -> bool:
         return False
     finally:
         await ws.close()
+
+
+async def private_rest_json(
+    method: str,
+    path: str,
+    *,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+    params: dict[str, Any] | None = None,
+    timeout: float = 10.0,
+) -> httpx.Response:
+    """Signed request that ALSO carries its fields as a real JSON body.
+
+    WHY THIS EXISTS, AND WHY IT IS SEPARATE. Gemini's classic private REST
+    convention is an EMPTY body with the JSON encoded into X-GEMINI-PAYLOAD.
+    Every Prediction Markets endpoint that takes fields documents them instead
+    as a JSON request body with ``Content-Type: application/json`` (verified
+    2026-09-18 on developer.gemini.com: the place, active-orders,
+    orders/history and metrics/volume examples all send ``--data '{...}'``).
+
+    The two conventions agree everywhere we had already succeeded, because the
+    endpoints we had read -- positions, settled positions -- take NO fields, so
+    an empty body was the correct body and the classic form worked. The first
+    request whose fields actually mattered received an empty body and a 400.
+
+    Auth is unchanged and still classic: the same signed X-GEMINI-PAYLOAD, the
+    same HMAC-SHA384, and the identical field set is signed as well as sent, so
+    the request is valid whichever half the venue reads. ``private_rest_request``
+    keeps its exact previous behaviour for the read-only callers that rely on it.
+    """
+    key, secret = credentials()
+    key = api_key or key
+    secret = api_secret or secret
+    if not key or not secret:
+        raise RuntimeError("Gemini API credentials are not configured")
+    headers = rest_auth_headers(key, secret, path, params=params)
+    headers["Content-Type"] = "application/json"
+    body = json.dumps(params or {}, separators=(",", ":")).encode("utf-8")
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        return await client.request(
+            method.upper(),
+            f"{GEMINI_REST}{path}",
+            headers=headers,
+            content=body,
+        )

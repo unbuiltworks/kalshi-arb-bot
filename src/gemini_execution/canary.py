@@ -36,7 +36,10 @@ COHORT_PREFIX = "GEMI-BTC05M"            # BTC5m only
 COHORT_SUFFIX = "-UP"
 SIDE = spec.SIDE_BUY                     # BUY only, this first canary
 OUTCOME = spec.OUTCOME_YES
-QUANTITY = D("0.01")                     # exactly, the venue minimum
+#: V2: NOT a constant. The quantity is read from the contract's own
+#: quantityMinimum/quantityIncrement at preflight time. This remains only as
+#: the value the ENVELOPE was authorized at, for comparison in reports.
+QUANTITY = D("0.01")
 TICK_OFFSET = 0                          # the touch; never tuned for priority
 MAX_BBO_AGE_S = 5.0                      # a stale quote is not evidence of now
 
@@ -52,9 +55,14 @@ def _check_symbol(sym: str) -> None:
             % sym)
 
 
-def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None
-                   ) -> Dict[str, Any]:
-    """Every rule, re-checked against the FRESH preflight. Raises on any."""
+def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None,
+                   terms: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Every rule, re-checked against the FRESH preflight. Raises on any.
+
+    `terms` is the contract's authoritative metadata. It is an INPUT so this
+    stays a pure check: a validation function that reaches the network is one
+    that cannot be tested without one.
+    """
     if not pf.get("ok"):
         raise EnvelopeViolation("preflight did not pass: %s"
                                 % pf.get("verdict"))
@@ -68,10 +76,31 @@ def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None
     if str(pf.get("side") or "").lower() != SIDE:
         raise EnvelopeViolation("side %r is not %r" % (pf.get("side"), SIDE))
 
+    # V2: the quantity is whatever the VENUE states as its minimum, validated
+    # against the contract's own quantityMinimum/quantityIncrement. Canary #1
+    # hard-coded 0.01 from an endpoint that disclaims these instruments; it
+    # happened to match, which is not the same as being established.
+    from src.gemini_execution import metadata as _MD
+    terms = terms if terms is not None else _MD.terms_for(sym)
+    if not terms.get("readable"):
+        raise EnvelopeViolation(
+            "instrument metadata is not readable (%s); size and price may not "
+            "be assumed" % terms.get("why"))
+    if terms.get("contract_status") != "active" or \
+            terms.get("market_state") != "open":
+        raise EnvelopeViolation(
+            "contract status %r / market state %r is not tradeable"
+            % (terms.get("contract_status"), terms.get("market_state")))
+    smallest = _MD.smallest_valid_quantity(terms)
     qty = D(str(pf.get("quantity")))
-    if qty != QUANTITY:
-        raise EnvelopeViolation("quantity %s is not exactly %s"
-                                % (qty, QUANTITY))
+    if str(qty) != str(D(str(smallest))):
+        raise EnvelopeViolation(
+            "quantity %s is not the venue's smallest valid quantity %s"
+            % (qty, smallest))
+    qv = _MD.quantity_is_valid(qty, terms)
+    if qv.get("valid") is not True:
+        raise EnvelopeViolation("quantity %s fails the contract's own rules: %s"
+                                % (qty, qv.get("checks")))
 
     rest = pf.get("restability") or {}
     if rest.get("tick_offset_from_touch") != TICK_OFFSET:
@@ -81,12 +110,15 @@ def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None
     if not rest.get("restable"):
         raise EnvelopeViolation("the price is not restable")
 
-    terms = pf.get("venue_terms") or {}
-    if terms.get("status") != "limit_only":
+    # NOT `terms`: that name holds the CONTRACT metadata above, and reusing it
+    # here silently replaced it with the preflight's venue_terms, so the price
+    # check then read a dict with no `readable` key and refused every price.
+    venue_terms = pf.get("venue_terms") or {}
+    if venue_terms.get("status") != "limit_only":
         raise EnvelopeViolation(
             "venue status %r is not limit_only; the venue-level maker "
             "protection this canary relies on is not in force"
-            % terms.get("status"))
+            % venue_terms.get("status"))
 
     bbo = pf.get("current_bbo") or {}
     bid, ask = bbo.get("bid"), bbo.get("ask")
@@ -102,6 +134,11 @@ def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None
             "price %s is not the touch %s; tick offset 0 means join the bid"
             % (price, bid))
 
+    pv = _MD.price_is_valid(price, terms)
+    if pv.get("valid") is not True:
+        raise EnvelopeViolation("price %s fails the contract's own rules: %s"
+                                % (price, pv.get("checks")))
+
     ts = bbo.get("source_ts")
     t = now if now is not None else time.time()
     if ts is None:
@@ -112,8 +149,13 @@ def check_envelope(pf: Dict[str, Any], *, now: Optional[float] = None
         raise EnvelopeViolation("the BBO is %.1fs old, older than %.1fs"
                                 % (age, MAX_BBO_AGE_S))
 
+    # the VENUE's smallest valid quantity, never the module constant. Returning
+    # str(QUANTITY) here would have re-introduced exactly the hard-coding V2
+    # exists to remove -- and would have sent 0.01 at a venue asking for 1.
     return {"symbol": sym, "side": SIDE, "outcome": OUTCOME,
-            "price": str(price), "quantity": str(QUANTITY),
+            "price": str(price), "quantity": str(smallest),
+            "authorized_envelope_quantity": str(QUANTITY),
+            "quantity_source": "contract quantityMinimum/quantityIncrement",
             "bbo_age_s": round(age, 3)}
 
 
@@ -176,8 +218,12 @@ async def submit_once(auth_id: str, *, state_dir: str = latch.DEFAULT_DIR,
     pf = await pf_mod.preflight_async(now)
 
     # 4-6 envelope, fresh BBO, no crossing
+    from src.gemini_execution import metadata as MD
+    sym_pf = pf.get("instrument")
+    terms = MD.terms_for(sym_pf) if sym_pf else {"readable": False,
+                                                 "why": "no instrument"}
     try:
-        intent = check_envelope(pf, now=now)
+        intent = check_envelope(pf, now=now, terms=terms)
     except EnvelopeViolation as exc:
         return {"submitted": False, "state": "ENVELOPE_REFUSED",
                 "why": str(exc), "preflight_ok": pf.get("ok")}

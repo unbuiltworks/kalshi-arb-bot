@@ -10,6 +10,8 @@ import tempfile
 
 import pytest
 
+from decimal import Decimal as D
+
 from src.gemini_execution import arming, canary as C, latch, spec
 
 AUTH = arming.EXPECTED_AUTH_ID
@@ -59,6 +61,18 @@ class _PF:
         return self._pf
 
 
+def _terms(**over):
+    """The contract metadata as the venue states it, so the envelope can be
+    tested without a network."""
+    t = {"readable": True, "instrumentSymbol": "GEMI-BTC05M2609180000-UP",
+         "quantityMinimum": "0.01", "quantityIncrement": "0.01",
+         "priceMinimum": "0.01", "priceIncrement": "0.01",
+         "priceMaximum": None, "quantityMaximum": None,
+         "contract_status": "active", "market_state": "open"}
+    t.update(over)
+    return t
+
+
 class _TR:
     """A transport that records calls. Never reaches a network."""
 
@@ -78,9 +92,15 @@ class _TR:
         return {"resolved": True, "found": False}
 
 
-def _submit(pf, tr, state_dir, auth=AUTH):
-    return _run(C.submit_once(auth, state_dir=state_dir, now=NOW,
-                              preflight=_PF(pf), transport=tr))
+def _submit(pf, tr, state_dir, auth=AUTH, terms=None):
+    import src.gemini_execution.metadata as _MD
+    orig = _MD.terms_for
+    _MD.terms_for = lambda sym: (terms if terms is not None else _terms())
+    try:
+        return _run(C.submit_once(auth, state_dir=state_dir, now=NOW,
+                                  preflight=_PF(pf), transport=tr))
+    finally:
+        _MD.terms_for = orig
 
 
 # ============================================================ arming refusals
@@ -136,8 +156,8 @@ def test_the_transport_itself_refuses_while_disarmed(monkeypatch):
                       "source_ts": None}}, "no timestamp"),
     ({"instrument": "GEMI-BTC15M2609180000-UP"}, "BTC5m only"),
     ({"instrument": "GEMI-ETH05M2609180000-UP"}, "BTC5m only"),
-    ({"quantity": "0.02"}, "not exactly"),
-    ({"quantity": "1"}, "not exactly"),
+    ({"quantity": "0.02"}, "smallest valid quantity"),
+    ({"quantity": "1"}, "smallest valid quantity"),
     ({"side": "SELL"}, "side"),
     ({"restability": {"restable": True,
                       "tick_offset_from_touch": 1}}, "tick offset"),
@@ -403,11 +423,17 @@ def test_the_durable_record_is_written_before_the_send(state_dir, armed):
 
 
 def _submit_hooks(pf, tr, state_dir, *, durable_check=None,
-                  make_durable=None, auth=AUTH):
-    return _run(C.submit_once(auth, state_dir=state_dir, now=NOW,
-                              preflight=_PF(pf), transport=tr,
-                              durable_check=durable_check,
-                              make_durable=make_durable))
+                  make_durable=None, auth=AUTH, terms=None):
+    import src.gemini_execution.metadata as _MD
+    orig = _MD.terms_for
+    _MD.terms_for = lambda sym: (terms if terms is not None else _terms())
+    try:
+        return _run(C.submit_once(auth, state_dir=state_dir, now=NOW,
+                                  preflight=_PF(pf), transport=tr,
+                                  durable_check=durable_check,
+                                  make_durable=make_durable))
+    finally:
+        _MD.terms_for = orig
 
 
 # ================================ a rejection must say WHY, and say it durably
@@ -451,3 +477,69 @@ def test_the_terminal_state_is_written_to_durable_storage_too(state_dir,
                   make_durable=lambda a, rec: seen.append(rec["state"]))
     assert seen[0] == latch.INTENT_PERSISTED
     assert seen[-1] == latch.REJECTED
+
+
+# ====================== V2: size and price come from the VENUE, not from us
+
+def test_unreadable_instrument_metadata_refuses(state_dir, armed):
+    """Canary #1 took 0.01 from an endpoint that disclaims these instruments.
+    It happened to match, which is not the same as being established."""
+    tr = _TR()
+    r = _submit(_pf(), tr, state_dir,
+                terms={"readable": False, "why": "event not found"})
+    assert r["state"] == "ENVELOPE_REFUSED"
+    assert "may not be assumed" in r["why"]
+    assert tr.calls == []
+
+
+@pytest.mark.parametrize("over,needle", [
+    ({"contract_status": "settled"}, "not tradeable"),
+    ({"market_state": "closed"}, "not tradeable"),
+])
+def test_an_untradeable_contract_refuses(state_dir, armed, over, needle):
+    tr = _TR()
+    r = _submit(_pf(), tr, state_dir, terms=_terms(**over))
+    assert r["state"] == "ENVELOPE_REFUSED" and needle in r["why"]
+    assert tr.calls == []
+
+
+def test_a_quantity_below_the_venue_minimum_refuses(state_dir, armed):
+    tr = _TR()
+    r = _submit(_pf(quantity="0.01"), tr, state_dir,
+                terms=_terms(quantityMinimum="1", quantityIncrement="1"))
+    assert r["state"] == "ENVELOPE_REFUSED"
+    assert "smallest valid quantity" in r["why"]
+    assert tr.calls == []
+
+
+def test_the_quantity_tracks_the_venue_when_the_minimum_changes(state_dir,
+                                                                armed):
+    """If the venue said 1, the canary sends 1 -- not a hard-coded 0.01.
+    The size is the venue's, which is the entire point of V2."""
+    tr = _TR()
+    r = _submit(_pf(quantity="1"), tr, state_dir,
+                terms=_terms(quantityMinimum="1", quantityIncrement="1"))
+    assert r["submitted"] is True, r
+    assert tr.calls[0]["quantity"] == "1"
+    assert C.QUANTITY != D("1"), "the constant must not be what drove it"
+
+
+def test_a_price_off_the_increment_refuses(state_dir, armed):
+    tr = _TR()
+    r = _submit(_pf(limit_price="0.635",
+                    current_bbo={"bid": "0.635", "ask": "0.90",
+                                 "source_ts": NOW - 1.0}),
+                tr, state_dir, terms=_terms(priceIncrement="0.01"))
+    assert r["state"] == "ENVELOPE_REFUSED"
+    assert "contract's own rules" in r["why"]
+    assert tr.calls == []
+
+
+def test_a_price_below_the_venue_minimum_refuses(state_dir, armed):
+    tr = _TR()
+    r = _submit(_pf(limit_price="0.01",
+                    current_bbo={"bid": "0.01", "ask": "0.90",
+                                 "source_ts": NOW - 1.0}),
+                tr, state_dir, terms=_terms(priceMinimum="0.05"))
+    assert r["state"] == "ENVELOPE_REFUSED"
+    assert tr.calls == []
