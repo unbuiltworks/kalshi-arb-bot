@@ -250,6 +250,7 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --cohort "COHORT-2026-09-18-C5" \
             --ledger analysis/gemini/continuous_ledger.jsonl \
             --out    analysis/gemini/continuous_unarmed_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire   /tmp/unarmed_wire.json \
