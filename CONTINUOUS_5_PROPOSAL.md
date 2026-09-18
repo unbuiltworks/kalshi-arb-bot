@@ -144,25 +144,71 @@ The second is about ten lines and changes no control flow. It is offered, not
 taken: changing a hash the owner pinned is the owner's call, and the standing
 resolution is that evidence capture never edits the authorized executable.
 
-## Unarmed production-shaped verification
+## Unarmed production-shaped verification — the eight required checks
 
-`analysis/gemini/continuous_unarmed_20260918T191316Z.json`, real credentials
-and readers, cohort path exercised end to end.
+`analysis/gemini/continuous_unarmed_20260918T200252Z.json`, committed by
+Actions run 35389107398 on `70b0243a`. Real credentials, real readers, the same
+entry point the armed step calls, contract `GEMI-BTC05M2609182005-UP` at TTE
+127.9s. Terms `ACCEPTED`, `blocks_orders: false`.
 
-| required | result |
-|---|---|
-| recovery | `recovered: true` |
-| readability | `order_history readable: true`; `active ok: true, status 200` |
-| current inventory | `yes 0 / no 0 / n_fills 0` — authoritative, on a fresh contract |
-| current working orders | `venue authoritative: 0 resting` |
-| risk | gates evaluated against reconciled inventory, preflight `agrees: true, discrepancies: []` |
-| budget | cohort `6`, consumed `0`, remaining `6` |
-| cohort | loaded, predecessor **intact** (`89cf9de6…`, 12 consumed) |
-| authorization is the sole blocker | `why_not` lists only `REQUIRED_AUTH_ID is None`, `AUTHORIZED_SHA is None`, transport arm |
-| zero socket mutation | `wire: null`, `session: null` — no session constructed |
-| zero new latch | `latch.consumed: false`; **5** latch files, no sixth |
+| # | required before live execution | evidence in the artifact |
+|---|---|---|
+| 1 | executable SHA `3194e691…abf1` | `driver_executable_sha` matches exactly |
+| 2 | envelope SHA `b3bff654…aa17` | `driver_envelope_sha` and `authorization.envelope_sha` both match, and equal `authorized_envelope` |
+| 3 | bundle SHA `48f7f1f4…a56f` | `bundle_sha` matches exactly |
+| 4 | cohort `COHORT-2026-09-18-C5` | `cohort.cohort_id` |
+| 5 | budget 6/6 | `budget 6, consumed 0, remaining 6`; `pre_latch_recovery.budget_left 6`; cohort ledger 0 rows |
+| 6 | historical ledger byte-identical, 12/12 spent | `predecessor.recorded_sha256 == current_sha256 == 89cf9de6…`, `recorded_consumed == current_consumed == 12`, `intact: true` |
+| 7 | reconciliation before every decision, and after ambiguous cancels when a place is pending | **partly** — see below |
+| 8 | no authorization, no CONTINUOUS-5 latch | `authorization.authorized false` with all three reasons; `latch.consumed false`; 5 latch files, no sixth |
 
-Terminal state `READY_TO_MUTATE_BUT_UNAUTHORIZED`. 6322 tests pass.
+Terminal state **`READY_TO_MUTATE_BUT_UNAUTHORIZED`**, refused for exactly three
+reasons and nothing else: `REQUIRED_AUTH_ID is None`, `AUTHORIZED_SHA is None`,
+`GEMINI_CANARY_LIVE is not YES`. Preflight `agrees: true, discrepancies: []`.
+Authoritative reads all succeeded — `order_history readable: true`
+(`NO_ORDERS_ON_RECORD`, 0 rows), `active ok: true, status 200`, fills 0,
+open orders 0 — so the fail-closed branch was reachable and simply had nothing
+to refuse. 6,324 tests pass.
+
+**On check 7, stated precisely rather than claimed.** What this run
+*demonstrates* is the pre-latch half: `pre_latch_recovery` carries
+`checked_before_latch: true` and `checked_before_authorization: true`, so
+recovery ran before the authorization latch could be spent. The *per-cycle*
+half cannot be demonstrated by an unarmed run, because the driver refuses
+before it ever reaches `RUNNING` and no cycle executes. It is pinned by test
+instead:
+
+* `test_run_window_records_every_refresh_for_audit` — one refresh per cycle,
+  each `when == "pre_decide"`;
+* `test_a_fill_between_cancel_and_replace_is_seen_before_the_place` — the
+  second refresh, `when == "post_cancel"`, only when a place is pending;
+* `test_turns_carry_the_inventory_the_decision_used` — the report shows which
+  inventory each decision saw;
+* `test_repeated_refreshes_apply_each_fill_exactly_once` and
+  `test_a_restart_recovers_the_same_state_a_refresh_produces` — idempotent by
+  construction;
+* `test_unreadable_fills_stop_the_window_rather_than_read_as_flat` and
+  `test_unreadable_open_orders_stop_the_window` — unreadable stops the window;
+* `test_an_empty_cancel_result_does_not_erase_the_order` and
+  `test_the_slot_is_still_spent_on_an_ambiguous_cancel` — the ambiguous cancel
+  that caused CONTINUOUS-4;
+* `test_risk_gates_run_against_reconciled_inventory_not_zero` — the bounds bind
+  real inventory.
+
+The first live window is what converts that from pinned to observed.
+
+## The armed step was not ready, and now is
+
+The armed step invoked `run_continuous` **without `--cohort`**. It would have
+bound the historical ledger — 12/12 permanently spent — so an authorized window
+would have died on budget at the moment it mattered, and the repair would have
+been improvised under arm-time pressure. It now names
+`COHORT-2026-09-18-C5`.
+
+It remains **unarmable**: one `GEMINI_CANARY_LIVE` assignment in the whole
+workflow, a sentinel `--auth-id NO-AUTHORIZATION-IN-FORCE`, and driver
+constants still `None`. Two tests pin both facts, including that a preparation
+commit never installs an authorization id.
 
 ## CONTINUOUS-4 accounting (unchanged, cashflow continues independently)
 
