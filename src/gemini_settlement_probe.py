@@ -236,6 +236,25 @@ async def probe(symbols: Sequence[str]) -> Dict[str, Any]:
         r = await _read("/v1/mytrades", {"symbol": sym, "limit_trades": 500})
         legs = legs_from_mytrades(sym, r.get("body"))
         st = S.Settlement(sym, legs=legs)
+
+        # THE OUTCOME LEG, WHICH NOTHING USED TO READ. `resolution_for` is a
+        # PUBLIC read of the contract object and carries status,
+        # resolutionSide, resolvedAt and settlementValue -- it has carried
+        # them all along. Because the probe never called it, settlement_value
+        # and settlement_source were never assigned by anything and the
+        # authoritative_outcome link was structurally unsatisfiable: a
+        # resolved contract stayed labelled unsettled forever. CONTINUOUS-4
+        # resolved at 17:30:07.369Z and still read "absent" at 17:55Z.
+        resolution: Dict[str, Any] = {}
+        applied: Dict[str, Any] = {"applied": False, "why": "not attempted"}
+        try:
+            from src.gemini_execution import metadata as MD
+            resolution = MD.resolution_for(sym)
+            applied = S.apply_resolution(st, resolution)
+        except Exception as exc:                               # noqa: BLE001
+            applied = {"applied": False,
+                       "why": "%s: %s" % (type(exc).__name__, exc)}
+
         settlements.append(st)
         per_symbol.append({
             "symbol": sym, "mytrades_status": r.get("status"),
@@ -244,6 +263,21 @@ async def probe(symbols: Sequence[str]) -> Dict[str, Any]:
             "legs_parsed": len(legs),
             "unparseable": r.get("unparseable") is not None,
             "position": str(st.position()),
+            # SHAPE ONLY of the trade rows, so the outcome field can be read
+            # from what the venue actually sends rather than guessed at.
+            "mytrades_row_keys": sorted(
+                {k for row in (r.get("body") or [])
+                 if isinstance(row, dict) for k in row.keys()}
+            ) if isinstance(r.get("body"), list) else None,
+            "resolution": {k: resolution.get(k) for k in
+                           ("verdict", "resolutionSide", "resolvedAt",
+                            "settlementValue", "marketState", "status",
+                            "expired", "is_terminal", "flapped",
+                            "strike_check", "source")},
+            "resolution_applied": applied,
+            "payout": (str(st.payout()) if st.payout() is not None else None),
+            "reconstructed": (str(st.reconstructed())
+                              if st.reconstructed() is not None else None),
             "proof_chain": proof_chain(sym, st, candidates),
         })
 

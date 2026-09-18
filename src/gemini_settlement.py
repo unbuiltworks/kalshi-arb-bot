@@ -105,6 +105,57 @@ class NotSettled(Exception):
     """Raised when something asks for realized P&L the evidence cannot support."""
 
 
+#: the contract field that is NOT a payout. Named so the mistake is hard to
+#: make twice: the venue's `settlementValue` is the underlying index print
+#: (measured 2026-09-18: "80727.9451111111" against strike "80694.84"), while
+#: the payout is 1/0 decided by `resolutionSide`.
+UNDERLYING_PRICE_FIELD = "settlementValue"
+OUTCOME_FIELD = "resolutionSide"
+
+
+def apply_resolution(st: "Settlement", res: Mapping[str, Any]) -> Dict[str, Any]:
+    """Attach a venue resolution reading to a Settlement. READ-ONLY input.
+
+    WHY THIS FUNCTION EXISTS AT ALL. Nothing ever assigned `settlement_value`
+    or `settlement_source`, so the proof chain's `authoritative_outcome` link
+    evaluated `bool(None and None)` -- FALSE for every symbol, always. A
+    contract the venue had resolved, and whose resolution was readable on a
+    PUBLIC endpoint, stayed labelled unsettled indefinitely. CONTINUOUS-4 was
+    resolved at 17:30:07.369Z and still read "absent" at 17:55Z.
+
+    Takes the shape `metadata.resolution_for` returns. A reading that is not
+    SETTLED attaches nothing: absence of evidence is not evidence, and an
+    endpoint that flaps between settled and active must never be recorded as
+    having un-settled a contract.
+    """
+    if not isinstance(res, Mapping):
+        return {"applied": False, "why": "no resolution reading supplied"}
+    if res.get("verdict") != "SETTLED":
+        return {"applied": False, "verdict": res.get("verdict"),
+                "why": ("the venue has not been observed to resolve this "
+                        "contract; UNCONFIRMED is the absence of evidence, "
+                        "never a claim that it did not settle")}
+    side = res.get(OUTCOME_FIELD)
+    if side not in ("yes", "no"):
+        return {"applied": False,
+                "why": "resolutionSide is %r, which names no side" % (side,)}
+
+    st.resolution_side = str(side)
+    st.resolved_at = res.get("resolvedAt")
+    st.underlying_settlement_price = res.get(UNDERLYING_PRICE_FIELD)
+    # the YES side's payout, which is what `settlement_value` has always meant
+    st.settlement_value = "1" if side == "yes" else "0"
+    st.settlement_source = res.get("source") or "contract object"
+    return {"applied": True, "resolution_side": st.resolution_side,
+            "resolved_at": st.resolved_at,
+            "settlement_value_yes_side": st.settlement_value,
+            "underlying_settlement_price": st.underlying_settlement_price,
+            "strike_check": res.get("strike_check"),
+            "labels": ("settlement_value is the 1/0 PAYOUT for the YES side, "
+                       "derived from resolutionSide. underlying_settlement_"
+                       "price is the index print and is never a payout.")}
+
+
 # ------------------------------------------------------------------ evidence
 
 @dataclass
@@ -117,9 +168,34 @@ class Leg:
     fee: str
     source: str                # the endpoint that produced it
     trade_id: Optional[str] = None
+    #: WHICH SIDE OF THE CONTRACT. "yes" or "no", lowercased as the venue
+    #: writes it, or None when the row did not say. Without it a YES leg and a
+    #: NO leg are indistinguishable, and a two-sided position reconstructs as
+    #: though EVERY unit paid out -- see `payout_per_unit`.
+    outcome: Optional[str] = None
 
     def signed_qty(self) -> D:
         return D(self.qty) if self.side == "BUY" else -D(self.qty)
+
+    def payout_per_unit(self, resolution_side: str) -> Optional[D]:
+        """What one unit of THIS leg redeems for, given the venue's outcome.
+
+        A binary contract pays 1 to the side that won and 0 to the other. Our
+        CONTINUOUS-4 position was YES 0.01 and NO 0.01 on the same contract:
+        the UP contract resolved `resolutionSide: "yes"`, so the YES unit
+        redeemed 1 and the NO unit redeemed 0, for a payout of 0.0100 against
+        a cost of 0.0106.
+
+        Summing the position first and multiplying by one settlement value
+        instead would have paid out BOTH units -- +0.0094, a phantom profit
+        with the sign inverted. None here means the row did not name its
+        outcome, which is UNREADABLE and must stop a reconstruction rather
+        than default to either side.
+        """
+        if not self.outcome or not resolution_side:
+            return None
+        return D("1") if str(self.outcome).lower() == str(
+            resolution_side).lower() else D("0")
 
     def cash(self) -> D:
         """Cash out at a buy, in at a sell. Fees are NOT folded in here."""
@@ -139,6 +215,16 @@ class Settlement:
     cash_delta_source: Optional[str] = None
     inferred_settlement_value: Optional[str] = None   # from the underlying
     notes: Optional[str] = None
+    #: the venue's own `resolutionSide` -- "yes" or "no". THE PAYOUT COMES
+    #: FROM THIS, never from the contract's `settlementValue` field, which is
+    #: the UNDERLYING INDEX PRICE (measured 2026-09-18: "80727.9451111111"
+    #: against a strike of "80694.84"). Multiplying a position by that number
+    #: would misprice a $0.01 position by five orders of magnitude.
+    resolution_side: Optional[str] = None
+    resolved_at: Optional[str] = None
+    #: the index print the venue resolved against, kept for audit and NEVER
+    #: used as a payout
+    underlying_settlement_price: Optional[str] = None
 
     # ------------------------------------------------------------ positions
 
@@ -186,16 +272,49 @@ class Settlement:
                 "this is not one." % (self.symbol, ", ".join(gaps)))
         return D(str(self.cash_delta_observed))
 
+    def payout(self) -> Optional[D]:
+        """What the legs redeem for, PER LEG, by the side each one is on.
+
+        Returns None when any leg cannot say which side it is on, because a
+        two-sided position whose sides are unknown cannot be valued at all and
+        guessing one is worse than reporting nothing.
+        """
+        if not self.resolution_side:
+            return None
+        total = D("0")
+        for l in self.legs:
+            per = l.payout_per_unit(self.resolution_side)
+            if per is None:
+                return None
+            total += l.signed_qty() * per
+        return total
+
     def reconstructed(self) -> Optional[D]:
-        """What the legs and the settlement value SAY the cash should be.
+        """What the legs and the venue's OUTCOME say the cash should be.
 
         A cross-check on `realized`, never a substitute: it is arithmetic on
-        our records, and the venue's cash is the fact."""
-        if not self.settlement_value:
-            return None
-        return (self.fills_cash()
-                + self.position() * D(str(self.settlement_value))
-                - self.fees())
+        our records, and the venue's cash is the fact.
+
+        THIS USED TO MULTIPLY THE WHOLE POSITION BY ONE SETTLEMENT VALUE. For
+        a one-sided position that happens to be right. For CONTINUOUS-4's
+        YES 0.01 + NO 0.01 it pays out both units -- +0.0094 instead of
+        -0.0006, a phantom profit with the sign inverted. The payout is now
+        taken leg by leg from the side each leg is on.
+        """
+        pay = self.payout()
+        if pay is not None:
+            return self.fills_cash() + pay - self.fees()
+        # A NET-ZERO POSITION REDEEMS NOTHING WHICHEVER SIDE WON, so the
+        # settlement term vanishes and no per-leg outcome is needed. This is
+        # the ONLY case where the old whole-position arithmetic was provably
+        # right, and it stays supported so a closed round trip still
+        # reconstructs without labelled legs.
+        if self.settlement_value is not None and self.position() == D("0"):
+            return self.fills_cash() - self.fees()
+        # An OPEN position whose legs cannot say which side they are on is
+        # exactly the CONTINUOUS-4 case. Returning a number here is what
+        # produced +0.0094 instead of -0.0006.
+        return None
 
     def report(self) -> Dict[str, Any]:
         gaps = self.missing()
@@ -209,6 +328,13 @@ class Settlement:
             "settlement_value": self.settlement_value,
             "settlement_source": self.settlement_source,
             "inferred_settlement_value": self.inferred_settlement_value,
+            # the venue's OUTCOME evidence, surfaced so a resolved contract
+            # cannot silently read as unsettled in an artifact again
+            "resolution_side": self.resolution_side,
+            "resolved_at": self.resolved_at,
+            "underlying_settlement_price": self.underlying_settlement_price,
+            "payout": (str(self.payout()) if self.payout() is not None
+                       else None),
             "satisfied": self.satisfied(),
             "missing": gaps,
             "gate": "BLOCKED" if gaps else "OPEN",

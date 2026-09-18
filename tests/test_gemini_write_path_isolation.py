@@ -67,6 +67,21 @@ def test_no_other_gemini_module_names_a_mutation_path():
     assert not offenders, offenders
 
 
+#: The ONE read-only module outside modules may import, named explicitly.
+#:
+#: NARROWED 2026-09-18, IN THE OPEN. The settlement probe reported a resolved
+#: contract as unsettled for 25 minutes because nothing ever read the venue's
+#: OUTCOME. The reader that does -- `metadata.resolution_for` -- is a PUBLIC,
+#: read-only contract fetch that happens to live in the execution package, and
+#: a blanket import ban meant the settlement gate could not see what the
+#: Gemini UI already displayed.
+#:
+#: This exception is exactly one module wide and is itself guarded: the test
+#: below asserts `metadata` carries no mutation surface, so the exception
+#: cannot quietly become a hole. Everything else in the package stays banned.
+READ_ONLY_EXCEPTION = "src.gemini_execution.metadata"
+
+
 def test_no_other_gemini_module_imports_the_execution_package():
     offenders = []
     for p in _gemini_modules():
@@ -76,11 +91,40 @@ def test_no_other_gemini_module_imports_the_execution_package():
             if isinstance(n, ast.Import):
                 mods = {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom) and n.module:
-                mods = {n.module}
-            for m in mods:
+                # RESOLVE THE FULL DOTTED NAME. `from src.gemini_execution
+                # import ws_session` must read as the MODULE it pulls in, not
+                # as the package -- otherwise the narrow exception below could
+                # not distinguish the one read-only module from any other.
+                mods = {n.module} | {"%s.%s" % (n.module, a.name)
+                                     for a in n.names}
+            for m in sorted(mods):
+                if m == READ_ONLY_EXCEPTION:
+                    continue
+                # the package name alone is fine when the only thing taken
+                # from it is the permitted module
+                if m == "src.gemini_execution" and READ_ONLY_EXCEPTION in mods:
+                    continue
                 if m.startswith("src.gemini_execution"):
                     offenders.append("%s imports %s" % (p, m))
     assert not offenders, offenders
+
+
+def test_the_read_only_exception_really_is_read_only():
+    """The exception above is only safe while this holds. If `metadata` ever
+    grows an order path, the narrowing becomes a hole and this fails first."""
+    p = pathlib.Path(READ_ONLY_EXCEPTION.replace(".", "/") + ".py")
+    assert p.exists(), p
+    text = p.read_text()
+    tree = ast.parse(text)
+    consts = {n.value for n in ast.walk(tree)
+              if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    for marker in MUTATION_MARKERS:
+        assert marker not in consts, "%s names mutation surface %r" % (p, marker)
+    called = {n.func.attr for n in ast.walk(tree)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    for bad in ("place", "cancel", "cancel_and_confirm"):
+        assert bad not in called, "%s calls %s()" % (p, bad)
+    assert "ws_session" not in text and "GeminiMakerSession" not in text
 
 
 def test_the_named_read_only_modules_are_covered_by_the_scan():
