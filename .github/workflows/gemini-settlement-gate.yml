@@ -235,19 +235,36 @@ jobs:
             --out analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/reconcile.txt
 
-          # THE TWO ORDERS CONTINUOUS-5 LEFT RESTING. Its cancel was rejected
-          # -1013 and the window stopped, so YES 0.26 and NO 0.46 were still
-          # open on a contract that has since expired. This READS what became
-          # of them -- filled, cancelled/expired, or still open. It does NOT
-          # mutate them: the C5 authorization is spent, and no --apply-from is
-          # passed, so the C5 ledger is not written either.
-          for pair in "0 145828836250441342" "1 145828836250441357"; do
-            set -- $pair
-            python -m src.gemini_execution.reconcile_slot \
-              --ledger analysis/gemini/cohorts/COHORT-2026-09-18-C5/ledger.jsonl \
-              --slot "$1" --order-id "$2" \
-              --out analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ)_c5s$1.json \
-              2>&1 | tee -a /tmp/reconcile_c5.txt || true
+          # EVERY ORDER EVERY COHORT CREATED, reconciled READ-ONLY.
+          #
+          # C5 taught this the hard way: its cancel was rejected -1013, the
+          # window stopped, and one of the orders it left resting FILLED 57
+          # seconds later. A window that has stopped is not a window that is
+          # flat, so the disposition of each order -- FILLED, OPEN, CANCELLED
+          # or EXPIRED -- has to be read from the venue rather than inferred
+          # from the fact that the controller ended.
+          #
+          # Derived from each cohort ledger's own PLACE slots, so it needs no
+          # editing per window. NOTHING is mutated: no --apply-from, so the
+          # ledgers are not written, and there is no order path here at all.
+          for led in analysis/gemini/cohorts/*/ledger.jsonl; do
+            coh=$(basename "$(dirname "$led")")
+            python3 - "$led" > /tmp/slots.txt <<'PYEOF'
+          import json, sys
+          rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+          ids = {r["slot"]: r.get("orderId") for r in rows
+                 if r.get("kind") == "RESOLVE" and r.get("orderId")}
+          for r in rows:
+              if r.get("kind") == "PLACE" and ids.get(r["slot"]):
+                  print(r["slot"], ids[r["slot"]])
+          PYEOF
+            while read -r slot oid; do
+              [ -n "$oid" ] || continue
+              python -m src.gemini_execution.reconcile_slot \
+                --ledger "$led" --slot "$slot" --order-id "$oid" \
+                --out "analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ)_${coh##*-}s${slot}.json" \
+                2>&1 | tee -a /tmp/reconcile_cohorts.txt || true
+            done < /tmp/slots.txt
           done
 
       # THE UNARMED PRODUCTION-PATH VERIFICATION. This is run_continuous
@@ -278,9 +295,10 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # ARMED FOR CONTINUOUS-6, authorized 2026-09-18 after the cancel
-      # defect C5 exposed was fixed at the normalization boundary. C5 stays
-      # spent at 3 of 6 with its UNKNOWN intact; C6 is a FRESH cohort.
+      # DISARMED AGAIN. CONTINUOUS-6 RAN AND IS SPENT: 8 cycles, all 6 slots,
+      # stopped on budget rather than on an error, and its cancels were
+      # accepted 200 -- the -1013 is gone. The auth id below is the sentinel
+      # and the driver constants are None, so this step cannot arm.
       #
       # NOTE FOR WHOEVER READS THIS NEXT: STOP stops the CONTROLLER. C5's
       # NO leg filled 57 seconds AFTER its window terminated, because a
@@ -330,12 +348,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T00:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-18-GEMINI-CONTINUOUS-6" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
             --cohort  "COHORT-2026-09-18-C6" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
@@ -388,7 +406,7 @@ jobs:
           # thrown the record away -- and the NEXT window would have read a
           # cohort with 0 consumed. That is a budget reset by accident, which
           # is the one thing the cohort mechanism exists to make impossible.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_c5s[0-9])?\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

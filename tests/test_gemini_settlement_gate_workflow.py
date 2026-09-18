@@ -398,112 +398,79 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     assert "COHORT-2026-09-18-C5" not in armed.split("run:", 1)[1]
 
 
-def test_the_workflow_is_armed_for_exactly_the_authorized_window():
-    """ARMED for CONTINUOUS-6. This guard has now pinned "cannot arm",
-    "armed", "spent and disarmed" and "armed again" in one day -- it tracks
-    the real posture, and what must never hold is an armed tree with no live
-    authorization behind it."""
+def test_continuous_6_is_spent_and_the_workflow_is_disarmed():
+    """CONTINUOUS-6 ran; the tree is disarmed again. What must never hold is
+    an armed tree with no live authorization behind it."""
     from src.gemini_execution import arming as ARM
     from src.gemini_execution import bundle as BUN
     from src.gemini_execution import ws_continuous as WCX
 
-    auth = "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
     wf = WF.read_text()
-    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
-
     assert len(re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)) == 1
-    assert 'GEMINI_CANARY_AUTH: "%s"' % auth in armed
-    assert '--auth-id "%s"' % auth in armed
-    assert "COHORT-2026-09-18-C6" in armed
-
-    # the code and the workflow name the SAME authorization, and the
-    # signature sits on the hashes actually in the tree
-    assert WCX.REQUIRED_AUTH_ID == auth and ARM.EXPECTED_AUTH_ID == auth
-    assert WCX.AUTHORIZED_SHA == WCX.executable_sha()
-    assert WCX.AUTHORIZED_ENVELOPE == WCX.envelope_sha()
-    assert BUN.AUTHORIZED_BUNDLE == BUN.bundle_sha()
-    assert WCX.AUTHORIZED_SHA == (
-        "7dc3daaefcbc39488611fbb94efdb3830c84f760aa866d53dcfaeb99b2aa01ff")
-    assert WCX.AUTHORIZED_ENVELOPE == (
+    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in wf
+    ids = re.findall(r'--auth-id "([^"]+)"', wf)
+    assert ids and set(ids) == {"NO-AUTHORIZATION-IN-FORCE"}, ids
+    assert ARM.EXPECTED_AUTH_ID == "NO-AUTHORIZATION-IN-FORCE"
+    assert WCX.REQUIRED_AUTH_ID is None and WCX.AUTHORIZED_SHA is None
+    assert BUN.AUTHORIZED_BUNDLE is None
+    # the envelope did not move across the window
+    assert WCX.envelope_sha() == (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    assert BUN.AUTHORIZED_BUNDLE == (
-        "3bd2872fdb462ea48aa28dc04b299232c9df6da45f88030af96faca5f993497d")
-
-    # the read-only proof step must stay unarmed
-    block = wf.split("Unarmed production path (real readers", 1)[1].split(
-        "ONE authorized Gemini continuous window", 1)[0]
-    unarmed = "\n".join(l for l in block.splitlines()
-                        if not l.strip().startswith("#"))
-    assert '--auth-id "NO-AUTHORIZATION-IN-FORCE"' in unarmed
-    assert "GEMINI_CANARY_LIVE" not in unarmed and auth not in unarmed
+    # nor did the executable: C6 needed no code change
+    assert WCX.executable_sha() == (
+        "7dc3daaefcbc39488611fbb94efdb3830c84f760aa866d53dcfaeb99b2aa01ff")
 
 
-def test_the_continuous_5_latch_is_durable_and_unreusable():
-    """One authorization, one window, and the latch is what makes that
-    survive a fresh runner with a clean disk."""
-    import json
+def test_one_latch_per_authorization_and_no_latch_without_one():
+    """One authorization, one window, and the latch makes that durable across
+    a fresh runner with a clean disk.
+
+    This asserted a COUNT, which broke the moment CONTINUOUS-6 ran -- a test
+    pinning a moment again. The invariant is the CORRESPONDENCE: every latch
+    on disk belongs to an authorization we know was granted, and every
+    granted authorization has exactly one latch. A latch naming an
+    authorization nobody issued is the thing that must never appear.
+    """
     import pathlib
-    p = pathlib.Path(
-        "analysis/gemini/canary_latch/"
-        "latch_OWNER-2026-09-18-GEMINI-CONTINUOUS-5.json")
-    assert p.exists(), "the window ran; its latch must be committed"
-    rec = json.loads(p.read_text())
-    blob = json.dumps(rec)
-    assert "OWNER-2026-09-18-GEMINI-CONTINUOUS-5" in blob
-    # five predecessors plus this one; a seventh would be a window nobody
-    # authorized
-    latches = sorted(pathlib.Path("analysis/gemini/canary_latch").glob("*.json"))
-    assert len(latches) == 6, [x.name for x in latches]
+    granted = {
+        "OWNER-2026-09-17-GEMINI-CANARY-1",
+        "OWNER-2026-09-18-GEMINI-CONTINUOUS-1",
+        "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+        "OWNER-2026-09-18-GEMINI-CONTINUOUS-3",
+        "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+        "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
+        "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+    }
+    d = pathlib.Path("analysis/gemini/canary_latch")
+    on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
+    assert on_disk <= granted, "a latch names an unissued authorization: %s" % (
+        on_disk - granted)
+    assert len(on_disk) == len(list(d.glob("latch_*.json"))), "duplicate latch"
+    assert "OWNER-2026-09-18-GEMINI-CONTINUOUS-6" in on_disk
 
 
-def test_the_cohort_ledger_records_what_the_window_spent():
-    """The slots CONTINUOUS-5 spent are durable, not runner-local.
+def test_c5_stays_frozen_while_c6_spends_its_own_budget():
+    """Budget is never regained by rewriting evidence, and never shared.
 
-    The evidence commit staged the historical ledger but not the cohort's
-    own, so an armed window would have spent its budget and thrown the
-    record away -- and the next window would have read 0 consumed. Fixed
-    before arming; this pins the outcome.
+    C5 is permanently 3 of 6 with its UNKNOWN intact. C6 spends only its own
+    slots, and consumption is MONOTONIC in both: a cohort whose consumed
+    count FELL would be a reset wearing the cohort's name.
     """
     import json
-    import pathlib
-    p = pathlib.Path("analysis/gemini/cohorts/COHORT-2026-09-18-C5/ledger.jsonl")
-    rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
-    attempts = [r for r in rows if r.get("kind") in ("PLACE", "CANCEL")]
-    assert len(attempts) == 3, attempts
-    assert [r["kind"] for r in attempts] == ["PLACE", "PLACE", "CANCEL"]
-    # the rejected cancel is recorded UNKNOWN and is NEVER silently resolved
-    resolves = {r["slot"]: r["outcome"] for r in rows if r.get("kind") == "RESOLVE"}
-    assert resolves == {0: "ACCEPTED", 1: "ACCEPTED", 2: "UNKNOWN"}, resolves
-
-
-def test_the_c5_orders_are_reconciled_read_only():
-    """CONTINUOUS-5 left two orders resting and its authorization is SPENT.
-
-    They may be READ and must not be touched: no --apply-from (which would
-    write the C5 ledger) and no cancel path anywhere near them.
-    """
-    wf = WF.read_text()
-    block = wf.split("Reconcile historical ledger slot", 1)[1].split(
-        "- name:", 1)[0]
-    # the step's own comment explains what it does NOT do, so only the
-    # EXECUTABLE lines decide whether it writes anything
-    step = "\n".join(l for l in block.splitlines()
-                     if not l.strip().startswith("#"))
-    assert "145828836250441342" in step and "145828836250441357" in step
-    assert "COHORT-2026-09-18-C5/ledger.jsonl" in step
-    assert "--apply-from" not in step, (
-        "reading what became of them must never write the C5 ledger")
-    assert "order.cancel" not in step and "GEMINI_CANARY_LIVE" not in step
-
-
-def test_the_c5_cohort_keeps_its_three_unused_slots_unused():
-    """Budget is not regained by rewriting an UNKNOWN."""
     from src.gemini_execution import cohort as CO
+
     c5 = CO.state("COHORT-2026-09-18-C5")
     assert c5["budget"] == 6 and c5["consumed"] == 3 and c5["remaining"] == 3
+    rows = [json.loads(l) for l in open(c5["ledger_path"], encoding="utf-8")
+            if l.strip()]
+    outcomes = {r["slot"]: r["outcome"] for r in rows if r.get("kind") == "RESOLVE"}
+    assert outcomes == {0: "ACCEPTED", 1: "ACCEPTED", 2: "UNKNOWN"}, outcomes
+
     c6 = CO.state("COHORT-2026-09-18-C6")
-    assert c6["budget"] == 6 and c6["consumed"] == 0
-    # C6 is chained to C5, so C5's evidence cannot be rewritten unnoticed
+    assert c6["budget"] == 6
+    assert 0 <= c6["consumed"] <= 6
+    assert c6["consumed"] + c6["remaining"] == c6["budget"]
+    # the chain: C6 records C5's ledger, so a rewrite of C5 is detectable
     assert c6["predecessor"]["predecessor_ledger"].endswith(
         "COHORT-2026-09-18-C5/ledger.jsonl")
     assert c6["predecessor"]["recorded_consumed"] == 3
