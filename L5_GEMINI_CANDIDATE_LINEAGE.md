@@ -49,7 +49,21 @@ target.
 
 ## Two gates before another bounded window
 
-### 1. Settlement of CONTINUOUS-4 — accounting only
+### 1. Settlement of CONTINUOUS-4 — CLOSED 2026-09-18T18:39Z
+
+**SETTLED.** The contract resolved `resolutionSide: "yes"` at 17:30:07.369Z.
+Reconstruction from venue evidence: cost −0.0106, payout +0.0100, **P&L
+−0.0006 EXPECTED**. See `CONTINUOUS_4_SETTLEMENT.md`.
+
+**REALIZED is still $0.00.** `settlement_cashflow` is the one remaining break:
+both settlement endpoints 404, positions returns 0 rows, and `/v1/mytrades`
+carries no redemption row. −$0.0006 stays EXPECTED until attributable cash
+movement is found.
+
+This gate was open for 25 minutes longer than the venue needed, because our
+probe never read the outcome. Root cause and fix: `CONTINUOUS_4_SETTLEMENT.md`.
+
+### 1b. Original wording, kept for the record — accounting only
 
 As of 17:55:26Z, 25 minutes past expiry: `position "0.02"`, `mytrades rows 2`,
 `fees "0"`, `authoritative_outcome` **absent**, `settlement_cashflow`
