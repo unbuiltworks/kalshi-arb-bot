@@ -489,7 +489,8 @@ class Driver:
     """One BTC5m window, and then STOPPED. STOPPED is terminal."""
 
     def __init__(self, auth_id: str, symbol: str, *, ledger_path: str,
-                 now_fn: Callable[[], float] = time.time) -> None:
+                 now_fn: Callable[[], float] = time.time,
+                 max_actions: Optional[int] = None) -> None:
         if not str(symbol).startswith(CP.COHORT_PREFIX):
             raise CP.ProbeStop("%s is not a %s contract"
                                % (symbol, CP.COHORT_PREFIX))
@@ -507,6 +508,24 @@ class Driver:
         self.guard: Optional[CP.WindowGuard] = None
         self.budget_consumed: Optional[int] = None
         self.log: List[Dict[str, Any]] = []
+        # A COHORT MAY TIGHTEN THE ENVELOPE, NEVER EXTEND IT. A request above
+        # CP.MAX_ACTIONS is REFUSED rather than clamped: silently granting
+        # less than was asked for leaves the caller believing it holds budget
+        # it does not hold, which is the failure this bound exists to prevent.
+        if max_actions is None:
+            self._max_actions = int(CP.MAX_ACTIONS)
+        else:
+            if int(max_actions) < 1:
+                raise CP.ProbeStop("a window with no mutation slots cannot act")
+            if int(max_actions) > int(CP.MAX_ACTIONS):
+                raise CP.ProbeStop(
+                    "max_actions %d exceeds the envelope's %d; the envelope is "
+                    "the ceiling" % (int(max_actions), int(CP.MAX_ACTIONS)))
+            self._max_actions = int(max_actions)
+
+    @property
+    def max_actions(self) -> int:
+        return self._max_actions
 
     @property
     def symbol(self) -> str:
@@ -524,7 +543,7 @@ class Driver:
 
     def budget_left(self) -> int:
         used = self.budget_consumed if self.budget_consumed is not None else 0
-        return max(0, CP.MAX_ACTIONS - used)
+        return max(0, self._max_actions - used)
 
     # -------------------------------------------------- fail-closed preamble
 
@@ -635,7 +654,7 @@ class Driver:
             self.stop(STOPPED,
                       "budget: %d mutation(s) required, %d slot(s) left of %d"
                       % (plan["mutations"], self.budget_left(),
-                         CP.MAX_ACTIONS))
+                         self._max_actions))
             return {"state": self.state, "turn": turn, "plan": plan,
                     "why": self.why}
         return {"state": self.state, "turn": turn, "plan": plan,
@@ -982,7 +1001,8 @@ class Driver:
         report["why"] = self.why
         report["budget_consumed"] = self.budget_consumed
         report["budget_left"] = self.budget_left()
-        report["max_actions"] = CP.MAX_ACTIONS
+        report["max_actions"] = self._max_actions
+        report["envelope_max_actions"] = CP.MAX_ACTIONS
         report["working_orders"] = self.working.rungs()
         report["inventory"] = self.inv.report() if self.inv else None
         report["residual_note"] = (

@@ -349,7 +349,8 @@ async def authoritative_state(symbol: str) -> Dict[str, Any]:
 
 async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                      out_path: str,
-                     wire_path: Optional[str] = None) -> Dict[str, Any]:
+                     wire_path: Optional[str] = None,
+                     cohort_id: Optional[str] = None) -> Dict[str, Any]:
     """Always writes its report, however it exits.
 
     EVERY REFUSAL PATH RETURNS EARLY, and the artifact write used to sit after
@@ -361,7 +362,8 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
     rep: Dict[str, Any] = {}
     try:
         rep = await _build(auth_id, state_dir=state_dir,
-                           ledger_path=ledger_path, wire_path=wire_path)
+                           ledger_path=ledger_path, wire_path=wire_path,
+                           cohort_id=cohort_id)
         return rep
     finally:
         rep.setdefault("finished_utc",
@@ -374,7 +376,8 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
 
 
 async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
-                 wire_path: Optional[str] = None) -> Dict[str, Any]:
+                 wire_path: Optional[str] = None,
+                 cohort_id: Optional[str] = None) -> Dict[str, Any]:
     from src.gemini_execution.ws_session import GeminiMakerSession
 
     rep: Dict[str, Any] = {
@@ -443,6 +446,37 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # it reads the ledger and authoritative venue state and cannot mutate
     # either. The preflight was moved here after CONTINUOUS-1 was lost the
     # same way; this is the same lesson one step further down.
+    # ------------------------------------------------------------- COHORT
+    # A cohort supplies its OWN empty ledger and its own bounded budget, and
+    # records the historical ledger's hash so a reset can never be passed off
+    # as a fresh start. Without one, the historical ledger is used exactly as
+    # before -- which is how every prior window ran, and which now reads
+    # 12 consumed of 12.
+    cohort_budget: Optional[int] = None
+    if cohort_id:
+        from src.gemini_execution import cohort as CO
+        try:
+            co = CO.load(cohort_id)
+            pred = CO.verify_predecessor(co)
+            rep["cohort"] = CO.state(cohort_id)
+            if not pred.get("intact"):
+                rep["state"] = WC.DO_NOT_TRADE
+                rep["why"] = ("cohort %s was created against a historical "
+                              "ledger that has since changed: %s"
+                              % (cohort_id, pred.get("why")))
+                rep["latch"] = {"consumed": False,
+                                "why": "refused before the latch"}
+                return rep
+            ledger_path = co.ledger_path
+            cohort_budget = co.budget
+        except Exception as exc:                               # noqa: BLE001
+            rep["state"] = WC.DO_NOT_TRADE
+            rep["why"] = "cohort %s unusable: %s: %s" % (
+                cohort_id, type(exc).__name__, exc)
+            rep["latch"] = {"consumed": False,
+                            "why": "refused before the latch"}
+            return rep
+
     st = await authoritative_state(symbol)
     rep["authoritative_state"] = {
         "fills": st.get("fills"), "open_orders": st.get("open_orders"),
@@ -454,7 +488,8 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # instance can answer "would recovery succeed?" with no side effect. The
     # window below builds its own Driver and recovers again authoritatively;
     # this one exists solely to refuse before the latch.
-    probe = WC.Driver(auth_id, symbol, ledger_path=ledger_path)
+    probe = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
+                      max_actions=cohort_budget)
     pre = probe.recover(venue_fills=st.get("fills"),
                         venue_open=st.get("open_orders"),
                         venue_orders=st.get("orders_seen"))
@@ -555,7 +590,8 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         rep["latch"] = {"consumed": False, "durable": False}
         return rep
 
-    driver = WC.Driver(auth_id, symbol, ledger_path=ledger_path)
+    driver = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
+                       max_actions=cohort_budget)
     # the observer wraps the real session; the arm gate and every bound
     # still run inside the objects it delegates to.
     session = RecordingSession(GeminiMakerSession(id_prefix="l5cp"))
@@ -624,12 +660,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--auth-id", required=True)
     ap.add_argument("--state-dir", default="analysis/gemini/canary_latch")
     ap.add_argument("--ledger", default="analysis/gemini/continuous_ledger.jsonl")
+    ap.add_argument("--cohort", default=None,
+                    help="mutation cohort id; supplies its own ledger and "
+                         "bounded budget and must already exist")
     ap.add_argument("--out", default="analysis/gemini/continuous_run.json")
     ap.add_argument("--wire", default="analysis/gemini/continuous_wire.json")
     a = ap.parse_args(argv)
     rep = asyncio.run(main_async(a.auth_id, state_dir=a.state_dir,
                                  ledger_path=a.ledger, out_path=a.out,
-                                 wire_path=a.wire))
+                                 wire_path=a.wire, cohort_id=a.cohort))
     print("GEMINI_CONTINUOUS " + json.dumps(
         {k: rep.get(k) for k in ("state", "why", "symbol_selection",
                                  "driver_executable_sha")}, default=str),
