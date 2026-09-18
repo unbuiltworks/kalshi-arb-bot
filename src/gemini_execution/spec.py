@@ -27,12 +27,15 @@ rather than placing anything.
 
 RE-VERIFIED 2026-09-18, after canary #1 was rejected with HTTP 400:
 
-  * The fields go in a JSON REQUEST BODY with Content-Type: application/json.
-    Every prediction-markets endpoint that takes fields documents them that
-    way. This is NOT the classic Gemini private convention of an empty body
-    with the JSON in X-GEMINI-PAYLOAD, and the difference is invisible until
-    a request actually carries a field: the account reads we had already
-    proven -- positions, settled positions -- take none.
+  * The documented OrderRequest schema is symbol, orderType, side, quantity,
+    price, outcome, stopPrice, timeInForce and makerOrCancel -- and NOTHING
+    else. clientOrderId is in the RESPONSE schema only; canary #1 sent one.
+  * The fields are documented as a JSON REQUEST BODY with Content-Type:
+    application/json, and this venue ALSO reads them out of the classic
+    signed X-GEMINI-PAYLOAD header (measured 2026-09-18 with a two-ticker
+    read-only probe). We send both, so the request is valid either way. The
+    shape was a hypothesis for the 400 and is now disproven: the fields
+    arrived.
   * Documented response codes are 201, 400, 401, 422, 500 and 503. A 400 is
     request validation. TERMS_NOT_ACCEPTED is a 422, so the rejection we
     received was NOT a terms problem.

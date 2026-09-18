@@ -80,13 +80,20 @@ async def place(*, symbol: str, side: str, outcome: str, price: str,
     array. If the venue cannot honour post-only it cancels the order rather
     than crossing, which is the venue-level guarantee the envelope requires.
 
-    THE FIELDS GO IN A JSON BODY. Canary #1 sent this exact dict through the
-    classic signer, which transmits Content-Length: 0 and puts the JSON in
-    X-GEMINI-PAYLOAD. The venue documents a JSON request body here, so it
-    received a request with no fields at all and answered 400 -- not because
-    the size or the price was wrong (the contract's own quantityMinimum
-    0.01 and priceMinimum 0.01 both admitted them) but because they never
-    arrived. See `probe_field_transport` for the read-only proof.
+    THE FIELDS GO IN A JSON BODY, which is how the API documents them, AND
+    in the signed header, which is where this venue actually reads them from.
+    Sending both makes the request valid under either reading.
+
+    IT IS NOT WHY CANARY #1 WAS REJECTED. That was the hypothesis, and
+    `probe_field_transport` disproved it on 2026-09-18: asked with two
+    different event tickers, the venue returned the matching payload for the
+    ticker carried in the SIGNED HEADER with an empty body. The fields did
+    arrive. Nor was it the size or the price -- the contract's own
+    quantityMinimum 0.01 and priceMinimum 0.01 admitted both -- and nor was
+    it terms, which read hasAcceptedLatest true and would be a 422 anyway.
+    What that request did carry, and the documented OrderRequest schema does
+    not admit, was a clientOrderId. That is the open candidate; it is refused
+    below, and the next rejection body will say whether it was the cause.
     """
     arming.require(now)                      # structural: no arm, no request
     body: Dict[str, Any] = {
@@ -234,8 +241,12 @@ async def probe_field_transport(ticker_a: str, ticker_b: str) -> Dict[str, Any]:
       json(A) == json(B)   the endpoint ignores the field -> INCONCLUSIVE,
                            the probe is wrong, not the venue
       header(A) == json(A) the field WAS read from the signed header
-      otherwise            only the body is read, which is what would have
-                           silently emptied canary #1's order
+      otherwise            only the body is read
+
+    MEASURED 2026-09-18 (run 35293967331): HEADER_PAYLOAD_ALSO_READ, with
+    field_is_honoured true. The venue reads a request field out of the signed
+    header, so an empty body does not explain canary #1's 400 and that
+    hypothesis is retired.
     """
     async def ask(tk, json_body):
         r = await _post(VOLUME_PATH, {"eventTicker": tk}, json_body=json_body)
