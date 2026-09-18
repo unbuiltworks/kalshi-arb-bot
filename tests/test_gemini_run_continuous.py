@@ -257,8 +257,15 @@ def test_an_unauthorized_run_reaches_READY_without_spending_the_latch():
 
 
 def test_the_ready_token_is_not_added_to_the_authorized_executable():
-    """Naming it in ws_continuous would change executable_sha, and the
-    authorization names that hash."""
+    """Naming it in ws_continuous would change executable_sha, and an
+    authorization names that hash.
+
+    This asserts ONLY that the token stays out of the driver. Whether the
+    installed AUTHORIZED_SHA currently matches is a separate question with its
+    own test -- and right now it deliberately does NOT, because the driver was
+    changed after CONTINUOUS-2 was spent.
+    """
     from src.gemini_execution import ws_continuous as WC2
     assert not hasattr(WC2, "READY_BUT_UNAUTHORIZED")
-    assert WC2.executable_sha() == WC2.AUTHORIZED_SHA
+    assert "READY_TO_MUTATE_BUT_UNAUTHORIZED" not in open(
+        WC2.__file__, encoding="utf-8").read()

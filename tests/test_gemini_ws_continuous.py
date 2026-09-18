@@ -14,6 +14,7 @@ un-patched module.
 import ast
 import asyncio
 import json
+import json
 import os
 
 import pytest
@@ -33,7 +34,10 @@ class FakeSession:
 
     def __init__(self, script=None, default=None):
         self.script = list(script or [])
-        self.default = default if default is not None else {"status": 200}
+        # the venue's real place ack carries the order id under `result`; a
+        # default that omitted it hid the cancel bug from every test
+        self.default = (default if default is not None
+                        else {"status": 200, "result": {"orderId": 1}})
         self.sent = []
 
     async def request(self, method, params, timeout=5.0):
@@ -86,18 +90,32 @@ def _run(coro):
 
 # ============================================================ AUTHORIZATION
 
-def test_the_installed_authorization_binds_the_reviewed_artifact_exactly():
-    """An authorization is installed (OWNER 2026-09-18, one window). It must
-    name THIS executable and THIS envelope, or it is not an authorization for
-    what is running."""
-    assert WC.REQUIRED_AUTH_ID == "OWNER-2026-09-18-GEMINI-CONTINUOUS-2"
-    assert WC.AUTHORIZED_SHA == WC.executable_sha(), (
-        "the installed authorization does not name the running executable")
-    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
-    assert WC.AUTHORIZED_SHA == (
-        "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d")
-    assert WC.AUTHORIZED_ENVELOPE == (
-        "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+def test_the_spent_authorization_no_longer_binds_the_changed_executable():
+    """THE MECHANISM DOING ITS JOB, not a defect.
+
+    OWNER-2026-09-18-GEMINI-CONTINUOUS-2 was spent on the first live window.
+    The cancel defect that window exposed has since been fixed, which changed
+    the executable -- so AUTHORIZED_SHA no longer names what is running, and
+    the driver refuses. That is exactly what naming the executable by hash is
+    for: approval attaches to code that was read, and this code has changed.
+    """
+    assert WC.AUTHORIZED_SHA != WC.executable_sha(), (
+        "the driver changed after its authorization; the hash must diverge")
+    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha(), (
+        "no BOUND moved -- only the cancel path did")
+    st = WC.authorization_state()
+    assert st["authorized"] is False
+    assert any("different executable" in w for w in st["why_not"]), st["why_not"]
+
+
+def test_no_environment_can_revive_a_superseded_authorization(monkeypatch):
+    monkeypatch.setattr(WC.arming, "EXPECTED_AUTH_ID", WC.REQUIRED_AUTH_ID)
+    monkeypatch.setenv("GEMINI_CANARY_LIVE", "YES")
+    monkeypatch.setenv("GEMINI_CANARY_AUTH", str(WC.REQUIRED_AUTH_ID))
+    monkeypatch.setenv("GEMINI_CANARY_AUTH_EXPIRES", "2099-01-01T00:00:00Z")
+    assert WC.authorized() is False, (
+        "a full dual key must still not arm an executable the authorization "
+        "does not name")
 
 
 def test_without_the_transport_arm_no_mutation_is_possible(monkeypatch):
@@ -784,3 +802,69 @@ def _sha_env():
     import hashlib, json
     return hashlib.sha256(
         json.dumps(WC.envelope(), sort_keys=True).encode()).hexdigest()
+
+
+# ============ THE FIRST LIVE WINDOW'S DEFECT: CANCEL BY THE WRONG FIELD =====
+
+def test_REGRESSION_cancel_uses_orderId_not_clientOrderId(tmp_path,
+                                                           _authorized):
+    """The venue answered -1013 "invalid orderId format" on the first live
+    cancel, and the order stayed resting.
+
+    order.cancel TAKES orderId. spec.py says so in words, spec.ORDER_ID_FIELD
+    exists for it, and transport.py already cancels with {"orderId": ...}. The
+    package had the answer in three places and the driver used none of them.
+    """
+    d = _ready(tmp_path)
+    s = FakeSession(default={"status": 200,
+                             "result": {"orderId": 145828836242288478}})
+    out = _run(d.place(s, _rung("YES", "0.55")))
+    assert out["venue_order_id"] == 145828836242288478, (
+        "the venue id lives under ack['result'], not at the top level")
+
+    _run(d.cancel(s, d.working.rungs()[0]))
+    sent = [m for m in s.sent if m["method"] == "order.cancel"]
+    assert len(sent) == 1
+    assert sent[0]["params"] == {"orderId": 145828836242288478}, sent[0]
+    assert "clientOrderId" not in sent[0]["params"]
+
+
+def test_REGRESSION_a_cancel_with_no_venue_id_is_refused_not_sent(tmp_path,
+                                                                   _authorized):
+    """A malformed cancel is worse than no cancel: it spends a slot, fails,
+    and leaves the order resting. An unknown venue id is reconciliation."""
+    d = _ready(tmp_path)
+    s = FakeSession(default={"status": 200})        # ack carries NO result
+    out = _run(d.place(s, _rung("YES", "0.55")))
+    assert out["venue_order_id"] is None
+    before = d.budget_consumed
+
+    with pytest.raises(WC.ReconcileRequired):
+        _run(d.cancel(s, d.working.rungs()[0]))
+    assert d.state == WC.RECONCILE
+    assert d.budget_consumed == before, (
+        "a cancel that was never formed must not spend a slot")
+    assert not [m for m in s.sent if m["method"] == "order.cancel"]
+    assert d.working.by_id, "the order is still resting and must stay tracked"
+
+
+def test_the_venue_order_id_is_recorded_in_the_durable_ledger(tmp_path,
+                                                               _authorized):
+    d = _ready(tmp_path)
+    s = FakeSession(default={"status": 200, "result": {"orderId": 99}})
+    _run(d.place(s, _rung("YES", "0.55")))
+    rows = [r for r in d.ledger.rows if r.get("kind") == WC.PLACE]
+    resolved = [json.loads(l) for l in
+                open(d.ledger.path, encoding="utf-8").read().splitlines() if l]
+    assert any(r.get("orderId") == 99 for r in resolved), (
+        "the venue id must be durable, or a restart cannot cancel what it "
+        "placed")
+
+
+def test_the_place_ack_is_returned_for_the_record(tmp_path, _authorized):
+    """acks were `null` in the first live report, so the ack SHAPE was not
+    visible post-hoc and the id bug had to be diagnosed from the ledger."""
+    d = _ready(tmp_path)
+    ack = {"status": 200, "result": {"orderId": 7}}
+    out = _run(d.place(FakeSession(default=ack), _rung("YES", "0.55")))
+    assert out["ack"] == ack

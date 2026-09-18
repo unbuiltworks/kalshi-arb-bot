@@ -7,13 +7,18 @@ contributes NO strategy: every side, price, size and timing decision is
 adds is the order of operations, the durable accounting, and the working-order
 memory -- which is where a bounded probe is actually made safe.
 
-IT IS NOT ARMED AND CANNOT BE ARMED BY CONFIGURATION. `REQUIRED_AUTH_ID` and
-`AUTHORIZED_SHA` are both None. No environment variable, no argument and no
-caller can make `authorized()` true while they are; a human must edit two
-constants in a reviewed commit, and `AUTHORIZED_SHA` must name the sha256 of
-THIS FILE as reviewed, so editing the driver after authorization invalidates
-the authorization automatically. The Probe #1 authorization is unspent and is
-NOT authority for this code: it named a different artifact.
+IT CANNOT BE ARMED BY CONFIGURATION. No environment variable, no argument and
+no caller can make `authorized()` true on its own: `AUTHORIZED_SHA` must name
+the sha256 of THIS FILE's executable body, and `AUTHORIZED_ENVELOPE` the hash
+of the bounds in force, so editing either invalidates the authorization
+automatically. Installing one is a human editing three constants in a reviewed
+commit, and the dual key's live half is never in this repository.
+
+AUTHORIZATION HISTORY, because a spent one must never look reusable:
+  OWNER-2026-09-17-GEMINI-CANARY-1      SPENT, latch REJECTED
+  OWNER-2026-09-18-GEMINI-CONTINUOUS-1  SPENT, latch INTENT_PERSISTED, no order
+  OWNER-2026-09-18-GEMINI-CONTINUOUS-2  SPENT, 2 orders placed and accepted,
+                                        both expired UNFILLED, zero position
 
 THE TWO SEAM DEFECTS THIS EXISTS TO CLOSE, both measured before it was written
 (analysis/gemini/CONTINUOUS_CONTROLLER_WALK_FINDINGS.md):
@@ -53,8 +58,16 @@ budget that was meant to bound how many times we touch the venue.
 
 AMBIGUITY IS NEVER "NO ORDER". A timeout, a dropped socket or an unparseable
 ack is SUBMISSION_UNKNOWN_RECONCILE_REQUIRED: the driver STOPS and the order
-is resolved against the venue's own record by clientOrderId. Reading it as a
-failure is how a probe places a second order on top of one it already has.
+is resolved against the venue's own record. Reading it as a failure is how a
+probe places a second order on top of one it already has.
+
+TWO IDENTIFIERS, AND THEY ARE NOT INTERCHANGEABLE. `clientOrderId` is ours and
+is what reconciliation MATCHES on; `orderId` is the venue's and is what
+`order.cancel` TAKES. Confusing them earned -1013 "invalid orderId format" on
+the first live cancel and left the order resting. The venue id is read from
+`ack["result"]["orderId"]` -- under `result`, not at the top level -- and a
+cancel with no venue id is refused as reconciliation work rather than sent
+malformed.
 """
 from __future__ import annotations
 
@@ -717,12 +730,19 @@ class Driver:
                                "rejection loop run forever inside a budget "
                                "meant to bound how often we touch it.")}
 
-        self.ledger.resolve(slot, ACCEPTED, {"status": status})
+        # THE ORDER ID LIVES UNDER `result`, NOT AT THE TOP LEVEL. Reading it
+        # from the top level silently produced None, and a None order id is
+        # what made the first live cancel malformed. ws_canary already parsed
+        # it correctly; this now matches it exactly.
+        result = (ack or {}).get("result") or (ack or {}).get("data") or {}
+        oid = (result.get(spec.ORDER_ID_FIELD)
+               if isinstance(result, dict) else None)
+        self.ledger.resolve(slot, ACCEPTED, {"status": status,
+                                             spec.ORDER_ID_FIELD: oid})
         self.working.add(coid, leg=leg, price=price, qty=qty,
-                         now=self.now_fn(),
-                         venue_order_id=(ack or {}).get("orderId"))
+                         now=self.now_fn(), venue_order_id=oid)
         return {"placed": True, "client_order_id": coid, "slot": slot,
-                "status": status}
+                "status": status, "venue_order_id": oid, "ack": ack}
 
     async def cancel(self, session: Any, order: Mapping[str, Any]
                      ) -> Dict[str, Any]:
@@ -733,14 +753,31 @@ class Driver:
             self.stop(STOPPED, "no mutation slots left to cancel with")
             raise CP.ProbeStop(self.why or "budget exhausted")
 
-        slot = self.ledger.attempt(CANCEL, {"client_order_id": coid})
+        # order.cancel TAKES orderId. It is written in spec.py -- "cancel, by
+        # orderId" -- spec.ORDER_ID_FIELD exists for it, and transport.py
+        # already cancels with {"orderId": ...}. Sending clientOrderId instead
+        # earned -1013 "invalid orderId format" on the first live cancel and
+        # left the order resting. The package had the answer in three places.
+        oid = order.get("venue_order_id")
+        if oid in (None, "", 0):
+            # NEVER send a malformed cancel. An unknown venue id is
+            # reconciliation work: the venue's own open-order list carries it.
+            self.stop(RECONCILE,
+                      "no venue orderId for %s, so a cancel cannot be formed; "
+                      "re-read open orders to recover it rather than sending "
+                      "a cancel the venue will reject" % coid)
+            raise ReconcileRequired(self.why or "missing venue order id")
+
+        slot = self.ledger.attempt(CANCEL, {"client_order_id": coid,
+                                            spec.ORDER_ID_FIELD: oid})
         self.budget_consumed = (self.budget_consumed or 0) + 1
         if self.guard is not None:
             self.guard.actions_taken = self.budget_consumed
 
         try:
             ack = await session.request(spec.WS_CANCEL_METHOD,
-                                        {"clientOrderId": coid}, timeout=5.0)
+                                        {spec.ORDER_ID_FIELD: oid},
+                                        timeout=5.0)
         except Exception as exc:                               # noqa: BLE001
             self.ledger.resolve(slot, UNKNOWN,
                                 {"error": "%s: %s" % (type(exc).__name__, exc)})
