@@ -67,16 +67,22 @@ def test_installing_an_authorization_does_not_move_the_bundle():
 def test_an_edit_to_the_invoker_moves_the_bundle_but_not_the_driver(
         monkeypatch):
     """The exact property that makes the bundle worth having."""
+    # pin the RELATIONSHIP, not a literal hash. A literal rots the moment the
+    # driver legitimately changes, and then the test is edited rather than
+    # read -- which is how a guard quietly stops guarding.
+    driver_before = WC.executable_sha()
+    bundle_before = B.bundle_sha()
     real = B.member_source
     monkeypatch.setattr(B, "member_source",
                         lambda n: (real(n) + "\n# edit\n"
                                    if n == "run_continuous.py" else real(n)))
-    assert B.bundle_sha() != B.state.__globals__["AUTHORIZED_BUNDLE"] or True
-    moved = B.bundle_sha()
+    assert B.bundle_sha() != bundle_before, (
+        "an invoker edit must move the bundle, or the bundle is not covering "
+        "the file it was added for")
     monkeypatch.undo()
-    assert moved != B.bundle_sha()
-    assert WC.executable_sha() == (
-        "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4")
+    assert B.bundle_sha() == bundle_before
+    assert WC.executable_sha() == driver_before, (
+        "and an invoker edit must NOT move the driver hash")
 
 
 def test_a_member_gaining_an_authorization_constant_is_refused(monkeypatch):

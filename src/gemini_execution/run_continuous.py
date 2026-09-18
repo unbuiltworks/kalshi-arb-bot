@@ -562,12 +562,22 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     try:
         await session.connect()
         rep["session"] = "connected"
+        # THE AUTHORITATIVE RE-READ THE DRIVER RECONCILES AGAINST. It is the
+        # SAME function that produced the pre-latch state, so mid-window truth
+        # and startup truth come from one reader with one set of observed
+        # shapes -- and `authoritative_state` already returns None rather than
+        # [] when a read cannot be extracted, which is what makes the driver's
+        # fail-closed branch reachable instead of decorative.
+        async def refresh() -> Dict[str, Any]:
+            return await authoritative_state(symbol)
+
         out = await driver.run_window(
             session, tte_of=tte_of(symbol),
             venue_fills=st.get("fills"),
             venue_open=st.get("open_orders"),
             venue_orders=st.get("orders_seen"),
             readers=readers,
+            refresh_fn=refresh,
             interval_s=5.0)
         rep["window"] = out
     except Exception as exc:                                   # noqa: BLE001

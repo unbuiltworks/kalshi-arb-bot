@@ -288,11 +288,12 @@ def test_the_driver_places_through_the_observer_and_the_ack_is_captured(
 def test_capture_is_present_but_the_driver_hash_is_untouched():
     """The whole reason the capture lives in the invoker. If this ever fails,
     the authorization stopped naming the code that runs."""
-    assert WC.executable_sha() == (
-        "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4")
     # None means no authorization is installed, which is honest. What must
     # never happen is AUTHORIZED_SHA naming code OTHER than what runs.
     assert WC.AUTHORIZED_SHA in (None, WC.executable_sha())
+    # and the capture itself still lives outside the hashed driver
+    src = open(WC.__file__, encoding="utf-8").read()
+    assert "RecordingSession" not in src
 
 
 def test_the_invoker_is_the_one_holding_the_capture_not_the_driver():

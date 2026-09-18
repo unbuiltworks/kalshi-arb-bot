@@ -95,13 +95,13 @@ LABEL = "GEMINI_L5_WS_CONTINUOUS_V1"
 #: default to be overridden at runtime: nothing reads an environment variable
 #: to fill it in. A human edits it in a reviewed commit, or the driver cannot
 #: mutate anything, ever.
-REQUIRED_AUTH_ID: Optional[str] = "OWNER-2026-09-18-GEMINI-CONTINUOUS-4"
+REQUIRED_AUTH_ID: Optional[str] = None
 
 #: The sha256 of THIS FILE as reviewed under that authorization. An
 #: authorization names the exact executable it was granted against, so editing
 #: the driver afterwards invalidates it automatically rather than silently
 #: carrying it forward onto code nobody reviewed.
-AUTHORIZED_SHA: Optional[str] = "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4"  # noqa: E501
+AUTHORIZED_SHA: Optional[str] = None
 
 #: The sha256 of the frozen risk envelope the authorization was granted
 #: against. Changing any bound changes this, and the authorization stops
@@ -250,6 +250,11 @@ def require_authorization(now: Optional[float] = None) -> None:
 PLACE, CANCEL = "PLACE", "CANCEL"
 ATTEMPTED, ACCEPTED, REJECTED, UNKNOWN = ("ATTEMPTED", "ACCEPTED", "REJECTED",
                                           "UNKNOWN")
+
+#: How many orderUpdate frames to record per cycle. A bound, not a budget:
+#: these are OBSERVED and never decided upon, and an unbounded drain would let
+#: a chatty account stall the loop it is meant to inform.
+_MAX_EVENTS_PER_CYCLE = 200
 
 
 class MutationLedger:
@@ -788,20 +793,111 @@ class Driver:
 
         status = (ack or {}).get("status")
         if status is not None and int(status) == spec.WS_ACK_OK:
-            self.ledger.resolve(slot, ACCEPTED, {"status": status})
-            self.working.drop(coid)
-            return {"cancelled": True, "client_order_id": coid, "slot": slot}
+            # A 200 MEANS THE REQUEST WAS ACCEPTED, NOT THAT AN ORDER WAS
+            # CANCELLED. Measured 2026-09-18: every cancel in CONTINUOUS-4
+            # returned 200 with result {"orderId":"","symbol":"","status":""}
+            # -- empty -- and TWO of the four orders it "cancelled" had already
+            # FILLED. Dropping them from the working set on that ack is how the
+            # driver came to believe it held nothing while the venue held 0.02.
+            #
+            # An empty or id-less result is therefore UNCONFIRMED. The slot is
+            # still spent, because the frame went out. But the order stays in
+            # the working set and the next authoritative refresh decides
+            # whether it is really gone. The venue is the authority; an ack is
+            # a receipt.
+            result = (ack or {}).get("result")
+            confirmed = bool(isinstance(result, dict)
+                             and str(result.get(spec.ORDER_ID_FIELD) or ""))
+            self.ledger.resolve(slot, ACCEPTED,
+                                {"status": status,
+                                 "cancel_confirmed": confirmed})
+            if confirmed:
+                self.working.drop(coid)
+            return {"cancelled": confirmed, "client_order_id": coid,
+                    "slot": slot, "cancel_confirmed": confirmed,
+                    "why": (None if confirmed else
+                            "ack 200 carried no orderId; this order may have "
+                            "FILLED rather than cancelled, so it stays in the "
+                            "working set for authoritative reconciliation")}
         self.ledger.resolve(slot, UNKNOWN, {"status": status, "ack": ack})
         self.stop(RECONCILE, "cancel of %s was not acknowledged OK" % coid)
         raise ReconcileRequired(self.why or "cancel unknown")
 
     # ------------------------------------------------------------- the window
 
+    def _drain_events(self, session: Any, report: Dict[str, Any]) -> None:
+        """Record raw orderUpdate frames. OBSERVATION ONLY.
+
+        The session subscribes to orders@account and NOTHING has ever read that
+        queue, so the orderUpdate shape has never been seen. Nothing here
+        decides on them: a parser written against an unobserved shape is
+        exactly what produced the last several defects in this package. They
+        are recorded so the shape becomes evidence, while inventory comes from
+        an authoritative re-read whose shape IS observed.
+        """
+        q = getattr(session, "events", None)
+        if q is None or not hasattr(q, "get_nowait"):
+            return
+        seen = report.setdefault("order_events", [])
+        for _ in range(_MAX_EVENTS_PER_CYCLE):
+            try:
+                seen.append(q.get_nowait())
+            except Exception:                                  # noqa: BLE001
+                return
+
+    async def _refresh(self, refresh_fn: Callable) -> Optional[Dict[str, Any]]:
+        """Re-establish inventory and the working set from the VENUE.
+
+        WHY THIS RUNS BEFORE EVERY DECISION. `apply_fill` existed but had no
+        caller in the live loop, so inventory stayed frozen at the recovery
+        snapshot for a whole window. CONTINUOUS-4 completed a pair at $1.06
+        believing it held nothing while the venue held 0.02, and
+        `CP.would_breach` was therefore testing every rung against ZERO
+        inventory -- the residual, imbalance, per-leg and total-spend bounds
+        were advisory rather than enforced.
+
+        RE-READ RATHER THAN PARSE EVENTS, because the orderUpdate shape has
+        never been observed. This path uses only reads already proven against
+        the venue.
+
+        IDEMPOTENT BY CONSTRUCTION, not by bookkeeping. `CP.recover` builds a
+        FRESH Inventory from the authoritative fill list on every call and
+        `WorkingOrders.reconcile` REPLACES its view, so each fill is applied
+        exactly once no matter how often this runs, and a restart lands on the
+        same state. There is no "already seen" set to drift.
+
+        UNREADABLE STOPS THE WINDOW. Mid-window is no more entitled to assume a
+        flat account than a restart is.
+        """
+        st = await refresh_fn()
+        inv, why = CP.recover(self._auth_id, self._symbol, st.get("fills"))
+        if inv is None:
+            self.stop(DO_NOT_TRADE, why or "inventory unreadable mid-window")
+            return None
+        try:
+            note = self.working.reconcile(st.get("open_orders"), self.now_fn())
+        except ReconcileRequired as exc:
+            self.stop(DO_NOT_TRADE, str(exc))
+            return None
+        before = self.inv.report() if self.inv is not None else None
+        self.inv = inv
+        after = inv.report()
+        return {"working": note, "changed": before != after,
+                "n_fills": after.get("n_fills"),
+                "yes_qty": after.get("yes_qty"),
+                "no_qty": after.get("no_qty"),
+                "matched_qty": after.get("matched_qty"),
+                "directional_residual": after.get("directional_residual"),
+                "inventory_imbalance": after.get("inventory_imbalance"),
+                "total_spend_usd": after.get("total_spend_usd"),
+                "resting": len(self.working.rungs())}
+
     async def run_window(self, session: Any, *, tte_of: Callable[[], float],
                          venue_fills: Optional[List[Mapping[str, Any]]] = None,
                          venue_open: Optional[Sequence[Mapping[str, Any]]] = None,
                          venue_orders: Optional[Sequence[Mapping[str, Any]]] = None,
                          readers: Optional[Mapping[str, Callable]] = None,
+                         refresh_fn: Optional[Callable] = None,
                          interval_s: float = 5.0,
                          max_cycles: int = 400) -> Dict[str, Any]:
         """Drive ONE window. Every exit is terminal; nothing re-arms.
@@ -833,15 +929,39 @@ class Driver:
         try:
             while self.state == RUNNING and report["cycles"] < max_cycles:
                 report["cycles"] += 1
+                # THE VENUE IS THE AUTHORITY ON WHAT WE HOLD, and it is asked
+                # BEFORE the decision rather than after the window.
+                self._drain_events(session, report)
+                if refresh_fn is not None:
+                    ref = await self._refresh(refresh_fn)
+                    report.setdefault("refreshes", []).append(
+                        {"cycle": report["cycles"], "when": "pre_decide",
+                         **(ref or {"failed": True})})
+                    if self.state in TERMINAL:
+                        break
                 out = self.decide(float(tte_of()))
                 report["turns"].append({
                     "cycle": report["cycles"], "state": out.get("state"),
                     "window_phase": out.get("window_phase"),
                     "plan": _plan_summary(out.get("plan")),
+                    "inventory": (self.inv.report() if self.inv else None),
                     "budget_left": self.budget_left()})
                 plan = out.get("plan") or {}
                 for c in plan.get("cancel", []):
                     await self.cancel(session, c["order"])
+                # A FILL CAN ARRIVE BETWEEN THE CANCEL AND THE REPLACEMENT.
+                # Deciding on inventory read before the cancels and then
+                # placing afterwards is precisely how a replacement gets sized
+                # against stale zero inventory, so the state is re-established
+                # once more before anything new goes out. Cheap: it only runs
+                # when this cycle actually intends to place.
+                if refresh_fn is not None and plan.get("place"):
+                    ref2 = await self._refresh(refresh_fn)
+                    report.setdefault("refreshes", []).append(
+                        {"cycle": report["cycles"], "when": "post_cancel",
+                         **(ref2 or {"failed": True})})
+                    if self.state in TERMINAL:
+                        break
                 for p in plan.get("place", []):
                     await self.place(session, p["rung"])
                 if self.state == WITHDRAWING:
