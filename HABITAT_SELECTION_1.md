@@ -36,9 +36,11 @@ byte-identical before and after the restore.)*
    par-constrained positive. No feature separates anything, nothing survives
    a leave-one-out, and the single positive **contradicts** the strongest
    cross-venue candidate.
-2. **The L5 gradient is real and five pre-entry features track it
-   monotonically** across 2,184 independent windows — including the two that
-   measure two-sidedness directly.
+2. **The L5 gradient is measured but CONFOUNDED WITH REGIME** — see §6. Only
+   BTC15m is a maker operation (95.5% maker); BTC5m and ETH5m are
+   predominantly taker, so the gradient orders strategies as much as habitats.
+   L5 BTC15m's **75.7% par-constrained recycling** stands as the maker
+   benchmark; the "five monotone habitat features" claim does not.
 3. **The oracle bound is high: 90.0% of gross exposure avoidable** with
    perfect foresight while keeping the one good window. Habitat selection
    *could* be worth enough to justify collecting a larger sample — if the
@@ -167,52 +169,73 @@ that way rather than as a better number.
 So the ceiling is high enough to justify collecting a larger sample. It says
 nothing yet about whether a real selector can approach it.
 
-## 6. The cross-venue gradient — where the signal actually is
+## 6. The cross-venue gradient — CORRECTED: confounded with regime
 
-Same diagnostic, on **2,184 independent L5 windows**, one row per window from
-the **predecessor window only** (closed before the current one opens, so
-nothing can leak):
+> **CORRECTION (2026-09-19, same day).** This section originally read the
+> gradient below as a *habitat* gradient. It is at least partly a
+> **maker-versus-taker regime** difference, and I should have caught it before
+> publishing: `src/l5_shadow/cohorts.py` records it, and its own docstring
+> warns that averaging these cohorts "produced every misleading cross-cohort
+> figure this programme has published."
 
-| slice | windows | **par-constrained rate** | complement rate |
-|---|---|---|---|
-| L5 BTC **15m** | 526 | **75.7%** | 96.2% |
-| L5 BTC **5m** | 956 | **50.2%** | 83.2% |
-| L5 ETH **5m** | 702 | **20.7%** | 42.0% |
-| Gemini BTC5m | 31 | **3.2%** | 9.7% |
+Chain-attributed roles, cross-checked against the venue's own maker flag at
+**1,270 of 1,270**, and pinned by `tests/test_l5_cohorts.py`:
 
-**Five of six comparable pre-entry features move monotonically with recycling:**
+| cohort | windows | fills | **maker %** | fills/window |
+|---|---|---|---|---|
+| **BTC15m** | 527 | 63,569 | **95.5%** | 121 |
+| BTC5m | 957 | 6,227 | **0.05%** | 6.5 |
+| ETH5m | 703 | 2,069 | **0.24%** | 2.9 |
+
+**Only BTC15m is a maker operation.** BTC5m and ETH5m are a different
+strategy, not a thinner version of the same one. A taker's round-trip and a
+maker's recycling are not the same quantity.
+
+The measured rates, which stand as measurements:
+
+| slice | windows | **par-constrained rate** | complement rate | regime |
+|---|---|---|---|---|
+| L5 BTC **15m** | 526 | **75.7%** | 96.2% | **MAKER** |
+| L5 BTC **5m** | 956 | 50.2% | 83.2% | predominantly taker |
+| L5 ETH **5m** | 702 | 20.7% | 42.0% | predominantly taker |
+| Gemini BTC5m (ours) | 31 | 3.2% | 9.7% | maker |
+
+And the five features that move monotonically along that order:
 
 | feature | BTC15m | BTC5m | ETH5m | monotonic |
 |---|---|---|---|---|
-| prior fills/min | 10.42 | 2.687 | 2.675 | **yes** |
-| prior notional/min | 91.72 | 52.26 | 27.27 | **yes** |
-| **prior two-sided** (median) | **1.0** | **1.0** | **0.0** | **yes** |
-| **prior side balance** | **0.727** | **0.500** | **0.000** | **yes** |
-| entry TTE (s) | 885 | 243 | 183 | **yes** |
+| prior fills/min | 10.42 | 2.687 | 2.675 | yes |
+| prior notional/min | 91.72 | 52.26 | 27.27 | yes |
+| prior two-sided (median) | 1.0 | 1.0 | 0.0 | yes |
+| prior side balance | 0.727 | 0.500 | 0.000 | yes |
+| entry TTE (s) | 885 | 243 | 183 | yes |
 | prior seconds since last fill | 147 | 145 | 290 | no |
 
-The two that matter most are the two that measure two-sidedness directly.
-**More than half of ETH5m windows follow a predecessor in which L5 bought only
-one side** — and ETH5m is where L5's own recycling collapses to 20.7%.
+**What survives the correction.** L5 BTC15m at **75.7% par-constrained
+recycling** is the maker benchmark, and it is real, large (526 windows) and
+the right thing to compare our Gemini quoting against.
 
-### The caveat that bounds this, stated plainly
+**What does not survive.** The claim that these five features describe a
+recyclable *habitat*. Ordered by regime as much as by habitat, the "gradient"
+has a maker operation at one end and two taker operations at the other. Worse,
+`prior_two_sided` and `prior_side_balance` are precisely what a maker produces
+**by definition** — so on the L5 side they may be measuring "was L5 making
+here", not "was this market recyclable". They are the two features I called
+the strongest, and they are the two most exposed to the confound.
+
+**What this means for the next step.** The comparison must be **maker against
+maker**, and it must use each venue's **external tape** rather than L5's own
+fills — which is exactly what `L5_HABITAT_INVENTORY.md` establishes is
+available today for Polymarket BTC15m, Polymarket BTC5m and Gemini BTC15m.
+
+### The observability caveat, which still applies
 
 **L5's rows are built from L5's OWN fills; Gemini's from the whole market
-tape.** Polymarket's extract carries no counterparty tape. So on the L5 side:
-
-- `prior_fills_per_min` is *how busy L5 was*, not how busy the market was;
-- `prior_two_sided` / `prior_side_balance` measure whether **L5 itself
-  completed** in the previous window.
-
-That makes those two partly **persistence of L5's own recycling**, not a pure
-market-state feature. It is still informative — recycling clusters, and that is
-worth knowing — but it is **not the same measurement** as Gemini's market-tape
-equivalent, and the two must be compared by **rank order within a venue, never
-by level across venues.**
-
-`entry_tte_s` is the one feature measured identically on both sides, and it
-moves monotonically: 885 → 243 → 183, with Gemini's entry band at 240–280
-sitting alongside BTC5m.
+tape.** Polymarket's extract carries no counterparty tape, so on the L5 side
+`prior_fills_per_min` is *how busy L5 was*, not how busy the market was. That
+was already the weakest part of this comparison and the regime confound
+compounds it. `entry_tte_s` is the one feature measured identically on both
+sides.
 
 ## 7. What this licenses, and the decision it sets up
 

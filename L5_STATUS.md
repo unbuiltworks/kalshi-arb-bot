@@ -259,17 +259,23 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > Not deployable, cannot be run; the no-burst oracle reading 100% is degenerate
 > (nothing to retain) and is reported as such.
 >
-> **THE L5 GRADIENT IS REAL AND MONOTONE across 2,184 independent windows.**
-> Par-constrained recycling BTC15m **75.7%** / BTC5m **50.2%** / ETH5m
-> **20.7%** / Gemini **3.2%**. Five of six comparable pre-entry features move
-> monotonically, and the two strongest measure two-sidedness directly: prior
-> side balance 0.727 → 0.500 → **0.000**, prior two-sided (median) 1.0 → 1.0 →
-> **0.0**. Also monotone: prior fills/min 10.42 → 2.69 → 2.68, prior
-> notional/min 91.7 → 52.3 → 27.3, entry TTE 885 → 243 → 183. CAVEAT: L5's rows
-> are L5's OWN fills, Gemini's the whole market tape, so prior two-sidedness on
-> the L5 side is partly persistence of L5's own recycling — compare rank order
-> within a venue, never levels across. `entry_tte_s` is the one identically
-> measured feature.
+> **THE L5 GRADIENT IS CONFOUNDED WITH REGIME — CORRECTED 2026-09-19 same
+> day.** Par-constrained recycling BTC15m **75.7%** / BTC5m 50.2% / ETH5m
+> 20.7% / Gemini 3.2%, and five of six pre-entry features move monotonically
+> along it. But `src/l5_shadow/cohorts.py` records, cross-checked against the
+> venue's own maker flag at 1,270/1,270 and pinned by
+> `tests/test_l5_cohorts.py`, that **only BTC15m is a maker operation (95.5%
+> maker, 121 fills/window)**; BTC5m is 0.05% maker and ETH5m 0.24%. A taker's
+> round-trip and a maker's recycling are not the same quantity. The gradient
+> therefore orders STRATEGIES as much as habitats, and the two features I
+> called strongest — prior two-sided and prior side balance — are exactly what
+> a maker produces by definition, so on the L5 side they may measure "was L5
+> making here" rather than "was this market recyclable". **L5 BTC15m at 75.7%
+> stands as the MAKER benchmark; the "five monotone habitat features" claim
+> does not.** That module's own docstring warned that averaging these cohorts
+> "produced every misleading cross-cohort figure this programme has
+> published", and I published another one before consulting it. The Gemini
+> findings are unaffected — they come from Gemini's own external tape.
 >
 > **Two defects caught, not shipped.** Leave-one-out counted only sign flips,
 > so dropping the single positive — which empties a cell — read as "no flip"
@@ -284,6 +290,33 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > See `HABITAT_SELECTION_1.md`. Nothing live, no selector, no threshold, no
 > authorization; Model A and the TTE bounds unchanged. GEMINI_RECYCLE stays the
 > adapted execution control.
+>
+> **HABITAT DISCOVERY IS P0 (2026-09-19). Gemini BTC5m becomes continuous
+> evidence collection, not the optimisation target.** Inventory first, per the
+> owner: `L5_HABITAT_INVENTORY.md`. **Four habitats are replayable immediately
+> with ZERO new infrastructure** — verified live at 14:35Z:
+> `src/l5_shadow/venues.py` already serves Polymarket `pm_window`/`pm_book`/
+> `pm_trades` and Gemini `gemini_book`/`gemini_trades` for BOTH 5m and 15m, and
+> `src/gemini_execution/tape_replay.py` is venue-neutral (it takes cycles,
+> prints, a resolution and an expiry). Live fetch today: PM BTC15m 48 prints +
+> full ladder, PM BTC5m 100 prints, Gemini BTC15m 3 prints + book.
+>
+> **Polymarket BTC15m is the priority** — the one habitat where a maker regime
+> is KNOWN to exist, with an EXTERNAL tape, so our hypothetical quote meets
+> flow that is not L5's. `l5_all_trades.csv` is L5's own fills and cannot serve
+> the apples-to-apples comparison the owner asked for.
+>
+> **Polymarket executability, sourced not assumed:** tick 0.01, taker fee 0.07,
+> fee rebate 0.2, rewards max spread 4.5, and **minimum order size 5** against
+> our Gemini size of 0.01. That minimum is its own matrix column: a habitat we
+> cannot enter at our size is not a habitat for us whatever its flow looks
+> like.
+>
+> Order: Gemini BTC15m (same code path, isolates timeframe) → PM BTC15m → PM
+> BTC5m (completes the 2x2, separating venue from timeframe) → PMUS sports
+> (one schema pass on the live recorder) → Gemini non-BTC discovery
+> (`metadata.py` is hard-wired to BTC05M). Crypto is not assumed to win.
+> `L5_HABITAT_MATRIX.md` reports evidence and sample sizes, no composite score.
 
 ### P0: Polymarket US sports
 
