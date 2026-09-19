@@ -68,7 +68,8 @@ async def _account_state(symbol: str):
 
 async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                      interval_s: float, cohort=None,
-                     policy: str = "FROZEN_L5_NATIVE") -> dict:
+                     policy: str = "FROZEN_L5_NATIVE",
+                     on_cycle=None) -> dict:
     """Discover -> band -> state -> policy -> rollover, once.
 
     `cohort` binds the contract FAMILY (BTC5m, BTC15m). `policy` selects the
@@ -166,6 +167,13 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         row["hypothetical_fills"] = hyp_fills
         row["hypothetical_rungs_live"] = sorted(hyp.live)
         rows.append(row)
+        if on_cycle is not None:
+            # LIVE, not end-of-window. rungs_resting only means anything while
+            # the window is still running; by the time the record is written
+            # the surface has been withdrawn and the answer is always zero.
+            on_cycle(symbol=symbol, cycle=n, tte_s=tte, inv=inv, hyp=hyp,
+                     book_readable=bool(row["habitat"].get("book_readable")),
+                     book_why=row["habitat"].get("book_why"))
         runner._persist(row)
         await asyncio.sleep(interval_s)
 
@@ -234,6 +242,247 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
     runner.windows.append(w)
     runner._persist(w)
     return w
+
+
+#: how often a cohort prints its compact heartbeat, in cycles
+HEARTBEAT_EVERY = 5
+
+#: a cohort that raises backs off before trying again. It never gives up:
+#: this is a read-only collector and its job is to be running tomorrow.
+COHORT_BACKOFF_S = (5.0, 15.0, 30.0, 60.0, 120.0)
+
+#: THE FLOOR, and it is not decorative. A cohort whose window raises
+#: immediately retries immediately, and an immediate retry inside a shared
+#: event loop is a hot loop that STARVES THE SIBLING COHORT -- the one thing
+#: putting both families in one process is not allowed to do. A test drove
+#: the backoff to zero and watched a broken BTC15m spin 353,506 times while
+#: BTC5m made no progress at all. The floor makes that unreachable whatever
+#: the table above says.
+MIN_BACKOFF_S = 1.0
+
+#: a failing cohort reports, it does not flood. After this many consecutive
+#: failures with the same error the heartbeat goes quiet until the error
+#: changes or the cohort recovers.
+ERROR_QUIET_AFTER = 3
+
+
+class CohortHeartbeat:
+    """One cohort's live state, compact enough to read in a log tail.
+
+    WHY PER COHORT AND NOT PER PROCESS. Two cohorts now share a process, and
+    a single merged counter would hide exactly the thing the comparison is
+    for: whether BTC5m and BTC15m behave differently. Every field here
+    belongs to one contract family and is never summed across them.
+    """
+
+    def __init__(self, name: str) -> None:
+        self.cohort = name
+        self.current_contract = None
+        self.cycles = 0
+        self.readable = 0
+        self.refused = 0
+        self.rungs_resting = 0
+        self.rungs_rested = 0
+        self.first_fills = 0
+        self.complete_fills = 0
+        self.matched_pairs = 0
+        self.residual = "0"
+        self.windows = 0
+        self.last_rollover = None
+        self.last_error = None
+        self.errors = 0
+        self.restarts = 0
+        self._repeats = 0
+
+    # -------------------------------------------------------- live updates
+    def cycle(self, *, symbol, cycle, tte_s, inv, hyp, book_readable,
+              book_why) -> None:
+        self.current_contract = symbol
+        self.cycles += 1
+        if book_readable:
+            self.readable += 1
+        else:
+            self.refused += 1
+        self.rungs_resting = len(hyp.live)
+        self.rungs_rested = hyp.placed + hyp.requoted
+        rep = hyp.report()
+        self.first_fills = rep["first_fills"]
+        self.complete_fills = rep["complete_fills"]
+        r = inv.report()
+        self.residual = str(r.get("directional_residual"))
+        if cycle % HEARTBEAT_EVERY == 0:
+            self.emit(tte_s=tte_s)
+
+    def window_done(self, w) -> None:
+        self.windows += 1
+        self.last_rollover = {"symbol": w.get("symbol"),
+                              "state": w.get("state"),
+                              "finished_utc": w.get("finished_utc")}
+        inv = w.get("inventory") or {}
+        try:
+            if float(inv.get("matched_qty") or 0) > 0:
+                self.matched_pairs += 1
+        except (TypeError, ValueError):
+            pass
+        self.emit()
+
+    def fail(self, exc) -> None:
+        self.errors += 1
+        err = "%s: %s" % (type(exc).__name__, exc)
+        same = (self.last_error or {}).get("err") == err
+        self._repeats = (self._repeats + 1) if same else 0
+        self.last_error = {"err": err,
+                           "utc": datetime.now(timezone.utc).isoformat(),
+                           "consecutive": self._repeats + 1}
+        # REPORT, DO NOT FLOOD. The same error every backoff for an hour is
+        # one fact, not seven hundred lines of it.
+        if self._repeats < ERROR_QUIET_AFTER:
+            self.emit()
+
+    def emit(self, *, tte_s=None) -> None:
+        print("L5_COHORT_HB " + json.dumps({
+            "cohort": self.cohort,
+            "current_contract": self.current_contract,
+            "tte_s": (round(tte_s, 1) if isinstance(tte_s, (int, float))
+                      else None),
+            "windows": self.windows,
+            "cycles": self.cycles,
+            "readable": self.readable,
+            "refused": self.refused,
+            "rungs_resting": self.rungs_resting,
+            "rungs_rested": self.rungs_rested,
+            "first_fills": self.first_fills,
+            "COMPLETE_fills": self.complete_fills,
+            "matched_pairs": self.matched_pairs,
+            "residual": self.residual,
+            "last_rollover": self.last_rollover,
+            "last_error": self.last_error,
+            "errors": self.errors,
+            "restarts": self.restarts,
+            "mutations_sent": 0,
+            "labels": ("SHADOW/HYPOTHETICAL. No order exists. first_fills, "
+                       "COMPLETE_fills and matched_pairs count rungs that "
+                       "were never placed; none is submitted, filled, "
+                       "settled or realized."),
+        }, default=str), flush=True)
+
+
+def _cohort_paths(root: str, cohort_name: str):
+    """Independent evidence paths, one directory per family.
+
+    BTC15m keeps the exact path it has been writing to on the volume since
+    2026-09-19, so this change adds a lane rather than orphaning a lane's
+    history: root=/state gives /state/gemini-btc15m/continuous_v1 as before.
+    """
+    base = os.path.join(root, "gemini-%s" % cohort_name.lower())
+    return (os.path.join(base, "continuous_v1"),
+            os.path.join(base, "%s_continuous.json" % cohort_name.lower()))
+
+
+async def cohort_loop(a, cohort_name: str) -> None:
+    """ONE cohort, for ever, isolated from every other cohort.
+
+    FAILURE ISOLATION IS THE POINT. Each cohort owns its runner, its entry
+    band, its evidence directory, its guard, its inventory and its
+    hypothetical book -- nothing is shared but the event loop and the
+    process. A cohort that raises records the error on its own heartbeat,
+    backs off and builds a FRESH runner; it cannot stop, reset or even slow
+    the other one, and a test asserts that by making one cohort raise every
+    time while the other completes its windows.
+    """
+    from src.gemini_execution import contract_cohort as CC
+    co = CC.resolve(cohort_name)
+    band = ((a.band_lo, a.band_hi) if a.band_lo is not None
+            else co.entry_band)
+    ev, out = _cohort_paths(a.state_root, co.name)
+    hb = CohortHeartbeat(co.name)
+    print("COHORT %s prefix=%s grid=%dm band=%s policy=%s evidence=%s" % (
+        co.name, co.prefix, co.minutes, band, a.policy, ev), flush=True)
+    forever = (a.windows == 0)
+    attempt = 0
+    while True:
+        runner = CR.ContinuousRunner(
+            mode=CR.SHADOW, budget=CR.RiskBudget(max_windows=a.windows),
+            entry_band=band, evidence_dir=ev)
+        try:
+            while True:
+                adm = CR.admits_another_window(runner.budget, runner.state)
+                if not forever and not adm["admits"]:
+                    runner.stop(adm["state"] or CR.COMPLETED,
+                                adm["why"] or "done")
+                    break
+                w = await one_window(runner, cycles=a.cycles,
+                                     interval_s=a.interval, cohort=co,
+                                     policy=a.policy, on_cycle=hb.cycle)
+                _print_window(w)
+                hb.window_done(w)
+                attempt = 0
+                if runner.state.stopped:
+                    # A STOP IS NOT AN EXIT for a read-only collector. It is
+                    # recorded, this cohort gets a fresh runner, and the
+                    # other cohort never notices.
+                    hb.restarts += 1
+                    hb.last_error = {"err": "runner stopped: %s"
+                                            % (runner.state.why,),
+                                     "utc": datetime.now(
+                                         timezone.utc).isoformat()}
+                    hb.emit()
+                    break
+            if not forever:
+                break
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:                                 # noqa: BLE001
+            hb.fail(exc)
+            wait = max(MIN_BACKOFF_S,
+                       COHORT_BACKOFF_S[min(attempt,
+                                            len(COHORT_BACKOFF_S) - 1)])
+            attempt += 1
+            await asyncio.sleep(wait)
+            continue
+        try:
+            rep = runner.report()
+            os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+            with open(out, "w", encoding="utf-8") as fh:
+                json.dump(rep, fh, indent=2, default=str)
+        except OSError as exc:                                   # noqa: BLE001
+            hb.fail(exc)
+        if not forever:
+            return
+        await asyncio.sleep(1.0)
+
+
+def _print_window(w) -> None:
+    """The per-window line. Unchanged in content; moved so both the single
+    and the multi-cohort paths emit exactly the same thing."""
+    h = w.get("hypothetical") or {}
+    iv = w.get("inventory") or {}
+    hb = w.get("habitat") or {}
+    why = (hb.get("refusal_reasons") or ["-"])[0]
+    print("WINDOW %s tte=%s cycles=%s -> %s | HYP rested=%s fills=%s "
+          "first=%s complete=%s | matched=%s residual=%s basis=%s "
+          "| books=%s/%s refused=%s" % (
+              w.get("symbol"), w.get("entry_tte_s"), w.get("cycles"),
+              w.get("state"), h.get("rungs_rested"), h.get("fills"),
+              h.get("first_fills"), h.get("complete_fills"),
+              iv.get("matched_qty"), iv.get("directional_residual"),
+              iv.get("effective_matched_pair_cost"),
+              hb.get("book_readable_cycles"), hb.get("cycles"), why),
+          flush=True)
+
+
+async def multi_async(a) -> int:
+    """Every cohort concurrently, each in its own task.
+
+    `return_exceptions=True` is deliberate: a task that somehow escapes its
+    own handler must not cancel its sibling through gather.
+    """
+    names = [n.strip() for n in a.cohorts.split(",") if n.strip()]
+    print("DUAL_COHORT_SHADOW cohorts=%s policy=%s state_root=%s" % (
+        names, a.policy, a.state_root), flush=True)
+    await asyncio.gather(*[cohort_loop(a, n) for n in names],
+                         return_exceptions=True)
+    return 0
 
 
 async def main_async(a) -> int:
@@ -307,7 +556,19 @@ def main(argv=None) -> int:
     ap.add_argument("--evidence-dir", default="analysis/gemini/continuous_v1")
     ap.add_argument("--out",
                     default="analysis/gemini/continuous_shadow_soak.json")
+    # ---- MULTI-COHORT. Supplying --cohorts takes the dual path; leaving it
+    # unset keeps the single-cohort path byte-for-byte, which is what every
+    # existing invocation and every existing test uses.
+    ap.add_argument("--cohorts", default=None,
+                    help="comma-separated families to run CONCURRENTLY, each "
+                         "with its own runner, band, guard, inventory and "
+                         "evidence directory (e.g. btc5m,btc15m)")
+    ap.add_argument("--state-root", default="analysis/gemini",
+                    help="parent of the per-cohort evidence directories; "
+                         "each family gets <root>/gemini-<cohort>/")
     a = ap.parse_args(argv)
+    if a.cohorts:
+        return asyncio.run(multi_async(a))
     return asyncio.run(main_async(a))
 
 

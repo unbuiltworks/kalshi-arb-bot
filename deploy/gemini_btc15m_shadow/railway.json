@@ -5,21 +5,22 @@
     "dockerfilePath": "deploy/gemini_btc15m_shadow/Dockerfile",
     "watchPatterns": [
       "deploy/gemini_btc15m_shadow/**",
-      "src/gemini_execution/shadow_soak.py",
-      "src/gemini_execution/hypothetical.py",
-      "src/gemini_execution/contract_cohort.py",
-      "src/gemini_execution/run_continuous.py",
-      "src/gemini_execution/continuous_runner.py",
       "src/gemini_execution/continuous_probe.py",
-      "src/gemini_execution/metadata.py"
+      "src/gemini_execution/continuous_runner.py",
+      "src/gemini_execution/contract_cohort.py",
+      "src/gemini_execution/hypothetical.py",
+      "src/gemini_execution/metadata.py",
+      "src/gemini_execution/run_continuous.py",
+      "src/gemini_execution/shadow_soak.py"
     ]
   },
   "deploy": {
-    "startCommand": "python3 -m src.gemini_execution.shadow_soak --cohort btc15m --policy GEMINI_RECYCLE --windows 0 --cycles 110 --interval 8.0 --evidence-dir /state/gemini-btc15m/continuous_v1 --out /state/gemini-btc15m/btc15m_continuous.json",
+    "startCommand": "python3 -m src.gemini_execution.shadow_soak --cohorts btc5m,btc15m --policy GEMINI_RECYCLE --windows 0 --cycles 110 --interval 8.0 --state-root /state",
     "restartPolicyType": "ALWAYS",
     "restartPolicyMaxRetries": 100
   },
-  "_status": "SHADOW / DISARMED. Gemini BTC15m continuous L5 lifecycle: frozen Model A, GEMINI_RECYCLE adapter, public reads plus read-only account reads. No order path, no authorization id, no arming env. mutations_sent is 0 on every window by construction.",
+  "_status": "SHADOW / DISARMED. BOTH Gemini crypto cohorts in ONE process: BTC05M and BTC15M each with their own runner, entry band, guard, inventory, hypothetical book and evidence directory. Frozen Model A, GEMINI_RECYCLE adapter, public reads plus read-only account reads. No order path, no authorization id, no arming env. mutations_sent is 0 on every window by construction.",
   "_hypothetical": "The lane now runs a HYPOTHETICAL fill ledger: the rungs it would have rested, walked against the public tape with the same queue accounting tape_replay uses offline. It places nothing. Every number it produces is hypothetical and an upper bound, and none of it is submitted, filled, settled, realized or a cost basis.",
-  "_restart": "ALWAYS is correct for a READ-ONLY collector and is NOT the money-moving policy: the bounded live probe uses restartPolicyType NEVER and that is unchanged. This service can place nothing, so relaunching it cannot repeat a trade."
+  "_restart": "ALWAYS is correct for a READ-ONLY collector and is NOT the money-moving policy: the bounded live probe uses restartPolicyType NEVER and that is unchanged. This service can place nothing, so relaunching it cannot repeat a trade.",
+  "_isolation": "One cohort crashing must not kill or reset the other. Each owns its state; a failure is recorded on that cohort's own heartbeat, backed off behind a floor that makes a hot retry loop unreachable, and retried with a fresh runner. Tests drive one cohort to fail every time and assert the other keeps completing windows."
 }

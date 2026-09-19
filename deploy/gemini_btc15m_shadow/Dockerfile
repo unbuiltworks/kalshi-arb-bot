@@ -41,9 +41,12 @@ RUN touch src/__init__.py && pip install --no-cache-dir httpx websockets
 ENV PYTHONUNBUFFERED=1 \
     GEMINI_SHADOW_ROLE=gemini-btc15m-shadow \
     GEMINI_CANARY_STATE_DIR=/state/gemini-btc15m
-# --windows 0 rolls continuously: one contract after another, for ever.
+# BOTH crypto cohorts, concurrently, in ONE process -- no second service.
+# --windows 0 rolls continuously: one contract after another, for ever, per
+# cohort. --state-root gives each family its own directory, and BTC15m keeps
+# the exact path it has been writing to since 2026-09-19 so this adds a lane
+# rather than orphaning a lane's history.
 CMD ["python3", "-m", "src.gemini_execution.shadow_soak", \
-     "--cohort", "btc15m", "--policy", "GEMINI_RECYCLE", \
+     "--cohorts", "btc5m,btc15m", "--policy", "GEMINI_RECYCLE", \
      "--windows", "0", "--cycles", "110", "--interval", "8.0", \
-     "--evidence-dir", "/state/gemini-btc15m/continuous_v1", \
-     "--out", "/state/gemini-btc15m/btc15m_continuous.json"]
+     "--state-root", "/state"]
