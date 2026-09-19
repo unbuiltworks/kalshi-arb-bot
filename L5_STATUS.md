@@ -129,6 +129,33 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > EXPECTED −$0.0006 (matched pair), −$0.0046, −$0.0021 and +$0.0069 (three
 > unmatched directional residuals). They are different objects and are never
 > summed. SETTLED IS NOT REALIZED.
+>
+> **COMPLEMENT REACHABILITY (2026-09-19) — the second half of the cycle does
+> not happen here under current coverage.** 18 seeds (4 ACTUAL venue fills, 14
+> HYPOTHETICAL from the large-print forensic, 13 contracts) replayed forward to
+> settlement under 7 arms. NATIVE reaches **0 of 77** complement quotes;
+> IMPROVE_1, all four minimum-rest arms and the Model B competitive-COMPLETE
+> arm each reach **1 of 74** and form **one** matched pair. One matched pair
+> against zero is **p = 0.50** on the exact test, so the verdict is
+> `BROAD_LEAKAGE_UNCHANGED_IN_EVERY_ARM`. Longer rest adds an EXTEND fill
+> (7→8) and pushes the pair basis **0.84 → 1.02, above par** — on a 5-minute
+> contract a held quote is stale, not patient, and the one rest "success" is
+> the same fill IMPROVE_1 gets without rest, 18 cents worse.
+>
+> **The one-sidedness hypothesis is REFUTED and the mechanism is COVERAGE.**
+> De-duplicated to 13 (symbol, leg) pairs there is MORE complement-direction
+> notional than extend-direction ($998.81 vs $598.06, 37.5% extend). But
+> **85.0% of it arrives after our last recorded cycle** (16 of 17 prints;
+> $848.90 outside vs $149.91 inside), and **7 of 18 seeds had zero cycles
+> after the first fill**, so no COMPLETE was ever quoted. The single seed with
+> in-coverage complement flow is the single seed that matched, at a 0.84
+> basis. This is the A/B/C/D attribution's C (timing, 46.0%) reached by an
+> independent route. **Established: our coverage cannot support the second
+> leg. NOT established: that the venue cannot.** All 77 native complement
+> quotes sat AT the touch, so price and queue were not the obstacle. Residual
+> at TTE 30 and TTE 0 is **unobserved in all 18 seeds** — recording stops
+> between TTE 202.8 and TTE 36.2. See `COMPLEMENT_REACHABILITY_1.md`;
+> everything in it is SHADOW/THEORETICAL and no bound was changed.
 
 ### P0: Polymarket US sports
 
