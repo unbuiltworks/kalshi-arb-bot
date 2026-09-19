@@ -194,6 +194,49 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > it ran on 11 seeds and one recycled its full residual at a 1.00 basis.
 > See `COMPLETION_MODEL_B_1.md`. Model A, the TTE bounds and the live envelope
 > are unchanged and everything is SHADOW/THEORETICAL.
+>
+> **SEQUENTIAL-TAPE REPLAY (2026-09-19) — the arm expansion is FROZEN; the
+> limiting resource is independent windows.** The tape is the clock now: prints
+> are walked in order and inventory plus the Model-A action are recomputed
+> after every hypothetical execution, before the next print. 35 windows
+> offered, **29 sufficiently reconstructed**, 6 skipped and reported. Two
+> policies only.
+>
+> **GEMINI_RECYCLE (B) dominates FROZEN_L5_NATIVE (A) and costs nothing.**
+> Identical windows filled (16), windows paired (3) and COMPLETE fills (3),
+> with **136 EXTENDs vetoed**: terminal residual **0.22 → 0.13 (−41%)**,
+> capital at risk **$0.1323 → $0.0859 (−35%)**, matched/gross 0.107 → 0.158,
+> settlement residual −$0.0167 → −$0.0101. Third independent confirmation of
+> the EXTEND result, first on independent windows with a sequential clock.
+>
+> **But the pairs are mostly matched LOSSES.** Of 3 pairs the bases are 1.4675,
+> 1.16 and 0.93 — **one window in 29 produced matched inventory at an
+> acceptable basis.** B's better ratio comes from shrinking gross (0.28 →
+> 0.19), not from better pairs. **Remove the nine >=100-contract prints and the
+> paired result does not survive**: 3 pairs → 1, and that one is above par
+> (1.2733 A / 1.49 B). The conclusion is burst-dominated.
+>
+> **THE COMPLETE PRICE FRONTIER IS THE DECISIVE RESULT. Price is not the
+> lever.** Over 105 missed complement episodes: **81.0% would have required a
+> CROSS** (not authorized), 13.3% were unreachable at any maker price within 40
+> ticks, and only **6 of 105 (5.7%)** were reachable by improving the maker
+> price — 1 at 0 ticks, 1 at 1 tick, 4 at >5. The analytical pair ceilings are
+> FLAT from 0.98 to 1.05 (3 complements, 2.86% at every one); only dropping the
+> ceiling entirely adds any, and it adds three pairs at 1.05-1.47. These
+> ceilings are buckets for reading the table, NOT gates — the ruling against a
+> pair-cost ceiling in the live path stands.
+>
+> **The rebate is negative net of fees at this size**: accrued $0.0010 (A) /
+> $0.0007 (B), **payable after rounding $0.00**, against maker fees $0.0023 /
+> $0.0015. Reported as its own line, never added to trading economics.
+>
+> On the 39.9% reachable notional: we get filled in 16 of 29 windows, reach a
+> complement in 3, and reach an acceptable basis in **1**. B contains the
+> damage; neither converts the reachable notional into acceptable matched
+> inventory. 14 of B's 19 fills rest on an UNKNOWN NO-side queue treated as
+> zero, the optimistic assumption, and are counted separately. See
+> `TAPE_REPLAY_1.md`. Model A, the TTE bounds and the live envelope unchanged;
+> everything SHADOW/THEORETICAL.
 
 ### P0: Polymarket US sports
 
