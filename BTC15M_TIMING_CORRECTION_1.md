@@ -166,6 +166,21 @@ lane's absence.
 window is 300s, so `[0, 300]` and `[0, 900]` are the same band there and a
 second arm would be the first one wearing a different label.
 
+**The band move is not neutral for the control, and it favours the control.**
+Entering at 240–280, the control began quoting at whatever TTE it entered —
+somewhere in 240–280. Entering at 840–880, it begins quoting the moment its
+band opens at tte **300**. So the control now gets 20–60 seconds MORE quoting
+time per window than the configuration it replaces. Two consequences, both
+worth stating plainly:
+
+1. The prospective comparison is **conservative in the correction's favour**.
+   If the corrected arm still recycles more, the control was not handicapped
+   into that result.
+2. The control's prospective numbers are **not directly comparable to the
+   historical BTC15m record** collected under the 240–280 band. Against the
+   corrected arm, on the same tape, same cycle, they are exactly comparable —
+   which is the comparison this exists to make.
+
 ## 7. How the two arms run
 
 One process, one cohort loop, both arms on the **same tape, book and depth**
