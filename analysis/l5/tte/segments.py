@@ -259,3 +259,172 @@ def fills_by_tte(by_window: Mapping[str, Sequence[Mapping[str, Any]]]
         "median_fill_tte_s": (round(_median(ttes), 1) if ttes else None),
         "labels": LABELS,
     }
+
+
+# ===================================================================
+# PER-FILL TTE: where the activity, the dollars and the recycling are
+# ===================================================================
+
+#: the buckets asked for, on EACH FILL's own TTE
+FILL_BUCKETS = (("600-900", 600.0, 900.0),
+                ("300-600", 300.0, 600.0),
+                ("180-300", 180.0, 300.0),
+                ("120-180", 120.0, 180.0),
+                ("60-120", 60.0, 120.0),
+                ("30-60", 30.0, 60.0),
+                ("<30", 0.0, 30.0))
+
+#: Gemini's published maker rate; fee per contract is rate * p * (1 - p)
+MAKER_RATE = D("0.0175")
+
+
+def fill_bucket_of(tte: float) -> str:
+    for name, lo, hi in FILL_BUCKETS:
+        if lo <= tte < hi:
+            return name
+    return "600-900" if tte >= 900 else "<30"
+
+
+def maker_fee(qty: D, price: D) -> D:
+    """One leg's maker fee. A PAIR pays this twice, once per leg."""
+    return MAKER_RATE * qty * price * (D("1") - price)
+
+
+def walk_window(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Classify every fill against the inventory that preceded it.
+
+    THE RELATION IS DERIVED, NOT LABELLED BY THE VENUE. L5's activity feed
+    says what he bought, not why. Walking the window in time order and
+    comparing each buy against the residual standing before it is what turns
+    a list of trades into OPEN / EXTEND / COMPLETE -- the same three relations
+    the frozen policy chooses between.
+
+    `pair_basis` on a COMPLETE is the held side's running average cost plus
+    the price paid now. It is an average over the whole held side rather than
+    over the specific contracts matched; L5 gives no lot identity, so a
+    stricter attribution would be invented rather than measured.
+    """
+    qty = {"Up": D("0"), "Down": D("0")}
+    spend = {"Up": D("0"), "Down": D("0")}
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        o = r["outcome"]
+        if o not in qty or r["side"] != "BUY":
+            continue
+        residual = qty["Up"] - qty["Down"]
+        held = "Up" if residual > 0 else ("Down" if residual < 0 else None)
+        if held is None:
+            rel = "OPEN"
+        elif o == held:
+            rel = "EXTEND"
+        else:
+            rel = "COMPLETE"
+        basis = None
+        matched_now = D("0")
+        if rel == "COMPLETE" and held is not None and qty[held] > 0:
+            matched_now = min(r["size"], abs(residual))
+            basis = (spend[held] / qty[held]) + r["price"]
+        qty[o] += r["size"]
+        spend[o] += r["usdc"]
+        out.append({
+            "tte_s": float(r["tte_s"]), "relation": rel, "outcome": o,
+            "price": r["price"], "size": r["size"], "usdc": r["usdc"],
+            "matched_now": matched_now, "pair_basis": basis,
+            "residual_after": qty["Up"] - qty["Down"],
+        })
+    return out
+
+
+def by_fill_tte(by_window: Mapping[str, Sequence[Mapping[str, Any]]]
+                ) -> Dict[str, Any]:
+    """Everything the decision needs, bucketed on each fill's own TTE."""
+    agg: Dict[str, Dict[str, Any]] = {}
+    for name, _lo, _hi in FILL_BUCKETS:
+        agg[name] = {"fills": 0, "usd": D("0"), "OPEN": 0, "EXTEND": 0,
+                     "COMPLETE": 0, "matched": D("0"), "bases": [],
+                     "residual_generated": D("0"),
+                     "residual_recycled": D("0"),
+                     "par": 0, "fee_positive": 0, "windows": set()}
+    first_ttes: List[float] = []
+    last_ttes: List[float] = []
+    for slug, rows in by_window.items():
+        walked = walk_window(rows)
+        if not walked:
+            continue
+        first_ttes.append(walked[0]["tte_s"])
+        last_ttes.append(walked[-1]["tte_s"])
+        for w in walked:
+            if w["tte_s"] < 0:
+                continue
+            b = agg[fill_bucket_of(w["tte_s"])]
+            b["fills"] += 1
+            b["usd"] += w["usdc"]
+            b[w["relation"]] += 1
+            b["windows"].add(slug)
+            if w["relation"] in ("OPEN", "EXTEND"):
+                b["residual_generated"] += w["size"]
+            else:
+                b["residual_recycled"] += w["matched_now"]
+                b["matched"] += w["matched_now"]
+            if w["pair_basis"] is not None and D("0") < w["pair_basis"] <= D("2"):
+                pb = w["pair_basis"]
+                b["bases"].append(float(pb))
+                if pb <= D("1"):
+                    b["par"] += 1
+                # both legs pay maker fees; the pair is fee-positive when the
+                # basis leaves more than those two fees below par
+                p = w["price"]
+                fees = maker_fee(D("1"), p) + maker_fee(D("1"), D("1") - p)
+                if pb + fees <= D("1"):
+                    b["fee_positive"] += 1
+    out: Dict[str, Any] = {}
+    for name, b in agg.items():
+        n = b["fills"]
+        oe = b["OPEN"] + b["EXTEND"]
+        nb = len(b["bases"])
+        out[name] = {
+            "fills": n,
+            "windows_touched": len(b["windows"]),
+            "fills_per_window": (round(n / len(b["windows"]), 1)
+                                 if b["windows"] else None),
+            "usd": round(float(b["usd"]), 2),
+            "usd_share": None,
+            "OPEN": b["OPEN"], "EXTEND": b["EXTEND"],
+            "COMPLETE": b["COMPLETE"],
+            "complete_per_open_extend": (round(b["COMPLETE"] / oe, 4)
+                                         if oe else None),
+            "matched_contracts": round(float(b["matched"]), 2),
+            "residual_generated": round(float(b["residual_generated"]), 2),
+            "residual_recycled": round(float(b["residual_recycled"]), 2),
+            "recycle_ratio": (round(float(b["residual_recycled"]
+                                          / b["residual_generated"]), 4)
+                              if b["residual_generated"] > 0 else None),
+            "median_pair_basis": (round(_median(b["bases"]), 4) if nb
+                                  else None),
+            "par_constrained_completes": b["par"],
+            "par_rate": (round(b["par"] / nb, 4) if nb else None),
+            "fee_positive_completes": b["fee_positive"],
+            "fee_positive_rate": (round(b["fee_positive"] / nb, 4) if nb
+                                  else None),
+        }
+    tot = sum(v["usd"] for v in out.values())
+    for v in out.values():
+        v["usd_share"] = round(v["usd"] / tot, 4) if tot else None
+    return {
+        "buckets": out,
+        "first_fill_tte": _dist(first_ttes),
+        "last_fill_tte": _dist(last_ttes),
+        "maker_rate": str(MAKER_RATE),
+        "labels": LABELS,
+    }
+
+
+def _dist(xs: List[float]) -> Dict[str, Any]:
+    if not xs:
+        return {"n": 0}
+    s = sorted(xs)
+    def q(f):
+        return round(s[min(len(s) - 1, int(f * len(s)))], 1)
+    return {"n": len(s), "min": round(s[0], 1), "p10": q(0.10),
+            "p25": q(0.25), "median": round(_median(s), 1), "p75": q(0.75),
+            "p90": q(0.90), "max": round(s[-1], 1)}
