@@ -214,6 +214,18 @@ def test_the_armed_step_names_the_exact_authorization():
     assert 'GEMINI_CANARY_AUTH: "%s"' % arming.EXPECTED_AUTH_ID in wf
     assert '--auth-id "%s"' % arming.EXPECTED_AUTH_ID in wf
     assert "GEMINI_CANARY_AUTH_EXPIRES" in wf
+    # AND IT MUST NOT BE IN THE PAST while the tree is armed. It was stale
+    # from the 09-18 windows when CONTINUOUS-8 was armed and refused twice on
+    # it -- correctly, before the latch, but the refusal cost two dispatches
+    # to diagnose and a test would have cost none.
+    if LIVE_AUTHORIZATION is not None:
+        import datetime as _dt
+        raw = re.search(r'GEMINI_CANARY_AUTH_EXPIRES: "([^"]+)"', wf).group(1)
+        exp = _dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        assert exp > _dt.datetime.now(_dt.timezone.utc), (
+            "the arm expires at %s, which is already past: an armed tree "
+            "whose expiry has lapsed cannot run the window it was armed for"
+            % raw)
 
 
 def test_no_spent_authorization_can_still_be_dispatched():
