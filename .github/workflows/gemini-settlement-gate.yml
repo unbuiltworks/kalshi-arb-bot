@@ -56,13 +56,19 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    # MUST EXCEED THE ARMED STEP'S OWN TIMEOUT. It was 15 while the armed
-    # step was 12, which was fine for a window that started immediately. C8
-    # WAITS up to 420s for its entry band and then runs ~250s, so a 15-minute
-    # job would have killed the runner mid-window -- and a hard kill is worse
+    # MUST EXCEED EVERY STEP'S OWN TIMEOUT. It was 15 while the armed step
+    # was 12, which was fine for a window that started immediately. C8 WAITS
+    # up to 420s for its entry band and then runs ~250s, so a 15-minute job
+    # would have killed the runner mid-window -- and a hard kill is worse
     # than a stop, because the terminal withdrawal never runs and the orders
     # stay live. That is CONTINUOUS-5's failure mode with no way to recover.
-    timeout-minutes: 30
+    #
+    # Then the SHADOW SOAK arrived at 45 minutes against a 30-minute job --
+    # the same defect in reverse, caught before it ran. The soak sends
+    # nothing so a kill could not strand an order, but it would have thrown
+    # away the evidence and looked like a failure. A test now pins
+    # job > every step.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:

@@ -506,6 +506,19 @@ def test_the_job_outlives_the_armed_step_which_outlives_the_bounded_wait():
     assert job > step, (job, step)
 
 
+def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
+    """The armed step's 12 vs the job's 15 was caught; the SOAK's 45 against
+    the job's 30 was the same defect in reverse. Pin the general rule."""
+    import re as _re
+    wf = WF.read_text()
+    job = int(_re.search(r"^  gate:.*?^    timeout-minutes: (\d+)", wf,
+                         _re.M | _re.S).group(1))
+    steps = [int(m) for m in _re.findall(r"^        timeout-minutes: (\d+)",
+                                         wf, _re.M)]
+    assert steps, "no step declares a timeout; this guard would pass vacuously"
+    assert job > max(steps), (job, steps)
+
+
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
