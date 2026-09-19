@@ -13,11 +13,22 @@
 # image.
 FROM python:3.11-slim
 WORKDIR /app
+# THE IMPORT CLOSURE, COMPUTED NOT GUESSED. The first image copied four of
+# these and crash-looped on `No module named src.l5_surface`, which
+# continuous_probe imports at module scope. This list is the transitive
+# closure of `from src.X` / `import src.X` across the lane, including the
+# lazily-imported ones an import-time trace alone would miss.
 COPY src/__init__.py src/__init__.py
 COPY src/gemini_execution/ src/gemini_execution/
+COPY src/l5_surface/ src/l5_surface/
+COPY src/l5_intent/ src/l5_intent/
 COPY src/l5_shadow/ src/l5_shadow/
 COPY src/l5_adapters/ src/l5_adapters/
+COPY src/l5_fidelity/ src/l5_fidelity/
+COPY src/l5_router/ src/l5_router/
+COPY src/polymarket_l5/ src/polymarket_l5/
 COPY src/gemini_prediction_auth.py src/gemini_prediction_auth.py
+COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
 COPY src/auth.py src/auth.py
 COPY src/fee_calc.py src/fee_calc.py
 RUN touch src/__init__.py && pip install --no-cache-dir httpx websockets
