@@ -16,6 +16,17 @@ direction, and a price change loses queue position. The policy is re-asked
 after every hypothetical fill, so inventory moves before the next print is
 looked at -- the whole point of the sequential engine.
 
+TWO DECISION PATHS, AND WHICH IS WHICH. The rungs set at a CYCLE boundary
+come from the lane's own `WindowGuard.step` plus the adapter -- the same
+actions the lane records as `model_a_wanted` / `vetoed_by_adapter`. The
+re-target that follows a hypothetical fill MID-CYCLE calls `tape_replay
+.desired` instead, without the guard. That is deliberate: it is the exact
+path the offline engine takes, so live and replay agree by construction, and
+the guard's job is order safety -- one outstanding order, cohort binding --
+which has no meaning for a rung that does not exist. It is stated here
+because the evidence would otherwise read as though every rung passed the
+guard.
+
 WHAT THIS IS NOT. No order is submitted. No session exists. Nothing here is
 SUBMITTED, FILLED, SETTLED or REALIZED, and a hypothetical fill is not a
 cost basis. It is an UPPER BOUND on what a rung could have caught: Gemini
@@ -148,6 +159,7 @@ class HypotheticalBook:
                 # the offline engine takes and the reason it is reused here.
                 d = TR.desired(self.policy, symbol=self.symbol, tte_s=tte_s,
                                inv=inv, book=book or {})
+                row["retargeted_by"] = "tape_replay.desired (no WindowGuard)"
                 self.retarget(d["kept"], now_ms=p["utc_ms"], depth=depth)
         return got_any
 

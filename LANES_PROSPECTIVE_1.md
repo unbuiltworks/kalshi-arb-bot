@@ -167,6 +167,24 @@ Runtime evidence, from the service's own logs:
 Discovery → wait → band entry at **TTE 279.8s**, inside the 240–280 band and
 inside Model A's quoting window → 29 cycles → terminal `COMPLETED`.
 
+### Automatic rollover, proven on the BTC5m lane
+
+The BTC5m lane has rolled from one contract to the next three times without
+intervention, each entry inside the same 240–280 band:
+
+| symbol | entry TTE | cycles | terminal |
+|---|---|---|---|
+| `GEMI-BTC05M2609191525-UP` | 275.6s | 23 | COMPLETED |
+| `GEMI-BTC05M2609191530-UP` | 279.7s | 26 | COMPLETED |
+| `GEMI-BTC05M2609191535-UP` | 271.4s | 24 | COMPLETED |
+
+Same loop, same `--windows 0`, same cohort parameterisation as BTC15m —
+`contract_cohort.py` supplies the family and nothing else differs — so the
+rollover path is the one BTC15m runs. BTC15m's own second window is not yet
+in the log at the time of writing; it is expected roughly every 15 minutes
+and the chain is not claimed proven on that lane until a second symbol
+appears there.
+
 ---
 
 ## 5. What is still not evidenced

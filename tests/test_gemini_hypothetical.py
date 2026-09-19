@@ -213,3 +213,28 @@ def test_A_REQUOTE_COUNTS_AS_A_RUNG_THAT_RESTED():
     r = b.report()
     assert r["rungs_placed"] == 1 and r["requotes"] == 2
     assert r["rungs_rested"] == 3
+
+
+def test_THE_MID_FILL_RETARGET_SAYS_IT_SKIPPED_THE_GUARD():
+    """Cycle-boundary rungs come from WindowGuard; the post-fill one does not.
+
+    Recorded on the row rather than left implicit, so the evidence cannot be
+    read as though every rung passed the guard.
+    """
+    b = HY.HypotheticalBook(symbol="S", policy=TR.POLICY_A)
+    b.retarget([{"leg": "YES", "price": "0.30", "qty": "0.01",
+                 "action": CP.OPEN}], now_ms=1000, depth=None)
+    got = b.consume([_p(1, 2000, "0.28", "5", "sell")], inv=CP.Inventory(),
+                    book={}, depth=None, tte_s=200)
+    assert got[0]["retargeted_by"] == "tape_replay.desired (no WindowGuard)"
+    flat = " ".join(HY.__doc__.split())
+    assert "without the guard" in flat
+
+
+def test_an_unreadable_book_takes_the_rungs_down_rather_than_guessing():
+    b = HY.HypotheticalBook(symbol="S", policy=TR.POLICY_A)
+    b.retarget([{"leg": "YES", "price": "0.30", "qty": "0.01",
+                 "action": CP.OPEN}], now_ms=1000, depth=None)
+    b.consume([_p(1, 2000, "0.28", "5", "sell")], inv=CP.Inventory(),
+              book={"readable": False, "why": "nope"}, depth=None, tte_s=200)
+    assert b.live == {}
