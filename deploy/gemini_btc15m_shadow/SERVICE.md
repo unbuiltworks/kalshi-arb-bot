@@ -109,8 +109,11 @@ would read as a finding about the correction rather than about the schedule.
 `--cycles 110 --interval 8.0` already covers 880s, so the start command is
 unchanged. BTC5m's band is untouched.
 
-**watchPatterns must include `src/l5_surface/**` and
-`artifacts/l5_surface/**`** — the arm's spec and the frozen artifacts live
-there, and a spec-only change would otherwise not redeploy.
+**watchPatterns.** `src/l5_surface/*.py` and `artifacts/l5_surface/*.json`
+were added — the arm's spec and the frozen artifacts live there, and a
+spec-only change would otherwise not redeploy. `deploy/gemini_btc15m_shadow/**`
+was narrowed to `.../Dockerfile`: the wildcard matched THIS FILE, so editing
+the documentation rebuilt the image and restarted a running collector
+mid-window. A doc is not a deployment.
 
 Rationale and evidence: `BTC15M_TIMING_CORRECTION_1.md`.
