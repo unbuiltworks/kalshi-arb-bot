@@ -45,16 +45,31 @@ def test_THE_FROZEN_TTE_BOUNDS_ARE_NOT_SCALED_PER_FAMILY():
         assert not hasattr(c, "complete_only_tte_s")
 
 
+def _widest_band(cohort):
+    """The quoting window of the widest arm this cohort actually runs."""
+    from src.gemini_execution import continuous_probe as CP
+    from src.gemini_execution import shadow_soak as SS
+    specs = [CP.probe_params()]
+    corr = SS.correction_spec(cohort)
+    if corr is not None:
+        specs.append(corr)
+    bands = [s.get("TTE_policy")["quote_between_tte_s"] for s in specs]
+    return min(float(b[0]) for b in bands), max(float(b[1]) for b in bands)
+
+
 def test_the_band_is_set_by_the_QUOTING_WINDOW_not_by_symmetry():
     """This test previously asserted the band sat within 60s of the window's
-    OPEN -- symmetry with the 5-minute family. That was the wrong property
-    and it shipped a 15-minute band of 840-880, nine minutes before Model A
-    would quote at all. What matters is the TTE the policy will speak at."""
-    from src.gemini_execution import continuous_probe as CP
-    lo, hi = CP.probe_params().get("TTE_policy")["quote_between_tte_s"]
+    OPEN -- symmetry with the 5-minute family. That was the wrong property.
+
+    It is still the TTE the policy will speak at that matters, but "the
+    policy" is now plural: BTC15m runs a corrected arm quoting [0, 900]
+    beside the frozen [0, 300]. The band has to sit inside the WIDEST arm,
+    because the widest arm is the one that has to be live from the first
+    cycle -- a narrower arm withholding early is its decision, recorded, and
+    not a lane that cannot trade."""
     for c in (CC.BTC5M, CC.BTC15M):
-        assert float(lo) <= c.entry_band[0] <= c.entry_band[1] <= float(hi), \
-            c.name
+        lo, hi = _widest_band(c)
+        assert lo <= c.entry_band[0] <= c.entry_band[1] <= hi, c.name
 
 
 def test_the_ticker_grid_is_shared_and_only_the_step_differs():
@@ -158,19 +173,39 @@ def test_every_cohort_we_run_is_a_family_the_guard_will_bind():
         assert "GEMI-%s" % c.prefix in CP.COHORT_PREFIXES
 
 
-def test_EVERY_ENTRY_BAND_SITS_INSIDE_MODEL_AS_QUOTING_WINDOW():
-    """The frozen surface carries quote_between_tte_s = [0, 300], an OURS_ADAPTED
-    L5 parameter. Entering a 15-minute contract at TTE 840-880 gave nine
-    minutes of cycles where the policy correctly withheld its surface and
-    nothing could happen. A band outside the quoting window is a band that
-    cannot trade."""
-    from src.gemini_execution import continuous_probe as CP
-    lo, hi = CP.probe_params().get("TTE_policy")["quote_between_tte_s"]
+def test_EVERY_ENTRY_BAND_SITS_INSIDE_A_QUOTING_WINDOW_THAT_IS_RUN():
+    """A band outside every arm's quoting window is a band that cannot trade.
+
+    The check is against the arms the cohort RUNS, so adding an arm can widen
+    what is admissible and removing one narrows it back -- a band left behind
+    by a retired arm fails here rather than quietly going silent.
+    """
     for c in (CC.BTC5M, CC.BTC15M):
-        assert float(lo) <= c.entry_band[0] <= float(hi), c.name
-        assert float(lo) <= c.entry_band[1] <= float(hi), c.name
+        lo, hi = _widest_band(c)
+        assert lo <= c.entry_band[0] <= hi, c.name
+        assert lo <= c.entry_band[1] <= hi, c.name
 
 
-def test_both_families_now_enter_at_the_same_TTE():
-    """Which makes the two lanes directly comparable."""
-    assert CC.BTC5M.entry_band == CC.BTC15M.entry_band
+def test_THE_FAMILIES_NO_LONGER_ENTER_AT_THE_SAME_TTE_AND_THAT_IS_THE_POINT():
+    """They entered at the same TTE because both were bound to [0, 300].
+
+    BTC15m now enters at the top of its own window so the corrected arm has
+    an interval to be measured over at all. Entering both at 240-280 would
+    leave the correction unobservable by construction, and its silence would
+    read as a finding about the correction rather than about the schedule.
+    """
+    assert CC.BTC5M.entry_band == (240.0, 280.0)
+    assert CC.BTC15M.entry_band == (840.0, 880.0)
+    # each still enters inside its own instrument, with room to work
+    for c in (CC.BTC5M, CC.BTC15M):
+        assert c.entry_band[1] <= c.max_entry_tte_s, c.name
+        assert c.entry_band[0] > 0, c.name
+
+
+def test_BTC5M_HAS_NO_CORRECTION_ARM_AND_ITS_BAND_IS_UNMOVED():
+    """Its window is 300s: [0, 300] and [0, 900] are the same band there, so
+    a second arm would be the first one wearing a different label."""
+    from src.gemini_execution import shadow_soak as SS
+    assert SS.correction_spec(CC.BTC5M) is None
+    assert CC.BTC5M.entry_band == (240.0, 280.0)
+    assert _widest_band(CC.BTC5M) == (0.0, 300.0)

@@ -156,6 +156,8 @@ FROZEN_SHA = {
         "2237304d81ac63f51ea2adaf43849f6220fca7578c4b4a18ba68dc112877915c",
     "L5_ADAPTED_GEMINI_CRYPTO":
         "62d004d80b4af8b97823e239d8919ee3abff5420c0318d18623c2810bdb3c2a6",
+    "L5_ADAPTED_GEMINI_BTC15M_V2":
+        "cd8ad6a914dc9fc0a27a82de3159c990a2d3a380b6186cb95e5f87aa36defe7a",
 }
 
 
@@ -164,3 +166,82 @@ def test_the_frozen_identities_are_stable():
     for label, sha in FROZEN_SHA.items():
         assert sets[label].spec_sha256() == sha, (
             "%s re-hashed; downstream evidence cites the old value" % label)
+
+
+# ----------------------------------------- the BTC15m timing correction
+
+def test_THE_CORRECTION_CHANGES_EXACTLY_ONE_FIELD():
+    """"Only timing changes" has to be a property of the artifact.
+
+    Side selection, the price surface, the inventory mechanics and every
+    bound are the control lane's. If a second field ever moves, the
+    prospective comparison stops being about timing and nothing it produces
+    answers the question it was built for.
+    """
+    sets = PR.load_frozen()
+    base = sets[LN.GEMINI_CRYPTO]
+    corr = LN.derive_correction(sets["FIDELITY_OBSERVABLE_V1"],
+                                LN.GEMINI_BTC15M_V2)
+    moved = [f for f in PR.FIELDS
+             if (base.params[f].status, base.params[f].value)
+             != (corr.params[f].status, corr.params[f].value)]
+    assert moved == ["TTE_policy"], moved
+    assert corr.get("TTE_policy") == {"quote_between_tte_s": [0, 900]}
+    assert base.get("TTE_policy") == {"quote_between_tte_s": [0, 300]}
+
+
+def test_THE_CONTROL_IS_PRESERVED_NOT_MUTATED():
+    """Deriving the correction must leave the lane it corrects alone."""
+    sets = PR.load_frozen()
+    before = sets[LN.GEMINI_CRYPTO].spec_sha256()
+    LN.derive_correction(sets["FIDELITY_OBSERVABLE_V1"], LN.GEMINI_BTC15M_V2)
+    after = PR.load_frozen()[LN.GEMINI_CRYPTO].spec_sha256()
+    assert before == after == FROZEN_SHA["L5_ADAPTED_GEMINI_CRYPTO"]
+
+
+def test_A_CORRECTION_IS_NOT_A_LANE_AND_GETS_NO_LIVE_GATE():
+    """lane_gates.SOURCES is keyed by LANES.
+
+    A correction that joined LANES would acquire a live-progression gate by
+    existing rather than by earning one, which is the exact substitution this
+    codebase refuses everywhere else.
+    """
+    from src.l5_surface import lane_gates as G
+    assert LN.GEMINI_BTC15M_V2 not in LN.LANES
+    assert LN.GEMINI_BTC15M_V2 not in G.SOURCES
+    assert set(G.SOURCES) >= set(LN.LANES)
+
+
+def test_THE_CORRECTED_FIELD_STATES_ITS_PROVENANCE_AND_IS_NOT_CALLED_OBSERVED():
+    sets = PR.load_frozen()
+    corr = LN.derive_correction(sets["FIDELITY_OBSERVABLE_V1"],
+                                LN.GEMINI_BTC15M_V2)
+    p = corr.params["TTE_policy"]
+    assert p.status == PR.OURS_ADAPTED
+    assert not p.is_l5_evidence()
+    assert corr.l5_evidence_fields() == []
+    assert p.evidence is None
+    why = p.prior_evidence
+    for token in ("CORRECTION", "OURS_ADAPTED, never measured from L5",
+                  "TTE_PROVENANCE_1.md", "NOT CHANGED", "SHADOW ONLY"):
+        assert token in why, token
+    # the numbers the correction rests on are IN the artifact, not only in a
+    # commit message that nothing downstream reads
+    for token in ("63,569", "89.5%", "p=0.0037", "38 of the 96"):
+        assert token in why, token
+
+
+def test_FREEZING_WRITES_THE_CORRECTION_AND_STILL_NEVER_TOUCHES_FIDELITY():
+    import tempfile
+    import shutil
+    import os
+    with tempfile.TemporaryDirectory() as d:
+        for f in os.listdir(PR.FROZEN_DIR):
+            shutil.copy(os.path.join(PR.FROZEN_DIR, f), d)
+        out = LN.freeze(d)
+        assert out[LN.GEMINI_BTC15M_V2] == \
+            FROZEN_SHA["L5_ADAPTED_GEMINI_BTC15M_V2"]
+        assert out["FIDELITY_OBSERVABLE_V1"] == \
+            FROZEN_SHA["FIDELITY_OBSERVABLE_V1"]
+        assert PR.load_frozen(d)[LN.GEMINI_BTC15M_V2].get("TTE_policy") == \
+            {"quote_between_tte_s": [0, 900]}

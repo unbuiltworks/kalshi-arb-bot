@@ -70,13 +70,28 @@ BTC5M = Cohort(name="BTC5m", prefix="BTC05M", minutes=5,
 #: 5-minute contract TTE never exceeds 300 and it never binds. On a
 #: 15-minute contract it means Model A quotes ONLY the final five minutes.
 #:
-#: Entering at 840-880 -- symmetric with the 5-minute band -- was therefore
-#: wrong: it produced nine minutes of cycles in which the policy correctly
-#: withheld its surface and nothing could happen. Entering inside the
-#: quoting window makes the lane live from its first cycle, and makes the
-#: two families directly comparable because both then enter at the same TTE.
+#: Entering at 240-280 followed from that: inside the quoting window, so the
+#: lane was live from its first cycle. The band was correct GIVEN [0, 300].
+#:
+#: [0, 300] IS NOW KNOWN TO BE WRONG FOR THIS INSTRUMENT, and the band has to
+#: follow it back. L5_ADAPTED_GEMINI_BTC15M_V2 quotes [0, 900]; entering at
+#: 240-280 would leave the process unattached to the contract for the entire
+#: interval that correction is about, so the corrected arm could produce no
+#: evidence whatever and its silence would look like a finding. Entering at
+#: the top of the window is what makes the comparison possible at all.
+#:
+#: THE CONTROL'S DECISIONS ARE UNCHANGED BY THIS. Above tte 300 the frozen
+#: band withholds its surface, which is what it did before and what it does
+#: now -- the difference is that the withholding is RECORDED cycle by cycle
+#: instead of being inferred from the lane's absence. The earlier note that
+#: 840-880 "produced nine minutes in which nothing could happen" was right
+#: about the mechanism and wrong about the remedy: the cure for a band that
+#: withholds for nine minutes is not to stop watching those nine minutes.
+#:
+#: BTC5m IS UNTOUCHED. Its window is 300s, [0, 300] never binds on it, and
+#: its band is the separate constant above.
 BTC15M = Cohort(name="BTC15m", prefix="BTC15M", minutes=15,
-                entry_band=(240.0, 280.0))
+                entry_band=(840.0, 880.0))
 
 COHORTS: Dict[str, Cohort] = {c.name.lower(): c for c in (BTC5M, BTC15M)}
 COHORTS.update({c.prefix.lower(): c for c in (BTC5M, BTC15M)})

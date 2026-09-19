@@ -45,6 +45,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from typing import Any, List, Optional
 
 from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import continuous_runner as CR
@@ -64,6 +65,135 @@ async def _account_state(symbol: str):
         return {"symbol": symbol, "fills": None, "open_orders": None,
                 "orders_seen": None, "trades": None, "terminal_seen": None,
                 "unreadable_why": "%s: %s" % (type(exc).__name__, exc)}
+
+
+#: which cohorts carry a corrected-timing arm alongside the frozen lane.
+#: BTC5m is deliberately absent: its window is 300s, so [0, 300] and [0, 900]
+#: are the same band there and a second arm would be a duplicate of the first
+#: dressed up as a comparison.
+CORRECTION_ARMS = {"BTC15m": "L5_ADAPTED_GEMINI_BTC15M_V2"}
+
+
+class _Arm:
+    """One decision record: its own guard, inventory and hypothetical book.
+
+    ARMS SHARE THE TAPE AND NOTHING ELSE. Both see the same prints, the same
+    book and the same depth on the same cycle, which is the only way the
+    difference between them can be attributed to the one field that differs.
+    Sharing an inventory or a book would make the second arm a function of
+    the first's fills and the comparison would be measuring itself.
+
+    `sp is None` means the frozen Model A exactly as `plan` defaults to it --
+    the control's code path is unchanged, not re-implemented.
+    """
+
+    __slots__ = ("label", "sp", "guard", "inv", "hyp", "error")
+
+    def __init__(self, label, sp, *, symbol, cohort_prefix, policy):
+        self.label = label
+        self.sp = sp
+        self.error = None
+        self.guard = CP.WindowGuard(symbol, auth_id="SHADOW",
+                                    cohort_prefix=cohort_prefix)
+        self.inv = CP.Inventory()
+        self.hyp = HY.HypotheticalBook(symbol=symbol, policy=policy)
+
+
+def correction_spec(cohort) -> Optional[Any]:
+    """The corrected spec for this cohort, or None if it has no correction.
+
+    Probe-scoped size and residual are applied exactly as they are to the
+    control, so the two arms differ in the corrected field and in nothing
+    else -- including nothing about size.
+    """
+    label = CORRECTION_ARMS.get(getattr(cohort, "name", None))
+    if not label:
+        return None
+    from src.l5_surface import params as PR
+    probe = CP.probe_params(PR.load_frozen()[label])
+    # probe_params re-labels whatever it is given to the probe's own name,
+    # which for the control is exactly right and for an arm would erase the
+    # one thing its evidence has to say: WHICH spec produced this decision.
+    return PR.SurfaceParams(
+        label=label, kind="ADAPTED", params=probe.params,
+        notes=("%s under the probe's own size and residual; %s"
+               % (label, probe.notes or "")))
+
+
+def _corrects(label: str) -> Optional[str]:
+    """Which lane this arm corrects, named in every record it writes."""
+    from src.l5_surface import lanes as LN
+    c = LN.CORRECTIONS.get(label) or {}
+    return c.get("corrects")
+
+
+def _band_of(arm: _Arm):
+    """The one field that differs, restated wherever the arm is reported."""
+    try:
+        return arm.sp.get("TTE_policy")["quote_between_tte_s"]
+    except Exception:                                            # noqa: BLE001
+        return None
+
+
+def _step_arm(arm: _Arm, *, symbol, tte, book, depth, flow, policy):
+    """One cycle for one arm. No venue call, no session, no mutation."""
+    from src.gemini_execution import tape_replay as TR
+    # THE PRINTS CAME FIRST -- see the control path below; the ordering
+    # discipline is the same for every arm and for the same reason.
+    fills = arm.hyp.consume(flow.get("prints") or [], inv=arm.inv, book=book,
+                            depth=depth, tte_s=tte)
+    ms = CP.state_from_venue(symbol, tte, arm.inv, book=book)
+    kw = {"now": time.time()}
+    if arm.sp is not None:
+        kw["sp"] = arm.sp
+    turn = arm.guard.step(ms, arm.inv, **kw)
+    wanted = list(turn.get("actions") or [])
+    vetoed = []
+    if policy == TR.POLICY_B and arm.inv.residual() != 0:
+        keep = [a for a in wanted if a.get("action") == CP.COMPLETE]
+        vetoed = [a for a in wanted if a.get("action") != CP.COMPLETE]
+        turn = {**turn, "actions": keep}
+    acted = list(turn.get("actions") or [])
+    arm.hyp.retarget(acted, now_ms=int(time.time() * 1000), depth=depth)
+    return {
+        "market_state": ms, "turn": turn, "wanted": wanted, "vetoed": vetoed,
+        "acted": acted, "fills": fills,
+        "decision": {"turn": turn, "policy": policy,
+                     "model_a_wanted": wanted, "vetoed_by_adapter": vetoed,
+                     "plan": {"keep": [],
+                              "place": [{"rung": a} for a in acted],
+                              "cancel": [], "mutations": len(acted)}},
+    }
+
+
+def _step_arms(arms, *, symbol, tte, book, depth, flow, policy):
+    """Every arm's record for one cycle, with each arm's failure contained.
+
+    An arm that raises is RECORDED and the remaining arms still step. A
+    research arm must not be able to take down the 24/7 collector it rides
+    on, and "must not" has to be a property of this function rather than of
+    an intention.
+    """
+    out = {}
+    for arm in arms:
+        try:
+            st = _step_arm(arm, symbol=symbol, tte=tte, book=book,
+                           depth=depth, flow=flow, policy=policy)
+        except Exception as exc:                                 # noqa: BLE001
+            arm.error = "%s: %s" % (type(exc).__name__, exc)
+            out[arm.label] = {"error": arm.error}
+            continue
+        out[arm.label] = {
+            "corrects": _corrects(arm.label),
+            "quote_between_tte_s": _band_of(arm),
+            "decision": st["decision"],
+            "model_a_wanted": st["wanted"],
+            "vetoed_by_adapter": st["vetoed"],
+            "hypothetical_fills": st["fills"],
+            "hypothetical_rungs_live": sorted(arm.hyp.live),
+            "inventory": arm.inv.report(),
+        }
+    return out
 
 
 async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
@@ -122,6 +252,24 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
     # the rungs this lane WOULD have rested, and what the tape would have
     # done to them. No order, no session, no write path -- see hypothetical.py
     hyp = HY.HypotheticalBook(symbol=symbol, policy=policy)
+
+    # THE CORRECTED-TIMING ARM, if this cohort has one. It is strictly
+    # additive: it has its own guard, inventory and book, it is never
+    # consulted by the control, and it cannot stop the window -- a cohort
+    # that cannot build it records why and runs the control alone, because a
+    # research arm must never be able to take down a collector.
+    arms: List[_Arm] = []
+    arms_error = None
+    try:
+        csp = correction_spec(cohort)
+        if csp is not None:
+            arms.append(_Arm(csp.label, csp, symbol=symbol,
+                             cohort_prefix=(("GEMI-%s" % cohort.prefix)
+                                            if cohort else None),
+                             policy=policy))
+    except Exception as exc:                                     # noqa: BLE001
+        arms_error = "%s: %s" % (type(exc).__name__, exc)
+
     rows, n = [], 0
     while n < cycles:
         n += 1
@@ -166,6 +314,14 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         hyp.retarget(acted, now_ms=int(time.time() * 1000), depth=depth)
         row["hypothetical_fills"] = hyp_fills
         row["hypothetical_rungs_live"] = sorted(hyp.live)
+        # ---- the corrected arm(s), on THIS cycle's tape and book. Recorded
+        # beside the control's decision, never merged into it.
+        if arms:
+            row["correction_arms"] = _step_arms(
+                arms, symbol=symbol, tte=tte, book=book, depth=depth,
+                flow=flow, policy=policy)
+        if arms_error:
+            row["correction_arms_error"] = arms_error
         rows.append(row)
         if on_cycle is not None:
             # LIVE, not end-of-window. rungs_resting only means anything while
@@ -173,7 +329,7 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
             # the surface has been withdrawn and the answer is always zero.
             on_cycle(symbol=symbol, cycle=n, tte_s=tte, inv=inv, hyp=hyp,
                      book_readable=bool(row["habitat"].get("book_readable")),
-                     book_why=row["habitat"].get("book_why"))
+                     book_why=row["habitat"].get("book_why"), row=row)
         runner._persist(row)
         await asyncio.sleep(interval_s)
 
@@ -229,6 +385,20 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
              samples, rungs_placed=hyp.placed + hyp.requoted,
              fills=hyp.fills, window_s=len(rows) * interval_s),
          "hypothetical": hyp.report(),
+         "correction_arms": {
+             arm.label: {"corrects": _corrects(arm.label),
+                         "quote_between_tte_s": _band_of(arm),
+                         "hypothetical": arm.hyp.report(),
+                         "inventory": arm.inv.report(),
+                         "error": arm.error}
+             for arm in arms} or None,
+         "correction_arms_error": arms_error,
+         "correction_arms_labels": (
+             "A SECOND DECISION RECORD ON THE SAME TAPE, not a second lane. "
+             "It differs from the control in quote_between_tte_s and in "
+             "nothing else, it is shadow-only and unauthorized for any live "
+             "path, and mutations_sent is zero for every arm."
+             if arms else None),
          "inventory": inv.report(),
          "inventory_labels": (
              "moved by HYPOTHETICAL fills only. No order was submitted and "
@@ -289,6 +459,9 @@ class CohortHeartbeat:
         self.residual = "0"
         self.windows = 0
         self.last_rollover = None
+        #: per corrected arm, never summed into the control's counters. The
+        #: whole point is that the two numbers can differ.
+        self.arms = {}
         self.last_error = None
         self.errors = 0
         self.restarts = 0
@@ -296,8 +469,10 @@ class CohortHeartbeat:
 
     # -------------------------------------------------------- live updates
     def cycle(self, *, symbol, cycle, tte_s, inv, hyp, book_readable,
-              book_why) -> None:
+              book_why, row=None) -> None:
         self.current_contract = symbol
+        if row is not None:
+            self.note_arms(row)
         self.cycles += 1
         if book_readable:
             self.readable += 1
@@ -313,8 +488,45 @@ class CohortHeartbeat:
         if cycle % HEARTBEAT_EVERY == 0:
             self.emit(tte_s=tte_s)
 
+    def note_arms(self, row) -> None:
+        """Live per-arm counters, read from the arm's OWN books."""
+        for label, rec in (row.get("correction_arms") or {}).items():
+            a = self.arms.setdefault(label, {"first_fills": 0,
+                                             "COMPLETE_fills": 0,
+                                             "matched_pairs": 0,
+                                             "residual": "0",
+                                             "rungs_resting": 0,
+                                             "error": None})
+            if rec.get("error"):
+                a["error"] = rec["error"]
+                continue
+            a["rungs_resting"] = len(rec.get("hypothetical_rungs_live") or [])
+            inv = rec.get("inventory") or {}
+            a["residual"] = str(inv.get("directional_residual"))
+
     def window_done(self, w) -> None:
         self.windows += 1
+        for label, rec in (w.get("correction_arms") or {}).items():
+            a = self.arms.setdefault(label, {"first_fills": 0,
+                                             "COMPLETE_fills": 0,
+                                             "matched_pairs": 0,
+                                             "residual": "0",
+                                             "rungs_resting": 0,
+                                             "error": None})
+            h = rec.get("hypothetical") or {}
+            a["first_fills"] = h.get("first_fills", a["first_fills"])
+            a["COMPLETE_fills"] = h.get("complete_fills", a["COMPLETE_fills"])
+            a["rungs_rested"] = h.get("rungs_rested")
+            a["band"] = rec.get("quote_between_tte_s")
+            a["corrects"] = rec.get("corrects")
+            a["error"] = rec.get("error") or a.get("error")
+            inv = rec.get("inventory") or {}
+            a["residual"] = str(inv.get("directional_residual"))
+            try:
+                if float(inv.get("matched_qty") or 0) > 0:
+                    a["matched_pairs"] += 1
+            except (TypeError, ValueError):
+                pass
         self.last_rollover = {"symbol": w.get("symbol"),
                               "state": w.get("state"),
                               "finished_utc": w.get("finished_utc")}
@@ -355,6 +567,7 @@ class CohortHeartbeat:
             "COMPLETE_fills": self.complete_fills,
             "matched_pairs": self.matched_pairs,
             "residual": self.residual,
+            "arms": self.arms or None,
             "last_rollover": self.last_rollover,
             "last_error": self.last_error,
             "errors": self.errors,
@@ -364,6 +577,10 @@ class CohortHeartbeat:
                        "COMPLETE_fills and matched_pairs count rungs that "
                        "were never placed; none is submitted, filled, "
                        "settled or realized."),
+            "arms_labels": (("`arms` is the corrected-timing shadow arm, "
+                             "reported SEPARATELY and never summed into the "
+                             "counters above. mutations_sent is zero for it "
+                             "too.") if self.arms else None),
         }, default=str), flush=True)
 
 
