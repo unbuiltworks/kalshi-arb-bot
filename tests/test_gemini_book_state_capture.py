@@ -213,3 +213,23 @@ def test_no_depth_means_unchecked_not_agreed(monkeypatch):
     monkeypatch.setattr(MD, "terms_for", lambda s: {"priceIncrement": "0.01"})
     a = RC.book_state(_state(), None)["agreement"]
     assert a["checked"] is False and "agrees" not in a
+
+
+def test_a_CROSSED_book_is_recorded_as_refused_not_as_a_readable_book():
+    """Soak #2, 20 of 87 cycles. A crossed book PARSES perfectly -- the venue
+    served it, both sides have prices -- and the state refuses it. The record
+    said `readable: True` beside a -0.11 spread, which would have told a
+    later reader the controller had a usable book. The state's verdict wins.
+    """
+    crossed = {"readable": True, "identity_consistent": True,
+               "yes": {"bid": "0.16", "ask": "0.05"},
+               "no": {"bid": "0.95", "ask": "0.84"}}
+    p = RC.presented_book(_state(book=crossed))
+    assert p["present"] is True
+    assert p["readable"] is False                      # the state's verdict
+    assert p["raw_book_parsed"] is True                # the read itself was ok
+    assert "CROSSED" in (p.get("state_verdict_why") or "")
+    # no spread is derived from numbers that are not a book
+    assert "yes" not in p and "no" not in p
+    # but the published numbers are kept so the refusal can be audited
+    assert p["refused_prices"]["yes"] == {"bid": "0.16", "ask": "0.05"}

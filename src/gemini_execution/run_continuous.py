@@ -280,6 +280,32 @@ def presented_book(ms: Any) -> Dict[str, Any]:
         "identity_consistent": b.get("identity_consistent"),
         "complement_identity": sanitize(b.get("complement_identity")),
     }
+    # THE STATE'S VERDICT WINS OVER THE RAW READ'S. A crossed book parses
+    # perfectly -- the venue served it, `readable` is True and both sides
+    # have prices -- and `state_from_venue` still refuses it, because a bid
+    # at or above its own ask is not a book we can quote into. Soak #2 showed
+    # 20 of 87 cycles in that state, correctly quoting nothing, while this
+    # record said `readable: True` beside a -0.11 spread. A later reader
+    # scanning `readable` would have concluded the controller had a usable
+    # book. The state's own verdict is authoritative here.
+    if ms.get("inventory_known") is False or ms.get("state_id") == "unreadable":
+        out["readable"] = False
+        out["raw_book_parsed"] = bool(b.get("readable"))
+        # THE VENUE'S OWN REASON WINS. "the contract does not publish both
+        # outcomes' prices" says more than "book not readable", and the
+        # state's generic verdict is carried alongside rather than over it.
+        out["why"] = (b.get("why") or ms.get("unreadable_why")
+                      or "the venue's book was refused by state_from_venue")
+        out["state_verdict_why"] = ms.get("unreadable_why")
+        out["refused_prices"] = {
+            "yes": {"bid": (b.get("yes") or {}).get("bid"),
+                    "ask": (b.get("yes") or {}).get("ask")},
+            "no": {"bid": (b.get("no") or {}).get("bid"),
+                   "ask": (b.get("no") or {}).get("ask")},
+            "why_kept": ("the numbers the venue published are kept so the "
+                         "refusal can be audited; they are NOT a book and no "
+                         "spread is derived from them")}
+        return out
     if not out["readable"] or not b.get("identity_consistent"):
         out["why"] = (b.get("why")
                       or "the venue's book failed its complement-identity "

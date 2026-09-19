@@ -170,6 +170,7 @@ def cycle_sample(*, utc: str, tte_s: Any, presented: Any, depth: Any,
     return {
         "utc": utc, "tte_s": tte_s,
         "book_readable": bool(p.get("readable")),
+        "book_why": p.get("why"),
         "yes_bid": yes.get("bid"), "yes_ask": yes.get("ask"),
         "yes_spread": yes.get("spread"),
         "no_bid": no.get("bid"), "no_ask": no.get("ask"),
@@ -208,7 +209,11 @@ def window_summary(samples: Sequence[Mapping[str, Any]],
     denominator conversion actually needs: a rung that rested four minutes and
     one that rested four seconds are not one sample each.
     """
+    # A REFUSED CYCLE IS NOT A NARROW SPREAD. Mixing cycles whose book the
+    # controller refused into a median spread would report the venue as
+    # tighter than it is, using exactly the readings that were unusable.
     readable = [s for s in samples if s.get("book_readable")]
+    refused = [s for s in samples if not s.get("book_readable")]
     spreads = [_dec(s.get("yes_spread")) for s in readable]
     spreads = [x for x in spreads if x is not None]
     prints = [s["flow"].get("n_prints") for s in samples
@@ -226,6 +231,10 @@ def window_summary(samples: Sequence[Mapping[str, Any]],
     return {
         "cycles": n,
         "book_readable_cycles": len(readable),
+        "book_refused_cycles": len(refused),
+        "book_refused_share": (round(len(refused) / n, 3) if n else None),
+        "refusal_reasons": sorted({str(s.get("book_why")) for s in refused
+                                   if s.get("book_why")})[:6],
         "spread_yes": {
             "n": len(spreads),
             "min": (str(min(spreads)) if spreads else None),
