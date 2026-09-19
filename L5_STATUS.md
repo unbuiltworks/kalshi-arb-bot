@@ -317,6 +317,59 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > (one schema pass on the live recorder) → Gemini non-BTC discovery
 > (`metadata.py` is hard-wired to BTC05M). Crypto is not assumed to win.
 > `L5_HABITAT_MATRIX.md` reports evidence and sample sizes, no composite score.
+>
+> **THREE MECHANISM STUDIES + THE GEMINI SLATE (2026-09-19).** No execution
+> arms added, Model A frozen, GEMINI_RECYCLE and the EXTEND veto kept.
+>
+> **1. CLOSEST APPROACH CLOSES THE PRICING QUESTION.** 124 post-first-fill
+> episodes, strict chronology, maker territory = one tick under the ask.
+> **118 (95.2%) NEVER came within 5 ticks; ZERO came within 2; ZERO reached
+> the touch without executing. Median closest gap 22.0 TICKS.** The earlier
+> "82% required a cross" could have meant just out of reach — it did not. The
+> near-miss population is EMPTY: we were not losing races at the touch, the
+> price we needed and the price on offer were in different neighbourhoods for
+> the whole life of every quote. Midpoint moved toward us on 57% of episodes,
+> a coin flip, so this is not directional adverse selection either. Depth built
+> on 19 of 110 observable episodes.
+>
+> **2. UNDERLYING STATE: UNTESTED, NOT REFUTED.** Strike from the contract
+> (`availableAt` = window open, contemporaneous), BTC from 1-minute candles
+> (1,440 bars covering every window); `settlementValue` is the OUTCOME and is
+> never a feature, pinned by test. **18 states, 1 recyclable, 17 leakage** —
+> no contrast means anything. Honest spec limit: only the 60s velocity exists
+> historically; 5/15/30s cannot be resolved from 1-minute bars and are
+> recorded as None with that reason rather than interpolated.
+>
+> **3. LIQUIDITY PRESENCE: WE MEASURE THE WIRE, NOT PRESENCE.** Median print 8
+> contracts, median touch depth 202.0. Our 0.01 is **1/800th of a median
+> print and 1/20,000th of touch depth** — one typical counterparty could fill
+> our whole quote 800 times over. The fills proved the order path, the
+> coherence gate and the accounting; they say essentially nothing about
+> liquidity provision. **Whether a larger quote would ATTRACT flow is labelled
+> UNKNOWABLE from historical replay, not estimated** — that label is attached
+> to every object the module returns. The verdict was binary and read
+> "meaningful on at least one anchor" for these numbers, which was true and
+> misleading; it is three-way now (MARGINAL) with the threshold flagged
+> arbitrary.
+>
+> **4. THE SLATE: BTC05M IS THE WORST HABITAT ON GEMINI'S OWN BOOK.** 997
+> events, **11,012 contracts**, 9,274 unresolved, 160 tapes read stratified by
+> series. **BTC05M read ZERO prints across 8 sampled contracts — as did
+> ETH05M, SOL05M, XRP05M, and every 15M series. The 5-minute timeframe is dead
+> across every underlying, not just BTC.** Ranked by ALTERNATION (how often the
+> aggressor direction changes — what an oscillator needs, and what a volume
+> ranking cannot see): BTC15M 0.600, BTC1H 0.500 (balance 0.800), ZEC1H 0.231,
+> SOL 0.207, **BTC 0.203 with 507 prints and 100% two-sided across all 5
+> sampled**. Samples are 5-9 contracts per series and stated on every row;
+> BTC15M's 0.600 rests on ONE contract with a stated balance. Leads, not
+> conclusions. (A first pass sorted by newest expiry, spent its budget on
+> far-future sports that had never traded, and was re-run stratified.)
+>
+> **The obvious next step, not taken without the owner: run the sequential
+> replay against BTC1H / BTC15M / the BTC series** — same engine, same venue,
+> no new infrastructure — to test whether the TIMEFRAME was the problem all
+> along. See `MECHANISM_STUDIES_1.md`. Nothing live, no authorization, no
+> artificial volume.
 
 ### P0: Polymarket US sports
 
