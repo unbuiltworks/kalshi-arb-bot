@@ -84,6 +84,7 @@ from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
                     Tuple)
 
 from src.gemini_execution import arming, continuous_probe as CP, spec
+from src.gemini_execution import executions as EX
 from src.gemini_execution import continuous_preflight as PF
 
 LABEL = "GEMINI_L5_WS_CONTINUOUS_V1"
@@ -551,7 +552,15 @@ def unexplained_disappearances(known: Mapping[str, Mapping[str, Any]],
     answer has to come from the venue's own fill or terminal record.
     """
     active = _ids_of(st.get("open_orders"))
-    filled = _ids_of(st.get("orders_seen")) | _ids_of(st.get("trades"))
+    # THE SAME VIEW INVENTORY IS BUILT FROM. It used to be
+    # `_ids_of(orders_seen) | _ids_of(trades)` -- a looser set than the one
+    # `recover` consumed, which is exactly how C8B produced `coherent: True`
+    # beside an inventory that omitted the execution making it coherent.
+    view = st.get("executions")
+    if isinstance(view, Mapping):
+        filled = EX.identifiers(view)
+    else:
+        filled = _ids_of(st.get("orders_seen")) | _ids_of(st.get("trades"))
     terminal = _ids_of(st.get("terminal_seen"))
     out: List[Dict[str, Any]] = []
     for coid, row in (known or {}).items():
@@ -674,6 +683,10 @@ class Driver:
         #: SAFETY mutations, bounded separately from the strategy
         #: budget so cleanup can still run when strategy slots are 0.
         self.cleanup_consumed = 0
+        #: client/venue order id -> "YES"/"NO", from OUR OWN placements.
+        #: /v1/mytrades states no outcome, so this is what sides a
+        #: trades-only execution before filled-history catches up.
+        self._legs: Dict[str, str] = {}
         self.log: List[Dict[str, Any]] = []
         # A COHORT MAY TIGHTEN THE ENVELOPE, NEVER EXTEND IT. A request above
         # CP.MAX_ACTIONS is REFUSED rather than clamped: silently granting
@@ -909,6 +922,9 @@ class Driver:
 
         slot = self.ledger.attempt(PLACE, {
             "client_order_id": coid, "leg": leg, "price": price, "qty": qty})
+        # BEFORE THE FRAME. An ack that never comes back still leaves an
+        # order that may rest and fill, and its leg has to be answerable.
+        self._remember_leg(coid, leg)
         self.budget_consumed = (self.budget_consumed or 0) + 1
         if self.guard is not None:
             self.guard.actions_taken = self.budget_consumed
@@ -949,6 +965,7 @@ class Driver:
                if isinstance(result, dict) else None)
         self.ledger.resolve(slot, ACCEPTED, {"status": status,
                                              spec.ORDER_ID_FIELD: oid})
+        self._remember_leg(coid, leg, oid)
         self.working.add(coid, leg=leg, price=price, qty=qty,
                          now=self.now_fn(), venue_order_id=oid)
         return {"placed": True, "client_order_id": coid, "slot": slot,
@@ -1184,6 +1201,23 @@ class Driver:
             except Exception:                                  # noqa: BLE001
                 return
 
+    def _remember_leg(self, client_order_id: Any, leg: Any,
+                      venue_order_id: Any = None) -> None:
+        """OUR OWN record of what we asked for, keyed every way it comes back.
+
+        /v1/mytrades states price, quantity, fee and aggressor -- and NOT the
+        outcome. So a trades-only execution cannot be sided from the venue
+        alone until the slower filled-history row arrives, which is precisely
+        the window C8B's read 13 sat in. This is the authoritative answer to
+        "which leg did we buy": we placed it.
+        """
+        leg = str(leg or "").upper()
+        if leg not in ("YES", "NO"):
+            return
+        for k in (client_order_id, venue_order_id):
+            if k not in (None, "", 0):
+                self._legs[str(k)] = leg
+
     async def _refresh(self, refresh_fn: Callable) -> Optional[Dict[str, Any]]:
         """Re-establish inventory and the working set from the VENUE.
 
@@ -1224,6 +1258,22 @@ class Driver:
                           "authoritative state unreadable mid-window; an "
                           "unread venue is never an empty one")
                 return None
+            # ONE VIEW, BUILT ONCE, READ BY BOTH. The gate below and the
+            # inventory rebuild further down now answer "did this execute?"
+            # from the same object, so they cannot disagree.
+            st = dict(st)
+            st["executions"] = EX.canonical_executions(
+                st.get("orders_seen"), st.get("trades"),
+                leg_of=self._legs, symbol=self._symbol,
+                fills=st.get("fills"))
+            if st["executions"].get("contradictions"):
+                self.stop(DO_NOT_TRADE,
+                          "the venue's execution sources contradict each "
+                          "other: %s. The state is not established and "
+                          "nothing is decided on it."
+                          % json.dumps(st["executions"]["contradictions"],
+                                       default=str)[:400])
+                return None
             pending = unexplained_disappearances(known, st)
             if not pending:
                 break
@@ -1243,7 +1293,10 @@ class Driver:
                                               for p in pending))))
                 return None
 
-        inv, why = CP.recover(self._auth_id, self._symbol, st.get("fills"))
+        inv, why = CP.recover(self._auth_id, self._symbol,
+                              EX.as_fills(st.get("executions"))
+                              if isinstance(st.get("executions"), Mapping)
+                              else st.get("fills"))
         if inv is None:
             self.stop(DO_NOT_TRADE, why or "inventory unreadable mid-window")
             return None
@@ -1255,8 +1308,17 @@ class Driver:
         before = self.inv.report() if self.inv is not None else None
         self.inv = inv
         after = inv.report()
+        ev = st.get("executions") if isinstance(st.get("executions"),
+                                                 Mapping) else {}
         return {"working": note, "changed": before != after,
                 "coherent": True, "reconcile_attempts": attempts,
+                # THE VIEW BOTH CONSUMERS READ, reported so a later reader can
+                # see that `coherent` and the inventory came from one object.
+                "executions": {
+                    "n": ev.get("n_executions"),
+                    "degraded": ev.get("degraded"),
+                    "sources_readable": ev.get("sources_readable"),
+                    "by_order": ev.get("by_order")},
                 "n_fills": after.get("n_fills"),
                 "yes_qty": after.get("yes_qty"),
                 "no_qty": after.get("no_qty"),

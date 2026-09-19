@@ -461,9 +461,19 @@ def test_the_observer_has_a_caller_and_its_output_reaches_the_report(
     # THE VENUE ALREADY HOLDS NO 0.01 @ 0.14 -- the CONTINUOUS-4 state, so the
     # controller must classify the YES rung COMPLETE rather than OPEN.
     async def _auth_state(sym):
+        # PRODUCTION SHAPE: `fills` is DERIVED from `orders_seen`, so the two
+        # can never disagree in a real read. The earlier fixture had a fill
+        # beside an empty row list, which the canonical execution view
+        # correctly refused to reconcile.
+        rows = [{"orderId": 145828836246611835,
+                 "clientOrderId": "l5cp-pre-no-aaaaaaaa",
+                 "symbol": sym, "side": "buy", "outcome": "no",
+                 "status": "filled", "price": "0.14",
+                 "quantity": "0.01", "filledQuantity": "0.01"}]
         return {"symbol": sym,
                 "fills": [{"leg": "NO", "qty": "0.01", "price": "0.14"}],
-                "open_orders": [], "orders_seen": [],
+                "open_orders": [], "orders_seen": rows, "trades": [],
+                "terminal_seen": [],
                 "order_history_raw": {"readable": True},
                 "active_raw": {"ok": True}}
     monkeypatch.setattr(RC, "authoritative_state", _auth_state)

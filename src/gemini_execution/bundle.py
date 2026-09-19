@@ -39,6 +39,7 @@ MEMBERS = (
     "cohort.py",               # the bounded budget a window is granted
     "continuous_preflight.py",  # the authoritative preflight
     "metadata.py",             # the authoritative venue reads recovery uses
+    "executions.py",           # the ONE canonical execution view both consume
     "arming.py",               # the transport arm and the identifier
     "bundle.py",               # this file, so the member list cannot be edited
 )
@@ -57,6 +58,7 @@ _PLACEHOLDER = r"\1\2 = <BUNDLE-AUTHORIZATION>"
 #: exactly, so BOTH a constant appearing and a constant vanishing are
 #: refusals rather than a silently different hash.
 EXPECTED_AUTH_LINES = {
+    "executions.py": 0,
     "ws_continuous.py": 3,
     "run_continuous.py": 0,
     "continuous_probe.py": 0,

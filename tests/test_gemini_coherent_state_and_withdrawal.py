@@ -195,23 +195,61 @@ def test_a_terminal_row_explains_a_disappearance_without_inventing_a_fill(
 
 def test_the_trade_record_can_explain_it_when_order_history_has_not(
         tmp_path, monkeypatch):
-    """/v1/mytrades is a DIFFERENT read from order history. When the two
-    halves disagree, a third authority is what resolves it."""
+    """/v1/mytrades is a DIFFERENT read from order history, and it is the
+    FASTER one.
+
+    STRENGTHENED AFTER C8B. It is no longer enough that the disappearance is
+    explained: the inventory must carry the execution in the SAME refresh.
+    C8B had `coherent: True` beside an inventory that still read flat,
+    because the gate looked at trades and `recover` looked at filled history.
+    """
     monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
     d = _driver(tmp_path)
     d.working.add(YES_COID, leg="YES", price="0.21", qty="0.01", now=1000.0,
                   venue_order_id=YES_OID)
+    # what WE placed -- the only thing that can side a trades-only execution,
+    # since /v1/mytrades carries no outcome field
+    d._remember_leg(YES_COID, "YES", YES_OID)
 
     async def refresh():
-        return {"fills": [{"leg": "YES", "qty": "0.01", "price": "0.21"}],
-                "open_orders": [], "orders_seen": [],
+        return {"fills": [], "open_orders": [], "orders_seen": [],
                 "terminal_seen": [],
                 "trades": [{"order_id": YES_OID, "client_order_id": YES_COID,
-                            "price": "0.21", "amount": "0.01"}]}
+                            "price": "0.21", "amount": "0.01",
+                            "tid": 991, "aggressor": False,
+                            "fee_amount": "0"}]}
 
     out = _run(d._refresh(refresh))
     assert out is not None and out["coherent"] is True
-    assert d.inv.report()["yes_qty"] == "0.01"
+    # THE POINT: the same refresh that called it coherent carries the fill
+    rep = d.inv.report()
+    assert rep["yes_qty"] == "0.01" and rep["n_fills"] == 1
+    assert rep["directional_residual"] == "0.01"
+    assert out["n_fills"] == 1
+
+
+def test_an_execution_whose_LEG_cannot_be_established_fails_closed(
+        tmp_path, monkeypatch):
+    """A trade row states price, quantity, fee and aggressor -- and NOT the
+    outcome. Our client ids happen to contain "-yes-" and "-no-", and reading
+    them would work right up until the day it silently did not. So an
+    execution nobody can side is a CONTRADICTION, never a guess."""
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+    d = _driver(tmp_path)
+    d.working.add(YES_COID, leg="YES", price="0.21", qty="0.01", now=1000.0,
+                  venue_order_id=YES_OID)
+    # deliberately NOT remembered, and order history has not caught up
+
+    async def refresh():
+        return {"fills": [], "open_orders": [], "orders_seen": [],
+                "terminal_seen": [],
+                "trades": [{"order_id": YES_OID, "client_order_id": YES_COID,
+                            "price": "0.21", "amount": "0.01", "tid": 992}]}
+
+    out = _run(d._refresh(refresh))
+    assert out is None
+    assert d.state in WC.TERMINAL
+    assert "contradict" in (d.why or "")
 
 
 def test_an_unreadable_read_still_stops_rather_than_reading_as_empty(
