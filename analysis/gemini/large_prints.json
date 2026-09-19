@@ -1,8 +1,8 @@
 {
   "label": "GEMINI_L5_LARGE_PRINT_FORENSIC_V1",
-  "utc": "2026-09-19T12:08:16.174090+00:00",
+  "utc": "2026-09-19T13:17:44.453572+00:00",
   "census": {
-    "prints": 60,
+    "prints": 71,
     "buckets": {
       "<10": {
         "prints": 0,
@@ -12,9 +12,9 @@
         "improve_1_would_reach_us": 0
       },
       "10-25": {
-        "prints": 49,
-        "with_a_reconstructed_book": 24,
-        "no_evidence": 25,
+        "prints": 58,
+        "with_a_reconstructed_book": 28,
+        "no_evidence": 30,
         "native_would_reach_us": 10,
         "improve_1_would_reach_us": 10
       },
@@ -26,17 +26,57 @@
         "improve_1_would_reach_us": 2
       },
       "100+": {
-        "prints": 9,
-        "with_a_reconstructed_book": 8,
+        "prints": 11,
+        "with_a_reconstructed_book": 10,
         "no_evidence": 1,
-        "native_would_reach_us": 5,
-        "improve_1_would_reach_us": 6
+        "native_would_reach_us": 6,
+        "improve_1_would_reach_us": 8
       }
     },
     "coverage": {
       "why": "a print can only be evaluated where one of our own cycles covers the run-up to it. Our cycles exist from TTE ~280 to TTE ~104 in the soaks, so prints outside that are recorded and NOT evaluated rather than guessed at."
     },
     "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+  },
+  "attribution": {
+    "total_notional_usd": "2449.8289",
+    "total_prints": 168,
+    "band_hi_s": 280.0,
+    "causes": {
+      "C_timing_tte_over_280_before_our_band_opens": {
+        "prints": 65,
+        "notional_usd": "143.8060",
+        "share": "0.0587"
+      },
+      "no_evidence_our_cycles_do_not_cover_it": {
+        "prints": 62,
+        "notional_usd": "158.8651",
+        "share": "0.0648"
+      },
+      "reachable_we_would_have_been_there": {
+        "prints": 13,
+        "notional_usd": "976.17",
+        "share": "0.3985"
+      },
+      "C_timing_tte_under_60_where_we_cannot_OPEN": {
+        "prints": 23,
+        "notional_usd": "990.588",
+        "share": "0.4043"
+      },
+      "A_price_our_quote_would_not_be_reached": {
+        "prints": 2,
+        "notional_usd": "158.4998",
+        "share": "0.0647"
+      },
+      "B_queue_consumed_ahead_of_us": {
+        "prints": 3,
+        "notional_usd": "21.90",
+        "share": "0.0089"
+      }
+    },
+    "C_timing_total_share": "0.4631",
+    "why": "timing is decided first and on TTE alone: a print outside our quoting window could not have been reached at any price with any queue position. NO_EVIDENCE is never folded into a cause -- its share is how much of this rests on coverage.",
+    "labels": "EXECUTED notional from the tape, attributed to why we did not interact with it. No fill is claimed and nothing here is realized."
   },
   "rows": [
     {
@@ -9264,9 +9304,2240 @@
           }
         }
       }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191300-UP",
+      "tid": 1893456011800722,
+      "print": {
+        "price": "0.3",
+        "amount": "10",
+        "aggressor": "buy",
+        "utc_ms": 1789822492874,
+        "tte_s": 307.126
+      },
+      "bucket": "10-25",
+      "reachable_leg": "NO",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.14",
+          "ask": "0.47",
+          "mid": "0.305",
+          "complement_passive": "0.53",
+          "complement_crossing": "0.86",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": false,
+      "why": "no recorded cycle covers the run-up to this print, so no quote can be tested against it"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191300-UP",
+      "tid": 1893456011800724,
+      "print": {
+        "price": "0.3",
+        "amount": "10",
+        "aggressor": "buy",
+        "utc_ms": 1789822493913,
+        "tte_s": 306.087
+      },
+      "bucket": "10-25",
+      "reachable_leg": "NO",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.14",
+          "ask": "0.47",
+          "mid": "0.305",
+          "complement_passive": "0.53",
+          "complement_crossing": "0.86",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": false,
+      "why": "no recorded cycle covers the run-up to this print, so no quote can be tested against it"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191300-UP",
+      "tid": 1893456011800756,
+      "print": {
+        "price": "0.33",
+        "amount": "10",
+        "aggressor": "buy",
+        "utc_ms": 1789822623300,
+        "tte_s": 176.7
+      },
+      "bucket": "10-25",
+      "reachable_leg": "NO",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T12:56:54.881352+00:00",
+          "cycle_tte_s": 186.42206001281738,
+          "yes_bid": "0.32",
+          "yes_ask": "0.7",
+          "no_bid": "0.3",
+          "no_ask": "0.68",
+          "spread": "0.38",
+          "book_readable": true,
+          "touch_depth": "468.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.32",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.30",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.30",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.31",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T12:56:45.193434+00:00",
+          "cycle_tte_s": 197.3003695011139,
+          "yes_bid": "0.4",
+          "yes_ask": "0.7",
+          "no_bid": "0.3",
+          "no_ask": "0.6",
+          "spread": "0.3",
+          "book_readable": true,
+          "touch_depth": "468.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.40",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.30",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.30",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.31",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T12:56:34.316047+00:00",
+          "cycle_tte_s": 207.2111406326294,
+          "yes_bid": "0.58",
+          "yes_ask": "0.93",
+          "no_bid": "0.07",
+          "no_ask": "0.42",
+          "spread": "0.35",
+          "book_readable": true,
+          "touch_depth": "258.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.58",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.07",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.07",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.08",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T12:56:04.106822+00:00",
+          "cycle_tte_s": 237.22479152679443,
+          "yes_bid": "0.55",
+          "yes_ask": "0.85",
+          "no_bid": "0.15",
+          "no_ask": "0.45",
+          "spread": "0.30",
+          "book_readable": true,
+          "touch_depth": "272.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.55",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.15",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.15",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.16",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": true,
+          "bid": "0.3",
+          "ask": "0.68",
+          "mid": "0.49",
+          "complement_passive": "0.32",
+          "complement_crossing": "0.7",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 15,
+          "evidence": true,
+          "bid": "0.3",
+          "ask": "0.68",
+          "mid": "0.49",
+          "complement_passive": "0.32",
+          "complement_crossing": "0.7",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 30,
+          "evidence": true,
+          "bid": "0.3",
+          "ask": "0.68",
+          "mid": "0.49",
+          "complement_passive": "0.32",
+          "complement_crossing": "0.7",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.01",
+          "ask": "0.91",
+          "mid": "0.46",
+          "complement_passive": "0.09",
+          "complement_crossing": "0.99",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": true,
+      "quote_tests": {
+        "NATIVE": {
+          "exists": true,
+          "price": "0.30",
+          "would_reach_us": false,
+          "absorbed": null
+        },
+        "IMPROVE_1_TICK": {
+          "exists": true,
+          "price": "0.31",
+          "would_reach_us": false,
+          "absorbed": null
+        }
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191305-UP",
+      "tid": 1893456011800800,
+      "print": {
+        "price": "0.61",
+        "amount": "10",
+        "aggressor": "sell",
+        "utc_ms": 1789822796724,
+        "tte_s": 303.276
+      },
+      "bucket": "10-25",
+      "reachable_leg": "YES",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.07",
+          "ask": "0.38",
+          "mid": "0.225",
+          "complement_passive": "0.62",
+          "complement_crossing": "0.93",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": false,
+      "why": "no recorded cycle covers the run-up to this print, so no quote can be tested against it"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191305-UP",
+      "tid": 1893456011800820,
+      "print": {
+        "price": "0.29",
+        "amount": "10",
+        "aggressor": "sell",
+        "utc_ms": 1789822846211,
+        "tte_s": 253.789
+      },
+      "bucket": "10-25",
+      "reachable_leg": "YES",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:00:44.926425+00:00",
+          "cycle_tte_s": 255.98364686965942,
+          "yes_bid": "0.07",
+          "yes_ask": "0.39",
+          "no_bid": "0.61",
+          "no_ask": "0.93",
+          "spread": "0.32",
+          "book_readable": true,
+          "touch_depth": "2142.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.07",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.61",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.07",
+          "native_was_best": true,
+          "depth_ahead_of_native": "2142.0",
+          "improve_1_price": "0.08",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 2142.0"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:00:35.459353+00:00",
+          "cycle_tte_s": 265.9703063964844,
+          "yes_bid": "0.2",
+          "yes_ask": "0.52",
+          "no_bid": "0.48",
+          "no_ask": "0.8",
+          "spread": "0.32",
+          "book_readable": true,
+          "touch_depth": "750.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.20",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.48",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.20",
+          "native_was_best": true,
+          "depth_ahead_of_native": "750.0",
+          "improve_1_price": "0.21",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 750.0"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": true,
+          "bid": "0.07",
+          "ask": "0.38",
+          "mid": "0.225",
+          "complement_passive": "0.62",
+          "complement_crossing": "0.93",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 15,
+          "evidence": true,
+          "bid": "0.07",
+          "ask": "0.38",
+          "mid": "0.225",
+          "complement_passive": "0.62",
+          "complement_crossing": "0.93",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 30,
+          "evidence": true,
+          "bid": "0.07",
+          "ask": "0.38",
+          "mid": "0.225",
+          "complement_passive": "0.62",
+          "complement_crossing": "0.93",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.07",
+          "ask": "0.35",
+          "mid": "0.21",
+          "complement_passive": "0.65",
+          "complement_crossing": "0.93",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": true,
+      "quote_tests": {
+        "NATIVE": {
+          "exists": true,
+          "price": "0.07",
+          "would_reach_us": false,
+          "absorbed": null
+        },
+        "IMPROVE_1_TICK": {
+          "exists": true,
+          "price": "0.08",
+          "would_reach_us": false,
+          "absorbed": null
+        }
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191305-UP",
+      "tid": 1893456011800822,
+      "print": {
+        "price": "0.15",
+        "amount": "10",
+        "aggressor": "buy",
+        "utc_ms": 1789822853395,
+        "tte_s": 246.605
+      },
+      "bucket": "10-25",
+      "reachable_leg": "NO",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:00:44.926425+00:00",
+          "cycle_tte_s": 255.98364686965942,
+          "yes_bid": "0.07",
+          "yes_ask": "0.39",
+          "no_bid": "0.61",
+          "no_ask": "0.93",
+          "spread": "0.32",
+          "book_readable": true,
+          "touch_depth": "2142.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.07",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.61",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.61",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.62",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:00:35.459353+00:00",
+          "cycle_tte_s": 265.9703063964844,
+          "yes_bid": "0.2",
+          "yes_ask": "0.52",
+          "no_bid": "0.48",
+          "no_ask": "0.8",
+          "spread": "0.32",
+          "book_readable": true,
+          "touch_depth": "750.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.20",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.48",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.48",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.49",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": true,
+          "bid": "0.62",
+          "ask": "0.93",
+          "mid": "0.775",
+          "complement_passive": "0.07",
+          "complement_crossing": "0.38",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 15,
+          "evidence": true,
+          "bid": "0.62",
+          "ask": "0.93",
+          "mid": "0.775",
+          "complement_passive": "0.07",
+          "complement_crossing": "0.38",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 30,
+          "evidence": true,
+          "bid": "0.62",
+          "ask": "0.93",
+          "mid": "0.775",
+          "complement_passive": "0.07",
+          "complement_crossing": "0.38",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.65",
+          "ask": "0.93",
+          "mid": "0.79",
+          "complement_passive": "0.07",
+          "complement_crossing": "0.35",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": true,
+      "quote_tests": {
+        "NATIVE": {
+          "exists": true,
+          "price": "0.61",
+          "would_reach_us": false,
+          "absorbed": null
+        },
+        "IMPROVE_1_TICK": {
+          "exists": true,
+          "price": "0.62",
+          "would_reach_us": false,
+          "absorbed": null
+        }
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191315-UP",
+      "tid": 1893456011800948,
+      "print": {
+        "price": "0.42",
+        "amount": "10",
+        "aggressor": "buy",
+        "utc_ms": 1789823397646,
+        "tte_s": 302.354
+      },
+      "bucket": "10-25",
+      "reachable_leg": "NO",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.24",
+          "ask": "0.59",
+          "mid": "0.415",
+          "complement_passive": "0.41",
+          "complement_crossing": "0.76",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": false,
+      "why": "no recorded cycle covers the run-up to this print, so no quote can be tested against it"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191315-UP",
+      "tid": 1893456011800950,
+      "print": {
+        "price": "0.48",
+        "amount": "10",
+        "aggressor": "buy",
+        "utc_ms": 1789823401589,
+        "tte_s": 298.411
+      },
+      "bucket": "10-25",
+      "reachable_leg": "NO",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant within 6s; the book is not reconstructed"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 15,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 30,
+          "evidence": true,
+          "bid": "0.19",
+          "ask": "0.52",
+          "mid": "0.355",
+          "complement_passive": "0.48",
+          "complement_crossing": "0.81",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.38",
+          "ask": "0.65",
+          "mid": "0.515",
+          "complement_passive": "0.35",
+          "complement_crossing": "0.62",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": false,
+      "why": "no recorded cycle covers the run-up to this print, so no quote can be tested against it"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191315-UP",
+      "tid": 1893456011801008,
+      "print": {
+        "price": "0.53",
+        "amount": "319",
+        "aggressor": "buy",
+        "utc_ms": 1789823601183,
+        "tte_s": 98.817
+      },
+      "bucket": "100+",
+      "reachable_leg": "NO",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:13:21.134966+00:00",
+          "cycle_tte_s": 99.79466772079468,
+          "yes_bid": "0.18",
+          "yes_ask": "0.53",
+          "no_bid": "0.47",
+          "no_ask": "0.82",
+          "spread": "0.35",
+          "book_readable": true,
+          "touch_depth": "833.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.18",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.47",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.47",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.48",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:13:11.062378+00:00",
+          "cycle_tte_s": 110.5587694644928,
+          "yes_bid": "0.11",
+          "yes_ask": "0.43",
+          "no_bid": "0.57",
+          "no_ask": "0.89",
+          "spread": "0.32",
+          "book_readable": true,
+          "touch_depth": "5.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.11",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.57",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.57",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.58",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:12:49.058950+00:00",
+          "cycle_tte_s": 132.69950461387634,
+          "yes_bid": "0.01",
+          "yes_ask": "0.1",
+          "no_bid": "0.9",
+          "no_ask": "0.99",
+          "spread": "0.09",
+          "book_readable": true,
+          "touch_depth": null,
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.01",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.90",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.90",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.91",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:12:18.829795+00:00",
+          "cycle_tte_s": 162.6046929359436,
+          "yes_bid": "0.01",
+          "yes_ask": "0.3",
+          "no_bid": "0.7",
+          "no_ask": "0.99",
+          "spread": "0.29",
+          "book_readable": true,
+          "touch_depth": "10.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.01",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.70",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "NO",
+          "native_price": "0.70",
+          "native_was_best": true,
+          "depth_ahead_of_native": "0",
+          "improve_1_price": "0.71",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "front of queue"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": true,
+          "bid": "0.22",
+          "ask": "0.47",
+          "mid": "0.345",
+          "complement_passive": "0.53",
+          "complement_crossing": "0.78",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 15,
+          "evidence": true,
+          "bid": "0.22",
+          "ask": "0.57",
+          "mid": "0.395",
+          "complement_passive": "0.43",
+          "complement_crossing": "0.78",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 30,
+          "evidence": true,
+          "bid": "0.24",
+          "ask": "0.55",
+          "mid": "0.395",
+          "complement_passive": "0.45",
+          "complement_crossing": "0.76",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 60,
+          "evidence": true,
+          "bid": "0.77",
+          "ask": "0.99",
+          "mid": "0.88",
+          "complement_passive": "0.01",
+          "complement_crossing": "0.23",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": true,
+      "quote_tests": {
+        "NATIVE": {
+          "exists": true,
+          "price": "0.47",
+          "would_reach_us": true,
+          "absorbed": {
+            "0.01": {
+              "computable": true,
+              "our_qty": "0.01",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "0.01",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "0.10": {
+              "computable": true,
+              "our_qty": "0.10",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "0.10",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "1.00": {
+              "computable": true,
+              "our_qty": "1.00",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "1.00",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "10.00": {
+              "computable": true,
+              "our_qty": "10.00",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "10.00",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            }
+          }
+        },
+        "IMPROVE_1_TICK": {
+          "exists": true,
+          "price": "0.48",
+          "would_reach_us": true,
+          "absorbed": {
+            "0.01": {
+              "computable": true,
+              "our_qty": "0.01",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "0.01",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "0.10": {
+              "computable": true,
+              "our_qty": "0.10",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "0.10",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "1.00": {
+              "computable": true,
+              "our_qty": "1.00",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "1.00",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "10.00": {
+              "computable": true,
+              "our_qty": "10.00",
+              "size_ahead": "0",
+              "print_size": "319",
+              "reached_us": "319",
+              "hypothetically_filled": "10.00",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            }
+          }
+        }
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191315-UP",
+      "tid": 1893456011801010,
+      "print": {
+        "price": "0.72",
+        "amount": "10",
+        "aggressor": "sell",
+        "utc_ms": 1789823611804,
+        "tte_s": 88.196
+      },
+      "bucket": "10-25",
+      "reachable_leg": "YES",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:13:30.736840+00:00",
+          "cycle_tte_s": 90.63581442832947,
+          "yes_bid": "0.53",
+          "yes_ask": "0.78",
+          "no_bid": "0.22",
+          "no_ask": "0.47",
+          "spread": "0.25",
+          "book_readable": true,
+          "touch_depth": "10.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.53",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.22",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.53",
+          "native_was_best": true,
+          "depth_ahead_of_native": "10.0",
+          "improve_1_price": "0.54",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 10.0"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:13:21.134966+00:00",
+          "cycle_tte_s": 99.79466772079468,
+          "yes_bid": "0.18",
+          "yes_ask": "0.53",
+          "no_bid": "0.47",
+          "no_ask": "0.82",
+          "spread": "0.35",
+          "book_readable": true,
+          "touch_depth": "833.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.18",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.47",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.18",
+          "native_was_best": true,
+          "depth_ahead_of_native": "833.0",
+          "improve_1_price": "0.19",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 833.0"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:12:59.003852+00:00",
+          "cycle_tte_s": 122.67404317855835,
+          "yes_bid": "0.01",
+          "yes_ask": "0.11",
+          "no_bid": "0.89",
+          "no_ask": "0.99",
+          "spread": "0.10",
+          "book_readable": true,
+          "touch_depth": "10.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.01",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.89",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.01",
+          "native_was_best": true,
+          "depth_ahead_of_native": "10.0",
+          "improve_1_price": "0.02",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 10.0"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:12:28.706879+00:00",
+          "cycle_tte_s": 152.29768681526184,
+          "yes_bid": "0.01",
+          "yes_ask": "0.19",
+          "no_bid": "0.81",
+          "no_ask": "0.99",
+          "spread": "0.18",
+          "book_readable": true,
+          "touch_depth": "10.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.01",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.81",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.01",
+          "native_was_best": true,
+          "depth_ahead_of_native": "10.0",
+          "improve_1_price": "0.02",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 10.0"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": true,
+          "bid": "0.43",
+          "ask": "0.78",
+          "mid": "0.605",
+          "complement_passive": "0.22",
+          "complement_crossing": "0.57",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 15,
+          "evidence": true,
+          "bid": "0.45",
+          "ask": "0.76",
+          "mid": "0.605",
+          "complement_passive": "0.24",
+          "complement_crossing": "0.55",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 30,
+          "evidence": true,
+          "bid": "0.46",
+          "ask": "0.76",
+          "mid": "0.61",
+          "complement_passive": "0.24",
+          "complement_crossing": "0.54",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": true,
+      "quote_tests": {
+        "NATIVE": {
+          "exists": true,
+          "price": "0.53",
+          "would_reach_us": false,
+          "absorbed": null
+        },
+        "IMPROVE_1_TICK": {
+          "exists": true,
+          "price": "0.54",
+          "would_reach_us": false,
+          "absorbed": null
+        }
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191315-UP",
+      "tid": 1893456011801018,
+      "print": {
+        "price": "0.4",
+        "amount": "375",
+        "aggressor": "sell",
+        "utc_ms": 1789823651196,
+        "tte_s": 48.804
+      },
+      "bucket": "100+",
+      "reachable_leg": "YES",
+      "before": [
+        {
+          "lookback_s": 5,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:14:02.254083+00:00",
+          "cycle_tte_s": 59.80215907096863,
+          "yes_bid": "0.46",
+          "yes_ask": "0.76",
+          "no_bid": "0.24",
+          "no_ask": "0.54",
+          "spread": "0.30",
+          "book_readable": true,
+          "touch_depth": "326.0",
+          "l5_desired_surface": [],
+          "relevant_leg": "YES",
+          "native_price": null,
+          "native_was_best": null,
+          "depth_ahead_of_native": null,
+          "improve_1_price": "0.47",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "unreadable"
+        },
+        {
+          "lookback_s": 15,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:13:51.918831+00:00",
+          "cycle_tte_s": 70.48954772949219,
+          "yes_bid": "0.45",
+          "yes_ask": "0.76",
+          "no_bid": "0.24",
+          "no_ask": "0.55",
+          "spread": "0.31",
+          "book_readable": true,
+          "touch_depth": "333.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.45",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.24",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.45",
+          "native_was_best": true,
+          "depth_ahead_of_native": "333.0",
+          "improve_1_price": "0.46",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 333.0"
+        },
+        {
+          "lookback_s": 30,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:13:40.066948+00:00",
+          "cycle_tte_s": 80.91017436981201,
+          "yes_bid": "0.43",
+          "yes_ask": "0.78",
+          "no_bid": "0.22",
+          "no_ask": "0.57",
+          "spread": "0.35",
+          "book_readable": true,
+          "touch_depth": "348.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.43",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.22",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.43",
+          "native_was_best": true,
+          "depth_ahead_of_native": "348.0",
+          "improve_1_price": "0.44",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 348.0"
+        },
+        {
+          "lookback_s": 60,
+          "evidence": true,
+          "cycle_utc": "2026-09-19T13:13:11.062378+00:00",
+          "cycle_tte_s": 110.5587694644928,
+          "yes_bid": "0.11",
+          "yes_ask": "0.43",
+          "no_bid": "0.57",
+          "no_ask": "0.89",
+          "spread": "0.32",
+          "book_readable": true,
+          "touch_depth": "5.0",
+          "l5_desired_surface": [
+            {
+              "leg": "YES",
+              "price": "0.11",
+              "qty": "0.01",
+              "action": "OPEN"
+            },
+            {
+              "leg": "NO",
+              "price": "0.57",
+              "qty": "0.01",
+              "action": "OPEN"
+            }
+          ],
+          "relevant_leg": "YES",
+          "native_price": "0.11",
+          "native_was_best": true,
+          "depth_ahead_of_native": "1408.0",
+          "improve_1_price": "0.12",
+          "improve_1_stays_maker": true,
+          "hypothetical_queue_position": "behind 1408.0"
+        }
+      ],
+      "after": [
+        {
+          "forward_s": 5,
+          "evidence": true,
+          "bid": "0.4",
+          "ask": "0.76",
+          "mid": "0.58",
+          "complement_passive": "0.24",
+          "complement_crossing": "0.6",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 15,
+          "evidence": true,
+          "bid": "0.01",
+          "ask": "0.23",
+          "mid": "0.12",
+          "complement_passive": "0.77",
+          "complement_crossing": "0.99",
+          "labels": "mark-to-market on a market measurement. NOT realized, and never summed with matched-pair economics."
+        },
+        {
+          "forward_s": 30,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        },
+        {
+          "forward_s": 60,
+          "evidence": false,
+          "why": "no cycle of ours covers this instant"
+        }
+      ],
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "evaluable": true,
+      "quote_tests": {
+        "NATIVE": {
+          "exists": false,
+          "why": "the policy quoted nothing on this leg"
+        },
+        "IMPROVE_1_TICK": {
+          "exists": true,
+          "price": "0.47",
+          "would_reach_us": true,
+          "absorbed": {
+            "0.01": {
+              "computable": true,
+              "our_qty": "0.01",
+              "size_ahead": "0",
+              "print_size": "375",
+              "reached_us": "375",
+              "hypothetically_filled": "0.01",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "0.10": {
+              "computable": true,
+              "our_qty": "0.10",
+              "size_ahead": "0",
+              "print_size": "375",
+              "reached_us": "375",
+              "hypothetically_filled": "0.10",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "1.00": {
+              "computable": true,
+              "our_qty": "1.00",
+              "size_ahead": "0",
+              "print_size": "375",
+              "reached_us": "375",
+              "hypothetically_filled": "1.00",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            },
+            "10.00": {
+              "computable": true,
+              "our_qty": "10.00",
+              "size_ahead": "0",
+              "print_size": "375",
+              "reached_us": "375",
+              "hypothetically_filled": "10.00",
+              "fully_filled": true,
+              "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against."
+            }
+          }
+        }
+      }
     }
   ],
   "inventory_paths": [
+    {
+      "symbol": "GEMI-BTC05M2609191315-UP",
+      "seed_fill": {
+        "leg": "YES",
+        "qty": "0.01",
+        "price": "0.47"
+      },
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "computable": true,
+      "cycles_replayed": 2,
+      "steps": [
+        {
+          "utc": "2026-09-19T13:14:13.077302+00:00",
+          "tte_s": 49.37929320335388,
+          "window_phase": "COMPLETE_ONLY",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [
+            {
+              "outcome": "Down",
+              "leg": "NO",
+              "price": "0.24",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "COMPLETE",
+              "stage": "DECIDED"
+            }
+          ],
+          "holds": [
+            {
+              "leg": "YES",
+              "held_by": "END_OF_WINDOW",
+              "why": "tte 49.4s is under 60.0s, which is two maker-rest cycles: a new EXTEND could not be complemented before expiry"
+            }
+          ],
+          "inventory_before": {
+            "yes_qty": "0.01",
+            "no_qty": "0",
+            "matched_qty": "0",
+            "directional_residual": "0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": "0.47",
+            "avg_no_cost": null,
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [],
+          "inventory_after": {
+            "yes_qty": "0.01",
+            "no_qty": "0",
+            "matched_qty": "0",
+            "directional_residual": "0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": "0.47",
+            "avg_no_cost": null,
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        },
+        {
+          "utc": "2026-09-19T13:14:22.608277+00:00",
+          "tte_s": 38.44090747833252,
+          "window_phase": "COMPLETE_ONLY",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [
+            {
+              "outcome": "Down",
+              "leg": "NO",
+              "price": "0.77",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "COMPLETE",
+              "stage": "DECIDED"
+            }
+          ],
+          "holds": [
+            {
+              "leg": "YES",
+              "held_by": "END_OF_WINDOW",
+              "why": "tte 38.4s is under 60.0s, which is two maker-rest cycles: a new EXTEND could not be complemented before expiry"
+            }
+          ],
+          "inventory_before": {
+            "yes_qty": "0.01",
+            "no_qty": "0",
+            "matched_qty": "0",
+            "directional_residual": "0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": "0.47",
+            "avg_no_cost": null,
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [],
+          "inventory_after": {
+            "yes_qty": "0.01",
+            "no_qty": "0",
+            "matched_qty": "0",
+            "directional_residual": "0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": "0.47",
+            "avg_no_cost": null,
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        }
+      ],
+      "actions_seen": [
+        "COMPLETE"
+      ],
+      "theoretical_fills_after_seed": 0,
+      "final_inventory": {
+        "yes_qty": "0.01",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0.01",
+        "inventory_imbalance": "0.01",
+        "avg_yes_cost": "0.47",
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0.0047",
+        "same_side_run": {
+          "leg": "YES",
+          "len": 1
+        },
+        "n_fills": 1,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "settlement": {
+        "label": "GEMINI_L5_CONTINUOUS_PROBE_V1/settlement",
+        "contract": "GEMI-BTC05M2609191315-UP",
+        "settlement": {
+          "verdict": "SETTLED",
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-19T13:15:07.829Z",
+          "settlementValue": "81217.11025641025"
+        },
+        "inventory": {
+          "yes_qty": "0.01",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0.01",
+          "inventory_imbalance": "0.01",
+          "avg_yes_cost": "0.47",
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0.0047",
+          "same_side_run": {
+            "leg": "YES",
+            "len": 1
+          },
+          "n_fills": 1,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "matched_pair_economics": null,
+        "directional_residual_pnl": {
+          "directional_residual": "0.01",
+          "leg": "YES",
+          "label": "DIRECTIONAL_EXPOSURE",
+          "resolution_side": "no",
+          "outcome_known": true,
+          "labels": "carried directional exposure, NEVER matched economics. The historical measurement of this leg is negative out of sample (+$1,631 TRAIN, -$12,971 OOS), so it is reported on its own and never netted into the matched result.",
+          "redeems_per_unit": "0",
+          "cost_basis_per_unit": "0.47",
+          "gross_usd": "-0.0047",
+          "status": "SETTLED_NOT_YET_CASH_CONFIRMED"
+        },
+        "fees": null,
+        "rebates_rewards": null,
+        "settlement_cashflow": null,
+        "realized": null,
+        "accounting_labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are SEPARATE lines and are never summed into one number here. realized stays null until a venue-confirmed cash movement is read; a cost basis, a resolution side and a mark are none of them realized."
+      },
+      "path_labels": "maker fill -> movement -> the FROZEN policy's next action -> a complement or extension filled only where a REAL print would have reached it -> matched-pair economics -> residual -> settlement. Matched and residual are never summed, and nothing here is realized.",
+      "seeded_from_tid": 1893456011801018,
+      "overlay": "IMPROVE_1_TICK",
+      "print_amount": "375",
+      "print_tte_s": 48.804
+    },
+    {
+      "symbol": "GEMI-BTC05M2609191315-UP",
+      "seed_fill": {
+        "leg": "NO",
+        "qty": "0.01",
+        "price": "0.47"
+      },
+      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
+      "computable": true,
+      "cycles_replayed": 6,
+      "steps": [
+        {
+          "utc": "2026-09-19T13:13:30.736840+00:00",
+          "tte_s": 90.63581442832947,
+          "window_phase": "WINDOW_OPEN",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [
+            {
+              "outcome": "Up",
+              "leg": "YES",
+              "price": "0.53",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "COMPLETE",
+              "stage": "DECIDED"
+            },
+            {
+              "outcome": "Down",
+              "leg": "NO",
+              "price": "0.22",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "EXTEND",
+              "stage": "DECIDED"
+            }
+          ],
+          "holds": [],
+          "inventory_before": {
+            "yes_qty": "0",
+            "no_qty": "0.01",
+            "matched_qty": "0",
+            "directional_residual": "-0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": null,
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "NO",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [],
+          "inventory_after": {
+            "yes_qty": "0",
+            "no_qty": "0.01",
+            "matched_qty": "0",
+            "directional_residual": "-0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": null,
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "NO",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        },
+        {
+          "utc": "2026-09-19T13:13:40.066948+00:00",
+          "tte_s": 80.91017436981201,
+          "window_phase": "WINDOW_OPEN",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [
+            {
+              "outcome": "Up",
+              "leg": "YES",
+              "price": "0.43",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "COMPLETE",
+              "stage": "DECIDED"
+            },
+            {
+              "outcome": "Down",
+              "leg": "NO",
+              "price": "0.22",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "EXTEND",
+              "stage": "DECIDED"
+            }
+          ],
+          "holds": [],
+          "inventory_before": {
+            "yes_qty": "0",
+            "no_qty": "0.01",
+            "matched_qty": "0",
+            "directional_residual": "-0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": null,
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "NO",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [],
+          "inventory_after": {
+            "yes_qty": "0",
+            "no_qty": "0.01",
+            "matched_qty": "0",
+            "directional_residual": "-0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": null,
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "NO",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        },
+        {
+          "utc": "2026-09-19T13:13:51.918831+00:00",
+          "tte_s": 70.48954772949219,
+          "window_phase": "WINDOW_OPEN",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [
+            {
+              "outcome": "Up",
+              "leg": "YES",
+              "price": "0.45",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "COMPLETE",
+              "stage": "DECIDED"
+            },
+            {
+              "outcome": "Down",
+              "leg": "NO",
+              "price": "0.24",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "EXTEND",
+              "stage": "DECIDED"
+            }
+          ],
+          "holds": [],
+          "inventory_before": {
+            "yes_qty": "0",
+            "no_qty": "0.01",
+            "matched_qty": "0",
+            "directional_residual": "-0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": null,
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "NO",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [],
+          "inventory_after": {
+            "yes_qty": "0",
+            "no_qty": "0.01",
+            "matched_qty": "0",
+            "directional_residual": "-0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": null,
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "NO",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        },
+        {
+          "utc": "2026-09-19T13:14:02.254083+00:00",
+          "tte_s": 59.80215907096863,
+          "window_phase": "COMPLETE_ONLY",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [
+            {
+              "outcome": "Up",
+              "leg": "YES",
+              "price": "0.46",
+              "qty": "0.01",
+              "rung_index": 0,
+              "ticks_behind_bid": 0,
+              "action": "COMPLETE",
+              "stage": "DECIDED"
+            }
+          ],
+          "holds": [
+            {
+              "leg": "NO",
+              "held_by": "END_OF_WINDOW",
+              "why": "tte 59.8s is under 60.0s, which is two maker-rest cycles: a new EXTEND could not be complemented before expiry"
+            }
+          ],
+          "inventory_before": {
+            "yes_qty": "0",
+            "no_qty": "0.01",
+            "matched_qty": "0",
+            "directional_residual": "-0.01",
+            "inventory_imbalance": "0.01",
+            "avg_yes_cost": null,
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": null,
+            "total_spend_usd": "0.0047",
+            "same_side_run": {
+              "leg": "NO",
+              "len": 1
+            },
+            "n_fills": 1,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [
+            {
+              "leg": "YES",
+              "price": "0.46",
+              "qty": "0.01",
+              "action": "COMPLETE",
+              "print_tid": 1893456011801018
+            }
+          ],
+          "inventory_after": {
+            "yes_qty": "0.01",
+            "no_qty": "0.01",
+            "matched_qty": "0.01",
+            "directional_residual": "0.00",
+            "inventory_imbalance": "0.00",
+            "avg_yes_cost": "0.46",
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": "0.93",
+            "total_spend_usd": "0.0093",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 2,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        },
+        {
+          "utc": "2026-09-19T13:14:13.077302+00:00",
+          "tte_s": 49.37929320335388,
+          "window_phase": "COMPLETE_ONLY",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [],
+          "holds": [
+            {
+              "leg": "YES",
+              "held_by": "END_OF_WINDOW",
+              "why": "tte 49.4s is under 60.0s, which is two maker-rest cycles: a new OPEN could not be complemented before expiry"
+            },
+            {
+              "leg": "NO",
+              "held_by": "END_OF_WINDOW",
+              "why": "tte 49.4s is under 60.0s, which is two maker-rest cycles: a new OPEN could not be complemented before expiry"
+            }
+          ],
+          "inventory_before": {
+            "yes_qty": "0.01",
+            "no_qty": "0.01",
+            "matched_qty": "0.01",
+            "directional_residual": "0.00",
+            "inventory_imbalance": "0.00",
+            "avg_yes_cost": "0.46",
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": "0.93",
+            "total_spend_usd": "0.0093",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 2,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [],
+          "inventory_after": {
+            "yes_qty": "0.01",
+            "no_qty": "0.01",
+            "matched_qty": "0.01",
+            "directional_residual": "0.00",
+            "inventory_imbalance": "0.00",
+            "avg_yes_cost": "0.46",
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": "0.93",
+            "total_spend_usd": "0.0093",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 2,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        },
+        {
+          "utc": "2026-09-19T13:14:22.608277+00:00",
+          "tte_s": 38.44090747833252,
+          "window_phase": "COMPLETE_ONLY",
+          "stop": null,
+          "why_no_surface": null,
+          "actions": [],
+          "holds": [
+            {
+              "leg": "YES",
+              "held_by": "END_OF_WINDOW",
+              "why": "tte 38.4s is under 60.0s, which is two maker-rest cycles: a new OPEN could not be complemented before expiry"
+            },
+            {
+              "leg": "NO",
+              "held_by": "END_OF_WINDOW",
+              "why": "tte 38.4s is under 60.0s, which is two maker-rest cycles: a new OPEN could not be complemented before expiry"
+            }
+          ],
+          "inventory_before": {
+            "yes_qty": "0.01",
+            "no_qty": "0.01",
+            "matched_qty": "0.01",
+            "directional_residual": "0.00",
+            "inventory_imbalance": "0.00",
+            "avg_yes_cost": "0.46",
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": "0.93",
+            "total_spend_usd": "0.0093",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 2,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          },
+          "theoretical_fills": [],
+          "inventory_after": {
+            "yes_qty": "0.01",
+            "no_qty": "0.01",
+            "matched_qty": "0.01",
+            "directional_residual": "0.00",
+            "inventory_imbalance": "0.00",
+            "avg_yes_cost": "0.46",
+            "avg_no_cost": "0.47",
+            "effective_matched_pair_cost": "0.93",
+            "total_spend_usd": "0.0093",
+            "same_side_run": {
+              "leg": "YES",
+              "len": 1
+            },
+            "n_fills": 2,
+            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+          }
+        }
+      ],
+      "actions_seen": [
+        "COMPLETE",
+        "EXTEND"
+      ],
+      "theoretical_fills_after_seed": 1,
+      "final_inventory": {
+        "yes_qty": "0.01",
+        "no_qty": "0.01",
+        "matched_qty": "0.01",
+        "directional_residual": "0.00",
+        "inventory_imbalance": "0.00",
+        "avg_yes_cost": "0.46",
+        "avg_no_cost": "0.47",
+        "effective_matched_pair_cost": "0.93",
+        "total_spend_usd": "0.0093",
+        "same_side_run": {
+          "leg": "YES",
+          "len": 1
+        },
+        "n_fills": 2,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "settlement": {
+        "label": "GEMINI_L5_CONTINUOUS_PROBE_V1/settlement",
+        "contract": "GEMI-BTC05M2609191315-UP",
+        "settlement": {
+          "verdict": "SETTLED",
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-19T13:15:07.829Z",
+          "settlementValue": "81217.11025641025"
+        },
+        "inventory": {
+          "yes_qty": "0.01",
+          "no_qty": "0.01",
+          "matched_qty": "0.01",
+          "directional_residual": "0.00",
+          "inventory_imbalance": "0.00",
+          "avg_yes_cost": "0.46",
+          "avg_no_cost": "0.47",
+          "effective_matched_pair_cost": "0.93",
+          "total_spend_usd": "0.0093",
+          "same_side_run": {
+            "leg": "YES",
+            "len": 1
+          },
+          "n_fills": 2,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "matched_pair_economics": {
+          "matched_qty": "0.01",
+          "effective_pair_cost": "0.93",
+          "gross_per_unit_vs_par": "0.07",
+          "gross_usd": "0.0007",
+          "status": "SETTLED_NOT_YET_CASH_CONFIRMED",
+          "labels": "a cost basis against par. NOT realized until the venue's own cash movement is read back."
+        },
+        "directional_residual_pnl": {
+          "directional_residual": "0.00",
+          "leg": null,
+          "label": "DIRECTIONAL_EXPOSURE",
+          "resolution_side": "no",
+          "outcome_known": true,
+          "labels": "carried directional exposure, NEVER matched economics. The historical measurement of this leg is negative out of sample (+$1,631 TRAIN, -$12,971 OOS), so it is reported on its own and never netted into the matched result."
+        },
+        "fees": null,
+        "rebates_rewards": null,
+        "settlement_cashflow": null,
+        "realized": null,
+        "accounting_labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are SEPARATE lines and are never summed into one number here. realized stays null until a venue-confirmed cash movement is read; a cost basis, a resolution side and a mark are none of them realized."
+      },
+      "path_labels": "maker fill -> movement -> the FROZEN policy's next action -> a complement or extension filled only where a REAL print would have reached it -> matched-pair economics -> residual -> settlement. Matched and residual are never summed, and nothing here is realized.",
+      "seeded_from_tid": 1893456011801008,
+      "overlay": "NATIVE",
+      "print_amount": "319",
+      "print_tte_s": 98.817
+    },
     {
       "symbol": "GEMI-BTC05M2609190430-UP",
       "seed_fill": {
@@ -11092,1120 +13363,6 @@
       "overlay": "NATIVE",
       "print_amount": "263",
       "print_tte_s": 61.937
-    },
-    {
-      "symbol": "GEMI-BTC05M2609191145-UP",
-      "seed_fill": {
-        "leg": "YES",
-        "qty": "0.01",
-        "price": "0.57"
-      },
-      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
-      "computable": true,
-      "cycles_replayed": 3,
-      "steps": [
-        {
-          "utc": "2026-09-19T11:43:37.267382+00:00",
-          "tte_s": 83.96281027793884,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.45",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.31",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.57",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0057",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.57",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0057",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:43:46.999029+00:00",
-          "tte_s": 74.37673258781433,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.62",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.06",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.57",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0057",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.57",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0057",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:43:56.669013+00:00",
-          "tte_s": 64.63698482513428,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.75",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.01",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.57",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0057",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.57",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0057",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        }
-      ],
-      "actions_seen": [
-        "COMPLETE",
-        "EXTEND"
-      ],
-      "theoretical_fills_after_seed": 0,
-      "final_inventory": {
-        "yes_qty": "0.01",
-        "no_qty": "0",
-        "matched_qty": "0",
-        "directional_residual": "0.01",
-        "inventory_imbalance": "0.01",
-        "avg_yes_cost": "0.57",
-        "avg_no_cost": null,
-        "effective_matched_pair_cost": null,
-        "total_spend_usd": "0.0057",
-        "same_side_run": {
-          "leg": "YES",
-          "len": 1
-        },
-        "n_fills": 1,
-        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-      },
-      "settlement": {
-        "label": "GEMINI_L5_CONTINUOUS_PROBE_V1/settlement",
-        "contract": "GEMI-BTC05M2609191145-UP",
-        "settlement": {
-          "verdict": "SETTLED",
-          "status": "settled",
-          "resolutionSide": "yes",
-          "resolvedAt": "2026-09-19T11:45:07.639Z",
-          "settlementValue": "81267.49416666666"
-        },
-        "inventory": {
-          "yes_qty": "0.01",
-          "no_qty": "0",
-          "matched_qty": "0",
-          "directional_residual": "0.01",
-          "inventory_imbalance": "0.01",
-          "avg_yes_cost": "0.57",
-          "avg_no_cost": null,
-          "effective_matched_pair_cost": null,
-          "total_spend_usd": "0.0057",
-          "same_side_run": {
-            "leg": "YES",
-            "len": 1
-          },
-          "n_fills": 1,
-          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-        },
-        "matched_pair_economics": null,
-        "directional_residual_pnl": {
-          "directional_residual": "0.01",
-          "leg": "YES",
-          "label": "DIRECTIONAL_EXPOSURE",
-          "resolution_side": "yes",
-          "outcome_known": true,
-          "labels": "carried directional exposure, NEVER matched economics. The historical measurement of this leg is negative out of sample (+$1,631 TRAIN, -$12,971 OOS), so it is reported on its own and never netted into the matched result.",
-          "redeems_per_unit": "1",
-          "cost_basis_per_unit": "0.57",
-          "gross_usd": "0.0043",
-          "status": "SETTLED_NOT_YET_CASH_CONFIRMED"
-        },
-        "fees": null,
-        "rebates_rewards": null,
-        "settlement_cashflow": null,
-        "realized": null,
-        "accounting_labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are SEPARATE lines and are never summed into one number here. realized stays null until a venue-confirmed cash movement is read; a cost basis, a resolution side and a mark are none of them realized."
-      },
-      "path_labels": "maker fill -> movement -> the FROZEN policy's next action -> a complement or extension filled only where a REAL print would have reached it -> matched-pair economics -> residual -> settlement. Matched and residual are never summed, and nothing here is realized.",
-      "seeded_from_tid": 1893456011799903,
-      "overlay": "IMPROVE_1_TICK",
-      "print_amount": "263",
-      "print_tte_s": 90.676
-    },
-    {
-      "symbol": "GEMI-BTC05M2609191200-UP",
-      "seed_fill": {
-        "leg": "YES",
-        "qty": "0.01",
-        "price": "0.66"
-      },
-      "labels": "SHADOW/THEORETICAL. No order existed, nothing was submitted, filled, settled or realized, and our own size would have changed the book this is measured against.",
-      "computable": true,
-      "cycles_replayed": 12,
-      "steps": [
-        {
-          "utc": "2026-09-19T11:57:18.960761+00:00",
-          "tte_s": 171.3758029937744,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.49",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.08",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:57:28.635176+00:00",
-          "tte_s": 152.6398675441742,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.42",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.21",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:57:38.525736+00:00",
-          "tte_s": 143.01619243621826,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.42",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.21",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:57:49.258617+00:00",
-          "tte_s": 132.46067309379578,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.42",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.21",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:57:59.093674+00:00",
-          "tte_s": 122.3946967124939,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.43",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.21",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:58:10.974341+00:00",
-          "tte_s": 111.71250677108765,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.44",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.21",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:58:20.578794+00:00",
-          "tte_s": 100.68689465522766,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.44",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.21",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:58:44.965847+00:00",
-          "tte_s": 90.95623183250427,
-          "window_phase": null,
-          "stop": "inventory could not be established from authoritative reads; unknown state holds, it never assumes flat",
-          "why_no_surface": null,
-          "actions": [],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:58:54.957149+00:00",
-          "tte_s": 66.62432980537415,
-          "window_phase": "WINDOW_OPEN",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Up",
-              "leg": "YES",
-              "price": "0.45",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "EXTEND",
-              "stage": "DECIDED"
-            },
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.21",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:59:04.677325+00:00",
-          "tte_s": 56.70754098892212,
-          "window_phase": "COMPLETE_ONLY",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.01",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [
-            {
-              "leg": "YES",
-              "held_by": "END_OF_WINDOW",
-              "why": "tte 56.7s is under 60.0s, which is two maker-rest cycles: a new EXTEND could not be complemented before expiry"
-            }
-          ],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:59:15.515485+00:00",
-          "tte_s": 46.88445687294006,
-          "window_phase": "COMPLETE_ONLY",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.01",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [
-            {
-              "leg": "YES",
-              "held_by": "END_OF_WINDOW",
-              "why": "tte 46.9s is under 60.0s, which is two maker-rest cycles: a new EXTEND could not be complemented before expiry"
-            }
-          ],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        },
-        {
-          "utc": "2026-09-19T11:59:25.138588+00:00",
-          "tte_s": 36.15450072288513,
-          "window_phase": "COMPLETE_ONLY",
-          "stop": null,
-          "why_no_surface": null,
-          "actions": [
-            {
-              "outcome": "Down",
-              "leg": "NO",
-              "price": "0.01",
-              "qty": "0.01",
-              "rung_index": 0,
-              "ticks_behind_bid": 0,
-              "action": "COMPLETE",
-              "stage": "DECIDED"
-            }
-          ],
-          "holds": [
-            {
-              "leg": "YES",
-              "held_by": "END_OF_WINDOW",
-              "why": "tte 36.2s is under 60.0s, which is two maker-rest cycles: a new EXTEND could not be complemented before expiry"
-            }
-          ],
-          "inventory_before": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          },
-          "theoretical_fills": [],
-          "inventory_after": {
-            "yes_qty": "0.01",
-            "no_qty": "0",
-            "matched_qty": "0",
-            "directional_residual": "0.01",
-            "inventory_imbalance": "0.01",
-            "avg_yes_cost": "0.66",
-            "avg_no_cost": null,
-            "effective_matched_pair_cost": null,
-            "total_spend_usd": "0.0066",
-            "same_side_run": {
-              "leg": "YES",
-              "len": 1
-            },
-            "n_fills": 1,
-            "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-          }
-        }
-      ],
-      "actions_seen": [
-        "COMPLETE",
-        "EXTEND"
-      ],
-      "theoretical_fills_after_seed": 0,
-      "final_inventory": {
-        "yes_qty": "0.01",
-        "no_qty": "0",
-        "matched_qty": "0",
-        "directional_residual": "0.01",
-        "inventory_imbalance": "0.01",
-        "avg_yes_cost": "0.66",
-        "avg_no_cost": null,
-        "effective_matched_pair_cost": null,
-        "total_spend_usd": "0.0066",
-        "same_side_run": {
-          "leg": "YES",
-          "len": 1
-        },
-        "n_fills": 1,
-        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-      },
-      "settlement": {
-        "label": "GEMINI_L5_CONTINUOUS_PROBE_V1/settlement",
-        "contract": "GEMI-BTC05M2609191200-UP",
-        "settlement": {
-          "verdict": "SETTLED",
-          "status": "settled",
-          "resolutionSide": "yes",
-          "resolvedAt": "2026-09-19T12:00:08.272Z",
-          "settlementValue": "81290.71999999999"
-        },
-        "inventory": {
-          "yes_qty": "0.01",
-          "no_qty": "0",
-          "matched_qty": "0",
-          "directional_residual": "0.01",
-          "inventory_imbalance": "0.01",
-          "avg_yes_cost": "0.66",
-          "avg_no_cost": null,
-          "effective_matched_pair_cost": null,
-          "total_spend_usd": "0.0066",
-          "same_side_run": {
-            "leg": "YES",
-            "len": 1
-          },
-          "n_fills": 1,
-          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
-        },
-        "matched_pair_economics": null,
-        "directional_residual_pnl": {
-          "directional_residual": "0.01",
-          "leg": "YES",
-          "label": "DIRECTIONAL_EXPOSURE",
-          "resolution_side": "yes",
-          "outcome_known": true,
-          "labels": "carried directional exposure, NEVER matched economics. The historical measurement of this leg is negative out of sample (+$1,631 TRAIN, -$12,971 OOS), so it is reported on its own and never netted into the matched result.",
-          "redeems_per_unit": "1",
-          "cost_basis_per_unit": "0.66",
-          "gross_usd": "0.0034",
-          "status": "SETTLED_NOT_YET_CASH_CONFIRMED"
-        },
-        "fees": null,
-        "rebates_rewards": null,
-        "settlement_cashflow": null,
-        "realized": null,
-        "accounting_labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are SEPARATE lines and are never summed into one number here. realized stays null until a venue-confirmed cash movement is read; a cost basis, a resolution side and a mark are none of them realized."
-      },
-      "path_labels": "maker fill -> movement -> the FROZEN policy's next action -> a complement or extension filled only where a REAL print would have reached it -> matched-pair economics -> residual -> settlement. Matched and residual are never summed, and nothing here is realized.",
-      "seeded_from_tid": 1893456011799995,
-      "overlay": "NATIVE",
-      "print_amount": "254",
-      "print_tte_s": 171.375
     }
   ],
   "labels": "SHADOW forensic. Every decision replayed comes from the FROZEN policy; nothing here chooses a price, a size or an action, no order was sent, and every fill is THEORETICAL."

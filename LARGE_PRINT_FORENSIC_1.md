@@ -203,20 +203,37 @@ proposing to go and get it.**
 
 ## 7. How much these shares moved when the sample grew
 
-The first pass ran on 19 windows; soak #4 added 7 more. What changed:
+The first pass ran on 19 windows; soak #4 took it to 26 and soak #5 to 30.
 
-| | 19 windows | 26 windows |
-|---|---|---|
-| C — timing (total) | 58.6% | **46.0%** |
-| A — price | 4.6% | **12.4%** |
-| B — queue | 1.2% | 0.9% |
-| reachable | 19.8% | 14.6% |
-| no evidence | 15.8% | 26.2% |
-| 100+ share of notional | 77.7% | 78.7% |
-| TTE 30–180 share | 87.6% | 88.5% |
+**The §6 table was derived by hand in prose and could not be reproduced.** It
+is now computed by `LP.attribution()` and stored in
+`analysis/gemini/large_prints.json`, pinned by 7 tests. At 30 windows, 168
+prints, $2,449.83:
 
-**The ranking held; the magnitudes did not.** C stayed dominant and B stayed
-negligible, but A nearly tripled. **These shares are not yet stable and should
-not be treated as parameters.** The two figures that barely moved — the
-concentration of notional in nine prints, and its concentration in TTE 30–180
-— are the ones worth relying on.
+| cause | 19 win | 26 win | **30 win (computed)** |
+|---|---|---|---|
+| C — timing, TTE <60 | — | 40.1% | **40.4%** |
+| C — timing, TTE >280 | — | 5.9% | **5.9%** |
+| **C — timing (total)** | 58.6% | 46.0% | **46.3%** |
+| A — price | 4.6% | 12.4% | **6.5%** |
+| B — queue | 1.2% | 0.9% | **0.9%** |
+| reachable | 19.8% | 14.6% | **39.9%** |
+| no evidence | 15.8% | 26.2% | **6.5%** |
+| 100+ share of notional | 77.7% | 78.7% | 78.7% |
+
+**C has stabilised. Coverage, not the venue, moved everything else.** C held
+at 46.0% → 46.3% and its two regions barely moved; B has been negligible
+throughout. But **"no evidence" collapsed from 26.2% to 6.5%** because soak #5
+added cycle coverage over windows that previously had no reconstructed book —
+and almost all of that notional landed in **reachable**, which more than
+doubled to 39.9%. A fell back to 6.5%, roughly where the 19-window pass had
+it, which confirms the 12.4% reading was itself a coverage artefact.
+
+**Read this as: C ≈ 46% is the one share worth relying on.** A, reachable and
+no-evidence are still moving with how much of the tape our cycles cover, and
+the honest summary is that **we now know we could have been there for 39.9% of
+the notional and were not** — a larger claim than the first pass could make,
+and one that only became visible when coverage improved.
+
+The two figures that have never moved — the concentration of notional in nine
+prints, and its concentration in TTE 30–180 — remain the ones worth relying on.

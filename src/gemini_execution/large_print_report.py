@@ -125,6 +125,9 @@ def build(*, jsonl: str, runs: str, soaks: str,
         "label": LABEL,
         "utc": datetime.now(timezone.utc).isoformat(),
         "census": LP.census(rows),
+        "attribution": LP.attribution(
+            [p for t in tapes.values() for p in (t.get("prints") or [])],
+            rows),
         "rows": rows,
         "inventory_paths": paths,
         "labels": ("SHADOW forensic. Every decision replayed comes from the "

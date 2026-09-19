@@ -179,3 +179,82 @@ def test_matched_and_residual_are_never_summed_in_the_path():
 @pytest.mark.parametrize("bad", [None, "", "abc"])
 def test_garbage_in_is_refused(bad):
     assert LP.bucket_of(bad) is None
+
+
+# ============================== the A/B/C/D attribution, computed not written
+
+def test_TIMING_IS_DECIDED_FIRST_AND_ON_TTE_ALONE():
+    """A print outside our quoting window could not have been reached at any
+    price with any queue position, so calling it a price failure would blame
+    price for something price could not have fixed."""
+    reachable = {"evaluable": True, "quote_tests": {
+        "NATIVE": {"would_reach_us": True,
+                   "absorbed": {"0.01": {"hypothetically_filled": "0.01"}}}}}
+    assert LP.attribute_one(reachable, tte_s=59.9) == LP.C_LATE
+    assert LP.attribute_one(reachable, tte_s=280.1) == LP.C_EARLY
+    assert LP.attribute_one(reachable, tte_s=150.0) == LP.REACHABLE
+
+
+def test_the_timing_boundary_is_the_frozen_policys_own():
+    from src.gemini_execution import continuous_probe as CP
+    assert LP.attribute_one({}, tte_s=CP.NO_NEW_OPEN_EXTEND_TTE_S - 0.1) \
+        == LP.C_LATE
+    assert LP.attribute_one({}, tte_s=CP.NO_NEW_OPEN_EXTEND_TTE_S) \
+        != LP.C_LATE
+
+
+def test_a_print_with_no_reconstructed_book_is_NO_EVIDENCE_not_a_cause():
+    assert LP.attribute_one(None, tte_s=150.0) == LP.NO_EVIDENCE
+    assert LP.attribute_one({"evaluable": False}, tte_s=150.0) \
+        == LP.NO_EVIDENCE
+
+
+def test_queue_is_separated_from_price():
+    blocked = {"evaluable": True, "quote_tests": {
+        "NATIVE": {"would_reach_us": True,
+                   "absorbed": {"0.01": {"hypothetically_filled": "0"}}}}}
+    priced_out = {"evaluable": True, "quote_tests": {
+        "NATIVE": {"would_reach_us": False},
+        "IMPROVE_1_TICK": {"would_reach_us": True}}}
+    unreachable = {"evaluable": True, "quote_tests": {
+        "NATIVE": {"would_reach_us": False},
+        "IMPROVE_1_TICK": {"would_reach_us": False}}}
+    assert LP.attribute_one(blocked, tte_s=150.0) == LP.B_QUEUE
+    assert LP.attribute_one(priced_out, tte_s=150.0) == LP.A_PRICE
+    assert LP.attribute_one(unreachable, tte_s=150.0) == LP.NO_EVIDENCE
+
+
+def test_the_attribution_covers_EVERY_print_not_only_the_large_ones():
+    """The first pass was hand-derived in prose on all prints while the
+    forensic covers only >=10, which is why the two could not be reconciled.
+    It is computed over the whole tape now."""
+    prints = [
+        {"tid": 1, "amount": "200", "price": "0.50", "tte_s": 150.0},
+        {"tid": 2, "amount": "2", "price": "0.50", "tte_s": 150.0},
+        {"tid": 3, "amount": "4", "price": "0.50", "tte_s": 20.0},
+    ]
+    rows = [{"tid": 1, "evaluable": True, "quote_tests": {
+        "NATIVE": {"would_reach_us": True,
+                   "absorbed": {"0.01": {"hypothetically_filled": "0.01"}}}}}]
+    a = LP.attribution(prints, rows)
+    assert a["total_prints"] == 3
+    assert a["causes"][LP.REACHABLE]["prints"] == 1
+    assert a["causes"][LP.NO_EVIDENCE]["prints"] == 1      # the small one
+    assert a["causes"][LP.C_LATE]["prints"] == 1
+    assert D(a["total_notional_usd"]) == D("103.0")
+
+
+def test_the_attribution_reports_C_as_one_total_as_well_as_two_regions():
+    prints = [{"tid": 1, "amount": "10", "price": "1", "tte_s": 20.0},
+              {"tid": 2, "amount": "10", "price": "1", "tte_s": 300.0},
+              {"tid": 3, "amount": "10", "price": "1", "tte_s": 150.0}]
+    a = LP.attribution(prints, [])
+    assert a["C_timing_total_share"] == "0.6667"
+
+
+def test_an_unreadable_print_is_skipped_rather_than_valued_at_zero():
+    a = LP.attribution([{"tid": 1, "amount": None, "price": "0.5",
+                         "tte_s": 150.0},
+                        {"tid": 2, "amount": "10", "price": "0.5",
+                         "tte_s": 150.0}], [])
+    assert a["total_prints"] == 1

@@ -479,3 +479,103 @@ def census(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     }
     out["labels"] = THEORETICAL
     return out
+
+
+#: the boundaries the attribution uses. They are the FROZEN policy's own --
+#: below NO_NEW_OPEN_EXTEND_TTE_S we cannot OPEN, above the band's top we have
+#: not entered yet -- so this is a statement about our envelope, not a new one.
+ATTRIBUTION_BAND_HI_S = 280.0
+
+A_PRICE = "A_price_our_quote_would_not_be_reached"
+B_QUEUE = "B_queue_consumed_ahead_of_us"
+C_LATE = "C_timing_tte_under_60_where_we_cannot_OPEN"
+C_EARLY = "C_timing_tte_over_280_before_our_band_opens"
+REACHABLE = "reachable_we_would_have_been_there"
+NO_EVIDENCE = "no_evidence_our_cycles_do_not_cover_it"
+
+
+def attribute_one(row: Optional[Mapping[str, Any]], *, tte_s: Any,
+                  band_hi_s: float = ATTRIBUTION_BAND_HI_S) -> str:
+    """Why we did not interact with this print. One cause, decided in order.
+
+    TIMING IS DECIDED FIRST and on TTE alone, because a print outside our
+    quoting window could not have been reached at any price with any queue
+    position -- calling it a price failure would be attributing to price
+    something price could not have fixed.
+
+    A print with no reconstructed book is NO_EVIDENCE and is never quietly
+    folded into a cause; the share of notional sitting in that bucket is the
+    honest measure of how much of this attribution rests on coverage.
+    """
+    from src.gemini_execution import continuous_probe as CP
+    t = None
+    try:
+        t = float(tte_s)
+    except (TypeError, ValueError):
+        t = None
+    if t is not None and t < CP.NO_NEW_OPEN_EXTEND_TTE_S:
+        return C_LATE
+    if t is not None and t > band_hi_s:
+        return C_EARLY
+    if not row or not row.get("evaluable"):
+        return NO_EVIDENCE
+    qt = row.get("quote_tests") or {}
+    nat = qt.get("NATIVE") or {}
+    imp = qt.get("IMPROVE_1_TICK") or {}
+    if nat.get("would_reach_us"):
+        got = ((nat.get("absorbed") or {}).get("0.01") or {}).get(
+            "hypothetically_filled")
+        try:
+            return REACHABLE if got is not None and float(got) > 0 else B_QUEUE
+        except (TypeError, ValueError):
+            return B_QUEUE
+    if imp.get("would_reach_us"):
+        return A_PRICE
+    return NO_EVIDENCE
+
+
+def attribution(prints: Sequence[Mapping[str, Any]],
+                rows: Sequence[Mapping[str, Any]], *,
+                band_hi_s: float = ATTRIBUTION_BAND_HI_S) -> Dict[str, Any]:
+    """A, B, C or D over EVERY print, not only the large ones.
+
+    Computed and stored rather than derived by hand in prose, which is how the
+    first pass ended up not being reproducible. Prints below the forensic's
+    size floor carry no reconstructed book, so they can only ever be timed or
+    unevidenced -- and the split says which.
+    """
+    by_tid = {r.get("tid"): r for r in rows or []}
+    buckets: Dict[str, Dict[str, Any]] = {}
+    total = D("0")
+    for p in prints or []:
+        amt, px = _dec(p.get("amount")), _dec(p.get("price"))
+        if amt is None or px is None:
+            continue
+        v = amt * px
+        total += v
+        cause = attribute_one(by_tid.get(p.get("tid")), tte_s=p.get("tte_s"),
+                              band_hi_s=band_hi_s)
+        b = buckets.setdefault(cause, {"prints": 0, "notional_usd": D("0")})
+        b["prints"] += 1
+        b["notional_usd"] += v
+    out = {k: {"prints": v["prints"], "notional_usd": str(v["notional_usd"]),
+               "share": (str(round(v["notional_usd"] / total, 4))
+                         if total > 0 else None)}
+           for k, v in buckets.items()}
+    c = sum((buckets.get(k) or {}).get("notional_usd", D("0"))
+            for k in (C_LATE, C_EARLY))
+    return {
+        "total_notional_usd": str(total),
+        "total_prints": sum(v["prints"] for v in buckets.values()),
+        "band_hi_s": band_hi_s,
+        "causes": out,
+        "C_timing_total_share": (str(round(c / total, 4)) if total > 0
+                                 else None),
+        "why": ("timing is decided first and on TTE alone: a print outside "
+                "our quoting window could not have been reached at any price "
+                "with any queue position. NO_EVIDENCE is never folded into a "
+                "cause -- its share is how much of this rests on coverage."),
+        "labels": ("EXECUTED notional from the tape, attributed to why we did "
+                   "not interact with it. No fill is claimed and nothing here "
+                   "is realized."),
+    }
