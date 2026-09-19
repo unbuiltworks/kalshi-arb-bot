@@ -159,7 +159,7 @@ def test_every_cohort_we_run_is_a_family_the_guard_will_bind():
 
 
 def test_EVERY_ENTRY_BAND_SITS_INSIDE_MODEL_AS_QUOTING_WINDOW():
-    """The frozen surface carries quote_between_tte_s = [0, 300], a MEASURED
+    """The frozen surface carries quote_between_tte_s = [0, 300], an OURS_ADAPTED
     L5 parameter. Entering a 15-minute contract at TTE 840-880 gave nine
     minutes of cycles where the policy correctly withheld its surface and
     nothing could happen. A band outside the quoting window is a band that

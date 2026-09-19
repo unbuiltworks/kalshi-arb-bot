@@ -11,7 +11,8 @@ from src.gemini_execution import lanes as LN
 # ===================================== the comparison is TTE-restricted
 
 def test_THE_REACHABLE_INTERVAL_IS_READ_FROM_MODEL_A_NOT_SET_HERE():
-    """quote_between_tte_s is a measured L5 parameter. This module reads it
+    """quote_between_tte_s is an OURS_ADAPTED parameter, not a measurement of
+    L5 (his is [0, 900]). This module reads it
     and never writes it."""
     lo, hi = LN.quoting_window()
     assert (lo, hi) == (0.0, 300.0)

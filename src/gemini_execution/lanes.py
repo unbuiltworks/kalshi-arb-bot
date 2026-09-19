@@ -2,7 +2,9 @@
 
 The whole-window BTC15m promotion is withdrawn. A 15-minute contract's tape
 is mostly flow the frozen policy never sees: `TTE_policy
-quote_between_tte_s = [0, 300]` is a MEASURED L5 parameter and is not touched
+quote_between_tte_s = [0, 300]` is an OURS_ADAPTED parameter -- the frozen
+artifact records it as `OURS_ADAPTED` with `evidence: null` and the note
+"Not a finding about this venue and never citable as one" -- and is not touched
 here or anywhere. So every comparison below is restricted to **TTE <= 300**,
 which is the only interval either lane can act in, and the restriction is
 applied to the VENUE's tape as well as to ours.

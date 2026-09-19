@@ -63,7 +63,10 @@ BTC5M = Cohort(name="BTC5m", prefix="BTC05M", minutes=5,
 #: not by symmetry with the 5-minute one.
 #:
 #: The frozen surface carries TTE_policy quote_between_tte_s = [0, 300]: a
-#: MEASURED L5 parameter, and part of Model A, so it is not touched. On a
+#: OURS_ADAPTED parameter -- NOT a measurement of L5 -- and part of Model A,
+#: so it is not touched here. L5's own measured TTE_policy is [0, 900]; the
+#: 300 is the length of a Gemini BTC5m contract, chosen for that cohort and
+#: then inherited by BTC15m. See TTE_PROVENANCE_1.md. On a
 #: 5-minute contract TTE never exceeds 300 and it never binds. On a
 #: 15-minute contract it means Model A quotes ONLY the final five minutes.
 #:
