@@ -489,7 +489,7 @@ def test_the_job_outlives_the_armed_step_which_outlives_the_bounded_wait():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = None
+LIVE_AUTHORIZATION = "OWNER-2026-09-19-GEMINI-CONTINUOUS-8"
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -554,6 +554,7 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-7",
+        "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
