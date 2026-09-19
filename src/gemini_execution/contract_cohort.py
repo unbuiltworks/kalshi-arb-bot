@@ -59,11 +59,21 @@ class Cohort:
 BTC5M = Cohort(name="BTC5m", prefix="BTC05M", minutes=5,
                entry_band=(240.0, 280.0))
 
-#: the 15-minute family. The band sits the same distance from the window's
-#: OPEN as the 5-minute band does -- 20 to 60 seconds in -- so entry happens
-#: early in the contract's life on both, rather than mid-window on one.
+#: the 15-minute family. THE BAND IS SET BY MODEL A'S OWN QUOTING WINDOW,
+#: not by symmetry with the 5-minute one.
+#:
+#: The frozen surface carries TTE_policy quote_between_tte_s = [0, 300]: a
+#: MEASURED L5 parameter, and part of Model A, so it is not touched. On a
+#: 5-minute contract TTE never exceeds 300 and it never binds. On a
+#: 15-minute contract it means Model A quotes ONLY the final five minutes.
+#:
+#: Entering at 840-880 -- symmetric with the 5-minute band -- was therefore
+#: wrong: it produced nine minutes of cycles in which the policy correctly
+#: withheld its surface and nothing could happen. Entering inside the
+#: quoting window makes the lane live from its first cycle, and makes the
+#: two families directly comparable because both then enter at the same TTE.
 BTC15M = Cohort(name="BTC15m", prefix="BTC15M", minutes=15,
-                entry_band=(840.0, 880.0))
+                entry_band=(240.0, 280.0))
 
 COHORTS: Dict[str, Cohort] = {c.name.lower(): c for c in (BTC5M, BTC15M)}
 COHORTS.update({c.prefix.lower(): c for c in (BTC5M, BTC15M)})

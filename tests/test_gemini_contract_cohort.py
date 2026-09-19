@@ -45,12 +45,16 @@ def test_THE_FROZEN_TTE_BOUNDS_ARE_NOT_SCALED_PER_FAMILY():
         assert not hasattr(c, "complete_only_tte_s")
 
 
-def test_the_entry_band_sits_the_same_distance_into_both_windows():
-    """Entry happens early in the contract's life on both families, rather
-    than at the open on one and mid-window on the other."""
+def test_the_band_is_set_by_the_QUOTING_WINDOW_not_by_symmetry():
+    """This test previously asserted the band sat within 60s of the window's
+    OPEN -- symmetry with the 5-minute family. That was the wrong property
+    and it shipped a 15-minute band of 840-880, nine minutes before Model A
+    would quote at all. What matters is the TTE the policy will speak at."""
+    from src.gemini_execution import continuous_probe as CP
+    lo, hi = CP.probe_params().get("TTE_policy")["quote_between_tte_s"]
     for c in (CC.BTC5M, CC.BTC15M):
-        into_window = c.window_s - c.entry_band[1]
-        assert 0 <= into_window <= 60, (c.name, into_window)
+        assert float(lo) <= c.entry_band[0] <= c.entry_band[1] <= float(hi), \
+            c.name
 
 
 def test_the_ticker_grid_is_shared_and_only_the_step_differs():
@@ -152,3 +156,21 @@ def test_every_cohort_we_run_is_a_family_the_guard_will_bind():
     from src.gemini_execution import continuous_probe as CP
     for c in (CC.BTC5M, CC.BTC15M):
         assert "GEMI-%s" % c.prefix in CP.COHORT_PREFIXES
+
+
+def test_EVERY_ENTRY_BAND_SITS_INSIDE_MODEL_AS_QUOTING_WINDOW():
+    """The frozen surface carries quote_between_tte_s = [0, 300], a MEASURED
+    L5 parameter. Entering a 15-minute contract at TTE 840-880 gave nine
+    minutes of cycles where the policy correctly withheld its surface and
+    nothing could happen. A band outside the quoting window is a band that
+    cannot trade."""
+    from src.gemini_execution import continuous_probe as CP
+    lo, hi = CP.probe_params().get("TTE_policy")["quote_between_tte_s"]
+    for c in (CC.BTC5M, CC.BTC15M):
+        assert float(lo) <= c.entry_band[0] <= float(hi), c.name
+        assert float(lo) <= c.entry_band[1] <= float(hi), c.name
+
+
+def test_both_families_now_enter_at_the_same_TTE():
+    """Which makes the two lanes directly comparable."""
+    assert CC.BTC5M.entry_band == CC.BTC15M.entry_band
