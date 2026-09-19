@@ -181,3 +181,44 @@ def test_A_BARE_TAPE_CROSSING_IS_NEVER_A_FILL_HERE():
          "cycles_detail": [_cycle(1, 800.0, buys=500, sells=500, cum=0)]}
     assert AB.bands([w], AB.CONTROL)["bands"][">600"]["fills"] == 0
     assert AC.the_chain(w, AC.CONTROL)["broke_at"] == "OPEN_fill"
+
+
+# ------------------------------------------- the live per-window log output
+
+def test_THE_LIVE_BANDED_PRINT_USES_THE_COMPACT_CYCLE_VIEW(capsys):
+    """_print_bands must produce the banded line from a window record as
+    one_window hands it over -- otherwise the log shows zeros for the very
+    columns the report is for."""
+    from src.gemini_execution import shadow_soak as SS
+    w = {"symbol": "GEMI-BTC15M2609192130-UP",
+         "hypothetical": {"rows": [
+             _fill("NO", "0.01", "0.58", "OPEN", 810.0, first=True),
+             _fill("YES", "0.01", "0.39", "COMPLETE", 640.0)]},
+         "inventory": {"matched_qty": "0.01"},
+         "cycles_detail": [_cycle(1, 810.0, cum=1), _cycle(2, 640.0, cum=4)]}
+    SS._print_bands(w)
+    out = capsys.readouterr().out
+    assert "ARM_BAND" in out and "GEMI-BTC15M2609192130-UP" in out
+    assert "tte=>600" in out
+    assert "readC=2" in out and "rested=4" in out
+    assert "first=1" in out and "COMP=1" in out
+    assert "basis=0.97" in out          # 0.58 + 0.39
+
+
+def test_A_REPORTING_ERROR_NEVER_ENDS_THE_COLLECTOR(capsys):
+    from src.gemini_execution import shadow_soak as SS
+    SS._print_bands({"symbol": "S", "hypothetical": "not-a-dict",
+                     "cycles_detail": []})
+    assert "ARM_BAND_ERROR" in capsys.readouterr().out
+
+
+def test_THE_COMPACT_VIEW_IS_DROPPED_SO_EVIDENCE_DOES_NOT_DOUBLE():
+    """It is attached after _persist and popped after printing; a lane that
+    runs for ever must not accumulate every cycle on every window record."""
+    import inspect
+    src = inspect.getsource(__import__(
+        "src.gemini_execution.shadow_soak", fromlist=["x"]).cohort_loop)
+    assert 'w.pop("cycles_detail", None)' in src
+    ow = inspect.getsource(__import__(
+        "src.gemini_execution.shadow_soak", fromlist=["x"]).one_window)
+    assert ow.index("runner._persist(w)") < ow.index('w["cycles_detail"]')

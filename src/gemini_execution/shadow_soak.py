@@ -421,6 +421,26 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                     "recorded plan is none of them.")}
     runner.windows.append(w)
     runner._persist(w)
+    # A COMPACT CYCLE VIEW FOR THE LIVE BANDED PRINT, attached AFTER the
+    # record is persisted and dropped by the caller once printed. The full
+    # rows are already on disk one per cycle; carrying them on the window
+    # record too would double the evidence and grow `runner.windows`
+    # without bound on a lane that runs for ever.
+    w["cycles_detail"] = [{
+        "cycle": r.get("cycle"), "tte_s": r.get("tte_s"),
+        "habitat": {"book_readable": (r.get("habitat") or {}
+                                      ).get("book_readable"),
+                    "flow": (r.get("habitat") or {}).get("flow")},
+        "hypothetical_rungs_rested_cumulative":
+            r.get("hypothetical_rungs_rested_cumulative"),
+        "correction_arms": {
+            k: {"hypothetical_rungs_rested_cumulative":
+                v.get("hypothetical_rungs_rested_cumulative"),
+                "decision": {"plan": {"place": ((v.get("decision") or {})
+                                                .get("plan") or {}
+                                                ).get("place") or []}}}
+            for k, v in (r.get("correction_arms") or {}).items()},
+    } for r in rows]
     return w
 
 
@@ -653,6 +673,9 @@ async def cohort_loop(a, cohort_name: str) -> None:
                                      interval_s=a.interval, cohort=co,
                                      policy=a.policy, on_cycle=hb.cycle)
                 _print_window(w)
+                _print_arms(w)
+                _print_bands(w)
+                w.pop("cycles_detail", None)
                 hb.window_done(w)
                 attempt = 0
                 if runner.state.stopped:
@@ -688,6 +711,56 @@ async def cohort_loop(a, cohort_name: str) -> None:
         if not forever:
             return
         await asyncio.sleep(1.0)
+
+
+def _print_bands(w) -> None:
+    """The banded table for THIS window, emitted where it can be read.
+
+    The evidence stream lives on the service's volume, so a report that can
+    only be run against those files is a report nobody reads while the lane
+    is running. Computing it per window from the window's own record puts
+    >600 / 300-600 / <=300 in the log beside the window that produced it.
+
+    Fails soft and entirely: a reporting error must never end a collector.
+    """
+    try:
+        from src.gemini_execution import arm_bands as AB
+        labels = [AB.CONTROL] + list(w.get("correction_arms") or {})
+        for lbl in labels:
+            b = AB.bands([w], lbl)
+            if not b["windows"]:
+                continue
+            for name, _lo, _hi in AB.BANDS:
+                r = b["bands"][name]
+                if not (r["fills"] or r["readable_cycles"]):
+                    continue
+                print("ARM_BAND %s %s tte=%s readC=%d rested=%d first=%d "
+                      "EXT=%d COMP=%d pairs=%d basis=%s fee+=%d resGen=%s "
+                      "m/g=%s" % (
+                          w.get("symbol"), lbl[:28], name,
+                          r["readable_cycles"], r["rungs_rested"],
+                          r["first_fills"], r["extend_fills"],
+                          r["complete_fills"], r["matched_pairs"],
+                          r["actual_pair_basis_median"],
+                          r["fee_positive_pairs"], r["residual_generated"],
+                          r["matched_gross"]), flush=True)
+    except Exception as exc:                                     # noqa: BLE001
+        print("ARM_BAND_ERROR %s: %s" % (type(exc).__name__, exc), flush=True)
+
+
+def _print_arms(w) -> None:
+    """The arm's window totals beside the control's, in one line each."""
+    for lbl, rec in (w.get("correction_arms") or {}).items():
+        h = rec.get("hypothetical") or {}
+        iv = rec.get("inventory") or {}
+        print("WINDOW_ARM %s %s band=%s | rested=%s fills=%s first=%s "
+              "complete=%s | matched=%s residual=%s basis=%s | err=%s" % (
+                  w.get("symbol"), lbl[:28], rec.get("quote_between_tte_s"),
+                  h.get("rungs_rested"), h.get("fills"), h.get("first_fills"),
+                  h.get("complete_fills"), iv.get("matched_qty"),
+                  iv.get("directional_residual"),
+                  iv.get("effective_matched_pair_cost"), rec.get("error")),
+              flush=True)
 
 
 def _print_window(w) -> None:
