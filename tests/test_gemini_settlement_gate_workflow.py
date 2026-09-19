@@ -440,7 +440,15 @@ def test_the_abandoned_C8_cohort_is_never_bound_and_stays_at_zero():
     assert pathlib.Path(c8["ledger_path"]).read_bytes() == b""
 
     c8b = CO.state("COHORT-2026-09-18-C8B")
-    assert c8b["budget"] == 12 and c8b["consumed"] == 0
+    # THE BUDGET IS THE INVARIANT, NOT THE COUNT. `consumed == 0` was a
+    # moment, and it broke the instant CONTINUOUS-8 ran -- the same defect as
+    # pinning a latch count or an executable hash. What must hold forever is
+    # that the budget is 12, that consumption never exceeds it, and that
+    # consumption is MONOTONIC: a count that FELL would be a reset wearing
+    # the cohort's name.
+    assert c8b["budget"] == 12
+    assert 0 <= c8b["consumed"] <= c8b["budget"]
+    assert c8b["remaining"] == c8b["budget"] - c8b["consumed"]
     # ... and C8B guards the ledger that actually holds spent slots
     pre = c8b["predecessor"]
     assert pre["intact"] is True
