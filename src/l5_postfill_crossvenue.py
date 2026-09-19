@@ -289,3 +289,137 @@ def contrast(l5: Mapping[str, Any], gem: Mapping[str, Any]) -> Dict[str, Any]:
                               if not r["separable"]],
             "labels": ("the observability is ASYMMETRIC and every row that "
                        "cannot be separated says so rather than guessing.")}
+
+
+# ============================== PRE-ENTRY GRADIENT, the same diagnostic
+
+def pre_entry_features(windows: Mapping[str, Sequence[Mapping[str, Any]]],
+                       ) -> List[Dict[str, Any]]:
+    """One row per L5 window, from the PREDECESSOR window only.
+
+    THE OBSERVABILITY IS NOT THE SAME AS GEMINI'S and the difference is not
+    cosmetic. Gemini's pre-entry tape is the WHOLE MARKET's prints; this is
+    L5's OWN fills and nothing else, because Polymarket's extract carries no
+    counterparty tape. So a rate here is "how busy L5 itself was", not "how
+    busy the market was", and the two must be compared by RANK ORDER WITHIN a
+    venue, never by level across venues.
+
+    The predecessor window has closed before the current one opens, so nothing
+    in it can leak.
+    """
+    order = sorted(windows, key=lambda k: min(f["ts"] for f in windows[k]))
+    out: List[Dict[str, Any]] = []
+    for i, wid in enumerate(order):
+        if i == 0:
+            continue
+        prev = windows[order[i - 1]]
+        cur = windows[wid]
+        t0 = min(f["ts"] for f in cur)
+        span = float(max(f["ts"] for f in prev) - min(f["ts"] for f in prev))
+        n = len(prev)
+        notional = sum(f["shares"] * f["price"] for f in prev)
+        ups = sum(1 for f in prev if f["outcome"] == UP)
+        dns = n - ups
+        seq = sequence(cur)
+        out.append({
+            "window_id": wid,
+            "prior_fills": n,
+            "prior_notional_usd": str(notional),
+            "prior_fills_per_min": (round(n / span * 60, 3) if span > 0
+                                    else None),
+            "prior_notional_per_min": (str(round(notional / D(str(span))
+                                                 * D("60"), 4))
+                                       if span > 0 else None),
+            "prior_two_sided": bool(ups > 0 and dns > 0),
+            "prior_side_balance": (round(min(ups, dns) / max(ups, dns), 3)
+                                   if max(ups, dns) else None),
+            "prior_span_s": round(span, 1),
+            "prior_seconds_since_last_fill": float(
+                t0 - max(f["ts"] for f in prev)),
+            "entry_tte_s": seq.get("first_fill_tte_s"),
+            "_outcome": {
+                "complete_fill": seq.get("reached_complement"),
+                "matched_pair": D(seq.get("matched_units") or "0") > 0,
+                "par_constrained_matched_pair": bool(
+                    D(seq.get("matched_units") or "0") > 0
+                    and seq.get("effective_matched_pair_cost") is not None
+                    and D(seq["effective_matched_pair_cost"]) <= D("1")),
+                "gross_contracts": str(sum(f["shares"] for f in cur)),
+                "terminal_residual_usd": seq.get("residual_usd"),
+                "capital_at_risk_usd": seq.get("gross_filled_usd"),
+            },
+            "labels": ("PREDECESSOR WINDOW ONLY, so nothing can leak. These "
+                       "are L5's OWN fills, not the market tape: compare rank "
+                       "order within a venue, never levels across venues."),
+        })
+    return out
+
+
+#: the features that exist in comparable form on both venues
+COMPARABLE = ("prior_fills_per_min", "prior_notional_per_min",
+              "prior_two_sided", "prior_side_balance",
+              "prior_seconds_since_last_fill", "entry_tte_s")
+
+
+def gradient(slices: Mapping[str, Sequence[Mapping[str, Any]]],
+             ) -> Dict[str, Any]:
+    """Which pre-entry characteristics move MONOTONICALLY with recycling.
+
+    The slices are ordered by their observed par-constrained recycling rate,
+    and each feature's median is read along that order. A feature that does
+    not move monotonically is reported as not moving -- the point is to find
+    the few that do, not to decorate all of them.
+    """
+    def med(rows, k):
+        xs = []
+        for r in rows:
+            v = r.get(k)
+            if isinstance(v, bool):
+                xs.append(1.0 if v else 0.0)
+            else:
+                try:
+                    xs.append(float(v))
+                except (TypeError, ValueError):
+                    pass
+        return round(sorted(xs)[len(xs) // 2], 4) if xs else None
+
+    rates = {}
+    for name, rows in slices.items():
+        n = len(rows)
+        good = sum(1 for r in rows
+                   if r["_outcome"].get("par_constrained_matched_pair"))
+        comp = sum(1 for r in rows if r["_outcome"].get("complete_fill"))
+        rates[name] = {"windows": n,
+                       "par_constrained_rate": (round(good / n, 4) if n
+                                                else None),
+                       "complement_rate": (round(comp / n, 4) if n else None)}
+    order = sorted(rates, key=lambda k: (rates[k]["par_constrained_rate"]
+                                         if rates[k]["par_constrained_rate"]
+                                         is not None else -1), reverse=True)
+    feats = {}
+    for f in COMPARABLE:
+        seq = [med(slices[k], f) for k in order]
+        clean = [v for v in seq if v is not None]
+        mono = (len(clean) == len(seq) and len(seq) >= 3
+                and (all(a >= b for a, b in zip(clean, clean[1:]))
+                     or all(a <= b for a, b in zip(clean, clean[1:]))))
+        feats[f] = {
+            "medians_in_recycling_order": dict(zip(order, seq)),
+            "monotonic": bool(mono),
+            "direction": (None if not mono else
+                          "falls as recycling falls"
+                          if clean[0] >= clean[-1] else
+                          "rises as recycling falls"),
+        }
+    return {
+        "slices_in_recycling_order": order,
+        "rates": rates,
+        "features": feats,
+        "monotonic_features": [f for f, v in feats.items() if v["monotonic"]],
+        "why": ("a feature that tracks the recycling gradient across "
+                "independent slices is a candidate worth collecting for. One "
+                "that does not is reported as not moving."),
+        "caveat": ("L5's rows are built from L5's OWN fills and Gemini's from "
+                   "the whole market tape, so this compares RANK ORDER, never "
+                   "levels."),
+    }

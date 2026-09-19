@@ -237,6 +237,53 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > zero, the optimistic assumption, and are counted separately. See
 > `TAPE_REPLAY_1.md`. Model A, the TTE bounds and the live envelope unchanged;
 > everything SHADOW/THEORETICAL.
+>
+> **PRE-ENTRY HABITAT SELECTION (2026-09-19) — the signal is in the L5 sample,
+> not ours.** Maker-price optimisation is FALSIFIED and frozen; no pricing arms
+> added. One row per window, features sourced strictly before the first
+> hypothetical order, boundary = the first recorded cycle, enforced by
+> `check_no_leakage` and pinned by test. **0 of 31 rows fail the leakage
+> check.**
+>
+> **Gemini cannot answer the question yet.** 31 independent windows, base rates
+> initial fill 17, reachable print 3, COMPLETE 3, matched 3, **par-constrained
+> 1**. With one positive against thirty, `any_meaningful: false` and **no
+> feature survives a leave-one-out**. The six predecessor-rate features cannot
+> form a contrast at all, because **the single positive window
+> (GEMI-BTC05M2609191315-UP, basis 0.93) followed a predecessor with ZERO
+> prints** — the exact opposite of what the L5 gradient predicts. Without the
+> bursts the primary outcome never fires.
+>
+> **The oracle bound is high: 90.0% of gross exposure and 89.7% of capital
+> avoidable with perfect foresight, residual to zero, keeping the good window.**
+> Not deployable, cannot be run; the no-burst oracle reading 100% is degenerate
+> (nothing to retain) and is reported as such.
+>
+> **THE L5 GRADIENT IS REAL AND MONOTONE across 2,184 independent windows.**
+> Par-constrained recycling BTC15m **75.7%** / BTC5m **50.2%** / ETH5m
+> **20.7%** / Gemini **3.2%**. Five of six comparable pre-entry features move
+> monotonically, and the two strongest measure two-sidedness directly: prior
+> side balance 0.727 → 0.500 → **0.000**, prior two-sided (median) 1.0 → 1.0 →
+> **0.0**. Also monotone: prior fills/min 10.42 → 2.69 → 2.68, prior
+> notional/min 91.7 → 52.3 → 27.3, entry TTE 885 → 243 → 183. CAVEAT: L5's rows
+> are L5's OWN fills, Gemini's the whole market tape, so prior two-sidedness on
+> the L5 side is partly persistence of L5's own recycling — compare rank order
+> within a venue, never levels across. `entry_tte_s` is the one identically
+> measured feature.
+>
+> **Two defects caught, not shipped.** Leave-one-out counted only sign flips,
+> so dropping the single positive — which empties a cell — read as "no flip"
+> and made one observation look robust; drops that DESTROY a contrast are now
+> counted and nothing survives. And I first wrote the module as `habitat.py`,
+> silently destroying the collector of that name (`public_flow`,
+> `ladder_shape`, `cycle_sample`, `window_summary`); the suite caught it, the
+> original is restored from git, the module is renamed `habitat_selection.py`
+> and a test pins the separation. No soak run hit it and every number is
+> byte-identical after the restore.
+>
+> See `HABITAT_SELECTION_1.md`. Nothing live, no selector, no threshold, no
+> authorization; Model A and the TTE bounds unchanged. GEMINI_RECYCLE stays the
+> adapted execution control.
 
 ### P0: Polymarket US sports
 
