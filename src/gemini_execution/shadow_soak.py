@@ -105,7 +105,9 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
     else:
         account_readable = True
 
-    guard = CP.WindowGuard(symbol, auth_id="SHADOW")
+    guard = CP.WindowGuard(
+        symbol, auth_id="SHADOW",
+        cohort_prefix=("GEMI-%s" % cohort.prefix) if cohort else None)
     rows, n = [], 0
     while n < cycles:
         n += 1

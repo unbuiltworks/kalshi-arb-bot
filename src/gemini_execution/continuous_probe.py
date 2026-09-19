@@ -131,6 +131,13 @@ def window_phase(tte_s: Any) -> str:
 
 COHORT_PREFIX = "GEMI-BTC05M"
 
+#: every contract family this guard will bind to. The binding itself is
+#: UNCHANGED -- a guard still accepts exactly one family and refuses every
+#: other symbol -- but which family is now stated rather than assumed, so the
+#: 15-minute lane can be bound as tightly as the 5-minute one instead of
+#: being refused outright. A prefix absent from here is still refused.
+COHORT_PREFIXES = ("GEMI-BTC05M", "GEMI-BTC15M")
+
 #: the engine's frozen outcome scope is ["Up", "Down"]. Handing it YES/NO
 #: produced a surface with zero rungs once already; the mapping is explicit.
 OUTCOME_TO_LEG = {"Up": "YES", "Down": "NO"}
@@ -588,9 +595,18 @@ class WindowGuard:
     terminal. Nothing here re-arms, re-authorizes or selects a next contract.
     """
 
-    def __init__(self, symbol: str, *, auth_id: str) -> None:
-        if not str(symbol).startswith(COHORT_PREFIX):
-            raise ProbeStop("%s is not a %s contract" % (symbol, COHORT_PREFIX))
+    def __init__(self, symbol: str, *, auth_id: str,
+                 cohort_prefix: Optional[str] = None) -> None:
+        # ONE FAMILY PER GUARD, and the caller must name a KNOWN one. Passing
+        # nothing keeps the standing 5-minute binding byte-for-byte; naming a
+        # family not in COHORT_PREFIXES is refused, so this cannot be used to
+        # bind to an arbitrary symbol.
+        want = COHORT_PREFIX if cohort_prefix is None else str(cohort_prefix)
+        if want not in COHORT_PREFIXES:
+            raise ProbeStop("%s is not a known contract family" % (want,))
+        if not str(symbol).startswith(want):
+            raise ProbeStop("%s is not a %s contract" % (symbol, want))
+        self.cohort_prefix = want
         self.symbol = str(symbol)
         self.auth_id = str(auth_id)
         self.state = PROBE_RUNNING

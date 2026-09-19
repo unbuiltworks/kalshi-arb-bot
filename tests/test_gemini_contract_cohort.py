@@ -121,3 +121,34 @@ def test_windows_zero_means_roll_continuously():
     src = open("src/gemini_execution/shadow_soak.py").read()
     assert "forever = (a.windows == 0)" in src
     assert "if not forever and not adm[\"admits\"]:" in src
+
+
+def test_THE_ONE_FAMILY_BINDING_IS_PARAMETERISED_NOT_WEAKENED():
+    """A guard still accepts exactly one contract family and refuses every
+    other symbol. What changed is that the family is named rather than
+    assumed, so the 15-minute lane binds as tightly as the 5-minute one."""
+    from src.gemini_execution import continuous_probe as CP
+    g = CP.WindowGuard("GEMI-BTC15M2609191500-UP", auth_id="SHADOW",
+                       cohort_prefix="GEMI-BTC15M")
+    assert g.cohort_prefix == "GEMI-BTC15M"
+    # the standing default is byte-for-byte the old behaviour
+    assert CP.WindowGuard("GEMI-BTC05M2609191500-UP",
+                          auth_id="SHADOW").cohort_prefix == CP.COHORT_PREFIX
+
+    # a symbol outside the bound family is refused
+    with pytest.raises(CP.ProbeStop):
+        CP.WindowGuard("GEMI-BTC05M2609191500-UP", auth_id="SHADOW",
+                       cohort_prefix="GEMI-BTC15M")
+    # a family not on the known list is refused, so this cannot bind to an
+    # arbitrary symbol
+    with pytest.raises(CP.ProbeStop):
+        CP.WindowGuard("GEMI-SOL05M2609191500-UP", auth_id="SHADOW",
+                       cohort_prefix="GEMI-SOL05M")
+    with pytest.raises(CP.ProbeStop):
+        CP.WindowGuard("GEMI-ETH05M2609191500-UP", auth_id="SHADOW")
+
+
+def test_every_cohort_we_run_is_a_family_the_guard_will_bind():
+    from src.gemini_execution import continuous_probe as CP
+    for c in (CC.BTC5M, CC.BTC15M):
+        assert "GEMI-%s" % c.prefix in CP.COHORT_PREFIXES
