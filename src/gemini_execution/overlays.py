@@ -372,3 +372,117 @@ def adverse_after(price: Any, leg: str, later: Sequence[Mapping[str, Any]], *,
             "labels": ("mark-to-market on the presented mid. NOT realized, "
                        "not a P&L line, never summed with matched-pair "
                        "economics.")}
+
+
+# ============================================== the minimum-rest arm
+#
+# A quote at the touch is outbid within one 8-second cycle 46.8% of the time,
+# and the frozen loop answers that by repricing -- which surrenders time
+# priority every time it happens. MINIMUM REST asks what a quote that simply
+# STAYS PUT for R seconds would have caught, including the prints that arrive
+# when the market comes back down through it.
+#
+# NO DURATION IS CHOSEN. Results are reported over 15/30/45/60 s buckets and
+# the choice is the owner's.
+
+MIN_REST_BUCKETS_S = (15, 30, 45, 60)
+
+
+def total_ahead(depth: Any, price: Any) -> Optional[D]:
+    """Everything a print must clear before it reaches us: size at BETTER
+    prices plus size at our own.
+
+    Size at a better price is cleared first under price priority, and size at
+    our own price under time priority. Counting only one of the two
+    understates the queue.
+    """
+    p = _dec(price)
+    if p is None or not isinstance(depth, Mapping) or not depth.get("readable"):
+        return None
+    tot = D("0")
+    for lv in ((depth.get("bids") or {}).get("levels") or []):
+        px, qty = _dec(lv.get("price")), _dec(lv.get("qty"))
+        if px is None or qty is None:
+            continue
+        if px >= p:
+            tot += qty
+    return tot
+
+
+def min_rest_arm(*, price: Any, leg: str, place_ms: Any,
+                 prints: Sequence[Mapping[str, Any]],
+                 later: Sequence[Mapping[str, Any]],
+                 depth_at_place: Any = None, our_qty: Any = "0.01",
+                 rest_s: int = 30, interval_s: float = 8.0) -> Dict[str, Any]:
+    """One quote, held at its price for `rest_s` seconds, no repricing.
+
+    It does not surrender queue position when the touch moves. Whether that
+    is a good idea is exactly what is being measured, and the answer is
+    reported per bucket rather than chosen here.
+    """
+    p, t0 = _dec(price), _dec(place_ms)
+    out: Dict[str, Any] = {"rest_s": rest_s,
+                           "price": (str(p) if p is not None else None),
+                           "leg": str(leg).upper(), "labels": THEORETICAL}
+    if p is None or t0 is None:
+        out.update({"computable": False, "why": "price or time unreadable"})
+        return out
+    t1 = t0 + D(str(rest_s)) * D("1000")
+
+    ahead = total_ahead(depth_at_place, p) if str(leg).upper() == "YES" \
+        else None
+    fill = counterfactual_fill(price=p, leg=leg, prints=prints,
+                               from_ms=t0, to_ms=t1, ahead=ahead,
+                               our_qty=our_qty)
+
+    # was the quote still the best bid at the end of the rest, and was it
+    # outbid at any point during it?
+    cycles_in = max(1, int(round(rest_s / interval_s)))
+    window = list(later or [])[:cycles_in]
+    side = "yes" if str(leg).upper() == "YES" else "no"
+    outbid = 0
+    for c in window:
+        b = _dec((((c.get("book") or {}).get(side)) or {}).get("bid"))
+        if b is not None and b > p:
+            outbid += 1
+    out.update({
+        "computable": True,
+        "size_ahead_at_placement": (str(ahead) if ahead is not None else None),
+        "cycles_covered": len(window),
+        "cycles_outbid_during_rest": outbid,
+        "outbid_share_of_rest": (round(outbid / len(window), 3)
+                                 if window else None),
+        "fill": fill,
+        "why": ("a quote that stays put keeps time priority at its own price; "
+                "it also stops being the best bid when someone improves, and "
+                "both are reported rather than one being assumed away"),
+    })
+    return out
+
+
+def min_rest_census(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Per-bucket results for the minimum-rest arm. No duration is chosen."""
+    out: Dict[str, Any] = {"buckets": {}, "labels": THEORETICAL}
+    for r_s in MIN_REST_BUCKETS_S:
+        got = [r for r in rows if r.get("rest_s") == r_s and r.get("computable")]
+        qknown = [g for g in got
+                  if (g.get("fill") or {}).get("queue_readable")]
+        fills = [g for g in qknown
+                 if (g.get("fill") or {}).get("filled_respecting_queue")]
+        reach = [g for g in got if (g.get("fill") or {}).get("reaching_prints")]
+        ob = [g.get("outbid_share_of_rest") for g in got
+              if g.get("outbid_share_of_rest") is not None]
+        out["buckets"][str(r_s)] = {
+            "quotes": len(got),
+            "queue_readable": len(qknown),
+            "cycles_with_a_reaching_print": len(reach),
+            "theoretical_fills_respecting_queue": len(fills),
+            "fill_share_where_queue_known": (round(len(fills) / len(qknown), 4)
+                                             if qknown else None),
+            "mean_outbid_share_of_rest": (round(sum(ob) / len(ob), 3)
+                                          if ob else None),
+        }
+    out["why_no_choice"] = ("the owner asked for buckets, not a duration. "
+                            "Choosing one here would be fitting a parameter "
+                            "to five fills.")
+    return out

@@ -262,3 +262,62 @@ def test_a_price_outside_zero_to_one_is_refused(bad):
                                  from_ms=0, to_ms=1)
     assert got["computable"] is False
     assert "outside (0, 1)" in got["why"]
+
+
+# ======================================== the minimum-rest arm
+
+def test_total_ahead_counts_better_prices_AND_our_own_level():
+    """A print clears better-priced bids under price priority and same-priced
+    ones under time priority. Counting only one understates the queue."""
+    d = {"readable": True, "bids": {"levels": [
+        {"price": "0.33", "qty": "5"}, {"price": "0.31", "qty": "245"},
+        {"price": "0.25", "qty": "10"}]}}
+    assert OV.total_ahead(d, "0.31") == D("250")
+    assert OV.total_ahead(d, "0.34") == D("0")
+    assert OV.total_ahead(None, "0.31") is None
+
+
+def test_a_resting_quote_keeps_its_price_while_the_touch_moves():
+    """The whole point of the arm: it does not surrender queue position just
+    because someone bid above it."""
+    later = [{"book": {"yes": {"bid": "0.40", "ask": "0.50"}}},
+             {"book": {"yes": {"bid": "0.40", "ask": "0.50"}}}]
+    got = OV.min_rest_arm(price="0.32", leg="YES", place_ms=0,
+                          prints=[_p(20000, "0.30", "9", "sell")],
+                          later=later, depth_at_place=None, rest_s=30)
+    assert got["computable"] is True
+    assert got["price"] == "0.32"
+    assert got["cycles_outbid_during_rest"] == 2
+    assert got["fill"]["reaching_prints"] == 1
+
+
+def test_a_longer_rest_can_only_see_more_prints_not_fewer():
+    prints = [_p(10000, "0.30", "9", "sell"), _p(50000, "0.30", "9", "sell")]
+    short = OV.min_rest_arm(price="0.32", leg="YES", place_ms=0,
+                            prints=prints, later=[], rest_s=15)
+    long_ = OV.min_rest_arm(price="0.32", leg="YES", place_ms=0,
+                            prints=prints, later=[], rest_s=60)
+    assert short["fill"]["reaching_prints"] == 1
+    assert long_["fill"]["reaching_prints"] == 2
+
+
+def test_NO_REST_DURATION_IS_CHOSEN():
+    """The owner asked for buckets, not a duration. Choosing one here would be
+    fitting a parameter to five fills."""
+    got = OV.min_rest_census([])
+    assert set(got["buckets"]) == {"15", "30", "45", "60"}
+    assert "Choosing one here would be fitting" in got["why_no_choice"]
+    import inspect
+    src = inspect.getsource(OV)
+    for bad in ("BEST_REST", "CHOSEN_REST", "DEFAULT_REST_S"):
+        assert bad not in src, bad
+
+
+def test_the_min_rest_census_reports_how_often_it_was_outbid():
+    rows = [OV.min_rest_arm(price="0.32", leg="YES", place_ms=0, prints=[],
+                            later=[{"book": {"yes": {"bid": "0.40",
+                                                     "ask": "0.5"}}}],
+                            rest_s=15)]
+    got = OV.min_rest_census(rows)
+    assert got["buckets"]["15"]["quotes"] == 1
+    assert got["buckets"]["15"]["mean_outbid_share_of_rest"] == 1.0

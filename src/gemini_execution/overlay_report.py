@@ -109,6 +109,18 @@ def build(*, jsonl: str, runs: str) -> Dict[str, Any]:
                     depth=c.get("depth"), prints=prints,
                     complement_book=book)
                 later = cyc[i + 1:]
+                # MINIMUM REST, over the owner's buckets. NATIVE and
+                # JOIN_BEST are the same order (ticks_native_behind_best is 0
+                # in every cycle the policy quoted), so JOIN is dropped as a
+                # separate candidate and the third arm is improve-plus-rest.
+                imp = (row["overlays"].get(OV.IMPROVE) or {})
+                if imp.get("exists"):
+                    row["min_rest"] = [
+                        OV.min_rest_arm(price=imp["price"], leg=leg,
+                                        place_ms=t0, prints=prints,
+                                        later=later, depth_at_place=c.get(
+                                            "depth"), rest_s=r_s)
+                        for r_s in OV.MIN_REST_BUCKETS_S]
                 for name in OV.OVERLAYS:
                     ov = row["overlays"].get(name) or {}
                     if not ov.get("exists"):
@@ -123,11 +135,17 @@ def build(*, jsonl: str, runs: str) -> Dict[str, Any]:
         if sym_rows:
             per_symbol[sym] = OV.overlay_census(sym_rows)
 
+    rest_rows = [m for r in out_rows for m in (r.get("min_rest") or [])]
     return {
         "label": LABEL,
         "utc": datetime.now(timezone.utc).isoformat(),
         "cycles_refused_unreadable_book": refused,
         "census": OV.overlay_census(out_rows),
+        "min_rest_census": OV.min_rest_census(rest_rows),
+        "join_dropped": ("NATIVE and JOIN_BEST are the same order -- "
+                         "ticks_native_behind_best is 0 in every cycle the "
+                         "policy quoted -- so JOIN is no longer carried as a "
+                         "separate candidate."),
         "per_symbol": per_symbol,
         "rows": out_rows,
         "labels": ("SHADOW OVERLAY STUDY. No order was sent, Model A is "
