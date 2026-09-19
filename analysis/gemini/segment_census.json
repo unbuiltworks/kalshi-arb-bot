@@ -1,0 +1,815 @@
+{
+  "label": "GEMINI_L5_SEGMENTED_HABITAT_CENSUS_V1",
+  "sources": {
+    "shadow_cycles": "analysis/gemini/continuous_v1/continuous_v1.jsonl",
+    "live_windows": "analysis/gemini/continuous_run_*.json"
+  },
+  "regate": {
+    "rows_regated": 22,
+    "rows_total": 173,
+    "why": "the soak predates `continuous_probe.crossed`; the recorded book is unchanged and only its verdict is re-read"
+  },
+  "live_windows": [
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+      "file": "continuous_run_20260918T143045Z.json",
+      "entry_tte_s": null,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-3",
+      "file": "continuous_run_20260918T161537Z.json",
+      "entry_tte_s": null,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "file": "continuous_run_20260918T172750Z.json",
+      "entry_tte_s": null,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 2,
+      "fill_prices": [
+        "0.92",
+        "0.14"
+      ],
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
+      "file": "continuous_run_20260918T210518Z.json",
+      "entry_tte_s": 275.9174520969391,
+      "decisions": 2,
+      "places": 2,
+      "cancels": 1,
+      "fills": 0,
+      "fill_prices": [],
+      "rungs_resolved": 2,
+      "resting_seconds_total": 16.28
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+      "file": "continuous_run_20260918T221133Z.json",
+      "entry_tte_s": 199.66616344451904,
+      "decisions": 8,
+      "places": 4,
+      "cancels": 3,
+      "fills": 1,
+      "fill_prices": [
+        "0.21"
+      ],
+      "rungs_resolved": 4,
+      "resting_seconds_total": 122.55
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-7",
+      "file": "continuous_run_20260918T232743Z.json",
+      "entry_tte_s": 125.30212664604187,
+      "decisions": 12,
+      "places": 3,
+      "cancels": 3,
+      "fills": 0,
+      "fill_prices": [],
+      "rungs_resolved": 3,
+      "resting_seconds_total": 142.22
+    },
+    {
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "file": "continuous_run_20260919T010705Z.json",
+      "entry_tte_s": 279.88969135284424,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "file": "continuous_run_20260919T011743Z.json",
+      "entry_tte_s": 277.75862646102905,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "file": "continuous_run_20260919T013250Z.json",
+      "entry_tte_s": 278.3392996788025,
+      "decisions": 9,
+      "places": 6,
+      "cancels": 5,
+      "fills": 1,
+      "fill_prices": [
+        "0.31"
+      ],
+      "rungs_resolved": 6,
+      "resting_seconds_total": 116.98
+    }
+  ],
+  "live_states": {
+    "decision_states": {
+      "OPEN": 26,
+      "NO_ACTION": 4,
+      "COMPLETE+EXTEND": 1
+    },
+    "post_fill_decisions": [
+      {
+        "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+        "cycle": 9,
+        "utc": "2026-09-19T01:36:37.170616+00:00",
+        "tte_s": 202.82938647270203,
+        "state": "STOPPED",
+        "classification": [
+          "EXTEND",
+          "COMPLETE"
+        ],
+        "actions": [
+          {
+            "outcome": "Up",
+            "leg": "YES",
+            "price": "0.12",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "EXTEND",
+            "stage": "DECIDED"
+          },
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.69",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "COMPLETE",
+            "stage": "DECIDED"
+          }
+        ],
+        "inventory": {
+          "yes_qty": "0.01",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0.01",
+          "inventory_imbalance": "0.01",
+          "avg_yes_cost": "0.31",
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0.0031",
+          "same_side_run": {
+            "leg": "YES",
+            "len": 1
+          },
+          "n_fills": 1,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        }
+      }
+    ],
+    "why": "SHADOW can never reach EXTEND or COMPLETE: with no order resting there is no fill, inventory stays flat and `classify()` derives the action from the residual alone. This census is live-only for that reason."
+  },
+  "adverse_movement": [
+    {
+      "leg": "YES",
+      "fill_price": "0.92",
+      "samples": [],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": false,
+      "why": "no cycle after the fill presented a readable book",
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "filled_utc": "2026-09-18T17:28:33.389Z",
+      "cycles_after_fill_on_record": 0
+    },
+    {
+      "leg": "NO",
+      "fill_price": "0.14",
+      "samples": [],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": false,
+      "why": "no cycle after the fill presented a readable book",
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "filled_utc": "2026-09-18T17:27:59.492Z",
+      "cycles_after_fill_on_record": 0
+    },
+    {
+      "leg": "YES",
+      "fill_price": "0.21",
+      "samples": [
+        {
+          "utc": "2026-09-18T22:12:45.110179+00:00",
+          "mid": null,
+          "why": "book refused at this cycle"
+        }
+      ],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": false,
+      "why": "no cycle after the fill presented a readable book",
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+      "filled_utc": "2026-09-18T22:12:44.125Z",
+      "cycles_after_fill_on_record": 1
+    },
+    {
+      "leg": "YES",
+      "fill_price": "0.31",
+      "samples": [
+        {
+          "utc": "2026-09-19T01:36:37.170616+00:00",
+          "mid": "0.215",
+          "vs_fill": "-0.095"
+        }
+      ],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": true,
+      "worst_against": "-0.095",
+      "best_for": "-0.095",
+      "last": "-0.095",
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "filled_utc": "2026-09-19T01:36:28.553Z",
+      "cycles_after_fill_on_record": 1
+    }
+  ],
+  "fills": [
+    {
+      "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "leg": "YES",
+      "price": "0.92",
+      "qty": "0.01",
+      "venue_created": "2026-09-18T17:28:05.939Z",
+      "venue_updated": "2026-09-18T17:28:33.389Z",
+      "spread": "NOT_PRESENTED_AT_DECISION",
+      "probability_band": "NOT_PRESENTED_AT_DECISION",
+      "touch_depth": "NOT_PRESENTED_AT_DECISION",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "l5_state": "NOT_PRESENTED_AT_DECISION",
+      "tte": "60-120s",
+      "state_why": "no decision record names this price; book-state capture did not exist in this window"
+    },
+    {
+      "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "leg": "NO",
+      "price": "0.14",
+      "qty": "0.01",
+      "venue_created": "2026-09-18T17:27:59.483Z",
+      "venue_updated": "2026-09-18T17:27:59.492Z",
+      "spread": "NOT_PRESENTED_AT_DECISION",
+      "probability_band": "NOT_PRESENTED_AT_DECISION",
+      "touch_depth": "NOT_PRESENTED_AT_DECISION",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "l5_state": "NOT_PRESENTED_AT_DECISION",
+      "tte": "120-180s",
+      "state_why": "no decision record names this price; book-state capture did not exist in this window"
+    },
+    {
+      "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+      "leg": "YES",
+      "price": "0.21",
+      "qty": "0.01",
+      "venue_created": "2026-09-18T22:11:41.436Z",
+      "venue_updated": "2026-09-18T22:12:44.125Z",
+      "decision_cycle": 1,
+      "tte": "180-240s",
+      "l5_state": "OPEN",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "spread": "NOT_PRESENTED_AT_DECISION",
+      "probability_band": "NOT_PRESENTED_AT_DECISION",
+      "touch_depth": "NOT_PRESENTED_AT_DECISION",
+      "book_capture_absent": true,
+      "presented_yes_bid": null,
+      "presented_yes_spread": null,
+      "touch_qty": null
+    },
+    {
+      "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "leg": "YES",
+      "price": "0.31",
+      "qty": "0.01",
+      "venue_created": "2026-09-19T01:35:30.748Z",
+      "venue_updated": "2026-09-19T01:36:28.553Z",
+      "decision_cycle": 1,
+      "tte": ">240s",
+      "l5_state": "OPEN",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "spread": "0.21-0.30",
+      "probability_band": "0.26-0.50",
+      "touch_depth": "101-500",
+      "book_capture_absent": false,
+      "presented_yes_bid": "0.31",
+      "presented_yes_spread": "0.27",
+      "touch_qty": "483.0"
+    }
+  ],
+  "rungs": [
+    {
+      "leg": "YES",
+      "price": "0.26",
+      "placed_utc": "2026-09-18T21:05:25.624526+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T21:05:32.072667+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.448,
+      "filled": false,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.46",
+      "placed_utc": "2026-09-18T21:05:25.777788+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T21:05:35.609970+00:00",
+      "ended": "AT_STOP",
+      "resting_s": 9.832,
+      "filled": false,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.52",
+      "placed_utc": "2026-09-18T22:11:41.503464+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:11:48.768500+00:00",
+      "ended": "CANCEL",
+      "resting_s": 7.265,
+      "filled": false,
+      "places_on_this_leg": 3,
+      "reprices_on_this_leg": 2,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.60",
+      "placed_utc": "2026-09-18T22:11:50.642835+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:11:57.338179+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.695,
+      "filled": false,
+      "places_on_this_leg": 3,
+      "reprices_on_this_leg": 2,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.69",
+      "placed_utc": "2026-09-18T22:11:59.824426+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:12:45.748070+00:00",
+      "ended": "CANCEL",
+      "resting_s": 45.924,
+      "filled": false,
+      "places_on_this_leg": 3,
+      "reprices_on_this_leg": 2,
+      "resting_bucket": "30-60s"
+    },
+    {
+      "leg": "YES",
+      "price": "0.21",
+      "placed_utc": "2026-09-18T22:11:41.456386+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:12:44.125Z",
+      "ended": "FILL",
+      "resting_s": 62.669,
+      "filled": true,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": ">60s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.79",
+      "placed_utc": "2026-09-18T23:27:57.350528+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T23:28:05.622192+00:00",
+      "ended": "CANCEL",
+      "resting_s": 8.272,
+      "filled": false,
+      "places_on_this_leg": 2,
+      "reprices_on_this_leg": 1,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.95",
+      "placed_utc": "2026-09-18T23:28:07.450022+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T23:29:09.289344+00:00",
+      "ended": "CANCEL",
+      "resting_s": 61.839,
+      "filled": false,
+      "places_on_this_leg": 2,
+      "reprices_on_this_leg": 1,
+      "resting_bucket": ">60s"
+    },
+    {
+      "leg": "YES",
+      "price": "0.01",
+      "placed_utc": "2026-09-18T23:27:57.267171+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T23:29:09.378497+00:00",
+      "ended": "CANCEL",
+      "resting_s": 72.111,
+      "filled": false,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": ">60s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.42",
+      "placed_utc": "2026-09-19T01:35:30.771951+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:35:43.084606+00:00",
+      "ended": "CANCEL",
+      "resting_s": 12.313,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "10-30s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.57",
+      "placed_utc": "2026-09-19T01:35:44.181134+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:35:50.596069+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.415,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.62",
+      "placed_utc": "2026-09-19T01:35:52.292266+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:13.784726+00:00",
+      "ended": "CANCEL",
+      "resting_s": 21.492,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "10-30s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.65",
+      "placed_utc": "2026-09-19T01:36:14.771840+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:27.578875+00:00",
+      "ended": "CANCEL",
+      "resting_s": 12.807,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "10-30s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.67",
+      "placed_utc": "2026-09-19T01:36:31.210750+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:37.370089+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.159,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "YES",
+      "price": "0.31",
+      "placed_utc": "2026-09-19T01:35:30.757048+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:28.553Z",
+      "ended": "FILL",
+      "resting_s": 57.796,
+      "filled": true,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": "30-60s"
+    }
+  ],
+  "census": {
+    "cycles": 173,
+    "book_refused_cycles": 22,
+    "book_refused_share": 0.127,
+    "refusal_reasons": [
+      "crossed or absent quote -- refused by the gate added after this cycle was recorded"
+    ],
+    "touch_was_ours_cycles": 0,
+    "fills_total": 4,
+    "rates_stated": false,
+    "why_no_rates": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts.",
+    "dimensions": {
+      "spread": {
+        "0.06-0.10": {
+          "cycles": 7,
+          "share": 0.04,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.11-0.20": {
+          "cycles": 34,
+          "share": 0.197,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.21-0.30": {
+          "cycles": 73,
+          "share": 0.422,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "<=0.05": {
+          "cycles": 1,
+          "share": 0.006,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">0.30": {
+          "cycles": 36,
+          "share": 0.208,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 22,
+          "share": 0.127,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 3,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "touch_depth": {
+        "101-500": {
+          "cycles": 41,
+          "share": 0.237,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "11-100": {
+          "cycles": 1,
+          "share": 0.006,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "2-10": {
+          "cycles": 74,
+          "share": 0.428,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">500": {
+          "cycles": 35,
+          "share": 0.202,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 22,
+          "share": 0.127,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 3,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "flow": {
+        "0/min": {
+          "cycles": 145,
+          "share": 0.838,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "2-6/min": {
+          "cycles": 1,
+          "share": 0.006,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "6-15/min": {
+          "cycles": 18,
+          "share": 0.104,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">15/min": {
+          "cycles": 1,
+          "share": 0.006,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 8,
+          "share": 0.046,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 4,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "tte": {
+        "120-180s": {
+          "cycles": 50,
+          "share": 0.289,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "180-240s": {
+          "cycles": 51,
+          "share": 0.295,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "60-120s": {
+          "cycles": 39,
+          "share": 0.225,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "<=60s": {
+          "cycles": 5,
+          "share": 0.029,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">240s": {
+          "cycles": 28,
+          "share": 0.162,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "probability_band": {
+        "0.00-0.10": {
+          "cycles": 47,
+          "share": 0.272,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.11-0.25": {
+          "cycles": 42,
+          "share": 0.243,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.26-0.50": {
+          "cycles": 31,
+          "share": 0.179,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.51-0.75": {
+          "cycles": 23,
+          "share": 0.133,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.76-0.90": {
+          "cycles": 7,
+          "share": 0.04,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.91-1.00": {
+          "cycles": 1,
+          "share": 0.006,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 22,
+          "share": 0.127,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 3,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "l5_state": {
+        "NO_ACTION": {
+          "cycles": 27,
+          "share": 0.156,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "OPEN": {
+          "cycles": 146,
+          "share": 0.844,
+          "fills": 2,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 2,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 4 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      }
+    },
+    "resting_time": {
+      "1-10s": {
+        "rungs": 7,
+        "fills": 0
+      },
+      "30-60s": {
+        "rungs": 2,
+        "fills": 1
+      },
+      ">60s": {
+        "rungs": 3,
+        "fills": 1
+      },
+      "10-30s": {
+        "rungs": 3,
+        "fills": 0
+      }
+    },
+    "repricing": {
+      "rungs_total": 15,
+      "rungs_on_a_repriced_leg": 10,
+      "fills_on_a_repriced_leg": 0,
+      "rungs_never_repriced": 5,
+      "fills_never_repriced": 2,
+      "caution": "ASSOCIATION, NOT CAUSE, and confounded on its face: the leg that gets repriced is the leg whose price is moving, so 'repriced rungs do not fill' and 'the moving leg does not fill' are the same observation here. Nothing in the controller may be changed on this."
+    },
+    "labels": "SEGMENTED HABITAT CENSUS -- model B evidence. Not a verdict, not a tuning input, not realized economics, and not reachable from the L5 policy."
+  },
+  "labels": "EVIDENCE ONLY -- model B. Read-only over preserved records. No rate is stated, nothing here reaches the L5 policy, and no line here is realized P&L."
+}
