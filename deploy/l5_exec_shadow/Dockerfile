@@ -30,6 +30,10 @@ ENV PYTHONUNBUFFERED=1
 
 COPY src/__init__.py src/__init__.py
 COPY src/l5_research_supervisor.py src/l5_research_supervisor.py
+# the volume retention sweep the supervisor calls at boot. Leaving it
+# out took the recorder down with an ImportError on 2026-09-19 -- the
+# helper that exists to KEEP the recorder alive killed it instead.
+COPY src/l5_state_retention.py src/l5_state_retention.py
 COPY src/l5_shadow/ src/l5_shadow/
 COPY src/l5_intent/ src/l5_intent/
 COPY src/l5_router/ src/l5_router/

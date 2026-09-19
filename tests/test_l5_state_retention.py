@@ -203,3 +203,77 @@ def test_three_independent_guards_protect_the_active_segment(tmp_path):
     _seg(tmp_path, "s", "active.jsonl", age_s=0)
     got = RT.candidates(str(tmp_path), min_age_s=3600)
     assert [c["name"] for c in got] == ["closed.jsonl"]
+
+
+# ================================ the image must carry what the code imports
+
+def test_THE_IMAGE_COPIES_EVERY_SRC_MODULE_THE_SUPERVISOR_IMPORTS():
+    """This exact gap took the recorder down three times.
+
+    `from src import l5_state_retention` inside the supervisor is useless if
+    the Dockerfile's COPY list does not carry the file: the container starts,
+    imports, and dies. The COPY list is checked against the imports rather
+    than maintained by eye.
+    """
+    import ast
+    import re
+
+    src = open("src/l5_research_supervisor.py", encoding="utf-8").read()
+    docker = open("deploy/l5_exec_shadow/Dockerfile", encoding="utf-8").read()
+    copied = set(re.findall(r"^COPY\s+(\S+)", docker, re.M))
+
+    wanted = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.ImportFrom) and node.module == "src":
+            for a in node.names:
+                wanted.add("src/%s.py" % a.name)
+        elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("src."):
+            wanted.add("src/%s/" % node.module.split(".")[1])
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith("src."):
+                    wanted.add("src/%s/" % a.name.split(".")[1])
+
+    missing = []
+    for w in sorted(wanted):
+        if w in copied:
+            continue
+        # a package directory satisfies a module inside it
+        if any(c.endswith("/") and w.startswith(c) for c in copied):
+            continue
+        # an explicit single-file COPY of that module satisfies it
+        if any(c == w for c in copied):
+            continue
+        missing.append(w)
+    assert not missing, (
+        "the l5-exec-shadow image does not COPY: %s -- the supervisor imports "
+        "them and the container will die on startup" % missing)
+
+
+def test_A_BROKEN_RETENTION_MODULE_CANNOT_KILL_THE_SUPERVISOR(monkeypatch):
+    """The stronger invariant, and the one the outage actually violated.
+
+    Even with the COPY check above, retention is a helper. If it raises for
+    ANY reason -- a missing import, a permission error, a bug I have not
+    thought of -- the recorder must keep recording. It is allowed to lose the
+    sweep. It is not allowed to lose the tape.
+    """
+    import builtins
+
+    from src import l5_research_supervisor as SUP
+
+    real_import = builtins.__import__
+
+    def boom(name, *a, **k):
+        if "l5_state_retention" in name or (
+                a and a[2] and "l5_state_retention" in str(a[2])):
+            raise ImportError("no module named l5_state_retention")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", boom)
+    s = SUP.Supervisor.__new__(SUP.Supervisor)
+    s.root = "/tmp"
+    u = s.report_disk()                      # must not raise
+    assert u["readable"] is False and "ImportError" in u["why"]
+    rep = s.sweep_retention()                # must not raise
+    assert rep.get("ok") is False

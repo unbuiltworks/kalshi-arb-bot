@@ -235,8 +235,20 @@ class Supervisor:
         number on every heartbeat, with a level at 70/85/95, turns that into
         something anyone reading the log can see coming.
         """
-        from src import l5_state_retention as RT
-        u = RT.usage(self.root)
+        # A RETENTION HELPER MUST NOT BE ABLE TO KILL THE RECORDER. On
+        # 2026-09-19 this import was missing from the image and the
+        # ImportError propagated out of run(), so the module written to keep
+        # the recorder alive took it down instead -- a strictly worse outage
+        # than the disk one it was fixing. Everything below reports and
+        # continues; the streams do not depend on any of it.
+        try:
+            from src import l5_state_retention as RT
+            u = RT.usage(self.root)
+        except Exception as exc:                                 # noqa: BLE001
+            u = {"readable": False,
+                 "why": "%s: %s" % (type(exc).__name__, exc)}
+            print("L5_DISK_UNAVAILABLE " + json.dumps(u), flush=True)
+            return u
         if u.get("readable") and u.get("level") != "OK":
             print("L5_DISK_%s %s" % (u["level"], json.dumps(u)), flush=True)
         return u
@@ -249,8 +261,8 @@ class Supervisor:
         costing a byte of the record. Deletion is not enabled and pressure
         does not enable it -- `delete_after_days` is left None deliberately.
         """
-        from src import l5_state_retention as RT
         try:
+            from src import l5_state_retention as RT
             rep = RT.sweep(self.root, delete_after_days=None)
         except Exception as exc:                                 # noqa: BLE001
             rep = {"ok": False, "err": "%s: %s" % (type(exc).__name__, exc)}
