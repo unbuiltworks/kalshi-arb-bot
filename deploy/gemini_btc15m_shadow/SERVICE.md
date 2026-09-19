@@ -53,3 +53,30 @@ worked. **What frozen Model A wanted is recorded on every cycle**
 money-moving policy — the bounded live probe uses `NEVER` and that is
 unchanged. This service can place nothing, so relaunching it cannot repeat a
 trade.
+
+## 2026-09-19 — the start command lives in the SERVICE, not in this directory
+
+`railway.json` here is **documentation**. Railway reads a config file from the
+repository root by default and this one is at
+`deploy/gemini_btc15m_shadow/railway.json`, so nothing reads it: the service's
+own `deploy.startCommand` is what actually runs, and it overrides the
+Dockerfile `CMD` as well.
+
+Changing the Dockerfile CMD and this railway.json to run both cohorts left the
+service still launching the single-cohort BTC15m command, and the give-away was
+the banner: the dual path prints `DUAL_COHORT_SHADOW` and a `COHORT ...
+evidence=...` line per family, while the old single path prints one bare
+`COHORT BTC15m ...`. A `redeploy` did not fix it either — it re-runs the
+previous deployment and carried the old command with it.
+
+The live command is now:
+
+```
+python3 -m src.gemini_execution.shadow_soak --cohorts btc5m,btc15m \
+  --policy GEMINI_RECYCLE --windows 0 --cycles 110 --interval 8.0 \
+  --state-root /state
+```
+
+`src/gemini_execution/hypothetical.py` was also missing from the service's
+watchPatterns, so a change to the fill ledger alone would not have redeployed
+this lane. It is there now.
