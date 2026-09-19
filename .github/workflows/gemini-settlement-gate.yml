@@ -44,6 +44,10 @@ on:
         description: "Set to true to run the CONTINUOUS V1 SHADOW soak (read-only, no order path). Default false."
         required: false
         default: "false"
+      soak_windows:
+        description: "How many SHADOW windows the soak runs. Each is ~5 min, and the step's own 45-minute cap bounds this whatever is typed. Default 4."
+        required: false
+        default: "4"
       unarmed_entry_band:
         description: "Entry band LO:HI for the UNARMED production-path proof. Default 90:300 (the standing rule) so routine runs do not wait. Set 240:280 to prove the armed window's own band read-only."
         required: false
@@ -476,8 +480,14 @@ jobs:
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
         run: |
           mkdir -p analysis/gemini/continuous_v1
+          # THE WINDOW COUNT IS AN INPUT, and the step's 45-minute cap is
+          # the real bound on it: a window is ~5 minutes, so a typo of 400
+          # costs a timed-out step, never a longer run than the cap allows.
+          # The soak sends nothing, so a kill cannot strand an order.
+          W="${{ github.event.inputs.soak_windows }}"
+          case "$W" in ''|*[!0-9]*) W=4 ;; esac
           python -m src.gemini_execution.shadow_soak \
-            --windows 4 --cycles 22 --interval 8 \
+            --windows "$W" --cycles 22 --interval 8 \
             --band-lo 240 --band-hi 280 \
             --evidence-dir analysis/gemini/continuous_v1 \
             --out analysis/gemini/continuous_shadow_soak_$(date -u +%Y%m%dT%H%M%SZ).json \

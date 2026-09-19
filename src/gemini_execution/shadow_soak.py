@@ -42,6 +42,7 @@ from src.gemini_execution import continuous_runner as CR
 from src.gemini_execution import executions as EX
 from src.gemini_execution import habitat as HB
 from src.gemini_execution import metadata as MD
+from src.gemini_execution import preentry as PE
 from src.gemini_execution import run_continuous as RC
 
 
@@ -68,6 +69,12 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
     sel = (sched.get("selection") or {}).get("chosen") or {}
     symbol = sel.get("symbol")
     runner.state.windows_started += 1
+
+    # PRE-ENTRY HABITAT, taken before the window commits to anything. It is
+    # PUBLIC, read-only, and its result is recorded and then IGNORED: the
+    # window proceeds exactly as it would have without it. That is the point
+    # -- a selector cannot be evaluated by a run it is already steering.
+    pre = PE.read_snapshot(symbol, sched.get("entered_tte_s"))
 
     # a REAL driver, recovered from REAL authoritative state. It is never
     # given a session, so its mutation path is unreachable from here.
@@ -126,6 +133,12 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
 
     samples = [r["habitat"] for r in rows]
     w = {"kind": "window", "started_utc": started,
+         "pre_entry": pre,
+         "realised_flow": PE.realised_window_flow(rows),
+         "pre_entry_labels": ("MEASURED BEFORE ENTRY AND NOT ACTED ON. The "
+                              "window ran identically to one taken without "
+                              "it; admission is unchanged and no threshold "
+                              "exists."),
          "finished_utc": datetime.now(timezone.utc).isoformat(),
          "symbol": symbol, "entry_tte_s": sched.get("entered_tte_s"),
          "waited_s": sched.get("waited_s"), "polls": sched.get("polls"),
