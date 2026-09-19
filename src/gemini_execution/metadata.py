@@ -52,23 +52,34 @@ def event_ticker(symbol: str) -> Optional[str]:
 BTC5M_PREFIX = "BTC05M"
 
 
-def current_btc5m_ticker(now: Optional[float] = None) -> str:
-    """The ticker of the BTC5m window currently running, from the clock alone.
+def current_ticker(now: Optional[float] = None, *, prefix: str = BTC5M_PREFIX,
+                   minutes: int = 5) -> str:
+    """The ticker of the window currently running, from the clock alone.
+
+    PARAMETERISED BY GRID, not copied per family: the 5- and 15-minute
+    contracts share one ceil-to-the-grid rule and differ only in the prefix
+    and the step.
 
     The transport diagnostic must not depend on a window being ELIGIBLE to
-    trade: eligibility is a narrow band inside each 5-minute cycle, so tying
-    the diagnostic to it means the question goes unanswered on most runs --
-    which is exactly what happened on the first attempt.
+    trade: eligibility is a narrow band inside each cycle, so tying the
+    diagnostic to it means the question goes unanswered on most runs -- which
+    is exactly what happened on the first attempt.
     """
     import math
     import time as _t
     t = datetime.fromtimestamp(now if now is not None else _t.time(),
                                tz=timezone.utc)
     from datetime import timedelta
-    minute = int(math.ceil((t.minute + t.second / 60.0) / 5.0) * 5)
+    step = int(minutes)
+    minute = int(math.ceil((t.minute + t.second / 60.0) / step) * step)
     end = t.replace(minute=0, second=0, microsecond=0) + timedelta(
         minutes=minute)
-    return BTC5M_PREFIX + end.strftime("%y%m%d%H%M")
+    return prefix + end.strftime("%y%m%d%H%M")
+
+
+def current_btc5m_ticker(now: Optional[float] = None) -> str:
+    """The 5-minute family's current ticker. Unchanged behaviour."""
+    return current_ticker(now, prefix=BTC5M_PREFIX, minutes=5)
 
 
 def sibling_ticker(ticker: str, minutes: int = 5) -> Optional[str]:

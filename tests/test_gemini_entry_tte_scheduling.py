@@ -47,7 +47,8 @@ def _terms(status="active", state="open"):
 
 def _clock(monkeypatch, tte_by_symbol):
     """Drive eligible_symbol from a table of symbol -> tte."""
-    monkeypatch.setattr(RC.MD, "current_btc5m_ticker", lambda t: "TK0")
+    monkeypatch.setattr(RC.MD, "current_ticker",
+                        lambda t, prefix=None, minutes=5: "TK0")
     monkeypatch.setattr(RC.MD, "sibling_ticker",
                         lambda tk, minutes=5: "TK%d" % (minutes // 5))
     monkeypatch.setattr(RC.MD, "terms_for", lambda s: _terms())
@@ -154,8 +155,17 @@ def test_the_scheduler_has_no_session_and_cannot_send(monkeypatch):
     what it CAN reach rather than of what it happens to do."""
     import inspect
     sig = set(inspect.signature(RC.await_entry_band).parameters)
+    # the exact set, so an accidental addition still trips this
     assert sig == {"band", "max_wait_s", "poll_s", "now_fn", "sleep_fn",
-                   "scan_fn"}
+                   "scan_fn", "cohort"}
+    # and the PROPERTY itself, so the next legitimate addition is judged on
+    # what it can reach rather than on matching a frozen literal. `cohort`
+    # names a contract family; it carries no credential and no wire.
+    for name in sig:
+        low = name.lower()
+        for forbidden in ("session", "signer", "frame", "key", "secret",
+                          "auth", "credential", "client", "driver"):
+            assert forbidden not in low, name
 
 
 # ======================================= and the refusal is BEFORE the latch

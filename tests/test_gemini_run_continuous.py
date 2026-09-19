@@ -33,7 +33,8 @@ def test_the_entry_band_leaves_room_for_a_full_rest_cycle():
 
 
 def test_a_contract_outside_the_band_is_refused(monkeypatch):
-    monkeypatch.setattr(RC.MD, "current_btc5m_ticker", lambda t: "BTC05M1")
+    monkeypatch.setattr(RC.MD, "current_ticker",
+                        lambda t, prefix=None, minutes=5: "BTC05M1")
     monkeypatch.setattr(RC.MD, "sibling_ticker", lambda tk, m=5: None)
     monkeypatch.setattr(RC.MD, "terms_for",
                         lambda s: {"contract_status": "active",
@@ -45,7 +46,8 @@ def test_a_contract_outside_the_band_is_refused(monkeypatch):
 
 
 def test_a_contract_that_is_not_open_is_refused(monkeypatch):
-    monkeypatch.setattr(RC.MD, "current_btc5m_ticker", lambda t: "BTC05M1")
+    monkeypatch.setattr(RC.MD, "current_ticker",
+                        lambda t, prefix=None, minutes=5: "BTC05M1")
     monkeypatch.setattr(RC.MD, "sibling_ticker", lambda tk, m=5: None)
     monkeypatch.setattr(RC.MD, "terms_for",
                         lambda s: {"contract_status": "settled",
@@ -55,7 +57,8 @@ def test_a_contract_that_is_not_open_is_refused(monkeypatch):
 
 
 def test_an_eligible_contract_is_chosen(monkeypatch):
-    monkeypatch.setattr(RC.MD, "current_btc5m_ticker", lambda t: "BTC05M1")
+    monkeypatch.setattr(RC.MD, "current_ticker",
+                        lambda t, prefix=None, minutes=5: "BTC05M1")
     monkeypatch.setattr(RC.MD, "terms_for",
                         lambda s: {"contract_status": "active",
                                    "market_state": "open"})

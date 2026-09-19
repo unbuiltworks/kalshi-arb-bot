@@ -57,10 +57,19 @@ async def _account_state(symbol: str):
 
 
 async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
-                     interval_s: float) -> dict:
-    """Discover -> band -> state -> policy -> rollover, once."""
+                     interval_s: float, cohort=None,
+                     policy: str = "FROZEN_L5_NATIVE") -> dict:
+    """Discover -> band -> state -> policy -> rollover, once.
+
+    `cohort` binds the contract FAMILY (BTC5m, BTC15m). `policy` selects the
+    execution ADAPTER: the frozen native surface, or GEMINI_RECYCLE, which
+    suppresses EXTEND while residual exists and works the COMPLETE instead.
+    Model A is asked either way and WHAT IT WANTED IS RECORDED either way, so
+    fidelity stays measurable under the adapter.
+    """
+    from src.gemini_execution import tape_replay as TR
     started = datetime.now(timezone.utc).isoformat()
-    sched = await RC.await_entry_band(runner.entry_band)
+    sched = await RC.await_entry_band(runner.entry_band, cohort=cohort)
     if not sched.get("in_band"):
         runner.stop(CR.ENTRY_BAND_UNREACHABLE, sched.get("why") or "no band")
         return {"kind": "window", "started_utc": started,
@@ -108,14 +117,28 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         depth = MD.contract_depth(symbol)
         flow = HB.public_flow(symbol)
         turn = guard.step(ms, inv, now=time.time())
-        decision = {"turn": turn, "plan": {"keep": [], "place": [
-            {"rung": a} for a in (turn.get("actions") or [])],
-            "cancel": [], "mutations": len(turn.get("actions") or [])}}
+        # ---- GEMINI_RECYCLE: filter what the frozen policy asked for, never
+        # add to it. `model_a_wanted` keeps fidelity measurable.
+        wanted = list(turn.get("actions") or [])
+        vetoed = []
+        if policy == TR.POLICY_B and inv.residual() != 0:
+            keep = [a for a in wanted if a.get("action") == CP.COMPLETE]
+            vetoed = [a for a in wanted if a.get("action") != CP.COMPLETE]
+            turn = {**turn, "actions": keep}
+        acted = list(turn.get("actions") or [])
+        decision = {"turn": turn, "policy": policy,
+                    "model_a_wanted": wanted, "vetoed_by_adapter": vetoed,
+                    "plan": {"keep": [], "place": [{"rung": a} for a in acted],
+                             "cancel": [], "mutations": len(acted)}}
         row = runner.observe_cycle(
             symbol=symbol, tte_s=tte, market_state=ms, depth=depth, flow=flow,
             inventory=inv.report(), working=[], decision=decision)
         row["cycle"] = n
         row["account_readable"] = account_readable
+        row["cohort"] = (cohort.name if cohort is not None else None)
+        row["execution_policy"] = policy
+        row["model_a_wanted"] = wanted
+        row["vetoed_by_adapter"] = vetoed
         rows.append(row)
         runner._persist(row)
         await asyncio.sleep(interval_s)
@@ -126,9 +149,23 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                                          after.get("trades"), symbol=symbol,
                                          fills=after.get("fills"))
     gate = CR.rollover_safe(symbol, {**after, "executions": after_view})
+    rolled_on_shadow = False
     if not gate["safe"]:
-        runner.stop(gate["state"], gate["why"])
-    else:
+        # THE GATE EXISTS TO STOP A NEW WINDOW OPENING WHILE THE LAST ONE MAY
+        # STILL HAVE LIVE ORDERS. In SHADOW that hazard cannot exist: this
+        # module never constructs a session and never calls Driver.place or
+        # Driver.cancel, so there is nothing outstanding to protect. The
+        # refusal is RECORDED in full and the loop rolls on.
+        #
+        # THIS IS NARROWLY SHADOW-ONLY. In LIVE the stop is unchanged, and a
+        # test pins that a LIVE runner still stops here. Without this, an
+        # unreadable account half ends a continuous collector after one
+        # window -- which is what it did on the first BTC15m attempt.
+        if runner.mode == CR.SHADOW:
+            rolled_on_shadow = True
+        else:
+            runner.stop(gate["state"], gate["why"])
+    if gate["safe"] or rolled_on_shadow:
         runner.state.windows_completed += 1
 
     samples = [r["habitat"] for r in rows]
@@ -141,12 +178,23 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                               "exists."),
          "finished_utc": datetime.now(timezone.utc).isoformat(),
          "symbol": symbol, "entry_tte_s": sched.get("entered_tte_s"),
+         "cohort": (cohort.name if cohort is not None else None),
+         "execution_policy": policy,
+         "adapter_vetoes": sum(len(r.get("vetoed_by_adapter") or [])
+                               for r in rows),
          "waited_s": sched.get("waited_s"), "polls": sched.get("polls"),
          "cycles": len(rows), "account_readable": account_readable,
          "rollover": gate,
+         "rolled_over_despite_gate_in_shadow": rolled_on_shadow,
+         "rollover_note": (
+             "the rollover gate refused and this is SHADOW: no session exists "
+             "and no order could be outstanding, so the refusal is recorded "
+             "and the loop continues. In LIVE this stops the run."
+             if rolled_on_shadow else None),
          "habitat": HB.window_summary(samples, rungs_placed=0, fills=(),
                                       window_s=len(rows) * interval_s),
-         "state": (CR.COMPLETED if gate["safe"] else gate["state"]),
+         "state": (CR.COMPLETED if (gate["safe"] or rolled_on_shadow)
+                   else gate["state"]),
          "mutations_sent": 0,
          "labels": ("SHADOW: zero orders were sent and no session exists. "
                     "SUBMITTED/FILLED/SETTLED/REALIZED are all zero and a "
@@ -157,16 +205,24 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
 
 
 async def main_async(a) -> int:
+    from src.gemini_execution import contract_cohort as CC
+    co = CC.resolve(a.cohort)
+    band = ((a.band_lo, a.band_hi) if a.band_lo is not None
+            else co.entry_band)
     runner = CR.ContinuousRunner(mode=CR.SHADOW,
                                  budget=CR.RiskBudget(max_windows=a.windows),
-                                 entry_band=(a.band_lo, a.band_hi),
+                                 entry_band=band,
                                  evidence_dir=a.evidence_dir)
+    print("COHORT %s prefix=%s grid=%dm band=%s policy=%s" % (
+        co.name, co.prefix, co.minutes, band, a.policy), flush=True)
+    forever = (a.windows == 0)
     while True:
         adm = CR.admits_another_window(runner.budget, runner.state)
-        if not adm["admits"]:
+        if not forever and not adm["admits"]:
             runner.stop(adm["state"] or CR.COMPLETED, adm["why"] or "done")
             break
-        w = await one_window(runner, cycles=a.cycles, interval_s=a.interval)
+        w = await one_window(runner, cycles=a.cycles, interval_s=a.interval,
+                             cohort=co, policy=a.policy)
         print("WINDOW %s tte=%s cycles=%s -> %s" % (
             w.get("symbol"), w.get("entry_tte_s"), w.get("cycles"),
             w.get("state")), flush=True)
@@ -185,11 +241,16 @@ async def main_async(a) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--windows", type=int, default=2)
+    ap.add_argument("--windows", type=int, default=2,
+                    help="0 = roll continuously, one contract after another")
     ap.add_argument("--cycles", type=int, default=12)
     ap.add_argument("--interval", type=float, default=8.0)
-    ap.add_argument("--band-lo", type=float, default=240.0)
-    ap.add_argument("--band-hi", type=float, default=280.0)
+    ap.add_argument("--cohort", default="btc5m",
+                    help="contract family: btc5m or btc15m")
+    ap.add_argument("--policy", default="FROZEN_L5_NATIVE",
+                    help="FROZEN_L5_NATIVE or GEMINI_RECYCLE")
+    ap.add_argument("--band-lo", type=float, default=None)
+    ap.add_argument("--band-hi", type=float, default=None)
     ap.add_argument("--evidence-dir", default="analysis/gemini/continuous_v1")
     ap.add_argument("--out",
                     default="analysis/gemini/continuous_shadow_soak.json")

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/gemini_btc15m_shadow/Dockerfile",
+    "watchPatterns": [
+      "deploy/gemini_btc15m_shadow/**",
+      "src/gemini_execution/shadow_soak.py",
+      "src/gemini_execution/contract_cohort.py",
+      "src/gemini_execution/run_continuous.py",
+      "src/gemini_execution/continuous_runner.py",
+      "src/gemini_execution/continuous_probe.py",
+      "src/gemini_execution/metadata.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.gemini_execution.shadow_soak --cohort btc15m --policy GEMINI_RECYCLE --windows 0 --cycles 110 --interval 8.0 --evidence-dir /state/gemini-btc15m/continuous_v1 --out /state/gemini-btc15m/btc15m_continuous.json",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_status": "SHADOW / DISARMED. Gemini BTC15m continuous L5 lifecycle: frozen Model A, GEMINI_RECYCLE adapter, public reads plus read-only account reads. No order path, no authorization id, no arming env. mutations_sent is 0 on every window by construction.",
+  "_restart": "ALWAYS is correct for a READ-ONLY collector and is NOT the money-moving policy: the bounded live probe uses restartPolicyType NEVER and that is unchanged. This service can place nothing, so relaunching it cannot repeat a trade."
+}

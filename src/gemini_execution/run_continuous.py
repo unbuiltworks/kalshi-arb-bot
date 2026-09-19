@@ -848,25 +848,40 @@ def tte_of(symbol: str):
 
 
 def eligible_symbol(now: Optional[float] = None,
-                    band: Optional[Sequence[float]] = None) -> Dict[str, Any]:
-    """The ONE BTC5m contract this window will be bound to, or a refusal.
+                    band: Optional[Sequence[float]] = None,
+                    cohort: Any = None) -> Dict[str, Any]:
+    """The ONE contract this window will be bound to, or a refusal.
 
     `band` NARROWS the entry window for one experiment and can never widen
-    it: it is intersected with the standing [MIN_ENTRY_TTE_S, MAX_ENTRY_TTE_S]
-    bound, so a caller cannot use it to enter a contract the normal rule would
-    refuse. Passing None is the standing behaviour, unchanged.
+    it: it is intersected with the standing [MIN_ENTRY_TTE_S, the cohort's
+    window length] bound, so a caller cannot use it to enter a contract the
+    normal rule would refuse. Passing None is the standing behaviour.
+
+    `cohort` selects the CONTRACT FAMILY -- the ticker prefix and the minute
+    grid. It does not touch the frozen policy's TTE bounds: MIN_ENTRY_TTE_S
+    is still built from `NO_NEW_OPEN_EXTEND_TTE_S + STALE_ORDER_S`, which are
+    absolute safety margins from expiry and are the same number of seconds on
+    every family.
     """
+    from src.gemini_execution import contract_cohort as CC
+    co = cohort if cohort is not None else CC.DEFAULT
     t = now if now is not None else time.time()
-    lo, hi = MIN_ENTRY_TTE_S, MAX_ENTRY_TTE_S
+    # the floor is the frozen policy's own margin and never moves; the
+    # ceiling is the family's window length, since a contract cannot be
+    # entered before it exists. For the 5-minute family this is the standing
+    # 300s and nothing changes.
+    lo = MIN_ENTRY_TTE_S
+    hi = MAX_ENTRY_TTE_S if co.minutes <= 5 else co.max_entry_tte_s
     if band is not None:
         lo, hi = max(lo, float(band[0])), min(hi, float(band[1]))
     tried: List[Dict[str, Any]] = []
-    ticker = MD.current_btc5m_ticker(t)
+    ticker = MD.current_ticker(t, prefix=co.prefix, minutes=co.minutes)
     for step in range(4):
-        tk = ticker if step == 0 else MD.sibling_ticker(ticker, 5 * step)
+        tk = (ticker if step == 0
+              else MD.sibling_ticker(ticker, co.minutes * step))
         if not tk:
             continue
-        sym = "GEMI-%s-UP" % tk
+        sym = co.symbol_for(tk)
         terms = MD.terms_for(sym) or {}
         exp = _expiry_epoch(sym)
         tte = None if exp is None else exp - t
@@ -879,14 +894,15 @@ def eligible_symbol(now: Optional[float] = None,
                 and row["contract_status"] == "active"
                 and row["market_state"] == "open"):
             return {"eligible": True, "chosen": row, "band": [lo, hi],
-                    "considered": tried + [row]}
+                    "cohort": co.name, "considered": tried + [row]}
         row["why"] = ("tte %s outside [%s, %s]" % (tte, lo, hi)
                       if tte is None or not (lo <= tte <= hi)
                       else "not active/open")
         tried.append(row)
     return {"eligible": False, "considered": tried, "band": [lo, hi],
-            "why": "no BTC5m contract is inside the entry band [%s, %s] "
-                   "right now" % (lo, hi)}
+            "cohort": co.name,
+            "why": "no %s contract is inside the entry band [%s, %s] "
+                   "right now" % (co.name, lo, hi)}
 
 
 #: CONTINUOUS-8 EXPERIMENTAL SCHEDULING -- when to BEGIN, and nothing else.
@@ -905,12 +921,12 @@ ENTRY_POLL_S = 5.0
 
 
 async def await_entry_band(band: Sequence[float], *,
-                           max_wait_s: float = MAX_ENTRY_WAIT_S,
+                           max_wait_s: Optional[float] = None,
                            poll_s: float = ENTRY_POLL_S,
                            now_fn: Callable[[], float] = time.time,
                            sleep_fn: Optional[Callable] = None,
-                           scan_fn: Optional[Callable] = None
-                           ) -> Dict[str, Any]:
+                           scan_fn: Optional[Callable] = None,
+                           cohort: Any = None) -> Dict[str, Any]:
     """WAIT, read-only, until a contract's TTE is inside the band.
 
     SENDS NOTHING AND SPENDS NOTHING. This runs BEFORE the preflight, before
@@ -924,12 +940,16 @@ async def await_entry_band(band: Sequence[float], *,
     """
     sleep = sleep_fn if sleep_fn is not None else asyncio.sleep
     scan = scan_fn if scan_fn is not None else eligible_symbol
+    if max_wait_s is None:
+        max_wait_s = (cohort.max_entry_wait_s if cohort is not None
+                      else MAX_ENTRY_WAIT_S)
     t0 = now_fn()
     polls = 0
     seen: List[Dict[str, Any]] = []
     while True:
         polls += 1
-        sel = scan(band=band)
+        sel = (scan(band=band) if cohort is None
+               else scan(band=band, cohort=cohort))
         waited = round(now_fn() - t0, 2)
         if sel.get("eligible"):
             return {"in_band": True, "band": [band[0], band[1]],
@@ -947,7 +967,7 @@ async def await_entry_band(band: Sequence[float], *,
             return {"in_band": False, "band": [band[0], band[1]],
                     "waited_s": waited, "polls": polls, "selection": sel,
                     "observed": seen[-6:],
-                    "why": ("no BTC5m contract reached the entry band "
+                    "why": ("no contract reached the entry band "
                             "[%s, %s] within %ss; refusing BEFORE the latch "
                             "rather than entering a window the experiment did "
                             "not ask for" % (band[0], band[1], max_wait_s))}
