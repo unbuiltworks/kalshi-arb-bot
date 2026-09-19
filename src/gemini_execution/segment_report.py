@@ -17,9 +17,11 @@ import argparse
 import glob
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping, Sequence
 
 from src.gemini_execution import continuous_probe as CP
+from src.gemini_execution import preentry as PE
+from src.gemini_execution import rebate_program as RP
 from src.gemini_execution import segments as SG
 
 LABEL = "GEMINI_L5_SEGMENTED_HABITAT_CENSUS_V1"
@@ -293,8 +295,105 @@ def adverse_after_fills(wins: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def _soak_windows(pattern: str) -> List[Dict[str, Any]]:
+    """Every soak window record, oldest first."""
+    out: List[Dict[str, Any]] = []
+    for path in sorted(glob.glob(pattern)):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                d = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        for w in (d.get("windows") or []):
+            out.append({**w, "soak_file": os.path.basename(path)})
+    return out
+
+
+def pre_entry_study(soaks: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Dispersion across windows, and whether a pre-entry read predicts flow.
+
+    THE WHOLE SELECTOR QUESTION. Windows without a pre-entry snapshot (every
+    soak before 2026-09-19) contribute to neither, and are counted so the
+    sample size is never overstated.
+    """
+    snaps, pairs, rows = [], [], []
+    for w in soaks:
+        pre = w.get("pre_entry")
+        act = w.get("realised_flow") or {}
+        if not isinstance(pre, Mapping):
+            continue
+        snaps.append(pre)
+        prior = ((pre.get("flow_prior_window") or {}).get("prints_per_min"))
+        rows.append({
+            "symbol": w.get("symbol"), "started_utc": w.get("started_utc"),
+            "entry_tte_s": w.get("entry_tte_s"),
+            "prior_prints_per_min": prior,
+            "prior_two_sided": (pre.get("flow_prior_window") or {})
+            .get("two_sided"),
+            "own_prints": (pre.get("flow_own") or {}).get("n_total_on_tape"),
+            "spot_prints_per_min": (pre.get("spot") or {})
+            .get("prints_per_min"),
+            "spot_range_bps": (pre.get("spot") or {}).get("range_bps"),
+            "spread": pre.get("spread"), "touch_depth": pre.get("touch_depth"),
+            "crossed": pre.get("crossed"),
+            "touch_changed": (pre.get("touch_turnover") or {}).get("changed"),
+            "actual_mean_prints_per_min": act.get("mean_prints_per_min"),
+            "actual_zero_share": act.get("zero_share"),
+            "rank": PE.rank_key(pre),
+        })
+        if prior is not None and act.get("measurable"):
+            pairs.append({"prior": prior,
+                          "actual": act.get("mean_prints_per_min")})
+    return {
+        "windows_with_a_pre_entry_read": len(snaps),
+        "windows_without_one": len(soaks) - len(snaps),
+        "dispersion": PE.dispersion(snaps) if snaps else {
+            "windows": 0, "why": "no window carries a pre-entry read yet"},
+        "persistence": PE.persistence(pairs),
+        "windows": sorted(rows, key=lambda r: r["rank"], reverse=True),
+        "labels": ("RANKED FOR READING ONLY. The soak recorded these and "
+                   "acted on none of them; admission is unchanged and no "
+                   "threshold exists."),
+    }
+
+
+def rung_lives(wins: List[Dict[str, Any]],
+               rung_by_window: Mapping[str, Any]) -> Dict[str, Any]:
+    """What stood around each rung while it rested."""
+    lives = []
+    for w in wins:
+        for r in rung_by_window.get(w.get("file"), []):
+            lives.append({**SG.rung_life(r, w.get("decisions") or []),
+                          "window": w.get("authorization_id")})
+    return {"lives": lives, "census": SG.rung_life_census(lives)}
+
+
+def rebate_reality() -> Dict[str, Any]:
+    """The published rules against this programme's actual fills."""
+    fills = [{"contracts": "0.01", "price": p}
+             for p in ("0.92", "0.14", "0.46", "0.21", "0.31")]
+    return {
+        "source": RP.SOURCE,
+        "crypto_rate": str(RP.CRYPTO_REBATE_RATE),
+        "taker_rate": str(RP.TAKER_RATE),
+        "eligible_band": [str(RP.ELIGIBLE_LO), str(RP.ELIGIBLE_HI)],
+        "paid": RP.PAID_AT_LOCAL,
+        "our_five_fills": RP.daily_accrual(fills),
+        "band_coverage": RP.band_coverage(
+            [f["price"] for f in fills]),
+        "one_cent_needs": {
+            "at_best_price_0_50": RP.contracts_for_one_cent("0.50"),
+            "at_our_fill_price_0_31": RP.contracts_for_one_cent("0.31"),
+        },
+        "consistency_with_confirmed_credits":
+            RP.consistency_with_confirmed("97.59"),
+        "labels": RP.ACCRUAL_LABEL,
+    }
+
+
 def build(*, jsonl: str, runs: str,
-          reconcile: str = "analysis/gemini/reconcile_slot_*.json"
+          reconcile: str = "analysis/gemini/reconcile_slot_*.json",
+          soaks: str = "analysis/gemini/continuous_shadow_soak_*.json"
           ) -> Dict[str, Any]:
     cycles = _load_cycles(jsonl)
     regate = _regate(cycles)
@@ -303,6 +402,7 @@ def build(*, jsonl: str, runs: str,
 
     fills: List[Dict[str, Any]] = []
     rungs: List[Dict[str, Any]] = []
+    rung_index: Dict[str, Any] = {}
     per_window: List[Dict[str, Any]] = []
     for w in wins:
         wf = _fill_segments(w, recon)
@@ -316,6 +416,7 @@ def build(*, jsonl: str, runs: str,
                                filled_utc=filled_at)
         fills.extend(wf)
         rungs.extend(wr)
+        rung_index[w.get("file")] = wr
         ds = w.get("decisions") or []
         per_window.append({
             "authorization_id": w.get("authorization_id"),
@@ -350,6 +451,9 @@ def build(*, jsonl: str, runs: str,
         "live_windows": per_window,
         "live_states": live_states(wins),
         "adverse_movement": adverse_after_fills(wins),
+        "pre_entry_study": pre_entry_study(_soak_windows(soaks)),
+        "rung_lives": rung_lives(wins, rung_index),
+        "rebate_reality": rebate_reality(),
         "fills": fills,
         "rungs": rungs,
         "census": cen,
@@ -365,10 +469,12 @@ def main(argv=None) -> int:
                     default="analysis/gemini/continuous_v1/continuous_v1.jsonl")
     ap.add_argument("--runs",
                     default="analysis/gemini/continuous_run_*.json")
+    ap.add_argument("--soaks",
+                    default="analysis/gemini/continuous_shadow_soak_*.json")
     ap.add_argument("--out",
                     default="analysis/gemini/segment_census.json")
     a = ap.parse_args(argv)
-    rep = build(jsonl=a.jsonl, runs=a.runs)
+    rep = build(jsonl=a.jsonl, runs=a.runs, soaks=a.soaks)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(rep, fh, indent=2, default=str)

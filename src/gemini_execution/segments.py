@@ -397,3 +397,211 @@ def census(cycles: Sequence[Mapping[str, Any]], *,
                    "verdict, not a tuning input, not realized economics, and "
                    "not reachable from the L5 policy."),
     }
+
+
+# ============================================================ rung life
+#
+# WHAT HAPPENED AROUND A RUNG WHILE IT RESTED. The resting-time association
+# ("three fills at 58-64 s, ten repriced rungs at zero") is a hypothesis
+# generator and stays one. What turns it into something examinable is the
+# state AROUND each rung: was it at the touch, what stood in front of it, how
+# far was the next real bid, and where did the other side go while it sat.
+#
+# C8B is the first window with a book behind every cycle, and it already
+# shows the thing the pooled numbers could not: at cycle 1 the 0.31 bid
+# carried 483 contracts; by cycle 2 it carried 0.01 -- OURS, alone -- with
+# the next real size 13 cents below. We did not queue behind 483 and wait for
+# it to drain. The 483 left, and we became the touch by ourselves.
+
+def rung_life(rung: Mapping[str, Any],
+              cycles: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """One rung's surroundings over the cycles it was resting through.
+
+    `cycles` are decision records carrying `book_state`; only those whose
+    timestamp falls inside the rung's life are used. Every field is measured
+    from the recorded book -- none is derived from our own order price.
+    """
+    lo, hi = _epoch(rung.get("placed_utc")), _epoch(rung.get("ended_utc"))
+    ours = _dec(rung.get("price"))
+    leg = str(rung.get("leg") or "").upper()
+    side = "yes" if leg == "YES" else "no"
+    rows: List[Dict[str, Any]] = []
+    no_book = 0
+    for c in cycles or []:
+        t = _epoch(c.get("utc"))
+        if t is None or lo is None or t < lo or (hi is not None and t > hi):
+            continue
+        bs = c.get("book_state") or {}
+        # A CYCLE WITHOUT A BOOK IS NOT A CYCLE WE SAW THE BOOK IN. C5 and C6
+        # decided before book-state capture existed; counting their cycles
+        # here would report rungs as observed whose surroundings are entirely
+        # unknown.
+        if not bs:
+            no_book += 1
+            continue
+        pres = bs.get("presented") or {}
+        q = pres.get(side) or {}
+        bid, ask = _dec(q.get("bid")), _dec(q.get("ask"))
+        # THE LADDER IS THE CONTRACT'S, i.e. the YES side. A NO rung's queue
+        # is not readable from it, and saying so beats inventing one.
+        lad = (bs.get("depth") or {}).get("bids") or {}
+        levels = lad.get("levels") or [] if side == "yes" else []
+        at_our_price = None
+        ahead = None
+        below = None
+        if side == "yes" and ours is not None and levels:
+            ahead = D("0")
+            at_our_price = D("0")
+            best_below = None
+            for lv in levels:
+                px, qty = _dec(lv.get("price")), _dec(lv.get("qty"))
+                if px is None or qty is None:
+                    continue
+                if px > ours:
+                    ahead += qty
+                elif px == ours:
+                    at_our_price += qty
+                else:
+                    if best_below is None or px > best_below:
+                        best_below = px
+            below = best_below
+        rows.append({
+            "utc": c.get("utc"), "cycle": c.get("cycle"),
+            "tte_s": c.get("tte_s"),
+            "our_price": (str(ours) if ours is not None else None),
+            "best_bid": q.get("bid"), "best_ask": q.get("ask"),
+            "at_touch": (None if bid is None or ours is None
+                         else bid == ours),
+            "queue_ahead": (str(ahead) if ahead is not None else None),
+            "size_at_our_price": (str(at_our_price)
+                                  if at_our_price is not None else None),
+            "next_bid_below": (str(below) if below is not None else None),
+            "gap_to_next_bid": (str(ours - below)
+                                if below is not None and ours is not None
+                                else None),
+            "ladder_side": ("contract ladder is the YES side; a NO rung's "
+                            "queue is not readable from it"
+                            if side == "no" else None),
+        })
+
+    at = [r["at_touch"] for r in rows if r["at_touch"] is not None]
+    bids = [_dec(r["best_bid"]) for r in rows]
+    bids = [b for b in bids if b is not None]
+    asks = [_dec(r["best_ask"]) for r in rows]
+    asks = [a for a in asks if a is not None]
+    ahead_seen = [_dec(r["queue_ahead"]) for r in rows]
+    ahead_seen = [x for x in ahead_seen if x is not None]
+    # SIZE AT OUR OWN PRICE is the series that matters, not size AHEAD of it:
+    # C8B joined a 483-deep bid at 0.31 and nothing was ever ahead of it,
+    # because 483 sat AT that price. By the next cycle the level carried 0.01
+    # -- ours, alone.
+    at_px = [_dec(r["size_at_our_price"]) for r in rows]
+    at_px = [x for x in at_px if x is not None]
+    gaps = [_dec(r["gap_to_next_bid"]) for r in rows]
+    gaps = [g for g in gaps if g is not None]
+    ours_qty = _dec(rung.get("qty")) or D("0.01")
+    alone = [x for x in at_px if x <= ours_qty]
+
+    out = {
+        "leg": leg, "price": rung.get("price"),
+        "resting_s": rung.get("resting_s"), "ended": rung.get("ended"),
+        "filled": rung.get("filled"),
+        "reprices_on_this_leg": rung.get("reprices_on_this_leg"),
+        "cycles_observed": len(rows),
+        "cycles_in_life_without_a_book": no_book,
+        "at_touch_cycles": sum(1 for x in at if x),
+        "at_touch_share": (round(sum(1 for x in at if x) / len(at), 3)
+                           if at else None),
+        "bid_moved_while_resting": (len({str(b) for b in bids}) > 1
+                                    if bids else None),
+        "bid_range": ([str(min(bids)), str(max(bids))] if bids else None),
+        "ask_moved_while_resting": (len({str(a) for a in asks}) > 1
+                                    if asks else None),
+        "ask_range": ([str(min(asks)), str(max(asks))] if asks else None),
+        "ask_travel_toward_us": (str(max(asks) - min(asks)) if len(asks) > 1
+                                 else None),
+        "queue_ahead_first": (str(ahead_seen[0]) if ahead_seen else None),
+        "queue_ahead_last": (str(ahead_seen[-1]) if ahead_seen else None),
+        "queue_ahead_vanished": (bool(ahead_seen and ahead_seen[0] > 0
+                                      and ahead_seen[-1] == 0)
+                                 if ahead_seen else None),
+        "size_at_our_price_first": (str(at_px[0]) if at_px else None),
+        "size_at_our_price_last": (str(at_px[-1]) if at_px else None),
+        # ALONE AT THE TOUCH: the level carries no more than our own size, so
+        # the bid at that price IS us. C8B's filled rung was alone for every
+        # cycle of its life.
+        "alone_at_touch_cycles": len(alone),
+        "alone_at_touch_share": (round(len(alone) / len(at_px), 3)
+                                 if at_px else None),
+        "gap_to_next_bid_first": (str(gaps[0]) if gaps else None),
+        "gap_to_next_bid_last": (str(gaps[-1]) if gaps else None),
+        "gap_widened": (bool(gaps[-1] > gaps[0]) if len(gaps) > 1 else None),
+        "samples": rows,
+        "flow_through_our_price": None,
+        "flow_why": ("the PUBLIC print tape was not recorded in live windows "
+                     "before 2026-09-19, so prints at our price during this "
+                     "rung's life cannot be counted. `book_state.flow` now "
+                     "carries it and the next live window can answer it."),
+        "labels": ("EVIDENCE ONLY -- model B. Measured from the recorded "
+                   "book, never from our own order price, and it changes "
+                   "nothing in the controller."),
+    }
+    return out
+
+
+def rung_life_census(lives: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """The whole rung-life picture, with every confound restated.
+
+    NOT A RULE. Three fills is three fills whatever is measured around them.
+    """
+    obs = [l for l in lives if l.get("cycles_observed")]
+    filled = [l for l in obs if l.get("filled")]
+    unfilled = [l for l in obs if not l.get("filled")]
+
+    def share(rows, key):
+        vals = [r.get(key) for r in rows if r.get(key) is not None]
+        if not vals:
+            return None
+        return round(sum(1 for v in vals if v) / len(vals), 3)
+
+    return {
+        "rungs_with_a_book_behind_them": len(obs),
+        "rungs_without_one": len(lives) - len(obs),
+        "filled": {
+            "n": len(filled),
+            "at_touch_share": share(filled, "at_touch_share"),
+            "alone_at_touch_share": share(filled, "alone_at_touch_share"),
+            "gap_widened_share": share(filled, "gap_widened"),
+            "ask_moved_share": share(filled, "ask_moved_while_resting"),
+        },
+        "unfilled": {
+            "n": len(unfilled),
+            "at_touch_share": share(unfilled, "at_touch_share"),
+            "alone_at_touch_share": share(unfilled, "alone_at_touch_share"),
+            "gap_widened_share": share(unfilled, "gap_widened"),
+            "ask_moved_share": share(unfilled, "ask_moved_while_resting"),
+        },
+        "confounds": [
+            "THE REPRICED LEG IS THE MOVING LEG. 'repriced rungs do not fill' "
+            "and 'the leg whose price is moving does not fill' are the same "
+            "observation in this data and cannot be separated by it.",
+            "NEITHER RESTING NOR NOT-REPRICING IS SUFFICIENT. C7's YES rung "
+            "was placed once at 0.01, never repriced, rested 72.1 s, and did "
+            "not fill. A penny bid left alone is still a penny bid.",
+            "n = 5 FILLS, and only three of them have a mutation record. "
+            "Every share above is over single digits.",
+            "ONE WINDOW HAS A BOOK BEHIND EVERY CYCLE. Book-state capture "
+            "began with C8B, so the per-cycle surroundings below come almost "
+            "entirely from one window on one day.",
+            "PRINTS AT OUR PRICE ARE NOT IN THE RECORD for any existing "
+            "rung; the live tape reader landed after all of them.",
+            "BEING ALONE AT THE TOUCH IS NOT THE SAME AS BEING PATIENT. The "
+            "one fill with a book behind it stood as the ENTIRE bid, 6 to 19 "
+            "cents above the next real one, while the offer walked 10 cents "
+            "down toward it. 'Rested 58 s then filled' and 'was the last bid "
+            "standing in a falling market' describe the same event, and this "
+            "record cannot separate them either.",
+        ],
+        "labels": ("HYPOTHESIS GENERATOR, not a rule, and not a tuning "
+                   "input. Nothing here reaches the L5 policy."),
+    }

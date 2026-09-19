@@ -345,3 +345,113 @@ def test_a_fill_on_an_order_THIS_window_never_placed_is_not_claimed():
     recon = {"999": {"orderId": 999, "outcome": "no", "price": "0.46",
                      "status": "filled", "filledQuantity": "0.01"}}
     assert SR._fill_segments(win, recon) == []
+
+
+# ============================================ what stood around a rung
+
+def _cyc(n, tte, bid, ask, levels, utc):
+    return {"cycle": n, "utc": utc, "tte_s": tte,
+            "book_state": {"presented": {"readable": True,
+                                         "yes": {"bid": bid, "ask": ask}},
+                           "depth": {"readable": True,
+                                     "bids": {"best": bid, "levels": levels}}}}
+
+
+C8B_CYCLES = [
+    _cyc(1, 271.3, "0.31", "0.58",
+         [{"price": "0.31", "qty": "483.0"}, {"price": "0.28", "qty": "10.0"}],
+         "2026-09-19T01:35:28.748+00:00"),
+    _cyc(2, 257.2, "0.31", "0.43",
+         [{"price": "0.31", "qty": "0.01"}, {"price": "0.25", "qty": "10.0"}],
+         "2026-09-19T01:35:42.900+00:00"),
+    _cyc(3, 249.6, "0.31", "0.38",
+         [{"price": "0.31", "qty": "0.01"}, {"price": "0.21", "qty": "10.0"}],
+         "2026-09-19T01:35:50.400+00:00"),
+]
+C8B_RUNG = {"leg": "YES", "price": "0.31", "qty": "0.01",
+            "placed_utc": "2026-09-19T01:35:30.748+00:00",
+            "ended_utc": "2026-09-19T01:36:28.553+00:00",
+            "resting_s": 57.805, "ended": "FILL", "filled": True,
+            "reprices_on_this_leg": 0}
+
+
+def test_the_cycle_BEFORE_a_rung_was_placed_is_not_part_of_its_life():
+    """Cycle 1 decided the rung; the rung did not exist during it. Counting
+    it would credit the 483-deep book to a rung that was not there."""
+    got = SG.rung_life(C8B_RUNG, C8B_CYCLES)
+    assert got["cycles_observed"] == 2
+    assert [s["cycle"] for s in got["samples"]] == [2, 3]
+
+
+def test_THE_FILLED_RUNG_WAS_THE_ENTIRE_BID():
+    """THE OBSERVATION THAT REFRAMES THE RESTING-TIME HYPOTHESIS. C8B joined a
+    bid carrying 483 contracts; by the next cycle that level carried 0.01 --
+    ours, alone -- and the next real bid was 6 then 10 cents below."""
+    got = SG.rung_life(C8B_RUNG, C8B_CYCLES)
+    assert got["size_at_our_price_first"] == "0.01"
+    assert got["size_at_our_price_last"] == "0.01"
+    assert got["alone_at_touch_share"] == 1.0
+    assert got["at_touch_share"] == 1.0
+    assert got["gap_to_next_bid_first"] == "0.06"
+    assert got["gap_to_next_bid_last"] == "0.10"
+    assert got["gap_widened"] is True
+
+
+def test_the_offer_walking_toward_us_is_recorded():
+    got = SG.rung_life(C8B_RUNG, C8B_CYCLES)
+    assert got["ask_moved_while_resting"] is True
+    assert got["ask_range"] == ["0.38", "0.43"]
+    assert got["ask_travel_toward_us"] == "0.05"
+
+
+def test_SIZE_AT_OUR_PRICE_NOT_SIZE_AHEAD_IS_THE_SERIES_THAT_MATTERS():
+    """Nothing was ever ahead of the 0.31 bid, because the 483 sat AT that
+    price. A queue-ahead reading alone would have shown 0 -> 0 and missed the
+    whole event."""
+    got = SG.rung_life(C8B_RUNG, C8B_CYCLES)
+    assert got["queue_ahead_first"] == "0" and got["queue_ahead_last"] == "0"
+    assert got["queue_ahead_vanished"] is False
+    assert got["size_at_our_price_first"] == "0.01"
+
+
+def test_a_NO_rung_has_no_readable_queue_and_says_so():
+    """The venue publishes ONE contract ladder, the YES side. Deriving a NO
+    queue from it would be inventing one."""
+    rung = {"leg": "NO", "price": "0.62", "qty": "0.01",
+            "placed_utc": "2026-09-19T01:35:52.292+00:00",
+            "ended_utc": "2026-09-19T01:36:13.784+00:00", "filled": False}
+    cyc = _cyc(4, 240.4, "0.31", "0.38", [{"price": "0.31", "qty": "0.01"}],
+               "2026-09-19T01:36:00.000+00:00")
+    got = SG.rung_life(rung, [cyc])
+    assert got["cycles_observed"] == 1
+    assert got["samples"][0]["queue_ahead"] is None
+    assert "not readable from it" in got["samples"][0]["ladder_side"]
+    assert got["alone_at_touch_share"] is None
+
+
+def test_prints_at_our_price_are_declared_absent_not_zero():
+    got = SG.rung_life(C8B_RUNG, C8B_CYCLES)
+    assert got["flow_through_our_price"] is None
+    assert "not recorded in live windows" in got["flow_why"]
+
+
+def test_the_census_restates_every_confound_including_the_new_one():
+    got = SG.rung_life_census([SG.rung_life(C8B_RUNG, C8B_CYCLES)])
+    joined = " ".join(got["confounds"])
+    assert "repriced leg is the moving leg" in joined.lower() \
+        or "REPRICED LEG IS THE MOVING LEG" in joined
+    assert "last bid standing" in joined
+    assert "n = 5 FILLS" in joined
+    assert "HYPOTHESIS GENERATOR" in got["labels"]
+
+
+def test_a_rung_with_no_book_behind_it_is_counted_separately():
+    got = SG.rung_life_census([
+        SG.rung_life(C8B_RUNG, C8B_CYCLES),
+        SG.rung_life({"leg": "YES", "price": "0.21", "qty": "0.01",
+                      "placed_utc": "2026-09-18T22:11:41.436+00:00",
+                      "ended_utc": "2026-09-18T22:12:44.125+00:00",
+                      "filled": True}, []),
+    ])
+    assert got["rungs_with_a_book_behind_them"] == 1
+    assert got["rungs_without_one"] == 1
