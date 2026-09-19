@@ -262,13 +262,23 @@ async def main_async(a) -> int:
         # hypothetical.py; nothing here is filled, settled or realized.
         h = w.get("hypothetical") or {}
         iv = w.get("inventory") or {}
+        hb = w.get("habitat") or {}
+        # WHY THERE WERE NO RUNGS, not just that there were none. A window
+        # that rested nothing because the venue's book was CROSSED on every
+        # cycle and one that rested nothing because the policy declined a
+        # readable book are different findings, and on a lane whose evidence
+        # file cannot be reached this line is the only place they differ.
+        why = (hb.get("refusal_reasons") or ["-"])[0]
         print("WINDOW %s tte=%s cycles=%s -> %s | HYP rested=%s fills=%s "
-              "first=%s complete=%s | matched=%s residual=%s basis=%s" % (
+              "first=%s complete=%s | matched=%s residual=%s basis=%s "
+              "| books=%s/%s refused=%s" % (
                   w.get("symbol"), w.get("entry_tte_s"), w.get("cycles"),
                   w.get("state"), h.get("rungs_rested"), h.get("fills"),
                   h.get("first_fills"), h.get("complete_fills"),
                   iv.get("matched_qty"), iv.get("directional_residual"),
-                  iv.get("effective_matched_pair_cost")), flush=True)
+                  iv.get("effective_matched_pair_cost"),
+                  hb.get("book_readable_cycles"), hb.get("cycles"), why),
+              flush=True)
         if runner.state.stopped:
             break
 
