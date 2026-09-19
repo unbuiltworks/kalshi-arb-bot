@@ -1368,3 +1368,83 @@ book history, so this prices from the tape and treats queue position as zero.
 Model A is untouched and nothing quotes earlier.
 
 See `LANES_PROSPECTIVE_1.md`.
+
+---
+
+## 2026-09-19 — the BTC15m timing correction (SHADOW; zero venue mutations)
+
+`quote_between_tte_s = [0, 300]` on the Gemini lane **is not an L5
+measurement and never was**: `OURS_ADAPTED`, `evidence: null`,
+`transferred_from: null`. It is the length of a Gemini **BTC5m** contract,
+chosen for the 5-minute cohort (commit `9b8a1ebe`) and inherited unchanged
+when BTC15m was bound to the same lane (`fdd19d06`). L5's own measured
+`TTE_policy` is `[0, 900]`. Full trace in `TTE_PROVENANCE_1.md`.
+
+**L5's own fills, per fill rather than per window** — 63,569 deduped across
+527 windows (`analysis/l5/tte/btc15m_by_fill_tte.json`):
+
+| bucket | fills | USD share | **OPEN** | recycle | median basis |
+|---|---|---|---|---|---|
+| 600–900 | 18,604 | 30.3% | **560** | 0.810 | 0.9737 |
+| 300–600 | 22,687 | 34.2% | **46** | 1.003 | 0.9520 |
+| 180–300 | 10,100 | 16.1% | **13** | 0.925 | 0.9854 |
+| 120–180 | 4,644 | 7.7% | **6** | 0.886 | 0.9924 |
+| 60–120 | 4,890 | 8.5% | **1** | 0.866 | 0.9876 |
+| 30–60 | 2,165 | 2.5% | **0** | 0.865 | 0.8792 |
+| <30 | 472 | 0.7% | **0** | 0.765 | 1.1622 |
+
+**560 of 626 OPEN fills (89.5%) at tte 600–900; 96.8% above tte 300; none
+below tte 60.** Under `[0, 300]` the clone is present only for the tail in
+which L5 has stopped opening. (`NO_NEW_OPEN_EXTEND_TTE_S = 60` is confirmed
+by the same table.)
+
+**Measured on Gemini's own tape, not argued from L5.** 96 expired BTC15m
+contracts, one fetch each, replayed under both bands so treatment and control
+differ in timing and nothing else. Both legs priced from prints that actually
+traded; `maker_reachable` is **UNOBSERVABLE** on every row — Gemini serves no
+book history — so every figure is an upper bound conditional on a fill.
+
+| | EARLY `[300,900]` | LATE `[0,300]` |
+|---|---|---|
+| any print in band | 92/96 | **58/96** |
+| price-observable complements | **76** | 28 |
+| pairs ≤ $1 | **33** | 14 |
+| fee-positive pairs | **28** | 12 |
+| median basis | 1.0200 | 1.0050 |
+| prints in band | 812 | 178 |
+
+Paired: fee-positive **EARLY-only 22, LATE-only 6** (two-sided sign test
+**p = 0.0037**). Conditional quality is slightly *better* late (50.0% at or
+below par vs 43.4%); absolute opportunity is 2.3× greater early, and **38 of
+96 contracts have no prints at all** inside the frozen band. On the stated
+metric — recycling, not first-fill count — the frozen band is where the flow
+is not.
+
+**The correction.** `L5_ADAPTED_GEMINI_BTC15M_V2`
+(`cd8ad6a914dc9fc0…`): one field, `quote_between_tte_s → [0, 900]`.
+`L5_ADAPTED_GEMINI_CRYPTO` (`62d004d80b4af8b9…`) is **byte-identical and
+preserved as the control**. A correction is not a lane — `lane_gates.SOURCES`
+is keyed by `LANES`, so it is declared in `lanes.CORRECTIONS` and pinned out
+of `LANES` by test, and it carries no live-progression gate. The corrected
+field stays `OURS_ADAPTED`; the provenance lives in its `prior_evidence`
+text, not in its status.
+
+Both arms run in the existing `gemini-maker-shadow` process on the same tape,
+book and depth every cycle, sharing nothing else. The BTC15m **entry band
+moves 240–280 → 840–880** — experimental scheduling, always outside Model A —
+because otherwise the process is unattached to the contract for the whole
+interval the correction is about and the arm's silence would read as a
+finding. BTC5m is untouched and has no arm.
+
+**Nothing else changed:** side selection, price surface, sequential inventory
+state, EXTEND/COMPLETE mechanics, size, residual bounds, the 60/30 terminal
+rules, `MAX_ACTIONS`, the GEMINI_RECYCLE veto, the crossed-book refusal.
+`mutations_sent = 0`.
+
+The correction is a claim about **recycling**, so first-fill count cannot
+confirm it. If the corrected arm accumulates first fills at tte 600–900 and
+still shows zero complements and zero matched pairs over a comparable sample,
+timing was not the binding constraint — and that is the report, not a request
+for more uptime.
+
+See `BTC15M_TIMING_CORRECTION_1.md`.

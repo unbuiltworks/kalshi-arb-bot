@@ -80,3 +80,37 @@ python3 -m src.gemini_execution.shadow_soak --cohorts btc5m,btc15m \
 `src/gemini_execution/hypothetical.py` was also missing from the service's
 watchPatterns, so a change to the fill ledger alone would not have redeployed
 this lane. It is there now.
+
+## The corrected-timing arm (2026-09-19)
+
+BTC15m now runs TWO decision records per cycle in this one process:
+
+| arm | spec | `quote_between_tte_s` |
+|---|---|---|
+| control | `L5_ADAPTED_GEMINI_CRYPTO` (frozen, unchanged) | `[0, 300]` |
+| correction | `L5_ADAPTED_GEMINI_BTC15M_V2` | `[0, 900]` |
+
+They see the same tape, book and depth every cycle and share nothing else —
+each owns its guard, inventory and hypothetical book. The arm is strictly
+additive: it never feeds the control, it cannot stop a window (a raise is
+recorded and the loop continues), `_step_arm` is synchronous with no session
+and no order path, and `mutations_sent` stays 0.
+
+Per cycle the evidence row carries `correction_arms[label]`; the per-window
+record and the `L5_COHORT_HB` heartbeat carry the arm's counters under
+`arms`, never summed into the control's.
+
+**BTC5m has no arm** — its window is 300s, so both bands are the same band
+there.
+
+**The BTC15m entry band moved 240–280 → 840–880.** An arm quoting `[0, 900]`
+on a lane that attaches at tte 280 produces no evidence, and its silence
+would read as a finding about the correction rather than about the schedule.
+`--cycles 110 --interval 8.0` already covers 880s, so the start command is
+unchanged. BTC5m's band is untouched.
+
+**watchPatterns must include `src/l5_surface/**` and
+`artifacts/l5_surface/**`** — the arm's spec and the frozen artifacts live
+there, and a spec-only change would otherwise not redeploy.
+
+Rationale and evidence: `BTC15M_TIMING_CORRECTION_1.md`.
