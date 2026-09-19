@@ -200,7 +200,7 @@ def test_only_evidence_artifacts_are_committable(name, allowed):
 def test_the_armed_step_is_off_unless_explicitly_armed():
     wf = WF.read_text()
     i = wf.index("ONE authorized Gemini continuous window")
-    step = wf[i:i + 2000]
+    step = _step("ONE authorized Gemini continuous window")
     assert "github.event.inputs.armed_continuous == 'true'" in step
     assert 'default: "false"' in wf
 
@@ -347,7 +347,7 @@ def test_REGRESSION_the_add_list_and_the_allow_list_name_the_same_files():
     import re
     wf = WF.read_text()
     i = wf.index("Commit ONLY the evidence artifact")
-    step = wf[i:i + 3200]
+    step = _step("Commit ONLY the evidence artifact")
     pattern = re.search(r"grep -qvE '([^']+)'", step).group(1)
 
     # every pathspec the `for` loop stages, as a concrete filename
@@ -385,9 +385,9 @@ def test_REGRESSION_the_add_list_and_the_allow_list_name_the_same_files():
 def test_the_allow_list_still_rejects_anything_outside_the_evidence_dir():
     import re
     wf = WF.read_text()
-    i = wf.index("Commit ONLY the evidence artifact")
     pattern = re.search(r"grep -qvE '([^']+)'",
-                        wf[i:i + 3200]).group(1)
+                        _step("Commit ONLY the evidence artifact")
+                        ).group(1)
     for bad in ("src/gemini_execution/ws_continuous.py",
                 ".github/workflows/gemini-settlement-gate.yml",
                 "analysis/gemini/../../src/x.py",
@@ -469,7 +469,7 @@ def test_the_unarmed_band_defaults_to_the_standing_rule():
     not make every routine gate run sit through a 420s wait."""
     wf = WF.read_text()
     i = wf.index("unarmed_entry_band:")
-    assert 'default: "90:300"' in wf[i:i + 500]
+    assert 'default: "90:300"' in wf[i:i + 800]
     # the STEP, not a fixed slice: the first cut was 900 chars and stopped
     # short of the very line it was checking.
     unarmed = wf.split("Unarmed production path", 1)[1].split(

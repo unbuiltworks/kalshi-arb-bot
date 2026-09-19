@@ -36,6 +36,10 @@ on:
         description: "Set to true to ARM the ONE authorized continuous window. Default false."
         required: false
         default: "false"
+      continuous_shadow_soak:
+        description: "Set to true to run the CONTINUOUS V1 SHADOW soak (read-only, no order path). Default false."
+        required: false
+        default: "false"
       unarmed_entry_band:
         description: "Entry band LO:HI for the UNARMED production-path proof. Default 90:300 (the standing rule) so routine runs do not wait. Set 240:280 to prove the armed window's own band read-only."
         required: false
@@ -411,6 +415,31 @@ jobs:
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/continuous.txt
 
+      # ==================================================================
+      # CONTINUOUS V1 SHADOW SOAK. The production lifecycle -- discover,
+      # wait for the band, establish authoritative state, run the FROZEN
+      # policy, check the rollover gate -- with NO order path: it never
+      # constructs a session and never calls place or cancel, which is a
+      # property of what it calls rather than a flag it sets.
+      #
+      # It needs the read-only credentials for the authoritative ACCOUNT
+      # half; without them the rollover gate correctly refuses, because an
+      # unreadable open-order list is not an empty one.
+      - name: Continuous V1 SHADOW soak (read-only; sends nothing)
+        if: ${{ github.event.inputs.continuous_shadow_soak == 'true' }}
+        timeout-minutes: 45
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini/continuous_v1
+          python -m src.gemini_execution.shadow_soak \
+            --windows 4 --cycles 22 --interval 8 \
+            --band-lo 240 --band-hi 280 \
+            --evidence-dir analysis/gemini/continuous_v1 \
+            --out analysis/gemini/continuous_shadow_soak_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/soak.txt
+
       - name: Report the gate, without deciding anything
         run: python3 scripts/gemini_settlement_gate_report.py /tmp/gate.json
 
@@ -435,6 +464,8 @@ jobs:
                    analysis/gemini/reconcile_slot_*.json \
                    analysis/gemini/continuous_unarmed_*.json \
                    analysis/gemini/premutation_proof_*.json \
+                   analysis/gemini/continuous_shadow_soak_*.json \
+                   analysis/gemini/continuous_v1/continuous_v1.jsonl \
                    analysis/gemini/continuous_ledger.jsonl \
                    analysis/gemini/cohorts/*/ledger.jsonl \
                    analysis/gemini/cohorts/*/cohort.json \
@@ -457,7 +488,7 @@ jobs:
           # thrown the record away -- and the NEXT window would have read a
           # cohort with 0 consumed. That is a budget reset by accident, which
           # is the one thing the cohort mechanism exists to make impossible.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other
