@@ -1,9 +1,9 @@
 {
   "FULL_TAPE": {
     "label": "GEMINI_PRE_ENTRY_HABITAT_V1",
-    "utc": "2026-09-19T14:12:09.429602+00:00",
+    "utc": "2026-09-19T15:10:38.913767+00:00",
     "excluded_bursts": false,
-    "independent_windows": 31,
+    "independent_windows": 43,
     "windows_skipped": 6,
     "skipped": [
       {
@@ -34,17 +34,17 @@
     "rows_failing_the_leakage_check": 0,
     "leakage_failures": [],
     "outcome_base_rates": {
-      "initial_maker_fill": 17,
+      "initial_maker_fill": 21,
       "opposite_reachable_print_after_first_fill": 3,
       "complete_fill": 3,
       "matched_pair": 3,
       "par_constrained_matched_pair": 1
     },
     "distributions": {
-      "independent_windows": 31,
+      "independent_windows": 43,
       "features": {
         "prior_prints": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
           "p25": 2.0,
           "median": 4.0,
@@ -53,291 +53,291 @@
           "coverage": 1.0
         },
         "prior_notional_usd": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
-          "p25": 6.0,
+          "p25": 5.0444,
           "median": 10.5,
-          "p75": 149.64,
-          "max": 395.9322,
+          "p75": 111.4026,
+          "max": 465.7964,
           "coverage": 1.0
         },
         "prior_prints_per_min": {
-          "n": 25,
+          "n": 33,
           "min": 0.783,
           "p25": 1.224,
-          "median": 2.559,
-          "p75": 6.42,
+          "median": 2.222,
+          "p75": 3.973,
           "max": 112.08,
-          "coverage": 0.806
+          "coverage": 0.767
         },
         "prior_notional_per_min": {
-          "n": 25,
+          "n": 33,
           "min": 0.2139,
           "p25": 4.1695,
           "median": 12.6357,
           "p75": 64.6165,
           "max": 11370.8593,
-          "coverage": 0.806
+          "coverage": 0.767
         },
         "prior_two_sided": {
-          "n": 29,
+          "n": 39,
           "min": 0.0,
           "p25": 1.0,
           "median": 1.0,
           "p75": 1.0,
           "max": 1.0,
-          "coverage": 0.935
+          "coverage": 0.907
         },
         "prior_side_balance": {
-          "n": 29,
+          "n": 39,
           "min": 0.0,
-          "p25": 0.333,
+          "p25": 0.25,
           "median": 0.5,
-          "p75": 0.667,
+          "p75": 0.75,
           "max": 1.0,
-          "coverage": 0.935
+          "coverage": 0.907
         },
         "prior_seconds_since_last_print": {
-          "n": 29,
+          "n": 39,
           "min": 36.365,
           "p25": 99.281,
-          "median": 192.718,
+          "median": 164.824,
           "p75": 251.539,
-          "max": 330.549,
-          "coverage": 0.935
+          "max": 338.001,
+          "coverage": 0.907
         },
         "prior_span_s": {
-          "n": 29,
+          "n": 39,
           "min": 0.0,
           "p25": 18.519,
           "median": 135.914,
-          "p75": 287.69,
+          "p75": 256.851,
           "max": 367.202,
-          "coverage": 0.935
+          "coverage": 0.907
         },
         "entry_spread": {
-          "n": 31,
-          "min": 0.24,
-          "p25": 0.29,
-          "median": 0.32,
-          "p75": 0.34,
+          "n": 43,
+          "min": 0.11,
+          "p25": 0.27,
+          "median": 0.31,
+          "p75": 0.33,
           "max": 0.38,
           "coverage": 1.0
         },
         "entry_yes_bid": {
-          "n": 31,
+          "n": 43,
           "min": 0.03,
-          "p25": 0.2,
-          "median": 0.33,
-          "p75": 0.47,
-          "max": 0.6,
+          "p25": 0.3,
+          "median": 0.39,
+          "p75": 0.52,
+          "max": 0.87,
           "coverage": 1.0
         },
         "entry_yes_ask": {
-          "n": 31,
+          "n": 43,
           "min": 0.3,
-          "p25": 0.53,
+          "p25": 0.59,
           "median": 0.69,
-          "p75": 0.78,
-          "max": 0.9,
+          "p75": 0.79,
+          "max": 0.98,
           "coverage": 1.0
         },
         "entry_mid": {
-          "n": 31,
+          "n": 43,
           "min": 0.165,
-          "p25": 0.365,
-          "median": 0.51,
-          "p75": 0.62,
-          "max": 0.75,
+          "p25": 0.445,
+          "median": 0.545,
+          "p75": 0.645,
+          "max": 0.925,
           "coverage": 1.0
         },
         "entry_touch_depth": {
-          "n": 31,
+          "n": 43,
           "min": 10.0,
+          "p25": 10.0,
+          "median": 312.0,
+          "p75": 500.0,
+          "max": 1363.0,
+          "coverage": 1.0
+        },
+        "entry_levels": {
+          "n": 43,
+          "min": 1.0,
+          "p25": 3.0,
+          "median": 4.0,
+          "p75": 4.0,
+          "max": 5.0,
+          "coverage": 1.0
+        },
+        "entry_depth_within_3": {
+          "n": 43,
+          "min": 0.0,
           "p25": 10.0,
           "median": 384.0,
           "p75": 510.0,
           "max": 1363.0,
           "coverage": 1.0
         },
-        "entry_levels": {
-          "n": 31,
-          "min": 1.0,
-          "p25": 3.0,
-          "median": 3.0,
-          "p75": 4.0,
-          "max": 5.0,
-          "coverage": 1.0
-        },
-        "entry_depth_within_3": {
-          "n": 31,
-          "min": 10.0,
-          "p25": 277.0,
-          "median": 384.0,
-          "p75": 527.0,
-          "max": 1363.0,
-          "coverage": 1.0
-        },
         "own_prints_before_entry": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
           "p25": 0.0,
-          "median": 2.0,
-          "p75": 3.0,
+          "median": 1.0,
+          "p75": 2.0,
           "max": 5.0,
           "coverage": 1.0
         },
         "own_notional_before_entry": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
           "p25": 0.0,
-          "median": 2.046,
-          "p75": 6.8336,
-          "max": 21.5616,
+          "median": 1.0,
+          "p75": 7.2,
+          "max": 29.5,
           "coverage": 1.0
         },
         "own_price_move_before_entry": {
-          "n": 20,
+          "n": 26,
           "min": -0.17,
           "p25": -0.02,
           "median": 0.0,
           "p75": 0.02,
           "max": 0.24,
-          "coverage": 0.645
+          "coverage": 0.605
         },
         "entry_tte_s": {
-          "n": 31,
+          "n": 43,
           "min": 223.49377632141113,
-          "p25": 266.15567326545715,
-          "median": 268.7590923309326,
-          "p75": 272.48322463035583,
+          "p25": 266.22328066825867,
+          "median": 269.2638201713562,
+          "p75": 271.83605575561523,
           "max": 277.7100954055786,
           "coverage": 1.0
         },
         "touch_turnover_before_entry": {
-          "n": 18,
+          "n": 30,
           "min": -1143.0,
-          "p25": -10.0,
+          "p25": 0.0,
           "median": 0.0,
           "p75": 0.0,
           "max": 490.0,
-          "coverage": 0.581
+          "coverage": 0.698
         }
       }
     },
     "correlations": {
       "outcome": "par_constrained_matched_pair",
-      "independent_windows": 31,
+      "independent_windows": 43,
       "positives": 1,
-      "negatives": 30,
+      "negatives": 42,
       "smaller_cell": 1,
       "any_meaningful": false,
       "features": {
         "prior_prints": {
-          "n_pairs": 31,
-          "rho": -0.2982,
+          "n_pairs": 43,
+          "rho": -0.2441,
           "meaningful": false
         },
         "prior_notional_usd": {
-          "n_pairs": 31,
-          "rho": -0.296,
+          "n_pairs": 43,
+          "rho": -0.2426,
           "meaningful": false
         },
         "prior_prints_per_min": {
-          "n_pairs": 25,
+          "n_pairs": 33,
           "rho": null,
           "meaningful": false
         },
         "prior_notional_per_min": {
-          "n_pairs": 25,
+          "n_pairs": 33,
           "rho": null,
           "meaningful": false
         },
         "prior_two_sided": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "prior_side_balance": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "prior_seconds_since_last_print": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "prior_span_s": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "entry_spread": {
-          "n_pairs": 31,
-          "rho": 0.1028,
+          "n_pairs": 43,
+          "rho": 0.1249,
           "meaningful": false
         },
         "entry_yes_bid": {
-          "n_pairs": 31,
-          "rho": 0.1843,
+          "n_pairs": 43,
+          "rho": 0.1059,
           "meaningful": false
         },
         "entry_yes_ask": {
-          "n_pairs": 31,
-          "rho": 0.2043,
+          "n_pairs": 43,
+          "rho": 0.1493,
           "meaningful": false
         },
         "entry_mid": {
-          "n_pairs": 31,
-          "rho": 0.1941,
+          "n_pairs": 43,
+          "rho": 0.1306,
           "meaningful": false
         },
         "entry_touch_depth": {
-          "n_pairs": 31,
-          "rho": -0.0621,
+          "n_pairs": 43,
+          "rho": 0.0,
           "meaningful": false
         },
         "entry_levels": {
-          "n_pairs": 31,
-          "rho": 0.2705,
+          "n_pairs": 43,
+          "rho": 0.2203,
           "meaningful": false
         },
         "entry_depth_within_3": {
-          "n_pairs": 31,
-          "rho": -0.1025,
+          "n_pairs": 43,
+          "rho": -0.0501,
           "meaningful": false
         },
         "own_prints_before_entry": {
-          "n_pairs": 31,
-          "rho": 0.0528,
+          "n_pairs": 43,
+          "rho": 0.0842,
           "meaningful": false
         },
         "own_notional_before_entry": {
-          "n_pairs": 31,
-          "rho": 0.1879,
+          "n_pairs": 43,
+          "rho": 0.154,
           "meaningful": false
         },
         "own_price_move_before_entry": {
-          "n_pairs": 20,
-          "rho": 0.2652,
+          "n_pairs": 26,
+          "rho": 0.2361,
           "meaningful": false
         },
         "entry_tte_s": {
-          "n_pairs": 31,
-          "rho": -0.2041,
+          "n_pairs": 43,
+          "rho": -0.1989,
           "meaningful": false
         },
         "touch_turnover_before_entry": {
-          "n_pairs": 18,
-          "rho": 0.0798,
+          "n_pairs": 30,
+          "rho": 0.0,
           "meaningful": false
         }
       },
-      "why": "a coefficient here describes these 31 windows. With 1 positive it is not an estimate of anything and no threshold follows from it; 30 per cell would be the floor."
+      "why": "a coefficient here describes these 43 windows. With 1 positive it is not an estimate of anything and no threshold follows from it; 30 per cell would be the floor."
     },
     "leave_one_out": {
-      "independent_windows": 31,
+      "independent_windows": 43,
       "outcome": "par_constrained_matched_pair",
       "features": {
         "prior_prints": {
@@ -361,7 +361,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_notional_per_min": {
@@ -369,7 +369,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_two_sided": {
@@ -377,7 +377,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_side_balance": {
@@ -385,7 +385,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_seconds_since_last_print": {
@@ -393,7 +393,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_span_s": {
@@ -401,21 +401,21 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_spread": {
-          "contrast_all_windows": 0.01,
-          "loo_min": 0.01,
-          "loo_max": 0.01,
+          "contrast_all_windows": 0.02,
+          "loo_min": 0.02,
+          "loo_max": 0.02,
           "sign_flips_when_one_window_is_dropped": 0,
           "drops_that_destroy_the_contrast": 1,
           "survives_every_drop": false
         },
         "entry_yes_bid": {
-          "contrast_all_windows": 0.15,
-          "loo_min": 0.15,
-          "loo_max": 0.16,
+          "contrast_all_windows": 0.09,
+          "loo_min": 0.09,
+          "loo_max": 0.09,
           "sign_flips_when_one_window_is_dropped": 0,
           "drops_that_destroy_the_contrast": 1,
           "survives_every_drop": false
@@ -429,14 +429,30 @@
           "survives_every_drop": false
         },
         "entry_mid": {
-          "contrast_all_windows": 0.135,
-          "loo_min": 0.135,
-          "loo_max": 0.155,
+          "contrast_all_windows": 0.1,
+          "loo_min": 0.1,
+          "loo_max": 0.115,
           "sign_flips_when_one_window_is_dropped": 0,
           "drops_that_destroy_the_contrast": 1,
           "survives_every_drop": false
         },
         "entry_touch_depth": {
+          "contrast_all_windows": -14.0,
+          "loo_min": -14.0,
+          "loo_max": 22.0,
+          "sign_flips_when_one_window_is_dropped": 21,
+          "drops_that_destroy_the_contrast": 1,
+          "survives_every_drop": false
+        },
+        "entry_levels": {
+          "contrast_all_windows": 1.0,
+          "loo_min": 1.0,
+          "loo_max": 2.0,
+          "sign_flips_when_one_window_is_dropped": 0,
+          "drops_that_destroy_the_contrast": 1,
+          "survives_every_drop": false
+        },
+        "entry_depth_within_3": {
           "contrast_all_windows": -72.0,
           "loo_min": -72.0,
           "loo_max": -72.0,
@@ -444,33 +460,17 @@
           "drops_that_destroy_the_contrast": 1,
           "survives_every_drop": false
         },
-        "entry_levels": {
-          "contrast_all_windows": 2.0,
-          "loo_min": 2.0,
-          "loo_max": 2.0,
-          "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 1,
-          "survives_every_drop": false
-        },
-        "entry_depth_within_3": {
-          "contrast_all_windows": -103.0,
-          "loo_min": -103.0,
-          "loo_max": -72.0,
-          "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 1,
-          "survives_every_drop": false
-        },
         "own_prints_before_entry": {
-          "contrast_all_windows": 0.0,
-          "loo_min": 0.0,
-          "loo_max": 0.0,
+          "contrast_all_windows": 1.0,
+          "loo_min": 1.0,
+          "loo_max": 1.0,
           "sign_flips_when_one_window_is_dropped": 0,
           "drops_that_destroy_the_contrast": 1,
           "survives_every_drop": false
         },
         "own_notional_before_entry": {
-          "contrast_all_windows": 6.954,
-          "loo_min": 6.954,
+          "contrast_all_windows": 8.0,
+          "loo_min": 8.0,
           "loo_max": 8.025,
           "sign_flips_when_one_window_is_dropped": 0,
           "drops_that_destroy_the_contrast": 1,
@@ -485,9 +485,9 @@
           "survives_every_drop": false
         },
         "entry_tte_s": {
-          "contrast_all_windows": -4.93212,
-          "loo_min": -4.93212,
-          "loo_max": -4.427392,
+          "contrast_all_windows": -5.125211,
+          "loo_min": -5.125211,
+          "loo_max": -4.93212,
           "sign_flips_when_one_window_is_dropped": 0,
           "drops_that_destroy_the_contrast": 1,
           "survives_every_drop": false
@@ -504,16 +504,16 @@
       "why": "a contrast that changes sign when one window is removed was that window, not a habitat characteristic. A drop that DESTROYS the contrast -- emptying a cell -- is counted too: with one positive window, removing it leaves nothing to contrast, and calling that 'no sign flip' would make a single observation look robust."
     },
     "oracle_bound": {
-      "independent_windows": 31,
+      "independent_windows": 43,
       "windows_with_the_outcome": 1,
-      "base_rate": 0.0323,
-      "gross_contracts_all": "0.20",
+      "base_rate": 0.0233,
+      "gross_contracts_all": "0.24",
       "gross_contracts_retained": "0.02",
-      "gross_exposure_avoided_share": "0.9000",
-      "capital_at_risk_all_usd": "0.0903",
+      "gross_exposure_avoided_share": "0.9167",
+      "capital_at_risk_all_usd": "0.1086",
       "capital_at_risk_retained_usd": "0.0093",
-      "capital_avoided_share": "0.8970",
-      "residual_usd_all": "0.0545",
+      "capital_avoided_share": "0.9144",
+      "residual_usd_all": "0.0728",
       "residual_usd_retained": "0",
       "residual_avoided_share": "1.0000",
       "outcome_retained_share": 1.0,
@@ -2017,15 +2017,591 @@
           "gross_contracts": "0",
           "n_fills": 0
         }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191415-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191410-UP",
+        "entry_instant_ms": "1789827029052",
+        "entry_tte_s": 271.83605575561523,
+        "has_live_snapshot": true,
+        "prior_prints": 1,
+        "prior_notional_usd": "7.70",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": false,
+        "prior_side_balance": 0.0,
+        "prior_span_s": 0.0,
+        "prior_seconds_since_last_print": 321.848,
+        "entry_spread": "0.27",
+        "entry_yes_bid": "0.33",
+        "entry_yes_ask": "0.6",
+        "entry_mid": "0.465",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 5,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0084",
+          "capital_at_risk_usd": "0.0084",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191420-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191415-UP",
+        "entry_instant_ms": "1789827335200",
+        "entry_tte_s": 266.323606967926,
+        "has_live_snapshot": true,
+        "prior_prints": 2,
+        "prior_notional_usd": "5.0444",
+        "prior_prints_per_min": "1.075",
+        "prior_notional_per_min": "2.7121",
+        "prior_two_sided": true,
+        "prior_side_balance": 1.0,
+        "prior_span_s": 111.596,
+        "prior_seconds_since_last_print": 149.922,
+        "entry_spread": "0.31",
+        "entry_yes_bid": "0.48",
+        "entry_yes_ask": "0.79",
+        "entry_mid": "0.635",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "336.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191425-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191420-UP",
+        "entry_instant_ms": "1789827627375",
+        "entry_tte_s": 273.6082763671875,
+        "has_live_snapshot": true,
+        "prior_prints": 0,
+        "prior_notional_usd": "0",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": null,
+        "prior_side_balance": null,
+        "prior_span_s": null,
+        "prior_seconds_since_last_print": null,
+        "entry_spread": "0.19",
+        "entry_yes_bid": "0.74",
+        "entry_yes_ask": "0.93",
+        "entry_mid": "0.835",
+        "entry_touch_depth": "220.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "5.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191430-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191425-UP",
+        "entry_instant_ms": "1789827929951",
+        "entry_tte_s": 271.53434133529663,
+        "has_live_snapshot": true,
+        "prior_prints": 9,
+        "prior_notional_usd": "50.1984",
+        "prior_prints_per_min": "5.736",
+        "prior_notional_per_min": "31.9949",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.8,
+        "prior_span_s": 94.137,
+        "prior_seconds_since_last_print": 112.081,
+        "entry_spread": "0.24",
+        "entry_yes_bid": "0.63",
+        "entry_yes_ask": "0.87",
+        "entry_mid": "0.75",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 3,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191435-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191430-UP",
+        "entry_instant_ms": "1789828230395",
+        "entry_tte_s": 270.64447593688965,
+        "has_live_snapshot": true,
+        "prior_prints": 0,
+        "prior_notional_usd": "0",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": null,
+        "prior_side_balance": null,
+        "prior_span_s": null,
+        "prior_seconds_since_last_print": null,
+        "entry_spread": "0.28",
+        "entry_yes_bid": "0.39",
+        "entry_yes_ask": "0.67",
+        "entry_mid": "0.53",
+        "entry_touch_depth": "384.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "384.0",
+        "own_prints_before_entry": 1,
+        "own_notional_before_entry": "7.20",
+        "own_price_move_before_entry": "0.00",
+        "touch_turnover_before_entry": "112.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789828205438",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789828230395",
+          "latest_feature_source_ms": "1789828205438",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0031",
+          "capital_at_risk_usd": "0.0031",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191440-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191435-UP",
+        "entry_instant_ms": "1789828536357",
+        "entry_tte_s": 264.7485203742981,
+        "has_live_snapshot": true,
+        "prior_prints": 7,
+        "prior_notional_usd": "111.4026",
+        "prior_prints_per_min": "1.635",
+        "prior_notional_per_min": "26.0235",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.75,
+        "prior_span_s": 256.851,
+        "prior_seconds_since_last_print": 74.068,
+        "entry_spread": "0.28",
+        "entry_yes_bid": "0.31",
+        "entry_yes_ask": "0.59",
+        "entry_mid": "0.45",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 5,
+        "entry_depth_within_3": "545.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "-525.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0037",
+          "capital_at_risk_usd": "0.0037",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191445-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191440-UP",
+        "entry_instant_ms": "1789828831262",
+        "entry_tte_s": 270.84728169441223,
+        "has_live_snapshot": true,
+        "prior_prints": 4,
+        "prior_notional_usd": "7.4790",
+        "prior_prints_per_min": "1.779",
+        "prior_notional_per_min": "3.3259",
+        "prior_two_sided": true,
+        "prior_side_balance": 1.0,
+        "prior_span_s": 134.924,
+        "prior_seconds_since_last_print": 122.011,
+        "entry_spread": "0.20",
+        "entry_yes_bid": "0.56",
+        "entry_yes_ask": "0.76",
+        "entry_mid": "0.66",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 5,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 1,
+        "own_notional_before_entry": "1.0",
+        "own_price_move_before_entry": "0.0",
+        "touch_turnover_before_entry": "10.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789828795461",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789828831262",
+          "latest_feature_source_ms": "1789828795461",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191450-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191445-UP",
+        "entry_instant_ms": "1789829133462",
+        "entry_tte_s": 267.5807104110718,
+        "has_live_snapshot": true,
+        "prior_prints": 1,
+        "prior_notional_usd": "1.0",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": false,
+        "prior_side_balance": 0.0,
+        "prior_span_s": 0.0,
+        "prior_seconds_since_last_print": 338.001,
+        "entry_spread": "0.11",
+        "entry_yes_bid": "0.87",
+        "entry_yes_ask": "0.98",
+        "entry_mid": "0.925",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 2,
+        "own_notional_before_entry": "11.10",
+        "own_price_move_before_entry": "0.07",
+        "touch_turnover_before_entry": "5.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789829111292",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789829133462",
+          "latest_feature_source_ms": "1789829111292",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191455-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191450-UP",
+        "entry_instant_ms": "1789829434087",
+        "entry_tte_s": 266.9505400657654,
+        "has_live_snapshot": true,
+        "prior_prints": 3,
+        "prior_notional_usd": "14.30",
+        "prior_prints_per_min": "0.941",
+        "prior_notional_per_min": "4.4856",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.5,
+        "prior_span_s": 191.279,
+        "prior_seconds_since_last_print": 135.52,
+        "entry_spread": "0.33",
+        "entry_yes_bid": "0.23",
+        "entry_yes_ask": "0.56",
+        "entry_mid": "0.395",
+        "entry_touch_depth": "652.0",
+        "entry_levels": 2,
+        "entry_depth_within_3": "652.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "142.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191500-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191455-UP",
+        "entry_instant_ms": "1789829736737",
+        "entry_tte_s": 264.3571243286133,
+        "has_live_snapshot": true,
+        "prior_prints": 10,
+        "prior_notional_usd": "371.2391",
+        "prior_prints_per_min": "2.504",
+        "prior_notional_per_min": "92.9717",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.667,
+        "prior_span_s": 239.582,
+        "prior_seconds_since_last_print": 61.286,
+        "entry_spread": "0.15",
+        "entry_yes_bid": "0.5",
+        "entry_yes_ask": "0.65",
+        "entry_mid": "0.575",
+        "entry_touch_depth": "290.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "290.0",
+        "own_prints_before_entry": 2,
+        "own_notional_before_entry": "10.0",
+        "own_price_move_before_entry": "0.0",
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789829722719",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789829736737",
+          "latest_feature_source_ms": "1789829722719",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0031",
+          "capital_at_risk_usd": "0.0031",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191505-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191500-UP",
+        "entry_instant_ms": "1789830030071",
+        "entry_tte_s": 271.20134258270264,
+        "has_live_snapshot": true,
+        "prior_prints": 10,
+        "prior_notional_usd": "465.7964",
+        "prior_prints_per_min": "2.893",
+        "prior_notional_per_min": "134.7609",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.667,
+        "prior_span_s": 207.388,
+        "prior_seconds_since_last_print": 103.977,
+        "entry_spread": "0.28",
+        "entry_yes_bid": "0.39",
+        "entry_yes_ask": "0.67",
+        "entry_mid": "0.53",
+        "entry_touch_depth": "384.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "384.0",
+        "own_prints_before_entry": 1,
+        "own_notional_before_entry": "5.10",
+        "own_price_move_before_entry": "0.00",
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789829999280",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789830030071",
+          "latest_feature_source_ms": "1789829999280",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191510-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191505-UP",
+        "entry_instant_ms": "1789830327945",
+        "entry_tte_s": 273.735223531723,
+        "has_live_snapshot": true,
+        "prior_prints": 4,
+        "prior_notional_usd": "29.40",
+        "prior_prints_per_min": "1.526",
+        "prior_notional_per_min": "11.2157",
+        "prior_two_sided": false,
+        "prior_side_balance": 0.0,
+        "prior_span_s": 157.28,
+        "prior_seconds_since_last_print": 171.385,
+        "entry_spread": "0.33",
+        "entry_yes_bid": "0.59",
+        "entry_yes_ask": "0.92",
+        "entry_mid": "0.755",
+        "entry_touch_depth": "254.0",
+        "entry_levels": 2,
+        "entry_depth_within_3": "254.0",
+        "own_prints_before_entry": 5,
+        "own_notional_before_entry": "29.50",
+        "own_price_move_before_entry": "-0.05",
+        "touch_turnover_before_entry": "-13.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789830297201",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789830327945",
+          "latest_feature_source_ms": "1789830297201",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
       }
     ],
     "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order; outcomes are computed separately from the GEMINI_RECYCLE replay. Nothing is trained, no threshold is fitted, no admission rule exists, and every execution behind the outcomes is SHADOW/THEORETICAL."
   },
   "NO_BURSTS": {
     "label": "GEMINI_PRE_ENTRY_HABITAT_V1",
-    "utc": "2026-09-19T14:12:51.760481+00:00",
+    "utc": "2026-09-19T15:11:47.163729+00:00",
     "excluded_bursts": true,
-    "independent_windows": 31,
+    "independent_windows": 43,
     "windows_skipped": 6,
     "skipped": [
       {
@@ -2056,17 +2632,17 @@
     "rows_failing_the_leakage_check": 0,
     "leakage_failures": [],
     "outcome_base_rates": {
-      "initial_maker_fill": 15,
+      "initial_maker_fill": 19,
       "opposite_reachable_print_after_first_fill": 1,
       "complete_fill": 1,
       "matched_pair": 1,
       "par_constrained_matched_pair": 0
     },
     "distributions": {
-      "independent_windows": 31,
+      "independent_windows": 43,
       "features": {
         "prior_prints": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
           "p25": 2.0,
           "median": 4.0,
@@ -2075,291 +2651,291 @@
           "coverage": 1.0
         },
         "prior_notional_usd": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
-          "p25": 6.0,
+          "p25": 5.0444,
           "median": 10.5,
-          "p75": 149.64,
-          "max": 395.9322,
+          "p75": 111.4026,
+          "max": 465.7964,
           "coverage": 1.0
         },
         "prior_prints_per_min": {
-          "n": 25,
+          "n": 33,
           "min": 0.783,
           "p25": 1.224,
-          "median": 2.559,
-          "p75": 6.42,
+          "median": 2.222,
+          "p75": 3.973,
           "max": 112.08,
-          "coverage": 0.806
+          "coverage": 0.767
         },
         "prior_notional_per_min": {
-          "n": 25,
+          "n": 33,
           "min": 0.2139,
           "p25": 4.1695,
           "median": 12.6357,
           "p75": 64.6165,
           "max": 11370.8593,
-          "coverage": 0.806
+          "coverage": 0.767
         },
         "prior_two_sided": {
-          "n": 29,
+          "n": 39,
           "min": 0.0,
           "p25": 1.0,
           "median": 1.0,
           "p75": 1.0,
           "max": 1.0,
-          "coverage": 0.935
+          "coverage": 0.907
         },
         "prior_side_balance": {
-          "n": 29,
+          "n": 39,
           "min": 0.0,
-          "p25": 0.333,
+          "p25": 0.25,
           "median": 0.5,
-          "p75": 0.667,
+          "p75": 0.75,
           "max": 1.0,
-          "coverage": 0.935
+          "coverage": 0.907
         },
         "prior_seconds_since_last_print": {
-          "n": 29,
+          "n": 39,
           "min": 36.365,
           "p25": 99.281,
-          "median": 192.718,
+          "median": 164.824,
           "p75": 251.539,
-          "max": 330.549,
-          "coverage": 0.935
+          "max": 338.001,
+          "coverage": 0.907
         },
         "prior_span_s": {
-          "n": 29,
+          "n": 39,
           "min": 0.0,
           "p25": 18.519,
           "median": 135.914,
-          "p75": 287.69,
+          "p75": 256.851,
           "max": 367.202,
-          "coverage": 0.935
+          "coverage": 0.907
         },
         "entry_spread": {
-          "n": 31,
-          "min": 0.24,
-          "p25": 0.29,
-          "median": 0.32,
-          "p75": 0.34,
+          "n": 43,
+          "min": 0.11,
+          "p25": 0.27,
+          "median": 0.31,
+          "p75": 0.33,
           "max": 0.38,
           "coverage": 1.0
         },
         "entry_yes_bid": {
-          "n": 31,
+          "n": 43,
           "min": 0.03,
-          "p25": 0.2,
-          "median": 0.33,
-          "p75": 0.47,
-          "max": 0.6,
+          "p25": 0.3,
+          "median": 0.39,
+          "p75": 0.52,
+          "max": 0.87,
           "coverage": 1.0
         },
         "entry_yes_ask": {
-          "n": 31,
+          "n": 43,
           "min": 0.3,
-          "p25": 0.53,
+          "p25": 0.59,
           "median": 0.69,
-          "p75": 0.78,
-          "max": 0.9,
+          "p75": 0.79,
+          "max": 0.98,
           "coverage": 1.0
         },
         "entry_mid": {
-          "n": 31,
+          "n": 43,
           "min": 0.165,
-          "p25": 0.365,
-          "median": 0.51,
-          "p75": 0.62,
-          "max": 0.75,
+          "p25": 0.445,
+          "median": 0.545,
+          "p75": 0.645,
+          "max": 0.925,
           "coverage": 1.0
         },
         "entry_touch_depth": {
-          "n": 31,
+          "n": 43,
           "min": 10.0,
+          "p25": 10.0,
+          "median": 312.0,
+          "p75": 500.0,
+          "max": 1363.0,
+          "coverage": 1.0
+        },
+        "entry_levels": {
+          "n": 43,
+          "min": 1.0,
+          "p25": 3.0,
+          "median": 4.0,
+          "p75": 4.0,
+          "max": 5.0,
+          "coverage": 1.0
+        },
+        "entry_depth_within_3": {
+          "n": 43,
+          "min": 0.0,
           "p25": 10.0,
           "median": 384.0,
           "p75": 510.0,
           "max": 1363.0,
           "coverage": 1.0
         },
-        "entry_levels": {
-          "n": 31,
-          "min": 1.0,
-          "p25": 3.0,
-          "median": 3.0,
-          "p75": 4.0,
-          "max": 5.0,
-          "coverage": 1.0
-        },
-        "entry_depth_within_3": {
-          "n": 31,
-          "min": 10.0,
-          "p25": 277.0,
-          "median": 384.0,
-          "p75": 527.0,
-          "max": 1363.0,
-          "coverage": 1.0
-        },
         "own_prints_before_entry": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
           "p25": 0.0,
-          "median": 2.0,
-          "p75": 3.0,
+          "median": 1.0,
+          "p75": 2.0,
           "max": 5.0,
           "coverage": 1.0
         },
         "own_notional_before_entry": {
-          "n": 31,
+          "n": 43,
           "min": 0.0,
           "p25": 0.0,
-          "median": 2.046,
-          "p75": 6.8336,
-          "max": 21.5616,
+          "median": 1.0,
+          "p75": 7.2,
+          "max": 29.5,
           "coverage": 1.0
         },
         "own_price_move_before_entry": {
-          "n": 20,
+          "n": 26,
           "min": -0.17,
           "p25": -0.02,
           "median": 0.0,
           "p75": 0.02,
           "max": 0.24,
-          "coverage": 0.645
+          "coverage": 0.605
         },
         "entry_tte_s": {
-          "n": 31,
+          "n": 43,
           "min": 223.49377632141113,
-          "p25": 266.15567326545715,
-          "median": 268.7590923309326,
-          "p75": 272.48322463035583,
+          "p25": 266.22328066825867,
+          "median": 269.2638201713562,
+          "p75": 271.83605575561523,
           "max": 277.7100954055786,
           "coverage": 1.0
         },
         "touch_turnover_before_entry": {
-          "n": 18,
+          "n": 30,
           "min": -1143.0,
-          "p25": -10.0,
+          "p25": 0.0,
           "median": 0.0,
           "p75": 0.0,
           "max": 490.0,
-          "coverage": 0.581
+          "coverage": 0.698
         }
       }
     },
     "correlations": {
       "outcome": "par_constrained_matched_pair",
-      "independent_windows": 31,
+      "independent_windows": 43,
       "positives": 0,
-      "negatives": 31,
+      "negatives": 43,
       "smaller_cell": 0,
       "any_meaningful": false,
       "features": {
         "prior_prints": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "prior_notional_usd": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "prior_prints_per_min": {
-          "n_pairs": 25,
+          "n_pairs": 33,
           "rho": null,
           "meaningful": false
         },
         "prior_notional_per_min": {
-          "n_pairs": 25,
+          "n_pairs": 33,
           "rho": null,
           "meaningful": false
         },
         "prior_two_sided": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "prior_side_balance": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "prior_seconds_since_last_print": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "prior_span_s": {
-          "n_pairs": 29,
+          "n_pairs": 39,
           "rho": null,
           "meaningful": false
         },
         "entry_spread": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "entry_yes_bid": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "entry_yes_ask": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "entry_mid": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "entry_touch_depth": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "entry_levels": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "entry_depth_within_3": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "own_prints_before_entry": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "own_notional_before_entry": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "own_price_move_before_entry": {
-          "n_pairs": 20,
+          "n_pairs": 26,
           "rho": null,
           "meaningful": false
         },
         "entry_tte_s": {
-          "n_pairs": 31,
+          "n_pairs": 43,
           "rho": null,
           "meaningful": false
         },
         "touch_turnover_before_entry": {
-          "n_pairs": 18,
+          "n_pairs": 30,
           "rho": null,
           "meaningful": false
         }
       },
-      "why": "a coefficient here describes these 31 windows. With 0 positive it is not an estimate of anything and no threshold follows from it; 30 per cell would be the floor."
+      "why": "a coefficient here describes these 43 windows. With 0 positive it is not an estimate of anything and no threshold follows from it; 30 per cell would be the floor."
     },
     "leave_one_out": {
-      "independent_windows": 31,
+      "independent_windows": 43,
       "outcome": "par_constrained_matched_pair",
       "features": {
         "prior_prints": {
@@ -2367,7 +2943,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_notional_usd": {
@@ -2375,7 +2951,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_prints_per_min": {
@@ -2383,7 +2959,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_notional_per_min": {
@@ -2391,7 +2967,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_two_sided": {
@@ -2399,7 +2975,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_side_balance": {
@@ -2407,7 +2983,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_seconds_since_last_print": {
@@ -2415,7 +2991,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "prior_span_s": {
@@ -2423,7 +2999,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_spread": {
@@ -2431,7 +3007,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_yes_bid": {
@@ -2439,7 +3015,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_yes_ask": {
@@ -2447,7 +3023,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_mid": {
@@ -2455,7 +3031,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_touch_depth": {
@@ -2463,7 +3039,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_levels": {
@@ -2471,7 +3047,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_depth_within_3": {
@@ -2479,7 +3055,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "own_prints_before_entry": {
@@ -2487,7 +3063,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "own_notional_before_entry": {
@@ -2495,7 +3071,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "own_price_move_before_entry": {
@@ -2503,7 +3079,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "entry_tte_s": {
@@ -2511,7 +3087,7 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         },
         "touch_turnover_before_entry": {
@@ -2519,23 +3095,23 @@
           "loo_min": null,
           "loo_max": null,
           "sign_flips_when_one_window_is_dropped": 0,
-          "drops_that_destroy_the_contrast": 31,
+          "drops_that_destroy_the_contrast": 43,
           "survives_every_drop": false
         }
       },
       "why": "a contrast that changes sign when one window is removed was that window, not a habitat characteristic. A drop that DESTROYS the contrast -- emptying a cell -- is counted too: with one positive window, removing it leaves nothing to contrast, and calling that 'no sign flip' would make a single observation look robust."
     },
     "oracle_bound": {
-      "independent_windows": 31,
+      "independent_windows": 43,
       "windows_with_the_outcome": 0,
       "base_rate": 0.0,
-      "gross_contracts_all": "0.16",
+      "gross_contracts_all": "0.20",
       "gross_contracts_retained": "0",
       "gross_exposure_avoided_share": "1.0000",
-      "capital_at_risk_all_usd": "0.0665",
+      "capital_at_risk_all_usd": "0.0848",
       "capital_at_risk_retained_usd": "0",
       "capital_avoided_share": "1.0000",
-      "residual_usd_all": "0.0516",
+      "residual_usd_all": "0.0699",
       "residual_usd_retained": "0",
       "residual_avoided_share": "1.0000",
       "outcome_retained_share": 1.0,
@@ -4026,6 +4602,582 @@
         "leakage_check": {
           "clean": true,
           "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191415-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191410-UP",
+        "entry_instant_ms": "1789827029052",
+        "entry_tte_s": 271.83605575561523,
+        "has_live_snapshot": true,
+        "prior_prints": 1,
+        "prior_notional_usd": "7.70",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": false,
+        "prior_side_balance": 0.0,
+        "prior_span_s": 0.0,
+        "prior_seconds_since_last_print": 321.848,
+        "entry_spread": "0.27",
+        "entry_yes_bid": "0.33",
+        "entry_yes_ask": "0.6",
+        "entry_mid": "0.465",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 5,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0084",
+          "capital_at_risk_usd": "0.0084",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191420-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191415-UP",
+        "entry_instant_ms": "1789827335200",
+        "entry_tte_s": 266.323606967926,
+        "has_live_snapshot": true,
+        "prior_prints": 2,
+        "prior_notional_usd": "5.0444",
+        "prior_prints_per_min": "1.075",
+        "prior_notional_per_min": "2.7121",
+        "prior_two_sided": true,
+        "prior_side_balance": 1.0,
+        "prior_span_s": 111.596,
+        "prior_seconds_since_last_print": 149.922,
+        "entry_spread": "0.31",
+        "entry_yes_bid": "0.48",
+        "entry_yes_ask": "0.79",
+        "entry_mid": "0.635",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "336.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191425-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191420-UP",
+        "entry_instant_ms": "1789827627375",
+        "entry_tte_s": 273.6082763671875,
+        "has_live_snapshot": true,
+        "prior_prints": 0,
+        "prior_notional_usd": "0",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": null,
+        "prior_side_balance": null,
+        "prior_span_s": null,
+        "prior_seconds_since_last_print": null,
+        "entry_spread": "0.19",
+        "entry_yes_bid": "0.74",
+        "entry_yes_ask": "0.93",
+        "entry_mid": "0.835",
+        "entry_touch_depth": "220.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "5.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191430-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191425-UP",
+        "entry_instant_ms": "1789827929951",
+        "entry_tte_s": 271.53434133529663,
+        "has_live_snapshot": true,
+        "prior_prints": 9,
+        "prior_notional_usd": "50.1984",
+        "prior_prints_per_min": "5.736",
+        "prior_notional_per_min": "31.9949",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.8,
+        "prior_span_s": 94.137,
+        "prior_seconds_since_last_print": 112.081,
+        "entry_spread": "0.24",
+        "entry_yes_bid": "0.63",
+        "entry_yes_ask": "0.87",
+        "entry_mid": "0.75",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 3,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191435-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191430-UP",
+        "entry_instant_ms": "1789828230395",
+        "entry_tte_s": 270.64447593688965,
+        "has_live_snapshot": true,
+        "prior_prints": 0,
+        "prior_notional_usd": "0",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": null,
+        "prior_side_balance": null,
+        "prior_span_s": null,
+        "prior_seconds_since_last_print": null,
+        "entry_spread": "0.28",
+        "entry_yes_bid": "0.39",
+        "entry_yes_ask": "0.67",
+        "entry_mid": "0.53",
+        "entry_touch_depth": "384.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "384.0",
+        "own_prints_before_entry": 1,
+        "own_notional_before_entry": "7.20",
+        "own_price_move_before_entry": "0.00",
+        "touch_turnover_before_entry": "112.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789828205438",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789828230395",
+          "latest_feature_source_ms": "1789828205438",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0031",
+          "capital_at_risk_usd": "0.0031",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191440-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191435-UP",
+        "entry_instant_ms": "1789828536357",
+        "entry_tte_s": 264.7485203742981,
+        "has_live_snapshot": true,
+        "prior_prints": 7,
+        "prior_notional_usd": "111.4026",
+        "prior_prints_per_min": "1.635",
+        "prior_notional_per_min": "26.0235",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.75,
+        "prior_span_s": 256.851,
+        "prior_seconds_since_last_print": 74.068,
+        "entry_spread": "0.28",
+        "entry_yes_bid": "0.31",
+        "entry_yes_ask": "0.59",
+        "entry_mid": "0.45",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 5,
+        "entry_depth_within_3": "545.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "-525.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0037",
+          "capital_at_risk_usd": "0.0037",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191445-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191440-UP",
+        "entry_instant_ms": "1789828831262",
+        "entry_tte_s": 270.84728169441223,
+        "has_live_snapshot": true,
+        "prior_prints": 4,
+        "prior_notional_usd": "7.4790",
+        "prior_prints_per_min": "1.779",
+        "prior_notional_per_min": "3.3259",
+        "prior_two_sided": true,
+        "prior_side_balance": 1.0,
+        "prior_span_s": 134.924,
+        "prior_seconds_since_last_print": 122.011,
+        "entry_spread": "0.20",
+        "entry_yes_bid": "0.56",
+        "entry_yes_ask": "0.76",
+        "entry_mid": "0.66",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 5,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 1,
+        "own_notional_before_entry": "1.0",
+        "own_price_move_before_entry": "0.0",
+        "touch_turnover_before_entry": "10.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789828795461",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789828831262",
+          "latest_feature_source_ms": "1789828795461",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191450-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191445-UP",
+        "entry_instant_ms": "1789829133462",
+        "entry_tte_s": 267.5807104110718,
+        "has_live_snapshot": true,
+        "prior_prints": 1,
+        "prior_notional_usd": "1.0",
+        "prior_prints_per_min": null,
+        "prior_notional_per_min": null,
+        "prior_two_sided": false,
+        "prior_side_balance": 0.0,
+        "prior_span_s": 0.0,
+        "prior_seconds_since_last_print": 338.001,
+        "entry_spread": "0.11",
+        "entry_yes_bid": "0.87",
+        "entry_yes_ask": "0.98",
+        "entry_mid": "0.925",
+        "entry_touch_depth": "10.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "10.0",
+        "own_prints_before_entry": 2,
+        "own_notional_before_entry": "11.10",
+        "own_price_move_before_entry": "0.07",
+        "touch_turnover_before_entry": "5.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789829111292",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789829133462",
+          "latest_feature_source_ms": "1789829111292",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191455-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191450-UP",
+        "entry_instant_ms": "1789829434087",
+        "entry_tte_s": 266.9505400657654,
+        "has_live_snapshot": true,
+        "prior_prints": 3,
+        "prior_notional_usd": "14.30",
+        "prior_prints_per_min": "0.941",
+        "prior_notional_per_min": "4.4856",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.5,
+        "prior_span_s": 191.279,
+        "prior_seconds_since_last_print": 135.52,
+        "entry_spread": "0.33",
+        "entry_yes_bid": "0.23",
+        "entry_yes_ask": "0.56",
+        "entry_mid": "0.395",
+        "entry_touch_depth": "652.0",
+        "entry_levels": 2,
+        "entry_depth_within_3": "652.0",
+        "own_prints_before_entry": 0,
+        "own_notional_before_entry": "0",
+        "own_price_move_before_entry": null,
+        "touch_turnover_before_entry": "142.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": null,
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "why": "no current-contract evidence was used; predecessor-only features cannot leak"
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191500-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191455-UP",
+        "entry_instant_ms": "1789829736737",
+        "entry_tte_s": 264.3571243286133,
+        "has_live_snapshot": true,
+        "prior_prints": 10,
+        "prior_notional_usd": "371.2391",
+        "prior_prints_per_min": "2.504",
+        "prior_notional_per_min": "92.9717",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.667,
+        "prior_span_s": 239.582,
+        "prior_seconds_since_last_print": 61.286,
+        "entry_spread": "0.15",
+        "entry_yes_bid": "0.5",
+        "entry_yes_ask": "0.65",
+        "entry_mid": "0.575",
+        "entry_touch_depth": "290.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "290.0",
+        "own_prints_before_entry": 2,
+        "own_notional_before_entry": "10.0",
+        "own_price_move_before_entry": "0.0",
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789829722719",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789829736737",
+          "latest_feature_source_ms": "1789829722719",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": true,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0.0031",
+          "capital_at_risk_usd": "0.0031",
+          "gross_contracts": "0.01",
+          "n_fills": 1
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191505-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191500-UP",
+        "entry_instant_ms": "1789830030071",
+        "entry_tte_s": 271.20134258270264,
+        "has_live_snapshot": true,
+        "prior_prints": 10,
+        "prior_notional_usd": "465.7964",
+        "prior_prints_per_min": "2.893",
+        "prior_notional_per_min": "134.7609",
+        "prior_two_sided": true,
+        "prior_side_balance": 0.667,
+        "prior_span_s": 207.388,
+        "prior_seconds_since_last_print": 103.977,
+        "entry_spread": "0.28",
+        "entry_yes_bid": "0.39",
+        "entry_yes_ask": "0.67",
+        "entry_mid": "0.53",
+        "entry_touch_depth": "384.0",
+        "entry_levels": 4,
+        "entry_depth_within_3": "384.0",
+        "own_prints_before_entry": 1,
+        "own_notional_before_entry": "5.10",
+        "own_price_move_before_entry": "0.00",
+        "touch_turnover_before_entry": "0.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789829999280",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789830030071",
+          "latest_feature_source_ms": "1789829999280",
+          "why": null
+        },
+        "_outcome": {
+          "initial_maker_fill": false,
+          "opposite_reachable_print_after_first_fill": false,
+          "complete_fill": false,
+          "matched_pair": false,
+          "par_constrained_matched_pair": false,
+          "effective_pair_basis": null,
+          "terminal_residual_usd": "0",
+          "capital_at_risk_usd": "0",
+          "gross_contracts": "0",
+          "n_fills": 0
+        }
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191510-UP",
+        "admissible": true,
+        "prior_symbol": "GEMI-BTC05M2609191505-UP",
+        "entry_instant_ms": "1789830327945",
+        "entry_tte_s": 273.735223531723,
+        "has_live_snapshot": true,
+        "prior_prints": 4,
+        "prior_notional_usd": "29.40",
+        "prior_prints_per_min": "1.526",
+        "prior_notional_per_min": "11.2157",
+        "prior_two_sided": false,
+        "prior_side_balance": 0.0,
+        "prior_span_s": 157.28,
+        "prior_seconds_since_last_print": 171.385,
+        "entry_spread": "0.33",
+        "entry_yes_bid": "0.59",
+        "entry_yes_ask": "0.92",
+        "entry_mid": "0.755",
+        "entry_touch_depth": "254.0",
+        "entry_levels": 2,
+        "entry_depth_within_3": "254.0",
+        "own_prints_before_entry": 5,
+        "own_notional_before_entry": "29.50",
+        "own_price_move_before_entry": "-0.05",
+        "touch_turnover_before_entry": "-13.0",
+        "book_depletion_available": true,
+        "book_depletion_why": null,
+        "latest_feature_source_ms": "1789830297201",
+        "labels": "PRE-ENTRY ONLY. Every feature is sourced strictly before the first hypothetical order. Nothing here is a selector, no threshold is fitted and no admission rule exists.",
+        "leakage_check": {
+          "clean": true,
+          "entry_instant_ms": "1789830327945",
+          "latest_feature_source_ms": "1789830297201",
+          "why": null
         },
         "_outcome": {
           "initial_maker_fill": false,

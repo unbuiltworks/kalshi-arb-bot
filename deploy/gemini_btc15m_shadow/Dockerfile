@@ -31,6 +31,12 @@ COPY src/gemini_prediction_auth.py src/gemini_prediction_auth.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
 COPY src/auth.py src/auth.py
 COPY src/fee_calc.py src/fee_calc.py
+# THE DATA CLOSURE, which the import closure does not cover. params.py reads
+# the frozen surface specs from artifacts/l5_surface at import; without them
+# `PR.load_frozen()["L5_ADAPTED_GEMINI_CRYPTO"]` raises KeyError the moment
+# the policy is first asked for a surface -- which is AFTER the entry band,
+# so the container looks healthy until its first real cycle.
+COPY artifacts/l5_surface/ artifacts/l5_surface/
 RUN touch src/__init__.py && pip install --no-cache-dir httpx websockets
 ENV PYTHONUNBUFFERED=1 \
     GEMINI_SHADOW_ROLE=gemini-btc15m-shadow \
