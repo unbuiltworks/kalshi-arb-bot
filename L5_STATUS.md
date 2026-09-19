@@ -53,8 +53,27 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > `analysis/gemini/CONTINUOUS_PROBE_1_FAIL_CLOSED.md` and
 > `CONTINUOUS_{5,6,7}_RESULT.md`.
 >
-> **As of CONTINUOUS-7 (2026-09-18T23:29Z) the binding constraint is no
-> longer plumbing — it is FILL RATE.** C7 ran 12 clean cycles, spent all 6
+> **CONTINUOUS-8 (2026-09-19T01:36Z) PROVED THE TARGET CHAIN LIVE.** Entered
+> at TTE 278.3s by the entry-band scheduler; eight cycles of OPEN/OPEN on
+> flat inventory; YES 0.01 @ 0.31 filled as MAKER at 01:36:28.553Z; the next
+> coherent refresh carried it (attempts 1, n_fills 1); and cycle 9 returned
+> **EXTEND YES @ 0.12 and COMPLETE NO @ 0.69** — labels `classify()` derives
+> from the residual, unreachable from empty inventory. Contract settled
+> **YES**; the engine's own settlement_report gives directional-residual
+> `gross_usd 0.0069`, status SETTLED_NOT_YET_CASH_CONFIRMED,
+> `matched_pair_economics: null`, `realized: null`. **EXPECTED +$0.0069, not
+> REALIZED**, and one 0.01 directional leg settling the right way is not
+> evidence of edge.
+>
+> **OPEN DEFECT, not blocking that result:** the coherence gate explains a
+> disappearance from `fills ∪ trades ∪ terminal_seen` while `CP.recover`
+> builds inventory from `fills` alone. At read 13 (2.64s after the fill)
+> `trades` already had it and `fills` did not, so the gate passed while
+> inventory read flat and a replacement went out against it. No decision was
+> corrupted. Fix before autonomous continuous operation: build inventory from
+> `fills ∪ trades`, deduplicated by order_id/tid.
+>
+> **Before C8, the binding constraint was FILL RATE, not plumbing.** C7 ran 12 clean cycles, spent all 6
 > cohort slots, had every mutation accepted, explained a real double
 > order-disappearance from authoritative terminal evidence on the first read,
 > and terminated with ZERO orders live (the first window to do so). It filled
@@ -70,7 +89,11 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > contributes nothing to any of them: no fill, no position, no economics.
 >
 > **The target chain — FILL → COHERENT REFRESH → INVENTORY CHANGE → CHANGED
-> L5 ACTION — is still UNPROVEN live.**
+> L5 ACTION — is PROVEN live, by CONTINUOUS-8.** Gemini REALIZED remains
+> $0.00 across eight windows: 5 fills, four confirmed settlements carrying
+> EXPECTED −$0.0006 (matched pair), −$0.0046, −$0.0021 and +$0.0069 (three
+> unmatched directional residuals). They are different objects and are never
+> summed. SETTLED IS NOT REALIZED.
 
 ### P0: Polymarket US sports
 
