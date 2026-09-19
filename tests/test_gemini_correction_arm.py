@@ -213,3 +213,50 @@ def test_THE_ENTRY_BAND_LETS_THE_ARM_BE_SEEN_AT_ALL():
     # distinguishable for most of the window
     ctl_hi = CP.probe_params().get("TTE_policy")["quote_between_tte_s"][1]
     assert lo > float(ctl_hi)
+
+
+# ----------------------------------------------- BTC5m must not have moved
+
+def test_BTC5M_RUNS_THE_CONTROL_PATH_WITH_NO_ARM_BRANCH_AT_ALL():
+    """The arm block is guarded by `if arms:`, and BTC5m has no arms.
+
+    So the code BTC5m executes per cycle is the code it executed before,
+    plus one integer written to the row. Nothing in its decision path is
+    routed through _step_arm, which is why "byte-for-byte" is a statement
+    about this file and not a hope.
+    """
+    import ast
+    import inspect
+    import textwrap
+    src = textwrap.dedent(inspect.getsource(SS.one_window))
+    tree = ast.parse(src)
+    # the control's own step is NOT a call to _step_arm
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    names = [getattr(n.func, "id", getattr(n.func, "attr", ""))
+             for n in calls]
+    assert names.count("_step_arms") == 1, names.count("_step_arms")
+    assert "_step_arm" not in names, "the control must not be routed via _step_arm"
+    # and that single call sits under `if arms:`
+    guarded = [n for n in ast.walk(tree)
+               if isinstance(n, ast.If)
+               and getattr(n.test, "id", None) == "arms"
+               and "_step_arms" in ast.unparse(n)]
+    assert len(guarded) == 1
+
+
+def test_A_COHORT_WITHOUT_AN_ARM_WRITES_NO_ARM_KEYS():
+    """A BTC5m row must not sprout correction_arms, empty or otherwise."""
+    corr_sp = SS.correction_spec(CC.BTC5M)
+    assert corr_sp is None
+    out = SS._step_arms([], symbol=SYM, tte=250.0, book=_book(), depth=None,
+                        flow={"prints": []}, policy="FROZEN_L5_NATIVE")
+    assert out == {}
+
+
+def test_THE_HEARTBEAT_OF_AN_ARMLESS_COHORT_REPORTS_ARMS_AS_NULL():
+    hb = SS.CohortHeartbeat("BTC5m")
+    hb.window_done({"symbol": "GEMI-BTC05M2609192115-UP", "state": "COMPLETED",
+                    "inventory": {"matched_qty": "0",
+                                  "directional_residual": "0"}})
+    assert hb.arms == {}
+    assert hb.windows == 1

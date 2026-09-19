@@ -218,6 +218,102 @@ on the accounting split. Those remain the useful output.
 observations. Whether the relationships survive is decided by the preregistered
 prospective residual-episode diagnostics at 5/15/30/60/120/300 s.
 
+## 2c-BUG. TRANSFER BUG, 2026-09-19 — `[0,300]` was a BTC5m instrument adaptation, never L5 BTC15m evidence
+
+**This is a correction to a transfer, not a change to L5's behavioral model.**
+
+`TTE_policy quote_between_tte_s = [0, 300]` on the Gemini lane **is not, and
+never was, a measurement of L5.** The frozen artifact
+`L5_ADAPTED_GEMINI_CRYPTO` records it as:
+
+| field | value |
+|---|---|
+| `status` | `OURS_ADAPTED` |
+| `evidence` | `null` |
+| `transferred_from` | `null` |
+| `prior_evidence` | "OURS ... Not a finding about this venue and never citable as one." |
+
+**L5's own measured `TTE_policy` is `OBSERVED_PROSPECTIVE` `[0, 900]`.**
+
+**How the bug happened.** The 300 is the length of a Gemini **BTC5m**
+contract. Commit `9b8a1ebe` (2026-09-17) created the Gemini lane and chose it
+for the 5-minute cohort, where it spans the *whole* contract and never binds —
+correct, and its own commit message says the number "is about the instrument."
+Commit `fdd19d06` (2026-09-19) bound **BTC15m** to that same lane spec without
+re-deriving the band. A number meaning "the entire window" on a 5-minute
+contract silently became "the last third" on a 15-minute one.
+
+`lanes.py` already declares `TTE_policy` INSTRUMENT_SPECIFIC *precisely
+because the number is a window length*. So this was never a disagreement with
+the transfer rule — it was the rule not being applied a second time. Applied
+to the actual instrument, a Gemini BTC15m window is 900s and the band is
+`[0, 900]`, which is independently the value measured from L5.
+
+**Nobody may cite `[0,300]` as an L5 finding.** `params.is_l5_evidence()`
+returns False for `OURS_ADAPTED`, and it had already propagated into method
+once: a habitat comparison was restricted to TTE≤300 on the stated grounds
+that "L5 measured it that way." The restriction was right (the clone cannot
+act outside its band); the justification was false.
+
+**What L5 actually does on BTC15m** — his own fills, 63,569 deduped across
+527 windows, segmented *per fill*:
+
+| bucket | fills | USD share | **OPEN** | EXTEND | COMPLETE | recycle | median basis |
+|---|---|---|---|---|---|---|---|
+| 600–900 | 18,604 | 30.3% | **560** | 9,028 | 9,016 | 0.810 | 0.9737 |
+| 300–600 | 22,687 | 34.2% | **46** | 11,155 | 11,486 | 1.003 | 0.9520 |
+| 180–300 | 10,100 | 16.1% | **13** | 5,271 | 4,816 | 0.925 | 0.9854 |
+| 120–180 | 4,644 | 7.7% | **6** | 2,404 | 2,234 | 0.886 | 0.9924 |
+| 60–120 | 4,890 | 8.5% | **1** | 2,638 | 2,251 | 0.866 | 0.9876 |
+| 30–60 | 2,165 | 2.5% | **0** | 1,218 | 947 | 0.865 | 0.8792 |
+| <30 | 472 | 0.7% | **0** | 267 | 205 | 0.765 | 1.1622 |
+
+**89.5% of OPEN fills (560 of 626) land at tte 600–900; 96.8% above tte 300;
+none below tte 60.** First-fill TTE per window: median **885s**. Under
+`[0, 300]` the clone was present only for the 3.2% tail in which L5 has
+essentially stopped opening.
+
+*Two distinct statistics are easy to conflate here.* **99.3%** of L5's fills
+occur in **windows whose first fill is above tte 600** — that is a statement
+about which windows he works. It is **not** true that 99.3% of fills occur
+*above tte 600*: per fill, the 600–900 bucket holds 29.3% of fills and 30.3%
+of dollars, and his activity is spread across the whole window. What
+concentrates at 600–900 is the **OPEN**. Both statements support the
+correction; only the second describes where the flow is.
+
+`NO_NEW_OPEN_EXTEND_TTE_S = 60` is separately **confirmed** by this table:
+zero OPEN fills below tte 60.
+
+**The correction.** `L5_ADAPTED_GEMINI_BTC15M_V2`
+(`cd8ad6a914dc9fc0…`) changes **exactly one field**,
+`quote_between_tte_s → [0, 900]`, for the **BTC15m cohort only**. It is a
+cohort-specific transfer correction, **not a global Model-A mutation**:
+
+* **BTC5m stays `[0, 300]`, byte-for-byte**, with no correction arm — its
+  window is 300s, so both bands are the same band there.
+* `L5_ADAPTED_GEMINI_CRYPTO` (`62d004d80b4af8b9…`) is **unchanged and
+  preserved as the running control**.
+* **Unchanged:** side selection, `tick_offsets`, `rung_count`,
+  `both_sides_policy`, sequential inventory state, EXTEND/COMPLETE mechanics,
+  size, `max_residual`, the 60/30 terminal rules, `MAX_ACTIONS`, the
+  GEMINI_RECYCLE veto, the crossed-book refusal. No new pricing strategy was
+  invented to obtain fills.
+* A correction is **not a lane**: `lane_gates.SOURCES` is keyed by
+  `lanes.LANES`, so one that joined `LANES` would acquire a live-progression
+  gate by existing rather than earning one. It is declared in
+  `lanes.CORRECTIONS` and pinned out of `LANES` by test, and carries **no live
+  authorization**.
+* The corrected field remains `OURS_ADAPTED`. It coincides with a value
+  measured about L5, but we arrived at it from our own instrument's length;
+  the provenance lives in its `prior_evidence` text, not in its status.
+
+**Both bands run prospectively, side by side,** in the existing dual-cohort
+Railway process — control `[0,300]` and candidate `[0,900]` on the same tape,
+book and depth each cycle, sharing no inventory or book. `mutations_sent = 0`.
+
+Full record: `BTC15M_TIMING_CORRECTION_1.md`, `TTE_PROVENANCE_1.md`,
+`L5_TTE_SEGMENTS_1.md`.
+
 ## 2d. OWNER DECISION 2026-09-18 — NO pair-cost ceiling on the Gemini live path
 
 **Ruling (owner, 2026-09-18).** For CONTINUOUS-5 the controller behaviour is

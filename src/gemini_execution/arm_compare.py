@@ -155,3 +155,132 @@ def the_sequence(windows: Sequence[Mapping[str, Any]], label: str
             "labels": LABELS,
         })
     return hits
+
+
+# --------------------------------------------------------- the full chain
+
+#: the sequence that has to hold end to end for recycling to have happened
+CHAIN = ("OPEN_fill", "inventory_update", "subsequent_L5_action",
+         "opposite_flow", "COMPLETE_fill", "matched_inventory")
+
+#: a resting YES rung is reached by an AGGRESSOR SELL; a resting NO rung by
+#: an AGGRESSOR BUY. So holding YES, the complement is a NO rung and the flow
+#: that would reach it is BUY flow. This is the venue's tape convention, not
+#: a modelling choice.
+_COMPLEMENT_FLOW = {"YES": "buy_prints", "NO": "sell_prints"}
+
+
+def the_chain(window: Mapping[str, Any], label: str) -> Dict[str, Any]:
+    """Walk one window's evidence through the six steps and say where it broke.
+
+    `broke_at` is the point of the whole thing: "no complements" is not a
+    cause. Knowing whether the chain dies at opposite flow (nobody traded the
+    other side), at COMPLETE fill (they traded it and never reached our rung)
+    or at matched inventory is what separates a timing problem from a queue
+    problem.
+    """
+    if label != CONTROL and label not in (window.get("correction_arms") or {}):
+        return {"arm": label, "applicable": False,
+                "why": "window predates this arm"}
+    hyp, inv = _arm_view(window, label)
+    fills = list(hyp.get("rows") or [])
+    cycles = sorted(window.get("cycles_detail") or [],
+                    key=lambda r: r.get("cycle") or 0)
+
+    steps: Dict[str, Any] = {k: {"happened": False} for k in CHAIN}
+
+    opens = [f for f in fills
+             if f.get("kind") == "OPEN" or f.get("was_first_fill")]
+    if opens:
+        o = opens[0]
+        steps["OPEN_fill"] = {"happened": True, "leg": o.get("leg"),
+                              "tte_s": o.get("tte_s"), "price": o.get("price"),
+                              "qty": o.get("qty"),
+                              "queue_known": o.get("queue_known")}
+        held = str(o.get("leg") or "")
+        after = _dec(o.get("tte_s"))
+
+        # 2. the fill moved inventory -- the ledger applied it, and the arm's
+        #    own per-cycle inventory shows it
+        steps["inventory_update"] = {
+            "happened": True,
+            "residual_after_window": inv.get("directional_residual"),
+            "note": "hypothetical ledger applied the fill to this arm's "
+                    "inventory before the policy was next asked"}
+
+        # 3. the policy was re-asked and rested something after the fill
+        rested_after = 0
+        for c in cycles:
+            t = _dec(c.get("tte_s"))
+            if t is None or after is None or t > after:
+                continue
+            rec = (c if label == CONTROL
+                   else ((c.get("correction_arms") or {}).get(label) or {}))
+            place = (((rec.get("decision") or {}).get("plan") or {})
+                     .get("place") or [])
+            rested_after += len(place)
+        steps["subsequent_L5_action"] = {
+            "happened": bool(rested_after) or bool(o.get("retargeted_by")),
+            "rungs_rested_after_the_open": rested_after,
+            "retargeted_at_the_fill": o.get("retargeted_by")}
+
+        # 4. did flow that COULD reach the complement actually arrive?
+        key = _COMPLEMENT_FLOW.get(held)
+        n = 0
+        for c in cycles:
+            t = _dec(c.get("tte_s"))
+            if t is None or after is None or t > after:
+                continue
+            f = (c.get("habitat") or {}).get("flow") or {}
+            if key and isinstance(f.get(key), int):
+                n += f[key]
+        steps["opposite_flow"] = {
+            "happened": n > 0, "complement_leg": ("NO" if held == "YES"
+                                                  else "YES"),
+            "aggressor_prints_that_could_reach_it": n,
+            "note": "a resting %s rung is reached by an aggressor %s"
+                    % (("NO" if held == "YES" else "YES"),
+                       "BUY" if held == "YES" else "SELL")}
+
+    comps = [f for f in fills if f.get("kind") == "COMPLETE"]
+    if comps:
+        c0 = comps[0]
+        steps["COMPLETE_fill"] = {"happened": True, "leg": c0.get("leg"),
+                                  "tte_s": c0.get("tte_s"),
+                                  "price": c0.get("price"),
+                                  "qty": c0.get("qty")}
+    matched = _dec(inv.get("matched_qty")) or D("0")
+    if matched > 0:
+        steps["matched_inventory"] = {
+            "happened": True, "matched_qty": str(matched),
+            "effective_matched_pair_cost":
+                inv.get("effective_matched_pair_cost"),
+            "directional_residual": inv.get("directional_residual")}
+
+    broke = next((k for k in CHAIN if not steps[k]["happened"]), None)
+    return {"arm": label, "applicable": True, "symbol": window.get("symbol"),
+            "entry_tte_s": window.get("entry_tte_s"),
+            "quote_between_tte_s": _band(window, label),
+            "steps": steps, "broke_at": broke,
+            "complete": broke is None, "labels": LABELS}
+
+
+def chain_census(windows: Sequence[Mapping[str, Any]], label: str
+                 ) -> Dict[str, Any]:
+    """Where the chain dies, counted. The answer to "why no complements"."""
+    out: Dict[str, int] = {k: 0 for k in CHAIN}
+    out["COMPLETE"] = 0
+    n = 0
+    for w in windows:
+        r = the_chain(w, label)
+        if not r.get("applicable"):
+            continue
+        n += 1
+        if r["broke_at"] is None:
+            out["COMPLETE"] += 1
+        else:
+            out[r["broke_at"]] += 1
+    return {"arm": label, "windows": n, "broke_at": out,
+            "note": ("each window is counted once, at the FIRST step that "
+                     "did not happen. COMPLETE means all six held."),
+            "labels": LABELS}

@@ -191,6 +191,8 @@ def _step_arms(arms, *, symbol, tte, book, depth, flow, policy):
             "vetoed_by_adapter": st["vetoed"],
             "hypothetical_fills": st["fills"],
             "hypothetical_rungs_live": sorted(arm.hyp.live),
+            "hypothetical_rungs_rested_cumulative": (arm.hyp.placed
+                                                     + arm.hyp.requoted),
             "inventory": arm.inv.report(),
         }
     return out
@@ -314,6 +316,7 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         hyp.retarget(acted, now_ms=int(time.time() * 1000), depth=depth)
         row["hypothetical_fills"] = hyp_fills
         row["hypothetical_rungs_live"] = sorted(hyp.live)
+        row["hypothetical_rungs_rested_cumulative"] = hyp.placed + hyp.requoted
         # ---- the corrected arm(s), on THIS cycle's tape and book. Recorded
         # beside the control's decision, never merged into it.
         if arms:
