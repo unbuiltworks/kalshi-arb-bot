@@ -112,3 +112,81 @@ minutes.
 
 PRO plan allows volumes to 1000 GB, so there is room to grow again if the
 stream set expands.
+
+---
+
+# Verification (17:05Z)
+
+All figures below are the container's own `shutil.disk_usage` off the mounted
+volume, carried on every supervisor heartbeat — not estimates.
+
+### service healthy → volume writable → recorder advancing
+
+`not_running: []`. All eight streams `process_alive: true`, every one growing
+between heartbeats:
+
+| stream | 16:58:33 | 17:05:07 |
+|---|---|---|
+| `surface_shadow` | 64,349,804 | 135,994,986 |
+| `gemdepth/samples.jsonl` | 1,998,181,950 | 2,000,535,230 |
+| `book_context` | 9,175,127 | 16,350,717 |
+| `gemini_surface` | 2,943,854 | 5,634,564 |
+| `window_forensics` | 113,947 | 1,797,759 |
+| `pmus_surface` | 520,149 | 1,064,765 |
+
+No `Errno 28` since the restart. `pmus_surface` reports `tape: SERVED`,
+`unreadable_observations: 0`, and its evidence ladder is advancing
+(`EVIDENCED_FILL` 3 → 5 → 7 on BUY_YES).
+
+### no evidence corruption
+
+`compress()` sha256s the source, gzips, re-reads the archive through
+`gzip.open`, compares, and unlinks the source **only** on a match — with the
+failure path covered by two tests. Independently of that, the directory
+conserves its entries: `l5-surface-shadow` held 37 entries before the sweep
+and 37 after (plus one new active segment), and the only two names that left
+`.jsonl` are exactly the two that appeared as `.jsonl.gz`. Nothing else moved.
+
+```
+surface_shadow_20260918T222730Z   8,863,548,721 -> 181,253,490   48.9x
+surface_shadow_20260918T123735Z   8,852,409,046 -> 183,543,295   48.2x
+```
+
+**48x, four times the 12x I assumed when I sized the volume.**
+
+### used / free capacity
+
+| | |
+|---|---|
+| total | 251,654,762,496 (251.65 GB) |
+| used | 31,766,425,600 (31.77 GB) |
+| free | 219,871,559,680 (219.87 GB) |
+| **used** | **12.62% — level OK** |
+
+Down from 100% and a crashed replica.
+
+### growth/day and days to the next threshold
+
+Measured across heartbeats 16:58:33 → 17:05:07: 89,378,816 bytes in 394 s =
+**19.60 GB/day uncompressed**. That is the raw write rate between sweeps; the
+sweep then compresses closed segments at ~48x, so net growth settles near
+**0.5–1.0 GB/day**.
+
+| threshold | GB to go | at 0.5 GB/day | at 1.0 GB/day | if compression stopped |
+|---|---|---|---|---|
+| 70% NOTICE | 144.4 | 289 d | 144 d | 7 d |
+| 85% WARN | 182.1 | 364 d | 182 d | 9 d |
+| 95% CRITICAL | 207.3 | 415 d | 207 d | 11 d |
+
+The last column is the honest failure case: **the volume only holds if the
+sweep keeps running**, and that is exactly what the 70/85/95 warnings exist
+to catch. They now fire on every heartbeat, months before the wall.
+
+### one pre-existing condition, not caused by this work
+
+`window_forensics` shows `restart_count: 109`, `last_restart_reason:
+file_not_growing>1200s`. It is the one stream with `SEGMENT_PER_START`, so
+every restart opens a new `seg_*` directory — which is why there were 43 of
+them. It is being restarted by its watchdog rather than crashing, and it is
+recording now. Flagged rather than fixed: it is a churn source and a separate
+question from storage.
