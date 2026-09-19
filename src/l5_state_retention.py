@@ -175,20 +175,37 @@ def compress(path: str, *, level_: int = 6) -> Dict[str, Any]:
 def sweep(root: str, *, now: Optional[float] = None,
           min_age_s: float = DEFAULT_MIN_AGE_S,
           max_files: int = 200,
+          max_seconds: Optional[float] = None,
           delete_after_days: Optional[float] = None) -> Dict[str, Any]:
-    """Compress closed segments, newest-largest first, with accounting.
+    """Compress closed segments, largest first, with accounting.
+
+    `max_seconds` BOUNDS THE WORK, and the supervisor always sets it. This
+    sweep runs inside the supervisor's own loop, so an unbounded pass stalls
+    `reap()` and `watch_freshness()` for as long as it takes -- and the first
+    pass over a volume like this one has 38 GB to compress, which is tens of
+    minutes of not supervising anything. A bounded pass does what it can and
+    the next one continues; a file already archived is never revisited, so
+    successive passes converge.
+
+    The budget is checked BETWEEN files, never inside one. A half-written
+    archive is not a saving, so a file that has started is always finished.
 
     `delete_after_days` is None by default and the supervisor never sets it.
     When it IS set, only archives (`.gz`) older than that are unlinked, and
     never an un-archived source.
     """
     now = time.time() if now is None else now
+    started = time.time()
     before = usage(root)
     cands = candidates(root, now=now, min_age_s=min_age_s)
     done: List[Dict[str, Any]] = []
     failed: List[Dict[str, Any]] = []
     freed = 0
+    out_of_time = False
     for c in cands[:max_files]:
+        if max_seconds is not None and (time.time() - started) >= max_seconds:
+            out_of_time = True
+            break
         r = compress(c["path"])
         (done if r["ok"] else failed).append(r)
         if r["ok"]:
@@ -217,6 +234,9 @@ def sweep(root: str, *, now: Optional[float] = None,
                                 "age_days": round((now - st.st_mtime) / 86400,
                                                   2)})
     return {"root": root, "before": before, "after": usage(root),
+            "elapsed_s": round(time.time() - started, 1),
+            "budget_s": max_seconds, "stopped_on_budget": out_of_time,
+            "remaining": max(0, len(cands) - len(done) - len(failed)),
             "candidates": len(cands), "compressed": len(done),
             "failed": len(failed), "failures": failed[:10],
             "bytes_freed": freed, "gb_freed": round(freed / 1e9, 3),

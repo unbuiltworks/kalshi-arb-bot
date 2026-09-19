@@ -253,7 +253,7 @@ class Supervisor:
             print("L5_DISK_%s %s" % (u["level"], json.dumps(u)), flush=True)
         return u
 
-    def sweep_retention(self) -> Dict[str, Any]:
+    def sweep_retention(self, *, budget_s: float = 120.0) -> Dict[str, Any]:
         """Compress closed segments. Never deletes evidence.
 
         gzip on this JSONL is lossless and an archive is verified against its
@@ -263,7 +263,8 @@ class Supervisor:
         """
         try:
             from src import l5_state_retention as RT
-            rep = RT.sweep(self.root, delete_after_days=None)
+            rep = RT.sweep(self.root, delete_after_days=None,
+                           max_seconds=budget_s)
         except Exception as exc:                                 # noqa: BLE001
             rep = {"ok": False, "err": "%s: %s" % (type(exc).__name__, exc)}
             print("L5_RETENTION " + json.dumps(rep, default=str), flush=True)
@@ -271,7 +272,8 @@ class Supervisor:
         if rep["compressed"] or rep["failed"]:
             print("L5_RETENTION " + json.dumps(
                 {k: rep[k] for k in ("candidates", "compressed", "failed",
-                                     "gb_freed", "deletion_enabled")},
+                                     "gb_freed", "remaining", "elapsed_s",
+                                     "stopped_on_budget", "deletion_enabled")},
                 default=str), flush=True)
             self.mark("retention", **{k: rep[k] for k in
                                       ("candidates", "compressed", "failed",
@@ -876,8 +878,15 @@ class Supervisor:
         # supervisor starts dies on its first write, which is exactly how the
         # 2026-09-19 outage looked. Freeing space first is what makes the
         # boot below meaningful.
-        self.report_disk()
-        self.sweep_retention()
+        u = self.report_disk()
+        # ONLY WHEN IT MATTERS. A boot sweep is the right thing on a volume
+        # under pressure -- every stream would otherwise die on its first
+        # write. It is the WRONG thing on a healthy one: the first pass over
+        # this volume had 38 GB to compress, which is tens of minutes of the
+        # recorder not recording. Below the first warning level the sweep
+        # waits for the periodic pass, which runs with the streams already up.
+        if not u.get("readable") or u.get("level") != "OK":
+            self.sweep_retention(budget_s=600.0)
         self.boot()
         # once, with the per-parent detail: the tapes cannot be read from
         # outside this container, so this is the only way the evidence travels

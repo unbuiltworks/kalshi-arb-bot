@@ -277,3 +277,58 @@ def test_A_BROKEN_RETENTION_MODULE_CANNOT_KILL_THE_SUPERVISOR(monkeypatch):
     assert u["readable"] is False and "ImportError" in u["why"]
     rep = s.sweep_retention()                # must not raise
     assert rep.get("ok") is False
+
+
+# ==================================== the sweep runs inside the supervisor loop
+
+def test_THE_SWEEP_IS_BOUNDED_AND_SAYS_SO(tmp_path):
+    """An unbounded pass stalls reap() and watch_freshness() for as long as
+    it takes, and the first pass here had 38 GB to get through."""
+    for i in range(6):
+        _seg(tmp_path, "s", "a%d.jsonl" % i, rows=400, age_s=99999 - i)
+    _seg(tmp_path, "s", "active.jsonl", age_s=0)
+    rep = RT.sweep(str(tmp_path), min_age_s=1.0, max_seconds=0.0)
+    assert rep["compressed"] == 0
+    assert rep["stopped_on_budget"] is True
+    assert rep["remaining"] == rep["candidates"]
+    assert "elapsed_s" in rep and rep["budget_s"] == 0.0
+
+
+def test_successive_bounded_passes_converge(tmp_path):
+    for i in range(4):
+        _seg(tmp_path, "s", "a%d.jsonl" % i, rows=50, age_s=99999 - i)
+    _seg(tmp_path, "s", "active.jsonl", age_s=0)
+    first = RT.sweep(str(tmp_path), min_age_s=1.0, max_files=2)
+    second = RT.sweep(str(tmp_path), min_age_s=1.0, max_files=2)
+    assert first["compressed"] == 2 and second["compressed"] == 2
+    # nothing is compressed twice
+    third = RT.sweep(str(tmp_path), min_age_s=1.0)
+    assert third["compressed"] == 0
+
+
+def test_a_started_file_is_always_finished(tmp_path):
+    """The budget is checked BETWEEN files: a half-written archive saves
+    nothing and a verified one is the only kind that unlinks a source."""
+    import ast
+    import inspect
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(RT)))
+              if isinstance(n, ast.FunctionDef) and n.name == "sweep")
+    body = ast.unparse(fn)
+    assert "out_of_time = True" in body and "break" in body
+    # the budget check is not inside compress()
+    comp = inspect.getsource(RT.compress)
+    assert "max_seconds" not in comp
+
+
+def test_the_boot_sweep_only_runs_under_pressure():
+    """On a healthy volume the recorder must start recording, not compress."""
+    import ast
+    import inspect
+
+    from src import l5_research_supervisor as SUP
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(SUP)))
+              if isinstance(n, ast.FunctionDef) and n.name == "run")
+    body = ast.unparse(fn)
+    assert 'u.get("level") != \'OK\'' in body or "!= 'OK'" in body
+    # and the boot sweep is still reachable when it IS under pressure
+    assert "sweep_retention(budget_s=600.0)" in body

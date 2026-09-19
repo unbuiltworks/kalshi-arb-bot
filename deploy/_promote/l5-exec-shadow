@@ -38,3 +38,4 @@ promote pmus_surface: the L5 evidence ladder against the authenticated trade tap
 promote pmus_surface heartbeat: the tape-coverage facts have to reach the log, not only the volume
 promote retention: the volume hit 100% and killed the recorder; compress closed segments, warn at 70/85/95
 promote retention fix: the image did not COPY l5_state_retention and the ImportError killed the recorder
+promote retention bounded: the boot sweep blocked the recorder for minutes; budget it and gate it on pressure
