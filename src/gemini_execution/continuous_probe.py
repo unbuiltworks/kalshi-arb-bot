@@ -488,6 +488,44 @@ def stale_orders(resting: List[Mapping[str, Any]], now: float,
     return out
 
 
+def crossed(book: Mapping[str, Any]) -> bool:
+    """Is the published book CROSSED -- a bid at or above its own ask?
+
+    FOUND BY THE FIRST CONTINUOUS SHADOW SOAK, 2026-09-19. Two of 86 cycles
+    on GEMI-BTC05M2609190305-UP published YES 0.95 bid against a 0.65 ask: a
+    bid thirty cents ABOVE the ask, with a passive pair cost of 1.30 for a
+    pair worth 1.00. The frozen controller quoted into it -- OPEN YES @ 0.95
+    and OPEN NO @ 0.35 -- because nothing refused the book.
+
+    THE EXISTING CHECK CANNOT CATCH THIS. `identity_consistent` verifies
+    no_bid == 1 - yes_ask and no_ask == 1 - yes_bid, and those hold EXACTLY
+    on a crossed book: crossing both sides preserves the complement identity
+    by construction. All 2 crossed cycles reported identity_consistent True.
+
+    THE MECHANISM, established rather than guessed: both crossed cycles were
+    exactly the two cycles whose ASK LADDER WAS EMPTY. With no resting ask
+    the contract object still publishes an ask price, and that number is not
+    describing anything -- so the derived NO bid is not either.
+
+    This is a READABILITY gate, the same kind already applied to an
+    identity-inconsistent book, and not a pair-cost rule: it says nothing
+    about what a pair may cost, only that a book we cannot read is not one to
+    quote into. The owner's decision that NO pair-cost ceiling exists on this
+    path is untouched.
+    """
+    try:
+        for side in ("yes", "no"):
+            s_ = book.get(side) or {}
+            bid, ask = s_.get("bid"), s_.get("ask")
+            if bid in (None, "") or ask in (None, ""):
+                return True
+            if D(str(bid)) >= D(str(ask)):
+                return True
+    except (ArithmeticError, TypeError, ValueError):
+        return True
+    return False
+
+
 def state_from_venue(symbol: str, tte_s: float, inv: "Inventory", *,
                      now: Optional[float] = None,
                      book: Optional[Mapping[str, Any]] = None
@@ -504,11 +542,17 @@ def state_from_venue(symbol: str, tte_s: float, inv: "Inventory", *,
     from src.gemini_execution import metadata as MD
     import time as _t
     b = book if book is not None else MD.outcome_book(symbol)
-    if not b.get("readable") or not b.get("identity_consistent"):
+    if not b.get("readable") or not b.get("identity_consistent") \
+            or crossed(b):
         return {"market_key": symbol, "state_id": "unreadable",
                 "t_utc": now if now is not None else _t.time(),
                 "tte_s": tte_s, "cohort": "BTC5m",
                 "inventory_known": False, "outcomes": {},
+                "unreadable_why": (
+                    "book not readable" if not b.get("readable")
+                    else ("complement identity violated"
+                          if not b.get("identity_consistent")
+                          else "CROSSED book: a bid at or above its own ask")),
                 "book": b}
     tick = (MD.terms_for(symbol) or {}).get("priceIncrement") or "0.01"
     t = now if now is not None else _t.time()

@@ -277,6 +277,64 @@ the instantaneous version does not survive scoring.
 test_no_pair_cost_gate_exists_in_this_path` asserts the absence of every
 enumerated ceiling, so a gate cannot reappear silently.
 
+## 2e. CONTINUOUS-8 — the first live proof of the feedback loop (2026-09-19)
+
+**This is the canonical evidence that the replication loop closes on a real
+venue.** Everything before it proved the machinery could survive contact;
+this proved the machinery *feeds back into the policy*.
+
+`OWNER-2026-09-19-GEMINI-CONTINUOUS-8`, contract
+`GEMI-BTC05M2609190140-UP`, entered at **TTE 278.3s** by the entry-band
+scheduler, 9 cycles over 229s, cohort `COHORT-2026-09-18-C8B` at 11 of 12.
+
+```
+cycles 1-8   inventory 0/0, n_fills 0        ->  OPEN YES 0.31 · OPEN NO
+01:36:28.553Z  YES 0.01 @ 0.31 FILLED as MAKER (aggressor false, fee 0)
+read 14      coherent, attempts 1, n_fills 1, new_fills [YES 0.01 @ 0.31]
+cycle 9      yes 0.01, residual +0.01, spend 0.0031
+             ->  EXTEND YES @ 0.12 · COMPLETE NO @ 0.69
+```
+
+**Why the changed action is the proof, not a coincidence.** `classify()`
+derives `EXTEND` and `COMPLETE` from the inventory residual alone — neither
+label is reachable from an empty inventory. The action changed *because* the
+inventory changed, and the inventory changed *because* a real execution was
+carried by a coherent authoritative refresh.
+
+**Nothing was done to manufacture it.** Every rung joined the bid
+(`ticks_behind_bid: 0`), every order was `maker-or-cancel` at 0.01, and the
+venue's own trade record says `aggressor: false`. No cross, no SELL, no
+forced flatten, no pair-cost ceiling, no controller change. The envelope
+`b3bff654…aa17` was unmoved for an eighth window.
+
+**The book capture explains the fill directly**, which C7 could not: the YES
+bid held 0.31 while the ask walked 0.58 → 0.43 → 0.38 → 0.35 → 0.33 down to
+meet it, and the ladder at our own price read `0.01` — our order, alone on
+the bid, after the 483.0 that had been there left. 9/9 cycles readable on
+both sources, 9/9 touch agreements.
+
+**Accounting, strictly.** The contract settled **YES**; the leg held was the
+winning side. `settlement_report` gives `matched_pair_economics: null` — a
+single YES leg is pure directional residual and nothing is netted into a
+matched result that does not exist — directional residual `gross_usd
+0.0069`, status `SETTLED_NOT_YET_CASH_CONFIRMED`, `realized: null`. So
+**EXPECTED +$0.0069, never REALIZED**, on the same footing as C4's −$0.0006,
+C5's −$0.0046 and C6's −$0.0021, and never summed with them.
+
+**A 0.01 directional leg settling the right way is not evidence of edge.**
+It is one sample of carried exposure, and the historical measurement of this
+residual is negative out of sample. The result of C8B is the *chain*, not the
+$0.0069.
+
+**The seam it exposed, since closed.** The coherence gate explained a
+disappearance from `fills ∪ trades ∪ terminal_seen` while `CP.recover` built
+inventory from `fills` alone, so read 13 reported `coherent: True` beside an
+inventory that still read flat. Both consumers now read ONE canonical
+execution view (`src/gemini_execution/executions.py`), and the C8B timing is
+pinned as a replay test.
+
+Full record: `CONTINUOUS_8_RESULT.md`.
+
 ## 3. Measured historical evolution
 
 Artifact: `analysis/l5/l5_ramp_analysis.json`  

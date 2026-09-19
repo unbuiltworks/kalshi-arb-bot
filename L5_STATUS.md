@@ -65,13 +65,22 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > REALIZED**, and one 0.01 directional leg settling the right way is not
 > evidence of edge.
 >
-> **OPEN DEFECT, not blocking that result:** the coherence gate explains a
-> disappearance from `fills ∪ trades ∪ terminal_seen` while `CP.recover`
-> builds inventory from `fills` alone. At read 13 (2.64s after the fill)
-> `trades` already had it and `fills` did not, so the gate passed while
-> inventory read flat and a replacement went out against it. No decision was
-> corrupted. Fix before autonomous continuous operation: build inventory from
-> `fills ∪ trades`, deduplicated by order_id/tid.
+> **THAT SEAM IS NOW CLOSED.** The coherence gate explained a disappearance
+> from `fills ∪ trades ∪ terminal_seen` while `CP.recover` built inventory
+> from `fills` alone, so read 13 reported `coherent: True` beside an
+> inventory that still read flat. Both consumers now read ONE canonical
+> execution view (`src/gemini_execution/executions.py`, a bundle member):
+> executions group by ORDER, the finer-grained source wins, the aggregate
+> CROSS-CHECKS it, a disagreement fails closed, a leg is never inferred from
+> a client-order-id convention, and a terminal row can never become a fill.
+> The exact C8B timing is pinned as a replay test — read 13 now carries
+> `yes 0.01 / residual +0.01 / spend 0.0031 / n_fills 1`, and when filled
+> history catches up the state is byte-identical rather than doubled.
+>
+> **The manually authorized plumbing-validation phase is COMPLETE.** The
+> programme has moved to the bounded continuous L5 system; see
+> `CONTINUOUS_SYSTEM_V1.md` for the lifecycle, the eight failure states and
+> the run-level risk budget. No C9 is prepared and none should be.
 >
 > **Before C8, the binding constraint was FILL RATE, not plumbing.** C7 ran 12 clean cycles, spent all 6
 > cohort slots, had every mutation accepted, explained a real double

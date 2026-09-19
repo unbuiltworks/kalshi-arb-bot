@@ -262,3 +262,67 @@ def test_the_gate_and_the_inventory_cannot_disagree(tmp_path, monkeypatch):
                                  "no": {"bid": "0.69", "ask": "0.88"}})
     labels = [a["action"] for a in (turn.get("turn") or {}).get("actions") or []]
     assert CP.OPEN not in labels, labels
+
+
+# ============================== the crossed book the first soak actually found
+
+@pytest.mark.parametrize("book,why", [
+    # THE REAL ROW, GEMI-BTC05M2609190305-UP cycles 20-21, 2026-09-19:
+    # a YES bid thirty cents ABOVE its own ask, with the complement identity
+    # holding EXACTLY -- which is why the existing check could not catch it.
+    ({"readable": True, "identity_consistent": True,
+      "yes": {"bid": "0.95", "ask": "0.65"},
+      "no": {"bid": "0.35", "ask": "0.05"}}, "crossed"),
+    # touching is not a book either: a zero-width market is not one we can
+    # join passively on both sides
+    ({"readable": True, "identity_consistent": True,
+      "yes": {"bid": "0.50", "ask": "0.50"},
+      "no": {"bid": "0.50", "ask": "0.50"}}, "equal"),
+    # a missing side is not a price
+    ({"readable": True, "identity_consistent": True,
+      "yes": {"bid": "0.50", "ask": None},
+      "no": {"bid": "0.50", "ask": "0.50"}}, "missing"),
+])
+def test_a_crossed_or_degenerate_book_is_not_quoted_into(book, why):
+    assert CP.crossed(book) is True
+    st = CP.state_from_venue("SYM", 200.0, CP.Inventory(), now=1.0, book=book)
+    assert st["inventory_known"] is False
+    assert st["state_id"] == "unreadable"
+    assert st["outcomes"] == {}
+
+
+def test_the_identity_check_alone_would_have_passed_that_book():
+    """The point of the new gate, pinned: crossing BOTH sides preserves the
+    complement identity by construction, so `identity_consistent` is True on
+    exactly the book that must be refused."""
+    b = {"readable": True, "identity_consistent": True,
+         "yes": {"bid": "0.95", "ask": "0.65"},
+         "no": {"bid": "0.35", "ask": "0.05"}}
+    # the identity really does hold: no_bid == 1 - yes_ask, no_ask == 1 - yes_bid
+    from decimal import Decimal as _D
+    assert _D(b["no"]["bid"]) == _D("1") - _D(b["yes"]["ask"])
+    assert _D(b["no"]["ask"]) == _D("1") - _D(b["yes"]["bid"])
+    assert CP.crossed(b) is True
+
+
+def test_an_ordinary_book_is_still_quoted_into():
+    """The gate must not refuse the 84 of 86 soak cycles that were fine."""
+    b = {"readable": True, "identity_consistent": True,
+         "yes": {"bid": "0.31", "ask": "0.58"},
+         "no": {"bid": "0.42", "ask": "0.69"}}
+    assert CP.crossed(b) is False
+    st = CP.state_from_venue("SYM", 265.0, CP.Inventory(), now=1.0, book=b)
+    assert st["inventory_known"] is True
+
+
+def test_the_gate_says_nothing_about_what_a_PAIR_may_cost():
+    """It is a READABILITY gate, not the pair-cost ceiling the owner ruled
+    against. A wide, expensive, perfectly readable book still passes."""
+    b = {"readable": True, "identity_consistent": True,
+         "yes": {"bid": "0.60", "ask": "0.95"},
+         "no": {"bid": "0.05", "ask": "0.40"}}          # passive pair 0.65
+    assert CP.crossed(b) is False
+    b2 = {"readable": True, "identity_consistent": True,
+          "yes": {"bid": "0.90", "ask": "0.95"},
+          "no": {"bid": "0.05", "ask": "0.10"}}         # passive pair 0.95
+    assert CP.crossed(b2) is False
