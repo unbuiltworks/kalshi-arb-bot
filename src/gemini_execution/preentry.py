@@ -76,8 +76,18 @@ def _rate_per_min(n: Any, seconds: Any) -> Optional[str]:
 
 
 def tape_window(flow: Any, *, now_ms: Optional[float] = None,
-                recent_s: float = RECENT_S) -> Dict[str, Any]:
-    """Summarise a `habitat.public_flow` read over the last `recent_s`.
+                recent_s: float = RECENT_S,
+                whole_tape: bool = False) -> Dict[str, Any]:
+    """Summarise a `habitat.public_flow` read.
+
+    `whole_tape=True` measures the tape's OWN span instead of a trailing
+    wall-clock window. THE PREDECESSOR CONTRACT NEEDS THIS AND THE FIRST
+    IMPLEMENTATION GOT IT WRONG: by the time we read a candidate at TTE ~275,
+    its predecessor expired about 300 seconds ago, so a trailing 120-second
+    window over the predecessor's tape is ALWAYS empty. The first seven
+    pre-entry snapshots duly reported `prior_prints_per_min` of 0.000 in five
+    of seven windows -- an artifact of the window definition, not a quiet
+    venue.
 
     Never raises, and an unreadable tape stays unreadable rather than
     collapsing to zero prints.
@@ -92,10 +102,18 @@ def tape_window(flow: Any, *, now_ms: Optional[float] = None,
         return out
     prints = [p for p in (flow.get("prints") or []) if isinstance(p, Mapping)]
     t_ms = now_ms if now_ms is not None else _time.time() * 1000.0
-    cutoff = t_ms - recent_s * 1000.0
-    recent = [p for p in prints
-              if isinstance(p.get("utc_ms"), (int, float))
-              and p["utc_ms"] >= cutoff]
+    stamps = [p["utc_ms"] for p in prints
+              if isinstance(p.get("utc_ms"), (int, float))]
+    if whole_tape:
+        recent = list(prints)
+        span_s = (((max(stamps) - min(stamps)) / 1000.0)
+                  if len(stamps) > 1 else None)
+    else:
+        cutoff = t_ms - recent_s * 1000.0
+        recent = [p for p in prints
+                  if isinstance(p.get("utc_ms"), (int, float))
+                  and p["utc_ms"] >= cutoff]
+        span_s = recent_s
     newest = flow.get("newest_utc_ms")
     since = (round((t_ms - newest) / 1000.0, 1)
              if isinstance(newest, (int, float)) else None)
@@ -104,9 +122,12 @@ def tape_window(flow: Any, *, now_ms: Optional[float] = None,
     vol = sum((_dec(p.get("qty")) or D("0") for p in recent), D("0"))
     out.update({
         "readable": True,
+        "measured_over": ("the tape's own span" if whole_tape
+                          else "a trailing %.0fs window" % recent_s),
+        "span_s": span_s,
         "n_total_on_tape": flow.get("n_prints"),
         "n_recent": len(recent),
-        "prints_per_min": _rate_per_min(len(recent), recent_s),
+        "prints_per_min": _rate_per_min(len(recent), span_s),
         "since_last_print_s": since,
         "recent_volume": str(vol),
         "buy_prints": buys, "sell_prints": sells,
@@ -195,7 +216,8 @@ def touch_turnover(before: Any, after: Any) -> Dict[str, Any]:
 def snapshot(*, symbol: str, tte_s: Any, book: Any, depth: Any,
              own_flow: Any, prior_flow: Any, spot_flow: Any,
              depth_2: Any = None, crossed: Optional[bool] = None,
-             now_ms: Optional[float] = None) -> Dict[str, Any]:
+             now_ms: Optional[float] = None,
+             prior_whole_tape: bool = True) -> Dict[str, Any]:
     """One candidate window's PRE-ENTRY habitat. Pure: reads what it is given.
 
     Every field the owner named is present or explicitly absent with a reason.
@@ -204,27 +226,46 @@ def snapshot(*, symbol: str, tte_s: Any, book: Any, depth: Any,
 
     b = book if isinstance(book, Mapping) else {}
     yes = b.get("yes") or {}
+    # THE RAW CONTRACT BOOK CARRIES NO `spread` KEY -- only the presented
+    # summary does -- so the first seven snapshots reported spread None beside
+    # a perfectly readable 0.32/0.66. Derived here from the two observed
+    # prices, never defaulted.
+    spread = yes.get("spread")
+    if spread is None:
+        _b, _a = _dec(yes.get("bid")), _dec(yes.get("ask"))
+        spread = str(_a - _b) if _b is not None and _a is not None else None
     lad = HB.ladder_shape(depth)
     bids = (lad.get("bids") or {}) if lad.get("readable") else {}
+    # AGE IS AGAINST THE 300s EFFECTIVE WINDOW AND IS A FLOOR. Prints can
+    # precede `effectiveDate`: 19 of 26 captured windows had their first print
+    # at TTE 375.9-378.2, and 7 captured 11:35-12:05Z had none before TTE
+    # 268.7. So the tradeable life is NOT a constant and this age is stated as
+    # a floor rather than as the contract's life.
     age_s = (SLOT_S - float(tte_s)) if isinstance(tte_s, (int, float)) else None
 
     own = tape_window(own_flow, now_ms=now_ms)
-    prior = tape_window(prior_flow, now_ms=now_ms)
+    prior = tape_window(prior_flow, now_ms=now_ms,
+                        whole_tape=prior_whole_tape)
     # the candidate's own tape covers only its life so far, so its rate is
     # computed over its OWN AGE and never over RECENT_S
     own["age_s"] = (round(age_s, 1) if age_s is not None else None)
     own["prints_per_min_over_age"] = _rate_per_min(
         own.get("n_total_on_tape"), age_s)
+    own["age_is_a_floor"] = True
     own["why_age"] = ("a 20-second-old contract with two prints is NEW, not "
                       "quiet; its rate is stated over its own age or not at "
-                      "all")
+                      "all. The age is measured against the 300s EFFECTIVE "
+                      "window and is a FLOOR -- prints can precede it, and in "
+                      "19 of 26 captured windows they did, from TTE ~377.")
 
     return {
         "symbol": symbol, "tte_s": tte_s,
         "readable": bool(b.get("readable")) and not bool(crossed),
         "crossed": crossed,
         "book_why": b.get("why"),
-        "spread": yes.get("spread"),
+        "spread": spread,
+        "spread_source": ("the book" if yes.get("spread") is not None
+                          else "derived from the observed bid and ask"),
         "yes_bid": yes.get("bid"), "yes_ask": yes.get("ask"),
         "touch_depth": bids.get("best_qty"),
         "touch_is_ours": bids.get("touch_is_ours"),
@@ -422,6 +463,9 @@ def read_snapshot(symbol: str, tte_s: Any, *,
     prior = ({"readable": False, "why": "no predecessor ticker could be built"}
              if not prior_sym else _safe(lambda: HB.public_flow(prior_sym),
                                          "prior tape"))
+    # the predecessor is already expired, so its rate is measured over its own
+    # life; a trailing wall-clock window over a dead contract is always empty
+    prior_whole = True
     spot = _safe(lambda: HB.public_flow(SPOT_SYMBOL), "spot tape")
 
     _time.sleep(max(0.0, turnover_gap_s))
@@ -435,7 +479,8 @@ def read_snapshot(symbol: str, tte_s: Any, *,
 
     snap = snapshot(symbol=symbol, tte_s=tte_s, book=book, depth=depth,
                     own_flow=own, prior_flow=prior, spot_flow=spot,
-                    depth_2=depth_2, crossed=crossed)
+                    depth_2=depth_2, crossed=crossed,
+                    prior_whole_tape=prior_whole)
     snap["prior_symbol"] = prior_sym
     snap["sources"] = ("PUBLIC: contract prices, /v1/book/{symbol} x2, "
                        "/v1/trades/{symbol}, /v1/trades/{predecessor}, "

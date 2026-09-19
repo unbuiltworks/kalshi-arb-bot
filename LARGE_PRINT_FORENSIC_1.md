@@ -110,7 +110,13 @@ off L5's habitat.
 
 **What they do cut off is Gemini's.** 38.8% of Gemini's notional is in TTE
 30–60, where L5 historically did 10.2% and where we may only COMPLETE.
-Gemini's TTE 30–180 carries **88.5%** of its notional against L5's **64.6%**. And L5
+Gemini's TTE 30–180 carries **88.5%** of its notional against L5's **64.6%**.
+
+The `>300` row needs a caveat I got wrong once: prints above TTE 300 precede
+the contract's own `effectiveDate`, and they are **not** a reliable feature.
+19 of 26 windows open with a burst at TTE ~377; the 7 captured 11:35–12:05Z
+have no print before TTE 268.7. L5 never traded above TTE 300 because
+Polymarket's 5-minute windows are exactly 300 s. And L5
 never traded above TTE 300 at all — its 5-minute windows are exactly 300 s —
 while Gemini's contracts trade from TTE ~377, a pre-window region L5's
 behaviour has no analogue for.

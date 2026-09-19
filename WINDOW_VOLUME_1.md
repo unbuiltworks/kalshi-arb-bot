@@ -29,13 +29,21 @@ Reproduce: `python3 -m src.gemini_execution.volume_report` →
 
 ## 0. Two structural facts that were wrong in everything I reported before
 
-**(a) A BTC5m contract's tradeable life is ~377 seconds, not 300.** Across all
-19 windows the first print lands at TTE **375.9–378.2 s**, median 377.0 — a
-2.3-second band across 19 independent contracts. The contract object's
-`effectiveDate` really is exactly 300 s before expiry, and `createdAt` is ~69
-minutes before, so **trading begins about 77 seconds before the contract's own
-effective date**. Every print rate I have previously quoted used a 300-second
-denominator and was therefore overstated.
+**(a) Prints can precede the contract's own `effectiveDate` — but not
+always, and I over-stated this first time.** Across these 19 windows the first
+print lands at TTE **375.9–378.2 s**, median 377.0 — a 2.3-second band across
+19 independent contracts, which is an event rather than chance. The contract
+object's `effectiveDate` really is exactly 300 s before expiry, so in these
+windows trading began about 77 seconds before it.
+
+> **CORRECTED after soak #4.** I wrote that "a BTC5m contract's tradeable life
+> is ~377 seconds, not 300" and stated it as structural. It is not. The 7
+> windows captured 11:35–12:05Z have their first print at TTE **268.7, 216.3,
+> 204.2, 197.4, 171.4, 160.8 and 39.3** — none before the effective window at
+> all. So the split is **19 windows with a pre-effective opening burst, 7
+> without**, and the tradeable life is not a constant. What is constant is
+> `effectiveDate` at exactly 300 s. Rates below use the measured first-print
+> span per window, which remains right; the generalisation was wrong.
 
 **(b) 55 of 125 prints — 44% — land before TTE 300**, and **60 of 125 (48%)
 land before our entry band can even open at TTE 280.** They are small: those

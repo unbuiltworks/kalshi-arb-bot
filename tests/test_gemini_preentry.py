@@ -311,3 +311,86 @@ def test_realised_flow_refuses_a_window_with_no_adjacent_pair():
     got = PE.realised_window_flow([])
     assert got["measurable"] is False
     assert "one usable cycle has no flow measurement" in got["why"]
+
+
+# =============== three defects the first seven snapshots exposed
+
+def test_THE_PREDECESSORS_RATE_IS_OVER_ITS_OWN_LIFE_NOT_A_TRAILING_WINDOW():
+    """By the time we read a candidate at TTE ~275, its predecessor expired
+    about 300 s ago, so a trailing 120-second window over the predecessor's
+    tape is ALWAYS empty. The first seven snapshots duly reported
+    prior_prints_per_min 0.000 in five of seven windows -- an artifact of the
+    window definition, not a quiet venue."""
+    # four prints spread over 60 s, all of them ~300 s in the past
+    old = NOW - 300000
+    prints = [_p(old - i * 20000) for i in range(4)]
+    flow = _flow(prints, newest=old, oldest=old - 60000)
+
+    trailing = PE.tape_window(flow, now_ms=NOW, recent_s=120.0)
+    assert trailing["n_recent"] == 0
+    assert trailing["prints_per_min"] == "0.000"
+
+    whole = PE.tape_window(flow, now_ms=NOW, whole_tape=True)
+    assert whole["n_recent"] == 4
+    assert whole["span_s"] == 60.0
+    assert whole["prints_per_min"] == "4.000"
+    assert whole["measured_over"] == "the tape's own span"
+
+
+def test_the_reader_measures_the_predecessor_over_its_whole_tape():
+    import inspect
+    src = inspect.getsource(PE.read_snapshot)
+    assert "prior_whole = True" in src
+    assert "ALWAYS empty" in inspect.getsource(PE.tape_window)
+
+
+def test_a_single_print_tape_has_no_span_and_therefore_no_rate():
+    got = PE.tape_window(_flow([_p(NOW - 1000)], newest=NOW - 1000),
+                         now_ms=NOW, whole_tape=True)
+    assert got["span_s"] is None and got["prints_per_min"] is None
+
+
+def test_SPREAD_IS_DERIVED_WHEN_THE_RAW_BOOK_DOES_NOT_CARRY_ONE():
+    """The raw contract book has no `spread` key -- only the presented summary
+    does -- so the first seven snapshots reported spread None beside a
+    perfectly readable 0.32 / 0.66."""
+    snap = PE.snapshot(symbol="S", tte_s=279.9,
+                       book={"readable": True,
+                             "yes": {"bid": "0.32", "ask": "0.66"}},
+                       depth=None, own_flow=None, prior_flow=None,
+                       spot_flow=None, crossed=False)
+    assert snap["spread"] == "0.34"
+    assert snap["spread_source"] == "derived from the observed bid and ask"
+
+
+def test_a_book_that_carries_its_own_spread_is_used_as_given():
+    snap = PE.snapshot(symbol="S", tte_s=279.9,
+                       book={"readable": True,
+                             "yes": {"bid": "0.32", "ask": "0.66",
+                                     "spread": "0.34"}},
+                       depth=None, own_flow=None, prior_flow=None,
+                       spot_flow=None, crossed=False)
+    assert snap["spread"] == "0.34" and snap["spread_source"] == "the book"
+
+
+def test_a_one_sided_book_yields_no_derived_spread():
+    snap = PE.snapshot(symbol="S", tte_s=279.9,
+                       book={"readable": True, "yes": {"bid": "0.32"}},
+                       depth=None, own_flow=None, prior_flow=None,
+                       spot_flow=None, crossed=False)
+    assert snap["spread"] is None
+
+
+def test_THE_CONTRACT_AGE_IS_A_FLOOR_BECAUSE_PRINTS_PRECEDE_effectiveDate():
+    """19 of 26 captured windows had their first print at TTE 375.9-378.2 --
+    before the 300 s effective window. Seven captured 11:35-12:05Z had none
+    before TTE 268.7. The tradeable life is NOT a constant, so the age is
+    stated as a floor rather than as the contract's life."""
+    snap = PE.snapshot(symbol="S", tte_s=280.0,
+                       book={"readable": True, "yes": {}}, depth=None,
+                       own_flow=_flow([_p(NOW - 5000)], newest=NOW - 5000),
+                       prior_flow=None, spot_flow=None, now_ms=NOW)
+    own = snap["flow_own"]
+    assert own["age_s"] == 20.0
+    assert own["age_is_a_floor"] is True
+    assert "FLOOR" in own["why_age"] and "TTE ~377" in own["why_age"]
