@@ -102,10 +102,16 @@ def candidates(root: str, *, now: Optional[float] = None,
                 st = os.stat(p)
             except OSError:
                 continue
+            if fn in PROTECTED or fn.endswith(".gz"):
+                # AN ARCHIVE MUST NOT COUNT AS THE NEWEST FILE. Compressing
+                # stamps the .gz with the time of the sweep, so the newest
+                # entry in a directory becomes an archive the moment one is
+                # written -- and the segment the recorder still has open
+                # would stop being "newest" and lose that guard. Only
+                # compressible files compete for it.
+                continue
             if st.st_mtime > newest_mtime:
                 newest_name, newest_mtime = fn, st.st_mtime
-            if fn in PROTECTED or fn.endswith(".gz"):
-                continue
             if not fn.endswith(COMPRESSIBLE):
                 continue
             if st.st_size == 0:

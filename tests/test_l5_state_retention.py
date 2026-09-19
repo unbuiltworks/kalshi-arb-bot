@@ -76,8 +76,10 @@ def test_an_archive_is_not_recompressed(tmp_path):
     d.mkdir()
     (d / "a.jsonl.gz").write_bytes(gzip.compress(b"{}\n"))
     _seg(tmp_path, "s", "b.jsonl", age_s=99999)
+    _seg(tmp_path, "s", "active.jsonl", age_s=0)
     names = [c["name"] for c in RT.candidates(str(tmp_path), min_age_s=1.0)]
     assert names == ["b.jsonl"]
+    assert (d / "a.jsonl.gz").exists()
 
 
 # ================================================= compression is verified
@@ -332,3 +334,24 @@ def test_the_boot_sweep_only_runs_under_pressure():
     assert 'u.get("level") != \'OK\'' in body or "!= 'OK'" in body
     # and the boot sweep is still reachable when it IS under pressure
     assert "sweep_retention(budget_s=600.0)" in body
+
+
+def test_AN_ARCHIVE_DOES_NOT_STEAL_NEWEST_FROM_THE_ACTIVE_SEGMENT(tmp_path):
+    """Compressing stamps the .gz with the sweep's time.
+
+    Seen live: after two archives were written, the newest entry in
+    l5-surface-shadow was a .gz. If that counted, the segment the recorder
+    still has open would lose the newest-file guard and rely on the age guard
+    alone -- which an idle-but-open recorder would not satisfy.
+    """
+    d = tmp_path / "s"
+    d.mkdir()
+    old_active = _seg(tmp_path, "s", "active.jsonl", age_s=9000)
+    _seg(tmp_path, "s", "closed.jsonl", age_s=99999)
+    gz = d / "archived.jsonl.gz"
+    gz.write_bytes(gzip.compress(b"{}\n"))          # mtime = now, the newest
+    got = [c["name"] for c in RT.candidates(str(tmp_path), min_age_s=1.0)]
+    assert "active.jsonl" not in got, (
+        "the open segment lost its guard to a freshly written archive")
+    assert got == ["closed.jsonl"]
+    assert old_active.exists()
