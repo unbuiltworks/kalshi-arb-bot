@@ -17,9 +17,11 @@ bodies of evidence say so plainly:
   that bet wins **0.3421** of the time. Across 17 counterfactual probes,
   **none** raises the residual win rate to 0.50. The side a resting maker
   accumulates is the side that is becoming wrong.
-- **This venue's habitat** (`SEGMENTED_HABITAT_1.md` §4): **87.9%** of
+- **This venue's habitat** (`SEGMENTED_HABITAT_1.md` §4): **88.8%** of 249
   measured adjacent-cycle pairs saw **zero** public prints, with one contract
-  going 198.5 s without a single one.
+  going 198.5 s without a single one. That share was 87.9% at n=165 and
+  88.8% at n=249 — it is the one number here that has not moved with more
+  data.
 
 A run whose purpose were profit would be refused by its own evidence base.
 
@@ -181,9 +183,9 @@ anything less repeats that on a loop.
   against Gemini outcomes. A poor result here is evidence about model B only.
 - **Not concurrency, size or aggressiveness.** All frozen. The promotion order
   stays PATIENCE → FREQUENCY → SIZE → CONCURRENCY, and this run is frequency.
-- **Not a stable refusal rate.** Book refusals were 2.3% in one soak and 23.0%
-  in the next, 90 minutes apart. Usable cycles per window are not plannable
-  from a constant, and the run must survive either.
+- **Not a stable refusal rate.** Book refusals were 2.3%, then 23.0%, then
+  3.4% across three soaks in four hours. Usable cycles per window are not
+  plannable from a constant, and the run must survive any of them.
 
 ---
 
@@ -194,7 +196,7 @@ anything less repeats that on a loop.
 | 1 | one canonical authoritative fill view, fails closed on contradiction | **DONE** — `executions.py`, bundle member, 26 tests |
 | 2 | exact C8B replay pinned as a test | **DONE** — read 13 carries `yes 0.01 / residual +0.01 / spend 0.0031 / n_fills 1` |
 | 3 | rebate reader over authenticated surfaces, no scraper | **DONE** — `/v1/transfers` credits, `/v1/tradevolume` denominator, cross-checked by `/v1/mytrades` |
-| 4 | continuous production-lifecycle shadow soak | **DONE** — 2 soaks, 8/8 windows, 173 cycles, 0 mutations |
+| 4 | continuous production-lifecycle shadow soak | **DONE** — 3 soaks, 12/12 windows, 261 cycles, 0 mutations, $0 spend |
 | 5 | fill conversion + habitat + rebate economics, segmented | **DONE** — `SEGMENTED_HABITAT_1.md` |
 | 6 | shadow proven to have no reachable order path | **DONE** — property of what it calls, not a flag |
 | 7 | run-level budget cannot self-increase | **DONE** — frozen dataclass, public surface pinned to `["labels"]` |

@@ -8,7 +8,7 @@ repricing frequency, EXTEND/COMPLETE state, and adverse movement after fills."
 reachable from the L5 policy, the pricing, the sizing or any bound, and no
 number below has changed one. No line here is realized P&L.
 
-**Sources.** 173 shadow cycles (soak #1 and #2, `continuous_v1.jsonl`), 9 live
+**Sources.** 261 shadow cycles (soaks #1-#3, `continuous_v1.jsonl`), 9 live
 window records (`continuous_run_*.json` — seven that ran, two C8 dispatches
 refused before the latch that spent nothing), the venue's own order records,
 the venue's own slot-reconciliation rows, and the venue's own public print
@@ -72,7 +72,7 @@ each bucket — beside **where the five fills landed**, as counts.
 
 Two further refusals, both load-bearing:
 
-- **A refused book is not a narrow spread.** 22 of 173 cycles carry a crossed
+- **A refused book is not a narrow spread.** 25 of 261 cycles carry a crossed
   or absent quote. They are counted on their own line and contribute to no
   price-derived segment. Bucketing a −0.30 "spread" as `<=0.05` would report
   the venue as the tightest it has ever been using precisely the readings the
@@ -90,12 +90,12 @@ Over the 151 readable cycles:
 
 | YES spread | cycles | share | fills |
 |---|---|---|---|
-| `<=0.05` | 1 | 0.6% | 0 |
-| `0.06-0.10` | 7 | 4.0% | 0 |
-| `0.11-0.20` | 34 | 19.7% | 0 |
-| **`0.21-0.30`** | **73** | **42.2%** | **1** (C8B, 0.27) |
-| `>0.30` | 36 | 20.8% | 0 |
-| refused | 22 | 12.7% | — |
+| `<=0.05` | 1 | 0.4% | 0 |
+| `0.06-0.10` | 11 | 4.2% | 0 |
+| `0.11-0.20` | 62 | 23.8% | 0 |
+| **`0.21-0.30`** | **107** | **41.0%** | **1** (C8B, 0.27) |
+| `>0.30` | 55 | 21.1% | 0 |
+| refused | 25 | 9.6% | — |
 | not captured | — | — | 4 |
 
 The one fill we have a book for landed in the bucket the venue offers most
@@ -103,18 +103,19 @@ often. That is consistent with "spread did not matter" and equally consistent
 with "we only ever quoted in that regime". It distinguishes nothing.
 
 **The number that does matter here is the denominator:** this venue's touch
-spread is 21–30 cents almost half the time and above 30 cents a fifth of the
-time. Only 4.6% of cycles offered a spread of 10 cents or less.
+spread is 21–30 cents about two cycles in five and above 30 cents in another
+one in five. Only **4.6%** of cycles offered a spread of 10 cents or less —
+the same share at n=173 and at n=261.
 
 ## 3. Touch depth — and an open question about queue priority
 
 | bid touch size | cycles | share | fills |
 |---|---|---|---|
-| `2-10` | 74 | 42.8% | 0 |
-| `11-100` | 1 | 0.6% | 0 |
-| `101-500` | 41 | 23.7% | 1 (C8B, **483**) |
-| `>500` | 35 | 20.2% | 0 |
-| refused | 22 | 12.7% | — |
+| `2-10` | 105 | 40.2% | 0 |
+| `11-100` | 3 | 1.1% | 0 |
+| `101-500` | 90 | 34.5% | 1 (C8B, **483**) |
+| `>500` | 38 | 14.6% | 0 |
+| refused | 25 | 9.6% | — |
 | not captured | — | — | 4 |
 
 Our own resting size is **flagged, never subtracted** (`touch_was_ours_cycles`).
@@ -132,8 +133,10 @@ does not show it. Three readings are open and I cannot yet distinguish them:
 
 The read that would settle it is cheap, public and read-only: record
 `GET /v1/trades/{symbol}` during live windows as the soak already does, and
-check for prints at our price between placement and fill. Live windows do not
-currently capture it. **That is a recording gap, not a finding.**
+check for prints at our price between placement and fill. **That reader is
+now in the live path** (`book_state.flow`, §10.1), so the question is
+answerable by the next live window and is unanswerable from the five fills we
+already have. It stays an open question, not a finding.
 
 ## 4. Flow — this is the binding constraint
 
@@ -142,14 +145,15 @@ contract duration):
 
 | public prints | adjacent-cycle pairs | share |
 |---|---|---|
-| **0 / min** | **145** | **87.9%** |
-| 0–2 / min | 1 | 0.6% |
+| **0 / min** | **221** | **88.8%** |
+| 0–2 / min | 1 | 0.4% |
 | 2–6 / min | 0 | — |
-| 6–15 / min | 18 | 10.9% |
-| >15 / min | 1 | 0.6% |
-| not measurable (first cycle of a window, ×8) | 8 | — |
+| 6–15 / min | 26 | 10.4% |
+| >15 / min | 1 | 0.4% |
+| not measurable (first cycle of a window, ×12) | 12 | — |
 
-Non-zero rates when they occur: median 7.0/min, max 19.6/min.
+Non-zero rates when they occur: median 6.8/min, max 19.6/min. The share was
+87.9% at n=165 pairs and is 88.8% at n=249 — it did not move.
 **Longest unbroken run of zero-print cycles on a single contract: 21
 consecutive cycles spanning 198.5 s** (`GEMI-BTC05M2609190300-UP`).
 
@@ -179,19 +183,24 @@ in §0, **TTE separates nothing.** C4's TTEs are derived from the venue's own
 
 | YES bid | cycles | share | fills |
 |---|---|---|---|
-| `0.00-0.10` | 47 | 27.2% | 0 |
-| `0.11-0.25` | 42 | 24.3% | 0 |
-| `0.26-0.50` | 31 | 17.9% | 1 (C8B @ 0.31) |
-| `0.51-0.75` | 23 | 13.3% | 0 |
-| `0.76-0.90` | 7 | 4.0% | 0 |
-| `0.91-1.00` | 1 | 0.6% | 0 |
-| refused | 22 | 12.7% | — |
+| `0.00-0.10` | 52 | 19.9% | 0 |
+| `0.11-0.25` | 49 | 18.8% | 0 |
+| `0.26-0.50` | 51 | 19.5% | 1 (C8B @ 0.31) |
+| `0.51-0.75` | 48 | 18.4% | 0 |
+| `0.76-0.90` | 35 | 13.4% | 0 |
+| `0.91-1.00` | 1 | 0.4% | 0 |
+| refused | 25 | 9.6% | — |
 | not captured | — | — | 4 |
 
-Over half of all cycles (89 of 173, 51.4%) present a YES bid at or below
-0.25. The
-policy's OPEN rung follows the bid, so more than half of our quoting happens
-in the tails — where a 0.01 quote is cheap and also nearly worthless to a
+**This is the one dimension soak #3 moved, and it moved a claim I had made.**
+At n=173 I reported "over half of all cycles (51.4%) present a YES bid at or
+below 0.25". At n=261 that is **38.7%**, and the 0.76–0.90 bucket went from
+4.0% to 13.4%. The tail-heaviness was a property of the first two soaks, not
+of the venue — 173 cycles over two 25-minute stretches was not enough to
+characterise a distribution and I should not have described it as if it were.
+What survives is weaker and still worth saying: the four middle buckets are
+close to flat, so the policy's OPEN rung follows the bid into the tails often
+enough to matter, where a 0.01 quote is cheap and also nearly worthless to a
 counterparty.
 
 ## 7. Resting time and repricing — the one association worth reporting
@@ -250,7 +259,8 @@ Across every live decision ever taken (31 on record):
 
 Shadow **cannot** contribute here and never will: with nothing resting there
 are no fills, inventory stays flat, and `classify()` derives the action from
-the residual alone. All 173 shadow cycles are `OPEN` (146) or `NO_ACTION` (27).
+the residual alone. All 261 shadow cycles are `OPEN` (231) or `NO_ACTION`
+(30) — three more soaks would not change that, and nor would three hundred.
 
 The single post-fill decision is **C8B cycle 9** (TTE 202.8 s, residual 0.01):
 `EXTEND YES @ 0.12` + `COMPLETE NO @ 0.69`. The window terminated at the
@@ -295,17 +305,25 @@ completed.
 |---|---|---|---|---|
 | #1 | 02:46–03:07Z | 86 | 2 | **2.3%** |
 | #2 | 04:21–04:45Z | 87 | 20 | **23.0%** |
-| both | | 173 | 22 | 12.7% |
+| #3 | 05:50–06:09Z | 88 | 3 | **3.4%** |
+| all | | 261 | 25 | 9.6% |
 
-Ninety minutes apart, a tenfold difference. **The refusal rate is not a
-property of the venue that can be budgeted for as a constant**, which matters
-directly for how many usable cycles a live window actually has. Sizing a live
-envelope against 12.7% would have been wrong on both of the two days we have.
+Three soaks, three different rates, all inside four hours. **The refusal rate
+is not a property of the venue that can be budgeted for as a constant**, which
+matters directly for how many usable cycles a live window actually has.
+Sizing a live envelope against any one of 2.3%, 23.0%, 3.4% or the 9.6%
+pooled figure would have been wrong on at least two of the three.
 
-The soak cycles were recorded before `continuous_probe.crossed` existed, so
-every row carries `book_readable: true`. This census re-reads the **preserved,
-unmodified** book with the current gate and reports the re-gating explicitly
-(`regate.rows_regated: 22`). No evidence file was altered.
+Within soak #3 the refusals were not even spread across its own windows:
+three of four refused **nothing**, and one refused 3 of 22 (13.6%).
+
+Soaks #1 and #2 were recorded before `continuous_probe.crossed` existed, so
+every one of their rows carries `book_readable: true`. This census re-reads
+the **preserved, unmodified** book with the current gate and reports the
+re-gating explicitly (`regate.rows_regated: 22` of 261). No evidence file was
+altered. **Soak #3 ran with the gate live and refused at the source** — its
+three refused cycles produced `l5_action []` and zero mutations, which is the
+gate working rather than a reconstruction of it.
 
 ---
 
@@ -323,7 +341,10 @@ or any bound. Nothing in §1–§10 is a tuning input.
 - the EXTEND/COMPLETE half of the L5 policy has **one** decision of live
   evidence and **zero** executions behind it (§8);
 - usable-cycle count per live window cannot be planned from a fixed refusal
-  rate (§10).
+  rate (§10);
+- **and the probability-band distribution I reported at n=173 did not hold at
+  n=261** (§6). The correction is in that section, and it is why every number
+  here now carries its sample size.
 
 **Recording gaps** (all public, read-only, behaviour-neutral):
 
