@@ -18,11 +18,20 @@ and no session is ever constructed. The policy is asked what it would do and
 the answer is recorded. Nothing here can reach the venue's write path, which
 is a property of what it calls, not a flag it sets.
 
-WHAT SHADOW CANNOT PROVE, stated rather than assumed: with nothing resting
-there are no fills, so inventory stays flat and the policy stays in OPEN.
-KEEP/CANCEL and the fill-driven transitions are not exercised here -- C8B
-proved those live. This proves discovery, banding, state maintenance,
-evidence completeness, rollover and the failure states.
+WHAT SHADOW CANNOT PROVE, stated rather than assumed: no order rests, so no
+REAL fill can occur and no real inventory can move. This proves discovery,
+banding, state maintenance, evidence completeness, rollover and the failure
+states -- and, with the ledger below, what the flow WOULD have done to a rung
+that was there.
+
+THE HYPOTHETICAL LEDGER. Without it this lane reports zero fills for ever,
+which reads as a market that declined our quote rather than as a lane with no
+fill mechanism. `hypothetical.HypotheticalBook` drives the SAME queue
+accounting `tape_replay` uses offline -- displayed queue first, opposite
+aggressor required, price change loses position -- forward against the live
+public tape, and moves a SHADOW inventory. Every number it produces is
+HYPOTHETICAL and an upper bound; none of it is submitted, filled, settled,
+realized or a cost basis.
 
 Read-only credentials are used for the authoritative account reads. When they
 are absent the soak still runs on public reads and records the account half
@@ -41,6 +50,7 @@ from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import continuous_runner as CR
 from src.gemini_execution import executions as EX
 from src.gemini_execution import habitat as HB
+from src.gemini_execution import hypothetical as HY
 from src.gemini_execution import metadata as MD
 from src.gemini_execution import preentry as PE
 from src.gemini_execution import run_continuous as RC
@@ -108,6 +118,9 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
     guard = CP.WindowGuard(
         symbol, auth_id="SHADOW",
         cohort_prefix=("GEMI-%s" % cohort.prefix) if cohort else None)
+    # the rungs this lane WOULD have rested, and what the tape would have
+    # done to them. No order, no session, no write path -- see hypothetical.py
+    hyp = HY.HypotheticalBook(symbol=symbol, policy=policy)
     rows, n = [], 0
     while n < cycles:
         n += 1
@@ -115,9 +128,17 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         if tte is None or tte < CP.WITHDRAW_ALL_TTE_S:
             break
         book = MD.outcome_book(symbol)
-        ms = CP.state_from_venue(symbol, tte, inv, book=book)
         depth = MD.contract_depth(symbol)
         flow = HB.public_flow(symbol)
+        # THE PRINTS CAME FIRST. Everything on this tape landed while the
+        # PREVIOUS cycle's rungs were resting, so they are walked against
+        # those -- before anything is requoted. Retargeting first would let
+        # a rung priced now catch a print from eight seconds ago, which is
+        # the single easiest way to manufacture fills that never existed.
+        hyp_fills = hyp.consume(flow.get("prints") or [], inv=inv, book=book,
+                                depth=depth, tte_s=tte)
+        # and the policy is asked against the inventory those fills produced
+        ms = CP.state_from_venue(symbol, tte, inv, book=book)
         turn = guard.step(ms, inv, now=time.time())
         # ---- GEMINI_RECYCLE: filter what the frozen policy asked for, never
         # add to it. `model_a_wanted` keeps fidelity measurable.
@@ -141,6 +162,9 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         row["execution_policy"] = policy
         row["model_a_wanted"] = wanted
         row["vetoed_by_adapter"] = vetoed
+        hyp.retarget(acted, now_ms=int(time.time() * 1000), depth=depth)
+        row["hypothetical_fills"] = hyp_fills
+        row["hypothetical_rungs_live"] = sorted(hyp.live)
         rows.append(row)
         runner._persist(row)
         await asyncio.sleep(interval_s)
@@ -193,8 +217,14 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
              "and no order could be outstanding, so the refusal is recorded "
              "and the loop continues. In LIVE this stops the run."
              if rolled_on_shadow else None),
-         "habitat": HB.window_summary(samples, rungs_placed=0, fills=(),
-                                      window_s=len(rows) * interval_s),
+         "habitat": HB.window_summary(
+             samples, rungs_placed=hyp.placed + hyp.requoted,
+             fills=hyp.fills, window_s=len(rows) * interval_s),
+         "hypothetical": hyp.report(),
+         "inventory": inv.report(),
+         "inventory_labels": (
+             "moved by HYPOTHETICAL fills only. No order was submitted and "
+             "nothing here is filled, settled, realized or a cost basis."),
          "state": (CR.COMPLETED if (gate["safe"] or rolled_on_shadow)
                    else gate["state"]),
          "mutations_sent": 0,

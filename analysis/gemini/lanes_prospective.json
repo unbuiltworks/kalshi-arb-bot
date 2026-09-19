@@ -1,0 +1,415 @@
+{
+  "utc": "2026-09-19T15:29:49.004198+00:00",
+  "quoting_window_tte_s": [
+    0.0,
+    300.0
+  ],
+  "quoting_window_source": "READ from the frozen surface's TTE_policy. Not set here.",
+  "lanes": {
+    "BTC5m": {
+      "venue_half": {
+        "contracts": 24,
+        "prints": 113,
+        "notional_usd": 1534.43,
+        "prints_per_contract": 4.71,
+        "notional_per_contract": 63.93,
+        "two_sided_contracts": 16,
+        "two_sided_share": 0.667
+      },
+      "per_contract": {
+        "GEMI-BTC05M2609191525-UP": {
+          "prints": 10,
+          "notional_usd": "61.2816",
+          "buy_prints": 8,
+          "sell_prints": 2,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191520-UP": {
+          "prints": 15,
+          "notional_usd": "43.9476",
+          "buy_prints": 9,
+          "sell_prints": 6,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191515-UP": {
+          "prints": 17,
+          "notional_usd": "271.6665",
+          "buy_prints": 6,
+          "sell_prints": 11,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191510-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC05M2609191505-UP": {
+          "prints": 3,
+          "notional_usd": "24.30",
+          "buy_prints": 0,
+          "sell_prints": 3,
+          "two_sided": false
+        },
+        "GEMI-BTC05M2609191500-UP": {
+          "prints": 10,
+          "notional_usd": "465.7964",
+          "buy_prints": 6,
+          "sell_prints": 4,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191455-UP": {
+          "prints": 10,
+          "notional_usd": "371.2391",
+          "buy_prints": 4,
+          "sell_prints": 6,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191450-UP": {
+          "prints": 3,
+          "notional_usd": "14.30",
+          "buy_prints": 2,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191445-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC05M2609191440-UP": {
+          "prints": 4,
+          "notional_usd": "7.4790",
+          "buy_prints": 2,
+          "sell_prints": 2,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191435-UP": {
+          "prints": 7,
+          "notional_usd": "111.4026",
+          "buy_prints": 3,
+          "sell_prints": 4,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191430-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC05M2609191425-UP": {
+          "prints": 9,
+          "notional_usd": "50.1984",
+          "buy_prints": 5,
+          "sell_prints": 4,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191420-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC05M2609191415-UP": {
+          "prints": 2,
+          "notional_usd": "5.0444",
+          "buy_prints": 1,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191410-UP": {
+          "prints": 1,
+          "notional_usd": "7.70",
+          "buy_prints": 1,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC05M2609191405-UP": {
+          "prints": 4,
+          "notional_usd": "16.00",
+          "buy_prints": 3,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191400-UP": {
+          "prints": 3,
+          "notional_usd": "11.7517",
+          "buy_prints": 1,
+          "sell_prints": 2,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191355-UP": {
+          "prints": 5,
+          "notional_usd": "23.40",
+          "buy_prints": 2,
+          "sell_prints": 3,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191350-UP": {
+          "prints": 3,
+          "notional_usd": "19.7268",
+          "buy_prints": 1,
+          "sell_prints": 2,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191345-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC05M2609191340-UP": {
+          "prints": 2,
+          "notional_usd": "10.80",
+          "buy_prints": 1,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191335-UP": {
+          "prints": 4,
+          "notional_usd": "12.40",
+          "buy_prints": 2,
+          "sell_prints": 2,
+          "two_sided": true
+        },
+        "GEMI-BTC05M2609191330-UP": {
+          "prints": 1,
+          "notional_usd": "6.0",
+          "buy_prints": 0,
+          "sell_prints": 1,
+          "two_sided": false
+        }
+      },
+      "lane_half": {
+        "windows": 2,
+        "windows_with_tape": 1,
+        "prints_in_reachable_window": 10,
+        "notional_in_reachable_window_usd": "61.2816",
+        "two_sided_windows": 1,
+        "two_sided_share": 1.0,
+        "buy_prints": 8,
+        "sell_prints": 2,
+        "model_a_quotes": 78,
+        "quotes_per_window": 39.0,
+        "adapter_vetoes": 0,
+        "first_fills": null,
+        "complete_fills": null,
+        "matched_contracts": null,
+        "gross_contracts": null,
+        "matched_over_gross": null,
+        "capital_at_risk_usd": "0",
+        "unmeasurable_here": {
+          "first_fills": "zero orders rested, so this cannot be measured in a lane that places none. Not a measured zero.",
+          "complete_fills": "zero orders rested, so this cannot be measured in a lane that places none. Not a measured zero.",
+          "matched_contracts": "zero orders rested, so this cannot be measured in a lane that places none. Not a measured zero.",
+          "gross_contracts": "zero orders rested, so this cannot be measured in a lane that places none. Not a measured zero.",
+          "matched_over_gross": "zero orders rested, so this cannot be measured in a lane that places none. Not a measured zero."
+        },
+        "reachable_tte_s": 300.0,
+        "labels": "PROSPECTIVE, and restricted to TTE <= 300 -- the only interval the frozen policy quotes in. SHADOW: no order existed and nothing is realized."
+      },
+      "the_sequence": {
+        "occurrences": 0,
+        "at_or_below_par": 0,
+        "windows_whose_inventory_moved": 0,
+        "rows": [],
+        "is_the_trigger": false,
+        "can_fire_in_these_lanes": false,
+        "why_not": "shadow_soak calls neither Driver.place nor Driver.cancel, so no rung rests and no fill can occur. A running SHADOW lane can prove discovery, banding, state, surface generation, terminal handling and rollover. It cannot prove recycling.",
+        "why": "one occurrence is an anecdote. Repetition of OPEN fill -> inventory change -> COMPLETE fill -> matched inventory is what would justify preparing a bounded live proposal, and nothing is prepared before it."
+      }
+    },
+    "BTC15m": {
+      "venue_half": {
+        "contracts": 24,
+        "prints": 47,
+        "notional_usd": 357.28,
+        "prints_per_contract": 1.96,
+        "notional_per_contract": 14.89,
+        "two_sided_contracts": 8,
+        "two_sided_share": 0.333
+      },
+      "per_contract": {
+        "GEMI-BTC15M2609191530-UP": {
+          "prints": 1,
+          "notional_usd": "3.44",
+          "buy_prints": 1,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191515-UP": {
+          "prints": 1,
+          "notional_usd": "0.94",
+          "buy_prints": 0,
+          "sell_prints": 1,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191500-UP": {
+          "prints": 5,
+          "notional_usd": "6.4348",
+          "buy_prints": 3,
+          "sell_prints": 2,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191445-UP": {
+          "prints": 7,
+          "notional_usd": "2.59",
+          "buy_prints": 4,
+          "sell_prints": 3,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191430-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191415-UP": {
+          "prints": 6,
+          "notional_usd": "104.0322",
+          "buy_prints": 6,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191400-UP": {
+          "prints": 1,
+          "notional_usd": "16.92",
+          "buy_prints": 1,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191345-UP": {
+          "prints": 4,
+          "notional_usd": "19.2973",
+          "buy_prints": 1,
+          "sell_prints": 3,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191330-UP": {
+          "prints": 3,
+          "notional_usd": "1.56",
+          "buy_prints": 0,
+          "sell_prints": 3,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191315-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191300-UP": {
+          "prints": 2,
+          "notional_usd": "1.90",
+          "buy_prints": 0,
+          "sell_prints": 2,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191245-UP": {
+          "prints": 2,
+          "notional_usd": "1.94",
+          "buy_prints": 1,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191230-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191215-UP": {
+          "prints": 2,
+          "notional_usd": "1.72",
+          "buy_prints": 0,
+          "sell_prints": 2,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191200-UP": {
+          "prints": 1,
+          "notional_usd": "149.38",
+          "buy_prints": 0,
+          "sell_prints": 1,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191145-UP": {
+          "prints": 3,
+          "notional_usd": "2.1288",
+          "buy_prints": 1,
+          "sell_prints": 2,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191130-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191115-UP": {
+          "prints": 1,
+          "notional_usd": "0.95",
+          "buy_prints": 0,
+          "sell_prints": 1,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191100-UP": {
+          "prints": 1,
+          "notional_usd": "0.9",
+          "buy_prints": 0,
+          "sell_prints": 1,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609191045-UP": {
+          "prints": 3,
+          "notional_usd": "0.39",
+          "buy_prints": 2,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191030-UP": {
+          "prints": 2,
+          "notional_usd": "0.29",
+          "buy_prints": 1,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191015-UP": {
+          "prints": 2,
+          "notional_usd": "42.47",
+          "buy_prints": 1,
+          "sell_prints": 1,
+          "two_sided": true
+        },
+        "GEMI-BTC15M2609191000-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        },
+        "GEMI-BTC15M2609190945-UP": {
+          "prints": 0,
+          "notional_usd": "0",
+          "buy_prints": 0,
+          "sell_prints": 0,
+          "two_sided": false
+        }
+      },
+      "lane_half": {
+        "state": "UNREADABLE_FROM_HERE",
+        "why": "this lane persists to a Railway volume; the container running this report cannot mount it. Absent, not zero.",
+        "evidence_path": null
+      }
+    }
+  }
+}

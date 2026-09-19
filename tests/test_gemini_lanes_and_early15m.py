@@ -1,6 +1,7 @@
 """Both lanes compared only where Model A trades; EARLY_15M kept offline."""
 from decimal import Decimal as D
 
+import json
 import pytest
 
 from src.gemini_execution import early_15m as EA
@@ -50,57 +51,107 @@ def test_a_one_sided_reachable_window_is_not_called_two_sided():
 
 
 def test_the_census_reports_every_column_asked_for():
-    ws = [{"symbol": "S", "cycles": 5,
-           "inventory": {"matched_qty": "0.01",
-                         "effective_matched_pair_cost": "0.93",
-                         "directional_residual": "0.00",
-                         "total_spend_usd": "0.0093"},
-           "gross_contracts": "0.02", "first_fills": 1,
-           "complement_fills": 1, "opposite_flow_after_fill": 2,
-           "model_a_quotes": 8}]
+    # inventory lives on the CYCLE rows, which is where a running lane
+    # actually persists it -- the window row carries none.
+    ws = [{"symbol": "S", "cycles": 5, "adapter_vetoes": 2,
+           "cycles_detail": [
+               {"model_a_wanted": [{"action": "OPEN"}, {"action": "OPEN"}],
+                "inventory": {"matched_qty": "0",
+                              "total_spend_usd": "0"}},
+               {"model_a_wanted": [{"action": "COMPLETE"}],
+                "inventory": {"matched_qty": "0.01",
+                              "effective_matched_pair_cost": "0.93",
+                              "directional_residual": "0.00",
+                              "total_spend_usd": "0.0093"}}]}]
     c = LN.lane_census(ws, {"S": {"prints": 6, "notional_usd": "40",
-                                  "two_sided": True}})
-    for k in ("windows", "prints_in_reachable_window",
+                                  "two_sided": True, "buy_prints": 4,
+                                  "sell_prints": 2}})
+    for k in ("windows", "windows_with_tape", "prints_in_reachable_window",
               "notional_in_reachable_window_usd", "two_sided_windows",
-              "model_a_quotes", "first_fills", "opposite_flow_after_fill",
-              "complete_fills", "par_constrained_pairs",
-              "matched_contracts", "gross_contracts", "matched_over_gross",
-              "terminal_residual_contracts", "capital_at_risk_usd"):
+              "two_sided_share", "buy_prints", "sell_prints",
+              "model_a_quotes", "quotes_per_window", "adapter_vetoes",
+              "first_fills", "complete_fills", "matched_contracts",
+              "gross_contracts", "matched_over_gross",
+              "capital_at_risk_usd"):
         assert k in c, k
-    assert c["par_constrained_pairs"] == 1
-    assert c["matched_over_gross"] == "0.5000"
+    assert c["model_a_quotes"] == 3
+    assert c["adapter_vetoes"] == 2
+    assert c["capital_at_risk_usd"] == "0.0093"
 
 
-def test_a_pair_above_par_is_not_counted_as_par_constrained():
-    ws = [{"symbol": "S", "cycles": 5,
-           "inventory": {"matched_qty": "0.01",
-                         "effective_matched_pair_cost": "1.02",
-                         "directional_residual": "0",
-                         "total_spend_usd": "0.0102"},
-           "gross_contracts": "0.02"}]
-    assert LN.lane_census(ws, {})["par_constrained_pairs"] == 0
+def test_A_FILL_COLUMN_IS_ABSENT_NOT_ZERO():
+    """The strongest wrong claim this file could make.
+
+    A shadow lane rests no order, so it cannot fill. Printing 0 first fills
+    beside a real print count would read as 'the lane quoted and the flow
+    refused it', which is a finding. It is not one: it is the absence of a
+    fill mechanism, and the census has to say which.
+    """
+    c = LN.lane_census([{"symbol": "S", "cycles": 3, "cycles_detail": []}], {})
+    for k in ("first_fills", "complete_fills", "matched_contracts",
+              "gross_contracts", "matched_over_gross"):
+        assert c[k] is None, k
+        assert "no mechanism here" in c["unmeasurable_here"][k]
+        assert "Not a measured zero" in c["unmeasurable_here"][k]
 
 
-# ============================================================ the trigger
+def test_the_lane_is_read_from_its_evidence_stream_not_its_final_report(tmp_path):
+    """A `--windows 0` lane never writes the report at the end of its loop."""
+    ev = tmp_path / "continuous_v1.jsonl"
+    ev.write_text(
+        json.dumps({"kind": "window", "symbol": "S", "cycles": 2,
+                    "started_utc": "2026-01-01T00:00:00+00:00",
+                    "finished_utc": "2026-01-01T00:05:00+00:00"}) + "\n"
+        + json.dumps({"kind": "cycle", "symbol": "S",
+                      "utc": "2026-01-01T00:01:00+00:00",
+                      "model_a_wanted": [{"action": "OPEN"}],
+                      "inventory": {"matched_qty": "0"}}) + "\n"
+        # a cycle on the same symbol from OUTSIDE this window must not be
+        # pooled into it
+        + json.dumps({"kind": "cycle", "symbol": "S",
+                      "utc": "2026-01-01T09:00:00+00:00",
+                      "model_a_wanted": [{"action": "OPEN"}],
+                      "inventory": {"matched_qty": "0"}}) + "\n",
+        encoding="utf-8")
+    ws = LN.lane_windows(str(ev))
+    assert len(ws) == 1
+    assert len(ws[0]["cycles_detail"]) == 1
+
+
+def test_the_trigger_cannot_fire_in_a_lane_that_rests_nothing():
+    s = LN.the_sequence([{"symbol": "S", "cycles_detail": [
+        {"inventory": {"matched_qty": "0", "n_fills": 0}}]}])
+    assert s["occurrences"] == 0
+    assert s["can_fire_in_these_lanes"] is False
+    assert "no rung rests" in s["why_not"]
+    assert s["windows_whose_inventory_moved"] == 0
+
 
 def test_ONE_OCCURRENCE_IS_NOT_THE_TRIGGER():
-    one = [{"symbol": "S", "inventory": {"matched_qty": "0.01",
-                                         "effective_matched_pair_cost":
-                                             "0.93"}}]
+    one = [{"symbol": "S", "cycles_detail": [
+        {"inventory": {"matched_qty": "0.01",
+                       "effective_matched_pair_cost": "0.93"}}]}]
     s = LN.the_sequence(one)
     assert s["occurrences"] == 1 and s["at_or_below_par"] == 1
     assert s["is_the_trigger"] is False
-    assert "one occurrence is an anecdote" in s["why"]
+
+
+def test_a_pair_above_par_is_not_counted_as_par_constrained():
+    s = LN.the_sequence([{"symbol": "S", "cycles_detail": [
+        {"inventory": {"matched_qty": "0.01",
+                       "effective_matched_pair_cost": "1.02"}}]}])
+    assert s["occurrences"] == 1 and s["at_or_below_par"] == 0
 
 
 def test_repetition_is_the_trigger():
-    two = [{"symbol": "A", "inventory": {"matched_qty": "0.01",
-                                         "effective_matched_pair_cost":
-                                             "0.93"}},
-           {"symbol": "B", "inventory": {"matched_qty": "0.01",
-                                         "effective_matched_pair_cost":
-                                             "0.97"}}]
+    two = [{"symbol": "A", "cycles_detail": [
+                {"inventory": {"matched_qty": "0.01",
+                               "effective_matched_pair_cost": "0.93"}}]},
+           {"symbol": "B", "cycles_detail": [
+                {"inventory": {"matched_qty": "0.01",
+                               "effective_matched_pair_cost": "0.97"}}]}]
     assert LN.the_sequence(two)["is_the_trigger"] is True
+
 
 
 def test_a_window_with_no_match_is_not_an_occurrence():
@@ -204,3 +255,44 @@ def test_THE_PAIR_BASIS_IS_CONSTRUCTED_AND_SAYS_SO():
     assert c["constructed_basis_values"] == ["0.99"]
     assert "tautology" not in c  # the caveat is a field, not a silent omission
     assert "BY CONSTRUCTION" in c["basis_is_constructed"]
+
+
+# ================================ the ledger is what makes the fills real
+
+def test_the_fill_columns_become_measured_where_the_ledger_ran():
+    w = {"symbol": "S", "cycles": 4, "cycles_detail": [],
+         "hypothetical": {"rungs_placed": 6, "first_fills": 1,
+                          "complete_fills": 1,
+                          "fills_resting_on_an_unknown_queue": 0},
+         "inventory": {"matched_qty": "0.01", "directional_residual": "0",
+                       "effective_matched_pair_cost": "0.95",
+                       "total_spend_usd": "0.0095"}}
+    c = LN.lane_census([w], {})
+    assert c["windows_with_a_hypothetical_ledger"] == 1
+    assert c["first_fills"] == 1 and c["complete_fills"] == 1
+    assert c["matched_contracts"] == "0.01"
+    assert c["gross_contracts"] == "0.02"
+    assert c["matched_over_gross"] == "0.5000"
+    assert c["unmeasurable_here"] == {}
+    assert "HYPOTHETICAL" in c["fills_are_hypothetical"]
+
+
+def test_A_HYPOTHETICAL_OCCURRENCE_IS_NEVER_REPORTED_AS_A_REAL_ONE():
+    w = {"symbol": "S", "cycles": 4, "cycles_detail": [],
+         "hypothetical": {"rungs_placed": 2},
+         "inventory": {"matched_qty": "0.01",
+                       "effective_matched_pair_cost": "0.95"}}
+    s = LN.the_sequence([w])
+    assert s["occurrences"] == 1
+    assert s["can_fire_in_these_lanes"] is True
+    assert s["why_not"] is None
+    assert "never placed" in s["occurrences_are_hypothetical"]
+
+
+def test_the_residual_counts_toward_gross_even_with_no_match():
+    w = {"symbol": "S", "cycles": 4, "cycles_detail": [],
+         "hypothetical": {"rungs_placed": 3, "first_fills": 1},
+         "inventory": {"matched_qty": "0", "directional_residual": "0.01"}}
+    c = LN.lane_census([w], {})
+    assert c["gross_contracts"] == "0.01"
+    assert c["matched_over_gross"] == "0.0000"

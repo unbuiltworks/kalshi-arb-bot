@@ -1310,3 +1310,61 @@ Three defects in the first run of the decomposition were found and corrected
 before these numbers were read; see the header of
 `analysis/l5/adapted/failure.py`. The FAILURE_MODE verdict is unaffected by
 them — it is computed from the baseline, which no probe touches.
+
+## 2026-09-19 — the running lanes had no fill mechanism (SHADOW; nothing armed)
+
+Both Gemini lanes run continuously on the frozen Model A and the
+`GEMINI_RECYCLE` adapter: **BTC5m** locally and **BTC15m** on Railway
+(`gemini-maker-shadow` `a15785aa-…`, deployment `6ebd2b34-…`,
+`restartPolicyType: ALWAYS`, 50 GB volume, no new service created).
+`quote_between_tte_s = [0, 300]` is untouched; `lanes.py` reads it and a test
+asserts it never assigns to it.
+
+**THE DEFECT.** `shadow_soak` places no order — correct, and the safety
+property — but the window record was also built with
+`HB.window_summary(samples, rungs_placed=0, fills=(), …)` hard-coded, and the
+recovered `Inventory` was never touched after entry. Both lanes therefore
+reported **0 first fills, 0 complement fills, 0 matched** beside a real,
+non-zero print count, and would have gone on doing so for ever. That reads as
+a market that declined our quote. It was the absence of a fill mechanism.
+`OPEN fill → inventory change → COMPLETE fill → matched inventory` was
+**structurally impossible** in either lane, so watching for it was watching
+for something that could not occur.
+
+**THE FIX.** `src/gemini_execution/hypothetical.py` drives the same queue
+accounting `tape_replay` uses offline, forward against the live public tape:
+displayed queue eats first, a rung is reached only by the opposite aggressor
+direction, a price change loses queue position, and the policy is re-asked
+after every fill. Prints are walked **before** the rungs are requoted (a
+cycle's tape landed while the previous cycle's rungs rested), and a re-fetched
+rolling tape cannot fill the same rung twice. It reaches no write path —
+asserted against the module's AST. Every number is HYPOTHETICAL and an upper
+bound; none is submitted, filled, settled, realized or a cost basis.
+
+**PROSPECTIVE TTE ≤ 300 COMPARISON**, 24 expired contracts per cohort, venue
+tape only, over the interval Model A can actually quote in:
+
+| | BTC5m | BTC15m |
+|---|---|---|
+| prints | **113** | 47 |
+| notional | **$1,534.43** | $357.28 |
+| prints / contract | **4.71** | 1.96 |
+| notional / contract | **$63.93** | $14.89 |
+| two-sided share | **0.667** | 0.333 |
+
+BTC5m wins every column Model A can reach. This reproduces prospectively the
+inversion found retrospectively before the whole-window BTC15m promotion was
+withdrawn. Both lanes stay up; this is a measurement, not a selection.
+
+**EARLY_15M_ADAPTATION (offline Model B research only).** 60 BTC15m contracts,
+56 computable: a first fill was available in **56/56**, and external
+opposite-direction flow reached a fee-safe complement price in **29 (51.8%)**,
+median **124.6s** after the fill. **The 0.99 pair basis is set by the replay,
+not discovered** — `replay_early()` quotes the complement at `1 − held − tick`,
+so all 29 bases were exactly 0.99 by construction, and "51.8%
+par-constrained" would have been a tautology. What survives is that flow
+*reached* that price, not that pairs *cost* it. Upper bound: Gemini serves no
+book history, so this prices from the tape and treats queue position as zero.
+Model A is untouched and nothing quotes earlier.
+
+See `LANES_PROSPECTIVE_1.md`.

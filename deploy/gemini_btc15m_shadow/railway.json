@@ -6,6 +6,7 @@
     "watchPatterns": [
       "deploy/gemini_btc15m_shadow/**",
       "src/gemini_execution/shadow_soak.py",
+      "src/gemini_execution/hypothetical.py",
       "src/gemini_execution/contract_cohort.py",
       "src/gemini_execution/run_continuous.py",
       "src/gemini_execution/continuous_runner.py",
@@ -19,5 +20,6 @@
     "restartPolicyMaxRetries": 100
   },
   "_status": "SHADOW / DISARMED. Gemini BTC15m continuous L5 lifecycle: frozen Model A, GEMINI_RECYCLE adapter, public reads plus read-only account reads. No order path, no authorization id, no arming env. mutations_sent is 0 on every window by construction.",
+  "_hypothetical": "The lane now runs a HYPOTHETICAL fill ledger: the rungs it would have rested, walked against the public tape with the same queue accounting tape_replay uses offline. It places nothing. Every number it produces is hypothetical and an upper bound, and none of it is submitted, filled, settled, realized or a cost basis.",
   "_restart": "ALWAYS is correct for a READ-ONLY collector and is NOT the money-moving policy: the bounded live probe uses restartPolicyType NEVER and that is unchanged. This service can place nothing, so relaunching it cannot repeat a trade."
 }

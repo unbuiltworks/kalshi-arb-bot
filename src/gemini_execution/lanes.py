@@ -39,19 +39,57 @@ def quoting_window() -> Sequence[float]:
     return (float(lo), float(hi))
 
 
-def lane_windows(out_glob: str) -> List[Dict[str, Any]]:
-    """Every completed window a running lane has persisted."""
-    rows: List[Dict[str, Any]] = []
-    for p in sorted(glob.glob(out_glob)):
+def lane_evidence(evidence_glob: str) -> Dict[str, List[Dict[str, Any]]]:
+    """Read what a RUNNING lane has actually persisted.
+
+    Not the `--out` report: a lane started with `--windows 0` runs for ever,
+    so the report at the end of its loop is never written. The durable record
+    is the append-only evidence stream, one row per cycle and one per window,
+    and that is what a continuously running lane can be read from at all.
+    """
+    windows: List[Dict[str, Any]] = []
+    cycles: List[Dict[str, Any]] = []
+    for path in sorted(glob.glob(evidence_glob)):
         try:
-            d = json.load(open(p, encoding="utf-8"))
-        except (OSError, ValueError):
+            fh = open(path, encoding="utf-8")
+        except OSError:
             continue
-        for w in (d.get("windows") or []):
-            w = dict(w)
-            w["_file"] = p
-            rows.append(w)
-    return rows
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                row["_file"] = path
+                (windows if row.get("kind") == "window" else cycles).append(row)
+    return {"windows": windows, "cycles": cycles}
+
+
+def lane_windows(evidence_glob: str) -> List[Dict[str, Any]]:
+    """Completed windows, each carrying the cycles that belong to it.
+
+    The join is by symbol and bounded by the window's own start/finish, so a
+    lane that revisits a symbol does not pool two visits into one window.
+    """
+    ev = lane_evidence(evidence_glob)
+    by_symbol: Dict[str, List[Dict[str, Any]]] = {}
+    for c in ev["cycles"]:
+        by_symbol.setdefault(str(c.get("symbol")), []).append(c)
+    out: List[Dict[str, Any]] = []
+    for w in ev["windows"]:
+        w = dict(w)
+        mine = by_symbol.get(str(w.get("symbol")), [])
+        lo, hi = w.get("started_utc"), w.get("finished_utc")
+        w["cycles_detail"] = [
+            c for c in mine
+            if (lo is None or str(c.get("utc") or "") >= str(lo))
+            and (hi is None or str(c.get("utc") or "") <= str(hi))
+        ]
+        out.append(w)
+    return out
 
 
 def tape_in_window(prints: Sequence[Mapping[str, Any]], *,
@@ -86,54 +124,97 @@ def lane_census(windows: Sequence[Mapping[str, Any]],
 
     Prospective: these are windows a running lane actually lived through,
     not a replay of a tape we fetched afterwards.
+
+    THE FILL COLUMNS ARE MEASURED ONLY WHERE THE LANE RAN THE HYPOTHETICAL
+    LEDGER, AND ARE ABSENT -- NOT ZERO -- ANYWHERE ELSE. `shadow_soak` places
+    no order, so a window recorded before the ledger existed has no fill
+    mechanism at all; printing 0 first fills beside a real print count would
+    read as a market that declined our quote rather than as a lane that never
+    quoted. Where the ledger did run, the numbers are HYPOTHETICAL: no order
+    was submitted and nothing is filled, settled, realized or a cost basis.
     """
     done = [w for w in windows if w.get("cycles")]
-    quotes = first_fills = opp_after = comp_fills = 0
-    matched_c = gross_c = resid_c = D("0")
+    quotes = vetoes = 0
+    ledger = rungs = firsts = comps = unknown_q = 0
+    matched = gross = D("0")
     cap = D("0")
-    par_pairs = 0
     prints = D("0")
     notional = D("0")
     two_sided = 0
+    buys = sells = 0
+    tape_seen = 0
     for w in done:
         sym = w.get("symbol")
-        t = tapes.get(sym) or {}
-        prints += D(int(t.get("prints") or 0))
-        notional += _dec(t.get("notional_usd")) or D("0")
-        two_sided += 1 if t.get("two_sided") else 0
-        inv = w.get("inventory") or {}
-        matched_c += _dec(inv.get("matched_qty")) or D("0")
-        resid_c += abs(_dec(inv.get("directional_residual")) or D("0"))
-        cap += _dec(inv.get("total_spend_usd")) or D("0")
-        basis = _dec(inv.get("effective_matched_pair_cost"))
-        if (_dec(inv.get("matched_qty")) or D("0")) > 0 and basis is not None \
-                and basis <= PAR:
-            par_pairs += 1
-        # what the lane actually did, from its own recorded cycles
+        t = tapes.get(sym)
+        if t is not None:
+            tape_seen += 1
+            prints += D(int(t.get("prints") or 0))
+            notional += _dec(t.get("notional_usd")) or D("0")
+            two_sided += 1 if t.get("two_sided") else 0
+            buys += int(t.get("buy_prints") or 0)
+            sells += int(t.get("sell_prints") or 0)
+        vetoes += int(w.get("adapter_vetoes") or 0)
+        # the window's own terminal inventory where it has one; otherwise
+        # the LAST cycle's, which is the nearest thing the record carries
+        last_inv: Mapping[str, Any] = dict(w.get("inventory") or {})
+        cyc_inv: Mapping[str, Any] = {}
         for r in (w.get("cycles_detail") or []):
             quotes += len(r.get("model_a_wanted") or [])
-        quotes += int(w.get("model_a_quotes") or 0)
-        first_fills += int(w.get("first_fills") or 0)
-        comp_fills += int(w.get("complement_fills") or 0)
-        opp_after += int(w.get("opposite_flow_after_fill") or 0)
-        gross_c += _dec(w.get("gross_contracts")) or D("0")
+            cyc_inv = r.get("inventory") or cyc_inv
+        last_inv = last_inv or cyc_inv
+        cap += _dec(last_inv.get("total_spend_usd")) or D("0")
+        h = w.get("hypothetical")
+        if h:
+            ledger += 1
+            rungs += int(h.get("rungs_placed") or 0)
+            firsts += int(h.get("first_fills") or 0)
+            comps += int(h.get("complete_fills") or 0)
+            unknown_q += int(h.get("fills_resting_on_an_unknown_queue") or 0)
+            m = _dec(last_inv.get("matched_qty")) or D("0")
+            matched += m
+            # gross is what was bought, matched or not: the par-constrained
+            # denominator the completion work ranks on
+            matched_pairs_gross = m * D("2")
+            gross += (matched_pairs_gross
+                      + abs(_dec(last_inv.get("directional_residual"))
+                            or D("0")))
+    absent = ("this lane rested no rung and ran no hypothetical ledger, so "
+              "the quantity has no mechanism here. Not a measured zero.")
+    measured = ledger > 0
     return {
         "windows": len(done),
+        "windows_with_tape": tape_seen,
         "prints_in_reachable_window": int(prints),
         "notional_in_reachable_window_usd": str(notional),
         "two_sided_windows": two_sided,
-        "two_sided_share": (round(two_sided / len(done), 3) if done else None),
+        "two_sided_share": (round(two_sided / tape_seen, 3)
+                            if tape_seen else None),
+        "buy_prints": buys,
+        "sell_prints": sells,
         "model_a_quotes": quotes,
-        "first_fills": first_fills,
-        "opposite_flow_after_fill": opp_after,
-        "complete_fills": comp_fills,
-        "par_constrained_pairs": par_pairs,
-        "matched_contracts": str(matched_c),
-        "gross_contracts": str(gross_c),
-        "matched_over_gross": (str(round(matched_c / gross_c, 4))
-                               if gross_c > 0 else None),
-        "terminal_residual_contracts": str(resid_c),
+        "quotes_per_window": (round(quotes / len(done), 2) if done else None),
+        "adapter_vetoes": vetoes,
+        "windows_with_a_hypothetical_ledger": ledger,
+        "hypothetical_rungs_placed": (rungs if measured else None),
+        "first_fills": (firsts if measured else None),
+        "complete_fills": (comps if measured else None),
+        "fills_resting_on_an_unknown_queue": (unknown_q if measured
+                                              else None),
+        "matched_contracts": (str(matched) if measured else None),
+        "gross_contracts": (str(gross) if measured else None),
+        "matched_over_gross": (str(round(matched / gross, 4))
+                               if measured and gross > 0 else None),
         "capital_at_risk_usd": str(cap),
+        "unmeasurable_here": ({} if measured else {
+            "first_fills": absent, "complete_fills": absent,
+            "matched_contracts": absent, "gross_contracts": absent,
+            "matched_over_gross": absent,
+        }),
+        "fills_are_hypothetical": ("every fill counted here is HYPOTHETICAL: "
+                                   "no order was submitted and nothing is "
+                                   "filled, settled, realized or a cost "
+                                   "basis. An upper bound." if measured
+                                   else None),
         "reachable_tte_s": REACHABLE_TTE_S,
         "labels": ("PROSPECTIVE, and restricted to TTE <= 300 -- the only "
                    "interval the frozen policy quotes in. SHADOW: no order "
@@ -144,29 +225,64 @@ def lane_census(windows: Sequence[Mapping[str, Any]],
 def the_sequence(windows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """THE TRIGGER: OPEN fill -> inventory change -> COMPLETE fill -> matched.
 
-    Reported the moment it happens, and counted rather than described,
-    because repetition is what would justify preparing a bounded live probe.
+    Counted rather than described, because repetition is what would justify
+    preparing a bounded live probe.
+
+    IT CAN ONLY FIRE WHERE THE HYPOTHETICAL LEDGER RAN, and it says which.
+    A window recorded without the ledger rests no rung, so the inventory it
+    recovers at entry is the inventory it reports at exit; zero occurrences
+    there is the absence of a fill mechanism, NOT evidence that the flow
+    declined to complete. Reporting it as the latter would be the strongest
+    claim in this file and the least supported.
+
+    Where the ledger did run, an occurrence is HYPOTHETICAL: the rung was
+    never placed, so this is what the flow would have done to one that was.
     """
     hits = []
+    moved = 0
+    with_ledger = 0
     for w in windows:
-        inv = w.get("inventory") or {}
-        m = _dec(inv.get("matched_qty")) or D("0")
-        if m <= 0:
-            continue
-        basis = _dec(inv.get("effective_matched_pair_cost"))
-        hits.append({
-            "symbol": w.get("symbol"), "cohort": w.get("cohort"),
-            "matched": str(m),
-            "effective_pair_basis": (str(basis) if basis is not None
-                                     else None),
-            "at_or_below_par": bool(basis is not None and basis <= PAR),
-            "started_utc": w.get("started_utc"),
-        })
+        seen = set()
+        if w.get("hypothetical"):
+            with_ledger += 1
+        wi = w.get("inventory") or {}
+        rows_ = ([{"inventory": wi}] if wi else []) \
+            + list(w.get("cycles_detail") or [])
+        for r in rows_:
+            inv = r.get("inventory") or {}
+            m = _dec(inv.get("matched_qty")) or D("0")
+            seen.add(str(inv.get("n_fills") or 0))
+            if m <= 0:
+                continue
+            basis = _dec(inv.get("effective_matched_pair_cost"))
+            hits.append({
+                "symbol": w.get("symbol"), "cohort": w.get("cohort"),
+                "matched": str(m),
+                "effective_pair_basis": (str(basis) if basis is not None
+                                         else None),
+                "at_or_below_par": bool(basis is not None and basis <= PAR),
+                "started_utc": w.get("started_utc"),
+            })
+            break
+        if len(seen) > 1:
+            moved += 1
     return {
         "occurrences": len(hits),
         "at_or_below_par": sum(1 for h in hits if h["at_or_below_par"]),
+        "windows_whose_inventory_moved": moved,
+        "windows_with_a_hypothetical_ledger": with_ledger,
         "rows": hits,
         "is_the_trigger": bool(len(hits) >= 2),
+        "can_fire_in_these_lanes": bool(with_ledger > 0),
+        "why_not": (None if with_ledger else
+                    "shadow_soak calls neither Driver.place nor "
+                    "Driver.cancel, so no rung rests and no REAL fill can "
+                    "occur. Without the hypothetical ledger this lane has no "
+                    "fill mechanism at all, and zero here is that absence."),
+        "occurrences_are_hypothetical": ("the rung was never placed. This is "
+                                         "what the flow would have done to "
+                                         "one that was." if with_ledger
+                                         else None),
         "why": ("one occurrence is an anecdote. Repetition of OPEN fill -> "
                 "inventory change -> COMPLETE fill -> matched inventory is "
                 "what would justify preparing a bounded live proposal, and "
