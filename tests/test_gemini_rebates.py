@@ -185,3 +185,25 @@ def test_the_C8B_maker_fill_earns_no_assumed_rebate():
 def test_garbage_in_is_refused_not_guessed(bad):
     got = RB.parse_credits(bad)
     assert got["readable"] is False and got["n"] == 0
+
+
+def test_the_symbol_match_is_CASE_INSENSITIVE():
+    """/v1/tradevolume returns `gemi-btc05m...-up` in LOWER case while every
+    other Gemini surface returns it upper. A case-sensitive prefix matched
+    ZERO of 62 real prediction rows on 2026-09-19 and produced a confident
+    verdict that the endpoint does not cover prediction instruments. It
+    covers them completely; the filter was the defect."""
+    lower = [[[{"symbol": "gemi-btc05m2608271730-up", "data_date": "2026-08-27",
+                "buy_maker_notional": "5.64", "sell_maker_notional": "0",
+                "buy_maker_count": "2", "sell_maker_count": "0"}]]]
+    got = RB.parse_maker_volume(lower)
+    assert got["rows_matched"] == 1
+    assert got["maker_notional_total"] == "5.64"
+
+
+def test_the_coverage_diagnostic_also_matches_case_insensitively():
+    lower = [[[{"symbol": "gemi-btc05m2608271730-up", "data_date": "2026-08-27",
+                "buy_maker_notional": "1", "sell_maker_notional": "0"}]]]
+    cov = RB._coverage(lower)
+    assert cov["verdict"] == "COVERS_PREDICTION_INSTRUMENTS"
+    assert cov["prediction_symbols"] == ["gemi-btc05m2608271730-up"]

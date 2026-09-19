@@ -44,7 +44,14 @@ TRADEVOLUME_PATH = "/v1/tradevolume"
 #: kind of loose matching that must not reach a number anybody relies on.
 REBATE_TYPES = ("rebate", "reward", "incentive")
 
-#: prediction-market instruments are the only ones this programme trades
+#: prediction-market instruments are the only ones this programme trades.
+#: MATCHED CASE-INSENSITIVELY, and that is not a nicety. `/v1/tradevolume`
+#: returns `gemi-btc05m2608271730-up` in LOWER case while every other surface
+#: -- the events API, order history, mytrades, the order acks -- returns
+#: `GEMI-BTC05M2608271730-UP`. A case-sensitive prefix silently matched zero
+#: of 62 prediction rows on 2026-09-19 and produced a confident verdict that
+#: the endpoint "does not cover prediction instruments". It covers them
+#: completely. The filter was the defect, not the venue.
 PREDICTION_PREFIX = "GEMI-"
 
 # ----------------------------------------------------------- attribution
@@ -164,7 +171,7 @@ def parse_maker_volume(payload: Any, *, prefix: str = PREDICTION_PREFIX
     n = 0
     for r in rows:
         sym = str(r.get("symbol") or "")
-        if prefix and not sym.startswith(prefix):
+        if prefix and not sym.upper().startswith(prefix.upper()):
             continue
         buy = _dec(r.get("buy_maker_notional")) or D("0")
         sell = _dec(r.get("sell_maker_notional")) or D("0")
@@ -269,7 +276,8 @@ def _coverage(payload: Any) -> Dict[str, Any]:
     walk(payload)
     syms = sorted({str(r.get("symbol")) for r in rows if r.get("symbol")})
     days = sorted({str(r.get("data_date")) for r in rows if r.get("data_date")})
-    pred = [s for s in syms if s.startswith(PREDICTION_PREFIX)]
+    pred = [s for s in syms
+            if s.upper().startswith(PREDICTION_PREFIX.upper())]
     return {
         "readable": True, "n_rows": len(rows),
         "distinct_symbols": len(syms), "symbols_sample": syms[:12],
