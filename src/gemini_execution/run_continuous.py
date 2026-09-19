@@ -27,6 +27,8 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from decimal import Decimal as D
+from decimal import InvalidOperation
 from typing import (Any, Callable, Dict, List, Mapping,
                     Optional, Sequence)
 
@@ -237,6 +239,117 @@ def observed_place_acks(wire: Sequence[Mapping[str, Any]]
 # already-returned value at the seam this file owns leaves the authorized
 # driver byte-for-byte what was reviewed -- executable_sha and envelope_sha do
 # not move -- which is the same resolution that captured the place acks.
+def _dec(v: Any) -> Optional[D]:
+    try:
+        return D(str(v))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _spread(bid: Any, ask: Any) -> Optional[str]:
+    b, a = _dec(bid), _dec(ask)
+    return None if (b is None or a is None) else str(a - b)
+
+
+def presented_book(ms: Any) -> Dict[str, Any]:
+    """The book the CONTROLLER decided on, as it decided on it.
+
+    Not a re-read and not a reconstruction: this is the `state_from_venue`
+    object the driver handed to `WindowGuard.step`, which is the only state
+    any rung in this cycle can have come from.
+
+    Unreadable is reported as unreadable. `state_from_venue` returns
+    `state_id == "unreadable"` with `inventory_known False` when the venue's
+    book is missing or fails its own complement-identity check, and the
+    driver then quotes nothing -- so "no book" is a real and reportable
+    outcome, never an empty one.
+    """
+    if not isinstance(ms, Mapping):
+        return {"present": False,
+                "why": ("the driver returned no market state for this "
+                        "decision; it returned before building one")}
+    b = ms.get("book") if isinstance(ms.get("book"), Mapping) else {}
+    out: Dict[str, Any] = {
+        "present": True,
+        "t_utc": ms.get("t_utc"),
+        "tte_s": ms.get("tte_s"),
+        "state_id": ms.get("state_id"),
+        "inventory_known": ms.get("inventory_known"),
+        "source": b.get("source"),
+        "readable": bool(b.get("readable")),
+        "identity_consistent": b.get("identity_consistent"),
+        "complement_identity": sanitize(b.get("complement_identity")),
+    }
+    if not out["readable"] or not b.get("identity_consistent"):
+        out["why"] = (b.get("why")
+                      or "the venue's book failed its complement-identity "
+                         "check; nothing was quoted against it")
+        return out
+    yes, no = b.get("yes") or {}, b.get("no") or {}
+    outcomes = ms.get("outcomes") or {}
+    out.update({
+        "yes": {"bid": yes.get("bid"), "ask": yes.get("ask"),
+                "spread": _spread(yes.get("bid"), yes.get("ask")),
+                "qty": None},
+        "no": {"bid": no.get("bid"), "ask": no.get("ask"),
+               "spread": _spread(no.get("bid"), no.get("ask")),
+               "qty": None},
+        "qty_why": ("this source publishes PRICES ONLY -- the contract object "
+                    "carries no depth. Size is reported under `depth`, from a "
+                    "separate read, and is NOT inferred here"),
+        "passive_pair_cost": b.get("passive_pair_cost"),
+        "crossing_pair_cost": b.get("crossing_pair_cost"),
+        "last_trade_price": b.get("last_trade_price"),
+        "tick": ((outcomes.get("Up") or {}).get("tick")),
+    })
+    return out
+
+
+def book_agreement(presented: Mapping[str, Any],
+                   depth: Any) -> Dict[str, Any]:
+    """Do the two independent reads describe the same touch?
+
+    CHECKED PER CYCLE, NEVER ASSUMED. The contract ladder and the contract
+    object are different endpoints with different clocks, and the claim that
+    `bids[0]`/`asks[0]` ARE the YES bid/ask is exactly the kind of mapping
+    that deserves to be asserted every time rather than once in a comment. A
+    disagreement is reported; it is not smoothed and it stops nothing, because
+    this is evidence and the decision has already been made.
+    """
+    if not isinstance(depth, Mapping) or not depth.get("readable"):
+        return {"checked": False,
+                "why": "no readable depth read to compare against"}
+    if not presented.get("readable"):
+        return {"checked": False,
+                "why": "no readable presented book to compare against"}
+    d_bid = (depth.get("bids") or {}).get("best")
+    d_ask = (depth.get("asks") or {}).get("best")
+    p_bid = (presented.get("yes") or {}).get("bid")
+    p_ask = (presented.get("yes") or {}).get("ask")
+    bid_ok = (_dec(d_bid) is not None and _dec(d_bid) == _dec(p_bid))
+    ask_ok = (_dec(d_ask) is not None and _dec(d_ask) == _dec(p_ask))
+    return {"checked": True, "bid_agrees": bid_ok, "ask_agrees": ask_ok,
+            "agrees": bool(bid_ok and ask_ok),
+            "ladder_best_bid": d_bid, "presented_yes_bid": p_bid,
+            "ladder_best_ask": d_ask, "presented_yes_ask": p_ask,
+            "labels": ("agreement means the ladder's touch IS the presented "
+                       "YES touch, so the ladder's sizes describe the "
+                       "presented book. A disagreement means the two reads "
+                       "caught different instants and the sizes must not be "
+                       "read as the presented book's sizes.")}
+
+
+def book_state(ms: Any, depth: Any) -> Dict[str, Any]:
+    """Everything needed to reconstruct WHY a rung was chosen this cycle."""
+    p = presented_book(ms)
+    return {"presented": p, "depth": sanitize(depth),
+            "agreement": book_agreement(p, depth),
+            "labels": ("`presented` is the state the controller decided on. "
+                       "`depth` is a separate PUBLIC read taken next to it, "
+                       "for size only. Neither is derived from our own order "
+                       "prices or from ticks_behind_bid.")}
+
+
 #
 # EVIDENCE ONLY. Each wrapper makes the SAME call with the SAME arguments,
 # returns the SAME object, propagates every exception untouched, and adds no
@@ -264,7 +377,7 @@ class DecisionObserver:
     mutation still happens inside the driver, under the driver's own bounds.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, depth_fn: Optional[Callable[[], Any]] = None) -> None:
         self.cycles: List[Dict[str, Any]] = []
         self.reads: List[Dict[str, Any]] = []
         self.mutations: List[Dict[str, Any]] = []
@@ -272,6 +385,10 @@ class DecisionObserver:
         self.errors: List[str] = []
         self._prev_fills: Optional[List[Dict[str, Any]]] = None
         self._prev_order_ids: set = set()
+        #: OPTIONAL public size read, taken beside each decision. None means
+        #: no depth is captured, which is a smaller record and never a
+        #: different window: nothing the driver does can depend on it.
+        self.depth_fn = depth_fn
 
     # ------------------------------------------------------- safe accessors
     # Every one of these is wrapped: a recorder that can raise is a recorder
@@ -296,6 +413,29 @@ class DecisionObserver:
             "consumed": driver.budget_consumed,
             "remaining": driver.budget_left(),
             "cohort_budget": getattr(driver, "_max_actions", None)}, {})
+
+    def _depth(self) -> Any:
+        """A size read taken next to the decision, and never in its way.
+
+        Wrapped like every other accessor: a recorder that can raise is a
+        recorder that can stop a live window. The elapsed time is measured and
+        kept, because the cost of this read comes out of maker resting time
+        and an unmeasured cost is one nobody can weigh.
+        """
+        if self.depth_fn is None:
+            return {"captured": False,
+                    "why": "no depth reader was configured for this run"}
+        t0 = time.time()
+        got = self._safe(self.depth_fn, None)
+        if got is None:
+            return {"captured": True, "readable": False,
+                    "elapsed_s": round(time.time() - t0, 4),
+                    "why": "the depth reader raised; see record_errors"}
+        if isinstance(got, dict):
+            got = dict(got)
+            got["elapsed_s"] = round(time.time() - t0, 4)
+            got["captured"] = True
+        return got
 
     # ------------------------------------------------------------- recorders
 
@@ -355,8 +495,14 @@ class DecisionObserver:
         return sanitize(new)
 
     def _record_decision(self, driver: Any, pre: Dict[str, Any],
-                         out: Any) -> None:
+                         out: Any, depth: Any = None) -> None:
         row = dict(pre)
+        # OUTSIDE the try below, so a book that cannot be summarised still
+        # leaves a row saying so rather than vanishing into record_error.
+        row["book_state"] = self._safe(
+            lambda: book_state((out or {}).get("market_state"), depth),
+            {"presented": {"present": False,
+                           "why": "book_state raised; see record_errors"}})
         try:
             turn = (out or {}).get("turn") or {}
             plan = (out or {}).get("plan") or {}
@@ -458,8 +604,12 @@ class DecisionObserver:
                 "working_orders_before": self._working(driver),
                 "budget_before_decision": self._budget(driver),
             }
+            # BEFORE the decision, so the size read describes the book the
+            # decision is about to be made against -- and OUTSIDE it, because
+            # it is not passed in and the driver cannot see it.
+            depth = self._depth()
             out = inner_decide(*a, **kw)
-            self._record_decision(driver, pre, out)
+            self._record_decision(driver, pre, out, depth)
             return out
 
         async def place(*a: Any, **kw: Any) -> Any:
@@ -549,13 +699,62 @@ class DecisionObserver:
             "authoritative_reads": len(self.reads),
             "mutations_observed": len(self.mutations),
             "action_labels": labels,
+            "book_capture": self.book_capture(),
             "record_errors": self.errors[:20],
             "note": ("EVIDENCE ONLY. Each wrapper makes the same call with "
                      "the same arguments, returns the same object and "
                      "propagates every exception. It adds no decision, no "
                      "mutation and no bound; every limit is still enforced "
-                     "inside ws_continuous.Driver, whose executable_sha is "
-                     "unchanged by this capture."),
+                     "inside ws_continuous.Driver. The driver now RETURNS the "
+                     "market state it decided on, which moved its "
+                     "executable_sha -- an additive key nothing reads back, "
+                     "not a change to what it decides."),
+        }
+
+    def book_capture(self) -> Dict[str, Any]:
+        """Coverage of the book record, so a silent gap is visible HERE.
+
+        A capture that quietly stopped working would otherwise show up as a
+        window nobody can explain afterwards -- which is the position
+        CONTINUOUS-7 left us in, and the reason this block exists.
+        """
+        n = len(self.cycles)
+        pres = dep = agree = dis = 0
+        elapsed: List[float] = []
+        why: List[str] = []
+        for c in self.cycles:
+            bs = c.get("book_state") or {}
+            p = bs.get("presented") or {}
+            d = bs.get("depth") or {}
+            a = bs.get("agreement") or {}
+            if p.get("readable"):
+                pres += 1
+            elif p.get("why"):
+                why.append(str(p.get("why")))
+            if isinstance(d, Mapping):
+                if d.get("readable"):
+                    dep += 1
+                elif d.get("why"):
+                    why.append(str(d.get("why")))
+                if isinstance(d.get("elapsed_s"), (int, float)):
+                    elapsed.append(float(d["elapsed_s"]))
+            if a.get("checked"):
+                agree += 1 if a.get("agrees") else 0
+                dis += 0 if a.get("agrees") else 1
+        return {
+            "cycles": n,
+            "presented_book_readable": pres,
+            "depth_readable": dep,
+            "touch_agreements": agree,
+            "touch_disagreements": dis,
+            "depth_elapsed_s": {
+                "n": len(elapsed),
+                "total": round(sum(elapsed), 3) if elapsed else 0.0,
+                "max": round(max(elapsed), 3) if elapsed else None},
+            "unreadable_reasons": sorted(set(why))[:10],
+            "labels": ("a cycle with no readable presented book is a cycle "
+                       "the controller quoted nothing in; UNREADABLE is "
+                       "recorded, never replaced with an empty book."),
         }
 
 
@@ -586,9 +785,19 @@ def tte_of(symbol: str):
     return _now
 
 
-def eligible_symbol(now: Optional[float] = None) -> Dict[str, Any]:
-    """The ONE BTC5m contract this window will be bound to, or a refusal."""
+def eligible_symbol(now: Optional[float] = None,
+                    band: Optional[Sequence[float]] = None) -> Dict[str, Any]:
+    """The ONE BTC5m contract this window will be bound to, or a refusal.
+
+    `band` NARROWS the entry window for one experiment and can never widen
+    it: it is intersected with the standing [MIN_ENTRY_TTE_S, MAX_ENTRY_TTE_S]
+    bound, so a caller cannot use it to enter a contract the normal rule would
+    refuse. Passing None is the standing behaviour, unchanged.
+    """
     t = now if now is not None else time.time()
+    lo, hi = MIN_ENTRY_TTE_S, MAX_ENTRY_TTE_S
+    if band is not None:
+        lo, hi = max(lo, float(band[0])), min(hi, float(band[1]))
     tried: List[Dict[str, Any]] = []
     ticker = MD.current_btc5m_ticker(t)
     for step in range(4):
@@ -604,18 +813,94 @@ def eligible_symbol(now: Optional[float] = None) -> Dict[str, Any]:
                or terms.get("status"),
                "market_state": terms.get("market_state")
                or terms.get("marketState")}
-        if (tte is not None and MIN_ENTRY_TTE_S <= tte <= MAX_ENTRY_TTE_S
+        if (tte is not None and lo <= tte <= hi
                 and row["contract_status"] == "active"
                 and row["market_state"] == "open"):
-            return {"eligible": True, "chosen": row, "considered": tried + [row]}
-        row["why"] = ("tte %s outside [%s, %s]" % (tte, MIN_ENTRY_TTE_S,
-                                                   MAX_ENTRY_TTE_S)
-                      if tte is None or not (MIN_ENTRY_TTE_S <= tte
-                                             <= MAX_ENTRY_TTE_S)
+            return {"eligible": True, "chosen": row, "band": [lo, hi],
+                    "considered": tried + [row]}
+        row["why"] = ("tte %s outside [%s, %s]" % (tte, lo, hi)
+                      if tte is None or not (lo <= tte <= hi)
                       else "not active/open")
         tried.append(row)
-    return {"eligible": False, "considered": tried,
-            "why": "no BTC5m contract is inside the entry band right now"}
+    return {"eligible": False, "considered": tried, "band": [lo, hi],
+            "why": "no BTC5m contract is inside the entry band [%s, %s] "
+                   "right now" % (lo, hi)}
+
+
+#: CONTINUOUS-8 EXPERIMENTAL SCHEDULING -- when to BEGIN, and nothing else.
+#: C4 and C7 entered at 129s and 136s and filled nothing across 19 cycles; C5
+#: and C6 entered at 282s and 207s and took one fill each. n=4 is a
+#: CORRELATION and is deliberately NOT encoded as strategy: no controller,
+#: price, size, envelope or pair-cost behaviour knows this number exists. It
+#: chooses WHEN the experiment starts, which until now was decided by when the
+#: workflow happened to run against the 5-minute grid -- C7 got 136s by
+#: accident of the dispatch clock.
+DEFAULT_ENTRY_BAND = (240.0, 280.0)
+#: one full contract cycle plus margin: from the worst arrival (just under the
+#: band) the next band opens ~260s later.
+MAX_ENTRY_WAIT_S = 420.0
+ENTRY_POLL_S = 5.0
+
+
+async def await_entry_band(band: Sequence[float], *,
+                           max_wait_s: float = MAX_ENTRY_WAIT_S,
+                           poll_s: float = ENTRY_POLL_S,
+                           now_fn: Callable[[], float] = time.time,
+                           sleep_fn: Optional[Callable] = None,
+                           scan_fn: Optional[Callable] = None
+                           ) -> Dict[str, Any]:
+    """WAIT, read-only, until a contract's TTE is inside the band.
+
+    SENDS NOTHING AND SPENDS NOTHING. This runs BEFORE the preflight, before
+    recovery, before the authorization gate and before the latch, so a wait
+    that never reaches the band refuses with the authorization still unspent.
+    The only thing it does is poll a PUBLIC read and sleep.
+
+    BOUNDED IN TIME AND IN POLLS. A scheduler that can wait forever is a
+    scheduler that can hold an armed workflow step open until its timeout,
+    which is a worse failure than not entering at all.
+    """
+    sleep = sleep_fn if sleep_fn is not None else asyncio.sleep
+    scan = scan_fn if scan_fn is not None else eligible_symbol
+    t0 = now_fn()
+    polls = 0
+    seen: List[Dict[str, Any]] = []
+    while True:
+        polls += 1
+        sel = scan(band=band)
+        waited = round(now_fn() - t0, 2)
+        if sel.get("eligible"):
+            return {"in_band": True, "band": [band[0], band[1]],
+                    "waited_s": waited, "polls": polls,
+                    "entered_tte_s": (sel.get("chosen") or {}).get("tte_s"),
+                    "selection": sel, "observed": seen[-6:],
+                    "labels": ("EXPERIMENTAL SCHEDULING ONLY: this chose WHEN "
+                               "to begin. The controller, prices, sizing and "
+                               "every bound are unchanged and know nothing "
+                               "about it.")}
+        seen.append({"waited_s": waited,
+                     "tte_s": [r.get("tte_s") for r in
+                               (sel.get("considered") or [])][:4]})
+        if waited + poll_s > max_wait_s:
+            return {"in_band": False, "band": [band[0], band[1]],
+                    "waited_s": waited, "polls": polls, "selection": sel,
+                    "observed": seen[-6:],
+                    "why": ("no BTC5m contract reached the entry band "
+                            "[%s, %s] within %ss; refusing BEFORE the latch "
+                            "rather than entering a window the experiment did "
+                            "not ask for" % (band[0], band[1], max_wait_s))}
+        await sleep(poll_s)
+
+
+def parse_entry_band(raw: Any) -> Optional[Sequence[float]]:
+    """"240:280" -> (240.0, 280.0). None or empty means no scheduling."""
+    if raw in (None, "", "none", "off"):
+        return None
+    lo, _, hi = str(raw).partition(":")
+    lo_f, hi_f = float(lo), float(hi)
+    if not (0 < lo_f < hi_f):
+        raise ValueError("entry band must be LO:HI with 0 < LO < HI")
+    return (lo_f, hi_f)
 
 
 def _legs_from_orders(orders: Sequence[Mapping[str, Any]]
@@ -728,7 +1013,9 @@ async def authoritative_state(symbol: str) -> Dict[str, Any]:
 async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                      out_path: str,
                      wire_path: Optional[str] = None,
-                     cohort_id: Optional[str] = None) -> Dict[str, Any]:
+                     cohort_id: Optional[str] = None,
+                     entry_band: Optional[Sequence[float]] = None
+                     ) -> Dict[str, Any]:
     """Always writes its report, however it exits.
 
     EVERY REFUSAL PATH RETURNS EARLY, and the artifact write used to sit after
@@ -741,7 +1028,7 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
     try:
         rep = await _build(auth_id, state_dir=state_dir,
                            ledger_path=ledger_path, wire_path=wire_path,
-                           cohort_id=cohort_id)
+                           cohort_id=cohort_id, entry_band=entry_band)
         return rep
     finally:
         rep.setdefault("finished_utc",
@@ -755,7 +1042,9 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
 
 async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                  wire_path: Optional[str] = None,
-                 cohort_id: Optional[str] = None) -> Dict[str, Any]:
+                 cohort_id: Optional[str] = None,
+                 entry_band: Optional[Sequence[float]] = None
+                 ) -> Dict[str, Any]:
     from src.gemini_execution.ws_session import GeminiMakerSession
 
     rep: Dict[str, Any] = {
@@ -770,7 +1059,30 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                          "ws_continuous.Driver."),
     }
 
-    sel = eligible_symbol()
+    # EXPERIMENTAL SCHEDULING, FIRST AND READ-ONLY. Before the preflight, the
+    # recovery, the authorization gate and the latch -- so a wait that never
+    # reaches the band refuses with the authorization STILL UNSPENT, and every
+    # read that follows is taken against the contract actually entered rather
+    # than one that expired while we waited.
+    if entry_band is not None:
+        sched = await await_entry_band(entry_band)
+        rep["entry_schedule"] = sched
+        sel = sched.get("selection") or {"eligible": False,
+                                         "why": sched.get("why")}
+        if not sched.get("in_band"):
+            rep["state"] = WC.DO_NOT_TRADE
+            rep["why"] = sched.get("why")
+            rep["latch"] = {"consumed": False,
+                            "why": ("the entry band was never reached; "
+                                    "refused BEFORE the latch")}
+            rep["symbol_selection"] = sel
+            return rep
+    else:
+        rep["entry_schedule"] = {
+            "scheduled": False,
+            "why": ("no entry band configured; the contract is whichever one "
+                    "is eligible at dispatch time")}
+        sel = eligible_symbol()
     rep["symbol_selection"] = sel
     if not sel.get("eligible"):
         rep["state"] = WC.DO_NOT_TRADE
@@ -992,7 +1304,9 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # BOUND BEFORE THE WINDOW RUNS, not after it, so a window that dies
     # mid-cycle still leaves every decision it had already made on disk.
     # These are the observer's own lists, so later appends land in `rep`.
-    decisions = DecisionObserver()
+    # The size read is bound to THIS window's symbol and nothing else, so the
+    # observer cannot be pointed at another contract by accident.
+    decisions = DecisionObserver(depth_fn=lambda: MD.contract_depth(symbol))
     rep["decisions"] = decisions.cycles
     rep["authoritative_reads"] = decisions.reads
     rep["mutations_observed"] = decisions.mutations
@@ -1073,10 +1387,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          "bounded budget and must already exist")
     ap.add_argument("--out", default="analysis/gemini/continuous_run.json")
     ap.add_argument("--wire", default="analysis/gemini/continuous_wire.json")
+    ap.add_argument("--entry-tte-band", default=None,
+                    help=("LO:HI seconds-to-expiry the window must BEGIN "
+                          "inside, e.g. 240:280. Omitted, the contract is "
+                          "whichever is eligible at dispatch time -- which is "
+                          "how CONTINUOUS-7 got 136s. This narrows the "
+                          "standing entry band and can never widen it."))
     a = ap.parse_args(argv)
     rep = asyncio.run(main_async(a.auth_id, state_dir=a.state_dir,
                                  ledger_path=a.ledger, out_path=a.out,
-                                 wire_path=a.wire, cohort_id=a.cohort))
+                                 wire_path=a.wire, cohort_id=a.cohort,
+                                 entry_band=parse_entry_band(
+                                     a.entry_tte_band)))
     print("GEMINI_CONTINUOUS " + json.dumps(
         {k: rep.get(k) for k in ("state", "why", "symbol_selection",
                                  "driver_executable_sha")}, default=str),

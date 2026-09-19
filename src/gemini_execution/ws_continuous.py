@@ -792,12 +792,29 @@ class Driver:
 
     def decide(self, tte_s: float, *,
                book: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-        """Decide and DIFF. Sends nothing; this is the whole dry run."""
+        """Decide and DIFF. Sends nothing; this is the whole dry run.
+
+        RETURNS THE MARKET STATE IT DECIDED ON. The book was always read here
+        -- `state_from_venue` fetches it when the caller passes none -- used,
+        and then DISCARDED, so the record could say what we quoted but never
+        what we were quoting against. CONTINUOUS-7 filled nothing and the only
+        way to say why was to infer the book backwards from our own prices and
+        `ticks_behind_bid`. Handing the caller the state that was actually
+        used replaces that inference with the thing itself.
+
+        EVIDENCE ONLY, and additive. The same state object is returned as was
+        passed to the guard; no decision, bound, price, size or ordering
+        depends on this key existing, and nothing reads it back.
+        """
         if self.state in TERMINAL:
-            return {"state": self.state, "why": self.why, "plan": None}
+            return {"state": self.state, "why": self.why, "plan": None,
+                    "market_state": None,
+                    "market_state_why": "terminal before a state was built"}
         if self.guard is None or self.inv is None:
             self.stop(DO_NOT_TRADE, "decide() before bind()")
-            return {"state": self.state, "why": self.why, "plan": None}
+            return {"state": self.state, "why": self.why, "plan": None,
+                    "market_state": None,
+                    "market_state_why": "decide() before bind()"}
 
         now = self.now_fn()
         st = CP.state_from_venue(self._symbol, tte_s, self.inv, now=now,
@@ -814,6 +831,7 @@ class Driver:
                                for o in self.working.rungs()],
                     "mutations": len(self.working.rungs())}
             return {"state": self.state, "turn": turn, "plan": plan,
+                    "market_state": st,
                     "why": turn.get("stop") or "window withdrawn"}
 
         plan = diff_surface(turn.get("actions") or [], self.working)
@@ -823,8 +841,9 @@ class Driver:
                       % (plan["mutations"], self.budget_left(),
                          self._max_actions))
             return {"state": self.state, "turn": turn, "plan": plan,
-                    "why": self.why}
+                    "market_state": st, "why": self.why}
         return {"state": self.state, "turn": turn, "plan": plan,
+                "market_state": st,
                 "window_phase": phase, "budget_left": self.budget_left()}
 
     def apply_fill(self, client_order_id: str, qty: Any, price: Any,

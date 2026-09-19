@@ -48,7 +48,13 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # MUST EXCEED THE ARMED STEP'S OWN TIMEOUT. It was 15 while the armed
+    # step was 12, which was fine for a window that started immediately. C8
+    # WAITS up to 420s for its entry band and then runs ~250s, so a 15-minute
+    # job would have killed the runner mid-window -- and a hard kill is worse
+    # than a stop, because the terminal withdrawal never runs and the orders
+    # stay live. That is CONTINUOUS-5's failure mode with no way to recover.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -280,9 +286,16 @@ jobs:
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
         run: |
           mkdir -p analysis/gemini
+          # THE SCHEDULING PATH RUNS HERE TOO, at the STANDING band. The
+          # armed step enters at 240:280 and would wait up to 420s for it;
+          # 90:300 is the rule that already applies, so the wait loop, the
+          # scan and the handoff into the rest of _build are exercised
+          # production-shaped at ~zero cost. A band can only NARROW the
+          # standing rule, so this one narrows nothing.
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort "COHORT-2026-09-18-C7" \
+            --cohort "COHORT-2026-09-18-C8" \
+            --entry-tte-band "90:300" \
             --ledger analysis/gemini/continuous_ledger.jsonl \
             --out    analysis/gemini/continuous_unarmed_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire   /tmp/unarmed_wire.json \
@@ -295,27 +308,41 @@ jobs:
       # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
       # armed_continuous=true is passed on dispatch.
       #
-      # DISARMED AGAIN. CONTINUOUS-7 RAN AND IS SPENT: 12 cycles, all 6
-      # slots, every cancel accepted, and the FIRST window to terminate with
-      # ZERO orders live -- orders_live_after_stop 0, STOPPED_FLAT_ORDERS.
-      # C7 is 6 of 6, C6 6 of 6, C5 frozen 3 of 6 with its UNKNOWN. The auth
-      # id below is the sentinel and the driver constants are None, so this
-      # step cannot arm.
+      # DISARMED. CONTINUOUS-7 RAN AND IS SPENT: 12 cycles, all 6 slots,
+      # every cancel accepted, and the first window to terminate with ZERO
+      # orders live. It FILLED NOTHING, so the target chain is still
+      # unproven. C7 is 6 of 6, C6 6 of 6, C5 frozen 3 of 6 with its UNKNOWN.
+      # The auth id below is the sentinel and the driver constants are None,
+      # so this step cannot arm.
+      #
+      # CONTINUOUS-8 IS STAGED AND UNAUTHORIZED. Two changes only, and
+      # NEITHER is a strategy change:
+      #   P0  the book each decision was made against is now RECORDED --
+      #       `decide` returns the state it used, and a PUBLIC size read is
+      #       taken beside it. C7's "why did nothing fill" had to be inferred
+      #       backwards from our own prices; it no longer does.
+      #   P1  --entry-tte-band 240:280 chooses WHEN the experiment begins.
+      #       C7 got 136s by accident of the dispatch clock. This is
+      #       experimental scheduling: the controller, prices, sizing,
+      #       pair-cost behaviour and every bound are unchanged and know
+      #       nothing about it. The band can only NARROW the standing entry
+      #       rule, never widen it.
       #
       # NOTE FOR WHOEVER READS THIS NEXT: STOP stops the CONTROLLER. C5's
       # NO leg filled 57 seconds AFTER its window terminated, because a
       # fail-closed stop does not withdraw orders the venue already
       # accepted. Do not read "stopped" as "flat" -- and note that C7's own
-      # FLAT ORDERS still says nothing about fills already taken. The
-      # terminal withdrawal added for C7 needed no cleanup mutation here
-      # (cleanup_consumed 0): the controller's own end-of-window cancels had
-      # already cleared the book. That is the good case, not proof the
-      # cleanup path works under one that has orders left.
+      # FLAT ORDERS still says nothing about fills already taken. C7's
+      # terminal withdrawal needed no cleanup mutation (cleanup_consumed 0)
+      # because the controller's own end-of-window cancels had already
+      # cleared the book. That is the good case, not proof the cleanup path
+      # works under one that has orders left.
       #
-      # OWNER-2026-09-18-GEMINI-CONTINUOUS-7, naming
-      #   executable_sha a5ff9175...56ef   (coherent refresh + withdrawal)
-      #   envelope_sha   b3bff654...aa17   (UNCHANGED: no bound moved, 7/7)
-      #   bundle_sha     28f117d3...8bb6
+      # THE 6-SLOT BUDGET IS EXPECTED TO BIND. Projected from C4-C7's own
+      # mutation rates onto a ~250s window, every observed rate needs MORE
+      # than 6 slots; C6 already stopped on budget after 65s. The budget is
+      # UNCHANGED at 6 by owner instruction, and that is reported rather
+      # than quietly fixed.
       #
       # ONE window. The latch makes that durable across runners, the cohort
       # bounds it to 6 mutations, and neither is reusable.
@@ -349,7 +376,11 @@ jobs:
       # ==================================================================
       - name: ONE authorized Gemini continuous window
         if: ${{ github.event.inputs.armed_continuous == 'true' }}
-        timeout-minutes: 12
+        # 12 was sized for a window that started immediately. C8 WAITS for
+        # its entry band -- bounded at 420s -- and then runs ~250s, so the
+        # step needs room for both plus the venue reads between them. The
+        # wait is bounded in the code; this is the outer backstop.
+        timeout-minutes: 18
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
@@ -360,7 +391,8 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort  "COHORT-2026-09-18-C7" \
+            --cohort  "COHORT-2026-09-18-C8" \
+            --entry-tte-band "240:280" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \

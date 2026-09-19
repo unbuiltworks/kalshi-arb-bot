@@ -123,7 +123,7 @@ def _scripted_decide(d):
     return decide
 
 
-def _window(tmp_path, tag, *, observed):
+def _window(tmp_path, tag, *, observed, depth_fn=None):
     d, led = _driver(tmp_path, tag)
     d.working.add("l5cp-pre-no-aaaaaaaa", leg="NO", price="0.14", qty="0.01",
                   now=1000.0, venue_order_id=145828836246611835)
@@ -141,7 +141,7 @@ def _window(tmp_path, tag, *, observed):
                  "orderId": 145828836246611835, "resting_since": 1000.0}]}
         return {"fills": [], "open_orders": []}
 
-    obs = RC.DecisionObserver() if observed else None
+    obs = RC.DecisionObserver(depth_fn=depth_fn) if observed else None
     fn = obs.attach(d, refresh) if observed else refresh
     rep = _run(d.run_window(session, tte_of=lambda: 150.0, refresh_fn=fn,
                             interval_s=0.0, max_cycles=1))
@@ -535,3 +535,86 @@ def test_the_observer_has_a_caller_and_its_output_reaches_the_report(
     # outnumbers the cycles.
     assert 1 <= rep["decision_capture"]["decide_calls"] <= rep["window"]["cycles"]
     assert rep["decision_capture"]["action_labels"].get(CP.COMPLETE, 0) >= 1
+
+    # ---- P0: THE BOOK IS IN THE ARTIFACT, through the real path.
+    # A capture that works in a unit test and is absent from the production
+    # report is the `apply_fill` failure mode again, and it is the reason this
+    # assertion lives in the integration test rather than beside the helper.
+    bs = first["book_state"]["presented"]
+    assert bs["present"] is True and bs["readable"] is True
+    assert bs["tte_s"] == 150.0 and bs["identity_consistent"] is True
+    # THE DISCRIMINATOR. A maker joins the BID, so a bid price alone could
+    # have come from our own rung. The ASKS and the SPREADS could not: we
+    # never quote them, and they are in the record because the book was read.
+    assert bs["yes"]["ask"] == "0.93" and bs["no"]["ask"] == "0.10"
+    assert bs["yes"]["spread"] == "0.03" and bs["no"]["spread"] == "0.03"
+    assert bs["yes"]["bid"] == "0.90" and bs["no"]["bid"] == "0.07"
+    # size is ABSENT WITH A REASON, never zero
+    assert bs["yes"]["qty"] is None and "PRICES ONLY" in bs["qty_why"]
+    cov = rep["decision_capture"]["book_capture"]
+    assert cov["cycles"] >= 1 and cov["presented_book_readable"] >= 1
+
+
+# ======================================= THE BOOK CAPTURE IS ALSO NEUTRAL
+
+def test_the_depth_read_changes_nothing_about_the_window(tmp_path,
+                                                         monkeypatch):
+    """P0 added a second network read beside every decision.
+
+    A read taken next to a money-moving decision has to be proven incapable of
+    changing it, and "it is only evidence" is a claim about intent. This
+    compares the same three durable surfaces with the depth reader ON against
+    a run with no observer at all.
+    """
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+    calls = {"n": 0}
+
+    def depth():
+        calls["n"] += 1
+        return {"readable": True, "bids": {"best": "0.89", "best_qty": "10"},
+                "asks": {"best": "0.91", "best_qty": "4"}}
+
+    plain_rep, plain_sent, plain_led, _ = _window(tmp_path, "nodepth",
+                                                  observed=False)
+    obs_rep, obs_sent, obs_led, obs = _window(tmp_path, "depth",
+                                              observed=True, depth_fn=depth)
+
+    assert calls["n"] == 1, "one size read per decision, no more"
+    assert _canon(plain_rep) == _canon(obs_rep)
+    assert _canon(plain_sent) == _canon(obs_sent)
+    assert _canon([json.loads(l) for l in plain_led.splitlines() if l]) == \
+        _canon([json.loads(l) for l in obs_led.splitlines() if l])
+    assert obs.cycles[0]["book_state"]["depth"]["readable"] is True
+
+
+def test_a_depth_reader_that_RAISES_still_changes_nothing(tmp_path,
+                                                          monkeypatch):
+    """The failure mode that matters: the size read is the newest thing in
+    the loop, so it is the likeliest to break, and it must not be able to
+    take a live window with it."""
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+
+    def boom():
+        raise RuntimeError("book endpoint down")
+
+    plain_rep, plain_sent, plain_led, _ = _window(tmp_path, "ok",
+                                                  observed=False)
+    obs_rep, obs_sent, obs_led, obs = _window(tmp_path, "boom",
+                                              observed=True, depth_fn=boom)
+
+    assert _canon(plain_rep) == _canon(obs_rep)
+    assert _canon(plain_sent) == _canon(obs_sent)
+    assert _canon([json.loads(l) for l in plain_led.splitlines() if l]) == \
+        _canon([json.loads(l) for l in obs_led.splitlines() if l])
+    # recorded as unreadable, with the reason kept -- never as an empty book
+    dep = obs.cycles[0]["book_state"]["depth"]
+    assert dep["readable"] is False and dep["captured"] is True
+    assert any("book endpoint down" in e for e in obs.errors)
+
+
+def test_with_no_depth_reader_the_row_says_so_rather_than_going_missing(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+    _, _, _, obs = _window(tmp_path, "none", observed=True, depth_fn=None)
+    dep = obs.cycles[0]["book_state"]["depth"]
+    assert dep["captured"] is False and dep.get("why")

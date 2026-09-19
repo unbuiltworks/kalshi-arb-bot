@@ -398,9 +398,35 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     assert "--cohort" in armed, "the armed step must bind a mutation cohort"
     # the FRESH cohort. C5 is spent at 3/6 and its three unused slots stay
     # unused; rebinding it would be recycling a spent budget.
-    assert "COHORT-2026-09-18-C7" in armed
-    for spent in ("COHORT-2026-09-18-C5", "COHORT-2026-09-18-C6"):
+    assert "COHORT-2026-09-18-C8" in armed
+    for spent in ("COHORT-2026-09-18-C5", "COHORT-2026-09-18-C6",
+                  "COHORT-2026-09-18-C7"):
         assert spent not in armed.split("run:", 1)[1], spent
+
+
+def test_the_job_outlives_the_armed_step_which_outlives_the_bounded_wait():
+    """A HARD KILL IS WORSE THAN A STOP.
+
+    The armed step now WAITS for its entry band before the window starts. The
+    job timeout was 15 minutes against a 12-minute step, sized for a window
+    that began immediately -- with the wait added, the runner would have been
+    killed mid-window, and a killed runner never reaches the terminal
+    withdrawal, so the orders stay live on the venue with nothing left to
+    cancel them. That is CONTINUOUS-5's post-stop fill with no recovery path.
+    """
+    import re as _re
+    from src.gemini_execution import run_continuous as RCX
+    wf = WF.read_text()
+    job = int(_re.search(r"^  gate:.*?^    timeout-minutes: (\d+)", wf,
+                         _re.M | _re.S).group(1))
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+    step = int(_re.search(r"timeout-minutes: (\d+)", armed).group(1))
+    # the window itself: entry band top, less the driver's withdraw floor
+    band_hi = float(_re.search(r'--entry-tte-band "\d+:(\d+)"',
+                               armed).group(1))
+    need_s = RCX.MAX_ENTRY_WAIT_S + band_hi
+    assert step * 60 > need_s, (step, need_s)
+    assert job > step, (job, step)
 
 
 #: the ONE authorization the tree may be armed for right now. When C7 is

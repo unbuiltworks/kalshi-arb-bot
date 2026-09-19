@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from src.gemini_execution import spec
 
 EVENTS_PATH = "/v1/prediction-markets/events"
+BOOK_PATH = "/v1/book"
 TERMS_STATUS_PATH = "/v1/prediction-markets/terms/status"
 
 #: fields the owner requires established before any order
@@ -734,3 +735,95 @@ def outcome_book(symbol: str) -> Dict[str, Any]:
                    "passive pair cost is what a maker surface can reach. It "
                    "is a cost basis, never a realized profit."),
     }
+
+
+def contract_depth(symbol: str, *, timeout: float = 2.5,
+                   levels: int = 5) -> Dict[str, Any]:
+    """Resting SIZE at and behind the touch, from the venue's own ladder.
+
+    WHY THIS IS A SECOND READ AND STAYS A SECOND READ. `outcome_book` is the
+    state the controller decides on, and the contract object publishes PRICES
+    ONLY -- it carries no depth at all. So "was there anything to trade
+    against?" cannot be answered from the presented book, and CONTINUOUS-7's
+    zero fills had to be explained by inferring the book from our own quoted
+    prices and `ticks_behind_bid`. That inference is exactly the substitution
+    this program refuses to keep making.
+
+    GET /v1/book/{symbol} is a PUBLIC, unauthenticated read of the SAME
+    contract, proven against these symbols over 8,186 samples
+    (analysis/l5/gemini_depth/INVESTIGATION.md). Its `bids` and `asks` are the
+    contract's own ladder and, at the touch, equal `outcome_book`'s yes
+    bid/ask -- measured 0.83/0.99 against 0.83/0.99 on
+    GEMI-BTC05M2609190015-UP. The caller CHECKS that agreement per cycle
+    rather than assuming it.
+
+    NOTHING IS DERIVED FOR THE NO SIDE. The venue publishes ONE contract
+    ladder. A NO buy rests against it through the complement identity that
+    `outcome_book` already verifies, but relabelling an ask size as a "NO bid
+    size" would put an inferred number where no observed one exists. The sizes
+    are reported under the ladder's own names and the absence is stated.
+
+    NEVER RAISES, and never blocks a decision: an unreadable book is a RESULT
+    carrying its reason. It is EVIDENCE ONLY -- no caller may price, size or
+    gate anything on it.
+    """
+    import time as _t
+
+    from src.l5_shadow import venues as V
+    t0 = _t.time()
+    out: Dict[str, Any] = {
+        "source": "GET %s%s/{symbol} (PUBLIC, unauthenticated)" % (V.GEMINI,
+                                                                   BOOK_PATH),
+        "instrumentSymbol": symbol,
+        "read_utc": datetime.fromtimestamp(t0, timezone.utc).isoformat(),
+        "labels": ("EVIDENCE ONLY. A separate read from the book the "
+                   "controller decided on, with its own clock; the two are "
+                   "reported side by side and never merged."),
+    }
+    r = V.get("%s%s/%s" % (V.GEMINI, BOOK_PATH, symbol), timeout=timeout)
+    out["rtt_s"] = r.get("rtt_s")
+    if not r.get("ok"):
+        out.update({"readable": False, "why": r.get("err")})
+        return out
+    try:
+        j = json.loads(r["body"])
+    except ValueError:
+        out.update({"readable": False, "why": "unparseable book body"})
+        return out
+
+    def side(rows: Any) -> Dict[str, Any]:
+        lv: List[Dict[str, Any]] = []
+        for row in (rows or [])[:levels]:
+            if not isinstance(row, Mapping):
+                continue
+            px, qty = row.get("price"), row.get("amount")
+            if px in (None, "") or qty in (None, ""):
+                continue
+            lv.append({"price": str(px), "qty": str(qty),
+                       "venue_ts": row.get("timestamp")})
+        total = sum((D(x["qty"]) for x in lv), D("0"))
+        return {"levels": lv, "n_levels": len(lv),
+                "best": (lv[0]["price"] if lv else None),
+                "best_qty": (lv[0]["qty"] if lv else None),
+                "qty_shown": str(total)}
+
+    bids, asks = side(j.get("bids")), side(j.get("asks"))
+    stamps = [D(str(x["venue_ts"])) for s_ in (bids, asks)
+              for x in s_["levels"] if x.get("venue_ts") not in (None, "")]
+    venue_ts = max(stamps) if stamps else None
+    out.update({
+        "readable": True,
+        # the ladder under the venue's OWN names. For a -UP contract these are
+        # the YES bid and YES ask sides; that equality is asserted against the
+        # presented book per cycle, not assumed here.
+        "bids": bids, "asks": asks,
+        "levels_requested": levels,
+        "venue_ts": (str(venue_ts) if venue_ts is not None else None),
+        "snapshot_age_s": (round(t0 - float(venue_ts), 3)
+                           if venue_ts is not None else None),
+        "no_side_depth": None,
+        "no_side_depth_why": ("the venue publishes one contract ladder and no "
+                              "separate NO ladder; a NO size is NOT derived "
+                              "from an ask size here"),
+    })
+    return out
