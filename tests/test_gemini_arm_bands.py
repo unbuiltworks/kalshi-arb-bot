@@ -222,3 +222,15 @@ def test_THE_COMPACT_VIEW_IS_DROPPED_SO_EVIDENCE_DOES_NOT_DOUBLE():
     ow = inspect.getsource(__import__(
         "src.gemini_execution.shadow_soak", fromlist=["x"]).one_window)
     assert ow.index("runner._persist(w)") < ow.index('w["cycles_detail"]')
+
+
+def test_THE_BAND_CLASSIFIER_USES_THE_PROBES_OWN_FILL_KINDS():
+    """arm_bands compares fill kinds against string literals. If the probe
+    ever renames them, every OPEN/EXTEND/COMPLETE column silently reads zero
+    while the fill counts stay right -- a failure that looks like a finding.
+    """
+    import inspect
+    from src.gemini_execution import continuous_probe as CP
+    src = inspect.getsource(AB._walk_window)
+    for const in (CP.OPEN, CP.EXTEND, CP.COMPLETE):
+        assert '"%s"' % const in src, const
