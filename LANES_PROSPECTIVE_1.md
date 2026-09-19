@@ -187,6 +187,50 @@ appears there.
 
 ---
 
+## 4b. The fourth axis: BTC15m's book is unreadable most of the time
+
+Measured from the running lanes' own cycles at TTE <= 300. `CP.crossed()`
+refuses a book whose bid is at or above its own ask; it is a READABILITY
+gate, not a pair-cost ceiling, and a refused cycle rests no rung.
+
+| | cycles | readable | refused |
+|---|---|---|---|
+| BTC5m (5 windows) | 125 | 76 | **0.392** |
+| BTC15m (`…1615-UP`) | 29 | 8 | **0.724** |
+
+The BTC15m window before it rested **0** rungs across 30 cycles, consistent
+with a book that was crossed throughout. So BTC15m loses on a fourth measure
+Model A can reach, after prints, notional and two-sidedness: the policy
+cannot read its book roughly three cycles in four.
+
+Rested rungs track readability closely — BTC5m 33/24, 19/14, 24/23, 14/11,
+6/4 (rested/readable) — which is what it should look like when a readable
+cycle yields up to two legs and an unchanged price keeps its rung.
+
+### Two corrections to how I measured this
+
+I ran a public-read probe to test the crossing hypothesis and **got the
+answer wrong twice** before the running lane settled it.
+
+1. **It checked the wrong gate.** The probe read
+   `MD.outcome_book(...)["readable"]`, which is whether the book FETCHED.
+   `CP.crossed()` is a separate check applied afterwards. The probe reported
+   "61/61 and 12/12 readable, zero refusals" and had not tested the
+   hypothesis at all.
+2. **Recomputing crossing directly from the same samples, it was
+   under-powered and mistimed.** It gave BTC5m 28/61 (0.459, close to the
+   0.392 the lane recorded) but BTC15m **0/12**, and I read that as ruling
+   the explanation out. Its BTC15m samples span TTE **300 -> 215 only** — one
+   contract, twelve reads, ending before the late window. The lane's own 29
+   cycles span **274 -> 30** and are 72.4% refused. Crossing concentrates
+   near expiry, and the probe stopped before it.
+
+The original hypothesis was right; the probe was wrong. The number to trust
+is the running lane's, because it is the one measuring the cycles the policy
+actually lived through.
+
+---
+
 ## 5. What is still not evidenced
 
 - The ledger above has not yet produced a single **prospective** fill. It was

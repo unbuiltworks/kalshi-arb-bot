@@ -85,5 +85,15 @@ accumulates is the side that is becoming wrong.* One occurrence is an
 anecdote — the value here is that the mechanism is now **observable live**,
 which it was not while the lane reported a hard-coded zero.
 
-Standing count: **1 hypothetical first fill, 0 complement fills, 0 matched
-pairs, across 76 rested rungs in four BTC5m windows.**
+## A second first fill, on the other side
+
+`GEMI-BTC05M2609191610-UP` produced a second hypothetical first fill, this
+one a **NO** leg: residual **-0.01**. Again no complement filled and again
+`matched` stayed 0.
+
+Two first fills on opposite sides, neither recycled, is consistent with a
+policy that gets its first leg from whichever side the market is running
+through — and then cannot buy the other one back.
+
+Standing count across five BTC5m ledger windows: **2 hypothetical first
+fills, 0 complement fills, 0 matched pairs, 96 rested rungs.**
