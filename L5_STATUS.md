@@ -156,6 +156,44 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > at TTE 30 and TTE 0 is **unobserved in all 18 seeds** — recording stops
 > between TTE 202.8 and TTE 36.2. See `COMPLEMENT_REACHABILITY_1.md`;
 > everything in it is SHADOW/THEORETICAL and no bound was changed.
+>
+> **COMPLETION MODEL B (2026-09-19) — the metric is now RECYCLING, not fill
+> count.** 18 initial fills over 13 contracts replayed to settlement under 31
+> arms, every number denominated in dollars. Three results:
+>
+> 1. **The EXTEND veto is a Pareto win on observed data.** Every veto arm
+>    dominates its own non-veto twin: all 7 EXTEND fills suppressed, **$0.0331
+>    of residual avoided (25.7%)**, **$0.0000 of matched inventory given up**.
+>    On Gemini as observed the EXTEND fills contributed nothing to matched
+>    inventory. No threshold is proposed; this is the unconditional veto.
+> 2. **Queue preservation does nothing.** The premise held — a complement was
+>    already resting in 15 of 18 seeds, and preserving it held up to 50 of 77
+>    complement quotes — but 0 pairs and 0 complement fills at every duration.
+>    Keeping a queue place is worthless when nothing arrives to work through
+>    it.
+> 3. **The cross-venue difference is ACTIVITY and RUNWAY, and it is a gradient
+>    inside L5's own book.** L5 BTC15m 122 fills/window → 96.0% complement;
+>    BTC5m 6 → 83.1%; ETH5m 2 → **42.1%** with ext:comp rising to 1.40 and the
+>    basis crossing par to 1.007; ours → 0%. L5's own recycling degrades the
+>    way ours does when its market thins. And L5's first fill lands at median
+>    **TTE 243** vs our **TTE 127** — it is not completing faster, it is
+>    starting far earlier.
+>
+> **MATCHED/GROSS IS GAMEABLE.** `BEST_PERMISSIBLE_MAKER` posts the highest raw
+> ratio purely by paying **1.25** for the pair `IMPROVE_1` buys at **0.84**, so
+> the ranking runs on the par-constrained ratio with the raw one beside it.
+> Stickiness beyond 15s crosses par in every column of the 4x5 matrix. No arm
+> ever crossed the ask.
+>
+> **Nothing supports a threshold.** The hazard dataset has **3 INDEPENDENT
+> positive states** (72 rows before de-duplicating a 24x arm pseudo-replication)
+> against a floor of 30; the burst study has **9 bursts** (they do land late —
+> TTE 90.7 vs 250.4 — after 65.5% depth depletion, but 9 is 9); the whole
+> completion matrix rests on **one matched pair**. The TTE 60-30 phase is NOT a
+> new bound (the frozen policy is already COMPLETE_ONLY there, pinned by test);
+> it ran on 11 seeds and one recycled its full residual at a 1.00 basis.
+> See `COMPLETION_MODEL_B_1.md`. Model A, the TTE bounds and the live envelope
+> are unchanged and everything is SHADOW/THEORETICAL.
 
 ### P0: Polymarket US sports
 
