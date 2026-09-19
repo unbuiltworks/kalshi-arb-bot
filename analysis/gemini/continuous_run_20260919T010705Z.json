@@ -1,0 +1,160 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-19T01:07:05.284231+00:00",
+  "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+  "driver_executable_sha": "e32e31f2711c10d99a499717d654bee76468d55171b3f5f13d5bff8439cd369f",
+  "driver_envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+  "bundle_sha": "bfc4ec1e3a7efcff19778ae0f9f3c0f8dc7752c949d256c59eb7f5d0fb2d9fe6",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "entry_schedule": {
+    "in_band": true,
+    "band": [
+      240.0,
+      280.0
+    ],
+    "waited_s": 195.37,
+    "polls": 17,
+    "entered_tte_s": 279.88969135284424,
+    "selection": {
+      "eligible": true,
+      "chosen": {
+        "symbol": "GEMI-BTC05M2609190115-UP",
+        "tte_s": 279.88969135284424,
+        "contract_status": "active",
+        "market_state": "open"
+      },
+      "band": [
+        240.0,
+        280.0
+      ],
+      "considered": [
+        {
+          "symbol": "GEMI-BTC05M2609190115-UP",
+          "tte_s": 279.88969135284424,
+          "contract_status": "active",
+          "market_state": "open"
+        }
+      ]
+    },
+    "observed": [
+      {
+        "waited_s": 133.3,
+        "tte_s": [
+          45.24304723739624,
+          -254.75695276260376,
+          -554.7569527626038,
+          -854.7569527626038
+        ]
+      },
+      {
+        "waited_s": 148.75,
+        "tte_s": [
+          36.410916566848755,
+          -263.58908343315125,
+          -563.5890834331512,
+          -863.5890834331512
+        ]
+      },
+      {
+        "waited_s": 162.16,
+        "tte_s": [
+          20.959101676940918,
+          -279.0408983230591,
+          -579.0408983230591,
+          -879.0408983230591
+        ]
+      },
+      {
+        "waited_s": 171.54,
+        "tte_s": [
+          7.550048589706421,
+          -292.4499514102936,
+          -592.4499514102936,
+          -892.4499514102936
+        ]
+      },
+      {
+        "waited_s": 182.46,
+        "tte_s": [
+          298.1686279773712,
+          -1.8313720226287842,
+          -301.8313720226288,
+          -601.8313720226288
+        ]
+      },
+      {
+        "waited_s": 189.82,
+        "tte_s": [
+          287.25337624549866,
+          -12.746623754501343,
+          -312.74662375450134,
+          -612.7466237545013
+        ]
+      }
+    ],
+    "labels": "EXPERIMENTAL SCHEDULING ONLY: this chose WHEN to begin. The controller, prices, sizing and every bound are unchanged and know nothing about it."
+  },
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609190115-UP",
+      "tte_s": 279.88969135284424,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "band": [
+      240.0,
+      280.0
+    ],
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609190115-UP",
+        "tte_s": 279.88969135284424,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": false,
+    "verdict": "UNREADABLE",
+    "blocks_orders": true,
+    "hasAcceptedLatest": null,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": null,
+        "err": "ReadTimeout"
+      },
+      {
+        "method": "POST",
+        "status": 405,
+        "body_keys": [
+          "message",
+          "reason",
+          "result"
+        ]
+      }
+    ],
+    "why": "acceptance could not be read by either method. This is NOT evidence that the terms are unaccepted -- it is the absence of evidence either way, and it blocks an order for that reason alone."
+  },
+  "preflight": {
+    "agrees": false,
+    "discrepancies": [
+      {
+        "field": "terms_accepted",
+        "expected": "True",
+        "got": "False",
+        "why": "the venue's current answer differs from the assumption the envelope was sized against"
+      }
+    ],
+    "checked_before_latch": true
+  },
+  "state": "DO_NOT_TRADE",
+  "why": "fresh preflight differs from the frozen assumptions: [{\"field\": \"terms_accepted\", \"expected\": \"True\", \"got\": \"False\", \"why\": \"the venue's current answer differs from the assumption the envelope was sized against\"}]",
+  "latch": {
+    "consumed": false,
+    "why": "the preflight refused BEFORE the latch was spent, so the authorization is untouched"
+  },
+  "finished_utc": "2026-09-19T01:10:36.377210+00:00"
+}
