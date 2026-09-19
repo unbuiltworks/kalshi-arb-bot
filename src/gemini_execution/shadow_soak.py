@@ -193,6 +193,10 @@ def _step_arms(arms, *, symbol, tte, book, depth, flow, policy):
             "hypothetical_rungs_live": sorted(arm.hyp.live),
             "hypothetical_rungs_rested_cumulative": (arm.hyp.placed
                                                      + arm.hyp.requoted),
+            "hypothetical_cumulative": {
+                k: arm.hyp.report()[k]
+                for k in ("fills", "first_fills", "open_fills",
+                          "extend_fills", "complete_fills")},
             "inventory": arm.inv.report(),
         }
     return out
@@ -317,6 +321,9 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         row["hypothetical_fills"] = hyp_fills
         row["hypothetical_rungs_live"] = sorted(hyp.live)
         row["hypothetical_rungs_rested_cumulative"] = hyp.placed + hyp.requoted
+        row["hypothetical_cumulative"] = {
+            k: hyp.report()[k] for k in ("fills", "first_fills", "open_fills",
+                                         "extend_fills", "complete_fills")}
         # ---- the corrected arm(s), on THIS cycle's tape and book. Recorded
         # beside the control's decision, never merged into it.
         if arms:
@@ -332,7 +339,7 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
             # the surface has been withdrawn and the answer is always zero.
             on_cycle(symbol=symbol, cycle=n, tte_s=tte, inv=inv, hyp=hyp,
                      book_readable=bool(row["habitat"].get("book_readable")),
-                     book_why=row["habitat"].get("book_why"), row=row)
+                     book_why=row["habitat"].get("book_why"), arms=arms)
         runner._persist(row)
         await asyncio.sleep(interval_s)
 
@@ -472,10 +479,10 @@ class CohortHeartbeat:
 
     # -------------------------------------------------------- live updates
     def cycle(self, *, symbol, cycle, tte_s, inv, hyp, book_readable,
-              book_why, row=None) -> None:
+              book_why, arms=None) -> None:
         self.current_contract = symbol
-        if row is not None:
-            self.note_arms(row)
+        if arms:
+            self.note_arms(arms)
         self.cycles += 1
         if book_readable:
             self.readable += 1
@@ -491,21 +498,32 @@ class CohortHeartbeat:
         if cycle % HEARTBEAT_EVERY == 0:
             self.emit(tte_s=tte_s)
 
-    def note_arms(self, row) -> None:
-        """Live per-arm counters, read from the arm's OWN books."""
-        for label, rec in (row.get("correction_arms") or {}).items():
-            a = self.arms.setdefault(label, {"first_fills": 0,
-                                             "COMPLETE_fills": 0,
-                                             "matched_pairs": 0,
-                                             "residual": "0",
-                                             "rungs_resting": 0,
-                                             "error": None})
-            if rec.get("error"):
-                a["error"] = rec["error"]
+    def note_arms(self, arms) -> None:
+        """Live per-arm counters, read from each arm's OWN ledger.
+
+        The control's counters come from its live HypotheticalBook every
+        cycle; the arms' must too. Reading them from the persisted row
+        instead reported first_fills 0 on a cycle whose residual had
+        plainly moved, because the row carries that cycle's fills and no
+        running total.
+        """
+        for arm in arms or ():
+            a = self.arms.setdefault(arm.label, {"first_fills": 0,
+                                                 "COMPLETE_fills": 0,
+                                                 "matched_pairs": 0,
+                                                 "residual": "0",
+                                                 "rungs_resting": 0,
+                                                 "rungs_rested": 0,
+                                                 "error": None})
+            if arm.error:
+                a["error"] = arm.error
                 continue
-            a["rungs_resting"] = len(rec.get("hypothetical_rungs_live") or [])
-            inv = rec.get("inventory") or {}
-            a["residual"] = str(inv.get("directional_residual"))
+            rep = arm.hyp.report()
+            a["rungs_resting"] = len(arm.hyp.live)
+            a["rungs_rested"] = rep["rungs_rested"]
+            a["first_fills"] = rep["first_fills"]
+            a["COMPLETE_fills"] = rep["complete_fills"]
+            a["residual"] = str(arm.inv.report().get("directional_residual"))
 
     def window_done(self, w) -> None:
         self.windows += 1

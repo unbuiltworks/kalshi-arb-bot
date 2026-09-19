@@ -178,6 +178,43 @@ def test_EVERY_ARM_RECORD_NAMES_WHAT_IT_CORRECTS_AND_ITS_BAND():
     assert "correction_arms_labels" in inspect.getsource(SS.one_window)
 
 
+def test_THE_LIVE_HEARTBEAT_READS_THE_ARMS_OWN_LEDGER_NOT_THE_ROW():
+    """A cycle whose residual moved must not report first_fills 0.
+
+    It did: note_arms read the persisted row, which carries THAT CYCLE's
+    fills and no running total, so an arm that had plainly filled showed
+    first_fills 0 beside residual -0.01. The control never had this problem
+    because it is handed its live book. The arms are now too.
+    """
+    from decimal import Decimal as D
+    corr_sp = SS.correction_spec(CC.BTC15M)
+    arm = _arm(corr_sp.label, corr_sp)
+    # a fill on this arm's own ledger, exactly as consume() would record it
+    arm.hyp.fills.append({"leg": "NO", "qty": "0.01", "price": "0.58",
+                          "kind": CP.OPEN, "was_first_fill": True,
+                          "queue_known": True})
+    arm.inv.apply_fill("NO", D("0.01"), D("0.58"), source="test")
+
+    hb = SS.CohortHeartbeat("BTC15m")
+    hb.cycle(symbol=SYM, cycle=1, tte_s=700.0, inv=CP.Inventory(),
+             hyp=arm.hyp, book_readable=True, book_why=None, arms=[arm])
+    a = hb.arms[corr_sp.label]
+    assert a["first_fills"] == 1, "the live view must see the arm's fill"
+    assert a["residual"] == "-0.01"
+
+
+def test_AN_ARM_IN_ERROR_DOES_NOT_OVERWRITE_ITS_LAST_GOOD_COUNTS():
+    corr_sp = SS.correction_spec(CC.BTC15M)
+    arm = _arm(corr_sp.label, corr_sp)
+    hb = SS.CohortHeartbeat("BTC15m")
+    hb.cycle(symbol=SYM, cycle=1, tte_s=700.0, inv=CP.Inventory(),
+             hyp=arm.hyp, book_readable=True, book_why=None, arms=[arm])
+    arm.error = "RuntimeError: boom"
+    hb.cycle(symbol=SYM, cycle=2, tte_s=690.0, inv=CP.Inventory(),
+             hyp=arm.hyp, book_readable=True, book_why=None, arms=[arm])
+    assert hb.arms[corr_sp.label]["error"] == "RuntimeError: boom"
+
+
 def test_THE_HEARTBEAT_REPORTS_ARMS_SEPARATELY_AND_NEVER_SUMS_THEM():
     hb = SS.CohortHeartbeat("BTC15m")
     hb.window_done({
