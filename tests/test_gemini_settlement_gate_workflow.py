@@ -398,10 +398,67 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     assert "--cohort" in armed, "the armed step must bind a mutation cohort"
     # the FRESH cohort. C5 is spent at 3/6 and its three unused slots stay
     # unused; rebinding it would be recycling a spent budget.
-    assert "COHORT-2026-09-18-C8" in armed
+    assert "COHORT-2026-09-18-C8B" in armed
+    run = armed.split("run:", 1)[1]
     for spent in ("COHORT-2026-09-18-C5", "COHORT-2026-09-18-C6",
                   "COHORT-2026-09-18-C7"):
-        assert spent not in armed.split("run:", 1)[1], spent
+        assert spent not in run, spent
+
+
+def test_the_abandoned_C8_cohort_is_never_bound_and_stays_at_zero():
+    """C8 was created at 6 slots, then superseded by C8B at 12 before it ever
+    ran. It is kept as evidence and must never be used.
+
+    It is pinned HERE rather than by the cohort chain on purpose:
+    `verify_predecessor` is SINGLE-HOP, so whichever ledger C8B names is the
+    only one the live path enforces before the latch -- and C8's ledger is
+    EMPTY, carrying no mutation history to protect. Chaining C8B to it would
+    have traded C7's six spent slots for an empty file.
+    """
+    import json
+    import pathlib
+    from src.gemini_execution import cohort as CO
+
+    wf = WF.read_text()
+    # the exact id, not the C8B prefix match
+    assert not re.search(r'--cohort\s+"COHORT-2026-09-18-C8"', wf)
+
+    c8 = CO.state("COHORT-2026-09-18-C8")
+    assert c8["budget"] == 6 and c8["consumed"] == 0
+    assert pathlib.Path(c8["ledger_path"]).read_bytes() == b""
+
+    c8b = CO.state("COHORT-2026-09-18-C8B")
+    assert c8b["budget"] == 12 and c8b["consumed"] == 0
+    # ... and C8B guards the ledger that actually holds spent slots
+    pre = c8b["predecessor"]
+    assert pre["intact"] is True
+    assert pre["predecessor_ledger"].endswith("COHORT-2026-09-18-C7/ledger.jsonl")
+    assert pre["recorded_consumed"] == 6
+
+    # the budget is a TIGHTENING of the envelope, never an extension
+    from src.gemini_execution import continuous_probe as CPX
+    assert c8b["budget"] <= CPX.MAX_ACTIONS
+    manifest = json.loads(pathlib.Path(
+        "analysis/gemini/cohorts/COHORT-2026-09-18-C8B/cohort.json"
+    ).read_text())
+    assert manifest["envelope_max_actions"] == CPX.MAX_ACTIONS
+
+
+def test_the_unarmed_band_defaults_to_the_standing_rule():
+    """The knob exists to prove the ARMED band read-only. Its default must
+    not make every routine gate run sit through a 420s wait."""
+    wf = WF.read_text()
+    i = wf.index("unarmed_entry_band:")
+    assert 'default: "90:300"' in wf[i:i + 500]
+    # the STEP, not a fixed slice: the first cut was 900 chars and stopped
+    # short of the very line it was checking.
+    unarmed = wf.split("Unarmed production path", 1)[1].split(
+        "ONE authorized Gemini continuous window", 1)[0]
+    assert "unarmed_entry_band" in unarmed and "'90:300'" in unarmed
+    # and the ARMED step's band is fixed in the file, never dispatch-supplied
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+    assert '--entry-tte-band "240:280"' in armed
+    assert "github.event.inputs.unarmed_entry_band" not in armed
 
 
 def test_the_job_outlives_the_armed_step_which_outlives_the_bounded_wait():

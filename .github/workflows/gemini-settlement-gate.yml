@@ -36,6 +36,10 @@ on:
         description: "Set to true to ARM the ONE authorized continuous window. Default false."
         required: false
         default: "false"
+      unarmed_entry_band:
+        description: "Entry band LO:HI for the UNARMED production-path proof. Default 90:300 (the standing rule) so routine runs do not wait. Set 240:280 to prove the armed window's own band read-only."
+        required: false
+        default: "90:300"
 
 # One at a time. A second run could commit evidence over the first.
 concurrency:
@@ -286,16 +290,18 @@ jobs:
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
         run: |
           mkdir -p analysis/gemini
-          # THE SCHEDULING PATH RUNS HERE TOO, at the STANDING band. The
-          # armed step enters at 240:280 and would wait up to 420s for it;
-          # 90:300 is the rule that already applies, so the wait loop, the
-          # scan and the handoff into the rest of _build are exercised
-          # production-shaped at ~zero cost. A band can only NARROW the
-          # standing rule, so this one narrows nothing.
+          # THE SCHEDULING PATH RUNS HERE TOO. The default 90:300 is the rule
+          # that already applies, so the wait loop, the scan and the handoff
+          # into the rest of _build are exercised production-shaped at ~zero
+          # cost on every routine run. Dispatch with unarmed_entry_band
+          # 240:280 to prove the ARMED window's own band read-only: it then
+          # waits for the real band and refuses at the authorization gate
+          # with the latch untouched and no frame sent. A band can only
+          # NARROW the standing rule, never widen it.
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort "COHORT-2026-09-18-C8" \
-            --entry-tte-band "90:300" \
+            --cohort "COHORT-2026-09-18-C8B" \
+            --entry-tte-band "${{ github.event.inputs.unarmed_entry_band || '90:300' }}" \
             --ledger analysis/gemini/continuous_ledger.jsonl \
             --out    analysis/gemini/continuous_unarmed_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire   /tmp/unarmed_wire.json \
@@ -391,7 +397,7 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort  "COHORT-2026-09-18-C8" \
+            --cohort  "COHORT-2026-09-18-C8B" \
             --entry-tte-band "240:280" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
