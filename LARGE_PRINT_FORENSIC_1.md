@@ -4,6 +4,10 @@
 forensic on every print of 10 contracts or more, the TTE comparison against
 L5's own history, and the three-arm overlay.
 
+**Sample: 26 windows, 154 prints, 3,686.14 contracts, $2,093.71.** Soak #4
+added 7 windows after the first pass; **§7 records how much the attribution
+moved when it did**, because it moved enough to matter.
+
 **Model A is unchanged.** Every decision replayed below comes from the frozen
 `continuous_probe.plan`. This study chooses no price, size or action, sends
 nothing, and every fill in it is **SHADOW/THEORETICAL**.
@@ -16,37 +20,39 @@ Code: `large_prints.py` (17 tests), `overlays.py` (33). Reproduce:
 
 ## 1. The print-size census — six prints are the market
 
-| bucket | prints | contracts | $ notional | share |
-|---|---|---|---|---|
-| <10 | 82 | 208.21 | 101.58 | 6.6% |
-| 10–25 | 35 | 358.78 | 186.48 | 12.1% |
-| 25–100 | 2 | 122.00 | 56.60 | 3.7% |
-| **100+** | **6** | **2,024.00** | **1,199.03** | **77.7%** |
+| bucket | prints | $ notional | share |
+|---|---|---|---|
+| <10 | 94 | 129.73 | 6.2% |
+| 10–25 | 49 | 258.98 | 12.4% |
+| 25–100 | 2 | 56.60 | 2.7% |
+| **100+** | **9** | **1,648.40** | **78.7%** |
 
-**Six prints carry 77.7% of all notional across 19 windows.** Their TTEs:
-**41.8, 56.5, 57.0, 61.9, 126.0, 127.0** — every one of them below TTE 130,
-and four of the six below TTE 62.
+**Nine prints carry 78.7% of all notional across 26 windows.** The six from
+the first pass sat at TTE 41.8, 56.5, 57.0, 61.9, 126.0 and 127.0 — every one
+below TTE 130, four below TTE 62. The concentration held when the sample grew
+from 19 windows to 26 (77.7% → 78.7%).
 
 ## 2. The forensic on the 43 prints of ≥10 contracts
 
 | bucket | prints | with a reconstructed book | native would reach us | improve-1 would reach us |
 |---|---|---|---|---|
-| 10–25 | 35 | 13 | **7** | 7 |
+| 10–25 | 49 | 24 | **10** | 10 |
 | 25–100 | 2 | 2 | **2** | 2 |
-| 100+ | 6 | 5 | **3** | 3 |
+| 100+ | 9 | 8 | **5** | **6** |
 
-**12 of the 20 reconstructable large prints would have reached our native
+**17 of the 34 reconstructable large prints would have reached our native
 quote.** That is a very different picture from the cycle-level view, where
 only 15 of 483 cycles saw any reaching print — because most cycles have no
 print at all. **For the prints that happen, we are usually at a price that
 would have been hit.**
 
-**And native and improve-1-tick reach exactly the same large prints.** A
-312-contract print clears any queue at that level. **Queue position is
-irrelevant for precisely the prints that carry 77.7% of the notional.** It
-matters only for small ones.
+**And native and improve-1-tick reach almost exactly the same large prints** —
+10 vs 10 in the 10–25 bucket, 2 vs 2 in 25–100, and 5 vs 6 in 100+. A
+312-contract print clears any queue at that level. **Queue position is nearly
+irrelevant for precisely the prints that carry 78.7% of the notional.** It
+matters for small ones.
 
-22 of the 35 prints in the 10–25 bucket have **no reconstructed book** — our
+25 of the 49 prints in the 10–25 bucket have **no reconstructed book** — our
 own cycles stop around TTE ~104 and those prints fall below it. They are
 recorded and not evaluated, rather than guessed at.
 
@@ -87,14 +93,14 @@ $129,040**) against Gemini's executed notional:
 
 | TTE | L5 trades | L5 $ | **Gemini $** |
 |---|---|---|---|
-| >300 | 0.0% | 0.0% | **5.9%** |
-| 280–300 | 6.5% | 7.8% | 2.0% |
-| 240–280 (our entry) | 7.4% | 7.8% | 2.5% |
-| 180–240 | 16.1% | 17.0% | 2.0% |
-| 120–180 | 23.0% | 24.3% | **21.0%** |
-| **60–120** | **29.9%** | **30.1%** | 15.9% |
-| **30–60** | 13.0% | 10.2% | **50.7%** |
-| 0–30 | 4.0% | 2.9% | 0.0% |
+| >300 | 0.0% | 0.0% | **4.4%** |
+| 280–300 | 6.5% | 7.8% | 1.5% |
+| 240–280 (our entry) | 7.4% | 7.8% | 1.9% |
+| 180–240 | 16.1% | 17.0% | 2.5% |
+| 120–180 | 23.0% | 24.3% | **30.8%** |
+| **60–120** | **29.9%** | **30.1%** | 18.9% |
+| **30–60** | 13.0% | 10.2% | **38.8%** |
+| 0–30 | 4.0% | 2.9% | 1.3% |
 
 **The answer is no.** L5's single busiest bucket is **TTE 60–120 (30.1% of
 dollars)** — which our envelope *does* cover for OPEN and EXTEND, since
@@ -102,8 +108,9 @@ dollars)** — which our envelope *does* cover for OPEN and EXTEND, since
 historical dollars (below TTE 60) and **2.9%** (below TTE 30). They do not cut
 off L5's habitat.
 
-**What they do cut off is Gemini's.** 50.7% of Gemini's notional is in TTE
-30–60, where L5 historically did 10.2% and where we may only COMPLETE. And L5
+**What they do cut off is Gemini's.** 38.8% of Gemini's notional is in TTE
+30–60, where L5 historically did 10.2% and where we may only COMPLETE.
+Gemini's TTE 30–180 carries **88.5%** of its notional against L5's **64.6%**. And L5
 never traded above TTE 300 at all — its 5-minute windows are exactly 300 s —
 while Gemini's contracts trade from TTE ~377, a pre-window region L5's
 behaviour has no analogue for.
@@ -118,17 +125,19 @@ I am not proposing to move either bound.
 JOIN_BEST is dropped: `ticks_native_behind_best` is **0 in all 476 cycles**
 the policy quoted, so NATIVE and JOIN are the same order.
 
+Over 742 cycles:
+
 | arm | distinct prints reached | quote-instances filled | mean outbid share of rest |
 |---|---|---|---|
-| **NATIVE** (reprices every ~8 s) | **2** | 1 | — |
-| **IMPROVE_1_TICK** (reprices every ~8 s) | **6** | 5 | — |
-| IMPROVE + 15 s minimum rest | 7 | 7 | 37.8% |
-| IMPROVE + 30 s minimum rest | 11 | 13 | 43.5% |
-| IMPROVE + 45 s minimum rest | 15 | 17 | 45.9% |
-| **IMPROVE + 60 s minimum rest** | **17** | 24 | 47.1% |
+| **NATIVE** (reprices every ~8 s) | **5** | 2 | — |
+| **IMPROVE_1_TICK** (reprices every ~8 s) | **10** | 7 | — |
+| IMPROVE + 15 s minimum rest | 11 | 10 | 34.4% |
+| IMPROVE + 30 s minimum rest | 15 | 18 | 40.1% |
+| IMPROVE + 45 s minimum rest | 19 | 24 | 42.6% |
+| **IMPROVE + 60 s minimum rest** | **22** | 34 | 44.0% |
 
-**Native reaches 2 distinct prints across 19 windows. Improving by one tick
-and simply not repricing for 60 seconds reaches 17 — 8.5×.** The gain is
+**Native reaches 5 distinct prints across 26 windows. Improving by one tick
+and simply not repricing for 60 seconds reaches 22 — 4.4×.** The gain is
 monotone in rest duration and the cost is mild: even at 60 s the quote is
 outbid for only 47% of the rest.
 
@@ -144,27 +153,28 @@ would not be.
 
 ## 6. The answer: A, B, C or D?
 
-Attributing all **$1,543.69** of executed notional across 19 windows to the
+Attributing all **$2,093.71** of executed notional across 26 windows to the
 reason we did not interact with it:
 
 | cause | prints | $ notional | share |
 |---|---|---|---|
-| **C — timing: TTE 30–60, where we cannot OPEN** | 7 | **782.54** | **50.7%** |
-| **C — timing: TTE >280, before our band opens** | 60 | 122.71 | **7.9%** |
-| **A — price: our quote would not be reached** | 21 | 70.84 | **4.6%** |
-| **B — queue: consumed ahead of us** | 6 | 18.84 | **1.2%** |
-| no evidence (our cycles do not cover it) | 21 | 243.75 | 15.8% |
-| **reachable — we would have been there** | 10 | **305.01** | **19.8%** |
+| **C — timing: TTE <60, where we cannot OPEN** | 19 | **839.54** | **40.1%** |
+| **C — timing: TTE >280, before our band opens** | 60 | 122.71 | **5.9%** |
+| **A — price: our quote would not be reached** | 33 | 258.72 | **12.4%** |
+| **B — queue: consumed ahead of us** | 7 | 19.04 | **0.9%** |
+| no evidence (our cycles do not cover it) | 24 | 548.11 | 26.2% |
+| **reachable — we would have been there** | 11 | **305.60** | **14.6%** |
 
-**(C) TIMING/TTE — 58.6%, and it dominates everything else by an order of
-magnitude.** Almost all of it is one bucket: TTE 30–60 carries half of all
-notional and our envelope is in COMPLETE_ONLY there and withdrawn 30 seconds
-later.
+**(C) TIMING/TTE — 46.0%, and it is still the largest cause by a factor of
+almost four.** Almost all of it is one region: TTE <60, where our envelope is
+in COMPLETE_ONLY and then withdrawn.
 
-**(A) PRICE — 4.6%.** Small, and consistent with §5: we are at the best bid
-100% of the time. Price is very nearly not the problem.
+**(A) PRICE — 12.4%.** Real, and larger than the first pass suggested (4.6%
+at 19 windows). We are at the best *bid* 100% of the time, so this is not
+"we quote behind the touch" — it is that the touch itself is often nowhere
+near where the print happens.
 
-**(B) QUEUE — 1.2% by notional**, though it is the difference between 2 and 6
+**(B) QUEUE — 0.9% by notional**, though it is the difference between 5 and 10
 distinct prints reached, because the prints it costs us are the small ones.
 Queue position matters for print *count* and barely at all for *notional*.
 
@@ -174,11 +184,33 @@ cycles saw any reaching print. But **$305.01 (19.8%) of notional was
 reachable at our own price with our own queue position** — the flow was there
 and we were not trading.
 
-**Ranking: C ≫ D > A > B.**
+**Ranking: C ≫ A > D ≈ B by notional.** By *count* of prints reached the order
+differs — queue position doubles the prints we touch — which is why both
+measures are given.
 
-One caution on (C): the reason the envelope leaves TTE 30–60 is that the
-outcome is nearly determined there — the median print price in that bucket is
-0.44 but it contains the 714-contract print at **0.79**, 42 seconds before a
-contract that settled YES. Being the maker on the other side of that is
-exactly the adverse selection this programme has been measuring. **The 50.7%
-is not free money and I am not proposing to go and get it.**
+One caution on (C): the reason the envelope leaves TTE <60 is that the
+outcome is nearly determined there — that region contains the 714-contract
+print at **0.79**, 42 seconds before a contract that settled YES. Being the
+maker on the other side of that is exactly the adverse selection this
+programme has been measuring. **The 40.1% is not free money and I am not
+proposing to go and get it.**
+
+## 7. How much these shares moved when the sample grew
+
+The first pass ran on 19 windows; soak #4 added 7 more. What changed:
+
+| | 19 windows | 26 windows |
+|---|---|---|
+| C — timing (total) | 58.6% | **46.0%** |
+| A — price | 4.6% | **12.4%** |
+| B — queue | 1.2% | 0.9% |
+| reachable | 19.8% | 14.6% |
+| no evidence | 15.8% | 26.2% |
+| 100+ share of notional | 77.7% | 78.7% |
+| TTE 30–180 share | 87.6% | 88.5% |
+
+**The ranking held; the magnitudes did not.** C stayed dominant and B stayed
+negligible, but A nearly tripled. **These shares are not yet stable and should
+not be treated as parameters.** The two figures that barely moved — the
+concentration of notional in nine prints, and its concentration in TTE 30–180
+— are the ones worth relying on.

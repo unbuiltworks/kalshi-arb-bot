@@ -6,7 +6,7 @@
   },
   "regate": {
     "rows_regated": 22,
-    "rows_total": 261,
+    "rows_total": 398,
     "why": "the soak predates `continuous_probe.crossed`; the recorded book is unchanged and only its verdict is re-read"
   },
   "live_windows": [
@@ -267,19 +267,240 @@
     }
   ],
   "pre_entry_study": {
-    "windows_with_a_pre_entry_read": 0,
+    "windows_with_a_pre_entry_read": 7,
     "windows_without_one": 12,
     "dispersion": {
-      "windows": 0,
-      "why": "no window carries a pre-entry read yet"
+      "windows": 7,
+      "prior_prints_per_min": {
+        "field": "prior_prints_per_min",
+        "n": 7,
+        "min": 0.0,
+        "p25": 0.0,
+        "median": 0.0,
+        "p75": 0.0,
+        "p90": 0.5,
+        "max": 2.5,
+        "zero_share": 0.714,
+        "spread_p90_over_median": null
+      },
+      "own_prints_on_tape": {
+        "field": "own_prints_on_tape",
+        "n": 7,
+        "min": 0.0,
+        "p25": 0.0,
+        "median": 0.0,
+        "p75": 0.0,
+        "p90": 0.0,
+        "max": 0.0,
+        "zero_share": 1.0,
+        "spread_p90_over_median": null
+      },
+      "spot_prints_per_min": {
+        "field": "spot_prints_per_min",
+        "n": 7,
+        "min": 0.902,
+        "p25": 1.016,
+        "median": 1.123,
+        "p75": 1.141,
+        "p90": 8.902,
+        "max": 14.13,
+        "zero_share": 0.0,
+        "spread_p90_over_median": 7.93
+      },
+      "spot_range_bps": {
+        "field": "spot_range_bps",
+        "n": 7,
+        "min": 0.0,
+        "p25": 1.6,
+        "median": 5.2,
+        "p75": 6.1,
+        "p90": 8.0,
+        "max": 13.0,
+        "zero_share": 0.143,
+        "spread_p90_over_median": 1.54
+      },
+      "spread": {
+        "field": "spread",
+        "n": 0,
+        "why": "no readable observation"
+      },
+      "touch_depth": {
+        "field": "touch_depth",
+        "n": 7,
+        "min": 10.0,
+        "p25": 10.0,
+        "median": 394.0,
+        "p75": 468.0,
+        "p90": 510.0,
+        "max": 882.0,
+        "zero_share": 0.0,
+        "spread_p90_over_median": 1.29
+      },
+      "two_sided_prior_share": 0.143,
+      "labels": "DISPERSION, not a verdict. A wide spread between median and p90 means windows differ and a selector has something to select on; a narrow one means it does not."
     },
     "persistence": {
-      "n_pairs": 0,
+      "n_pairs": 7,
       "min_pairs": 20,
       "computable": false,
-      "why": "0 pairs; 20 are needed before a persistence statement means anything"
+      "why": "7 pairs; 20 are needed before a persistence statement means anything"
     },
-    "windows": [],
+    "windows": [
+      {
+        "symbol": "GEMI-BTC05M2609191200-UP",
+        "started_utc": "2026-09-19T11:51:34.329383+00:00",
+        "entry_tte_s": 278.9158627986908,
+        "prior_prints_per_min": "2.500",
+        "prior_two_sided": true,
+        "own_prints": 0,
+        "spot_prints_per_min": "14.130",
+        "spot_range_bps": "0.0",
+        "spread": null,
+        "touch_depth": "375.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.452,
+        "actual_zero_share": 0.952,
+        "rank": [
+          2.5,
+          1.0,
+          0.0,
+          14.13
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191150-UP",
+        "started_utc": "2026-09-19T11:44:09.316499+00:00",
+        "entry_tte_s": 279.1347064971924,
+        "prior_prints_per_min": "0.500",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.123",
+        "spot_range_bps": "8.0",
+        "spread": null,
+        "touch_depth": "510.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.592,
+        "actual_zero_share": 0.905,
+        "rank": [
+          0.5,
+          0.0,
+          0.0,
+          1.123
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191205-UP",
+        "started_utc": "2026-09-19T11:59:34.949112+00:00",
+        "entry_tte_s": 277.32616686820984,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "8.902",
+        "spot_range_bps": "1.6",
+        "spread": null,
+        "touch_depth": "10.0",
+        "crossed": false,
+        "touch_changed": true,
+        "actual_mean_prints_per_min": 1.752,
+        "actual_zero_share": 0.762,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          8.902
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191145-UP",
+        "started_utc": "2026-09-19T11:39:11.455661+00:00",
+        "entry_tte_s": 277.5175004005432,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.141",
+        "spot_range_bps": "5.2",
+        "spread": null,
+        "touch_depth": "882.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.852,
+        "actual_zero_share": 0.857,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          1.141
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191140-UP",
+        "started_utc": "2026-09-19T11:34:07.759170+00:00",
+        "entry_tte_s": 274.1654477119446,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.058",
+        "spot_range_bps": "5.1",
+        "spread": null,
+        "touch_depth": "10.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.292,
+        "actual_zero_share": 0.952,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          1.058
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191155-UP",
+        "started_utc": "2026-09-19T11:49:09.218123+00:00",
+        "entry_tte_s": 276.0418031215668,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.016",
+        "spot_range_bps": "6.1",
+        "spread": null,
+        "touch_depth": "394.0",
+        "crossed": false,
+        "touch_changed": true,
+        "actual_mean_prints_per_min": 0.0,
+        "actual_zero_share": 1.0,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          1.016
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191135-UP",
+        "started_utc": "2026-09-19T11:27:26.444412+00:00",
+        "entry_tte_s": 279.90794920921326,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "0.902",
+        "spot_range_bps": "13.0",
+        "spread": null,
+        "touch_depth": "468.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.523,
+        "actual_zero_share": 0.905,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          0.902
+        ]
+      }
+    ],
     "labels": "RANKED FOR READING ONLY. The soak recorded these and acted on none of them; admission is unchanged and no threshold exists."
   },
   "rung_lives": {
@@ -1529,11 +1750,12 @@
     }
   ],
   "census": {
-    "cycles": 261,
-    "book_refused_cycles": 25,
-    "book_refused_share": 0.096,
+    "cycles": 398,
+    "book_refused_cycles": 27,
+    "book_refused_share": 0.068,
     "refusal_reasons": [
       "CROSSED book: a bid at or above its own ask",
+      "TimeoutError: The read operation timed out",
       "crossed or absent quote -- refused by the gate added after this cycle was recorded"
     ],
     "touch_was_ours_cycles": 0,
@@ -1543,43 +1765,43 @@
     "dimensions": {
       "spread": {
         "0.06-0.10": {
-          "cycles": 11,
-          "share": 0.042,
+          "cycles": 12,
+          "share": 0.03,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "0.11-0.20": {
-          "cycles": 62,
-          "share": 0.238,
+          "cycles": 72,
+          "share": 0.181,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "0.21-0.30": {
-          "cycles": 107,
-          "share": 0.41,
+          "cycles": 143,
+          "share": 0.359,
           "fills": 1,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "<=0.05": {
           "cycles": 1,
-          "share": 0.004,
+          "share": 0.003,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         ">0.30": {
-          "cycles": 55,
-          "share": 0.211,
+          "cycles": 143,
+          "share": 0.359,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "UNREADABLE": {
-          "cycles": 25,
-          "share": 0.096,
+          "cycles": 27,
+          "share": 0.068,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
@@ -1594,36 +1816,36 @@
       },
       "touch_depth": {
         "101-500": {
-          "cycles": 90,
-          "share": 0.345,
+          "cycles": 178,
+          "share": 0.447,
           "fills": 1,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "11-100": {
           "cycles": 3,
-          "share": 0.011,
+          "share": 0.008,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "2-10": {
-          "cycles": 105,
-          "share": 0.402,
+          "cycles": 122,
+          "share": 0.307,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         ">500": {
-          "cycles": 38,
-          "share": 0.146,
+          "cycles": 67,
+          "share": 0.168,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "UNREADABLE": {
-          "cycles": 25,
-          "share": 0.096,
+          "cycles": 28,
+          "share": 0.07,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
@@ -1638,36 +1860,36 @@
       },
       "flow": {
         "0/min": {
-          "cycles": 221,
+          "cycles": 337,
           "share": 0.847,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "2-6/min": {
-          "cycles": 1,
-          "share": 0.004,
+          "cycles": 4,
+          "share": 0.01,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "6-15/min": {
-          "cycles": 26,
-          "share": 0.1,
+          "cycles": 37,
+          "share": 0.093,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         ">15/min": {
           "cycles": 1,
-          "share": 0.004,
+          "share": 0.003,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "UNREADABLE": {
-          "cycles": 12,
-          "share": 0.046,
+          "cycles": 19,
+          "share": 0.048,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
@@ -1682,36 +1904,36 @@
       },
       "tte": {
         "120-180s": {
-          "cycles": 76,
-          "share": 0.291,
+          "cycles": 111,
+          "share": 0.279,
           "fills": 1,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "180-240s": {
-          "cycles": 77,
-          "share": 0.295,
+          "cycles": 116,
+          "share": 0.291,
           "fills": 1,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "60-120s": {
-          "cycles": 58,
-          "share": 0.222,
+          "cycles": 92,
+          "share": 0.231,
           "fills": 1,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "<=60s": {
-          "cycles": 5,
-          "share": 0.019,
+          "cycles": 10,
+          "share": 0.025,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         ">240s": {
-          "cycles": 45,
-          "share": 0.172,
+          "cycles": 69,
+          "share": 0.173,
           "fills": 2,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
@@ -1719,50 +1941,50 @@
       },
       "probability_band": {
         "0.00-0.10": {
-          "cycles": 52,
-          "share": 0.199,
+          "cycles": 67,
+          "share": 0.168,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "0.11-0.25": {
-          "cycles": 49,
-          "share": 0.188,
+          "cycles": 66,
+          "share": 0.166,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "0.26-0.50": {
-          "cycles": 51,
-          "share": 0.195,
+          "cycles": 121,
+          "share": 0.304,
           "fills": 1,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "0.51-0.75": {
-          "cycles": 48,
-          "share": 0.184,
+          "cycles": 77,
+          "share": 0.193,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "0.76-0.90": {
-          "cycles": 35,
-          "share": 0.134,
+          "cycles": 39,
+          "share": 0.098,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "0.91-1.00": {
           "cycles": 1,
-          "share": 0.004,
+          "share": 0.003,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "UNREADABLE": {
-          "cycles": 25,
-          "share": 0.096,
+          "cycles": 27,
+          "share": 0.068,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
@@ -1777,15 +1999,15 @@
       },
       "l5_state": {
         "NO_ACTION": {
-          "cycles": 30,
-          "share": 0.115,
+          "cycles": 43,
+          "share": 0.108,
           "fills": 0,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
         },
         "OPEN": {
-          "cycles": 231,
-          "share": 0.885,
+          "cycles": 355,
+          "share": 0.892,
           "fills": 3,
           "rate": null,
           "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."

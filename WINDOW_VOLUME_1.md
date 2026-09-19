@@ -13,6 +13,15 @@ the live windows that recorded no tape at the time.
 
 **Displayed depth appears in its own column and is added to nothing.**
 
+> **SNAPSHOT AT 19 WINDOWS.** Every table below is the first pass. Soak #4
+> later added 7 windows; the totals become **26 windows · 154 prints ·
+> 3,686.14 contracts · $2,093.71**, the 100+ bucket's share of notional goes
+> 77.7% → **78.7%**, and TTE 30–180 goes 87.6% → **88.5%**. The per-TTE and
+> attribution shares moved more than that, and
+> `LARGE_PRINT_FORENSIC_1.md` §7 records by how much. This document is kept
+> at 19 windows as the record of what was known when the question was first
+> answered.
+
 Reproduce: `python3 -m src.gemini_execution.volume_report` →
 `analysis/gemini/window_volume.json`. Code: `window_volume.py` · 16 tests.
 
