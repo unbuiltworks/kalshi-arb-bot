@@ -207,6 +207,35 @@ Rested rungs track readability closely — BTC5m 33/24, 19/14, 24/23, 14/11,
 6/4 (rested/readable) — which is what it should look like when a readable
 cycle yields up to two legs and an unchanged price keeps its rung.
 
+### CORRECTION: 72.4% was one window, not a property
+
+Three more BTC15m windows have since run, and the readability figure does not
+hold:
+
+| window | cycles | readable | share | rested | fills |
+|---|---|---|---|---|---|
+| `…1615-UP` | 29 | 8 | 0.28 | 13 | 0 |
+| `…1630-UP` | 30 | 25 | 0.83 | **0** | 0 |
+| `…1645-UP` | 29 | 29 | **1.00** | 36 | **1** |
+| `…1700-UP` | 30 | 29 | 0.97 | 39 | 0 |
+| **total** | **118** | **91** | **0.771** | 88 | 1 |
+
+BTC15m is **22.9% refused** across four windows, not 72.4% — and that is
+*better* than BTC5m's 39.2%, the opposite of what I reported. The 8/29 window
+was the outlier I happened to measure first. I over-generalised from a single
+window, which is the same error the probe made two paragraphs above, made
+again with a different instrument.
+
+**And a readable book does not imply a rung.** `…1630-UP` had 25 of 30 cycles
+readable and rested **zero** rungs. Crossing cannot explain that window, so
+something else withheld the surface there and I do not yet know what. The
+`books=` field says what it says; it does not say why the policy declined a
+book it could read.
+
+What survives from the crossing work: crossing is real, it is heavy in some
+windows, and it fully explains zero-rung windows like `…1600-UP`. What does
+not survive: the claim that BTC15m is structurally less readable than BTC5m.
+
 ### Two corrections to how I measured this
 
 I ran a public-read probe to test the crossing hypothesis and **got the
