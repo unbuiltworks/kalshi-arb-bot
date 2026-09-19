@@ -255,9 +255,20 @@ async def main_async(a) -> int:
             break
         w = await one_window(runner, cycles=a.cycles, interval_s=a.interval,
                              cohort=co, policy=a.policy)
-        print("WINDOW %s tte=%s cycles=%s -> %s" % (
-            w.get("symbol"), w.get("entry_tte_s"), w.get("cycles"),
-            w.get("state")), flush=True)
+        # THE LEDGER GOES TO STDOUT, not only to the evidence file. A lane
+        # running on Railway persists to a volume no analysis container can
+        # mount, so without this its recycling evidence is unreachable until
+        # someone shells into it. HYPOTHETICAL throughout -- see
+        # hypothetical.py; nothing here is filled, settled or realized.
+        h = w.get("hypothetical") or {}
+        iv = w.get("inventory") or {}
+        print("WINDOW %s tte=%s cycles=%s -> %s | HYP rested=%s fills=%s "
+              "first=%s complete=%s | matched=%s residual=%s basis=%s" % (
+                  w.get("symbol"), w.get("entry_tte_s"), w.get("cycles"),
+                  w.get("state"), h.get("rungs_rested"), h.get("fills"),
+                  h.get("first_fills"), h.get("complete_fills"),
+                  iv.get("matched_qty"), iv.get("directional_residual"),
+                  iv.get("effective_matched_pair_cost")), flush=True)
         if runner.state.stopped:
             break
 
