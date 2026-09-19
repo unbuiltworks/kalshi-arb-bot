@@ -9,8 +9,10 @@ reachable from the L5 policy, the pricing, the sizing or any bound, and no
 number below has changed one. No line here is realized P&L.
 
 **Sources.** 173 shadow cycles (soak #1 and #2, `continuous_v1.jsonl`), 9 live
-windows (`continuous_run_*.json`), the venue's own order records, and the
-venue's own public print tape. Read-only over preserved evidence; no evidence
+window records (`continuous_run_*.json` — seven that ran, two C8 dispatches
+refused before the latch that spent nothing), the venue's own order records,
+the venue's own slot-reconciliation rows, and the venue's own public print
+tape. Read-only over preserved evidence; no evidence
 file was rewritten and no venue call was made to produce this.
 
 Reproduce: `python3 -m src.gemini_execution.segment_report`
@@ -23,33 +25,50 @@ Output: `analysis/gemini/segment_census.json`
 I previously reported the live windows as *"C4 129 s / 0 fills, C5 282 s / 1,
 C6 207 s / 1, C7 136 s / 0, C8B 278 s / 1"* and drew a correlation between
 entry TTE and fill probability from it. **That table was wrong and the
-correlation does not exist.** The venue's own terminal order records say:
+correlation does not exist.** The venue's own order records say:
 
 | window | entry TTE | PLACEs | fills | filled at | resting to fill |
 |---|---|---|---|---|---|
-| C4  | ~131 s (no entry schedule) | not recorded | **2** | YES 0.92, NO 0.14 | 27.45 s, **0.009 s** |
-| C5  | 275.9 s | 2 | 0 | — | — |
+| C4  | 129.1 s † | not recorded | **2** | NO 0.14, YES 0.92 | **0.009 s**, 27.45 s |
+| C5  | 275.9 s | 2 | **1** ‡ | NO 0.46 | 63.68 s |
 | C6  | 199.7 s | 4 | **1** | YES 0.21 | 62.67 s |
 | C7  | 125.3 s | 3 | 0 | — | — |
 | C8B | 278.3 s | 6 | **1** | YES 0.31 | 57.80 s |
 
-Four fills, not two, and the window with the **earliest** entry produced the
-**most** fills while the window with the latest entry produced none. There is
-no monotone relationship between entry TTE and fills in this record. The P1
-entry band remains what the owner authorised it as — experimental scheduling —
-and now has no supporting correlation behind it at all.
+† C4 predates the entry-band scheduler; 129.1 s is the window's start
+against the venue's own expiry, and its two fills sit at TTE 120.5 s and
+114.1 s by the venue's `expiryDate` minus its `createdAt`.
 
----
+‡ **C5's fill landed 57 seconds after its window had already stopped**, on an
+order the window left resting. Its terminal read at 21:05:33 showed two
+orders open and zero fills; the venue recorded the fill at 21:06:29.459Z. It
+is confirmed in `reconcile_slot_20260918T214547Z_c5s0.json` and it settled
+against us.
+
+**Five fills, not two.** The two earliest entries are 3.8 seconds apart —
+C7 at 125.3 s filled **nothing** across 12 cycles, C4 at 129.1 s filled
+**twice** — and the two latest, C5 at 275.9 s and C8B at 278.3 s, filled once
+each. There is no monotone relationship between entry TTE and fills in this
+record, and the tightest pair in it straddles the largest gap in outcome.
+
+The P1 entry band remains what the owner authorised it as — experimental
+scheduling — and now has no supporting correlation behind it at all.
+
+**A terminal snapshot is not a fill count.** Four of the nine windows ended
+with one of our orders still resting, so their fill counts are a **floor**.
+The census marks each such window `fills_are_a_floor: true` and reads
+post-window fills from the venue's own reconciliation rows, keyed by the
+venue order id the window's own PLACE returned — never by price.
 
 ## 1. What this census refuses to say
 
-Nine dimensions. Four fills. A per-segment conversion rate over that ratio
+Nine dimensions. Five fills. A per-segment conversion rate over that ratio
 would print as `0/12, 1/9, 0/31` and read as knowledge.
 
 `segments.MIN_FILLS_FOR_A_RATE = 10`. Below it **no dimension states a rate**,
 every cell carries the reason, and `rates_stated` is `false` in the artifact.
 What is reported instead is the **census** — how many cycles the venue put in
-each bucket — beside **where the four fills landed**, as counts.
+each bucket — beside **where the five fills landed**, as counts.
 
 Two further refusals, both load-bearing:
 
@@ -58,8 +77,8 @@ Two further refusals, both load-bearing:
   price-derived segment. Bucketing a −0.30 "spread" as `<=0.05` would report
   the venue as the tightest it has ever been using precisely the readings the
   controller threw away.
-- **No book capture is not a failed read.** C4 and C6 filled before book-state
-  capture existed. Those fills read `NOT_PRESENTED_AT_DECISION`, not
+- **No book capture is not a failed read.** C4, C5 and C6 filled before
+  book-state capture existed. Those fills read `NOT_PRESENTED_AT_DECISION`, not
   `UNREADABLE`, and are not dropped — dropping them would make the record look
   as though the only fills we have are the ones we happen to have books for.
 
@@ -77,7 +96,7 @@ Over the 151 readable cycles:
 | **`0.21-0.30`** | **73** | **42.2%** | **1** (C8B, 0.27) |
 | `>0.30` | 36 | 20.8% | 0 |
 | refused | 22 | 12.7% | — |
-| not captured | — | — | 3 |
+| not captured | — | — | 4 |
 
 The one fill we have a book for landed in the bucket the venue offers most
 often. That is consistent with "spread did not matter" and equally consistent
@@ -96,6 +115,7 @@ time. Only 4.6% of cycles offered a spread of 10 cents or less.
 | `101-500` | 41 | 23.7% | 1 (C8B, **483**) |
 | `>500` | 35 | 20.2% | 0 |
 | refused | 22 | 12.7% | — |
+| not captured | — | — | 4 |
 
 Our own resting size is **flagged, never subtracted** (`touch_was_ours_cycles`).
 
@@ -149,10 +169,10 @@ No fill is segmented by flow: the live windows do not record the public tape.
 | `60-120s` | 39 | 22.5% | 1 (C4 YES 0.92) |
 | `120-180s` | 50 | 28.9% | 1 (C4 NO 0.14) |
 | `180-240s` | 51 | 29.5% | 1 (C6 YES 0.21) |
-| `>240s` | 28 | 16.2% | 1 (C8B YES 0.31) |
+| `>240s` | 28 | 16.2% | 2 (C5 NO 0.46, C8B YES 0.31) |
 
-One fill in each of four adjacent buckets. With the corrected record in §0,
-**TTE separates nothing.** C4's TTEs are derived from the venue's own
+At least one fill in each of four adjacent buckets. With the corrected record
+in §0, **TTE separates nothing.** C4's TTEs are derived from the venue's own
 `expiryDate` minus the venue's own `createdAt`, not reconstructed.
 
 ## 6. Probability band
@@ -166,6 +186,7 @@ One fill in each of four adjacent buckets. With the corrected record in §0,
 | `0.76-0.90` | 7 | 4.0% | 0 |
 | `0.91-1.00` | 1 | 0.6% | 0 |
 | refused | 22 | 12.7% | — |
+| not captured | — | — | 4 |
 
 Over half of all cycles (89 of 173, 51.4%) present a YES bid at or below
 0.25. The
@@ -176,7 +197,7 @@ counterparty.
 ## 7. Resting time and repricing — the one association worth reporting
 
 15 rungs have full PLACE→CANCEL records (C4's mutations predate that
-instrumentation).
+instrumentation, so its two fills are absent from this section).
 
 A rung that filled stops resting at its **fill**, not at the window's stop —
 both fills were still nominally live when their window ended, so measuring
@@ -186,22 +207,22 @@ fill).
 
 | resting | rungs | fills |
 |---|---|---|
-| `1-10s` | 7 | 0 |
+| `1-10s` | 6 | 0 |
 | `10-30s` | 3 | 0 |
 | `30-60s` | 2 | 1 (C8B, 57.80 s) |
-| `>60s` | 3 | 1 (C6, 62.67 s) |
+| `>60s` | 4 | 2 (C6 62.67 s, C5 63.68 s) |
 
 | leg repricing | rungs | fills |
 |---|---|---|
 | on a leg that was repriced | 10 | **0** |
-| on a leg placed once and left alone | 5 | **2** |
+| on a leg placed once and left alone | 5 | **3** |
 
-Both mutation-recorded fills came from a rung that was **placed once, never
-repriced, left resting for about a minute, at the prevailing bid**. The ten
-rungs on a repriced leg filled zero times, and so did all ten rungs that
-rested under 30 s. Across C6, C7 and C8B the pattern is identical: the YES
-rung is placed once and left; the NO rung is chased (0.42→0.57→0.62→0.65→0.67
-in C8B alone) and never fills.
+All three mutation-recorded fills came from a rung that was **placed once,
+never repriced, left resting 57.8–63.7 s, at the prevailing bid**. The ten
+rungs on a repriced leg filled zero times, and so did all nine rungs that
+rested under 30 s. Across C5, C6, C7 and C8B the pattern is identical: one
+leg is placed once and left; the other is chased (0.42→0.57→0.62→0.65→0.67 in
+C8B alone) and never fills.
 
 **Three reasons this must not become a controller change:**
 
@@ -211,7 +232,7 @@ in C8B alone) and never fills.
 2. **Neither condition is sufficient.** C7's YES rung was placed once at
    **0.01**, never repriced, and rested **72.1 s** — and did not fill. A penny
    bid left alone is still a penny bid.
-3. **n = 4.**
+3. **n = 5.**
 
 A terminal cancel is counted as a **withdrawal, not a reprice** — counting it
 otherwise put C7's rung, the clearest counterexample, on the wrong side of the
@@ -255,6 +276,7 @@ summed with matched-pair economics.**
 |---|---|---|
 | C4 YES 0.92 | 0 | no book — window ended |
 | C4 NO 0.14 | 0 | no book — window ended |
+| C5 NO 0.46 | 0 | no book — it filled 57 s after the window stopped |
 | C6 YES 0.21 | 1 | book refused at that cycle |
 | **C8B YES 0.31** | 1 | **−0.095** (mid 0.215, ~9 s later) |
 
@@ -303,11 +325,24 @@ or any bound. Nothing in §1–§10 is a tuning input.
 - usable-cycle count per live window cannot be planned from a fixed refusal
   rate (§10).
 
-**Recording gaps to close before, not during, live operation** (all public,
-read-only, behaviour-neutral):
+**Recording gaps** (all public, read-only, behaviour-neutral):
 
-1. record `GET /v1/trades/{symbol}` in live windows, as the soak already does
-   — without it no fill can ever be segmented by flow, and §3's queue question
-   stays open;
-2. keep sampling the presented book for at least ~60 s after any fill — three
-   of four fills have no post-fill book at all.
+1. **CLOSED.** `GET /v1/trades/{symbol}` is now recorded beside every live
+   decision, exactly as the soak already does it, under
+   `book_state.flow`. Without it no live fill could ever be segmented by
+   flow and §3's queue question could not be asked. The reader is optional,
+   wrapped, and proven byte-equivalent against a run with no observer at all —
+   including when it raises — by
+   `test_the_flow_read_changes_nothing_about_the_window` and
+   `test_a_flow_reader_that_RAISES_still_changes_nothing`. `envelope_sha`
+   `b3bff654…aa17` and `executable_sha` `50996ee0…59bd` are unmoved;
+   `bundle_sha` moves to `82ad2166…a6fe`, which is what a bundle member
+   gaining evidence capture is supposed to do.
+2. **OPEN, and proposed rather than built.** Keep sampling the presented book
+   for ~60 s after any fill: four of five fills have no post-fill book at all,
+   and C5's filled after the window had stopped reading entirely. Unlike (1)
+   this changes a window's shape — it extends the run past the mutation
+   budget — so it belongs in the live envelope the owner approves, as a
+   bounded read-only observation phase that begins only after terminal
+   cleanup has proven the book clear. It is described in the envelope
+   proposal and is **not** implemented here.

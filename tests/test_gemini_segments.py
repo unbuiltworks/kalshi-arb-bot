@@ -270,3 +270,78 @@ def test_a_rung_that_FILLED_stops_resting_at_the_FILL():
     assert rr[0]["ended"] == "FILL"
     assert rr[0]["resting_s"] == 57.805
     assert rr[0]["resting_bucket"] == ">60s" or rr[0]["resting_s"] < 60
+
+
+# ============================== the terminal snapshot is not the fill count
+
+def test_a_window_that_left_orders_RESTING_cannot_count_its_fills():
+    """CONTINUOUS-5's terminal read at 21:05:33 showed two orders resting and
+    zero fills. One of them filled at 21:06:29 -- 57 seconds AFTER the window
+    stopped -- and settled against us. A census built from the terminal
+    snapshot alone drops that fill, and with it the clearest instance of the
+    resting-time pattern it is trying to measure.
+
+    This pins the reader that picks post-window fills up from the venue's own
+    reconciliation rows, using the real C5 order.
+    """
+    from src.gemini_execution import segment_report as SR
+    import json as _j
+    import os as _os
+    import tempfile
+
+    d = tempfile.mkdtemp()
+    art = {"venue_evidence": {"history_per_status_raw": [
+        {"status_filter": "filled", "sample": {
+            "orderId": 145828836250441357,
+            "clientOrderId": "l5cp-owner-2026-no-bc908af5",
+            "symbol": "GEMI-BTC05M2609182110-UP", "outcome": "no",
+            "price": "0.46", "quantity": "0.01", "filledQuantity": "0.01",
+            "status": "filled",
+            "createdAt": "2026-09-18T21:05:25.646Z",
+            "updatedAt": "2026-09-18T21:06:29.459Z"}}]}}
+    with open(_os.path.join(d, "reconcile_slot_c5.json"), "w") as fh:
+        _j.dump(art, fh)
+
+    got = SR.reconciled_fills(_os.path.join(d, "reconcile_slot_*.json"))
+    assert "145828836250441357" in got
+    row = got["145828836250441357"]
+    assert row["filledQuantity"] == "0.01"
+    assert row["updatedAt"] == "2026-09-18T21:06:29.459Z"
+    assert row["evidence_file"] == "reconcile_slot_c5.json"
+
+
+def test_a_post_window_fill_is_attributed_to_the_window_that_PLACED_it():
+    from src.gemini_execution import segment_report as SR
+    win = {
+        "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
+        "finished_utc": "2026-09-18T21:05:35.609970+00:00",
+        "after": {"fills": [], "orders_seen": [], "open_orders": [
+            {"orderId": 145828836250441357, "status": "open"}]},
+        "mutations_observed": [
+            {"kind": "PLACE", "utc": "2026-09-18T21:05:25.777+00:00",
+             "target": {"leg": "NO", "price": "0.46", "action": "OPEN"},
+             "result": {"venue_order_id": "145828836250441357"}}],
+        "decisions": [],
+    }
+    recon = {"145828836250441357": {
+        "orderId": 145828836250441357, "outcome": "no", "price": "0.46",
+        "filledQuantity": "0.01", "status": "filled",
+        "createdAt": "2026-09-18T21:05:25.646Z",
+        "updatedAt": "2026-09-18T21:06:29.459Z",
+        "evidence_file": "reconcile_slot_c5.json"}}
+    segs = SR._fill_segments(win, recon)
+    assert len(segs) == 1
+    assert segs[0]["post_window_fill"] is True
+    assert segs[0]["leg"] == "NO" and segs[0]["price"] == "0.46"
+
+
+def test_a_fill_on_an_order_THIS_window_never_placed_is_not_claimed():
+    """The reconciliation files span every window. Attribution is by the
+    venue order id this window's own PLACE returned, never by price."""
+    from src.gemini_execution import segment_report as SR
+    win = {"authorization_id": "X", "finished_utc": "2026-09-18T21:05:35Z",
+           "after": {"fills": [], "orders_seen": [], "open_orders": []},
+           "mutations_observed": [], "decisions": []}
+    recon = {"999": {"orderId": 999, "outcome": "no", "price": "0.46",
+                     "status": "filled", "filledQuantity": "0.01"}}
+    assert SR._fill_segments(win, recon) == []

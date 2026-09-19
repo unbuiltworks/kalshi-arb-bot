@@ -10,12 +10,18 @@ cycles into the segments the owner named:
   repricing frequency . EXTEND/COMPLETE state . adverse movement after a fill
 
 THE REFUSAL THAT DEFINES THIS MODULE: a segment does NOT get a fill rate.
-Four fills exist in the whole programme (C4 x2, C6, C8B). Split nine ways they
-are noise, and a table of "0/12, 1/9, 0/31" printed as percentages reads as
-knowledge. So every dimension reports the CENSUS -- how many cycles the venue
-put in each bucket -- and separately WHERE the fills landed, as counts. A rate
-appears only once `MIN_FILLS_FOR_A_RATE` fills exist, and until then each cell
-carries the reason it is absent.
+Five fills exist in the whole programme (C4 x2, C5, C6, C8B). Split nine ways
+they are noise, and a table of "0/12, 1/9, 0/31" printed as percentages reads
+as knowledge. So every dimension reports the CENSUS -- how many cycles the
+venue put in each bucket -- and separately WHERE the fills landed, as counts.
+A rate appears only once `MIN_FILLS_FOR_A_RATE` fills exist, and until then
+each cell carries the reason it is absent.
+
+AND THE FILL COUNT ITSELF IS A FLOOR where a window's terminal read left an
+order resting. C5's did: its snapshot said two orders open and zero fills, and
+one of them filled 57 seconds later. Counting from the snapshot alone dropped
+that fill and, with it, the clearest instance of the resting-time pattern this
+module measures.
 
 WHAT EACH NUMBER COMES FROM, and what it is not:
 

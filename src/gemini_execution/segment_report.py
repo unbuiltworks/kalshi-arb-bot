@@ -76,7 +76,54 @@ def _live_windows(pattern: str) -> List[Dict[str, Any]]:
     return out
 
 
-def _fill_segments(win: Dict[str, Any]) -> List[Dict[str, Any]]:
+def reconciled_fills(pattern: str) -> Dict[str, Dict[str, Any]]:
+    """Venue-confirmed `filled` rows from the read-only slot reconciliations.
+
+    THE TERMINAL SNAPSHOT IS NOT THE FILL COUNT. CONTINUOUS-5's terminal read
+    at 21:05:33 showed two orders resting and zero fills; one of them filled
+    at 21:06:29 -- 57 seconds AFTER the window stopped -- and settled against
+    us. A census built from `after.fills` alone silently drops that fill, and
+    with it the clearest instance of the resting-time pattern it is trying to
+    measure.
+
+    So post-window fills are read from the venue's own order rows in the
+    preserved reconciliation artifacts, and any window whose terminal read
+    left orders resting has its fill count marked a FLOOR.
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    for path in sorted(glob.glob(pattern)):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                d = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        ve = d.get("venue_evidence") or {}
+        for h in (ve.get("history_per_status_raw") or []):
+            if h.get("status_filter") != "filled":
+                continue
+            row = h.get("sample") or {}
+            oid = str(row.get("orderId") or "")
+            if not oid or str(row.get("status")) != "filled":
+                continue
+            out.setdefault(oid, {**row, "evidence_file": os.path.basename(path)})
+    return out
+
+
+def _placed_ids(win: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """venue order id -> the PLACE that created it, for this window."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for m in (win.get("mutations_observed") or []):
+        if m.get("kind") != "PLACE":
+            continue
+        oid = str(((m.get("result") or {}).get("venue_order_id")) or "")
+        if oid:
+            out[oid] = m
+    return out
+
+
+def _fill_segments(win: Dict[str, Any],
+                   reconciled: Dict[str, Dict[str, Any]]
+                   ) -> List[Dict[str, Any]]:
     """Place each venue-confirmed fill in the state its rung was placed at.
 
     A fill is attributed to the DECISION that produced the rung, which is the
@@ -86,25 +133,38 @@ def _fill_segments(win: Dict[str, Any]) -> List[Dict[str, Any]]:
     borrowing a later cycle's book.
     """
     after = win.get("after") or {}
-    fills = after.get("fills") or []
-    orders = {str(o.get("price")): o
-              for o in (after.get("orders_seen") or [])
-              if str(o.get("status")) == "filled"}
+    placed = _placed_ids(win)
+    orders: Dict[str, Dict[str, Any]] = {}
+    for o in (after.get("orders_seen") or []):
+        if str(o.get("status")) == "filled":
+            orders[str(o.get("orderId"))] = dict(o)
+    # post-window fills: an order THIS window placed that the venue later
+    # recorded as filled. C5's is the whole reason this path exists.
+    for oid, row in reconciled.items():
+        if oid in orders or oid not in placed:
+            continue
+        orders[oid] = {**row, "post_window": True}
+
+    finish = str(win.get("finished_utc") or "")
     decisions = win.get("decisions") or []
     out = []
-    for f in fills:
-        px = str(f.get("price"))
-        o = orders.get(px) or {}
-        # the decision cycle whose actions named this price
-        seg = {"window": win.get("authorization_id"), "leg": f.get("leg"),
-               "price": px, "qty": f.get("qty"),
+    for oid, o in sorted(orders.items()):
+        px = str(o.get("price"))
+        leg = "YES" if str(o.get("outcome")).lower() == "yes" else "NO"
+        updated = str(o.get("updatedAt") or "")
+        post = bool(o.get("post_window")) or (
+            bool(updated) and bool(finish) and updated > finish)
+        seg = {"window": win.get("authorization_id"), "leg": leg,
+               "price": px, "qty": o.get("filledQuantity"),
+               "venue_order_id": oid,
                "venue_created": o.get("createdAt"),
-               "venue_updated": o.get("updatedAt")}
+               "venue_updated": updated,
+               "post_window_fill": post,
+               "evidence_file": o.get("evidence_file")}
         found = None
         for d in decisions:
             for a in (d.get("actions") or []):
-                if str(a.get("price")) == px and str(a.get("leg")) == str(
-                        f.get("leg")):
+                if str(a.get("price")) == px and str(a.get("leg")) == leg:
                     found = d
                     break
             if found:
@@ -233,23 +293,23 @@ def adverse_after_fills(wins: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def build(*, jsonl: str, runs: str) -> Dict[str, Any]:
+def build(*, jsonl: str, runs: str,
+          reconcile: str = "analysis/gemini/reconcile_slot_*.json"
+          ) -> Dict[str, Any]:
     cycles = _load_cycles(jsonl)
     regate = _regate(cycles)
     wins = _live_windows(runs)
+    recon = reconciled_fills(reconcile)
 
     fills: List[Dict[str, Any]] = []
     rungs: List[Dict[str, Any]] = []
     per_window: List[Dict[str, Any]] = []
     for w in wins:
-        wf = _fill_segments(w)
+        wf = _fill_segments(w, recon)
         after = w.get("after") or {}
-        filled_px = [str(o.get("price")) for o in (after.get("orders_seen")
-                                                   or [])
-                     if str(o.get("status")) == "filled"]
-        filled_at = {str(o.get("price")): str(o.get("updatedAt"))
-                     for o in (after.get("orders_seen") or [])
-                     if str(o.get("status")) == "filled" and o.get("updatedAt")}
+        filled_px = [str(f.get("price")) for f in wf]
+        filled_at = {str(f.get("price")): str(f.get("venue_updated"))
+                     for f in wf if f.get("venue_updated")}
         wr = SG.rung_intervals(w.get("mutations_observed") or [],
                                window_end=w.get("finished_utc"),
                                filled_prices=filled_px,
@@ -267,8 +327,15 @@ def build(*, jsonl: str, runs: str) -> Dict[str, Any]:
                           if m.get("kind") == "PLACE"),
             "cancels": sum(1 for m in (w.get("mutations_observed") or [])
                            if m.get("kind") == "CANCEL"),
-            "fills": len(after.get("fills") or []),
-            "fill_prices": [f.get("price") for f in (after.get("fills") or [])],
+            "fills": len(wf),
+            "fill_prices": [f.get("price") for f in wf],
+            "post_window_fills": sum(1 for f in wf
+                                     if f.get("post_window_fill")),
+            # A TERMINAL READ THAT LEFT ORDERS RESTING CANNOT COUNT FILLS.
+            # C5's did, and one of those orders filled 57 s later.
+            "fills_are_a_floor": bool(
+                [o for o in (after.get("open_orders") or [])
+                 if str(o.get("status")) in ("open", "live", "accepted")]),
             "rungs_resolved": len(wr),
             "resting_seconds_total": round(sum(
                 float(r["resting_s"]) for r in wr

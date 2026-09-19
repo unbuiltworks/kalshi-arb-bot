@@ -35,6 +35,7 @@ from typing import (Any, Callable, Dict, List, Mapping,
 from src.gemini_execution import bundle as BUNDLE
 from src.gemini_execution import continuous_preflight as PF
 from src.gemini_execution import continuous_probe as CP
+from src.gemini_execution import habitat as HB
 from src.gemini_execution import metadata as MD
 from src.gemini_execution import spec
 from src.gemini_execution import ws_continuous as WC
@@ -365,15 +366,24 @@ def book_agreement(presented: Mapping[str, Any],
                        "read as the presented book's sizes.")}
 
 
-def book_state(ms: Any, depth: Any) -> Dict[str, Any]:
-    """Everything needed to reconstruct WHY a rung was chosen this cycle."""
+def book_state(ms: Any, depth: Any, flow: Any = None) -> Dict[str, Any]:
+    """Everything needed to reconstruct WHY a rung was chosen this cycle.
+
+    `flow` was added after the segmented census found the venue's PUBLIC print
+    tape to be the binding constraint -- 87.9% of measured adjacent-cycle
+    pairs saw zero prints -- and found that not one live fill could be
+    segmented by it, because live windows never recorded the tape. It is a
+    public, unauthenticated read taken beside the decision and never inside
+    it.
+    """
     p = presented_book(ms)
     return {"presented": p, "depth": sanitize(depth),
+            "flow": sanitize(flow),
             "agreement": book_agreement(p, depth),
             "labels": ("`presented` is the state the controller decided on. "
-                       "`depth` is a separate PUBLIC read taken next to it, "
-                       "for size only. Neither is derived from our own order "
-                       "prices or from ticks_behind_bid.")}
+                       "`depth` and `flow` are separate PUBLIC reads taken "
+                       "next to it, for size and for prints. None is derived "
+                       "from our own order prices or from ticks_behind_bid.")}
 
 
 #
@@ -403,7 +413,8 @@ class DecisionObserver:
     mutation still happens inside the driver, under the driver's own bounds.
     """
 
-    def __init__(self, depth_fn: Optional[Callable[[], Any]] = None) -> None:
+    def __init__(self, depth_fn: Optional[Callable[[], Any]] = None,
+                 flow_fn: Optional[Callable[[], Any]] = None) -> None:
         self.cycles: List[Dict[str, Any]] = []
         self.reads: List[Dict[str, Any]] = []
         self.mutations: List[Dict[str, Any]] = []
@@ -415,6 +426,10 @@ class DecisionObserver:
         #: no depth is captured, which is a smaller record and never a
         #: different window: nothing the driver does can depend on it.
         self.depth_fn = depth_fn
+        #: OPTIONAL public PRINT TAPE read, taken beside each decision. Same
+        #: contract as `depth_fn`: None means a smaller record, never a
+        #: different window.
+        self.flow_fn = flow_fn
 
     # ------------------------------------------------------- safe accessors
     # Every one of these is wrapped: a recorder that can raise is a recorder
@@ -457,6 +472,25 @@ class DecisionObserver:
             return {"captured": True, "readable": False,
                     "elapsed_s": round(time.time() - t0, 4),
                     "why": "the depth reader raised; see record_errors"}
+        if isinstance(got, dict):
+            got = dict(got)
+            got["elapsed_s"] = round(time.time() - t0, 4)
+            got["captured"] = True
+        return got
+
+    def _flow(self) -> Any:
+        """The PUBLIC print tape, taken next to the decision and never in its
+        way. Identical contract to `_depth`, including the measured cost: this
+        read comes out of maker resting time too."""
+        if self.flow_fn is None:
+            return {"captured": False,
+                    "why": "no flow reader was configured for this run"}
+        t0 = time.time()
+        got = self._safe(self.flow_fn, None)
+        if got is None:
+            return {"captured": True, "readable": False,
+                    "elapsed_s": round(time.time() - t0, 4),
+                    "why": "the flow reader raised; see record_errors"}
         if isinstance(got, dict):
             got = dict(got)
             got["elapsed_s"] = round(time.time() - t0, 4)
@@ -521,12 +555,13 @@ class DecisionObserver:
         return sanitize(new)
 
     def _record_decision(self, driver: Any, pre: Dict[str, Any],
-                         out: Any, depth: Any = None) -> None:
+                         out: Any, depth: Any = None,
+                         flow: Any = None) -> None:
         row = dict(pre)
         # OUTSIDE the try below, so a book that cannot be summarised still
         # leaves a row saying so rather than vanishing into record_error.
         row["book_state"] = self._safe(
-            lambda: book_state((out or {}).get("market_state"), depth),
+            lambda: book_state((out or {}).get("market_state"), depth, flow),
             {"presented": {"present": False,
                            "why": "book_state raised; see record_errors"}})
         try:
@@ -634,8 +669,9 @@ class DecisionObserver:
             # decision is about to be made against -- and OUTSIDE it, because
             # it is not passed in and the driver cannot see it.
             depth = self._depth()
+            flow = self._flow()
             out = inner_decide(*a, **kw)
-            self._record_decision(driver, pre, out, depth)
+            self._record_decision(driver, pre, out, depth, flow)
             return out
 
         async def place(*a: Any, **kw: Any) -> Any:
@@ -1332,7 +1368,9 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # These are the observer's own lists, so later appends land in `rep`.
     # The size read is bound to THIS window's symbol and nothing else, so the
     # observer cannot be pointed at another contract by accident.
-    decisions = DecisionObserver(depth_fn=lambda: MD.contract_depth(symbol))
+    decisions = DecisionObserver(
+        depth_fn=lambda: MD.contract_depth(symbol),
+        flow_fn=lambda: HB.public_flow(symbol))
     rep["decisions"] = decisions.cycles
     rep["authoritative_reads"] = decisions.reads
     rep["mutations_observed"] = decisions.mutations

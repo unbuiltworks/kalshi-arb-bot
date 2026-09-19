@@ -82,14 +82,40 @@ LIVE submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
 > `CONTINUOUS_SYSTEM_V1.md` for the lifecycle, the eight failure states and
 > the run-level risk budget. No C9 is prepared and none should be.
 >
+> **AWAITING AUTHORIZATION — nothing continuous is live.** The smallest
+> bounded continuous-live envelope is proposed in
+> `CONTINUOUS_LIVE_ENVELOPE_PROPOSAL.md`: 12 windows, `max_total_spend_usd`
+> $1.00, one market, the unchanged per-window envelope, 12 pre-created
+> chained cohorts. Its purpose is EVIDENCE — a statable per-segment fill rate
+> and a rebate credit attributable to a recorded window — explicitly not
+> profit. **The −$0.25 realized-loss stop cannot fire on this venue**, because
+> `realized_usd` moves only on venue-confirmed cash and none has ever been
+> observed; the real bound is the $1.00 spend cap. The system stays in SHADOW
+> until the owner signs the statement in §8 of that document.
+>
 > **Before C8, the binding constraint was FILL RATE, not plumbing.** C7 ran 12 clean cycles, spent all 6
 > cohort slots, had every mutation accepted, explained a real double
 > order-disappearance from authoritative terminal evidence on the first read,
 > and terminated with ZERO orders live (the first window to do so). It filled
-> nothing. Across four windows that produced decisions, the two entering
-> before ~200s TTE filled once each and the two entering after did not fill
-> at all (n=4, correlation only). Entry TTE is currently not chosen — it
-> falls out of when the workflow runs against the 5-minute grid.
+> nothing.
+>
+> **CORRECTED 2026-09-19 — the entry-TTE/fill correlation does not exist.**
+> An earlier version of this paragraph said the windows entering before ~200s
+> TTE filled and the later ones did not. The venue's own order records say
+> otherwise: C4 (~131 s) filled **twice**, C5 (275.9 s) **once**, C6 (199.7 s)
+> once, C7 (125.3 s) **none**, C8B (278.3 s) once. Five fills across five
+> windows and no monotone relationship with entry TTE. Entry TTE remains
+> experimental scheduling, not strategy knowledge. See
+> `SEGMENTED_HABITAT_1.md` §0.
+>
+> **The binding constraint is FLOW.** 145 of 165 measurable adjacent-cycle
+> pairs (87.9%) saw **zero** new public prints, and one contract went 21
+> consecutive cycles — 198.5 s — without a single print. A passive quote
+> cannot be filled by flow that does not exist. All three fills with full
+> mutation records came from a rung placed once, never repriced, resting
+> 57.8–63.7 s at the prevailing bid; all ten rungs on a repriced leg filled
+> zero times. Reported **with** its confound (the repriced leg is the moving
+> leg) and changing nothing in the controller.
 >
 > **Gemini REALIZED is $0.00 across all seven windows.** Three settlements
 > carry EXPECTED P&L — C4 −$0.0006 (matched pair), C5 −$0.0046 and C6

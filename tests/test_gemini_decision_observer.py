@@ -123,7 +123,7 @@ def _scripted_decide(d):
     return decide
 
 
-def _window(tmp_path, tag, *, observed, depth_fn=None):
+def _window(tmp_path, tag, *, observed, depth_fn=None, flow_fn=None):
     d, led = _driver(tmp_path, tag)
     d.working.add("l5cp-pre-no-aaaaaaaa", leg="NO", price="0.14", qty="0.01",
                   now=1000.0, venue_order_id=145828836246611835)
@@ -141,7 +141,8 @@ def _window(tmp_path, tag, *, observed, depth_fn=None):
                  "orderId": 145828836246611835, "resting_since": 1000.0}]}
         return {"fills": [], "open_orders": []}
 
-    obs = RC.DecisionObserver(depth_fn=depth_fn) if observed else None
+    obs = (RC.DecisionObserver(depth_fn=depth_fn, flow_fn=flow_fn)
+           if observed else None)
     fn = obs.attach(d, refresh) if observed else refresh
     rep = _run(d.run_window(session, tte_of=lambda: 150.0, refresh_fn=fn,
                             interval_s=0.0, max_cycles=1))
@@ -628,3 +629,76 @@ def test_with_no_depth_reader_the_row_says_so_rather_than_going_missing(
     _, _, _, obs = _window(tmp_path, "none", observed=True, depth_fn=None)
     dep = obs.cycles[0]["book_state"]["depth"]
     assert dep["captured"] is False and dep.get("why")
+
+
+# ===================================== THE PRINT TAPE IS NEUTRAL TOO
+
+def test_the_flow_read_changes_nothing_about_the_window(tmp_path, monkeypatch):
+    """The segmented census found the PUBLIC print tape to be the binding
+    constraint on this venue -- and found that not one live fill could be
+    segmented by it, because live windows never recorded it. Closing that gap
+    puts a THIRD network read beside every money-moving decision, so it gets
+    the same proof the depth read got: the same three durable surfaces,
+    byte-equivalent against a run with no observer at all."""
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+    calls = {"n": 0}
+
+    def flow():
+        calls["n"] += 1
+        return {"readable": True, "n_prints": 3, "volume": "6.26",
+                "buy_prints": 1, "sell_prints": 2}
+
+    plain_rep, plain_sent, plain_led, _ = _window(tmp_path, "noflow",
+                                                  observed=False)
+    obs_rep, obs_sent, obs_led, obs = _window(tmp_path, "flow", observed=True,
+                                              flow_fn=flow)
+
+    assert calls["n"] == 1, "one tape read per decision, no more"
+    assert _canon(plain_rep) == _canon(obs_rep)
+    assert _canon(plain_sent) == _canon(obs_sent)
+    assert _canon([json.loads(l) for l in plain_led.splitlines() if l]) == \
+        _canon([json.loads(l) for l in obs_led.splitlines() if l])
+    fl = obs.cycles[0]["book_state"]["flow"]
+    assert fl["readable"] is True and fl["n_prints"] == 3
+
+
+def test_a_flow_reader_that_RAISES_still_changes_nothing(tmp_path,
+                                                         monkeypatch):
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+
+    def boom():
+        raise RuntimeError("trade tape down")
+
+    plain_rep, plain_sent, plain_led, _ = _window(tmp_path, "fok",
+                                                  observed=False)
+    obs_rep, obs_sent, obs_led, obs = _window(tmp_path, "fboom",
+                                              observed=True, flow_fn=boom)
+
+    assert _canon(plain_rep) == _canon(obs_rep)
+    assert _canon(plain_sent) == _canon(obs_sent)
+    assert _canon([json.loads(l) for l in plain_led.splitlines() if l]) == \
+        _canon([json.loads(l) for l in obs_led.splitlines() if l])
+    fl = obs.cycles[0]["book_state"]["flow"]
+    assert fl["readable"] is False and fl["captured"] is True
+    assert any("trade tape down" in e for e in obs.errors)
+
+
+def test_with_no_flow_reader_the_row_says_so_rather_than_going_missing(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(WC, "require_authorization", lambda *a, **k: None)
+    _, _, _, obs = _window(tmp_path, "fnone", observed=True, flow_fn=None)
+    fl = obs.cycles[0]["book_state"]["flow"]
+    assert fl["captured"] is False and fl.get("why")
+
+
+def test_the_tape_read_is_PUBLIC_and_carries_no_credential():
+    """It is an unauthenticated GET. If this ever needed a key it would be a
+    different kind of read taken next to a live decision."""
+    import inspect
+
+    from src.gemini_execution import habitat as HB
+    src = inspect.getsource(HB.public_flow)
+    assert "PUBLIC" in src
+    for bad in ("private_rest_request", "api_key", "Authorization",
+                "signature", "X-GEMINI"):
+        assert bad not in src, bad
