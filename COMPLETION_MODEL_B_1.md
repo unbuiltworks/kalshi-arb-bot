@@ -167,33 +167,32 @@ and nothing in the feature medians should be read as a signal.
 
 ## 6. Large-flow burst precursors
 
-9 bursts of ≥100 contracts against **136 matched controls** drawn from the same
-tapes, each control at least 180s clear of any burst.
+**Updated at 11 bursts / 154 controls (2026-09-19 14:2xZ).** The first pass ran
+at 9 bursts and two of its "separated" features did not survive two more.
 
-| feature | burst median | control median | coverage |
-|---|---|---|---|
-| **TTE (s)** | **90.7** | **250.4** | 9/9 |
-| **depth depletion share (120s)** | **0.655** | **0.000** | 8/9 |
-| contracts in prior 120s | 20 | 3.70 | 9/9 |
-| max print in prior 60s | 263 | 9 | 6/9 |
-| price range 60s | 0.31 | 0.06 | **2/9** |
-| spread | 0.31 | 0.30 | 8/9 |
-| aggressor imbalance 60s | 1.000 | 1.000 | 6/9 |
-| touch depth | 189.0 | 220.0 | 8/9 |
+| feature | burst median | control median | coverage | separates at n=11 |
+|---|---|---|---|---|
+| **TTE (s)** | **90.7** | **267.0** | **11/11** | **yes** |
+| contracts in prior 120s | 20 | 4 | 11/11 | yes |
+| book imbalance (top/total) | 0.919 | 0.946 | 10/11 | yes |
+| **depth depletion (120s)** | 0.341 | 0.000 | 10/11 | **no — was yes at n=9** |
+| **max print in prior 60s** | 263 | 10 | 7/11 | **no — was yes at n=9** |
+| levels disappeared | 3 | 2 | 10/11 | no |
+| spread | 0.31 | 0.30 | 10/11 | no |
+| touch depth | 227.0 | 234.0 | 10/11 | no |
 
-**Two features separate with full-ish coverage: bursts land late (TTE ~91 vs
-~250) and are preceded by the ladder being eaten** (65.5% depletion vs none).
-Spread, aggressor imbalance, touch depth and level disappearance do not
-separate at all. The price-range and velocity rows have 2-of-9 coverage and
-should be ignored.
+**Depth depletion was the second-strongest precursor at 9 bursts (0.655 vs
+0.000) and stopped separating at 11.** So did the max-print features. That is
+the instability the n=9 verdict warned about, arriving on schedule — and it is
+the reason the verdict refused to call anything predictable.
 
-> **Verdict: not predictable enough to rest liquidity in front of.** With 9
-> bursts, no feature establishes predictability at any useful confidence
-> whatever the medians do. A separated median is a reason to collect more
-> windows, never a reason to rest size in front of a burst.
+**Only TTE survives**, and it survives cleanly: bursts land at a median TTE of
+**90.7s** against **267.0s** for matched controls, at full coverage.
 
-The TTE finding does converge with §8 from an independent direction: the
-action on this venue is late.
+> **Verdict unchanged: not predictable enough to rest liquidity in front of.**
+> Eleven bursts cannot establish predictability, and two of the four apparent
+> precursors have already evaporated. The TTE finding converges with §8 from an
+> independent direction: the action on this venue is late.
 
 ## 7. Cross-venue — what L5 does that we do not
 

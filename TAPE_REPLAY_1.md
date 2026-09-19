@@ -88,24 +88,28 @@ alone, neither policy forms an acceptable pair in 29 windows.
 
 ## 4. The COMPLETE price frontier — the decisive result
 
-105 missed complement episodes. For each, the minimum improvement over Model
-A's own desired COMPLETE that would have taken an external fill, with the queue
-re-measured at every candidate price:
+**123 missed complement episodes at 31 windows** (105 at 29 — the 18 added
+episodes produced *no* new reachable ones). For each, the minimum improvement
+over Model A's own desired COMPLETE that would have taken an external fill,
+with the queue re-measured at every candidate price:
 
 | minimum improvement needed | n | share |
 |---|---|---|
-| 0 ticks (Model A's own price) | 1 | 1.0% |
-| 1 tick | 1 | 1.0% |
+| 0 ticks (Model A's own price) | 1 | 0.8% |
+| 1 tick | 1 | 0.8% |
 | 2 ticks | 0 | 0.0% |
 | 3–5 ticks | 0 | 0.0% |
-| >5 ticks | 4 | 3.8% |
-| **crossing required** | **85** | **81.0%** |
-| **unreachable at any maker price** | **14** | **13.3%** |
+| >5 ticks | 4 | 3.3% |
+| **crossing required** | **101** | **82.1%** |
+| **unreachable at any maker price** | **16** | **13.0%** |
 
-> **81% of missed complements could not have been taken at ANY maker price.**
+> **82% of missed complements could not have been taken at ANY maker price**,
+> and the reachable count has stayed at **6** while the episode count grew from
+> 105 to 123.
 > The improvement needed reaches the ask, which is a cross, and crossing is not
 > authorized. A further 13.3% were not reached by anything within 40 ticks.
-> **Only 6 of 105 — 5.7% — were reachable by improving the maker price at all.**
+> **Only 6 of 123 — 4.9% — were reachable by improving the maker price at
+> all**, down from 5.7% as the sample grew.
 
 **Price is not the lever.** This closes the question the 4×5 matrix could only
 gesture at: the complement does not fail because we quote a tick too low. It

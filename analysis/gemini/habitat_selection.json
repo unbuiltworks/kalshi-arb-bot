@@ -1,7 +1,7 @@
 {
   "FULL_TAPE": {
     "label": "GEMINI_PRE_ENTRY_HABITAT_V1",
-    "utc": "2026-09-19T14:03:25.980748+00:00",
+    "utc": "2026-09-19T14:12:09.429602+00:00",
     "excluded_bursts": false,
     "independent_windows": 31,
     "windows_skipped": 6,
@@ -2023,7 +2023,7 @@
   },
   "NO_BURSTS": {
     "label": "GEMINI_PRE_ENTRY_HABITAT_V1",
-    "utc": "2026-09-19T14:04:18.215804+00:00",
+    "utc": "2026-09-19T14:12:51.760481+00:00",
     "excluded_bursts": true,
     "independent_windows": 31,
     "windows_skipped": 6,
