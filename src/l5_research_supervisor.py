@@ -190,6 +190,12 @@ def _last_row_time(path: str) -> Optional[float]:
     return None
 
 
+#: how often the retention sweep runs. Compression is cheap and the sweep
+#: skips anything already archived, so this is about noticing growth early
+#: rather than about doing work.
+RETENTION_S = 900.0
+
+
 class Supervisor:
     def __init__(self, state_root: str, *, hours: float = 0.0) -> None:
         self.root = state_root
@@ -216,6 +222,49 @@ class Supervisor:
             pass                      # a marker we cannot write is still logged
         print("L5_SUPERVISOR " + json.dumps(rec, default=str), flush=True)
         return rec
+
+    # ------------------------------------------------------------ the volume
+
+    def report_disk(self) -> Dict[str, Any]:
+        """Say how full the volume is on every heartbeat.
+
+        THE FAILURE THIS ANSWERS. On 2026-09-19 this volume reached 100% and
+        the supervisor died with errno 28. Nothing before that moment said
+        the disk was filling: the recorders were healthy, the streams were
+        fresh, and the first symptom was every write failing at once. A
+        number on every heartbeat, with a level at 70/85/95, turns that into
+        something anyone reading the log can see coming.
+        """
+        from src import l5_state_retention as RT
+        u = RT.usage(self.root)
+        if u.get("readable") and u.get("level") != "OK":
+            print("L5_DISK_%s %s" % (u["level"], json.dumps(u)), flush=True)
+        return u
+
+    def sweep_retention(self) -> Dict[str, Any]:
+        """Compress closed segments. Never deletes evidence.
+
+        gzip on this JSONL is lossless and an archive is verified against its
+        source before the source is unlinked, so this frees space without
+        costing a byte of the record. Deletion is not enabled and pressure
+        does not enable it -- `delete_after_days` is left None deliberately.
+        """
+        from src import l5_state_retention as RT
+        try:
+            rep = RT.sweep(self.root, delete_after_days=None)
+        except Exception as exc:                                 # noqa: BLE001
+            rep = {"ok": False, "err": "%s: %s" % (type(exc).__name__, exc)}
+            print("L5_RETENTION " + json.dumps(rep, default=str), flush=True)
+            return rep
+        if rep["compressed"] or rep["failed"]:
+            print("L5_RETENTION " + json.dumps(
+                {k: rep[k] for k in ("candidates", "compressed", "failed",
+                                     "gb_freed", "deletion_enabled")},
+                default=str), flush=True)
+            self.mark("retention", **{k: rep[k] for k in
+                                      ("candidates", "compressed", "failed",
+                                       "bytes_freed", "deletion_enabled")})
+        return rep
 
     def last_heartbeat(self) -> Optional[float]:
         """When this supervisor was last demonstrably alive.
@@ -811,6 +860,12 @@ class Supervisor:
         return rep
 
     def run(self) -> int:
+        # BEFORE ANYTHING ELSE. If the volume is full, every stream this
+        # supervisor starts dies on its first write, which is exactly how the
+        # 2026-09-19 outage looked. Freeing space first is what makes the
+        # boot below meaningful.
+        self.report_disk()
+        self.sweep_retention()
         self.boot()
         # once, with the per-parent detail: the tapes cannot be read from
         # outside this container, so this is the only way the evidence travels
@@ -819,6 +874,7 @@ class Supervisor:
         signal.signal(signal.SIGINT, self.stop)
         last_hb = 0.0
         last_gate = 0.0
+        last_sweep = time.time()
         while self.deadline is None or time.time() < self.deadline:
             for name in STREAMS:
                 if name not in self.procs:
@@ -833,7 +889,11 @@ class Supervisor:
                           running=sorted(self.procs),
                           not_running=sorted(set(STREAMS) - set(self.procs)),
                           failures=dict(self.fails),
-                          recorder_health=self.recorder_health())
+                          recorder_health=self.recorder_health(),
+                          disk=self.report_disk())
+            if now - last_sweep >= RETENTION_S:
+                last_sweep = now
+                self.sweep_retention()
             if now - last_gate >= GATE_S:
                 last_gate = now
                 self.report_gate()
