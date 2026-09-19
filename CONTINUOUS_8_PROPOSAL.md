@@ -109,9 +109,9 @@ Job **30**, armed step **18**, and a test now pins
 |---|---|---|
 | 1 | full suite | **6,423 pass**, 27 skipped, 1 xfailed |
 | 2 | exact hashes | above; envelope unmoved, 8/8 |
-| 3 | fresh C8 cohort chained to C7 | `COHORT-2026-09-18-C8`, budget **6**, predecessor C7 `3e8399a3…` at 6/6, `intact: true` |
+| 3 | fresh cohort chained to C7 | `COHORT-2026-09-18-C8B`, budget **12**, predecessor C7 `3e8399a3…` at 6/6, `intact: true`. C8 (6 slots) is **abandoned at 0/6**, byte-for-byte empty, pinned by test. |
 | 4 | C5/C6/C7 ledgers preserved | C5 `b2404035…` 6 rows (3/6, UNKNOWN intact) · C6 `3996eb94…` 12 rows · C7 `3e8399a3…` 12 rows · historical `89cf9de6…` 12/12. Last commit touching any of them is C7's own evidence commit. |
-| 5 | production-shaped UNARMED verification | run 35409875494: `READY_TO_MUTATE_BUT_UNAUTHORIZED`, latch **not** consumed, preflight `agrees: true`, recovery true, coherence readers both true, authorization the sole blocker (three reasons) |
+| 5 | production-shaped UNARMED verification | run 35410681217, **at the armed window's own 240:280 band**: waited 126.4s over 12 polls, entered at **TTE 271.3s**, then `READY_TO_MUTATE_BUT_UNAUTHORIZED` — latch **not** consumed, **0 orders, 0 wire frames**, preflight `agrees: true`, recovery true, coherence readers both true, authorization the sole blocker (three reasons) |
 | 6 | book capture present | live read-only proof below, plus the real-`_build` integration test |
 | 7 | entry-TTE scheduling proven, no order | live read-only proof below, plus 20 unit tests |
 | 8 | stop at the boundary | **stopped here** |
@@ -193,26 +193,40 @@ early-entry window is roughly 4× longer than that.
 The fixed costs alone are 4 of the 6: two opening places, two end-of-window
 cancels. That leaves **two slots** for ~210s of re-pricing.
 
-### The separate proposal, not implemented
+### Authorized and created: C8B at 12 slots
 
-**Raise the C8 cohort budget from 6 to 12.** Kept deliberately apart from the
-observability and scheduling changes above, and **not done**:
+**`COHORT-2026-09-18-C8B`, budget 12.** C8 at 6 slots is abandoned before it
+ever ran, kept byte-for-byte at 0/6, and never to be used.
 
-* 12 is `CP.MAX_ACTIONS` — **the frozen envelope's own ceiling**. `cohort.create`
-  refuses anything above it. So this moves **no bound and no `envelope_sha`**;
-  it stops tightening a window that now runs twice as long.
-* It covers C7's projected 8.9 with margin; it does **not** cover C6's 19.4, so
-  a C6-rate window would still stop on budget. That is the correct failure
+* 12 is `CP.MAX_ACTIONS` — **the frozen envelope's own ceiling**.
+  `cohort.create` refuses anything above it, so this moves **no bound and no
+  `envelope_sha`**. It is lifecycle capacity for a window that runs roughly
+  twice as long, not financial risk.
+* It covers C7's projected 8.9 with margin and does **not** cover C6's 19.4,
+  so a C6-rate window still stops on budget. That is the correct failure
   direction.
-* Every other bound is untouched: $0.15 spend, 0.04 residual, 0.04 imbalance,
-  0.10 per leg, 0.01 size, MOC maker-only.
+* Every absolute bound is untouched: $0.15 spend, 0.04 residual, 0.04
+  imbalance, 0.10 per leg, 0.01 size, MOC maker-only, no pair-cost ceiling.
 
-**A cohort's budget is fixed at creation** — `create` refuses a second call for
-the same id, deliberately. So if you approve this, C8 needs a **distinct
-cohort id** (`COHORT-2026-09-18-C8B`, chained to C7 exactly as C8 is). I have
-not created one. If you leave the budget at 6, C8 runs as staged and will
-probably stop on budget mid-window — which is still a real result, just a
-shorter one.
+**The lineage, and why it is not the immediate predecessor.** C8B chains to
+**C7's** ledger, not to C8's.
+
+`verify_predecessor` is **single-hop** — it checks only the ledger a cohort
+names, and does not walk back through that ledger's own predecessor. So
+whichever file C8B names is the *only* one the live path enforces before the
+latch. C8's ledger is **empty**: it carries no mutation history to protect,
+and chaining to it would have traded C7's six spent slots for a file whose
+hash is `e3b0c442…`, the sha256 of nothing.
+
+C5, C6 and C7 each chained to the last cohort that had actually consumed
+slots. Until C8 that always coincided with the immediate predecessor; C8 is
+the first cohort that is created and never used, so the two notions diverge
+for the first time. The canonical reading of the chain — *the mutation
+history that must not be rewritten* — selects C7.
+
+C8 is therefore pinned by **test** rather than by the chain: its ledger must
+stay byte-for-byte empty, and no workflow step may name it. The manifest
+records all of this in full.
 
 ## If you authorize
 
@@ -221,7 +235,7 @@ Authorization ID  OWNER-2026-09-19-GEMINI-CONTINUOUS-8
 executable SHA    e32e31f2711c10d99a499717d654bee76468d55171b3f5f13d5bff8439cd369f
 envelope SHA      b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17
 bundle SHA        bfc4ec1e3a7efcff19778ae0f9f3c0f8dc7752c949d256c59eb7f5d0fb2d9fe6
-cohort            COHORT-2026-09-18-C8   (budget 6, or C8B if you raise it)
+cohort            COHORT-2026-09-18-C8B   (budget 12)
 entry band        240:280
 ```
 
