@@ -254,6 +254,76 @@ def effective_rate(credits: Mapping[str, Any], volume: Mapping[str, Any],
     return out
 
 
+def _coverage(payload: Any) -> Dict[str, Any]:
+    """What instruments and dates a volume payload actually covers."""
+    if payload is None:
+        return {"readable": False, "why": "unreadable"}
+    rows: List[Mapping[str, Any]] = []
+
+    def walk(o: Any) -> None:
+        if isinstance(o, Mapping):
+            rows.append(o)
+        elif isinstance(o, list):
+            for x in o:
+                walk(x)
+    walk(payload)
+    syms = sorted({str(r.get("symbol")) for r in rows if r.get("symbol")})
+    days = sorted({str(r.get("data_date")) for r in rows if r.get("data_date")})
+    pred = [s for s in syms if s.startswith(PREDICTION_PREFIX)]
+    return {
+        "readable": True, "n_rows": len(rows),
+        "distinct_symbols": len(syms), "symbols_sample": syms[:12],
+        "prediction_symbols": pred,
+        "date_range": [days[0], days[-1]] if days else None,
+        "verdict": ("COVERS_PREDICTION_INSTRUMENTS" if pred else
+                    "NO_PREDICTION_INSTRUMENTS_ON_THIS_SURFACE"),
+        "why": (None if pred else
+                "this endpoint returned %d row(s) across %d symbol(s) and "
+                "NONE of them is a prediction instrument, so it is the "
+                "spot/derivatives volume surface and cannot supply a "
+                "prediction maker denominator" % (len(rows), len(syms))),
+    }
+
+
+def _mytrades_denominator(payload: Any) -> Dict[str, Any]:
+    """Maker notional summed from OUR OWN execution record, if it answers.
+
+    Weaker than a venue-reported figure -- it is our fills, not the venue's
+    rebate book -- so it is reported as a SEPARATE candidate with that said,
+    never silently substituted.
+    """
+    if payload is None:
+        return {"readable": False,
+                "why": "/v1/mytrades did not answer unscoped"}
+    if not isinstance(payload, list):
+        return {"readable": False, "why": "unexpected shape"}
+    maker = D("0")
+    n = 0
+    days: Dict[str, D] = {}
+    for t in payload:
+        if not isinstance(t, Mapping):
+            continue
+        if t.get("aggressor") is not False:          # maker only
+            continue
+        px, qty = _dec(t.get("price")), _dec(t.get("amount"))
+        if px is None or qty is None:
+            continue
+        v = px * qty
+        maker += v
+        n += 1
+        day = (_utc(t.get("timestampms")) or "")[:10]
+        days[day] = days.get(day, D("0")) + v
+    return {"readable": True, "n_maker_trades": n,
+            "maker_notional": str(maker),
+            "by_day": {k: str(v) for k, v in sorted(days.items())},
+            "rows_returned": len(payload),
+            "source": "POST /v1/mytrades (OUR OWN executions, unscoped)",
+            "caveat": ("this is our execution record, not the venue's rebate "
+                       "book, and it is bounded by whatever retention the "
+                       "endpoint applies. Reported as a separate candidate "
+                       "denominator, never silently substituted.")}
+
+
 # ---------------------------------------------------------------- accounting
 
 #: the seven lines, kept apart, that sum to realized net P&L
@@ -355,6 +425,21 @@ async def read_all(*, since_utc: Optional[str] = None,
 
     credits = parse_credits(transfers)
     maker = parse_maker_volume(volume)
+
+    # WHY THE DENOMINATOR IS OR IS NOT THERE, established rather than
+    # asserted. "0 matching rows" could mean the endpoint does not cover
+    # prediction instruments at all, or that it does and we traded none --
+    # very different facts, and the symbols it DOES carry settle it.
+    maker["coverage"] = _coverage(volume)
+
+    # SECOND CANDIDATE DENOMINATOR. /v1/mytrades is our own execution record
+    # and carries `aggressor`, so maker notional can be summed from it --
+    # but only for symbols we can name. Whether it answers unscoped is the
+    # question, because the Aug-Sep activity spans thousands of expired
+    # 5-minute contracts nobody holds a list of.
+    if not _dec(maker.get("maker_notional_total")):
+        mine = await _post("/v1/mytrades", {"limit_trades": 500})
+        maker["mytrades_unscoped"] = _mytrades_denominator(mine)
     rep.update({
         "readable": credits.get("readable"),
         "credits": credits,
