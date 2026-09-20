@@ -1,0 +1,117 @@
+========================================================================================================================
+HABITAT SELECTOR -- can pre-entry information identify markets whose SUBSEQUENT flow imbalance resembles L5's habitat?
+    2026-09-20   HISTORICAL FIT + FROZEN ARTEFACT + PROSPECTIVE COHORT OPENED.  No orders, no probe, no economics used.
+========================================================================================================================
+
+WHY THIS IS THE RIGHT TARGET. 81f77fea proved R/M = 2I/(1-I) EXACTLY, so the habitat
+is one number: the imbalance of flow a resting two-sided maker can actually be reached
+by. Direction is not carried by the PMUS tape, but it IS supportable against the
+prevailing book, because a resting maker is reachable from one side at a time:
+
+    print px <= bid   seller hit the bid    -> reaches a resting BUY YES
+    print px >= ask   buyer lifted the ask  -> reaches a resting BUY NO
+    bid < px < ask    UNSUPPORTED -> excluded, and its share is carried as a feature
+                      so the exclusion is never silent (measured mean 2.6%)
+
+No P&L, no settlement, none of our own fills and nothing after the decision instant
+enters any feature. Two regression tests assert exactly that.
+
+========================================================================================================================
+FINDING 1 -- THE OBSERVATION THAT MOTIVATED THIS P0 DOES NOT SURVIVE A SAMPLE-SIZE CHECK
+========================================================================================================================
+A perfectly balanced market still MEASURES a non-zero imbalance from finite flow:
+
+    n prints      10      18      30      50     100    1000   58312
+    E[I] if truly balanced   0.240   0.187   0.146   0.113   0.080   0.026   0.003
+
+Our forward window carries a MEDIAN OF 18 directionally-supported prints. L5's 0.083
+was measured across 58,312 fills, where the floor is 0.003. The two numbers were never
+comparable.
+
+  rows with I_fwd <= L5's 0.083:                                    30 of 260 (11.5%)
+  of those, rows also at or below what a PERFECTLY BALANCED market
+  would show at their own print count:                              30 of 30
+
+Every apparently L5-balanced PMUS market is a small sample that came out even. THE
+p10 ~ 0.029 IS A SAMPLING ARTEFACT, not a population of balanced markets. This does not
+kill the question; it corrects the target. The selector predicts EXCESS imbalance over
+the floor, never raw I.
+
+========================================================================================================================
+FINDING 2 -- THE HABITAT DIFFERENCE IS REAL AND SURVIVES THE CORRECTION
+========================================================================================================================
+All three as distributions at the SAME sample size (n=18, our median):
+
+                                            p10     p50     p90    mean
+  NOISE FLOOR, a truly balanced market     0.000   0.111   0.333   0.186
+  L5 maker-ladder habitat, resampled       0.000   0.111   0.444   0.188
+  PMUS markets, measured                   0.108   0.469   0.927   0.506
+
+At matched sample size L5's habitat is statistically INDISTINGUISHABLE FROM A PERFECTLY
+BALANCED MARKET -- it sits on the floor. PMUS sits far above it. So the gap that killed
+broad PMUS is not an artefact; only the "balanced PMUS markets exist" reading was.
+
+========================================================================================================================
+FINDING 3 -- PRE-ENTRY OBSERVABLES DO CARRY SIGNAL, AND IT HOLDS OUT OF SAMPLE
+========================================================================================================================
+Chronological split, and every market straddling the cut DROPPED ENTIRELY so no market
+contributes to both sides (7 of 62 dropped). TRAIN 167 rows / 43 markets.
+
+TRAIN-only rank correlation with I_excess (negative = predicts BETTER habitat):
+  mid_dist_half +0.226 | drift_abs -0.213 | imb_cnt_lb +0.207 | min_side_share -0.207
+  imb_vol_lb +0.195 | two_sided_rate -0.173 | depth_two_sided +0.130 | spread_med -0.102
+  touch_stability +0.080 | depth_ratio +0.072 | ambiguous_share +0.040
+  print_rate -0.004 | n_prints_lb -0.004
+
+THE FROZEN SELECTOR is three features and an average of ranks, chosen because their
+TRAIN sign is MECHANISTICALLY EXPLICABLE and they agree, not because they were largest:
+  mid_dist_half   a market near 0.50 has genuine two-way opinion; one at 0.90 has a
+                  crowd on one side and nothing on the other
+  imb_cnt_lb      imbalance persists -- one-sided for ten minutes tends to stay one-sided
+  min_side_share  the same from the other end: flow already arrived on BOTH sides
+drift_abs is EXCLUDED despite scoring -0.213: its sign says more price movement predicts
+BETTER balance and no mechanism explains that. Including a feature whose direction cannot
+be argued is how a selector gets fitted to noise. Reported, not used.
+Cutoff = best TRAIN tercile, preregistered before any economics were computed.
+
+                                    n    I_excess p50   I_fwd p50   two-sided fwd/min
+  TRAIN  ALL                      167        +0.330       0.516            0.20
+         SELECTED                  56        +0.170       0.365            0.20
+         REJECTED                 111        +0.419       0.607            0.17
+         Spearman(score, I_excess)          0.292     eligible 33.5%
+
+  OOS    ALL                       63        +0.189       0.331            0.53
+         SELECTED                  29        +0.092       0.227            0.63
+         REJECTED                  34        +0.284       0.450            0.45
+         Spearman(score, I_excess)          0.315     eligible 46.0%
+
+IT HOLDS. OOS Spearman 0.315 is if anything ABOVE the TRAIN 0.292, so this is not an
+overfit. Selected markets show roughly HALF the excess imbalance of rejected ones
+(+0.092 vs +0.284) and more two-sided forward flow (0.63 vs 0.45 per minute).
+
+AND THE HONEST LIMIT: selection does not reach L5. Selected OOS I_fwd 0.227 implies
+r/m 0.587 against L5's 0.182, and selected I_excess is +0.092 where L5's is ~0.000.
+The selector closes about half the excess, on 63 rows and 12 markets. That is a real
+signal on a thin sample, not a solved problem, and it is why the prospective test
+exists rather than a decision being taken here.
+
+========================================================================================================================
+PROSPECTIVE COHORT -- OPENED, PREREGISTERED, NOT YET READ
+========================================================================================================================
+  artefact        analysis/pmus/habitat_selector_frozen.json   sha256 f9dcd886549a2865
+  frozen at       2026-09-20T19:52:46Z
+  cohort starts   2026-09-20T19:52:46Z -- every observation in it is collected AFTER the
+                  selector was frozen; none of it touched TRAIN or OOS
+  first evaluable observation  2026-09-20T20:32:46Z (600s feature window + 1800s target)
+  success         SELECTED shows materially lower I_excess than REJECTED, same sign and
+                  comparable effect to the historical OOS separation of -0.192
+  not permitted   refitting, moving the cutoff, choosing a cutoff after seeing economics,
+                  or letting P&L / settlement / our own fills into any input
+  if NO           kill PMUS as an L5 deployment venue and move this exact habitat test to
+                  other executable venues and categories, WITHOUT changing the L5 strategy
+
+The frozen L5 maker-ladder engine is NOT applied to the selected cohort yet. Per the
+standing instruction that happens only AFTER the selector demonstrates prospective
+predictive power, and the economics are then reported separately, line by line.
+
+No orders. No live probe. No P&L threshold fitting. No further broad-PMUS optimisation.

@@ -73,7 +73,8 @@ def books():
         for l in fh:
             try: d = json.loads(l)
             except Exception: continue
-            if d.get("_marker") or not d.get("live"): continue
+            if d.get("_marker") or d.get("kind") or not d.get("slug"): continue
+            if not d.get("live"): continue
             if d.get("bid") is None or d.get("ask") is None: continue
             t = ts(d.get("t"))
             if t is None or d["ask"] <= d["bid"]: continue
@@ -91,7 +92,7 @@ def flow():
         for l in open(SCR + "/flow_pmus.jsonl"):
             try: d = json.loads(l)
             except Exception: continue
-            if d.get("_marker"): continue
+            if d.get("_marker") or d.get("kind") or not d.get("slug"): continue
             t = ts(d.get("t"))
             if t is not None: rows[d["slug"]].append((t, d))
     except OSError: pass
@@ -109,7 +110,7 @@ def flow():
         for l in open(SCR + "/flow_intl.jsonl"):
             try: d = json.loads(l)
             except Exception: continue
-            if d.get("_marker"): continue
+            if d.get("_marker") or d.get("kind") or not d.get("slug"): continue
             t = ts(d.get("t")) or ts(d.get("observed_t"))
             try: px = float(d["price"]); sz = float(d["size"])
             except (TypeError, ValueError, KeyError): continue

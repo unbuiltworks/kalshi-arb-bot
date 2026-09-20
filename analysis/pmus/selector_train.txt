@@ -1,0 +1,27 @@
+CHRONOLOGICAL SPLIT. Markets straddling the cut are DROPPED ENTIRELY so no market
+contributes to both sides: 7 of 62 markets dropped.
+   TRAIN 167 rows / 43 markets      OOS 63 rows / 12 markets
+   TARGET = I_excess = realized forward imbalance MINUS the imbalance a perfectly
+            balanced market would show at that row's own print count. Lower is better habitat.
+
+TRAIN-ONLY RANK CORRELATION WITH THE TARGET (Spearman; negative = predicts BETTER habitat)
+   mid_dist_half      +0.226
+   drift_abs          -0.213
+   imb_cnt_lb         +0.207
+   min_side_share     -0.207
+   imb_vol_lb         +0.195
+   two_sided_rate     -0.173
+   depth_two_sided    +0.130
+   spread_med         -0.102
+   touch_stability    +0.080
+   depth_ratio        +0.072
+   ambiguous_share    +0.040
+   print_rate         -0.004
+   n_prints_lb        -0.004
+
+CATEGORY, TRAIN ONLY (median I_excess)
+   soccer_team_full_game_total        n= 14  median I_excess +0.253
+   tennis_match_winner                n= 44  median I_excess +0.280
+   soccer_team_full_time_winner       n= 72  median I_excess +0.308
+   soccer_team_full_game_spread       n= 11  median I_excess +0.471
+   esports_match_winner               n= 24  median I_excess +0.479

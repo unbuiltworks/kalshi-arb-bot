@@ -1,0 +1,17 @@
+FROZEN SELECTOR, fitted on TRAIN only.  cutoff score = 0.3772 (TRAIN tercile)
+
+TRAIN (in-sample, expected to work)
+   ALL markets                        n=167  I_excess p50 +0.330 mean +0.343 | I_fwd p50 0.516 | two-sided fwd/min p50 0.20
+   SELECTED by frozen selector        n= 56  I_excess p50 +0.170 mean +0.226 | I_fwd p50 0.365 | two-sided fwd/min p50 0.20
+   REJECTED                           n=111  I_excess p50 +0.419 mean +0.403 | I_fwd p50 0.607 | two-sided fwd/min p50 0.17
+   SELECTED minus REJECTED, median    -0.249  (negative = selector works)
+   Spearman(score, I_excess)          0.292
+   eligible rate                      33.5% of rows
+
+OOS  (the actual test)
+   ALL markets                        n= 63  I_excess p50 +0.189 mean +0.206 | I_fwd p50 0.331 | two-sided fwd/min p50 0.53
+   SELECTED by frozen selector        n= 29  I_excess p50 +0.092 mean +0.128 | I_fwd p50 0.227 | two-sided fwd/min p50 0.63
+   REJECTED                           n= 34  I_excess p50 +0.284 mean +0.272 | I_fwd p50 0.450 | two-sided fwd/min p50 0.45
+   SELECTED minus REJECTED, median    -0.192  (negative = selector works)
+   Spearman(score, I_excess)          0.315
+   eligible rate                      46.0% of rows
