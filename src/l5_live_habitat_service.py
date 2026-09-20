@@ -63,6 +63,35 @@ _CTX = (ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")
 _LOCK = threading.Lock()
 _FILES: dict = {}
 _COUNTS: dict = collections.defaultdict(int)
+_NFL_PRE_BASELINE_SLUGS: set[str] = set()
+
+
+def load_nfl_pre_baseline() -> set[str]:
+    """Recover previously observed NFL PRE control slugs from durable storage.
+
+    This guarantees same-market PRE->LIVE continuity even across a process
+    restart: once a slug has been observed in nfl_pre_control, the LIVE
+    discovery path keeps that exact slug if the venue still serves a two-sided
+    book for it.
+    """
+    p = os.path.join(ROOT, "pmus_books.jsonl")
+    out: set[str] = set()
+    if not os.path.exists(p):
+        return out
+    try:
+        with open(p, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if '"nfl_pre_control"' not in line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get("stratum") == "nfl_pre_control" and row.get("slug"):
+                    out.add(str(row["slug"]))
+    except OSError:
+        return out
+    return out
 
 
 def log(kind: str, **kw) -> None:
@@ -156,7 +185,7 @@ def pmus_discover() -> list:
         leagues = [l["slug"] for l in get(GATEWAY + "/v2/leagues")["leagues"]]
     except Exception:
         return []
-    live, nfl_pre, pre, diag = [], [], [], []
+    live, nfl_live_control, nfl_pre, pre, diag = [], [], [], [], []
     for lg in leagues:
         try:
             ev = get(GATEWAY + "/v2/leagues/%s/events?limit=500" % lg)
@@ -179,6 +208,9 @@ def pmus_discover() -> list:
                        "line": m.get("line"),
                        "kickoff_utc": e.get("startTime") or e.get("startDate"),
                        "mid": mid}
+                if is_live and row["slug"] in _NFL_PRE_BASELINE_SLUGS:
+                    nfl_live_control.append(
+                        {**row, "stratum": "nfl_pre_live_control"})
                 if is_live and DIAG_LO <= mid <= DIAG_HI:
                     diag.append({**row, "stratum": "p10_25_diagnostic"})
                 fam[m.get("sportsMarketType") or m.get("marketType")].append(
@@ -202,13 +234,17 @@ def pmus_discover() -> list:
     seen, out = set(), []
     # NFL PRE must be ahead of generic PRE so today's same-market control
     # cannot be crowded out by other leagues under TOTAL_CAP.
-    for r in live + diag + nfl_pre + pre:
+    # Exact NFL PRE slugs go first once their event is LIVE, guaranteeing
+    # same-market continuity instead of allowing a moving line/priority choice
+    # to silently swap the market under test at kickoff.
+    for r in nfl_live_control + live + diag + nfl_pre + pre:
         if r["slug"] in seen:
             continue
         seen.add(r["slug"])
         out.append(r)
         if len(out) >= max(
-                TOTAL_CAP, len(live) + len(diag) + len(nfl_pre)):
+                TOTAL_CAP,
+                len(nfl_live_control) + len(live) + len(diag) + len(nfl_pre)):
             break
     return out
 
@@ -552,10 +588,13 @@ def heartbeat_loop(state: dict, t_start: float) -> None:
 
 def main() -> int:
     os.makedirs(ROOT, exist_ok=True)
+    global _NFL_PRE_BASELINE_SLUGS
+    _NFL_PRE_BASELINE_SLUGS = load_nfl_pre_baseline()
     t_start = time.time()
     for n in ("pmus_books", "pmus_flow", "intl_books", "intl_flow"):
         gap(n, "service start / restart", pid=os.getpid())
     log("start", root=ROOT, pid=os.getpid(),
+        nfl_pre_baseline_slugs=len(_NFL_PRE_BASELINE_SLUGS),
         note="durable replacement for the recycling research container")
     state: dict = {"pmus": [], "pmus_live": {}, "intl": [], "intl_cond": {}}
     try:
