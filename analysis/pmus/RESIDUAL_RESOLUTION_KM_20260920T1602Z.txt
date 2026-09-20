@@ -1,0 +1,37 @@
+========================================================================================================================
+RESIDUAL RESOLUTION -- Kaplan-Meier, event = inventory returns to FLAT
+Residual QUANTITY is bounded at 3 by the frozen MAX_RESIDUAL_UNITS cap and is not at issue.
+The open question is DURATION, and 'unresolved at window end' is CENSORED, not a failure.
+========================================================================================================================
+
+QUEUE_AWARE FULL RESEARCH          n=56  resolved=5  censored=51
+   horizon            30s         60s        120s        300s        600s        900s       1200s       1800s
+   cum P(flat)        1.9%        1.9%        1.9%        4.2%        9.2%       15.6%       15.6%       15.6%
+   at risk             52          52          48          40          27          13          10           2
+   median time to flat: None   (KM, None = not reached)
+   censoring times: p50=601s p90=1532s max=1811s
+
+QUEUE_AWARE DEPLOYABLE no-cricket  n=53  resolved=4  censored=49
+   horizon            30s         60s        120s        300s        600s        900s       1200s       1800s
+   cum P(flat)        2.0%        2.0%        2.0%        4.4%        6.9%       14.1%       14.1%       14.1%
+   at risk             49          49          45          38          26          12           9           2
+   median time to flat: None   (KM, None = not reached)
+   censoring times: p50=601s p90=1588s max=1811s
+
+OPTIMISTIC FULL RESEARCH           n=73  resolved=7  censored=66
+   horizon            30s         60s        120s        300s        600s        900s       1200s       1800s
+   cum P(flat)        1.4%        2.8%        7.1%        7.1%        8.7%       11.6%       11.6%       11.6%
+   at risk             70          69          63          59          47          30          20           4
+   median time to flat: None   (KM, None = not reached)
+   censoring times: p50=813s p90=1699s max=1819s
+
+OPTIMISTIC DEPLOYABLE no-cricket   n=70  resolved=6  censored=64
+   horizon            30s         60s        120s        300s        600s        900s       1200s       1800s
+   cum P(flat)        1.4%        2.9%        7.4%        7.4%        7.4%       10.5%       10.5%       10.5%
+   at risk             67          66          60          56          46          29          19           4
+   median time to flat: None   (KM, None = not reached)
+   censoring times: p50=813s p90=1699s max=1819s
+
+
+RESIDUAL QUANTITY AT WINDOW END (deployable, queue-aware):
+    {1: 19, 2: 5, 3: 25}   cap=3 by construction
