@@ -1,0 +1,79 @@
+{
+ "title": "PREREGISTRATION: compatible opposing flow as a prospective habitat hypothesis",
+ "stamped_utc": "2026-09-20T13:26:52.869256+00:00",
+ "stamped_epoch": 1789910812.8692563,
+ "status": "STAMPED BEFORE ANY OUTCOME IN THE PROSPECTIVE COHORT IS KNOWN",
+ "COHORT_RULE": "A chain is PROSPECTIVE if its COMPLEMENT QUOTE timestamp is strictly greater than stamped_epoch. Every chain quoted at or before that instant is EXPLORATORY and is never pooled with the prospective cohort. The split is on the quote clock, not on analysis time, so it cannot be moved after the fact.",
+ "HYPOTHESIS": "Higher compatible opposing flow prospectively predicts faster and more frequent L5-style recycling on PMUS.",
+ "WHY_ONLY_A_HYPOTHESIS": "It is the surviving candidate after three others failed: book reach was insufficient, the residual cap was falsified, and the thin-depth signal was confounded by the queue-aware fill rule. It has NOT been tested out of sample and is not a gate, a filter or a selection rule. Nothing in the shipped path consults it.",
+ "PRIMARY_VARIABLE": {
+  "name": "compatible_flow_per_min",
+  "definition": "prints compatible with a maker order resting at the touch (at or below the best bid for a YES rest; at or above (1-px) for a NO rest), per observed minute, over the intersection of book and flow coverage for that market",
+  "treatment": "recorded CONTINUOUS. The bins below are DESCRIPTIVE reporting strata fixed now, not a fitted threshold and not a decision boundary."
+ },
+ "FIXED_BINS_CHOSEN_NOW": [
+  {
+   "bin": "flow<0.10",
+   "lo": 0.0,
+   "hi": 0.1
+  },
+  {
+   "bin": "0.10-0.25",
+   "lo": 0.1,
+   "hi": 0.25
+  },
+  {
+   "bin": "0.25-0.50",
+   "lo": 0.25,
+   "hi": 0.5
+  },
+  {
+   "bin": "0.50-1.00",
+   "lo": 0.5,
+   "hi": 1.0
+  },
+  {
+   "bin": "flow>=1.00",
+   "lo": 1.0,
+   "hi": null
+  }
+ ],
+ "BIN_JUSTIFICATION": "round decimal boundaries chosen for legibility. They were NOT derived from the exploratory matched set: the exploratory PMUS matched chains span 0.147 to 1.386 flow/min and cross four of these five bins, so no boundary isolates them.",
+ "OUTCOME_CHAIN_TO_REPORT_PER_BIN": [
+  "compatible flow/min (continuous, reported as median per bin)",
+  "P(compatible flow by 60/120/300/600s | COMPLETE-eligible), Kaplan-Meier",
+  "P(queue-aware opposite fill by the same horizons), Kaplan-Meier",
+  "P(queue-aware matched by the same horizons), Kaplan-Meier",
+  "modeled pair basis, median and % below $1, MODELED never realized"
+ ],
+ "COVARIATES_RETAINED": [
+  "touch_depth",
+  "spread",
+  "movement_per_min",
+  "sport",
+  "market_type",
+  "TTE",
+  "venue",
+  "stratum"
+ ],
+ "CHECKPOINT": "The first conservative conditional PMUS conclusion waits for >=25 QUEUE-AWARE COMPLETE-eligible chains. 25 is a checkpoint, not a stopping rule; collection continues past it.",
+ "FROZEN": [
+  "Model A unchanged",
+  "cap-3 SAFE_TRANSFER_CONTROL unchanged",
+  "no new completion rule",
+  "no depth gate",
+  "Gemini A+B unchanged",
+  "International reference-only",
+  "no orders",
+  "no arming"
+ ],
+ "exploratory_state_at_stamp": {
+  "pmus_eligible_optimistic": 28,
+  "pmus_eligible_queue_aware": 24,
+  "pmus_matched_optimistic": 8,
+  "pmus_matched_queue_aware": 5,
+  "intl_eligible_optimistic": 65,
+  "intl_eligible_queue_aware": 32,
+  "lookahead_s": 600
+ }
+}

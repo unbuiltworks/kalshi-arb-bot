@@ -1,0 +1,605 @@
+{
+ "estimator": "Kaplan-Meier cumulative incidence, 1 - S(t), right-censored at end_t - t_quote",
+ "clock": "COMPLEMENT QUOTE",
+ "note": "MARKET_END_OBSERVED_RATE uses a different denominator and is reported separately, never appended to the cumulative table.",
+ "PMUS|OPTIMISTIC|compat flow": {
+  "by_10s": {
+   "km_cum_incidence_pct": 3.6,
+   "events_by_t": 1,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 27,
+   "n_eligible": 28
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 7.1,
+   "events_by_t": 2,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 25,
+   "n_eligible": 28
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 14.6,
+   "events_by_t": 4,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 28
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 14.6,
+   "events_by_t": 4,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 28
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 26.1,
+   "events_by_t": 7,
+   "censored_by_t": 5,
+   "n_at_risk_after_t": 16,
+   "n_eligible": 28
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 30.7,
+   "events_by_t": 8,
+   "censored_by_t": 8,
+   "n_at_risk_after_t": 12,
+   "n_eligible": 28
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 46.4,
+   "events": 13,
+   "n_eligible": 28,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "PMUS|OPTIMISTIC|qa fill": {
+  "by_10s": {
+   "km_cum_incidence_pct": 3.6,
+   "events_by_t": 1,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 27,
+   "n_eligible": 28
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 7.1,
+   "events_by_t": 2,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 25,
+   "n_eligible": 28
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 14.6,
+   "events_by_t": 4,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 28
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 14.6,
+   "events_by_t": 4,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 28
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 22.0,
+   "events_by_t": 6,
+   "censored_by_t": 5,
+   "n_at_risk_after_t": 17,
+   "n_eligible": 28
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 31.8,
+   "events_by_t": 8,
+   "censored_by_t": 8,
+   "n_at_risk_after_t": 12,
+   "n_eligible": 28
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 39.3,
+   "events": 11,
+   "n_eligible": 28,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "PMUS|OPTIMISTIC|matched": {
+  "by_10s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 28,
+   "n_eligible": 28
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 26,
+   "n_eligible": 28
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 26,
+   "n_eligible": 28
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 26,
+   "n_eligible": 28
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 12.1,
+   "events_by_t": 3,
+   "censored_by_t": 7,
+   "n_at_risk_after_t": 18,
+   "n_eligible": 28
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 17.0,
+   "events_by_t": 4,
+   "censored_by_t": 11,
+   "n_at_risk_after_t": 13,
+   "n_eligible": 28
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 28.6,
+   "events": 8,
+   "n_eligible": 28,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "INTL|OPTIMISTIC|compat flow": {
+  "by_10s": {
+   "km_cum_incidence_pct": 3.1,
+   "events_by_t": 2,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 63,
+   "n_eligible": 65
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 13.9,
+   "events_by_t": 9,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 55,
+   "n_eligible": 65
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 20.2,
+   "events_by_t": 13,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 51,
+   "n_eligible": 65
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 29.6,
+   "events_by_t": 19,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 44,
+   "n_eligible": 65
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 55.5,
+   "events_by_t": 35,
+   "censored_by_t": 5,
+   "n_at_risk_after_t": 25,
+   "n_eligible": 65
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 72.0,
+   "events_by_t": 43,
+   "censored_by_t": 9,
+   "n_at_risk_after_t": 13,
+   "n_eligible": 65
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 72.3,
+   "events": 47,
+   "n_eligible": 65,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "INTL|OPTIMISTIC|qa fill": {
+  "by_10s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 65,
+   "n_eligible": 65
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 4.6,
+   "events_by_t": 3,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 61,
+   "n_eligible": 65
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 7.8,
+   "events_by_t": 5,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 59,
+   "n_eligible": 65
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 12.5,
+   "events_by_t": 8,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 55,
+   "n_eligible": 65
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 20.6,
+   "events_by_t": 13,
+   "censored_by_t": 7,
+   "n_at_risk_after_t": 45,
+   "n_eligible": 65
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 38.2,
+   "events_by_t": 22,
+   "censored_by_t": 13,
+   "n_at_risk_after_t": 30,
+   "n_eligible": 65
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 36.9,
+   "events": 24,
+   "n_eligible": 65,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "INTL|OPTIMISTIC|matched": {
+  "by_10s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 65,
+   "n_eligible": 65
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 64,
+   "n_eligible": 65
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 63,
+   "n_eligible": 65
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 11.1,
+   "events_by_t": 7,
+   "censored_by_t": 3,
+   "n_at_risk_after_t": 55,
+   "n_eligible": 65
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 31.3,
+   "events_by_t": 19,
+   "censored_by_t": 9,
+   "n_at_risk_after_t": 37,
+   "n_eligible": 65
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 56.8,
+   "events_by_t": 31,
+   "censored_by_t": 15,
+   "n_at_risk_after_t": 19,
+   "n_eligible": 65
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 50.8,
+   "events": 33,
+   "n_eligible": 65,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "PMUS|QUEUE_AWARE|compat flow": {
+  "by_10s": {
+   "km_cum_incidence_pct": 4.2,
+   "events_by_t": 1,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 24
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 8.3,
+   "events_by_t": 2,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 21,
+   "n_eligible": 24
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 17.1,
+   "events_by_t": 4,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 19,
+   "n_eligible": 24
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 21.7,
+   "events_by_t": 5,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 17,
+   "n_eligible": 24
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 30.9,
+   "events_by_t": 7,
+   "censored_by_t": 5,
+   "n_at_risk_after_t": 12,
+   "n_eligible": 24
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 36.6,
+   "events_by_t": 8,
+   "censored_by_t": 7,
+   "n_at_risk_after_t": 9,
+   "n_eligible": 24
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 41.7,
+   "events": 10,
+   "n_eligible": 24,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "PMUS|QUEUE_AWARE|qa fill": {
+  "by_10s": {
+   "km_cum_incidence_pct": 4.2,
+   "events_by_t": 1,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 24
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 4.2,
+   "events_by_t": 1,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 22,
+   "n_eligible": 24
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 12.9,
+   "events_by_t": 3,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 20,
+   "n_eligible": 24
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 17.5,
+   "events_by_t": 4,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 18,
+   "n_eligible": 24
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 22.0,
+   "events_by_t": 5,
+   "censored_by_t": 5,
+   "n_at_risk_after_t": 14,
+   "n_eligible": 24
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 33.2,
+   "events_by_t": 7,
+   "censored_by_t": 7,
+   "n_at_risk_after_t": 10,
+   "n_eligible": 24
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 41.7,
+   "events": 10,
+   "n_eligible": 24,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "PMUS|QUEUE_AWARE|matched": {
+  "by_10s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 24,
+   "n_eligible": 24
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 24
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 24
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 22,
+   "n_eligible": 24
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 4.5,
+   "events_by_t": 1,
+   "censored_by_t": 6,
+   "n_at_risk_after_t": 17,
+   "n_eligible": 24
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 10.5,
+   "events_by_t": 2,
+   "censored_by_t": 9,
+   "n_at_risk_after_t": 13,
+   "n_eligible": 24
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 20.8,
+   "events": 5,
+   "n_eligible": 24,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "INTL|QUEUE_AWARE|compat flow": {
+  "by_10s": {
+   "km_cum_incidence_pct": 12.5,
+   "events_by_t": 4,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 28,
+   "n_eligible": 32
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 15.6,
+   "events_by_t": 5,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 26,
+   "n_eligible": 32
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 25.4,
+   "events_by_t": 8,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 23,
+   "n_eligible": 32
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 35.4,
+   "events_by_t": 11,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 19,
+   "n_eligible": 32
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 72.8,
+   "events_by_t": 22,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 8,
+   "n_eligible": 32
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 85.1,
+   "events_by_t": 25,
+   "censored_by_t": 4,
+   "n_at_risk_after_t": 3,
+   "n_eligible": 32
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 78.1,
+   "events": 25,
+   "n_eligible": 32,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "INTL|QUEUE_AWARE|qa fill": {
+  "by_10s": {
+   "km_cum_incidence_pct": 3.1,
+   "events_by_t": 1,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 31,
+   "n_eligible": 32
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 6.2,
+   "events_by_t": 2,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 29,
+   "n_eligible": 32
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 12.7,
+   "events_by_t": 4,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 27,
+   "n_eligible": 32
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 19.3,
+   "events_by_t": 6,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 24,
+   "n_eligible": 32
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 52.9,
+   "events_by_t": 16,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 14,
+   "n_eligible": 32
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 79.6,
+   "events_by_t": 23,
+   "censored_by_t": 4,
+   "n_at_risk_after_t": 5,
+   "n_eligible": 32
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 75.0,
+   "events": 24,
+   "n_eligible": 32,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ },
+ "INTL|QUEUE_AWARE|matched": {
+  "by_10s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 0,
+   "n_at_risk_after_t": 32,
+   "n_eligible": 32
+  },
+  "by_30s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 1,
+   "n_at_risk_after_t": 31,
+   "n_eligible": 32
+  },
+  "by_60s": {
+   "km_cum_incidence_pct": 0.0,
+   "events_by_t": 0,
+   "censored_by_t": 2,
+   "n_at_risk_after_t": 30,
+   "n_eligible": 32
+  },
+  "by_120s": {
+   "km_cum_incidence_pct": 6.8,
+   "events_by_t": 2,
+   "censored_by_t": 3,
+   "n_at_risk_after_t": 27,
+   "n_eligible": 32
+  },
+  "by_300s": {
+   "km_cum_incidence_pct": 17.1,
+   "events_by_t": 5,
+   "censored_by_t": 3,
+   "n_at_risk_after_t": 24,
+   "n_eligible": 32
+  },
+  "by_600s": {
+   "km_cum_incidence_pct": 28.6,
+   "events_by_t": 8,
+   "censored_by_t": 9,
+   "n_at_risk_after_t": 15,
+   "n_eligible": 32
+  },
+  "_MARKET_END_OBSERVED_RATE": {
+   "pct": 37.5,
+   "events": 12,
+   "n_eligible": 32,
+   "NOTE": "DIFFERENT DENOMINATOR from the cumulative table: every eligible chain regardless of how long it was observed. Reported separately and NOT comparable cell-by-cell with the KM row."
+  }
+ }
+}

@@ -1,0 +1,30 @@
+KAPLAN-MEIER CUMULATIVE INCIDENCE  (cum%% / events / censored / at-risk-after)
+  cohort                     event                    by10s             by30s             by60s            by120s            by300s            by600s
+  ---------------------------------------------------------------------------------------------------------------------------------------------------
+  PMUS|OPTI n=28             compat flow         3.6/1/0/27        7.1/2/1/25       14.6/4/1/23       14.6/4/1/23       26.1/7/5/16       30.7/8/8/12
+  PMUS|OPTI n=28             qa fill             3.6/1/0/27        7.1/2/1/25       14.6/4/1/23       14.6/4/1/23       22.0/6/5/17       31.8/8/8/12
+  PMUS|OPTI n=28             matched             0.0/0/0/28        0.0/0/2/26        0.0/0/2/26        0.0/0/2/26       12.1/3/7/18      17.0/4/11/13
+  PMUS|QUEU n=24             compat flow         4.2/1/0/23        8.3/2/1/21       17.1/4/1/19       21.7/5/2/17       30.9/7/5/12        36.6/8/7/9
+  PMUS|QUEU n=24             qa fill             4.2/1/0/23        4.2/1/1/22       12.9/3/1/20       17.5/4/2/18       22.0/5/5/14       33.2/7/7/10
+  PMUS|QUEU n=24             matched             0.0/0/0/24        0.0/0/1/23        0.0/0/1/23        0.0/0/2/22        4.5/1/6/17       10.5/2/9/13
+
+  INTL|OPTI n=65             compat flow         3.1/2/0/63       13.9/9/1/55      20.2/13/1/51      29.6/19/2/44      55.5/35/5/25      72.0/43/9/13
+  INTL|OPTI n=65             qa fill             0.0/0/0/65        4.6/3/1/61        7.8/5/1/59       12.5/8/2/55      20.6/13/7/45     38.2/22/13/30
+  INTL|OPTI n=65             matched             0.0/0/0/65        0.0/0/1/64        0.0/0/2/63       11.1/7/3/55      31.3/19/9/37     56.8/31/15/19
+  INTL|QUEU n=32             compat flow        12.5/4/0/28       15.6/5/1/26       25.4/8/1/23      35.4/11/2/19       72.8/22/2/8       85.1/25/4/3
+  INTL|QUEU n=32             qa fill             3.1/1/0/31        6.2/2/1/29       12.7/4/1/27       19.3/6/2/24      52.9/16/2/14       79.6/23/4/5
+  INTL|QUEU n=32             matched             0.0/0/0/32        0.0/0/1/31        0.0/0/2/30        6.8/2/3/27       17.1/5/3/24       28.6/8/9/15
+
+MARKET_END_OBSERVED_RATE  -- SEPARATE STATISTIC, DIFFERENT DENOMINATOR
+  PMUS|OPTI                  compat flow   46.4%  (13 events / 28 eligible)
+  PMUS|OPTI                  qa fill       39.3%  (11 events / 28 eligible)
+  PMUS|OPTI                  matched       28.6%  (8 events / 28 eligible)
+  PMUS|QUEU                  compat flow   41.7%  (10 events / 24 eligible)
+  PMUS|QUEU                  qa fill       41.7%  (10 events / 24 eligible)
+  PMUS|QUEU                  matched       20.8%  (5 events / 24 eligible)
+  INTL|OPTI                  compat flow   72.3%  (47 events / 65 eligible)
+  INTL|OPTI                  qa fill       36.9%  (24 events / 65 eligible)
+  INTL|OPTI                  matched       50.8%  (33 events / 65 eligible)
+  INTL|QUEU                  compat flow   78.1%  (25 events / 32 eligible)
+  INTL|QUEU                  qa fill       75.0%  (24 events / 32 eligible)
+  INTL|QUEU                  matched       37.5%  (12 events / 32 eligible)

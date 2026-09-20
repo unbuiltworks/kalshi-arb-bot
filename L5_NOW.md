@@ -3,6 +3,27 @@
 Updated 2026-09-20. Supersedes nothing in `L5_OPERATING_MODEL.md`; this file
 records what the live sports-transfer experiment currently establishes.
 
+## 0. Hypothesis hierarchy, in the order they were tested and fell
+
+1. **Book reach — INSUFFICIENT.** Individual live-sports markets do reach the
+   International BTC15m book-reach reference, but reach measures the ask
+   descending to your bid, which quote revision alone produces. A fill needs a
+   print. Reach is an upper bound on fill opportunity, not a measure of it.
+2. **Residual cap — FALSIFIED as the PMUS bottleneck.** Cohort A (cap 3) and
+   cohort B (uncapped) on identical streams matched *the same four chains*:
+   `A=4, B=4, intersection=4, A_only=0, B_only=0`, with all 32 cap hits
+   removed. The cap never stood between a PMUS chain and a match.
+3. **Thin touch depth — CONFOUNDED.** The queue-aware fill rule *is* "cumulative
+   compatible volume must exceed depth resting ahead", so thin-depth markets
+   clear it by construction. On the optimistic branch, which never references
+   depth, matched chains span depth 55 to 50,556.
+4. **Compatible opposing flow — LEADING PROSPECTIVE HYPOTHESIS, UNTESTED.**
+   It separates matched from unmatched in both branches (75–80% above median
+   vs 40–42%). It is preregistered in
+   `analysis/pmus/PREREGISTRATION_compatible_flow.json` and has NOT been tested
+   out of sample. It is not a gate, filter or selection rule, and nothing in
+   the shipped path consults it.
+
 ## 1. The PMUS zero-match is NOT a liquidity failure
 
 Across the venue-separated chain run:
