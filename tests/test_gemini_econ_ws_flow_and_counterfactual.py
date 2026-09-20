@@ -25,11 +25,11 @@ def test_an_unknown_side_is_none_and_never_defaulted():
 
 
 class _Book:
-    def __init__(self, trades=None, vouch=True):
+    def __init__(self, trades=None, vouch=True, ready_since=0.0):
         self._t = trades or []
         self._vouch = vouch
         self.ready = True
-        self.ready_since = 0.0
+        self.ready_since = ready_since
 
     def prints_since(self, t0):
         return (list(self._t) if self._vouch else None)
@@ -77,7 +77,7 @@ def test_vouched_flow_normalizes_sides_and_counts_directionals():
                {"resting_side": "ask", "size": "1", "price": "0.61", "t": 2},
                {"resting_side": "", "size": "1", "price": "0.6", "t": 3}])
     src = WF.WsFlowSource(feed=_Feed(b))
-    got = src.flow("S", window_s=120, now=10.0)
+    got = src.flow("S", window_s=120, now=200.0)
     assert got["vouched"] is True
     assert [r["side"] for r in got["prints"]] == ["sell", "buy", None]
     assert got["n_prints"] == 3 and got["n_directional"] == 2
@@ -129,11 +129,13 @@ def test_a_markout_is_never_scored_before_its_horizon_elapses():
                         book={"yes": {"bid": "0.60", "ask": "0.65"}}, t=0.0))
     c.advance(now=1.0, bid="0.70")          # too soon for any horizon
     cell = list(c.report()["cells"].values())[0]
-    assert cell["median_touch_move_ticks_by_horizon_s"] == {}
+    assert cell["signed_markout_ticks_by_horizon_s"] == {}
     c.advance(now=40.0, bid="0.64")
-    got = list(c.report()["cells"].values())[0][
-        "median_touch_move_ticks_by_horizon_s"]
-    assert got["8"] == 4.0 and got["30"] == 4.0
+    cell = list(c.report()["cells"].values())[0]
+    # the bid ROSE 4 ticks -- favourable to a maker long the YES leg
+    assert cell["signed_markout_ticks_by_horizon_s"]["8"] == 4.0
+    assert cell["abs_touch_move_ticks_by_horizon_s"]["30"] == 4.0
+    assert cell["adverse_share_by_horizon_s"]["8"] == 0.0
 
 
 def test_the_census_survives_a_restart(tmp_path):
@@ -242,3 +244,102 @@ def test_nothing_in_the_counterfactual_is_labelled_realized():
                "realized" in x for x in m["labels"])
     assert all("REALIZED" not in str(v) for v in m.values()
                if isinstance(v, str))
+
+
+# ------------------------------------------- the three layers, kept apart
+
+def _layered():
+    L = CF.CounterfactualLedger()
+    f = L.open(symbol="S", cohort="BTC5m", t=0.0, tte_s=200,
+               held_leg="YES", complement_leg="NO", held_qty="0.01",
+               held_avg_cost="0.63", complement_price="0.50", ceiling="0.35",
+               book={"yes": {"bid": "0.62", "ask": "0.66"}},
+               features={"tte_s": 200, "spread": "0.04"})
+    return L, f
+
+
+def test_layer_1_is_valued_on_the_book_that_existed_at_the_decision():
+    L, f = _layered()
+    assert f.immediate["kind"] == "IMMEDIATE_INVENTORY_VALUE"
+    assert f.immediate["mark_bid"] == "0.62"     # the fork-instant bid
+    assert f.immediate["stage"] == "shadow"
+
+
+def test_layer_2_scores_each_horizon_exactly_once():
+    L, f = _layered()
+    f.advance(book={"yes": {"bid": "0.40", "ask": "0.45"}}, t=65.0)
+    assert sorted(f.mtm) == ["30", "60"]
+    before = dict(f.mtm["30"])
+    f.advance(book={"yes": {"bid": "0.10", "ask": "0.15"}}, t=66.0)
+    assert f.mtm["30"] == before                 # not re-scored
+
+
+def test_a_bid_marked_residual_is_mtm_and_never_realized():
+    """The owner's rule, pinned: bid-marked residual is counterfactual_mtm."""
+    L, f = _layered()
+    f.advance(book={"yes": {"bid": "0.40", "ask": "0.45"}}, t=65.0)
+    row = f.mtm["60"]
+    assert row["layer"] == CF.MTM
+    assert row["kind"] == "COUNTERFACTUAL_MTM"
+    assert row["stage"] == "shadow"
+    assert "Never realized P&L" in row["note"]
+
+
+def test_layer_3_is_the_only_one_that_can_be_settled_and_even_then_not_realized():
+    L, f = _layered()
+    r = f.resolve(book={}, t=300.0, settlement="YES")
+    assert r["layer"] == CF.SETTLEMENT
+    assert r["kind"] == "SETTLEMENT_VALUE"
+    assert r["stage"] == "settled"
+    assert r["realized"] is None
+    assert "venue-confirmed cash" in r["realized_note"]
+
+
+def test_an_unsettled_resolution_stays_mtm_not_settlement():
+    L, f = _layered()
+    r = f.resolve(book={"yes": {"bid": "0.55", "ask": "0.60"}}, t=300.0)
+    assert r["layer"] == CF.MTM
+    assert r["resolution_basis"] == "MARKED_AT_BID"
+    assert r["stage"] == "shadow"
+
+
+def test_the_three_layers_travel_together_on_resolution():
+    L, f = _layered()
+    f.advance(book={"yes": {"bid": "0.40", "ask": "0.45"}}, t=65.0)
+    r = f.resolve(book={}, t=300.0, settlement="YES")
+    assert r["immediate_inventory_value"]["kind"] == "IMMEDIATE_INVENTORY_VALUE"
+    assert "60" in r["counterfactual_mtm_by_horizon_s"]
+    assert r["features_at_fork"]["spread"] == "0.04"
+
+
+def test_the_layers_can_disagree_and_that_is_the_point():
+    """Layer 1 said the overlay helped; layer 2 said it cost us. Collapsing
+    them into one number would hide exactly the question being asked."""
+    L, f = _layered()
+    f.advance(book={"yes": {"bid": "0.40", "ask": "0.45"}}, t=65.0)
+    l1 = float(f.immediate["allow_minus_veto"])
+    l2 = float(f.mtm["60"]["allow_minus_veto"])
+    assert l1 < 0 < l2
+
+
+def test_the_sign_convention_is_stated_on_every_layer():
+    L, f = _layered()
+    f.advance(book={"yes": {"bid": "0.40", "ask": "0.45"}}, t=65.0)
+    r = f.resolve(book={}, t=300.0, settlement="YES")
+    for row in (f.immediate, f.mtm["60"], r):
+        assert "risk overlay COST us" in row["sign_note"]
+
+
+def test_every_candidate_feature_is_captured_at_the_fork():
+    L, f = _layered()
+    assert set(f.features) == set(CF.FORK_FEATURES)
+    assert L.report()["features_captured"] == list(CF.FORK_FEATURES)
+
+
+def test_the_ledger_reports_allow_minus_veto_per_horizon():
+    L, f = _layered()
+    f.advance(book={"yes": {"bid": "0.40", "ask": "0.45"}}, t=130.0)
+    rep = L.report()
+    assert rep["mtm_horizons_s"] == list(CF.MTM_HORIZONS_S)
+    assert rep["allow_minus_veto_by_horizon_s"]["60"] is not None
+    assert rep["allow_minus_veto_by_horizon_s"]["300"] is None   # not yet

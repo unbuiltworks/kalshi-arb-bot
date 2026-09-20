@@ -326,11 +326,21 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         # correction and execution arms from running.
         if ECON_ARM_ENABLED and cohort is not None:
             from src.gemini_execution.econ import arm as ECON
+            from src.gemini_execution.econ import registry as REG
+            # PER-COHORT STATE FROM THE REGISTRY, not built here: the arm is
+            # rebuilt every window and its census, hazard, fork ledger, socket
+            # and pre-warmer must all outlive that. A socket dropped at window
+            # end is exactly what made every next window open blind.
+            st = REG.state_for(
+                cohort.name,
+                state_dir=os.environ.get("GEMINI_ECON_STATE_DIR"))
             arms.append(ECON.GeminiEconArm(
                 symbol=symbol,
                 cohort_prefix="GEMI-%s" % cohort.prefix,
                 policy=policy, cohort_name=cohort.name,
-                hazard_path=os.environ.get("GEMINI_ECON_HAZARD_PATH")))
+                state=st,
+                cohort_prefix_grid=cohort.prefix,
+                cohort_minutes=cohort.minutes))
     except Exception as exc:                                     # noqa: BLE001
         arms_error = "%s: %s" % (type(exc).__name__, exc)
 
@@ -945,6 +955,37 @@ def _print_econ(w) -> None:
                   sb.get("PAIRS_ABOVE_CEILING_defect_counter"),
                   sb.get("PRIMARY_net_cents_per_capital_dollar_minute"),
                   e.get("divergences")), flush=True)
+        # THE DENOMINATOR. A cycle the socket could not vouch for is NOT an
+        # entry refusal, and an admission rate over total cycles would report a
+        # coverage gap as a strategy verdict.
+        cov = e.get("coverage") or {}
+        if cov.get("total_cycles"):
+            print("ECON_COV %s %s cohort=%s | total=%s vouched=%s "
+                  "warmup_excl=%s not_quoting=%s eligible=%s | admitted=%s "
+                  "refusals=%s rate_of_eligible=%s | warmup_share=%s "
+                  "prewarmed=%s notPrewarmed=%s medTimeToVouched=%ss "
+                  "exclusive=%s" % (
+                      w.get("symbol"), lbl[:20], e.get("cohort"),
+                      cov.get("total_cycles"),
+                      cov.get("coverage_vouched_cycles"),
+                      cov.get("warmup_excluded_cycles"),
+                      cov.get("not_quoting_cycles"),
+                      cov.get("strategy_eligible_cycles"),
+                      cov.get("entries_admitted"),
+                      cov.get("strategy_refusals"),
+                      cov.get("admission_rate_of_eligible"),
+                      cov.get("warmup_share_of_total"),
+                      cov.get("warmup_prewarmed"),
+                      cov.get("warmup_not_prewarmed"),
+                      cov.get("median_time_to_vouched_s"),
+                      cov.get("buckets_are_exclusive")), flush=True)
+        pw = e.get("prewarm") or {}
+        if pw:
+            print("ECON_PREWARM %s %s watching=%s opened=%s dropped=%s "
+                  "errors=%s" % (
+                      w.get("symbol"), lbl[:20], pw.get("watching"),
+                      pw.get("opened_total"), pw.get("dropped_total"),
+                      pw.get("errors")), flush=True)
         why = sb.get("entry_refusal_example_reasons") or {}
         if why:
             print("ECON_WHY %s %s %s" % (w.get("symbol"), lbl[:20], why),
@@ -971,13 +1012,17 @@ def _print_econ(w) -> None:
         if sp.get("observations"):
             top = sorted(((k, v) for k, v in (sp.get("cells") or {}).items()),
                          key=lambda kv: -kv[1]["n"])[:3]
-            print("ECON_SPREAD %s %s obs=%s cellsOK=%s | %s" % (
-                w.get("symbol"), lbl[:20], sp.get("observations"),
-                sp.get("cells_sufficient"),
-                " ; ".join("%s n=%d med=%.3f p90=%.3f mk=%s"
-                           % (k, v["n"], v["median"], v["p90"],
-                              v.get("median_touch_move_ticks_by_horizon_s"))
-                           for k, v in top)), flush=True)
+            print("ECON_SPREAD %s %s obs=%s cellsOK=%s uniq=%s persp=%s | %s"
+                  % (w.get("symbol"), lbl[:20], sp.get("observations"),
+                     sp.get("cells_sufficient"), sp.get("keys_unique"),
+                     sp.get("markout_perspective"),
+                     " ; ".join(
+                         "%s n=%d med=%.3f p90=%.3f signed=%s abs=%s adv=%s"
+                         % (k, v["n"], v["median"], v["p90"],
+                            v.get("signed_markout_ticks_by_horizon_s"),
+                            v.get("abs_touch_move_ticks_by_horizon_s"),
+                            v.get("adverse_share_by_horizon_s"))
+                         for k, v in top)), flush=True)
 
 
 def _print_arms(w) -> None:

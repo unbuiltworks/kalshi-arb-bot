@@ -43,7 +43,7 @@ ENV PYTHONUNBUFFERED=1 \
     GEMINI_SHADOW_ROLE=gemini-econ-shadow \
     GEMINI_CANARY_STATE_DIR=/state/gemini-econ \
     GEMINI_ECON_ARM=1 \
-    GEMINI_ECON_HAZARD_PATH=/state/gemini-econ/hazard.json
+    GEMINI_ECON_STATE_DIR=/state/gemini-econ/econ-state
 CMD ["python3", "-m", "src.gemini_execution.shadow_soak", \
      "--cohorts", "btc5m,btc15m", "--policy", "GEMINI_RECYCLE", \
      "--windows", "0", "--cycles", "110", "--interval", "8.0", \

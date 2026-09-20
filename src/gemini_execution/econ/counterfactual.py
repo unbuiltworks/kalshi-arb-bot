@@ -38,9 +38,35 @@ So this module reports:
     against IT is the evidence for that term. That is a further reason the
     control must keep running untouched.
 
+THREE LAYERS, KEPT APART, BECAUSE THEY ARE NOT THE SAME KIND OF NUMBER:
+
+  LAYER 1  immediate_inventory_value   the two branches valued AT THE FORK
+                                       INSTANT, on the book that existed when
+                                       the decision was made
+  LAYER 2  counterfactual_mtm          the two branches re-valued at FIXED
+                                       HORIZONS on the same subsequent tape.
+                                       A bid-marked residual lives HERE and
+                                       nowhere else.
+  LAYER 3  settlement_value            only when the venue has said which leg
+                                       won. This is the only layer that can
+                                       ever be called realized, and only once
+                                       the cash is confirmed.
+
+A BID-MARKED RESIDUAL IS COUNTERFACTUAL MTM, NEVER REALIZED P&L. It is what the
+position could have been sold for at a moment we did not sell it, on a venue
+where we placed no order at all. Every layer-2 row carries `stage: shadow` and
+`kind: COUNTERFACTUAL_MTM`; only layer 3 with a confirmed settlement carries
+`stage: settled`, and even then `realized` is withheld until venue-confirmed
+cash.
+
 MARKS ARE MARKS. A residual is marked at the price it could actually be sold
 into -- the bid -- never the mid, and never the settlement value of the side we
-happen to hold. Nothing here is realized, and `stage` says so on every row.
+happen to hold.
+
+SIGN CONVENTION. `allow_minus_veto` is ALLOW minus VETO on the same layer.
+POSITIVE means COMPLETING would have produced better total inventory economics
+than refusing -- i.e. the risk overlay COST us on that fork. Negative means the
+overlay helped. Stated here so a positive number is never read the other way.
 """
 from __future__ import annotations
 
@@ -66,6 +92,29 @@ LABELS = (
     "allow-style policy and is the evidence for that term.",
 )
 
+#: fixed horizons for layer 2, in seconds from the fork. Preregistered.
+MTM_HORIZONS_S = (30, 60, 120, 300)
+
+IMMEDIATE = "immediate_inventory_value"
+MTM = "counterfactual_mtm"
+SETTLEMENT = "settlement_value"
+
+SIGN_NOTE = (
+    "allow_minus_veto > 0 means COMPLETING would have produced better total "
+    "inventory economics than refusing -- the risk overlay COST us on that "
+    "fork. < 0 means the overlay helped.")
+
+#: every candidate feature captured AT THE FORK, so a model can be fitted
+#: later from prospective data rather than re-derived from a tape we no longer
+#: hold. Nothing is fitted now.
+FORK_FEATURES = (
+    "tte_s", "held_leg", "held_qty", "held_avg_cost", "complement_price",
+    "ceiling", "required_gap_ticks", "spread", "mid", "book_imbalance",
+    "side_alternation", "same_side_run_len", "prints_per_min", "qty_per_min",
+    "largest_print_share", "n_prints", "flow_window_used_s",
+    "time_since_first_fill_s", "window_mode", "cohort",
+)
+
 _ids = itertools.count(1)
 
 
@@ -74,6 +123,13 @@ def _dec(v: Any) -> Optional[D]:
         return D(str(v))
     except (InvalidOperation, TypeError, ValueError):
         return None
+
+
+def _median_of(xs):
+    if not xs:
+        return None
+    s = sorted(xs)
+    return s[len(s) // 2]
 
 
 def _bid_for(book: Mapping[str, Any], leg: str) -> Optional[D]:
@@ -100,6 +156,12 @@ class Fork:
     marks: List[Dict[str, Any]] = field(default_factory=list)
     veto_path_fills_after: int = 0
     resolved: Optional[Dict[str, Any]] = None
+    #: LAYER 1, computed once on the book that existed at the decision
+    immediate: Optional[Dict[str, Any]] = None
+    #: LAYER 2, one row per horizon, each scored exactly once
+    mtm: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    #: every candidate feature at the fork. Captured, never fitted.
+    features: Dict[str, Any] = field(default_factory=dict)
 
     # ---- the two branches' static economics ---------------------------
     def allow_static(self) -> Dict[str, Any]:
@@ -126,7 +188,63 @@ class Fork:
             "residual_leg": self.held_leg,
         }
 
-    # ---- marking ------------------------------------------------------
+    # ---- LAYER 1: the fork instant ------------------------------------
+    def set_immediate(self, *, book: Mapping[str, Any],
+                      features: Optional[Mapping[str, Any]] = None
+                      ) -> Dict[str, Any]:
+        """Value both branches on the book that existed AT THE DECISION."""
+        a, v = self.allow_static(), self.veto_static()
+        bid = _bid_for(book, self.held_leg)
+        allow_total = _dec(a["locked_value"]) or D("0")
+        veto_total = (None if bid is None
+                      else self.held_qty * (bid - self.held_avg_cost))
+        self.features = {k: (features or {}).get(k) for k in FORK_FEATURES}
+        self.immediate = {
+            "layer": IMMEDIATE, "kind": "IMMEDIATE_INVENTORY_VALUE",
+            "stage": "shadow", "t": self.t0, "tte_s": self.tte0,
+            "mark_bid": None if bid is None else str(bid),
+            ALLOW: {**a, "total_inventory_economics": str(allow_total)},
+            VETO: {**v, "residual_mark": (None if veto_total is None
+                                          else str(veto_total)),
+                   "total_inventory_economics": (None if veto_total is None
+                                                 else str(veto_total))},
+            "allow_minus_veto": (None if veto_total is None
+                                 else str(allow_total - veto_total)),
+            "sign_note": SIGN_NOTE,
+        }
+        return self.immediate
+
+    # ---- LAYER 2: fixed-horizon MTM on the subsequent tape ------------
+    def advance(self, *, book: Mapping[str, Any], t: float) -> List[str]:
+        """Score any horizon that has now elapsed, exactly once each."""
+        done: List[str] = []
+        age = float(t) - float(self.t0)
+        bid = _bid_for(book, self.held_leg)
+        if bid is None:
+            return done
+        a = self.allow_static()
+        allow_total = _dec(a["locked_value"]) or D("0")
+        for h in MTM_HORIZONS_S:
+            k = str(h)
+            if k in self.mtm or age < h:
+                continue
+            veto_total = self.held_qty * (bid - self.held_avg_cost)
+            self.mtm[k] = {
+                "layer": MTM, "kind": "COUNTERFACTUAL_MTM", "stage": "shadow",
+                "horizon_s": h, "t": t, "mark_bid": str(bid),
+                "allow_total": str(allow_total),
+                "veto_total": str(veto_total),
+                "allow_minus_veto": str(allow_total - veto_total),
+                "note": ("a bid-marked residual is COUNTERFACTUAL MTM: what "
+                         "the position could have been sold for at a moment we "
+                         "did not sell it, having placed no order at all. "
+                         "Never realized P&L."),
+                "sign_note": SIGN_NOTE,
+            }
+            done.append(k)
+        return done
+
+    # ---- legacy running mark (kept: cheap, and useful between horizons)
     def mark(self, *, book: Mapping[str, Any], t: float,
              tte_s: Any = None, stage: str = "shadow") -> Dict[str, Any]:
         """Both branches' TOTAL inventory-state economics at this book."""
@@ -200,8 +318,15 @@ class Fork:
             basis = "MARKED_AT_BID"
         out = {
             "schema": SCHEMA, "fork_id": self.fork_id,
+            "layer": (SETTLEMENT if basis == "SETTLED" else MTM),
+            "kind": ("SETTLEMENT_VALUE" if basis == "SETTLED"
+                     else "COUNTERFACTUAL_MTM"),
             "resolution_basis": basis, "t": t,
             "settlement_leg": settlement,
+            "sign_note": SIGN_NOTE,
+            "immediate_inventory_value": self.immediate,
+            "counterfactual_mtm_by_horizon_s": dict(self.mtm),
+            "features_at_fork": dict(self.features),
             ALLOW: {**a, "total_inventory_economics": str(allow_total)},
             VETO: {**v, "total_inventory_economics": (
                 None if veto_total is None else str(veto_total))},
@@ -210,6 +335,10 @@ class Fork:
             "veto_path_fills_after": self.veto_path_fills_after,
             "allow_path_recycling": None,
             "stage": ("settled" if basis == "SETTLED" else "shadow"),
+            "realized": None,
+            "realized_note": ("withheld until venue-confirmed cash; a settled "
+                              "contract states what it PAYS, not that we have "
+                              "been paid"),
             "labels": list(LABELS),
         }
         self.resolved = out
@@ -225,7 +354,8 @@ class CounterfactualLedger:
     def open(self, *, symbol: str, cohort: str, t: float, tte_s: Any,
              held_leg: str, complement_leg: str, held_qty: Any,
              held_avg_cost: Any, complement_price: Any,
-             ceiling: Any = None,
+             ceiling: Any = None, book: Optional[Mapping[str, Any]] = None,
+             features: Optional[Mapping[str, Any]] = None,
              regime: VT.FeeRegime = VT.VERIFIED_REGIME) -> Optional[Fork]:
         q, c, p = (_dec(held_qty), _dec(held_avg_cost),
                    _dec(complement_price))
@@ -237,6 +367,7 @@ class CounterfactualLedger:
                  held_qty=q, held_avg_cost=c, complement_price=p,
                  ceiling=(None if ceiling is None else str(ceiling)),
                  regime=regime)
+        f.set_immediate(book=book or {}, features=features or {})
         self.forks.append(f)
         if len(self.forks) > 500:
             self.forks = self.forks[-300:]
@@ -244,9 +375,11 @@ class CounterfactualLedger:
 
     def mark_open(self, *, book: Mapping[str, Any], t: float,
                   tte_s: Any = None) -> int:
+        """Advance LAYER 2 horizons, and keep the running mark between them."""
         n = 0
         for f in self.forks:
             if f.resolved is None:
+                f.advance(book=book, t=t)
                 f.mark(book=book, t=t, tte_s=tte_s)
                 n += 1
         return n
@@ -283,6 +416,21 @@ class CounterfactualLedger:
             "windows_where_VETO_was_better": len(deltas) - allow_better,
             "settled_resolutions": sum(1 for r in done
                                        if r["resolution_basis"] == "SETTLED"),
+            "layers": {
+                "1_immediate": IMMEDIATE, "2_mtm": MTM,
+                "3_settlement": SETTLEMENT,
+                "note": ("a bid-marked residual is layer 2 COUNTERFACTUAL_MTM "
+                         "and is never realized P&L; only layer 3 with "
+                         "venue-confirmed cash could be"),
+            },
+            "mtm_horizons_s": list(MTM_HORIZONS_S),
+            "allow_minus_veto_by_horizon_s": {
+                str(h): _median_of([
+                    float(f.mtm[str(h)]["allow_minus_veto"])
+                    for f in self.forks if str(h) in f.mtm])
+                for h in MTM_HORIZONS_S},
+            "features_captured": list(FORK_FEATURES),
+            "sign_note": SIGN_NOTE,
             "marked_resolutions": sum(
                 1 for r in done if r["resolution_basis"] == "MARKED_AT_BID"),
             "labels": list(LABELS) + [

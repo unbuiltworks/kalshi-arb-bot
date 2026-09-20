@@ -26,6 +26,13 @@ FLOW = {"prints": [{"side": "buy", "qty": "1", "price": "0.61"},
 def _no_network(monkeypatch):
     """The arm must be decidable from a supplied book alone."""
     monkeypatch.setattr(MD, "terms_for", lambda s: {"priceIncrement": "0.01"})
+    # per-cohort state is now a PROCESS-LEVEL registry so it outlives a window.
+    # That is the point in production and poison in a test suite, so each test
+    # starts from an empty one.
+    from src.gemini_execution.econ import registry as REG
+    REG.reset()
+    yield
+    REG.reset()
 
 
 class FakeWs:
@@ -49,24 +56,29 @@ class FakeWs:
     def drop(self, symbol):
         self.dropped.append(symbol)
 
-    def flow(self, symbol, *, window_s, now=None):
+    def flow(self, symbol, *, window_s, min_window_s=30.0, now=None):
         if not self.vouched:
             return {"vouched": False, "prints": None,
                     "why": self.why or "socket cannot vouch",
-                    "window_s": window_s}
+                    "window_requested_s": window_s, "window_used_s": None}
         rows = [{"side": p["side"], "qty": p["qty"], "price": p.get("price"),
                  "t": i} for i, p in enumerate(self._prints or [])]
         return {"vouched": True, "prints": rows, "n_prints": len(rows),
                 "n_directional": len(rows), "undirected": 0,
-                "window_s": window_s, "why": None}
+                "window_requested_s": window_s, "window_used_s": window_s,
+                "truncated_by_view": False, "why": None}
 
 
 def _arm(cohort="BTC15m", symbol=SYM15, ws=None, prints=None):
+    from src.gemini_execution.econ import registry as REG
+    REG.reset(cohort)
+    st = REG.state_for(cohort)
+    st.ensure_ws(ws if ws is not None
+                 else FakeWs(prints if prints is not None else TWO_SIDED))
     return ARM.GeminiEconArm(
         symbol=symbol, cohort_prefix="GEMI-BTC15M" if cohort == "BTC15m"
         else "GEMI-BTC05M", policy="GEMINI_RECYCLE", cohort_name=cohort,
-        ws=(ws if ws is not None
-            else FakeWs(prints if prints is not None else TWO_SIDED)))
+        state=st)
 
 
 TWO_SIDED = [{"side": "buy", "qty": "1", "price": "0.61"},

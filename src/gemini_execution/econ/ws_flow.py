@@ -30,6 +30,26 @@ AGGRESSOR was a sell. Getting this backwards inverts every alternation and
 imbalance feature computed downstream, so the mapping lives here and nowhere
 else, exactly as `hypothetical.normalize` keeps its own translation single.
 
+THE LONGEST VOUCHABLE WINDOW, NOT A FIXED ONE. A BTC5m contract lives 300s and
+the lane enters it at tte 240-280, so at the decision the contract is 20-60
+seconds old. Demanding a trailing 120-second vouched window there asks for
+history that CANNOT EXIST, and every such cycle was being counted as a flow
+refusal. The owner's requirement is that a decision use a VOUCHED INTERVAL --
+not that the interval be 120 seconds. So `flow` narrows its request to what the
+socket can actually attest:
+
+    available = now - ready_since
+    used      = min(requested, available), floored at `min_window_s`
+    below the floor -> UNVOUCHED, and nothing is claimed
+
+`window_requested_s` and `window_used_s` travel on every row, because a feature
+computed over 45 seconds is not the same object as one computed over 120 and a
+consumer must be able to tell.
+
+PROVENANCE IS UNCHANGED BY THIS. A shortened window is still an interval we
+actually watched, beginning after `ready_since` and ending at the decision
+instant. Nothing observed after the decision is ever folded back into it.
+
 FAIL CLOSED, AND NO FALLBACK TO THE POLLED TAPE. When coverage is unvouched
 this returns `vouched: False` with a reason and NO prints. It does not quietly
 fall back to `public_flow`: falling back would reintroduce the very source the
@@ -133,18 +153,37 @@ class WsFlowSource:
             pass
 
     def flow(self, symbol: str, *, window_s: float,
+             min_window_s: float = 30.0,
              now: Optional[float] = None) -> Dict[str, Any]:
-        """Prints in the trailing `window_s`, or an explicit refusal."""
+        """Prints in the longest vouchable trailing window, or a refusal."""
         t = time.time() if now is None else now
-        t0 = t - float(window_s)
         book = getattr(self.feed, "_books", {}).get(symbol)
         base: Dict[str, Any] = {"schema": SCHEMA, "symbol": symbol,
-                                "window_s": window_s, "labels": list(LABELS),
+                                "window_requested_s": float(window_s),
+                                "min_window_s": float(min_window_s),
+                                "window_used_s": None,
+                                "labels": list(LABELS),
                                 "source": "GEMINI_WS"}
         if book is None:
             base.update(vouched=False, prints=None,
                         why="no socket is watching %s yet" % symbol)
             return base
+
+        # how much continuous view does the socket actually have?
+        ready_since = getattr(book, "ready_since", None)
+        available = (None if ready_since is None else max(0.0, t - float(ready_since)))
+        base["available_view_s"] = available
+        if available is not None and available < float(min_window_s):
+            base.update(
+                vouched=False, prints=None,
+                why=("the socket has only %.1fs of continuous view, below the "
+                     "%.1fs floor; a shorter interval would be vouched but too "
+                     "thin to say anything" % (available, min_window_s)))
+            return base
+        used = (float(window_s) if available is None
+                else min(float(window_s), available))
+        base["window_used_s"] = round(used, 2)
+        t0 = t - used
         raw = book.prints_since(t0)
         if raw is None:
             base.update(
@@ -152,7 +191,8 @@ class WsFlowSource:
                 why=("the socket cannot vouch for the last %.1fs: its "
                      "continuous view began after that point, so an empty "
                      "list here would assert nobody traded when the truth is "
-                     "that we were not watching" % window_s),
+                     "that we were not watching" % (base["window_used_s"]
+                                                    or window_s)),
                 ready=getattr(book, "ready", None),
                 ready_since=getattr(book, "ready_since", None))
             return base
@@ -160,5 +200,8 @@ class WsFlowSource:
         known = [r for r in rows if r["side"] in ("buy", "sell")]
         base.update(vouched=True, prints=rows, n_prints=len(rows),
                     n_directional=len(known),
-                    undirected=len(rows) - len(known), why=None)
+                    undirected=len(rows) - len(known), why=None,
+                    truncated_by_view=bool(
+                        base["window_used_s"] is not None
+                        and base["window_used_s"] < float(window_s)))
         return base

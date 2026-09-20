@@ -103,13 +103,16 @@ class GeminiEconArm:
     __slots__ = ("label", "sp", "guard", "inv", "hyp", "error", "improve",
                  "preserve", "cohort", "pol", "board", "hazard",
                  "first_fill_t", "divergences", "last", "ws", "symbol",
-                 "cf", "spreads")
+                 "cf", "spreads", "state", "prewarm")
 
     def __init__(self, *, symbol: str, cohort_prefix: Optional[str],
                  policy: str, cohort_name: str,
                  hazard_path: Optional[str] = None,
                  label: str = LABEL,
-                 ws: Any = None):
+                 ws: Any = None,
+                 state: Any = None,
+                 cohort_prefix_grid: Optional[str] = None,
+                 cohort_minutes: Optional[int] = None):
         self.label = label
         # the frozen Model A, unmodified. For BTC15m this is the already-
         # reviewed timing correction, not a new spec written here.
@@ -124,24 +127,36 @@ class GeminiEconArm:
         self.inv = CP.Inventory()
         self.hyp = HY.HypotheticalBook(symbol=symbol, policy=policy)
         self.board = SB.Scoreboard(cohort=cohort_name)
-        self.hazard = (HZ.HazardEstimator.load(hazard_path) if hazard_path
-                       else HZ.HazardEstimator())
+        # PER-COHORT STATE THAT OUTLIVES THIS WINDOW. The arm is rebuilt every
+        # window; the census, hazard and fork ledger must not be, or nothing
+        # can ever accumulate to a sufficient cell.
+        from src.gemini_execution.econ import registry as REG
+        self.state = (state if state is not None
+                      else REG.state_for(cohort_name))
+        self.hazard = self.state.hazard
         self.symbol = symbol
         # FLOW COMES FROM THE MAINTAINED SOCKET, NOT THE POLLED TAPE. See
         # ws_flow's docstring: `habitat.public_flow` is labelled EVIDENCE ONLY
         # and may not be decided on. There is deliberately NO fallback -- an
         # unvouched interval refuses the flow gates rather than quietly
         # re-reading the source this replaces.
-        self.ws = ws if ws is not None else WF.WsFlowSource()
+        self.ws = self.state.ensure_ws(ws)
+        # SUBSCRIBE BEFORE THE DECISION WINDOW. See prewarm.py: a BTC5m
+        # contract is 20-60s old when the lane enters it, so a socket opened at
+        # the decision can never vouch for a meaningful interval.
+        self.prewarm = None
+        if cohort_prefix_grid and cohort_minutes:
+            self.prewarm = self.state.ensure_prewarm(
+                prefix=cohort_prefix_grid, minutes=cohort_minutes)
         # BOTH PATHS AT EVERY VETO. Local pair basis cannot say whether a
         # COMPLETE was wrong; the durable evidence (42.75% of L5's completes
         # above $1.00, and 1.00-1.02 outperforming <=0.96 when scored on the
         # resulting shares) is exactly why. See counterfactual.py.
-        self.cf = CF.CounterfactualLedger()
+        self.cf = self.state.cf
         # SPREAD AS A DISTRIBUTION BEFORE IT IS A THRESHOLD. max_spread was
         # preregistered from a single book and binds hard; it is NOT being
         # moved until this census says what the distribution is.
-        self.spreads = SC.SpreadCensus()
+        self.spreads = self.state.spreads
         self.first_fill_t: Optional[float] = None
         self.divergences: Dict[str, int] = {}
         self.last: Dict[str, Any] = {}
@@ -193,6 +208,10 @@ class GeminiEconArm:
 
         # the socket's own view of recent flow, for the gates only
         try:
+            # keep upcoming contracts warm so the NEXT window does not open
+            # blind; idempotent and bounded.
+            if self.prewarm is not None:
+                self.prewarm.pump(self.ws)
             self.ws.watch(symbol)
             wsf = self.ws.flow(
                 symbol,
@@ -226,6 +245,17 @@ class GeminiEconArm:
         held = self._held()
         mode = self.pol.mode(tte) if self.pol else {
             "mode": PO.WITHDRAW, "why": "no policy for cohort %r" % self.cohort}
+
+        # ---- COVERAGE ACCOUNTING, before any gate runs. A cycle the socket
+        # could not vouch for is COVERAGE_WARMUP_EXCLUDED and is NOT an entry
+        # refusal: the strategy was never asked.
+        quoting = bool(self.pol and self.pol.may_open(tte))
+        prewarmed = bool(self.prewarm is not None
+                         and self.prewarm.was_prewarmed(symbol,
+                                                        entered_at=now_t))
+        bucket = self.state.coverage.cycle(
+            symbol=symbol, t=now_t, vouched=bool(wsf.get("vouched")),
+            quoting=quoting, prewarmed=prewarmed)
 
         acted: List[Dict[str, Any]] = []
         records: List[Dict[str, Any]] = []
@@ -282,7 +312,11 @@ class GeminiEconArm:
                         held_qty=abs(held["residual"]),
                         held_avg_cost=cost,
                         complement_price=a.get("price"),
-                        ceiling=(adm.get("ceiling") or {}).get("ceiling"))
+                        ceiling=(adm.get("ceiling") or {}).get("ceiling"),
+                        book=book,
+                        features=self._fork_features(
+                            tte=tte, book=book, wsf=wsf, held=held,
+                            mode=mode, now_t=now_t))
                 if adm["admitted"]:
                     acted.append(a)
                     rec.update(gemini_disposition=AC.COMPLETE,
@@ -333,6 +367,7 @@ class GeminiEconArm:
                         flow_vouched=bool(wsf.get("vouched")),
                         flow_why=wsf.get("why"))
                     self.board.entry(dec)
+                    self.state.coverage.decision(bool(dec["admitted"]))
                     self.hazard.observe(feat, resolved=False,
                                         filled_acceptably=False)
                     if dec["admitted"]:
@@ -377,7 +412,9 @@ class GeminiEconArm:
             "schema": SCHEMA, "label": self.label, "cohort": self.cohort,
             "ws_flow": {k: wsf.get(k) for k in
                         ("vouched", "why", "n_prints", "n_directional",
-                         "undirected", "window_s")},
+                         "undirected", "window_requested_s", "window_used_s",
+                         "available_view_s", "truncated_by_view")},
+            "coverage_bucket": bucket,
             "mode": mode, "held": {k: (str(v) if isinstance(v, D) else v)
                                    for k, v in held.items()},
             "model_a_wanted": wanted,
@@ -400,6 +437,49 @@ class GeminiEconArm:
             ],
         }
         return self.last
+
+    def _fork_features(self, *, tte, book, wsf, held, mode,
+                       now_t) -> Dict[str, Any]:
+        """Every candidate feature AT THE FORK. Captured, never fitted.
+
+        Collected now because a fork's state cannot be reconstructed later --
+        Gemini serves no book history, so a feature not recorded at the moment
+        is a feature lost.
+        """
+        yes = (book or {}).get("yes") or {}
+        bid, ask = _dec(yes.get("bid")), _dec(yes.get("ask"))
+        prints = wsf.get("prints") or []
+        sides = [p.get("side") for p in prints if p.get("side")]
+        alt = (sum(1 for a, b in zip(sides, sides[1:]) if a != b)
+               / (len(sides) - 1)) if len(sides) > 1 else None
+        qs = [_dec(p.get("qty")) for p in prints]
+        qs = [q for q in qs if q is not None]
+        total = sum(qs) if qs else D("0")
+        used = wsf.get("window_used_s") or 0
+        return {
+            "tte_s": (None if tte is None else float(tte)),
+            "held_leg": held.get("held"),
+            "held_qty": str(abs(held.get("residual") or 0)),
+            "held_avg_cost": (None if held.get("held_avg_cost") is None
+                              else str(held["held_avg_cost"])),
+            "spread": (None if (bid is None or ask is None)
+                       else str(ask - bid)),
+            "mid": (None if (bid is None or ask is None)
+                    else str((bid + ask) / D("2"))),
+            "side_alternation": alt,
+            "same_side_run_len": self.inv.run_len,
+            "prints_per_min": (len(prints) / (used / 60.0)) if used else None,
+            "qty_per_min": (float(total) / (used / 60.0)) if used else None,
+            "largest_print_share": (float(max(qs) / total)
+                                    if qs and total > 0 else None),
+            "n_prints": len(prints),
+            "flow_window_used_s": used,
+            "time_since_first_fill_s": (
+                None if self.first_fill_t is None
+                else round(now_t - self.first_fill_t, 2)),
+            "window_mode": mode.get("mode"),
+            "cohort": self.cohort,
+        }
 
     def _required(self, a: Mapping[str, Any]) -> Optional[str]:
         """The complement price this entry would need to be worth taking."""
@@ -450,10 +530,10 @@ class GeminiEconArm:
         """
         n = self.cf.resolve_open(book=book or {}, t=time.time(),
                                  settlement=settlement)
-        try:
-            self.ws.drop(self.symbol)
-        except Exception:                                        # noqa: BLE001
-            pass
+        # NOTE: the socket is NOT dropped here. The pre-warmer owns socket
+        # lifetime now, because dropping at window end is precisely what made
+        # every next window open blind.
+        self.state.window_done()
         return {"forks_resolved": n,
                 "counterfactual": self.cf.report()}
 
@@ -462,8 +542,11 @@ class GeminiEconArm:
                 "spec_label": (self.sp.label if self.sp is not None
                                else "FROZEN_DEFAULT"),
                 "scoreboard": self.board.report(),
+                "coverage": self.state.coverage.report(),
                 "counterfactual": self.cf.report(),
                 "spread_census": self.spreads.report(),
+                "prewarm": (self.prewarm.report() if self.prewarm else None),
+                "state": self.state.report(),
                 "divergences": dict(self.divergences),
                 "policy": self.pol.report() if self.pol else None,
                 "error": self.error}

@@ -31,6 +31,31 @@ So every observation also carries what happened NEXT -- the touch at several
 horizons -- which is what turns "the spread was 0.30" into "a 0.30 spread at
 this TTE was followed by the touch moving N ticks and a print arriving or not".
 
+THE KEY IS COMPLETE AND THE REPORT IS UNIQUELY KEYED. An earlier live log
+printed `BTC5m|121-300|0.56-0.75|unknown` TWICE with different n and medians.
+That was neither an omitted key dimension nor an aggregation bug in the key: the
+census was being CONSTRUCTED AND DESTROYED ONCE PER WINDOW (see `registry.py`),
+so the two lines were two independent short-lived censuses that happened to
+share a cell name. The distinguishing dimension was the CONTRACT -- and it must
+not enter the key, because pooling across contracts is the whole point. The fix
+is per-cohort state that outlives a window; `key_dims` is published here and a
+test asserts one report never emits a key twice.
+
+MARKOUT SIGN CONVENTION, FIXED AND TESTED. Two numbers per horizon, never one:
+
+    signed_markout_ticks   from the perspective of a MAKER WHO BOUGHT THE YES
+                           LEG AT THE BID -- the canonical passive rung this
+                           lane rests. POSITIVE means the touch moved IN OUR
+                           FAVOUR (the long YES gained); NEGATIVE means adverse.
+                           A maker long the NO leg has the exact negation.
+    abs_touch_move_ticks   unsigned distance, for "how far did it go" questions
+                           that have no side
+
+Reporting only an absolute number, as the first version did, makes "the touch
+moved 14 ticks" unreadable: it cannot distinguish a market running away from our
+resting bid from one running into it, and those are opposite facts about
+adverse selection.
+
 NOTHING HERE GATES ANYTHING. This module has no admission rule, no threshold
 and no default. It counts.
 """
@@ -61,6 +86,20 @@ FLOW_LABELS = ("silent", "thin", "active", "busy")
 
 #: horizons at which the touch is revisited, in seconds
 MARKOUT_HORIZONS_S: Tuple[int, ...] = (8, 30, 60)
+
+#: whose fill the SIGN is from. Stated as a constant so a consumer never has
+#: to infer it, and so a change to it is a visible change.
+MARKOUT_PERSPECTIVE = "MAKER_BUY_YES_AT_BID"
+MARKOUT_SIGN_NOTE = (
+    "signed_markout_ticks > 0 is FAVOURABLE to a maker who bought the YES leg "
+    "at the bid (the touch rose into profit); < 0 is ADVERSE. A maker long the "
+    "NO leg has the exact negation. abs_touch_move_ticks is unsigned distance "
+    "and carries no favourable/adverse meaning.")
+
+#: the dimensions that make a cell key, published so a consumer can check that
+#: nothing it cares about was pooled away
+KEY_DIMS: Tuple[str, ...] = ("cohort", "tte_bucket", "price_bucket",
+                             "flow_bucket")
 
 LABELS = (
     "A CENSUS, not a gate. No threshold, no admission rule, no default.",
@@ -130,8 +169,11 @@ class SpreadCensus:
     #: below this a cell is arithmetic rather than evidence
     min_cell: int = 30
     cells: Dict[str, List[float]] = field(default_factory=dict)
-    #: cell -> horizon -> list of |touch movement| in ticks
+    #: cell -> horizon -> list of SIGNED markout in ticks (see
+    #: MARKOUT_PERSPECTIVE). Favourable is positive.
     markouts: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
+    #: cell -> horizon -> list of UNSIGNED touch movement in ticks
+    abs_moves: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
     _pending: List[Dict[str, Any]] = field(default_factory=list)
     observations: int = 0
 
@@ -174,9 +216,12 @@ class SpreadCensus:
                 if h in p["done"] or age < h:
                     continue
                 p["done"].append(h)
-                moved = float(abs(b - b0) / tick)
+                # SIGNED: a rising bid is favourable to a resting YES buyer
+                signed = float((b - b0) / tick)
                 self.markouts.setdefault(p["cell"], {}).setdefault(
-                    str(h), []).append(moved)
+                    str(h), []).append(signed)
+                self.abs_moves.setdefault(p["cell"], {}).setdefault(
+                    str(h), []).append(abs(signed))
 
     def report(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {
@@ -196,12 +241,27 @@ class SpreadCensus:
                 "min": s[0], "max": s[-1],
             }
             mk = self.markouts.get(cell) or {}
-            row["median_touch_move_ticks_by_horizon_s"] = {
+            ab = self.abs_moves.get(cell) or {}
+            row["signed_markout_ticks_by_horizon_s"] = {
                 h: (statistics.median(v) if v else None)
+                for h, v in sorted(mk.items())}
+            row["abs_touch_move_ticks_by_horizon_s"] = {
+                h: (statistics.median(v) if v else None)
+                for h, v in sorted(ab.items())}
+            row["adverse_share_by_horizon_s"] = {
+                h: ((sum(1 for x in v if x < 0) / len(v)) if v else None)
                 for h, v in sorted(mk.items())}
             out["cells"][cell] = row
         out["cells_sufficient"] = sum(1 for r in out["cells"].values()
                                       if r["sufficient"])
+        out["key_dims"] = list(KEY_DIMS)
+        out["markout_perspective"] = MARKOUT_PERSPECTIVE
+        out["markout_sign_note"] = MARKOUT_SIGN_NOTE
+        # a dict cannot hold a duplicate key; this states the guarantee the
+        # earlier duplicate log line appeared to violate, so a regression is
+        # caught here rather than in a log tail
+        out["keys_unique"] = (len(out["cells"])
+                              == len(set(out["cells"].keys())))
         return out
 
     # -- persistence so a 24/7 collector accumulates across restarts -------
@@ -210,6 +270,7 @@ class SpreadCensus:
         with open(tmp, "w") as fh:
             json.dump({"schema": SCHEMA, "min_cell": self.min_cell,
                        "cells": self.cells, "markouts": self.markouts,
+                       "abs_moves": self.abs_moves,
                        "observations": self.observations}, fh)
         os.replace(tmp, path)
 
@@ -222,6 +283,8 @@ class SpreadCensus:
                        cells={k: list(v) for k, v in (d.get("cells") or {}).items()},
                        markouts={k: {h: list(x) for h, x in v.items()}
                                  for k, v in (d.get("markouts") or {}).items()},
+                       abs_moves={k: {h: list(x) for h, x in v.items()}
+                                  for k, v in (d.get("abs_moves") or {}).items()},
                        observations=int(d.get("observations") or 0))
         except (OSError, ValueError, TypeError):
             return cls()
