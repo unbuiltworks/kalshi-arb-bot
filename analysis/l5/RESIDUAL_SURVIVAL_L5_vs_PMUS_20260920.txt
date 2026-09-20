@@ -1,0 +1,64 @@
+================================================================================================================
+HISTORICAL L5 RESIDUAL SURVIVAL  --  same definition as the PMUS curve
+CORPUS IS 5m/15m BTC-ETH MARKETS ONLY. Max window fill span 888s, median 153s.
+An L5 residual cannot outlive a ~900s settlement clock; horizons past that are UNDEFINED.
+================================================================================================================
+
+L5 ALL (5m + 15m)                      n=2425 resolved=232 censored=2193
+   horizon             30s        60s       120s       300s       600s       900s      1200s
+   cum P(flat)        4.6%       6.5%       8.3%       9.9%      10.8%      10.8%  undefined
+   at risk            2310       2196       1952        539        496          0          -
+   median time to flat: NOT REACHED
+
+L5 run_len 1 at residual open          n=2313 resolved=204 censored=2109
+   horizon             30s        60s       120s       300s       600s       900s      1200s
+   cum P(flat)        3.9%       5.8%       7.5%       9.2%      10.0%      10.0%  undefined
+   at risk            2218       2113       1889        507        474          0          -
+   median time to flat: NOT REACHED
+
+L5 run_len 2                           n=90 resolved=22 censored=68
+   horizon             30s        60s       120s       300s       600s       900s      1200s
+   cum P(flat)       18.9%      21.2%      24.0%      24.0%      28.0%      28.0%  undefined
+   at risk              74         68         49         19         13          0          -
+   median time to flat: NOT REACHED
+
+L5 run_len 3-4                         n=20 resolved=6 censored=14
+   horizon             30s        60s       120s       300s       600s       900s      1200s
+   cum P(flat)       20.0%      25.0%      30.8%      30.8%      30.8%      30.8%  undefined
+   at risk              16         13         12         11          9          0          -
+   median time to flat: NOT REACHED
+
+L5 run_len 5+                          n=2 resolved=0 censored=2
+   horizon             30s        60s       120s       300s       600s       900s      1200s
+   cum P(flat)        0.0%       0.0%       0.0%       0.0%       0.0%       0.0%  undefined
+   at risk               2          2          2          2          0          0          -
+   median time to flat: NOT REACHED
+
+resolved-episode duration quantiles: p25=13s p50=34s p75=70s p90=147s max=540s  n=232
+censoring times: p50=255s p90=888s max=896s  n=2193
+========================================================================================================
+RESIDUAL RESOLUTION: HISTORICAL L5 vs PROSPECTIVE PMUS, IDENTICAL DEFINITION
+t=0 first acquisition creating directional residual; event = return to flat; censor = observation ends
+========================================================================================================
+
+cohort                              30s      60s     120s     300s     600s     900s    1200s
+HISTORICAL L5 (5m/15m BTC)         4.6%     6.5%     8.3%     9.9%    10.8%    10.8%    undef
+   at risk                         2310     2196     1952      539      496        0        -
+   n=2425  resolved by trading=232 (9.6%)  carried to observation end=2193 (90.4%)
+PMUS deployable queue-aware        2.0%     2.0%     2.0%     4.4%     6.9%    14.1%    14.1%
+   at risk                           49       49       45       38       26       12        9
+   n=53  resolved by trading=4 (7.5%)  carried to observation end=49 (92.5%)
+
+READING.
+L5 resolved only 10.8% of residual episodes BY TRADING within its market's life;
+~90% were carried to settlement. PMUS is slower at short horizons (2.0% vs 8.3%
+at 120s) but converges by 600s (6.9% vs 10.8%) and passes L5 by 900s. Neither
+median is reached. Both carry ~90% of residual to the end of observation.
+
+=> LONG-LIVED RESIDUAL IS FAITHFUL L5 OPERATION, NOT A PMUS DEFECT.
+
+THE ASYMMETRY THAT REMAINS IS DURATION, NOT BEHAVIOUR. L5's residual was always
+extinguished by a 5-15 MINUTE settlement clock. A PMUS live-sports residual is
+extinguished by the END OF THE GAME -- hours. The holding BEHAVIOUR transfers;
+the EXPOSURE DURATION does not, and that is a venue property, not a policy flaw.
+
