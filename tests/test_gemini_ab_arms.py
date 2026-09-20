@@ -74,3 +74,68 @@ def test_PRESERVE_OFF_REPRODUCES_THE_FROZEN_BEHAVIOUR():
     ev = AB.reconcile(live, want, now_ms=D("1"), depth=depth,
                       default_qty=D("0.01"), preserve=False)
     assert ev["requoted"] == 1 and ev["decisions"] == []
+
+
+# ------------------------------- the challenger arm as it actually deploys
+
+def test_THE_CHALLENGER_IS_AN_EXECUTION_ADAPTATION_NOT_A_MODEL_CHANGE():
+    """A and B change how an order is placed, never what Model A decided."""
+    from src.gemini_execution import shadow_soak as SS
+    spec = SS.EXECUTION_ARMS[0]
+    assert spec["label"] == "EXEC_A_PLUS_B"
+    assert spec["improve"] and spec["preserve"]
+    arm = SS._Arm(spec["label"], None, symbol="GEMI-BTC15M2609200045-UP",
+                  cohort_prefix="GEMI-BTC15M", policy="P",
+                  improve=True, preserve=True)
+    # sp is None: it runs the SAME frozen spec as the control
+    assert arm.sp is None
+
+
+def test_THE_LEDGER_COUNTS_THE_MECHANISM_DIRECTLY():
+    """zero-ahead rungs are what A exists to create; counting fills alone
+    would leave the mechanism inferred rather than measured."""
+    from src.gemini_execution import hypothetical as HY
+    b = HY.HypotheticalBook(symbol="S", policy="P")
+    depth = {"readable": True,
+             "bids": {"levels": [{"price": "0.30", "qty": "50"}]},
+             "asks": {"levels": [{"price": "0.70", "qty": "50"}]}}
+    b.retarget([{"leg": "YES", "price": "0.40", "qty": "0.01",
+                 "action": "OPEN"}], now_ms=1, depth=depth)
+    r = b.report()
+    assert r["zero_ahead_rungs"] == 1        # 0.40 is inside the 0.30 bid
+    assert r["rungs_rested"] == 1
+
+
+def test_PRESERVE_ROUTES_THROUGH_THE_B_RULE_AND_IS_COUNTED():
+    from src.gemini_execution import hypothetical as HY
+    b = HY.HypotheticalBook(symbol="S", policy="P")
+    depth = {"readable": True,
+             "bids": {"levels": [{"price": "0.41", "qty": "300"}]},
+             "asks": {"levels": [{"price": "0.70", "qty": "50"}]}}
+    # rest at 0.42: inside the 0.41 bid, so nothing is ahead of us
+    b.retarget([{"leg": "YES", "price": "0.42", "qty": "0.01",
+                 "action": "OPEN"}], now_ms=1, depth=depth, preserve=True)
+    assert b.live["YES"].ahead == D("0")
+    # the touch slips one tick to 0.41. Replacement would sit behind 300, so
+    # keeping our place in line is right and B keeps it.
+    b.retarget([{"leg": "YES", "price": "0.41", "qty": "0.01",
+                 "action": "OPEN"}], now_ms=2, depth=depth, preserve=True)
+    assert b.live["YES"].price == D("0.42")
+    assert b.report()["preserved_rungs"] == 1
+
+
+def test_B_STILL_REQUOTES_INTO_A_CLEARLY_SUPERIOR_QUEUE():
+    """Preservation is not stubbornness: if the new price puts us in front
+    and the old one left us behind 300, we take the better place."""
+    from src.gemini_execution import hypothetical as HY
+    b = HY.HypotheticalBook(symbol="S", policy="P")
+    depth = {"readable": True,
+             "bids": {"levels": [{"price": "0.41", "qty": "300"}]},
+             "asks": {"levels": [{"price": "0.70", "qty": "50"}]}}
+    b.retarget([{"leg": "YES", "price": "0.41", "qty": "0.01",
+                 "action": "OPEN"}], now_ms=1, depth=depth, preserve=True)
+    assert b.live["YES"].ahead == D("300")
+    b.retarget([{"leg": "YES", "price": "0.42", "qty": "0.01",
+                 "action": "OPEN"}], now_ms=2, depth=depth, preserve=True)
+    assert b.live["YES"].price == D("0.42")
+    assert b.report()["preserved_rungs"] == 0

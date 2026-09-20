@@ -73,6 +73,23 @@ async def _account_state(symbol: str):
 #: dressed up as a comparison.
 CORRECTION_ARMS = {"BTC15m": "L5_ADAPTED_GEMINI_BTC15M_V2"}
 
+#: EXECUTION ADAPTATIONS, run as challengers beside the control on every
+#: cohort. These change NO decision Model A makes -- not the side, not the
+#: size, not whether to quote -- only how the order carrying that decision is
+#: placed and whether it is replaced:
+#:
+#:   A  one tick better, refused whenever that would reach the ask
+#:   B  keep a rung already holding its place in line when the desired touch
+#:      has moved by at most a tick
+#:
+#: Offline over 59 contracts under symmetric queue accounting, A+B took the
+#: control's 3 out-of-sample fills to 17, its 0 matched windows to 4 and its 0
+#: fee-positive pairs to 2. A is the mechanism: 39 of 40 fills rest on a rung
+#: with nothing in front of it. B contributes 3 and is carried to be measured
+#: prospectively rather than because the offline corpus demanded it.
+EXECUTION_ARMS = ({"label": "EXEC_A_PLUS_B", "improve": True,
+                   "preserve": True},)
+
 
 class _Arm:
     """One decision record: its own guard, inventory and hypothetical book.
@@ -87,11 +104,15 @@ class _Arm:
     the control's code path is unchanged, not re-implemented.
     """
 
-    __slots__ = ("label", "sp", "guard", "inv", "hyp", "error")
+    __slots__ = ("label", "sp", "guard", "inv", "hyp", "error", "improve",
+                 "preserve")
 
-    def __init__(self, label, sp, *, symbol, cohort_prefix, policy):
+    def __init__(self, label, sp, *, symbol, cohort_prefix, policy,
+                 improve=False, preserve=False):
         self.label = label
         self.sp = sp
+        self.improve = improve
+        self.preserve = preserve
         self.error = None
         self.guard = CP.WindowGuard(symbol, auth_id="SHADOW",
                                     cohort_prefix=cohort_prefix)
@@ -154,7 +175,14 @@ def _step_arm(arm: _Arm, *, symbol, tte, book, depth, flow, policy):
         vetoed = [a for a in wanted if a.get("action") != CP.COMPLETE]
         turn = {**turn, "actions": keep}
     acted = list(turn.get("actions") or [])
-    arm.hyp.retarget(acted, now_ms=int(time.time() * 1000), depth=depth)
+    # EXECUTION ADAPTATION A, applied to the price only. The action, leg and
+    # size are Model A's and are not touched; an improvement that would reach
+    # the ask is refused outright.
+    if getattr(arm, "improve", False):
+        from src.gemini_execution import ab_arms as AB
+        acted = AB.apply_A(acted, book or {})
+    arm.hyp.retarget(acted, now_ms=int(time.time() * 1000), depth=depth,
+                     preserve=getattr(arm, "preserve", False))
     return {
         "market_state": ms, "turn": turn, "wanted": wanted, "vetoed": vetoed,
         "acted": acted, "fills": fills,
@@ -273,6 +301,12 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                              cohort_prefix=(("GEMI-%s" % cohort.prefix)
                                             if cohort else None),
                              policy=policy))
+        for spec in EXECUTION_ARMS:
+            arms.append(_Arm(spec["label"], None, symbol=symbol,
+                             cohort_prefix=(("GEMI-%s" % cohort.prefix)
+                                            if cohort else None),
+                             policy=policy, improve=spec["improve"],
+                             preserve=spec["preserve"]))
     except Exception as exc:                                     # noqa: BLE001
         arms_error = "%s: %s" % (type(exc).__name__, exc)
 
@@ -558,11 +592,16 @@ class CohortHeartbeat:
                 a["error"] = arm.error
                 continue
             rep = arm.hyp.report()
+            inv = arm.inv.report()
             a["rungs_resting"] = len(arm.hyp.live)
             a["rungs_rested"] = rep["rungs_rested"]
+            a["zero_ahead_rungs"] = rep.get("zero_ahead_rungs")
+            a["preserved_rungs"] = rep.get("preserved_rungs")
             a["first_fills"] = rep["first_fills"]
             a["COMPLETE_fills"] = rep["complete_fills"]
-            a["residual"] = str(arm.inv.report().get("directional_residual"))
+            a["matched_qty"] = str(inv.get("matched_qty"))
+            a["pair_basis"] = inv.get("effective_matched_pair_cost")
+            a["residual"] = str(inv.get("directional_residual"))
 
     def window_done(self, w) -> None:
         self.windows += 1

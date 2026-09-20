@@ -87,19 +87,41 @@ class HypotheticalBook:
         self.fills: List[Dict[str, Any]] = []
         self.placed = 0
         self.requoted = 0
+        #: rungs that came to rest with NOTHING in front of them. This is the
+        #: mechanism arm A exists to create, counted directly rather than
+        #: inferred from the fills it produces.
+        self.zero_ahead_placed = 0
+        self.preserved = 0
         self.seen: set = set()
         self.high_water_ms: Optional[D] = None
 
     # ------------------------------------------------------------ rungs
     def retarget(self, actions: Sequence[Mapping[str, Any]], *,
-                 now_ms: Any, depth: Any) -> Dict[str, Any]:
-        """Bring the hypothetical rungs in line with what the lane wants."""
-        ev = TR._reconcile(self.live, list(actions or []),
-                           now_ms=TR._dec(now_ms) or D("0"), depth=depth,
-                           default_qty=self.qty,
-                           queue_mode=self.queue_mode)
+                 now_ms: Any, depth: Any,
+                 preserve: bool = False) -> Dict[str, Any]:
+        """Bring the hypothetical rungs in line with what the lane wants.
+
+        `preserve` is Gemini execution adaptation B: a rung already holding a
+        place in line is not surrendered merely because the desired touch
+        moved by a tick. It changes no decision Model A made -- only whether
+        the order carrying that decision is replaced.
+        """
+        if preserve:
+            from src.gemini_execution import ab_arms as AB
+            ev = AB.reconcile(self.live, list(actions or []),
+                              now_ms=TR._dec(now_ms) or D("0"), depth=depth,
+                              default_qty=self.qty, preserve=True)
+            self.preserved += ev.get("preserved", 0)
+        else:
+            ev = TR._reconcile(self.live, list(actions or []),
+                               now_ms=TR._dec(now_ms) or D("0"), depth=depth,
+                               default_qty=self.qty,
+                               queue_mode=self.queue_mode)
         self.placed += ev["placed"]
         self.requoted += ev["requoted"]
+        self.zero_ahead_placed += sum(
+            1 for q in self.live.values()
+            if q.ahead is not None and q.ahead == 0)
         return ev
 
     # ------------------------------------------------------------ tape
@@ -180,6 +202,8 @@ class HypotheticalBook:
             # one on each leg. Counting only `placed` would divide fills by
             # two in a window that rested eleven rungs.
             "rungs_rested": self.placed + self.requoted,
+            "zero_ahead_rungs": self.zero_ahead_placed,
+            "preserved_rungs": self.preserved,
             "fills": len(self.fills),
             "first_fills": sum(1 for f in self.fills if f["was_first_fill"]),
             "open_fills": sum(1 for f in self.fills

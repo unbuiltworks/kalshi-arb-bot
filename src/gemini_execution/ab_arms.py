@@ -10,19 +10,34 @@ frozen policy asked for and change only HOW the resulting rung is placed:
                       position rather than surrendering it, whenever the old
                       price is no more expensive than the newly desired one.
 
-B'S RULE IS PREREGISTERED AND HAS NO FITTED PARAMETER:
+B'S RULE, PREREGISTERED, NO FITTED PARAMETER:
 
-    KEEP unless requoting improves our QUEUE or our PRICE, i.e. keep when
-        ahead_left <= expected_ahead_after_replacement
-          AND p_old <= p_new          (every rung is a BUY: lower is better)
+    KEEP a resting rung when
+        ahead_left <= expected_ahead_after_replacement   (we already hold at
+                                                          least as good a
+                                                          place in line)
+          AND |p_old - p_new| <= one tick                (the desired touch
+                                                          moved by a tick, so
+                                                          the resting price is
+                                                          still economically
+                                                          acceptable)
+    and requote otherwise -- a clearly superior queue, or a touch that has
+    moved further than a tick, justifies losing priority. Fill, economic
+    invalidation and the end-window withdrawal are handled by the policy and
+    the guard and are not overridden here.
 
-A FIRST ATTEMPT GOT THIS WRONG and the error is worth recording. It required
-`ahead_left < ahead_at_place` -- "queue position has been earned" -- which is
-unsatisfiable when `ahead_at_place` is 0. That excluded precisely the rungs
-at the FRONT of the queue, the most valuable ones, so under arm A (which puts
-us at the front 85% of the time) B never fired once. The rule above compares
-what we hold against what replacement would give, which is the actual
-economics and has no such blind spot.
+TWO EARLIER VERSIONS WERE WRONG AND THE ERRORS ARE THE POINT.
+
+  1. `ahead_left < ahead_at_place` -- "queue position has been earned" --
+     cannot hold when ahead_at_place is 0, so it excluded precisely the
+     front-of-queue rungs it existed to protect, and never fired under A.
+
+  2. `p_old <= p_new` -- "the old quote costs no more" -- is the wrong test
+     for a resting BUY that wants to be FILLED. Cheaper is better only if it
+     trades; that rule kept quotes drifting arbitrarily far below the market,
+     so it held priority at a price nobody was trading and cost fills. The
+     tick bound is what makes "economically acceptable" mean still
+     competitive rather than merely cheap.
 
 WHAT IS MEASURED, NOT ASSUMED. Every keep/requote decision records the queue
 already consumed, both prices, the queue that replacement would inherit and
@@ -114,11 +129,13 @@ def reconcile(live: Dict[str, TR.Quote], want: Sequence[Mapping[str, Any]], *,
             continue
         if cur is not None and preserve:
             new_ahead = TR.size_ahead(depth, leg, p)
-            # requoting must improve the QUEUE or the PRICE to be worth the
-            # place in line it costs
+            # a CLEARLY SUPERIOR replacement is worth the place in line
             better_queue = (new_ahead is not None
                             and new_ahead < cur.ahead_left)
-            no_worse = cur.price <= p
+            # still economically acceptable: the touch moved by at most a
+            # tick. Further than that and the market has genuinely left our
+            # price, so priority there is worth nothing.
+            no_worse = abs(cur.price - p) <= TICK
             earned = not better_queue
             ev["decisions"].append({
                 "leg": leg, "old_price": str(cur.price), "new_price": str(p),
@@ -130,6 +147,7 @@ def reconcile(live: Dict[str, TR.Quote], want: Sequence[Mapping[str, Any]], *,
                 "consumed_fraction": (float((cur.ahead - cur.ahead_left)
                                             / cur.ahead)
                                       if cur.ahead else None),
+                "ticks_moved": str(abs(cur.price - p)),
                 "old_still_acceptable": bool(no_worse),
                 "expected_ahead_after_replacement": (str(new_ahead)
                                                      if new_ahead is not None
