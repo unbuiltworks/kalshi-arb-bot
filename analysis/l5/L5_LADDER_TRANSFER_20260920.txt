@@ -1,0 +1,219 @@
+========================================================================================================================
+L5 LADDER TRANSFER -- PHASES 1-3, HELD-OUT FIDELITY, FROZEN TRANSFER, SIMULATOR AUDIT, AND THE VERDICT
+    2026-09-20   SHADOW / REPLAY ONLY -- no order submitted, nothing armed, Model A unchanged (sha16 bbb55bf90638d2bd)
+========================================================================================================================
+
+HEADLINE: the ladder is real, it is proven on-chain, it improves L5 held-out fidelity
+threefold, and it improves PMUS geometry and economics. It does NOT close the gap to
+L5, and the reason is now proven rather than argued: the remaining gap is a property
+of the FLOW, not of our execution surface. STOP CONDITION B.
+
+========================================================================================================================
+A STRUCTURAL CORRECTION THAT COMES FIRST, BECAUSE IT CHANGES THE TARGET
+========================================================================================================================
+The L5 corpus is not one trader. It is TWO execution modes that must never be averaged,
+and the "L5 reference ~85% / 0.35" we have been chasing is the average of them.
+
+   mode            windows   fills    r/m   basis   tox/unit  standalone
+   MAKER-LADDER      314     58312   0.182  0.9668   -0.1985    -0.279%
+   TAKER            1902     13672   1.079  0.9888   -0.0068    +0.252%
+   blend                    71984   0.347  0.9708   -0.0888    -0.144%
+
+The split by maker share and the split by the on-chain ladder signature select the SAME
+windows (311 of 314 agree; zero taker-dominant windows carry the signature), so the label
+is not an artefact of which sweeps happened to be large enough to see.
+
+TWO CONSEQUENCES.
+  1. The real ladder target is r/m 0.182, not 0.35. Our arm-3 r/m of 0.89 was already
+     reproducing L5's TAKER mode, and our residual toxicity (-0.2006) was already
+     reproducing L5's MAKER mode (-0.1985). We were comparing against an average that
+     does not describe either.
+  2. The maker-ladder mode LOSES money standalone (-0.279%) while the taker mode makes
+     a little (+0.252%). The ladder is not a profit engine. It is a volume engine, and
+     it only pays if incentives pay for the volume. That is the thesis, now measured.
+
+PROVENANCE NOTE, AND A POLICY FLAG. Every maker-ladder window falls in 2026-08-28..08-31.
+The ladder IS the mature August incentive-era behaviour that CLAUDE.md keeps LOCKED
+pending source-confirmed economics for our account. Everything below is research/shadow
+under the existing replay authorisation. Nothing here proposes unlocking it live.
+
+========================================================================================================================
+PHASE 2 -- L5 HELD-OUT FIDELITY.  EVERYTHING FROZEN ON TRAIN, THEN NOT TOUCHED.
+   K = 4 rungs           (TRAIN median required-rungs floor; OOS median is also 4)
+   band = touch -2..+1   (TRAIN recapture 69.8% vs 53.7% one-sided passive, 51.6% one-sided aggressive)
+   TRAIN 219 windows 2026-08-28..2026-08-30     OOS 95 windows 2026-08-30..2026-08-31
+========================================================================================================================
+
+arm                    fills   matchedQ    residQ     r/m  runMean  distPx fills/min   t2opp    osc  qty p50
+L5 ACTUAL (OOS)        17764     161478     30898   0.191     3.42      58     14.00      7s    6.0     11.1
+1-RUNG                  4298      24454     16608   0.679     3.59      20      3.81     32s    2.0      9.4
+2-RUNG                  7288      45645     28218   0.618     3.72      31      6.17     20s    2.0     10.0
+4-RUNG [FROZEN]        11775      96095     32946   0.343     3.76      43      9.22     12s    4.0     10.1
+7-RUNG                 13857     117834     32730   0.278     3.72      47     10.72     11s    5.0     10.4
+
+DISTANCE TO L5 ACTUAL -- mean |relative error| across the 8 process statistics (lower is better)
+   1-RUNG               1.229   fills -0.76 m -0.85 rm +2.55 runmean +0.05 dp -0.66 fpm -0.73 tto +3.57 osc -0.67
+   2-RUNG               0.897   fills -0.59 m -0.72 rm +2.23 runmean +0.09 dp -0.47 fpm -0.56 tto +1.86 osc -0.67
+   4-RUNG [FROZEN]      0.410   fills -0.34 m -0.40 rm +0.79 runmean +0.10 dp -0.26 fpm -0.34 tto +0.71 osc -0.33
+   7-RUNG               0.274   fills -0.22 m -0.27 rm +0.45 runmean +0.09 dp -0.19 fpm -0.23 tto +0.57 osc -0.17
+
+RECAPTURE OF L5's OWN OOS FILLS (UPPER bound -- coverage is scored as a fill)
+    1 rung(s): TRAIN  24.6%   OOS  24.2%   (4298 of 17764 OOS fills)
+    2 rung(s): TRAIN  43.1%   OOS  41.0%   (7288 of 17764 OOS fills)
+    4 rung(s): TRAIN  69.8%   OOS  66.3%   (11775 of 17764 OOS fills)
+    7 rung(s): TRAIN  80.7%   OOS  78.0%   (13857 of 17764 OOS fills)
+   10 rung(s): TRAIN  86.2%   OOS  84.5%   (15011 of 17764 OOS fills)
+========================================================================================================================================
+PHASE 3 -- FROZEN L5 LADDER TRANSFERRED TO PMUS.  R=4, band touch-2..+1, both frozen on L5 TRAIN
+   Model A unchanged. No PMUS threshold fitted. No settlement-informed decision. No crossing, SELL, IOC or FOK.
+   Economics on SETTLED markets only; geometry also shown for the whole replay cohort.
+========================================================================================================================================
+arm                             slugs    acq  compl%     r/m  matchU   residU    basis  matched$    resid$    stand$   return
+arm2  cap0.98, 1 rung              85    166   48.2%    2.15      40       86   0.9350    4.6200  -20.8200  -16.2000  -25.23%
+arm3  L5 completion, 1 rung        83    208   69.2%    0.89      72       64   1.0000    0.2900  -12.8400  -12.5500  -13.71%
+arm4a LADDER on acquiring side    124    361   52.6%    1.80      95      171   1.0100    0.1800  -27.9400  -27.7600  -18.66%
+arm4b LADDER on both sides        124    629   74.1%    0.70     233      163   1.0200   -5.4100  -19.9700  -25.3800   -8.68%
+
+WHOLE-COHORT GEOMETRY (settled + still-open, comparable to the 65.4%/1.06 headline)
+   arm                            completion      r/m
+   arm2  cap0.98, 1 rung               43.0%     2.65
+   arm3  L5 completion, 1 rung         64.7%     1.09
+   arm4a LADDER on acquiring side      46.6%     2.29
+   arm4b LADDER on both sides          68.5%     0.92
+
+UNIT ECONOMICS
+   arm                             edge/matchedU     tox/residU    capital $
+   arm2  cap0.98, 1 rung               +0.115500      -0.242093      64.2000
+   arm3  L5 completion, 1 rung         +0.004028      -0.200625      91.5500
+   arm4a LADDER on acquiring side      +0.001895      -0.163392     148.7600
+   arm4b LADDER on both sides          -0.023219      -0.122515     292.3800
+
+READ, ONE MECHANIC AT A TIME:
+  arm4a puts the ladder ONLY on the side a decision is working. Acquisition rises
+  steeply but completion FALLS and r/m more than doubles -- four rungs acquire four
+  times faster while a single complement rung recycles at the old rate. That is the
+  INVENTORY_EXTEND mechanic from the arm-3 taxonomy, amplified.
+  arm4b ladders the complement too. That is the mechanic that matters.
+==========================================================================================================================
+THE DECISIVE ECONOMICS, ON THE MOST FAITHFUL IMPLEMENTATION WE CAN BUILD
+   SHADOW / REPLAY ONLY.  Nothing here is realized, filled or submitted.  No order was ever sent.
+==========================================================================================================================
+
+                                            matched $   residual $       fees $ standalone
+  arm4b FROZEN LADDER  (base queue)           -5.4100     -19.9700       0.0000    -25.3800
+     same, away-rung depth x2                 -7.1500     -21.3600       0.0000    -28.5100
+     same, away-rung depth x4                 -6.0500     -22.4800       0.0000    -28.5300
+
+  standalone = matched P&L + residual P&L - fees.   PMUS maker fee is ZERO and no
+  taker fee arises: there is no crossing, SELL, IOC or FOK anywhere in this replay.
+
+                                           standalone        capital         return  + incentive
+  arm4b FROZEN LADDER  (base queue)          -25.3800       292.3800         -8.68%     +2.8533 -> -7.70%
+     same, away-rung depth x2                -28.5100       252.5100        -11.29%     +2.4642 -> -10.31%
+     same, away-rung depth x4                -28.5300       215.5300        -13.24%     +2.1034 -> -12.26%
+
+  attributable maker incentive/rebate = $0.00 CONFIRMED.  PMUS /v1/transfers carries no
+  order id, so no rebate can be attributed to a fill. The +incentive column applies the one
+  window-level rate we have ever measured (97.59 bps on $52.2573 of maker volume) purely as a
+  yardstick. It is NOT credited, NOT realized, and NOT evidence of an attributable rebate.
+
+  BREAK-EVEN INCENTIVE RATE REQUIRED (bps of maker notional), vs 97.59 bps measured:
+     arm4b FROZEN LADDER  (base queue)           868 bps   =  8.9x the measured rate
+        same, away-rung depth x2                1129 bps   = 11.6x the measured rate
+        same, away-rung depth x4                1324 bps   = 13.6x the measured rate
+
+========================================================================================================================
+SIMULATOR AUDIT -- every optimistic assumption bounded, none silently resolved in our favour
+========================================================================================================================
+  ASSUMPTION                       TREATMENT                                    BOUND
+  queue at away-from-touch rungs   PMUS book is top-of-book only, so depth off  base / x2 / x4 depth:
+                                   the touch is NOT observed. Charging touch    completion 74.1/72.7/68.8%
+                                   depth to away rungs is OPTIMISTIC.           r/m 0.70/0.75/0.91
+                                                                                return -8.68/-11.29/-13.24%
+  price-improvement rungs          a rung above the touch becomes best bid, so  included in the x2/x4 sweep;
+                                   it is charged ZERO queue. Optimistic.        the passive-only arm (-3..0)
+                                                                                is WORSE, so this is not
+                                                                                carrying the result
+  sharesTraded direction           PMUS flow is CAUSAL_INFERRED_NOT_A_PRINT --  OPTIMISTIC and QUEUE_AWARE
+                                   inferred from sharesTraded deltas, never a   reported separately
+                                   real signed print. Direction is unobserved.  throughout; never collapsed
+  L5 recapture coverage            coverage is scored as a fill, i.e. we assume UPPER bound. Applied
+                                   we win the queue at that price.              IDENTICALLY to 1-rung and
+                                                                                R-rung, so the COMPARISON
+                                                                                between arms is unbiased
+  fill ordering / leakage          a fill may never be credited before the      7+8 regression tests, all
+                                   previous fill (t_last guard); the L5 touch   green; the lagged-touch test
+                                   is lagged so the scored price never enters   proves the first fill on a
+                                   its own decision                             side can never be scored
+  simultaneous orders              NOT assumed -- PROVEN on-chain for >=2 rungs atomic evidence is a LOWER
+                                   and inferred as a floor of 4 from 1s buckets bound on the posted ladder
+
+  NOT IDENTIFIABLE FROM PUBLIC FILL DATA, and labelled as such everywhere: true ladder depth
+  (we see only rungs that FILLED), posted rung size (we see filled quantity), every order that
+  never filled, every cancellation, and queue position. All ladder depths are floors.
+
+========================================================================================================================
+VERDICT AGAINST THE DECISION TREE
+========================================================================================================================
+  "If multi-rung mechanics improve held-out L5 fidelity AND materially close PMUS geometry, continue."
+     Held-out L5 fidelity: YES, decisively -- distance 1.229 -> 0.410, monotone in R, generalises
+     TRAIN->OOS with no refit. The ladder is L5. We have earned the right to call it that.
+     PMUS geometry: PARTIALLY -- cohort r/m 1.09 -> 0.92, completion 64.7% -> 68.5%, and the
+     return improves from -13.71% to -8.68%, the best of any arm built so far.
+
+  "If they improve L5 fidelity but don't improve PMUS, we have evidence of a genuine
+   transfer/microstructure limitation."
+     This is where we land, and the limitation is now PROVEN, not inferred:
+
+       R/M = 2I/(1-I) exactly, where I is the imbalance of acquisitions across the two sides.
+       Every arm sits ON its own floor to three decimals. Our execution already captures
+       100% of the pairing its markets offer. The ZERO-QUEUE 20-rung +/-10-tick upper bound
+       has the SAME imbalance (0.327) as the frozen 4-rung arm (0.315) -- reach, rung count
+       and queue position move both sides together and cannot change their balance.
+
+       L5's habitat   I = 0.083  ->  r/m floor 0.182  (achieved 0.182)
+       PMUS habitat   I = 0.315  ->  r/m floor 0.919  (achieved 0.919)
+
+     STOP CONDITION B IS MET. The residual 0.92 -> 0.182 gap is structurally impossible on
+     these PMUS markets. It is not a fidelity defect we have left unimplemented.
+
+  "Do not call the strategy profitable unless the faithful prospective version is positive
+   after actual executable economics."
+     IT IS NOT. The most faithful implementation we can build returns -8.68% standalone,
+     -13.24% under the pessimistic queue bound. Attributable incentives are $0.00 confirmed.
+     Break-even needs 868-1324 bps against the 97.59 bps this venue has actually been
+     observed to pay -- short by 9x to 14x. No incentive assumption available to us bridges
+     that, and I am not going to manufacture one.
+
+  "If faithful replay gets standalone close to breakeven, immediately build the same frozen
+   implementation into prospective shadow."
+     PRECONDITION NOT MET. -8.68% is not close to breakeven, so prospective shadow is NOT
+     started and no bounded live-probe package is prepared. Doing either would be spending
+     real capital on a geometry we have just proven the venue cannot deliver.
+
+========================================================================================================================
+WHAT THIS BUYS US, AND THE ONE QUESTION IT OPENS
+========================================================================================================================
+The transfer programme is not dead; its target is. We now have an evidence-derived,
+single-number habitat criterion that did not exist before: ACQUISITION FLOW IMBALANCE I.
+It is measurable before committing capital, it predicts r/m exactly rather than
+statistically, and it explains every arm we have built including the failures.
+
+L5 did not have better execution than us. It had I = 0.083. We are working markets at
+I = 0.315. Sports and esports books are directional -- the flow arrives on the side the
+crowd wants, and a two-sided maker cannot pair what never comes.
+
+THE OPEN QUESTION, stated but deliberately NOT acted on here: PMUS per-market I has p10
+of 0.029, so a minority of PMUS markets ARE L5-balanced. Selecting on I computed from our
+own realised acquisitions would be fitting a selector to an outcome-correlated variable on
+exploratory data, which is exactly what we were told not to do. If this is worth pursuing,
+it needs I estimated from PRE-ENTRY book/flow evidence, preregistered, and tested on a
+fresh prospective cohort. That is a new experiment, not a continuation of this one.
+
+WHAT THIS DOES NOT AUTHORISE
+  No live change, no prospective shadow of this arm, no probe package, no unlock of
+  near-$1 completion or of incentive-era behaviour. No PMUS threshold was searched, no
+  settlement-informed decision was taken, no parameter was tuned toward PMUS P&L: R and
+  the band were frozen on L5 TRAIN before any PMUS outcome was consulted. Model A is
+  untouched. Gemini A+B remain the unchanged negative control. International stays
+  reference-only. Cricket stays research-only. No orders. No arming.
