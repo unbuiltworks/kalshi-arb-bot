@@ -87,6 +87,11 @@ CORRECTION_ARMS = {"BTC15m": "L5_ADAPTED_GEMINI_BTC15M_V2"}
 #: fee-positive pairs to 2. A is the mechanism: 39 of 40 fills rest on a rung
 #: with nothing in front of it. B contributes 3 and is carried to be measured
 #: prospectively rather than because the offline corpus demanded it.
+#: The economic challenger runs beside the control by default and can be
+#: switched off without editing code. It never mutates anything either way,
+#: and switching it off cannot change a single decision the control makes.
+ECON_ARM_ENABLED = os.environ.get("GEMINI_ECON_ARM", "1") not in ("0", "false")
+
 EXECUTION_ARMS = ({"label": "EXEC_A_PLUS_B", "improve": True,
                    "preserve": True},)
 
@@ -158,6 +163,14 @@ def _band_of(arm: _Arm):
 
 def _step_arm(arm: _Arm, *, symbol, tte, book, depth, flow, policy):
     """One cycle for one arm. No venue call, no session, no mutation."""
+    # THE GEMINI_ECON_V1 CHALLENGER DRIVES ITSELF. It is the only arm whose
+    # decision is not "Model A, optionally re-priced": it asks Model A the same
+    # question and then applies venue economics the frozen policy cannot know.
+    # Delegating here keeps that logic out of this function entirely, so the
+    # control's path below is unchanged.
+    if getattr(arm, "IS_ECON_ARM", False):
+        return arm.step_compat(symbol=symbol, tte=tte, book=book, depth=depth,
+                               flow=flow, policy=policy)
     from src.gemini_execution import tape_replay as TR
     # THE PRINTS CAME FIRST -- see the control path below; the ordering
     # discipline is the same for every arm and for the same reason.
@@ -307,6 +320,17 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                                             if cohort else None),
                              policy=policy, improve=spec["improve"],
                              preserve=spec["preserve"]))
+        # THE ECONOMIC CHALLENGER, strictly additive like every other arm: its
+        # own guard, inventory and hypothetical book, sharing only the tape.
+        # It is built LAST so that a failure to construct it cannot prevent the
+        # correction and execution arms from running.
+        if ECON_ARM_ENABLED and cohort is not None:
+            from src.gemini_execution.econ import arm as ECON
+            arms.append(ECON.GeminiEconArm(
+                symbol=symbol,
+                cohort_prefix="GEMI-%s" % cohort.prefix,
+                policy=policy, cohort_name=cohort.name,
+                hazard_path=os.environ.get("GEMINI_ECON_HAZARD_PATH")))
     except Exception as exc:                                     # noqa: BLE001
         arms_error = "%s: %s" % (type(exc).__name__, exc)
 
