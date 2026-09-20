@@ -254,10 +254,21 @@ class ToxicityDataset:
             self.rows = self.rows[-(self.max_rows // 2):]
         return row
 
+    #: how a labelled row was joined to its fill_sequence row.
+    JOIN_FILL_T = "FILL_T_EXACT"
+    #: rows labelled before the join was corrected carry no method at all and
+    #: are reported as this. They were matched on `t_candidate` against a
+    #: capture stamped at FILL time -- two different events on one clock --
+    #: with a 12s tolerance, so they are a NON-RANDOM SUBSAMPLE enriched for
+    #: fills that arrived within ~1.5 cycles of admission.
+    JOIN_LEGACY = "LEGACY_TIMESTAMP_HEURISTIC"
+
     @staticmethod
     def label(row: Dict[str, Any], *, markout_60s: Optional[float],
               complement_filled: Optional[bool],
-              max_adverse_ticks: Optional[float]) -> None:
+              max_adverse_ticks: Optional[float],
+              fill_seq_id: Optional[int] = None,
+              join_method: Optional[str] = None) -> None:
         """Attach the OUTCOME. Never an input to any feature."""
         toxic = (None if markout_60s is None else bool(markout_60s < 0))
         row["outcome"] = {
@@ -265,11 +276,62 @@ class ToxicityDataset:
             "complement_filled": complement_filled,
             "max_adverse_ticks": max_adverse_ticks,
             "toxic": toxic,
+            # PROVENANCE OF THE LABEL, so a number can never again be read
+            # without knowing which fill it came from or how it got here.
+            "fill_seq_id": fill_seq_id,
+            "join_method": join_method,
             "definition": ("TOXIC = maker-perspective markout at 60s is "
                            "negative for the leg that filled. Complement fill "
                            "and drawdown are reported beside it, never folded "
                            "into the definition."),
+            "source": ("markout_60s is COPIED from the fill_sequence row, "
+                       "not recomputed. There is exactly ONE markout "
+                       "computation in this system, so the two stores cannot "
+                       "disagree on a shared row -- only on which rows they "
+                       "hold."),
         }
+
+    def reconcile(self, fill_rows: Sequence[Mapping[str, Any]]
+                  ) -> Dict[str, Any]:
+        """LOUD CHECK. For every labelled row, does the markout we stored
+        still equal the fill row it claims to come from?
+
+        This cannot fail while the label is a copy, and that is the point:
+        it converts an invariant we are relying on into one the evidence
+        report asserts every window instead of assuming.
+        """
+        by_id = {r.get("seq_id"): r for r in fill_rows
+                 if r.get("seq_id") is not None}
+        out: Dict[str, Any] = {"checked": 0, "agree": 0, "disagree": 0,
+                               "unjoinable": 0, "mismatches": [],
+                               "by_join_method": {}}
+        for r in self.rows:
+            o = r.get("outcome") or {}
+            if o.get("toxic") is None and o.get("markout_60s_ticks") is None:
+                continue
+            m = o.get("join_method") or self.JOIN_LEGACY
+            out["by_join_method"][m] = out["by_join_method"].get(m, 0) + 1
+            sid = o.get("fill_seq_id")
+            if sid is None or sid not in by_id:
+                out["unjoinable"] += 1
+                continue
+            out["checked"] += 1
+            theirs = (by_id[sid].get("markout_ticks_by_horizon_s")
+                      or {}).get("60")
+            ours = o.get("markout_60s_ticks")
+            if theirs == ours:
+                out["agree"] += 1
+            else:
+                out["disagree"] += 1
+                out["mismatches"].append(
+                    {"fill_seq_id": sid, "symbol": r.get("symbol"),
+                     "leg": r.get("leg"), "toxicity_markout_60s": ours,
+                     "fill_sequence_markout_60s": theirs})
+        out["ok"] = out["disagree"] == 0
+        out["why"] = (None if out["ok"] else
+                      "THE TWO STORES DISAGREE ON A SHARED FILL ID. Every "
+                      "leg-based conclusion is void until this is explained.")
+        return out
 
     # -- DURABILITY. The labelled cohort is the one thing a freeze exists to
     # accumulate, and the service runs restartPolicyType ALWAYS: a crash would

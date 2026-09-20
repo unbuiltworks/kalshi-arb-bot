@@ -647,28 +647,52 @@ class GeminiEconArm:
             settlement_leg=settlement)
         # LABEL the captured pre-fill rows with what actually happened. The
         # outcome never enters a feature; it is only ever the target.
+        #
+        # THE JOIN WAS ON TWO DIFFERENT CLOCKS, AND THAT WAS THE DEFECT.
+        # The toxicity capture is stamped `t = time.time()` in the cycle the
+        # fill was CONSUMED. This loop keyed on `t_candidate`, the cycle the
+        # rung was ADMITTED -- necessarily at least one cycle earlier, since a
+        # rung must rest before any print can reach it. With a 12s tolerance
+        # that matched only fills arriving within ~1.5 cycles of admission,
+        # which is a NON-RANDOM SUBSAMPLE enriched for fills into fast
+        # one-directional flow: precisely the adversely-selected ones. Worse,
+        # the nearest-match fallback could attach one fill's outcome to a
+        # different fill's features, and `byt` was never refreshed, so a row
+        # labelled inside this loop could be relabelled by a later fill.
+        #
+        # `first_fill_t` is taken from the SAME `time.time()` call as the
+        # capture, in the same cycle, so the two agree exactly. Rows that do
+        # not join stay UNLABELLED rather than being matched to the nearest
+        # thing available.
         try:
-            byt = {round(float(r.get("t") or 0), 1): r
-                   for r in self.state.toxicity.rows
-                   if r.get("outcome") is None
-                   and r.get("symbol") == self.symbol}
+            byt: Dict[float, List[Dict[str, Any]]] = {}
+            for r in self.state.toxicity.rows:
+                if r.get("outcome") is not None or r.get("symbol") != self.symbol:
+                    continue
+                try:
+                    byt.setdefault(round(float(r.get("t")), 3), []).append(r)
+                except (TypeError, ValueError):
+                    continue
             for row in self.state.fills.rows:
                 if row.get("symbol") != self.symbol or not row.get("first_fill"):
                     continue
-                key = round(float(row.get("t_candidate") or 0), 1)
-                tgt = byt.get(key)
-                if tgt is None and byt:
-                    # nearest capture for this contract, within a cycle
-                    k = min(byt, key=lambda x: abs(x - key))
-                    tgt = byt[k] if abs(k - key) <= 12.0 else None
-                if tgt is None:
+                ft = row.get("first_fill_t")
+                if ft is None:
                     continue
+                bucket = byt.get(round(float(ft), 3))
+                if not bucket:
+                    continue
+                # one capture per fill: take it and remove it, so a second
+                # fill in the same cycle cannot overwrite the first's label
+                tgt = bucket.pop(0)
                 PF.ToxicityDataset.label(
                     tgt,
                     markout_60s=(row.get("markout_ticks_by_horizon_s") or {}
                                  ).get("60"),
                     complement_filled=row.get("complement_filled"),
-                    max_adverse_ticks=row.get("max_adverse_markout_ticks"))
+                    max_adverse_ticks=row.get("max_adverse_markout_ticks"),
+                    fill_seq_id=row.get("seq_id"),
+                    join_method=PF.ToxicityDataset.JOIN_FILL_T)
         except Exception:                                        # noqa: BLE001
             pass
         # NOTE: the socket is NOT dropped here. The pre-warmer owns socket
@@ -703,6 +727,11 @@ class GeminiEconArm:
                             if self.pol else None),
                 "fill_sequence": self.state.fills.report(),
                 "toxicity_dataset": self.state.toxicity.report(),
+                # THE LOUD CHECK. Asserted every window rather than assumed:
+                # for every labelled row, does the markout we stored still
+                # equal the fill row it claims to come from?
+                "toxicity_reconciliation": self.state.toxicity.reconcile(
+                    self.state.fills.rows),
                 "toxicity_walk_forward": TX.walk_forward(
                     self.state.toxicity.rows),
                 "attribution": self.state.attribution.report(),

@@ -287,6 +287,13 @@ class Sequence:
             "first_fill_price": (None if self.first_fill_price is None
                                  else str(self.first_fill_price)),
             "first_fill_queue_known": self.first_fill_queue_known,
+            # THE JOIN KEY to the toxicity dataset. Both stores take this
+            # value from the SAME `time.time()` call in the same cycle, so
+            # matching on it is exact rather than a tolerance heuristic.
+            # `t_candidate` is a DIFFERENT event on the same clock -- the
+            # cycle the rung was admitted, at least one cycle earlier -- and
+            # joining on it is what desynchronised the two stores.
+            "first_fill_t": self.first_fill_t,
             "markout_ticks_by_horizon_s": dict(self.markouts),
             "max_adverse_markout_ticks": self.max_adverse_ticks,
             "complement_price_appeared": self.complement_price_t is not None,

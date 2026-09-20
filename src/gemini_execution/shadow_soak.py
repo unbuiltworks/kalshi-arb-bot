@@ -1242,6 +1242,21 @@ def _print_econ(w) -> None:
                               "mean_residual_net_per_contract_needed_usd")),
                       flush=True)
         # ---- TOXICITY. Can the adverse SIDE be identified before it fills?
+        # THE RECONCILIATION, LOUD. A disagreement between the two stores on
+        # a SHARED fill id voids every leg-based conclusion, so it is printed
+        # at the top of the toxicity block and never folded into a rate.
+        rec_ = e.get("toxicity_reconciliation") or {}
+        if rec_.get("by_join_method"):
+            print("ECON_TOX_RECONCILE %s %s ok=%s | checked=%s agree=%s "
+                  "disagree=%s unjoinable=%s | byJoin=%s%s" % (
+                      w.get("symbol"), lbl[:20], rec_.get("ok"),
+                      rec_.get("checked"), rec_.get("agree"),
+                      rec_.get("disagree"), rec_.get("unjoinable"),
+                      rec_.get("by_join_method"),
+                      ("" if rec_.get("ok") else
+                       " | *** DISAGREEMENT *** %s %s"
+                       % (rec_.get("why"), rec_.get("mismatches")[:3]))),
+                  flush=True)
         tox = e.get("toxicity_dataset") or {}
         if tox.get("rows"):
             print("ECON_TOX %s %s rows=%s labelled=%s toxic=%s | byLeg=%s" % (
