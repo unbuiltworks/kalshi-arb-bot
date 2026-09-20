@@ -100,10 +100,30 @@ def test_a_one_sided_book_is_refused():
     assert "TWO_SIDED_QUOTE" in r["failed_gates"]
 
 
-def test_too_few_prints_is_not_evidence_of_direction():
+def test_too_few_prints_is_counted_apart_from_one_directional_flow():
+    """The two refusals are different facts and used to be one gate.
+
+    "the tape was too thin to say anything" and "the tape said flow was
+    one-directional" call for opposite responses, and the flow-evidence ladder
+    varies exactly the first, so it has to be separable.
+    """
     r = _admit(_feat([{"side": "buy", "qty": "1"}]))
     assert r["admitted"] is False
-    assert "FLOW_REVERSIBLE" in r["failed_gates"]
+    assert "PRINT_COUNT" in r["failed_gates"]
+    assert "FLOW_REVERSIBLE" not in r["failed_gates"]
+
+
+def test_a_single_print_yields_UNKNOWN_rather_than_invented_statistics():
+    """With one print, alternation has no transitions and the largest print is
+    100% of volume BY CONSTRUCTION. Both must read UNKNOWN, not FAIL."""
+    th = _th(min_prints=1)
+    r = _admit(_feat([{"side": "buy", "qty": "1"}]), th=th)
+    g = {x["gate"]: x for x in r["gates"]}
+    assert g["PRINT_COUNT"]["pass"] is True
+    assert g["FLOW_REVERSIBLE"]["pass"] is None
+    assert g["FLOW_REVERSIBLE"]["identifiable"] is False
+    assert g["NOT_CONCENTRATED"]["pass"] is None
+    assert "by construction" in g["NOT_CONCENTRATED"]["why"]
 
 
 def test_unreadable_inventory_refuses_because_unreadable_is_not_flat():

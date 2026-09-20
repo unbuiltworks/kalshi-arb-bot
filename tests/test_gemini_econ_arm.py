@@ -249,7 +249,9 @@ def test_the_gates_read_the_socket_and_not_the_polled_tape():
     r = _step(a, flow=rich)
     assert r["econ_acted"] == []
     gates = {g for d in r["decisions"] for g in (d.get("failed_gates") or [])}
-    assert "FLOW_REVERSIBLE" in gates      # the socket saw nothing; poll ignored
+    # the socket saw NOTHING, so the refusal is the print count -- the polled
+    # tape's ten prints are ignored entirely
+    assert "PRINT_COUNT" in gates
 
 
 def test_unvouched_coverage_refuses_and_never_falls_back():

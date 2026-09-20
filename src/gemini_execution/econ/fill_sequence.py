@@ -34,6 +34,14 @@ UPPER BOUND, size ahead is the displayed size at placement, and our own presence
 would have changed the flow being replayed. Nothing here is submitted, filled,
 settled or realized.
 
+DEDUPLICATION ACROSS ARMS. The flow-evidence ladder runs four arms over the
+SAME cycles, so a state admitted by F0, F1 and F2 is ONE market observation
+seen three times, not three observations. Every candidate therefore carries an
+`observation_id` derived deterministically from (symbol, decision instant, leg,
+price) -- identical across arms by construction -- so a cross-arm comparison
+counts unique states rather than multiplying its own sample by the number of
+arms it happens to be running.
+
 CAPACITY IS PART OF THE ANSWER. A sequence that completes twice a day is a
 curiosity; the same sequence forty times a day is a business. Opportunity and
 completion rates are therefore reported PER DAY as well as per window.
@@ -46,6 +54,7 @@ from decimal import Decimal as D
 from decimal import InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src.gemini_execution.econ import book_move as BM
 from src.gemini_execution.econ import veto as VT
 
 SCHEMA = "gemini_econ_fill_sequence/v1"
@@ -73,6 +82,22 @@ def _bid(book: Mapping[str, Any], leg: str) -> Optional[D]:
     return _dec(((book or {}).get(str(leg).lower()) or {}).get("bid"))
 
 
+def observation_id(*, symbol: str, t: Any, leg: Any, price: Any,
+                   quantum_s: float = 1.0) -> str:
+    """A stable id for ONE market observation, shared by every arm that sees it.
+
+    Derived rather than passed down, so arms stepping independently inside the
+    same cycle agree without the collector having to thread an id through a
+    signature the control also uses. The instant is quantised to `quantum_s`
+    because the arms step microseconds apart within a cycle, not at the same
+    float.
+    """
+    import hashlib
+    q = int(float(t) // float(quantum_s or 1.0))
+    raw = "%s|%d|%s|%s" % (symbol, q, str(leg or "").upper(), price)
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
 @dataclass
 class Sequence:
     """One admitted entry, followed through the whole fill sequence."""
@@ -86,8 +111,13 @@ class Sequence:
     min_edge: str
     tick: D
 
+    observation_id: Optional[str] = None
     rested: bool = False
     rested_legs: List[str] = field(default_factory=list)
+    #: the DUAL-RUNG capture: both outcomes' bids, asks and spreads at the
+    #: candidate instant, and how the book had moved by each horizon
+    book_t0: Dict[str, Any] = field(default_factory=dict)
+    book_moves: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     first_fill_leg: Optional[str] = None
     first_fill_price: Optional[D] = None
@@ -143,7 +173,19 @@ class Sequence:
 
     def observe(self, *, book: Mapping[str, Any], t: float) -> None:
         """Markouts, complement-price availability and exit economics."""
-        if self.closed or self.first_fill_leg is None:
+        if self.closed:
+            return
+        # THE DUAL-RUNG BOOK MOVE. Recorded from the CANDIDATE instant, not
+        # from the first fill, because the question is what the book does
+        # after we would have POSTED into it.
+        if self.book_t0:
+            age0 = float(t) - float(self.t_candidate)
+            for h in MARKOUT_HORIZONS_S:
+                k = str(h)
+                if k not in self.book_moves and age0 >= h:
+                    self.book_moves[k] = BM.classify(
+                        self.book_t0, BM.snapshot(book), tick=self.tick)
+        if self.first_fill_leg is None:
             return
         held, comp = self.first_fill_leg, (
             "NO" if self.first_fill_leg == "YES" else "YES")
@@ -205,6 +247,14 @@ class Sequence:
                 exit_price=self.best_exit_price)
         return {
             "schema": SCHEMA, "seq_id": self.seq_id, "arm": self.arm,
+            "observation_id": self.observation_id,
+            "book_t0": dict(self.book_t0),
+            "book_move_by_horizon_s": {
+                k: {"klass": v.get("klass"),
+                    "d_bid_sum_ticks": v.get("d_bid_sum_ticks"),
+                    "d_yes_bid_ticks": v.get("d_yes_bid_ticks"),
+                    "d_no_bid_ticks": v.get("d_no_bid_ticks")}
+                for k, v in sorted(self.book_moves.items())},
             "cohort": self.cohort, "symbol": self.symbol,
             "t_candidate": self.t_candidate, "tte_s": self.tte_candidate,
             "rested": self.rested, "rested_legs": list(self.rested_legs),
@@ -258,14 +308,19 @@ class FillSequenceLedger:
     max_rows: int = 4000
 
     def candidate(self, *, cohort: str, symbol: str, t: float, tte_s: Any,
-                  min_edge: Any = "0.005", tick: Any = "0.01") -> Sequence:
+                  min_edge: Any = "0.005", tick: Any = "0.01",
+                  leg: Any = None, price: Any = None,
+                  book: Optional[Mapping[str, Any]] = None) -> Sequence:
         self.candidates += 1
         self.first_t = self.first_t if self.first_t is not None else float(t)
         self.last_t = float(t)
         sq = Sequence(seq_id=self._next_id, cohort=cohort, symbol=symbol,
                       arm=self.arm, t_candidate=float(t),
                       tte_candidate=(None if tte_s is None else float(tte_s)),
-                      min_edge=str(min_edge), tick=_dec(tick) or D("0.01"))
+                      min_edge=str(min_edge), tick=_dec(tick) or D("0.01"),
+                      observation_id=observation_id(
+                          symbol=symbol, t=t, leg=leg, price=price),
+                      book_t0=(BM.snapshot(book) if book else {}))
         self._next_id += 1
         if len(self.open_) < self.max_open:
             self.open_.append(sq)
@@ -360,6 +415,15 @@ class FillSequenceLedger:
                 [float((r["best_exit_economics"] or {}).get("net_roundtrip", 0))
                  for r in resid if r.get("best_exit_economics")]),
             # ---- capacity
+            "unique_observations": len({r.get("observation_id")
+                                        for r in rows
+                                        if r.get("observation_id")}),
+            "book_move_classes_by_horizon_s": {
+                h: dict(__import__("collections").Counter(
+                    (r["book_move_by_horizon_s"].get(h) or {}).get("klass")
+                    for r in rows
+                    if (r["book_move_by_horizon_s"].get(h) or {}).get("klass")))
+                for h in (str(x) for x in MARKOUT_HORIZONS_S)},
             "candidates_per_day": (None if per_day is None
                                    else round(self.candidates * per_day, 1)),
             "first_fills_per_day": (None if per_day is None

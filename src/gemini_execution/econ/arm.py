@@ -427,7 +427,9 @@ class GeminiEconArm:
                                 cohort=self.cohort, symbol=symbol, t=now_t,
                                 tte_s=tte,
                                 min_edge=(self.pol.thresholds.min_edge
-                                          if self.pol else "0.005"))
+                                          if self.pol else "0.005"),
+                                leg=a.get("leg"), price=a.get("price"),
+                                book=book)
                             sq.note_rest([a.get("leg")] if a.get("leg")
                                          else [])
                     else:

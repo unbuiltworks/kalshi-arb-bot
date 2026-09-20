@@ -236,6 +236,67 @@ PASSIVE_PAIR_COHORTS: Dict[str, CohortPolicy] = {
 
 BOOLEAN_VARIANT, PASSIVE_PAIR_VARIANT = "BOOLEAN", "PASSIVE_PAIR"
 
+#: THE FLOW-EVIDENCE LADDER. Four arms with the IDENTICAL passive-pair
+#: economic rule, identical price/TTE policy, identical inventory limits and
+#: identical cadence, differing in ONE number: how many WS prints the tape must
+#: carry before an entry may be admitted.
+#:
+#: The purpose is NOT to find the loosest threshold that trades. It is to
+#: measure whether additional flow evidence actually BUYS anything -- better
+#: first-fill markout, higher maker-to-maker completion, smaller residual
+#: losses, better whole-cycle economics. If F5 does not beat F0/F1/F2 on those,
+#: then >=5 prints is spending capacity and buying nothing.
+#:
+#: F5 is the production hypothesis and is NOT modified. At min_prints >= 2 both
+#: downstream flow statistics are always identifiable, so the ladder machinery
+#: reproduces F5's existing verdicts exactly; a test asserts it.
+FLOW_LADDER: Dict[str, int] = {"F0": 0, "F1": 1, "F2": 2, "F5": 5}
+
+#: On the LOOSE rungs a flow statistic that cannot be computed is UNKNOWN and
+#: is waived rather than refusing -- otherwise F0 would admit nothing and the
+#: ladder would measure its own gate instead of the market. A statistic that
+#: IS computable and FAILS still refuses on every rung; only unidentifiability
+#: is waived.
+_LADDER_ADVISORY = ("HAZARD", "REFERENCE_AGREEMENT",
+                    "FLOW_REVERSIBLE", "NOT_CONCENTRATED")
+
+
+def _flow_variant(pol: CohortPolicy, rung: str) -> CohortPolicy:
+    """The passive-pair policy at one rung of the flow-evidence ladder."""
+    base = _passive_pair_variant(pol)
+    t = base.thresholds
+    n = FLOW_LADDER[rung]
+    return CohortPolicy(
+        cohort=base.cohort, window_s=base.window_s,
+        quote_band_s=base.quote_band_s,
+        entry_until_tte_s=base.entry_until_tte_s,
+        mixed_until_tte_s=base.mixed_until_tte_s,
+        withdraw_below_tte_s=base.withdraw_below_tte_s,
+        max_residual=base.max_residual,
+        toxicity_horizon_s=base.toxicity_horizon_s,
+        rescue_below_tte_s=base.rescue_below_tte_s,
+        flow_window_s=base.flow_window_s,
+        thresholds=EN.Thresholds(
+            cohort=t.cohort, min_alternation=t.min_alternation,
+            max_largest_print_share=t.max_largest_print_share,
+            max_required_gap_ticks=t.max_required_gap_ticks,
+            max_reference_disagreement=t.max_reference_disagreement,
+            min_prints=n, hazard_threshold=t.hazard_threshold,
+            min_edge=t.min_edge, max_spread=t.max_spread,
+            spread_mode=EN.SPREAD_PASSIVE_PAIR, phase=t.phase,
+            advisory_gates=(t.advisory_gates if rung == "F5"
+                            else _LADDER_ADVISORY)),
+        notes=("%s at flow rung %s (min_prints=%d). Identical to the other "
+               "rungs in every other respect. OBSERVATION ONLY."
+               % (base.cohort, rung, n)))
+
+
+#: (cohort, rung) -> policy
+FLOW_LADDER_COHORTS: Dict[str, Dict[str, CohortPolicy]] = {
+    rung: {c: _flow_variant(p, rung) for c, p in COHORTS.items()}
+    for rung in FLOW_LADDER
+}
+
 
 def policy_for(cohort: Any, *, variant: str = BOOLEAN_VARIANT
                ) -> Optional[CohortPolicy]:
@@ -246,6 +307,8 @@ def policy_for(cohort: Any, *, variant: str = BOOLEAN_VARIANT
     records.
     """
     name = getattr(cohort, "name", None) or str(cohort or "")
+    if variant in FLOW_LADDER:
+        return FLOW_LADDER_COHORTS[variant].get(name)
     if variant == PASSIVE_PAIR_VARIANT:
         return PASSIVE_PAIR_COHORTS.get(name)
     return COHORTS.get(name)

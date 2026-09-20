@@ -47,6 +47,21 @@ SHADOW, LIVE = "SHADOW", "LIVE"
 SPREAD_BOOLEAN = "BOOLEAN"
 SPREAD_PASSIVE_PAIR = "PASSIVE_PAIR"
 
+#: IDENTIFIABILITY FLOORS. Below these a statistic cannot be computed at all,
+#: so the gate reports UNKNOWN rather than inventing a value.
+#:
+#:   alternation  needs at least 2 prints, because it counts TRANSITIONS
+#:                between consecutive aggressor directions and 1 print has
+#:                none. With 0 or 1 prints "alternation" is not a small
+#:                number, it is undefined.
+#:   concentration needs at least 2 prints, because with exactly 1 the largest
+#:                print is 100% of volume BY CONSTRUCTION. Reporting that as
+#:                "one participant, not liquidity" is an arithmetic identity
+#:                dressed up as a finding -- which is what the live log was
+#:                doing on every 1-print window.
+MIN_PRINTS_FOR_ALTERNATION = 2
+MIN_PRINTS_FOR_CONCENTRATION = 2
+
 #: Gates whose UNKNOWN is RECORDED but does not refuse, during SHADOW only.
 #:
 #: HAZARD is here for the bootstrap reason in the module docstring: refusing on
@@ -173,6 +188,18 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                            % (gap, thresholds.max_required_gap_ticks),
                            required_gap_ticks=gap))
 
+    # ---- 3a. PRINT COUNT, split out as its own gate.
+    #
+    # It used to be folded inside FLOW_REVERSIBLE, which conflated two
+    # different refusals: "the tape was too thin to say anything" and "the
+    # tape said the flow was one-directional". The flow-evidence ladder
+    # (F0/F1/F2/F5) varies exactly this number and nothing else, so it has to
+    # be separable or the ladder measures nothing.
+    #
+    # At min_prints >= 2 both downstream statistics are always identifiable,
+    # so this split reproduces the previous behaviour exactly at the
+    # production setting of 5. A test asserts that.
+    #
     # ---- 3. FLOW REVERSIBILITY. The gate the brief singles out. Volume is
     # deliberately absent.
     #
@@ -199,6 +226,10 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
         # UNVOUCHED IS NOT EMPTY, and it is not zero prints either. The socket
         # could not vouch for the interval, so we know nothing about flow --
         # which refuses, because an unknown gate is never a pass.
+        gates.append(_gate("PRINT_COUNT", None,
+                           "flow coverage UNVOUCHED: %s"
+                           % (flow_why or "socket could not vouch"),
+                           flow_source="GEMINI_WS", flow_vouched=False))
         gates.append(_gate("FLOW_REVERSIBLE", None,
                            "flow coverage UNVOUCHED: %s"
                            % (flow_why or "socket could not vouch"),
@@ -207,15 +238,29 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                            "flow coverage UNVOUCHED; print sizes unknown",
                            flow_source="GEMINI_WS", flow_vouched=False))
     elif n < thresholds.min_prints:
-        gates.append(_gate("FLOW_REVERSIBLE", False,
-                           "only %d prints in the window, below the minimum "
-                           "of %d; flow direction is not yet evidence"
-                           % (n, thresholds.min_prints), n_prints=n,
+        gates.append(_gate("PRINT_COUNT", False,
+                           "only %d prints in the window, below this arm's "
+                           "minimum of %d" % (n, thresholds.min_prints),
+                           n_prints=n, min_prints=thresholds.min_prints,
                            flow_source="GEMINI_WS"))
+    elif n < MIN_PRINTS_FOR_ALTERNATION:
+        # the arm ADMITS this few prints, but alternation is undefined on
+        # them. UNKNOWN, never a fabricated number and never a failure.
+        gates.append(_gate("PRINT_COUNT", True, None, n_prints=n,
+                           min_prints=thresholds.min_prints))
+        gates.append(_gate(
+            "FLOW_REVERSIBLE", None,
+            "alternation is UNIDENTIFIABLE on %d print(s): it counts "
+            "transitions between consecutive aggressor directions and there "
+            "are none" % n, n_prints=n, identifiable=False,
+            needs_prints=MIN_PRINTS_FOR_ALTERNATION))
     elif alt is None:
+        gates.append(_gate("PRINT_COUNT", True, None, n_prints=n))
         gates.append(_gate("FLOW_REVERSIBLE", None,
                            "aggressor direction unreadable on this tape"))
     else:
+        gates.append(_gate("PRINT_COUNT", True, None, n_prints=n,
+                           min_prints=thresholds.min_prints))
         ok = alt >= thresholds.min_alternation
         gates.append(_gate("FLOW_REVERSIBLE", ok,
                            None if ok else
@@ -231,6 +276,17 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
     share = feat.get("largest_print_share")
     if flow_vouched is False:
         pass                       # already recorded UNVOUCHED above
+    elif n < MIN_PRINTS_FOR_CONCENTRATION:
+        # with exactly one print the largest print is 100% of volume BY
+        # CONSTRUCTION. That is an identity, not evidence of a single
+        # participant, and the live log was emitting it as a finding on every
+        # 1-print window.
+        gates.append(_gate(
+            "NOT_CONCENTRATED", None,
+            "concentration is MATHEMATICALLY MEANINGLESS on %d print(s): the "
+            "largest print is 100%% of volume by construction" % n,
+            n_prints=n, identifiable=False,
+            needs_prints=MIN_PRINTS_FOR_CONCENTRATION))
     elif share is None:
         gates.append(_gate("NOT_CONCENTRATED", None,
                            "print sizes unreadable"))

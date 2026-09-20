@@ -92,6 +92,10 @@ CORRECTION_ARMS = {"BTC15m": "L5_ADAPTED_GEMINI_BTC15M_V2"}
 #: and switching it off cannot change a single decision the control makes.
 ECON_ARM_ENABLED = os.environ.get("GEMINI_ECON_ARM", "1") not in ("0", "false")
 
+#: the flow-evidence ladder (PP_F0 / PP_F1 / PP_F2 beside PASSIVE_PAIR_V1).
+#: Observation only; it can be switched off without touching any other arm.
+LADDER_ENABLED = os.environ.get("GEMINI_ECON_LADDER", "1") not in ("0", "false")
+
 EXECUTION_ARMS = ({"label": "EXEC_A_PLUS_B", "improve": True,
                    "preserve": True},)
 
@@ -342,9 +346,17 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
             # They share the market (one socket, one census) and keep their
             # own coverage, attribution, labels, forks and fill sequences, so
             # neither can contaminate the other's evidence.
-            for _lbl, _var in ((ECON.LABEL, ECPOL.BOOLEAN_VARIANT),
-                               (ECON.PASSIVE_PAIR_LABEL,
-                                ECPOL.PASSIVE_PAIR_VARIANT)):
+            # THE FLOW-EVIDENCE LADDER, observation only. Four rungs sharing
+            # the identical passive-pair economic rule, price/TTE policy,
+            # inventory limits, cadence and fill tape, differing ONLY in how
+            # many WS prints the tape must carry. F5 IS PASSIVE_PAIR_V1 and is
+            # not duplicated. The point is not to pick the loosest rung: it is
+            # to measure whether the extra flow evidence buys better fills.
+            _spec = [(ECON.LABEL, ECPOL.BOOLEAN_VARIANT),
+                     (ECON.PASSIVE_PAIR_LABEL, ECPOL.PASSIVE_PAIR_VARIANT)]
+            if LADDER_ENABLED:
+                _spec += [("PP_%s" % r, r) for r in ("F0", "F1", "F2")]
+            for _lbl, _var in _spec:
                 arms.append(ECON.GeminiEconArm(
                     symbol=symbol,
                     cohort_prefix="GEMI-%s" % cohort.prefix,
@@ -866,6 +878,7 @@ async def cohort_loop(a, cohort_name: str) -> None:
                 _print_window(w)
                 _print_arms(w)
                 _print_econ(w)
+                _print_ladder(w)
                 _print_bands(w)
                 w.pop("cycles_detail", None)
                 hb.window_done(w)
@@ -938,6 +951,73 @@ def _print_bands(w) -> None:
                           r["matched_gross"]), flush=True)
     except Exception as exc:                                     # noqa: BLE001
         print("ARM_BAND_ERROR %s: %s" % (type(exc).__name__, exc), flush=True)
+
+
+def _print_ladder(w) -> None:
+    """The flow-evidence ladder, compared on DEDUPLICATED observations.
+
+    A state admitted by F0, F1 and F2 is ONE market observation seen three
+    times. Counting it three times would inflate the looser rungs' samples by
+    construction and make them look better simply for being looser, which is
+    the opposite of what this ladder is for.
+    """
+    rungs = {}
+    for lbl, rec in (w.get("correction_arms") or {}).items():
+        e = rec.get("econ")
+        if not e or not str(lbl).startswith(("PP_", "PASSIVE_PAIR")):
+            continue
+        fs = e.get("fill_sequence") or {}
+        if fs.get("candidate_states") is None:
+            continue
+        rungs[lbl] = fs
+    if len(rungs) < 2:
+        return
+    base = rungs.get("PASSIVE_PAIR_V1") or {}
+    for lbl in sorted(rungs):
+        fs = rungs[lbl]
+        print("ECON_LADDER %s %s | uniqObs=%s cand=%s rested=%s first=%s "
+              "ffRate=%s | compPrice=%s compFill=%s m2m=%s | matched=%s "
+              "basis=%s net=%s | residRate=%s | mo60=%s adv60=%s | "
+              "perDay first=%s complete=%s" % (
+                  w.get("symbol"), lbl,
+                  fs.get("unique_observations"), fs.get("candidate_states"),
+                  fs.get("orders_hypothetically_rested"),
+                  fs.get("first_fills"), fs.get("first_fill_rate_of_rested"),
+                  fs.get("complement_price_appearances"),
+                  fs.get("complement_fills"),
+                  fs.get("maker_to_maker_completion_rate_of_first_fills"),
+                  fs.get("matched_pairs"), fs.get("matched_basis_p50"),
+                  fs.get("matched_net_total_excl_subsidy"),
+                  fs.get("residual_rate_of_first_fills"),
+                  fs.get("post_first_fill_markout_p50_60s"),
+                  fs.get("post_first_fill_adverse_share_60s"),
+                  fs.get("first_fills_per_day"),
+                  fs.get("completions_per_day")), flush=True)
+    # THE INCREMENTAL VALUE OF THE FILTER. If F5 does not beat the looser
+    # rungs on these, >=5 prints is spending capacity and buying nothing.
+    if base:
+        for lbl in sorted(k for k in rungs if k != "PASSIVE_PAIR_V1"):
+            fs = rungs[lbl]
+
+            def _d(k):
+                a, b = base.get(k), fs.get(k)
+                return (None if (a is None or b is None) else round(a - b, 4))
+            print("ECON_LADDER_DELTA %s F5_minus_%s | mo60=%s m2m=%s "
+                  "ffRate=%s residRate=%s net=%s" % (
+                      w.get("symbol"), lbl,
+                      _d("post_first_fill_markout_p50_60s"),
+                      _d("maker_to_maker_completion_rate_of_first_fills"),
+                      _d("first_fill_rate_of_rested"),
+                      _d("residual_rate_of_first_fills"),
+                      _d("matched_net_total_excl_subsidy")), flush=True)
+    # WHY BOTH LEGS MOVED. Does a wide passive book compress after we post?
+    for lbl in sorted(rungs):
+        cl = rungs[lbl].get("book_move_classes_by_horizon_s") or {}
+        if any(cl.values()):
+            print("ECON_BOOKMOVE %s %s | %s" % (
+                w.get("symbol"), lbl,
+                " ; ".join("%ss %s" % (h, v) for h, v in sorted(cl.items())
+                           if v)), flush=True)
 
 
 def _print_econ(w) -> None:
