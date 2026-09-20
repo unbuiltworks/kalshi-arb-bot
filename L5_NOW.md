@@ -43,7 +43,42 @@ behavioural rule — not a discretization artifact.** The marginal ~50/50
 complete rate seen per price bucket is a *mixture* of these two modes; price is
 not the predictor, `last_rel` is.
 
-## 4. The real transfer blocker is the inventory regime
+## 4. Residual-cap hypothesis FALSIFIED for this cohort
+
+Two cohorts on identical market streams, differing only by rebinding
+`MAX_RESIDUAL_UNITS`:
+
+| PMUS | first fills | eligible | matched |
+|---|---|---|---|
+| A cap 3 (shipped) | 40 | 20 | **4** |
+| B uncapped | 40 | 14 | **4** |
+
+`A=4, B=4, intersection=4, A_only=0, B_only=0` — **the same four chains**.
+Uncapping removed all 32 cap hits and added zero matches. The chains that
+matched closed before the cap could bind.
+
+**The current transfer bottleneck is compatible opposing flow and recycling
+latency**, pending the >=25 COMPLETE-eligible checkpoint and the NFL LIVE test.
+On International, uncapping actually *costs* matches (A=26, B=15) because
+`last_rel=extend` persistence keeps sequences open instead of closing them.
+
+## 5. The queue-aware matches sit in a recognizable habitat
+
+PMUS COMPLETE-eligible chains, cohort A, queue-aware branch, 600s look-ahead:
+5 matched of 21 eligible, and **all five are esports match-winner (LoL/CS2)**.
+
+| | touch depth (med) | compatible flow/min (med) |
+|---|---|---|
+| matched | **81.0** | **0.711** |
+| not matched | **1850.6** | 0.353 |
+
+A 23x depth difference. Thin touch plus higher compatible-flow rate — the same
+profile as the International BTC15m reference (depth ~80). Deep PMUS books
+(tennis 19k, soccer 43k) produced zero matches.
+
+## 6. The old inventory-regime framing
+
+
 
 L5's own recorded behaviour sits at:
 
@@ -63,7 +98,7 @@ few chances to flip.
 **This is a diagnosis, not a proposed change.** No model, bucket, threshold,
 cap or parameter has been modified.
 
-## 5. Habitat: book reach is not executable recycling
+## 7. Habitat: book reach is not executable recycling
 
 Individual live-sports markets do reach the International BTC15m book-reach
 reference (INTL lol 90.9%, wta 77.5%, PMUS sea full-game-total 71.5% at 120s).
@@ -71,7 +106,7 @@ But P(a reach is followed by a *compatible print* within 60s) reorders
 everything: PMUS cs2 76.9%, PMUS valorant 77.8%, INTL wta 6.7%, PMUS atpcq
 tennis 0.0%. Reach is an upper bound on fill opportunity, not a measure of it.
 
-## 6. Standing separations
+## 8. Standing separations
 
 * International is **reference/fidelity only** — L5's own venue, not executable
   for us, never a trading target.
