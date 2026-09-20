@@ -28,10 +28,52 @@ def _no_network(monkeypatch):
     monkeypatch.setattr(MD, "terms_for", lambda s: {"priceIncrement": "0.01"})
 
 
-def _arm(cohort="BTC15m", symbol=SYM15):
+class FakeWs:
+    """A WS flow source with no socket.
+
+    The gates read the MAINTAINED socket now, so a test that wants to drive
+    them must supply socket-shaped flow. `vouched=None` means "behave as if the
+    socket cannot vouch", which must refuse.
+    """
+
+    def __init__(self, prints=None, vouched=True, why=None):
+        self._prints = prints
+        self.vouched = vouched
+        self.why = why
+        self.watched = []
+        self.dropped = []
+
+    def watch(self, symbol):
+        self.watched.append(symbol)
+
+    def drop(self, symbol):
+        self.dropped.append(symbol)
+
+    def flow(self, symbol, *, window_s, now=None):
+        if not self.vouched:
+            return {"vouched": False, "prints": None,
+                    "why": self.why or "socket cannot vouch",
+                    "window_s": window_s}
+        rows = [{"side": p["side"], "qty": p["qty"], "price": p.get("price"),
+                 "t": i} for i, p in enumerate(self._prints or [])]
+        return {"vouched": True, "prints": rows, "n_prints": len(rows),
+                "n_directional": len(rows), "undirected": 0,
+                "window_s": window_s, "why": None}
+
+
+def _arm(cohort="BTC15m", symbol=SYM15, ws=None, prints=None):
     return ARM.GeminiEconArm(
         symbol=symbol, cohort_prefix="GEMI-BTC15M" if cohort == "BTC15m"
-        else "GEMI-BTC05M", policy="GEMINI_RECYCLE", cohort_name=cohort)
+        else "GEMI-BTC05M", policy="GEMINI_RECYCLE", cohort_name=cohort,
+        ws=(ws if ws is not None
+            else FakeWs(prints if prints is not None else TWO_SIDED)))
+
+
+TWO_SIDED = [{"side": "buy", "qty": "1", "price": "0.61"},
+             {"side": "sell", "qty": "2", "price": "0.60"},
+             {"side": "buy", "qty": "1", "price": "0.61"},
+             {"side": "sell", "qty": "1", "price": "0.60"},
+             {"side": "buy", "qty": "1", "price": "0.61"}]
 
 
 def _step(a, tte=700, book=BOOK, flow=FLOW, symbol=SYM15):
@@ -84,10 +126,10 @@ def test_reduce_and_exit_never_enter_an_l5_field():
 
 
 def test_a_toxic_window_suppresses_entry_and_names_the_gate():
-    toxic = {"prints": [{"side": "buy", "qty": "500", "price": "0.61"}]
-             + [{"side": "buy", "qty": "5", "price": "0.61"}] * 4}
-    a = _arm()
-    r = _step(a, flow=toxic)
+    toxic = ([{"side": "buy", "qty": "500", "price": "0.61"}]
+             + [{"side": "buy", "qty": "5", "price": "0.61"}] * 4)
+    a = _arm(prints=toxic)
+    r = _step(a)
     assert r["econ_acted"] == []
     assert a.divergences.get(ARM.SUPPRESSED, 0) > 0
     gates = {g for d in r["decisions"] for g in (d.get("failed_gates") or [])}
@@ -182,3 +224,45 @@ def test_the_hazard_survives_a_restart_through_the_arm(tmp_path):
                           policy="GEMINI_RECYCLE", cohort_name="BTC15m",
                           hazard_path=p)
     assert b.hazard.cells == a.hazard.cells
+
+
+# --------------------------------------------- flow provenance (WS re-source)
+
+def test_the_gates_read_the_socket_and_not_the_polled_tape():
+    """`habitat.public_flow` is labelled EVIDENCE ONLY. A rich polled tape must
+    NOT be able to admit an entry when the socket says nothing."""
+    a = _arm(ws=FakeWs([], vouched=True))
+    rich = {"prints": [{"side": "buy", "qty": "1"},
+                       {"side": "sell", "qty": "1"}] * 10}
+    r = _step(a, flow=rich)
+    assert r["econ_acted"] == []
+    gates = {g for d in r["decisions"] for g in (d.get("failed_gates") or [])}
+    assert "FLOW_REVERSIBLE" in gates      # the socket saw nothing; poll ignored
+
+
+def test_unvouched_coverage_refuses_and_never_falls_back():
+    a = _arm(ws=FakeWs(vouched=False, why="view began after the interval"))
+    r = _step(a)
+    assert r["econ_acted"] == []
+    assert r["ws_flow"]["vouched"] is False
+    # the gate is UNKNOWN rather than FAILED -- "could not measure" and
+    # "measured and rejected" are different facts -- and unknown still refuses
+    unknown = {g for d in r["decisions"] for g in (d.get("unknown_gates") or [])}
+    assert "FLOW_REVERSIBLE" in unknown
+    reasons = " ".join(str((d.get("gate_reasons") or {}).get("FLOW_REVERSIBLE"))
+                       for d in r["decisions"])
+    assert "UNVOUCHED" in reasons
+
+
+def test_vouched_socket_flow_admits_the_same_window_the_poll_could_not():
+    a = _arm(ws=FakeWs(TWO_SIDED, vouched=True))
+    r = _step(a, flow={"prints": []})       # polled tape empty, socket rich
+    assert r["ws_flow"]["vouched"] is True
+    assert len(r["econ_acted"]) > 0
+
+
+def test_the_arm_watches_its_symbol_on_the_socket():
+    ws = FakeWs(TWO_SIDED)
+    a = _arm(ws=ws)
+    _step(a)
+    assert SYM15 in ws.watched

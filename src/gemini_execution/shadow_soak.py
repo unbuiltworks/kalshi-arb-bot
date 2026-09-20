@@ -401,6 +401,20 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         runner._persist(row)
         await asyncio.sleep(interval_s)
 
+    # ---- WINDOW END: resolve the economic challenger's open counterfactual
+    # forks on the SAME final book both branches are scored against. Contained,
+    # like every other arm operation, so an observation module can never end a
+    # window.
+    econ_finish = {}
+    for arm in arms:
+        if not getattr(arm, "IS_ECON_ARM", False):
+            continue
+        try:
+            econ_finish[arm.label] = arm.finish(book=book)
+        except Exception as exc:                                 # noqa: BLE001
+            econ_finish[arm.label] = {"error": "%s: %s"
+                                      % (type(exc).__name__, exc)}
+
     # ------------------------------------------------- the rollover gate
     after = await _account_state(symbol)
     after_view = EX.canonical_executions(after.get("orders_seen"),
@@ -463,7 +477,8 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                          # starved arm is indistinguishable from a broken one:
                          # both read "rested=0" and neither says which gate
                          # refused.
-                         **({"econ": arm.report()}
+                         **({"econ": arm.report(),
+                             "econ_finish": econ_finish.get(arm.label)}
                             if getattr(arm, "IS_ECON_ARM", False) else {}),
                          "error": arm.error}
              for arm in arms} or None,
@@ -567,9 +582,26 @@ class CohortHeartbeat:
         self.refused = 0
         self.rungs_resting = 0
         self.rungs_rested = 0
+        # ---- THREE DIFFERENT CLOCKS, NAMED SO THEY CANNOT BE COMPARED BY
+        # ACCIDENT. `first_fills` and `complete_fills` are ASSIGNED from the
+        # CURRENT window's HypotheticalBook every cycle, so a rollover resets
+        # them to 0 with the fresh book. `matched_pairs` is INCREMENTED once
+        # per window and never reset. Printed side by side they read as one
+        # ratio, and they are not one: "first_fills 0, matched_pairs 1" means
+        # "no first fill in the window running NOW; one EARLIER window ended
+        # matched". These originals are preserved byte-for-byte so rows stay
+        # comparable with the control service's, and unambiguous fields are
+        # added beside them rather than replacing them.
         self.first_fills = 0
         self.complete_fills = 0
         self.matched_pairs = 0
+        #: true cumulative totals across every window this process has run
+        self.first_fills_cumulative = 0
+        self.complete_fills_cumulative = 0
+        #: what `matched_pairs` actually counts: WINDOWS that ended with
+        #: matched inventory, not the number of pairs. A window holding three
+        #: matched pairs adds ONE.
+        self.windows_ending_matched = 0
         self.residual = "0"
         self.windows = 0
         self.last_rollover = None
@@ -646,6 +678,18 @@ class CohortHeartbeat:
             h = rec.get("hypothetical") or {}
             a["first_fills"] = h.get("first_fills", a["first_fills"])
             a["COMPLETE_fills"] = h.get("complete_fills", a["COMPLETE_fills"])
+            # the arm's counters run on the same three clocks as the control's
+            # -- current-window gauges assigned per cycle, plus a per-window
+            # increment -- so they get the same unambiguous companions.
+            try:
+                a["first_fills_cumulative"] = (
+                    a.get("first_fills_cumulative", 0)
+                    + int(h.get("first_fills") or 0))
+                a["COMPLETE_fills_cumulative"] = (
+                    a.get("COMPLETE_fills_cumulative", 0)
+                    + int(h.get("complete_fills") or 0))
+            except (TypeError, ValueError):
+                pass
             a["rungs_rested"] = h.get("rungs_rested")
             a["band"] = rec.get("quote_between_tte_s")
             a["corrects"] = rec.get("corrects")
@@ -655,6 +699,8 @@ class CohortHeartbeat:
             try:
                 if float(inv.get("matched_qty") or 0) > 0:
                     a["matched_pairs"] += 1
+                    a["windows_ending_matched"] = (
+                        a.get("windows_ending_matched", 0) + 1)
             except (TypeError, ValueError):
                 pass
         self.last_rollover = {"symbol": w.get("symbol"),
@@ -664,6 +710,15 @@ class CohortHeartbeat:
         try:
             if float(inv.get("matched_qty") or 0) > 0:
                 self.matched_pairs += 1
+                self.windows_ending_matched += 1
+        except (TypeError, ValueError):
+            pass
+        # the window's OWN totals, banked before the next window's fresh
+        # HypotheticalBook resets the current-window gauges to zero
+        h = w.get("hypothetical") or {}
+        try:
+            self.first_fills_cumulative += int(h.get("first_fills") or 0)
+            self.complete_fills_cumulative += int(h.get("complete_fills") or 0)
         except (TypeError, ValueError):
             pass
         self.emit()
@@ -697,6 +752,29 @@ class CohortHeartbeat:
             "first_fills": self.first_fills,
             "COMPLETE_fills": self.complete_fills,
             "matched_pairs": self.matched_pairs,
+            # ---- the same facts, named so the clock is part of the name
+            "first_fills_current_window": self.first_fills,
+            "COMPLETE_fills_current_window": self.complete_fills,
+            "first_fills_cumulative": self.first_fills_cumulative,
+            "COMPLETE_fills_cumulative": self.complete_fills_cumulative,
+            "windows_ending_matched": self.windows_ending_matched,
+            "counter_semantics": {
+                "first_fills": ("CURRENT WINDOW ONLY. Assigned from the live "
+                                "HypotheticalBook each cycle; a rollover "
+                                "resets it to 0 with the fresh book."),
+                "COMPLETE_fills": "CURRENT WINDOW ONLY, same as first_fills.",
+                "matched_pairs": ("CUMULATIVE COUNT OF WINDOWS that ended with "
+                                  "matched inventory -- NOT a number of pairs. "
+                                  "A window holding three matched pairs adds "
+                                  "ONE. Never reset."),
+                "residual": "CURRENT WINDOW's inventory.",
+                "why_this_matters": ("first_fills and matched_pairs run on "
+                                     "DIFFERENT CLOCKS and are not a ratio. "
+                                     "'first_fills 0, matched_pairs 1' means "
+                                     "no first fill in the window running now "
+                                     "and one earlier window ended matched. "
+                                     "Use the _cumulative fields for any rate."),
+            },
             "residual": self.residual,
             "arms": self.arms or None,
             "last_rollover": self.last_rollover,
@@ -871,6 +949,35 @@ def _print_econ(w) -> None:
         if why:
             print("ECON_WHY %s %s %s" % (w.get("symbol"), lbl[:20], why),
                   flush=True)
+        # BOTH PATHS AT EVERY VETO. allow_minus_veto > 0 means COMPLETING
+        # would have produced better TOTAL INVENTORY economics than refusing,
+        # i.e. the risk overlay cost us on that fork.
+        cf = e.get("counterfactual") or {}
+        if cf.get("forks_opened"):
+            print("ECON_CF %s %s forks=%s resolved=%s | allow-veto med=%s "
+                  "mean=%s | ALLOW_better=%s VETO_better=%s | settled=%s "
+                  "marked=%s" % (
+                      w.get("symbol"), lbl[:20], cf.get("forks_opened"),
+                      cf.get("forks_resolved"),
+                      cf.get("allow_minus_veto_median"),
+                      cf.get("allow_minus_veto_mean"),
+                      cf.get("windows_where_ALLOW_would_have_been_better"),
+                      cf.get("windows_where_VETO_was_better"),
+                      cf.get("settled_resolutions"),
+                      cf.get("marked_resolutions")), flush=True)
+        # SPREAD AS A DISTRIBUTION. No threshold is moved from this; it is
+        # collected so a treatment can be preregistered against evidence.
+        sp = e.get("spread_census") or {}
+        if sp.get("observations"):
+            top = sorted(((k, v) for k, v in (sp.get("cells") or {}).items()),
+                         key=lambda kv: -kv[1]["n"])[:3]
+            print("ECON_SPREAD %s %s obs=%s cellsOK=%s | %s" % (
+                w.get("symbol"), lbl[:20], sp.get("observations"),
+                sp.get("cells_sufficient"),
+                " ; ".join("%s n=%d med=%.3f p90=%.3f mk=%s"
+                           % (k, v["n"], v["median"], v["p90"],
+                              v.get("median_touch_move_ticks_by_horizon_s"))
+                           for k, v in top)), flush=True)
 
 
 def _print_arms(w) -> None:

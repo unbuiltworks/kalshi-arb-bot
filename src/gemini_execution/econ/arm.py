@@ -48,6 +48,9 @@ from src.gemini_execution.econ import hazard as HZ
 from src.gemini_execution.econ import policy as PO
 from src.gemini_execution.econ import scoreboard as SB
 from src.gemini_execution.econ import veto as VT
+from src.gemini_execution.econ import counterfactual as CF
+from src.gemini_execution.econ import spread_census as SC
+from src.gemini_execution.econ import ws_flow as WF
 
 SCHEMA = "gemini_econ_arm/v1"
 LABEL = "GEMINI_ECON_V1"
@@ -99,12 +102,14 @@ class GeminiEconArm:
 
     __slots__ = ("label", "sp", "guard", "inv", "hyp", "error", "improve",
                  "preserve", "cohort", "pol", "board", "hazard",
-                 "first_fill_t", "divergences", "last")
+                 "first_fill_t", "divergences", "last", "ws", "symbol",
+                 "cf", "spreads")
 
     def __init__(self, *, symbol: str, cohort_prefix: Optional[str],
                  policy: str, cohort_name: str,
                  hazard_path: Optional[str] = None,
-                 label: str = LABEL):
+                 label: str = LABEL,
+                 ws: Any = None):
         self.label = label
         # the frozen Model A, unmodified. For BTC15m this is the already-
         # reviewed timing correction, not a new spec written here.
@@ -121,6 +126,22 @@ class GeminiEconArm:
         self.board = SB.Scoreboard(cohort=cohort_name)
         self.hazard = (HZ.HazardEstimator.load(hazard_path) if hazard_path
                        else HZ.HazardEstimator())
+        self.symbol = symbol
+        # FLOW COMES FROM THE MAINTAINED SOCKET, NOT THE POLLED TAPE. See
+        # ws_flow's docstring: `habitat.public_flow` is labelled EVIDENCE ONLY
+        # and may not be decided on. There is deliberately NO fallback -- an
+        # unvouched interval refuses the flow gates rather than quietly
+        # re-reading the source this replaces.
+        self.ws = ws if ws is not None else WF.WsFlowSource()
+        # BOTH PATHS AT EVERY VETO. Local pair basis cannot say whether a
+        # COMPLETE was wrong; the durable evidence (42.75% of L5's completes
+        # above $1.00, and 1.00-1.02 outperforming <=0.96 when scored on the
+        # resulting shares) is exactly why. See counterfactual.py.
+        self.cf = CF.CounterfactualLedger()
+        # SPREAD AS A DISTRIBUTION BEFORE IT IS A THRESHOLD. max_spread was
+        # preregistered from a single book and binds hard; it is NOT being
+        # moved until this census says what the distribution is.
+        self.spreads = SC.SpreadCensus()
         self.first_fill_t: Optional[float] = None
         self.divergences: Dict[str, int] = {}
         self.last: Dict[str, Any] = {}
@@ -147,11 +168,21 @@ class GeminiEconArm:
         """One cycle. Prints first, then the policy, then the economics."""
         # THE PRINTS COME FIRST, for the same reason every other arm does it:
         # this tape landed while the PREVIOUS cycle's rungs were resting.
+        #
+        # NOTE WHICH TAPE THIS IS. The HYPOTHETICAL FILL walk still consumes
+        # the shared `flow` the collector passes every arm, deliberately: all
+        # arms must be filled by the SAME tape or their fill counts stop being
+        # comparable, and simulating a fill is not "taking a decision from" the
+        # polled read. The ENTRY GATES below read the socket instead, because
+        # those are decisions.
         fills = self.hyp.consume(flow.get("prints") or [], inv=self.inv,
                                  book=book, depth=depth, tte_s=tte)
         if fills and self.first_fill_t is None:
             self.first_fill_t = time.time()
             self.board.first_fill(maker=True, zero_ahead=bool(self.improve))
+        if fills:
+            # a subsequent fill on the VETO path -- the one we actually walk
+            self.cf.note_fill()
 
         ms = CP.state_from_venue(symbol, tte, self.inv, book=book)
         kw: Dict[str, Any] = {"now": time.time()}
@@ -159,6 +190,38 @@ class GeminiEconArm:
             kw["sp"] = self.sp
         turn = self.guard.step(ms, self.inv, **kw)
         wanted: List[Dict[str, Any]] = list(turn.get("actions") or [])
+
+        # the socket's own view of recent flow, for the gates only
+        try:
+            self.ws.watch(symbol)
+            wsf = self.ws.flow(
+                symbol,
+                window_s=(self.pol.flow_window_s if self.pol else 120.0))
+        except Exception as exc:                                 # noqa: BLE001
+            wsf = {"vouched": False, "prints": None,
+                   "why": "ws flow unavailable: %s: %s"
+                          % (type(exc).__name__, exc)}
+
+        # ---- census + counterfactual marks, every cycle, gating nothing
+        now_t = time.time()
+        try:
+            ppm = None
+            if wsf.get("vouched"):
+                w_s = (self.pol.flow_window_s if self.pol else 120.0)
+                ppm = (len(wsf.get("prints") or []) / (w_s / 60.0)
+                       if w_s else None)
+            self.spreads.record(SC.observe(
+                cohort=self.cohort, tte_s=tte, book=book,
+                prints_per_min=ppm,
+                flow_source=("GEMINI_WS" if wsf.get("vouched")
+                             else "UNVOUCHED"),
+                t=now_t))
+            self.spreads.advance(
+                now=now_t, bid=((book or {}).get("yes") or {}).get("bid"))
+            self.cf.mark_open(book=book, t=now_t, tte_s=tte)
+        except Exception as exc:                                 # noqa: BLE001
+            # observation must never be able to stop a decision
+            pass
 
         held = self._held()
         mode = self.pol.mode(tte) if self.pol else {
@@ -208,6 +271,18 @@ class GeminiEconArm:
                         complement_price=a.get("price"))
                 self.board.completion_considered(adm["admitted"], adm["reason"],
                                                  forbidden=forbidden)
+                if not adm["admitted"] and cost is not None:
+                    # fork here: the veto is the branch we walk, ALLOW is the
+                    # branch the control walks, and both are scored on TOTAL
+                    # inventory-state economics rather than pair basis
+                    self.cf.open(
+                        symbol=symbol, cohort=self.cohort, t=now_t, tte_s=tte,
+                        held_leg=held["held"] or "",
+                        complement_leg=held["complement"] or "",
+                        held_qty=abs(held["residual"]),
+                        held_avg_cost=cost,
+                        complement_price=a.get("price"),
+                        ceiling=(adm.get("ceiling") or {}).get("ceiling"))
                 if adm["admitted"]:
                     acted.append(a)
                     rec.update(gemini_disposition=AC.COMPLETE,
@@ -245,13 +320,18 @@ class GeminiEconArm:
                         held_leg=(held["held"] or a.get("leg") or "YES"),
                         held_leg_price=a.get("price"),
                         required_complement_price=self._required(a),
-                        book=book, prints=(flow.get("prints") or []),
+                        book=book,
+                        prints=(wsf.get("prints") or []),
+                        window_s=(self.pol.flow_window_s if self.pol
+                                  else 120.0),
                         same_side_run_len=self.inv.run_len)
                     est = self.hazard.estimate(feat)
                     dec = EN.admit_entry(
                         feat=feat, thresholds=self.pol.thresholds,
                         proposed_price=a.get("price"),
-                        inventory=self.inv.report(), hazard_estimate=est)
+                        inventory=self.inv.report(), hazard_estimate=est,
+                        flow_vouched=bool(wsf.get("vouched")),
+                        flow_why=wsf.get("why"))
                     self.board.entry(dec)
                     self.hazard.observe(feat, resolved=False,
                                         filled_acceptably=False)
@@ -265,6 +345,16 @@ class GeminiEconArm:
                                    fidelity=SUPPRESSED, admitted=False,
                                    why=dec["why"],
                                    failed_gates=dec["failed_gates"],
+                                   # an UNKNOWN gate refuses too, and a record
+                                   # that shows only failures cannot say
+                                   # whether we measured and rejected or
+                                   # could not measure at all
+                                   unknown_gates=dec["unknown_gates"],
+                                   gate_reasons={
+                                       g["gate"]: g["why"]
+                                       for g in (dec.get("gates") or [])
+                                       if g.get("pass") is not True
+                                       and g.get("why")},
                                    hazard=est)
                         self._note(SUPPRESSED)
             else:
@@ -285,6 +375,9 @@ class GeminiEconArm:
 
         self.last = {
             "schema": SCHEMA, "label": self.label, "cohort": self.cohort,
+            "ws_flow": {k: wsf.get(k) for k in
+                        ("vouched", "why", "n_prints", "n_directional",
+                         "undirected", "window_s")},
             "mode": mode, "held": {k: (str(v) if isinstance(v, D) else v)
                                    for k, v in held.items()},
             "model_a_wanted": wanted,
@@ -294,11 +387,16 @@ class GeminiEconArm:
             "hypothetical_fills": fills,
             "inventory": self.inv.report(),
             "divergences": dict(self.divergences),
+            "counterfactual_open": sum(1 for f in self.cf.forks
+                                       if f.resolved is None),
             "labels": [
                 "SHADOW/HYPOTHETICAL. No order exists and nothing here is "
                 "submitted, filled, settled, credited or realized.",
                 "model_a_wanted is recorded BEFORE the economics are applied; "
                 "REDUCE and EXIT are never written into an L5 field.",
+                "Entry gates read the MAINTAINED SOCKET. The polled tape is "
+                "EVIDENCE ONLY and is used for the hypothetical fill walk "
+                "(shared by every arm) but never for a decision.",
             ],
         }
         return self.last
@@ -343,11 +441,29 @@ class GeminiEconArm:
                                   "cancel": [], "mutations": len(acted)}},
         }
 
+    def finish(self, *, book: Mapping[str, Any],
+               settlement: Optional[str] = None) -> Dict[str, Any]:
+        """Window end: resolve every open fork and release the socket.
+
+        Called by the collector at rollover. Resolving here rather than at an
+        arbitrary cycle means both branches are scored on the SAME final book.
+        """
+        n = self.cf.resolve_open(book=book or {}, t=time.time(),
+                                 settlement=settlement)
+        try:
+            self.ws.drop(self.symbol)
+        except Exception:                                        # noqa: BLE001
+            pass
+        return {"forks_resolved": n,
+                "counterfactual": self.cf.report()}
+
     def report(self) -> Dict[str, Any]:
         return {"schema": SCHEMA, "label": self.label, "cohort": self.cohort,
                 "spec_label": (self.sp.label if self.sp is not None
                                else "FROZEN_DEFAULT"),
                 "scoreboard": self.board.report(),
+                "counterfactual": self.cf.report(),
+                "spread_census": self.spreads.report(),
                 "divergences": dict(self.divergences),
                 "policy": self.pol.report() if self.pol else None,
                 "error": self.error}

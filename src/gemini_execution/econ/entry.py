@@ -116,7 +116,9 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                 hazard_estimate: Optional[Mapping[str, Any]] = None,
                 reference_disagreement: Any = None,
                 regime: VT.FeeRegime = VT.VERIFIED_REGIME,
-                tick: Any = "0.01") -> Dict[str, Any]:
+                tick: Any = "0.01",
+                flow_vouched: Optional[bool] = None,
+                flow_why: Optional[str] = None) -> Dict[str, Any]:
     """Should we rest a FIRST rung here?
 
     `feat` is a `hazard.features` record -- the same causal extraction the
@@ -183,12 +185,23 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
     # as a measurement of the market.
     alt = feat.get("side_alternation")
     n = feat.get("n_prints") or 0
-    if n < thresholds.min_prints:
+    if flow_vouched is False:
+        # UNVOUCHED IS NOT EMPTY, and it is not zero prints either. The socket
+        # could not vouch for the interval, so we know nothing about flow --
+        # which refuses, because an unknown gate is never a pass.
+        gates.append(_gate("FLOW_REVERSIBLE", None,
+                           "flow coverage UNVOUCHED: %s"
+                           % (flow_why or "socket could not vouch"),
+                           flow_source="GEMINI_WS", flow_vouched=False))
+        gates.append(_gate("NOT_CONCENTRATED", None,
+                           "flow coverage UNVOUCHED; print sizes unknown",
+                           flow_source="GEMINI_WS", flow_vouched=False))
+    elif n < thresholds.min_prints:
         gates.append(_gate("FLOW_REVERSIBLE", False,
                            "only %d prints in the window, below the minimum "
                            "of %d; flow direction is not yet evidence"
                            % (n, thresholds.min_prints), n_prints=n,
-                           flow_source_provisional=True))
+                           flow_source="GEMINI_WS"))
     elif alt is None:
         gates.append(_gate("FLOW_REVERSIBLE", None,
                            "aggressor direction unreadable on this tape"))
@@ -201,12 +214,14 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                            "adverse selection"
                            % (alt, thresholds.min_alternation),
                            side_alternation=alt, n_prints=n,
-                           flow_source_provisional=True))
+                           flow_source="GEMINI_WS"))
 
     # ---- 4. NOT CONCENTRATED. One print is not a two-sided market however
     # large it is.
     share = feat.get("largest_print_share")
-    if share is None:
+    if flow_vouched is False:
+        pass                       # already recorded UNVOUCHED above
+    elif share is None:
         gates.append(_gate("NOT_CONCENTRATED", None,
                            "print sizes unreadable"))
     else:
@@ -217,7 +232,8 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                            "%.1f%% -- this is one participant, not liquidity"
                            % (share * 100,
                               thresholds.max_largest_print_share * 100),
-                           largest_print_share=share))
+                           largest_print_share=share,
+                           flow_source="GEMINI_WS"))
 
     # ---- 5. TWO-SIDED QUOTE. Both outcomes quoted on both sides, read from
     # the prices the contract publishes. NOT a depth test: `contract_depth` is

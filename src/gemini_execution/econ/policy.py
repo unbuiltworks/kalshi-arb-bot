@@ -59,11 +59,12 @@ class CohortPolicy:
     __slots__ = ("cohort", "window_s", "quote_band_s", "entry_until_tte_s",
                  "mixed_until_tte_s", "withdraw_below_tte_s",
                  "max_residual", "toxicity_horizon_s", "rescue_below_tte_s",
-                 "thresholds", "notes")
+                 "thresholds", "notes", "flow_window_s")
 
     def __init__(self, *, cohort, window_s, quote_band_s, entry_until_tte_s,
                  mixed_until_tte_s, withdraw_below_tte_s, max_residual,
-                 toxicity_horizon_s, rescue_below_tte_s, thresholds, notes):
+                 toxicity_horizon_s, rescue_below_tte_s, thresholds, notes,
+                 flow_window_s=120.0):
         self.cohort = cohort
         self.window_s = window_s
         self.quote_band_s = quote_band_s
@@ -72,6 +73,14 @@ class CohortPolicy:
         self.withdraw_below_tte_s = withdraw_below_tte_s
         self.max_residual = D(str(max_residual))
         self.toxicity_horizon_s = toxicity_horizon_s
+        # A NEW PARAMETER THE WS RE-SOURCING REQUIRES, not a retune of an
+        # existing threshold. The polled tape returned a ~200-print tail with
+        # no bounded window at all, so "the window" had no defined length;
+        # reading a maintained socket needs one. 120s is NOT a fresh choice --
+        # it is the value `hazard.features` has defaulted to since it was
+        # written, reused rather than invented so no new number enters the
+        # preregistration through the back door.
+        self.flow_window_s = float(flow_window_s)
         self.rescue_below_tte_s = rescue_below_tte_s
         self.thresholds = thresholds
         self.notes = notes
@@ -123,6 +132,7 @@ class CohortPolicy:
             "withdraw_below_tte_s": self.withdraw_below_tte_s,
             "max_residual": str(self.max_residual),
             "toxicity_horizon_s": self.toxicity_horizon_s,
+            "flow_window_s": self.flow_window_s,
             "rescue_below_tte_s": self.rescue_below_tte_s,
             "thresholds": self.thresholds.report(),
             "notes": self.notes,

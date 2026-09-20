@@ -160,3 +160,51 @@ def test_the_driver_holds_no_transport():
     src = open(ED.__file__).read()
     for forbidden in ("order.place", "private_key", "api_key", "ws_session"):
         assert forbidden not in src
+
+
+# ------------------------------------------- the isolation rule, pinned
+
+def test_the_event_driven_lane_is_not_wired_into_the_8s_cadence():
+    """OWNER DECISION: feed the corrected WS evidence into the SAME 8-second
+    challenger cadence first, and do NOT simultaneously switch to event-driven
+    decisions -- otherwise "better information" and "faster reaction" cannot be
+    told apart.
+
+    So the collector and the arm must not reach this module at all. Asserted
+    over the module ASTs rather than trusted to stay true.
+    """
+    import ast
+
+    from src.gemini_execution import shadow_soak as SS
+    from src.gemini_execution.econ import arm as ARM
+
+    for mod in (SS, ARM):
+        tree = ast.parse(open(mod.__file__).read())
+        imported = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.ImportFrom) and n.module:
+                imported.add(n.module)
+                for a in n.names:
+                    imported.add("%s.%s" % (n.module, a.name))
+            elif isinstance(n, ast.Import):
+                for a in n.names:
+                    imported.add(a.name)
+        assert not any("event_driver" in m for m in imported), (
+            "%s reaches event_driver; the cadence must stay fixed at 8s while "
+            "the WS re-sourcing is evaluated" % mod.__name__)
+
+
+def test_the_arm_reads_ws_flow_for_gates_but_keeps_the_fixed_cadence():
+    """The re-sourcing changes the INFORMATION, not the clock."""
+    import ast
+
+    from src.gemini_execution.econ import arm as ARM
+    src = open(ARM.__file__).read()
+    assert "ws_flow" in src                  # better information: yes
+    tree = ast.parse(src)
+    fns = {n.name for n in ast.walk(tree)
+           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    # no event loop, no trigger classification, no debounce in the arm
+    assert not {f for f in fns if any(w in f.lower()
+                                      for w in ("on_event", "debounce",
+                                                "classify"))}
