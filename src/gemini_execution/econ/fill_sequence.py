@@ -354,6 +354,112 @@ class FillSequenceLedger:
             self.rows = self.rows[-(self.max_rows // 2):]
         return n
 
+    def label_settlement(self, symbol: str,
+                         settlement_leg: Optional[str]) -> Dict[str, Any]:
+        """STEP 11. Write the venue's published outcome onto closed rows.
+
+        The outcome arrives AFTER the window it belongs to -- the contract
+        object only reads `settled` once the venue has resolved it, and that
+        read flaps for minutes afterwards -- so the sequence is closed first
+        and labelled later. That is safe here and only here: a settlement is
+        never a feature, only ever the target, exactly as the toxicity
+        dataset already treats it. Nothing about the decision that produced
+        the fill is recomputed.
+
+        Only a residual row can carry a settlement value. A matched pair has
+        no directional leg left to settle, and a row that never filled has no
+        position at all; both are skipped rather than defaulted to zero.
+        """
+        out: Dict[str, Any] = {"symbol": symbol, "settlement_leg": None,
+                               "labelled": 0, "already": 0, "skipped": 0,
+                               "why": None}
+        leg = str(settlement_leg or "").upper()
+        if leg not in ("YES", "NO"):
+            out["why"] = ("settlement leg %r is not YES or NO; a residual is "
+                          "left UNLABELLED rather than given a made-up "
+                          "outcome" % (settlement_leg,))
+            return out
+        out["settlement_leg"] = leg
+        for r in self.rows:
+            if r.get("symbol") != symbol:
+                continue
+            if not r.get("first_fill") or r.get("matched"):
+                out["skipped"] += 1
+                continue
+            if r.get("residual_settlement_value") is not None:
+                out["already"] += 1
+                continue
+            px = _dec(r.get("first_fill_price"))
+            if px is None:
+                out["skipped"] += 1
+                continue
+            win = D("1") if leg == r.get("first_fill_leg") else D("0")
+            r["settlement_leg"] = leg
+            r["residual_settlement_value"] = str(win - px)
+            out["labelled"] += 1
+        return out
+
+    def unlabelled_symbols(self, *, exclude: Optional[str] = None,
+                           limit: int = 4) -> List[str]:
+        """Contracts with a residual whose outcome we have not yet recorded.
+
+        `exclude` drops the window that has only just closed: its contract has
+        not resolved yet, and asking produces a stale `active` read rather
+        than an answer.
+        """
+        seen: List[str] = []
+        for r in reversed(self.rows):
+            sym = r.get("symbol")
+            if (not sym or sym == exclude or sym in seen
+                    or not r.get("first_fill") or r.get("matched")
+                    or r.get("residual_settlement_value") is not None):
+                continue
+            seen.append(sym)
+            if len(seen) >= limit:
+                break
+        return seen
+
+    # ---------------------------------------------------------- durability
+    def save(self, path: str) -> None:
+        """Atomic. The cohort in `rows` is the evidence; a torn file is not."""
+        import json
+        import os as _os
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump({"schema": SCHEMA, "arm": self.arm, "rows": self.rows,
+                       "candidates": self.candidates,
+                       "first_t": self.first_t, "last_t": self.last_t}, fh,
+                      default=str)
+        _os.replace(tmp, path)
+
+    @classmethod
+    def load(cls, path: str, *, arm: Optional[str] = None
+             ) -> "FillSequenceLedger":
+        """Best effort. Open sequences are NOT restored: a half-observed
+        sequence resumed against a later window's book would mark one
+        contract's fill against another's tape."""
+        import json
+        led = cls(arm=arm or "GEMINI_ECON_V1")
+        try:
+            with open(path) as fh:
+                d = json.load(fh)
+        except (OSError, ValueError, TypeError):
+            return led
+        if not isinstance(d, dict) or d.get("schema") != SCHEMA:
+            return led
+        led.rows = [r for r in (d.get("rows") or []) if isinstance(r, dict)]
+        try:
+            led.candidates = int(d.get("candidates") or 0)
+        except (TypeError, ValueError):
+            led.candidates = 0
+        for k in ("first_t", "last_t"):
+            v = d.get(k)
+            try:
+                setattr(led, k, None if v is None else float(v))
+            except (TypeError, ValueError):
+                setattr(led, k, None)
+        return led
+
     # ------------------------------------------------------------ funnel
     def report(self) -> Dict[str, Any]:
         rows = self.rows

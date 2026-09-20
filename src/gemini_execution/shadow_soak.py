@@ -45,7 +45,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import continuous_runner as CR
@@ -244,6 +244,66 @@ def _step_arms(arms, *, symbol, tte, book, depth, flow, policy):
                           "extend_fills", "complete_fills")},
             "inventory": arm.inv.report(),
         }
+    return out
+
+
+SETTLEMENT_LABEL_LIMIT = 4
+
+
+async def _label_settlements(arms, *, just_closed: Optional[str] = None
+                             ) -> Dict[str, Any]:
+    """Write the venue's published outcome onto residual rows, one window late.
+
+    ONE network read per contract, shared by every arm, because the outcome is
+    a property of the contract and not of the strategy that held it. A read
+    that does not come back SETTLED leaves the rows UNLABELLED: the absence of
+    a settlement reading is never evidence of an outcome.
+    """
+    from src.gemini_execution import metadata as MD
+
+    econ = [a for a in arms if getattr(a, "IS_ECON_ARM", False)]
+    pending: List[str] = []
+    for a in econ:
+        for sym in a.pending_settlements(exclude=just_closed,
+                                         limit=SETTLEMENT_LABEL_LIMIT):
+            if sym not in pending:
+                pending.append(sym)
+    pending = pending[:SETTLEMENT_LABEL_LIMIT]
+
+    out: Dict[str, Any] = {"asked": len(pending), "settled": 0,
+                           "unconfirmed": 0, "labelled": 0, "symbols": {}}
+    for sym in pending:
+        try:
+            res = await asyncio.to_thread(MD.resolution_for, sym)
+        except Exception as exc:                                 # noqa: BLE001
+            out["symbols"][sym] = {"error": "%s: %s"
+                                   % (type(exc).__name__, exc)}
+            continue
+        leg = str(res.get("resolutionSide") or "").upper() or None
+        if not res.get("is_terminal") or leg not in ("YES", "NO"):
+            out["unconfirmed"] += 1
+            out["symbols"][sym] = {"verdict": res.get("verdict"),
+                                   "resolutionSide": res.get("resolutionSide"),
+                                   "labelled": 0,
+                                   "why": ("no read showed a settlement; the "
+                                           "residual stays UNLABELLED")}
+            continue
+        # the published side must agree with settlementValue against the
+        # strike, or we are labelling a cohort from a field we do not trust
+        chk = res.get("strike_check") or {}
+        if chk.get("agrees") is False:
+            out["symbols"][sym] = {"verdict": res.get("verdict"),
+                                   "resolutionSide": leg, "labelled": 0,
+                                   "why": "strike_check disagrees: %s" % (chk,)}
+            continue
+        out["settled"] += 1
+        n = 0
+        for a in econ:
+            n += int((a.label_settlement(sym, leg) or {}).get("labelled") or 0)
+        out["labelled"] += n
+        out["symbols"][sym] = {"verdict": res.get("verdict"),
+                               "resolutionSide": leg, "labelled": n,
+                               "strike_check_agrees": chk.get("agrees")}
     return out
 
 
@@ -448,6 +508,23 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
             econ_finish[arm.label] = arm.finish(book=book)
         except Exception as exc:                                 # noqa: BLE001
             econ_finish[arm.label] = {"error": "%s: %s"
+                                      % (type(exc).__name__, exc)}
+
+    # ---- STEP 11. The residual's SETTLEMENT VALUE, from the venue's own
+    # published resolutionSide. Until now `settlement_leg` was never passed
+    # and step 11 of the sequence schema had never executed, so every
+    # residual read `None` -- and the residual term is the only one large
+    # enough to set the sign of the loop's expectancy. PUBLIC and read-only.
+    #
+    # Deliberately NOT the contract that has just closed: that read is stale
+    # for minutes after expiry and answers `active` for a settled contract.
+    # The previous windows' outcomes are collected instead, so the label
+    # arrives one window late and always from a settled reading.
+    try:
+        econ_finish["settlements"] = await _label_settlements(
+            arms, just_closed=symbol)
+    except Exception as exc:                                     # noqa: BLE001
+        econ_finish["settlements"] = {"error": "%s: %s"
                                       % (type(exc).__name__, exc)}
 
     # ------------------------------------------------- the rollover gate

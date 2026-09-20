@@ -678,6 +678,21 @@ class GeminiEconArm:
         return {"forks_resolved": n,
                 "counterfactual": self.cf.report()}
 
+    # ------------------------------------------------------- step 11
+    def pending_settlements(self, *, exclude: Optional[str] = None,
+                            limit: int = 4) -> List[str]:
+        """Contracts whose residual outcome this arm still has not recorded."""
+        return self.state.fills.unlabelled_symbols(exclude=exclude,
+                                                   limit=limit)
+
+    def label_settlement(self, symbol: str,
+                         settlement_leg: Optional[str]) -> Dict[str, Any]:
+        """Record the venue's PUBLISHED outcome against this contract's
+        residual rows. Read-only with respect to the venue and never a
+        feature: the residual's settlement value is the target the whole
+        expectancy calculation turns on and nothing else consumes it."""
+        return self.state.fills.label_settlement(symbol, settlement_leg)
+
     def report(self) -> Dict[str, Any]:
         return {"schema": SCHEMA, "label": self.label, "cohort": self.cohort,
                 "spec_label": (self.sp.label if self.sp is not None

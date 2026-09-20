@@ -142,6 +142,9 @@ class CohortState:
         tx = self._pa("toxicity")
         if tx:
             self.toxicity = PF.ToxicityDataset.load(tx)
+        fl = self._pa("fills")
+        if fl:
+            self.fills = FS.FillSequenceLedger.load(fl, arm=self.arm)
         return self
 
     def save(self) -> Dict[str, Any]:
@@ -158,7 +161,13 @@ class CohortState:
             return out
         for name, obj, per_arm in (("hazard", self.market.hazard, False),
                                    ("spreads", self.market.spreads, False),
-                                   ("toxicity", self.toxicity, True)):
+                                   ("toxicity", self.toxicity, True),
+                                   # THE FUNNEL ITSELF. Without this the first
+                                   # fills, the matched pairs and the by-leg
+                                   # completion split live only in memory, and
+                                   # restartPolicyType ALWAYS means one crash
+                                   # erases the cohort the thesis turns on.
+                                   ("fills", self.fills, True)):
             p = self._pa(name) if per_arm else self._p(name)
             try:
                 obj.save(p)
