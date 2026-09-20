@@ -96,5 +96,40 @@
       "superseded_data": "scratchpad/nfl_sunday_v2_superseded_selection.jsonl"
     }
   ],
-  "amendment_integrity": "Both bugs were found by inspecting the SELECTED SAMPLE, not by looking at any outcome. No reach, movement, recycling or conversion figure had been computed for this slate when either fix was made. The superseded collections are retained rather than deleted. The qualification thresholds are unchanged."
+  "amendment_integrity": "Both bugs were found by inspecting the SELECTED SAMPLE, not by looking at any outcome. No reach, movement, recycling or conversion figure had been computed for this slate when either fix was made. The superseded collections are retained rather than deleted. The qualification thresholds are unchanged.",
+  "scope_widened_2026-09-20T04:55Z": {
+    "instruction": "measure the complete accessible LIVE slate now rather than waiting for NFL kickoff",
+    "what_changed": [
+      "8s cadence starts immediately instead of 15:00Z",
+      "league coverage is every league /v2/leagues returns (50), not a hand-picked list of 8",
+      "selection is LIVE-FIRST: every two-sided market of a live event is taken uncapped before any pregame market, then the NFL pregame control, then other pregame, under a 300-market cap",
+      "rediscovery every 5 minutes instead of 15, so a newly-live event enters the sample fast",
+      "live markets are sampled EVERY sweep and pregame every 4th: 18 threads did not beat a 13.0s sweep on 300 markets, so the gateway sets the floor, and the cadence budget goes to the markets the experiment is about",
+      "every row now carries sweep_s, the ACTUAL measured sweep duration, so no reach figure is ever computed on an assumed grid"
+    ],
+    "measured_after_change": {
+      "live_sampling_interval_median_s": 8.0,
+      "live_sweep_duration_s": 0.5,
+      "markets": 300,
+      "events": 50
+    }
+  },
+  "live_slate_at_04:47Z": {
+    "finding": "the gateway serves 118 events and exactly ONE is live",
+    "event": "mlb-min-laa-2026-09-19, period 'Mid Extra', +3.2h since start, 5 two-sided markets",
+    "three_independent_signals": {
+      "live_flag": {
+        "true": 1,
+        "false": 117
+      },
+      "period": {
+        "NS (not started)": 81,
+        "empty": 36,
+        "Mid Extra": 1
+      },
+      "started_and_not_ended": 1
+    },
+    "consistency_check": "the 02:00Z census of this same venue found 344 live markets (mls 203, mlb 120, wnba 18, cs2 2, ufc 1). Those games have since ended. At 00:47 ET a near-empty live slate is expected.",
+    "note": "this does not match a reported count of ~22 live events. The discrepancy is recorded rather than resolved; the collector now scales automatically with whatever the gateway marks live."
+  }
 }
