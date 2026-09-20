@@ -1,0 +1,156 @@
+==============================================================================================================
+P0-1  SETTLED-MODELED ECONOMICS, prospective non-cricket cohort
+SHADOW -> SETTLED-MODELED. NEVER REALIZED: no order was submitted, no fill is
+venue-confirmed. Only the SETTLEMENT OUTCOME is venue-confirmed.
+Known fees $0.00 (PMUS maker fee is zero).  REBATES SET TO EXACTLY ZERO.
+Matched-pair and directional-residual lines are kept apart; 'combined' is a
+separate reported line, not a claim they are the same kind of number.
+==============================================================================================================
+
+
+########## QUEUE_AWARE  deployable non-cricket ##########
+  episodes total        76
+  SETTLED               65
+  still OPEN            11  (excluded entirely; settlementPx on an open market is a default, not a result)
+
+  matched-pair P&L      +0.2267 USD   (11 matched units)
+  residual P&L          -18.6367 USD   (132 residual units)
+  known fees            +0.0000
+  rebates               +0.0000   EXPLICITLY ZERO
+  ----------------------------------------
+  COMBINED              -18.4100 USD
+  acquisition capital   57.4100 USD  (sum of modelled acquisition cost)
+  return on capital     -32.07%
+
+  winners 18 / losers 47 / flat 0
+  episode P&L  p10 -1.2600   p50 -0.3700   p90 +1.4700
+  WORST episode -1.4500  tsc-epl-ful-mnu-2026-09-20-2pt5 (epl)  matched=0 resid=3 surplus=YES avg=0.4833 settle=0.0
+  BEST  episode +2.1300  atc-epl-ful-mnu-2026-09-20-draw (epl)
+
+  CONCENTRATION by league (combined P&L):
+     lal            -9.1500  n=10  cap= 11.1500  roc= -82.06%
+     epl            -3.6000  n=7   cap=  6.6000  roc= -54.55%
+     setkameua      -3.2400  n=11  cap= 10.2400  roc= -31.64%
+     setkamemd      -2.4700  n=5   cap=  3.4700  roc= -71.18%
+     bra            -2.2800  n=2   cap=  2.2800  roc=-100.00%
+     bcl            -1.3700  n=1   cap=  1.3700  roc=-100.00%
+     brb            -1.1200  n=2   cap=  1.1200  roc=-100.00%
+     dota2          -0.9000  n=1   cap=  0.9000  roc=-100.00%
+     bbl            -0.8300  n=1   cap=  0.8300  roc=-100.00%
+     tsl            -0.6400  n=1   cap=  0.6400  roc=-100.00%
+     ere            -0.3100  n=1   cap=  0.3100  roc=-100.00%
+     alsv           -0.2700  n=1   cap=  0.2700  roc=-100.00%
+     rl             +0.0400  n=1   cap=  1.9600  roc=  +2.04%
+     ligpor         +0.3000  n=2   cap=  0.7000  roc= +42.86%
+     bun            +0.4500  n=6   cap=  3.5500  roc= +12.68%
+     nb1            +0.4700  n=2   cap=  0.5300  roc= +88.68%
+     setkamecz      +1.4500  n=5   cap=  4.5500  roc= +31.87%
+     cs2            +1.4600  n=4   cap=  4.5400  roc= +32.16%
+     atbl           +1.5900  n=1   cap=  1.4100  roc=+112.77%
+     setkawoua      +2.0100  n=1   cap=  0.9900  roc=+203.03%
+
+  CONCENTRATION by slug, worst 6 and best 3:
+     tsc-epl-ful-mnu-2026-09-20-2pt5                  -1.4500  n=1
+     atc-epl-ful-mnu-2026-09-20-mnu                   -1.4400  n=1
+     asc-lal-atm-rma-2026-09-20-neg-1pt5              -1.3900  n=2
+     aec-bcl-svv-ora-2026-09-20                       -1.3700  n=1
+     tsc-lal-atm-rma-2026-09-20-1pt5                  -1.3600  n=1
+     asc-lal-atm-rma-2026-09-20-neg-2pt5              -1.3500  n=2
+     aec-setkameua-necvol-smyvas-2026-09-20           +1.9700  n=1
+     aec-setkawoua-ivcole-gorann-2026-09-20           +2.0100  n=1
+     atc-epl-ful-mnu-2026-09-20-draw                  +2.1300  n=1
+
+  top loss tsc-epl-ful-mnu-2026-09-20-2pt5 accounts for 8% of the combined total
+
+
+########## OPTIMISTIC  deployable non-cricket ##########
+  episodes total        105
+  SETTLED               83
+  still OPEN            22  (excluded entirely; settlementPx on an open market is a default, not a result)
+
+  matched-pair P&L      +1.6399 USD   (18 matched units)
+  residual P&L          -15.2900 USD   (173 residual units)
+  known fees            +0.0000
+  rebates               +0.0000   EXPLICITLY ZERO
+  ----------------------------------------
+  COMBINED              -13.6501 USD
+  acquisition capital   78.6500 USD  (sum of modelled acquisition cost)
+  return on capital     -17.36%
+
+  winners 29 / losers 54 / flat 0
+  episode P&L  p10 -1.2900   p50 -0.2900   p90 +1.5500
+  WORST episode -1.5100  atc-atbl-rbs-stu-2026-09-20-rbs (atbl)  matched=0 resid=3 surplus=NO avg=0.5033 settle=1.0
+  BEST  episode +2.1900  atc-epl-ful-mnu-2026-09-20-draw (epl)
+
+  CONCENTRATION by league (combined P&L):
+     lal            -8.9300  n=12  cap= 10.9300  roc= -81.70%
+     alsv           -3.4400  n=4   cap=  3.4400  roc=-100.00%
+     setkamemd      -2.8100  n=5   cap=  3.8100  roc= -73.75%
+     atbl           -1.7300  n=2   cap=  1.7300  roc=-100.00%
+     setkameua      -1.4500  n=12  cap= 14.4500  roc= -10.03%
+     bcl            -1.3700  n=1   cap=  1.3700  roc=-100.00%
+     nor1           -1.2100  n=4   cap=  1.2100  roc=-100.00%
+     tsl            -0.9300  n=2   cap=  0.9300  roc=-100.00%
+     dota2          -0.9000  n=1   cap=  0.9000  roc=-100.00%
+     epl            -0.8600  n=7   cap=  6.8600  roc= -12.54%
+     bbl            -0.8600  n=1   cap=  0.8600  roc=-100.00%
+     bra            -0.5500  n=2   cap=  1.5500  roc= -35.48%
+     ere            -0.3100  n=1   cap=  0.3100  roc=-100.00%
+     brb            -0.0201  n=2   cap=  3.0200  roc=  -0.67%
+     rl             +0.0400  n=1   cap=  1.9600  roc=  +2.04%
+     nb1            +0.3700  n=2   cap=  0.6300  roc= +58.73%
+     els            +0.6300  n=1   cap=  0.3700  roc=+170.27%
+     swsl           +0.6400  n=1   cap=  0.3600  roc=+177.78%
+     sld            +0.8300  n=1   cap=  0.1700  roc=+488.24%
+     bun            +1.0600  n=6   cap=  5.9400  roc= +17.85%
+     cs2            +1.4800  n=4   cap=  4.5200  roc= +32.74%
+     ligpor         +1.9500  n=4   cap=  4.0500  roc= +48.15%
+     setkawoua      +2.0100  n=1   cap=  0.9900  roc=+203.03%
+     setkamecz      +2.7100  n=6   cap=  8.2900  roc= +32.69%
+
+  CONCENTRATION by slug, worst 6 and best 3:
+     atc-atbl-rbs-stu-2026-09-20-rbs                  -1.5100  n=1
+     atc-epl-ful-mnu-2026-09-20-mnu                   -1.4400  n=1
+     tsc-lal-atm-rma-2026-09-20-1pt5                  -1.3800  n=1
+     aec-bcl-svv-ora-2026-09-20                       -1.3700  n=1
+     aec-setkameua-novrus-tebyar-2026-09-20           -1.3700  n=2
+     atc-ligpor-vit-mor-2026-09-20-vit                -1.3200  n=1
+     aec-setkameua-necvol-smyvas-2026-09-20           +1.9700  n=1
+     aec-setkawoua-ivcole-gorann-2026-09-20           +2.0100  n=1
+     atc-epl-ful-mnu-2026-09-20-draw                  +2.1900  n=1
+
+  top loss atc-atbl-rbs-stu-2026-09-20-rbs accounts for 11% of the combined total
+====================================================================================================
+PER-UNIT ECONOMICS AND MECHANISM  (queue-aware deployable, 65 settled episodes)
+====================================================================================================
+  matched  +0.2267 USD over 11 units  = +0.0206 per matched unit
+  residual -18.6367 USD over 132 units  = -0.1412 per residual unit
+  residual units per matched unit: 12.0
+  => each matched unit earns +0.0206 while the ~12 residual units alongside it lose -1.6942
+
+ADVERSE SELECTION CHECK -- is the residual loss a directional-edge problem?
+  residual legs: n=60
+  mean acquisition cost of the surplus side : 0.3400
+  mean settled value of that side           : 0.2167
+  mean per-unit drift                       : -0.1233
+  surplus side settled ABOVE its cost in 13 of 60 legs (22%)
+
+  READING. The policy rests passively and is filled when price comes TO it, so a
+  fill on the surplus side is systematically a fill into adverse movement. With a
+  5-15 minute L5 clock that has little time to compound; across a 35+ minute
+  sports event it does. This is the exposure-duration asymmetry showing up as
+  money rather than as a survival curve.
+
+====================================================================================================
+WOULD REBATES RESCUE THIS? (P0-4)
+====================================================================================================
+  venue-confirmed maker rebate rate     97.59 bps  ($0.51 / $52.2573 maker notional)
+  WINDOW-LEVEL attribution only -- /v1/transfers carries no order id.
+  acquisition capital in this cohort    57.4100 USD
+  rebate if the whole cohort earned it  +0.5603 USD
+  combined settled-modeled P&L          -18.4100 USD
+  P&L WITH that rebate applied          -17.8497 USD
+  shortfall still to cover              -17.8497 USD  (rebate covers 3.0% of the loss)
+
+  => NO. The rebate is off by a factor of 33x. It cannot rescue this and
+     is not being used to try -- standalone economics are reported at rebate = 0.
