@@ -413,13 +413,29 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
                 "price": r.max_acceptable_price,
                 "qty": str(ACTION_SIZE), "rung_index": r.rung_index,
                 "ticks_behind_bid": r.ticks_behind_bid}
+        # WHAT THIS RUNG WOULD HAVE BEEN. A pure label from outcome and
+        # inventory, computed for HELD rungs too so a report can say
+        # "EXTEND blocked by the envelope" rather than only "a rung was
+        # held". It changes no decision: `classify` reads nothing but
+        # inventory, and the held rung is still held.
+        try:
+            would_be = classify(r.outcome, inv)
+        except ValueError:
+            would_be = None
         if r.suppressed_by is not None:
             holds.append({**base, "action": HOLD, "held_by": "OSCILLATOR",
+                          "would_be_action": would_be,
                           "why": r.suppressed_by})
             continue
         breach = would_breach(leg, r.max_acceptable_price, inv)
         if breach:
             holds.append({**base, "action": HOLD, "held_by": "ENVELOPE",
+                          "would_be_action": would_be,
+                          # WHICH bound, not just that one fired. The
+                          # imbalance cap and the per-leg caps are different
+                          # constraints and must not be reported as one.
+                          "bound": ("MAX_IMBALANCE" if "imbalance" in breach
+                                    else "MAX_LEG"),
                           "why": breach})
             continue
         act = classify(r.outcome, inv)
@@ -428,6 +444,7 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
         # complement can only manufacture the leg with negative expectancy.
         if phase == WINDOW_COMPLETE_ONLY and act in (OPEN, EXTEND):
             holds.append({**base, "action": HOLD, "held_by": "END_OF_WINDOW",
+                          "would_be_action": act,
                           "why": ("tte %.1fs is under %.1fs, which is two "
                                   "maker-rest cycles: a new %s could not be "
                                   "complemented before expiry"

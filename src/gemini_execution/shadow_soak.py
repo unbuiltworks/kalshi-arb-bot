@@ -363,6 +363,15 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
     # the rungs this lane WOULD have rested, and what the tape would have
     # done to them. No order, no session, no write path -- see hypothetical.py
     hyp = HY.HypotheticalBook(symbol=symbol, policy=policy)
+    # MODEL ACTION vs EXECUTED SHADOW ACTION, per action kind. A safety
+    # overlay must never be readable as L5 behaviour, so what the frozen
+    # policy REQUESTED and what survived each constraint are counted apart,
+    # and each block carries WHICH constraint stopped it:
+    #   OSCILLATOR    the L5 surface itself withheld the rung -- BEHAVIOUR
+    #   ENVELOPE      MAX_IMBALANCE or a per-leg cap -- SAFETY
+    #   END_OF_WINDOW the TTE 60/30 overlay -- SAFETY
+    act_census: Dict[str, Any] = {
+        "requested": {}, "rested": {}, "blocked": {}, "policy_vetoed": {}}
 
     # THE CORRECTED-TIMING ARM, if this cohort has one. It is strictly
     # additive: it has its own guard, inventory and book, it is never
@@ -471,6 +480,28 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
         row["model_a_wanted"] = wanted
         row["vetoed_by_adapter"] = vetoed
         hyp.retarget(acted, now_ms=int(time.time() * 1000), depth=depth)
+        # ---- the census. `wanted` is what FROZEN_L5_NATIVE asked for before
+        # any filter; `acted` is what survived; `holds` is what plan() itself
+        # withheld and why. Counted per kind so "EXTEND blocked by
+        # MAX_IMBALANCE" is a number rather than an inference.
+        for _a in wanted:
+            _k = str(_a.get("action"))
+            act_census["requested"][_k] = act_census["requested"].get(_k, 0) + 1
+        for _a in vetoed:
+            _k = str(_a.get("action"))
+            act_census["policy_vetoed"][_k] = (
+                act_census["policy_vetoed"].get(_k, 0) + 1)
+        for _h in (turn.get("holds") or []):
+            _k = str(_h.get("would_be_action") or "UNKNOWN")
+            _by = str(_h.get("held_by") or "UNKNOWN")
+            if _by == "ENVELOPE":
+                _by = "ENVELOPE_%s" % (_h.get("bound") or "UNKNOWN")
+            act_census["blocked"].setdefault(_k, {})
+            act_census["blocked"][_k][_by] = (
+                act_census["blocked"][_k].get(_by, 0) + 1)
+        for _q in hyp.live.values():
+            _k = str(getattr(_q, "kind", "UNKNOWN"))
+            act_census["rested"][_k] = act_census["rested"].get(_k, 0) + 1
         row["hypothetical_fills"] = hyp_fills
         row["hypothetical_rungs_live"] = sorted(hyp.live)
         row["hypothetical_rungs_rested_cumulative"] = hyp.placed + hyp.requoted
@@ -579,6 +610,17 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
              samples, rungs_placed=hyp.placed + hyp.requoted,
              fills=hyp.fills, window_s=len(rows) * interval_s),
          "hypothetical": hyp.report(),
+         "action_census": act_census,
+         "action_census_labels": (
+             "MODEL ACTION vs EXECUTED SHADOW ACTION. `requested` is what the "
+             "frozen policy asked for before any filter; `rested` counts live "
+             "rungs per cycle by kind; `blocked` splits plan()'s own holds by "
+             "WHICH constraint stopped them -- OSCILLATOR is the L5 surface "
+             "withholding a rung and is BEHAVIOUR, ENVELOPE_MAX_IMBALANCE, "
+             "ENVELOPE_MAX_LEG and END_OF_WINDOW are SAFETY overlays and must "
+             "never be read as L5 declining to act; `policy_vetoed` is the "
+             "GEMINI_RECYCLE adaptation and is 0 under FROZEN_L5_NATIVE. "
+             "Fills per kind are in `hypothetical` (open/extend/complete)."),
          "correction_arms": {
              arm.label: {"corrects": _corrects(arm.label),
                          "quote_between_tte_s": _band_of(arm),
@@ -953,6 +995,7 @@ async def cohort_loop(a, cohort_name: str) -> None:
                                      interval_s=a.interval, cohort=co,
                                      policy=a.policy, on_cycle=hb.cycle)
                 _print_window(w)
+                _print_l5_actions(w)
                 _print_arms(w)
                 _print_econ(w)
                 _print_ladder(w)
@@ -1438,6 +1481,27 @@ def _print_econ(w) -> None:
                             v.get("abs_touch_move_ticks_by_horizon_s"),
                             v.get("adverse_share_by_horizon_s"))
                          for k, v in top)), flush=True)
+
+
+def _print_l5_actions(w) -> None:
+    """What the frozen policy WANTED against what survived, per kind.
+
+    Printed for every window, including empty ones: a policy that requested
+    nothing and a policy whose every request was blocked are different
+    failures and must not both read as silence.
+    """
+    c = w.get("action_census") or {}
+    if not c:
+        return
+    h = w.get("hypothetical") or {}
+    print("L5F_ACTIONS %s policy=%s | requested=%s | rested=%s | "
+          "filled={OPEN:%s,EXTEND:%s,COMPLETE:%s} | blocked=%s | "
+          "policyVetoed=%s" % (
+              w.get("symbol"), w.get("execution_policy"),
+              c.get("requested"), c.get("rested"),
+              h.get("open_fills"), h.get("extend_fills"),
+              h.get("complete_fills"), c.get("blocked"),
+              c.get("policy_vetoed")), flush=True)
 
 
 def _print_arms(w) -> None:
