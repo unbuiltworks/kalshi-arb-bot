@@ -45,6 +45,13 @@ def _ok(p, px, sy):
     return (p["px"] <= lim) if sy else (p["px"] >= lim)
 
 
+def _closelog(stats, sy, tt):
+    """Close every still-open complement interval on side sy at tt."""
+    for c in stats.setdefault("comp_log", []):
+        if c[2] == sy and c[1] is None:
+            c[1] = tt
+
+
 def _place(live, stats, sy, px, t, depth, rel, preserve):
     """Place or refresh a rung. Returns nothing; mutates live/stats."""
     cur = live.get(sy)
@@ -54,14 +61,16 @@ def _place(live, stats, sy, px, t, depth, rel, preserve):
     if cur is not None:
         stats["resets"] += 1
         stats["lifetimes"].append(t - cur.t)
+        _closelog(stats, sy, t)          # the superseded rung stops resting HERE
     live[sy] = Q(sy, px, t, depth, rel)
     stats["placed"] += 1
+    if rel == "complete": stats.setdefault("comp_log", []).append([t, None, sy, float(px), float(depth or 0)])
 
 
 def replay(slug, se, prints, preserve=False, completion="FROZEN_098"):
     inv = dec.Inventory(); last_rel = ""; t_prev = 0.0; t_last = 0.0
     live = {}; fills = []; pi = 0
-    stats = {"placed": 0, "resets": 0, "preserved": 0, "lifetimes": []}
+    stats = {"placed": 0, "resets": 0, "preserved": 0, "lifetimes": [], "comp_log": []}
     prints = sorted(prints, key=lambda p: p["t"])
     above98 = 0
     for r in se:
@@ -78,10 +87,16 @@ def replay(slug, se, prints, preserve=False, completion="FROZEN_098"):
                         sa = inv.avg(not q.sy)
                         if sa is not None and float(sa) + q.px > 0.98:
                             above98 += 1
+                    before_r = int(inv.residual)
                     inv.record(q.sy, D(str(q.px)))
                     fills.append({"t": p["t"], "sy": q.sy, "px": q.px, "rel": q.rel})
                     t_last = max(t_last, p["t"]); last_rel = q.rel
                     stats["lifetimes"].append(p["t"] - q.t)
+                    fills[-1]["resid_before"] = before_r
+                    fills[-1]["resid_after"] = int(inv.residual)
+                    fills[-1]["comp_live"] = bool([k for k in live if k != sy])
+                    fills[-1]["qa"] = q.qa
+                    _closelog(stats, sy, p["t"])
                     live.pop(sy, None)
         if t - t_prev < dec.DECISION_MIN_GAP_S:
             continue
@@ -113,13 +128,16 @@ def replay(slug, se, prints, preserve=False, completion="FROZEN_098"):
                 if cpx is not None:
                     depth = float((r["bid_qty"] if dsy else r["ask_qty"]) or 0.0)
                     _place(live, stats, dsy, float(cpx), t, depth, "complete", preserve)
+    for c in stats.get("comp_log", []):
+        if c[1] is None: c[1] = se[-1]["t"]
     yq = [f for f in fills if f["sy"]]; nq = [f for f in fills if not f["sy"]]
     yc = sum(f["px"] for f in yq); nc = sum(f["px"] for f in nq)
     return {"slug": slug, "fills": len(fills), "yes_n": len(yq), "no_n": len(nq),
             "yes_cost": yc, "no_cost": nc, "matched": min(len(yq), len(nq)),
             "resid": abs(len(yq) - len(nq)),
             "pair_basis": ((yc/len(yq) + nc/len(nq)) if yq and nq else None),
-            "above98": above98, **{"st_" + k: v for k, v in stats.items() if k != "lifetimes"},
+            "above98": above98, "acqs": fills, "comp_log": stats.get("comp_log", []),
+            "end": se[-1]["t"], "book": [(r["t"], r["bid"], r["ask"], r["bid_qty"], r["ask_qty"]) for r in se], **{"st_" + k: v for k, v in stats.items() if k != "lifetimes"},
             "lifetimes": stats["lifetimes"]}
 
 

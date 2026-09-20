@@ -1,0 +1,435 @@
+========================================================================================================================
+ARM 3 -- WHAT CREATES THE RESIDUAL ONCE THE 0.98 CAP IS GONE, AND WHAT THE 1.06 -> 0.35 GAP ACTUALLY IS
+    2026-09-20   SHADOW / REPLAY ONLY -- no order was submitted, nothing is armed, Model A is unchanged
+========================================================================================================================
+
+ARM 3 = B2 continuous inventory  +  queue-preserving complements  +  L5_HISTORICAL completion
+        (complement priced at the deficit-side touch, PAIR_OBSERVATION_CAP 0.98 NOT applied)
+
+Authorised as research/shadow behaviour only. CLAUDE.md keeps near-$1 pair tolerance LOCKED as later
+incentive-era L5 behaviour; nothing here proposes unlocking it, and the economics below argue against
+doing so on its own. No threshold is searched, no selector is fitted, no settlement outcome influences
+any action inside the replay, and the causality invariant (no fill credited before the prior fill) holds.
+
+INSTRUMENTATION DEFECT FOUND AND FIXED BEFORE ANY CLASSIFICATION
+  The complement-interval log in queue_preserving_replay.py appended to stats["comp_log"] while its
+  close helper walked a different, always-empty list. Every interval therefore ran to end-of-observation,
+  which would have made "was a complement resting?" trivially true for every unit and silently emptied
+  the ORDER_ABSENT bucket. Fixed: a superseded rung now closes at the moment it is replaced, and a filled
+  rung at its fill. Rung lifetime p50 is now 37.5s (~one DECISION_MIN_GAP_S); only 65 of 764 rungs are
+  still open at end. Arm 3 was re-run from scratch on the corrected instrumentation; every number below
+  comes from that re-run. Economics are unaffected -- the log never fed the fill simulation.
+
+  The cohort also grew between bba82ee8 and this run (78 -> 83 slugs) because the collectors keep
+  running. All figures here are from ONE snapshot and are internally consistent.
+
+====================================================================================================================
+ARM 3 RESIDUAL TAXONOMY -- B2 continuous inventory + queue-preserving complements + L5_HISTORICAL completion
+          (the 0.98 PAIR_OBSERVATION_CAP is NOT applied in this arm)   SHADOW/REPLAY ONLY
+====================================================================================================================
+
+cause                 units  % units       P&L $     $/unit   settled   unsettl
+WINDOW_CENSORING         36    37.1%     -0.5500    -0.1833         3        33
+INVENTORY_EXTEND         28    28.9%     -4.6200    -0.1650        28         0
+PRICE_POLICY_LIMIT       14    14.4%     -3.2900    -0.2350        14         0
+QUEUE_REACH_LIMIT         9     9.3%     -3.1400    -0.3489         9         0
+OTHER                     5     5.2%     -0.2400    -0.0480         5         0
+MARKET_LIMIT              3     3.1%     -0.7000    -0.2333         3         0
+ORDER_ABSENT              2     2.1%     -0.3000    -0.1500         2         0
+TOTAL                    97   100.0%    -12.8400    -0.2006        64        33
+
+  SIDE-BY-SIDE vs the 0.98-CAPPED B2 ARM (RESIDUAL_AUTOPSY_20260920, n=126 units)
+  cause                     B2 + 0.98 cap     arm 3 (no cap)
+  PRICE_POLICY_LIMIT       58   46.0%         14   14.4%
+  WINDOW_CENSORING         34   27.0%         36   37.1%
+  INVENTORY_EXTEND         23   18.3%         28   28.9%
+  QUEUE_REACH_LIMIT         5    4.0%          9    9.3%
+  MARKET_LIMIT              3    2.4%          3    3.1%
+  ORDER_ABSENT              3    2.4%          2    2.1%
+  OTHER                   -       -            5    5.2%
+
+  PRICE_POLICY_LIMIT detail -- was the flow reachable only by CROSSING?
+     units with prints reachable only at the MARKETABLE price: 12 of 14
+     (crossing is prohibited: no SELL / taker / IOC without separate authorisation)
+
+  INVENTORY_EXTEND detail -- residual already carried when the unit was acquired
+     |residual| before acquisition: {0: 2, 1: 17, 2: 9}
+     relation: {'open': 2, 'extend': 26}
+
+  WINDOW_CENSORING detail
+     market never expired: 33     <1 decision gap of observation left: 3
+
+  QUEUE_REACH_LIMIT detail -- compatible volume that reached a resting rung but never cleared it
+     median compatible volume in window 1073.8 units, median rungs rested 3
+
+  OTHER detail -- queue cleared on a resting rung yet the unit is still residual
+     aec-cs2-brute-33-2026-09-20                rel=open     acc=  4 vol=   453.8 rungs= 1
+     aec-setkamemd-meraur-scovla-2026-09-20     rel=open     acc=  4 vol=  7330.2 rungs= 6
+     atc-tsl-erz-sam-2026-09-20-erz             rel=open     acc=  2 vol=  3421.3 rungs= 8
+     aec-setkawoua-ivcole-gorann-2026-09-20     rel=open     acc= 11 vol=  3978.2 rungs= 6
+     asc-epl-ful-mnu-2026-09-20-pos-1pt5        rel=open     acc=  3 vol=   145.4 rungs= 2
+======================================================================================================================
+ARM 3 SETTLED-MODELED ECONOMICS   SHADOW/REPLAY ONLY -- never realized, no order was ever submitted
+======================================================================================================================
+  full replay cohort       83 slugs, 275 acquisitions, 89 matched units, 97 residual units
+      completion 64.7%   residual/matched 1.09      <- geometry, whole cohort
+  economics subset         55 settled markets (28 still open, economics undefined)
+      208 acquisitions, 72 matched units, 64 residual units
+      completion 69.2%   residual/matched 0.89
+      matched pair basis  p10 0.8400  p50 1.0000  p90 1.1600   (47.2% below 1.00)
+
+  SEVEN-LINE CASHFLOW DECOMPOSITION
+  line                                              $   % of capital
+  1 matched-pair economics                     0.2900          0.32%
+  2 directional residual economics           -12.8400        -14.03%
+  3 spread capture                             0.0000          0.00%
+  4 maker rebates (attributable)               0.0000          0.00%
+  5 liquidity rewards (attributable)           0.0000          0.00%
+  6 fees (PMUS maker fee = 0)                  0.0000          0.00%
+  7 settlement / redemption cashflow           0.0000          0.00%
+                                         ------------  -------------
+  STANDALONE TOTAL (1+2)                     -12.5500        -13.71%
+  capital deployed                            91.5500
+
+  line 3 is 0.0 BY CONSTRUCTION, not by omission: every acquisition price in this
+       replay IS a maker join price, so spread capture is already inside line 1/2
+       and cannot be added again without double counting.
+  lines 4-5 are 0.0 BY EVIDENCE: PMUS /v1/transfers carries no order id, so no
+       rebate or reward is attributable to a fill. The one measured window-level
+       rate (97.59 bps on $52.2573 of maker volume) is recorded and NOT credited.
+  line 6 is 0.0 because the PMUS maker fee is zero; no taker fee arises -- no
+       crossing, SELL, IOC or FOK occurs anywhere in this replay.
+  line 7 is 0.0 as a SEPARATE line because settlement is already the valuation
+       inside lines 1 and 2 (matched pairs redeem at $1.00; residual units redeem
+       at the settled outcome). It is broken out only to keep the schema honest.
+  Lines 1 and 2 are never merged into one edge number for attribution.
+
+  worst 5 episodes by combined cashflow
+     atc-epl-ful-mnu-2026-09-20-ful                 matched +0.0000 resid  -1.3900 comb  -1.3900 cap  1.3900 m=0 r=3
+     aec-cs2-lav-vexar-2026-09-20                   matched -0.3500 resid  -0.7900 comb  -1.1400 cap  5.1400 m=4 r=2
+     aec-setkameua-cherom-pysyev-2026-09-20         matched -0.1700 resid  -0.8200 comb  -0.9900 cap  1.9900 m=1 r=2
+     asc-lal-atm-rma-2026-09-20-neg-2pt5            matched +0.2300 resid  -1.1600 comb  -0.9300 cap  2.9300 m=2 r=3
+     aec-setkameua-necvol-pondmy-2026-09-20         matched +0.0000 resid  -0.7700 comb  -0.7700 cap  0.7700 m=0 r=3
+  best 3 episodes
+     asc-lal-atm-rma-2026-09-20-neg-1pt5            matched +1.2800 resid  -0.1200 comb  +1.1600 cap  4.8400 m=6 r=1
+     aec-setkamecz-proluk-halpav-2026-09-20         matched +0.3400 resid  +1.0800 comb  +1.4200 cap  1.5800 m=1 r=2
+     aec-setkawoua-ivcole-gorann-2026-09-20         matched +0.0000 resid  +2.5700 comb  +2.5700 cap  0.4300 m=0 r=3
+  concentration: worst single episode = 11.1% of the net; 43 of 55 settled episodes negative
+
+  UNIT ECONOMICS USED BY THE COUNTERFACTUALS
+     matched units 72   matched P&L +0.2900   -> +0.004028 per matched unit
+     residual units 64  residual P&L -12.8400  -> -0.200625 per residual unit
+     capital per matched unit 0.995972   capital per residual unit 0.310000
+RECONCILIATION OF THE MATCHED / RESIDUAL SPLIT  (same cashflow, two attributions)
+  attribution                                   matched   residual      TOTAL
+  A strict FIFO per-unit (time order)           +0.2900   -12.8400   -12.5500
+  B side-average basis (prior reports)          +1.0654   -13.6154   -12.5500
+  The TOTAL is invariant: it is sum(settlement value) - sum(cost) however units are paired.
+  Only the ATTRIBUTION between line 1 and line 2 moves. Reported both; neither is summed into an edge.
+
+  capital, settled markets only      91.5500   -> standalone -12.5500 = -13.71%
+  capital, whole replay cohort       119.1900   -> standalone -12.5500 = -10.53%
+  CORRECTION TO bba82ee8: the -10.9%% there divided SETTLED-market P&L by WHOLE-COHORT capital,
+  which includes markets whose economics are undefined. On a like-for-like settled basis the
+  arm-3 return is -13.71%, not -10.9%. The dollar figure (-12.55) was and is correct.
+======================================================================================================================
+L5 vs PMUS -- STATE-NORMALISED BEHAVIOURAL COMPARISON
+   L5   : public canonical sequence, 2216 windows, 71982 BUY fills (BTC/ETH 5m+15m up-down)
+   PMUS : arm-3 replay, 83 markets, 275 acquisitions (sports/esports, cricket excluded)
+======================================================================================================================
+
+1. P(next acquisition is the OPPOSITE side | same-side run length)   <- the state normalisation
+   run length                       L5             PMUS arm 3
+   1                 37.5%  (n= 22894)       52.4%  (n=  126)
+   2                 35.8%  (n= 13738)       43.2%  (n=   44)
+   3                 31.0%  (n=  8562)       72.2%  (n=   18)
+   4                 28.3%  (n=  5748)       75.0%  (n=    4)
+   5                 25.6%  (n=  4070)                    n/a
+   >=6               19.6%  (n= 14754)                    n/a
+   POOLED                31.2% (n= 69766)          52.6% (n=  192)
+
+2. same-side RUN LENGTH distribution (completed runs)
+   run length               L5           PMUS
+   1                     39.6%          61.0%
+   2                     23.2%          22.7%
+   3                     12.3%          13.0%
+   4                      7.5%           2.6%
+   5                      4.6%           0.6%
+   >=6                   12.8%           0.0%
+   mean                  3.03           1.59
+
+3. SIMULTANEOUS TWO-SIDED RESTING EXPOSURE
+   PMUS: 142 of 275 acquisitions (51.6%) occurred while an order rested on the OTHER side
+   L5  : NOT OBSERVABLE. Public activity carries fills only; L5's resting orders were never public.
+         Observable proxy -- opposite-side acquisition within 60s of the previous fill:
+         L5    30.1%   PMUS  12.5%
+
+4-5. ACQUISITION FREQUENCY and FILLS PER MINUTE (active episode span, first fill -> last fill)
+                                                L5             PMUS
+   active span, minutes  p50                  2.93            16.05
+   acquisitions per market p50                6.00             2.00
+   fills per ACTIVE minute p50               3.000            0.429
+   inter-fill gap seconds p50                  2.0            126.5
+   inter-fill gap seconds p90                 20.0           1196.4
+
+7. PRICE MOVEMENT BETWEEN CONSECUTIVE FILLS (YES terms, absolute)
+   p50                                      0.0100           0.0400
+   p90                                      0.0800           0.1600
+   mean                                     0.0304           0.0690
+
+10. TIME TO SETTLEMENT at first acquisition
+   L5   p10     114s  p50     261s  p90     888s   (venue windows are 5 and 15 minutes)
+   PMUS  expected remaining EVENT duration at first acquisition is reported in
+         STEP1_CLOCK_VS_COMPLETION_20260920T1836Z.txt: p50 ~ 2h+ for the sports slate.
+6. COMPATIBLE OPPOSITE OPPORTUNITY per minute OF RESIDUAL-CARRYING TIME  (PMUS only)
+   residual-carrying time 2462.8 minutes across 83 markets
+   compatible prints AT OUR JOIN PRICE: 415  (0.17 per residual-minute)
+   compatible VOLUME:                686805 units (278.9 per residual-minute)
+   per-market p50 0.15 prints/min, 73.7 units/min
+   L5: NOT COMPUTABLE -- the corpus holds L5's own fills, not the market tape of its windows.
+
+8. RESIDUAL DURATION -- how long a non-zero residual is carried
+                                          L5     PMUS arm 3
+   residual span p10                      0s            35s
+   residual span p50                    132s           488s
+   residual span p90                    766s          4133s
+   n spans                              2425            120
+   spans closed before end            100.0%           0.0%
+
+   RECYCLE LATENCY -- fill to the NEXT OPPOSITE-side fill (the mechanic that closes a pair)
+   p10                                    1s            32s
+   p50                                   10s           217s
+   p90                                   54s          1444s
+
+   PRICE DRIFT over that latency (|move| in YES terms between the two fills)
+   p50                                0.0300         0.0600
+   p90                                0.1400         0.1900
+
+9. RESIDUAL / MATCHED TRAJECTORY through the market (by decile of the episode's active span)
+   decile        L5  |resid| / matched     PMUS |resid| / matched
+   0         67.499 /  44.379 (n= 7294)   1.070 /   0.420 (n= 100)
+   1        108.126 / 179.588 (n= 4847)   1.179 /   1.929 (n=  28)
+   2        126.438 / 283.132 (n= 5191)   1.192 /   2.423 (n=  26)
+   3        136.343 / 416.496 (n= 5922)   0.818 /   1.909 (n=  11)
+   4        132.830 / 551.261 (n= 6140)   1.083 /   2.250 (n=  12)
+   5        140.691 / 716.910 (n= 6589)   2.000 /   1.438 (n=  16)
+   6        154.550 / 869.228 (n= 6796)   1.200 /   1.000 (n=  10)
+   7        164.039 / 1046.830 (n= 7651)   1.263 /   1.947 (n=  19)
+   8        178.923 / 1286.086 (n= 8335)   1.900 /   3.700 (n=  10)
+   9        207.650 / 1454.018 (n=12846)   1.308 /   2.538 (n=  13)
+8. RESIDUAL DURATION -- corrected: spans that RETURNED TO FLAT vs spans still open at the end
+                                                    L5       PMUS arm 3
+   spans that closed (back to flat)                232               51
+   spans still open at end                        2193               69
+   share that closed                              9.6%            42.5%
+   CLOSED span duration p10                         9s              32s
+   CLOSED span duration p50                        34s             139s
+   CLOSED span duration p90                       147s            1076s
+   OPEN-at-end span duration p50                  144s            1040s
+   OPEN-at-end span duration p90                  786s            5004s
+
+9b. RESIDUAL/MATCHED RATIO through the episode (same deciles, ratio of the decile means)
+   decile   L5 mean|resid| mean matched  r/m PMUS mean|resid| mean matched r/m
+   0             67.50        44.38  1.521        1.07         0.42  2.548
+   1            108.13       179.59  0.602        1.18         1.93  0.611
+   2            126.44       283.13  0.447        1.19         2.42  0.492
+   3            136.34       416.50  0.327        0.82         1.91  0.429
+   4            132.83       551.26  0.241        1.08         2.25  0.481
+   5            140.69       716.91  0.196        2.00         1.44  1.391
+   6            154.55       869.23  0.178        1.20         1.00  1.200
+   7            164.04      1046.83  0.157        1.26         1.95  0.649
+   8            178.92      1286.09  0.139        1.90         3.70  0.514
+   9            207.65      1454.02  0.143        1.31         2.54  0.515
+
+   L5   |residual| grows 3.1x across the episode while matched grows 32.8x
+   PMUS |residual| grows 1.2x across the episode while matched grows 6.0x
+======================================================================================================================
+THE TRADE-OFF THE CAP CONTROLS -- same cohort, same snapshot, only the completion rule differs
+======================================================================================================================
+                                           arm2  cap 0.98    arm3  L5 rule   L5 (reference)
+  settled markets                                      55               55     2216 windows
+  acquisitions                                        166              208      71982 fills
+  matched units                                        40               72    648022 shares
+  residual units                                       86               64    224899 shares
+  completion  2M/A                                  48.2%            69.2%               --
+  residual / matched                                2.150            0.889            0.347
+  matched pair basis p50                           0.9350           1.0000           0.9708
+  MATCHED EDGE per matched unit                 +0.115500        +0.004028        +0.029186
+  RESIDUAL TOXICITY per resid unit              -0.242093        -0.200625        -0.088766
+  matched P&L $                                   +4.6200          +0.2900        +18912.87
+  residual P&L $                                 -20.8200         -12.8400        -19963.43
+  STANDALONE $                                   -16.2000         -12.5500         -1050.57
+  capital $                                       64.2000          91.5500           728500
+  STANDALONE % of capital                         -25.23%          -13.71%         -0.1442%
+
+  THE CAP BUYS EDGE AND SELLS GEOMETRY. Dropping it moved completion 48.2% -> 69.2% and
+  residual/matched 2.15 -> 0.89, but it also moved the matched pair basis p50 0.9350 -> 1.0000
+  and the matched edge per unit +0.115500 -> +0.004028. L5 held BOTH at once: geometry 0.347 AND
+  basis 0.9708. Neither of our arms does.
+
+======================================================================================================================
+COUNTERFACTUAL ECONOMICS -- arm 3 held at 208 acquisitions, unit parameters swapped one at a time
+======================================================================================================================
+  scenario                              matchU  residU   matched$     resid$       net$  capital$    return
+  0  ARM 3 AS MEASURED                    72.0    64.0    +0.2900   -12.8400   -12.5500     91.55   -13.71%
+  1  L5 GEOMETRY, PMUS toxicity+edge      88.6    30.8    +0.3569    -6.1706    -5.8136     97.80    -5.94%
+  2  PMUS geometry, L5 TOXICITY           72.0    64.0    +0.2900    -5.6810    -5.3910     91.55    -5.89%
+  3  L5 GEOMETRY + L5 TOXICITY            88.6    30.8    +0.3569    -2.7301    -2.3732     97.80    -2.43%
+  3b FULL L5 (geometry+toxicity+EDGE)     88.6    30.8    +2.5865    -2.7301    -0.1437     99.63    -0.14%
+
+  Scenario 0 is the measurement. 1 and 2 are the owner's two single-parameter swaps. 3 is both.
+  3b additionally swaps the MATCHED EDGE and lands on -0.144% -- L5's own standalone return of
+  -0.1442% of spend, reproduced from independently derived unit parameters. That agreement is a
+  check on the arithmetic, not a new result.
+
+======================================================================================================================
+WOULD INCENTIVES THEN MATTER?  measured PMUS maker rebate = 97.59 bps of maker notional
+   (window-level only: /v1/transfers carries no order id, so NOTHING below is credited to a fill)
+======================================================================================================================
+  scenario                                   net$ rebate@97.59bp   net+rebate as % capital
+  0  ARM 3 AS MEASURED                   -12.5500      +0.8934     -11.6566      -12.73%
+  1  L5 GEOMETRY, PMUS toxicity+edge      -5.8136      +0.9544      -4.8592       -4.97%
+  2  PMUS geometry, L5 TOXICITY           -5.3910      +0.8934      -4.4976       -4.91%
+  3  L5 GEOMETRY + L5 TOXICITY            -2.3732      +0.9544      -1.4188       -1.45%
+  3b FULL L5 (geometry+toxicity+EDGE)     -0.1437      +0.9723      +0.8286       +0.83%
+
+  BREAK-EVEN INCENTIVE RATE required by each scenario (bps of maker notional):
+     0  ARM 3 AS MEASURED                     1371 bps
+     1  L5 GEOMETRY, PMUS toxicity+edge        594 bps
+     2  PMUS geometry, L5 TOXICITY             589 bps
+     3  L5 GEOMETRY + L5 TOXICITY              243 bps
+     3b FULL L5 (geometry+toxicity+EDGE)        14 bps <= measured 97.59 bps
+
+  L5's own incentive intensity, for scale: +$68,208 of incentives against $728,500 of spend
+  = 936 bps. The PMUS rate we have actually measured is 97.59 bps -- about ONE TENTH of the
+  environment L5 monetised. It is still sufficient for scenario 3b and no other, because 3b's
+  standalone gap is only 14 bps.
+======================================================================================================================
+WHAT VARIABLE ACTUALLY TRACKS THE GEOMETRY?  two checks.  EXPLORATORY -- nothing is selected or tuned on this
+======================================================================================================================
+
+CHECK A -- WITHIN L5's OWN DATA, all four lanes, ordered by inter-fill price drift
+  lane       win   wins  matchedQ    residQ  gap p50  drift50        r/m       basis standalone%
+  BTC15m     15m    527    556058    104196     2.0s   0.0100      0.187      0.9666    -0.1943%
+  BTC5m      C5m    957     82731     92227    18.0s   0.0600      1.115      0.9928    +0.0446%
+  ETH5m      H5m    703      8833     27710    18.0s   0.1000      3.137      1.0264    -0.0125%
+  ETH15m     15m     29       399       766    42.2s   0.1150      1.919      1.1251    +0.9167%
+  READ -- and this CORRECTS the intuition that window length is the variable:
+    WINDOW LENGTH DOES NOT ORDER THE GEOMETRY. L5's 15-minute BTC lane has the BEST geometry
+    (r/m 0.187) and the BEST basis (0.9666); its 5-minute BTC lane is 6x worse (1.115).
+    INTER-FILL DRIFT DOES order it, monotonically across the three lanes that carry real size:
+       BTC15m drift 0.0100 -> r/m 0.187 | BTC5m 0.0600 -> 1.115 | ETH5m 0.1000 -> 3.137
+    (ETH15m is 29 windows and 399 matched shares -- too small to read.)
+    This is consistent with bb6ae542, which found that shortening the SETTLEMENT clock did not
+    converge our geometry. The settlement clock was never the variable; the drift between an
+    acquisition and its completion is. Those are different things and only the second tracks.
+    Note also that better geometry did NOT buy L5 a better standalone return: BTC15m is -0.1943%
+    and BTC5m +0.0446%. Geometry controls RESIDUAL DRAG, not profitability.
+
+CHECK B -- WITHIN OUR PMUS ARM 3: episodes bucketed by their own median inter-acquisition drift
+  LOW  drift  n=17  medDrift 0.0100  medGap  159.5s  acq  84  completion  81.0%  r/m  0.47  basis p50 1.0000
+  MID  drift  n=17  medDrift 0.0600  medGap   92.2s  acq 102  completion  80.4%  r/m  0.49  basis p50 1.0000
+  HIGH drift  n=19  medDrift 0.1200  medGap  156.9s  acq  59  completion  47.5%  r/m  2.21  basis p50 1.0450
+  READ: the same direction appears inside our own arm -- lower inter-fill drift goes with higher
+    completion and a lower r/m. EXPLORATORY ONLY: 83 episodes split three ways, buckets are not
+    preregistered, and nothing is selected, gated or tuned on this. Note the basis does NOT improve
+    with it (1.0000 in both lower buckets), which is exactly the arm-3 problem: with the cap gone we
+    complete at par whatever the drift.
+
+========================================================================================================================
+DELIVERABLE
+========================================================================================================================
+
+Q1. WHAT SPECIFICALLY ACCOUNTS FOR THE REMAINING 1.06 -> 0.35 RESIDUAL/MATCHED GAP?
+
+  IT IS NOT A RESIDUAL-CONTROL PROBLEM. It is a MATCHED-TURNOVER problem. Five things are ruled out
+  by measurement, and one survives:
+
+  RULED OUT -- we are not reluctant to complete. State-normalised at equal run length, arm 3 flips
+    to the opposite side MORE often than L5 does, at every run length we can observe:
+       run 1  52.4% vs 37.5% | run 2  43.2% vs 35.8% | run 3  72.2% vs 31.0% | pooled 52.6% vs 31.2%
+    Our mean same-side run is 1.59; L5's is 3.03. Our completion discipline is already more eager
+    than the trader we are copying. There is no patience defect left to fix.
+
+  RULED OUT -- liquidity. MARKET_LIMIT is 3 of 97 residual units.
+  RULED OUT -- missing complements. ORDER_ABSENT is 2 of 97. The "rest both sides" fix of 5a13f0b0 holds.
+  RULED OUT -- the 0.98 cap, now that it is gone. PRICE_POLICY_LIMIT collapsed from 46.0% of units
+    (58 of 126, and 74% of the dollars) to 14.4% (14 of 97). Of those 14, twelve were reachable only
+    at the MARKETABLE price, i.e. only by crossing -- which is prohibited without separate authorisation.
+  MOSTLY NOT A DEFECT -- WINDOW_CENSORING is the largest single bucket at 37.1%, but 33 of its 36 units
+    are markets that have simply not expired yet in a live cohort. Only 3 units are real short-window loss.
+
+  WHAT SURVIVES -- THE DENOMINATOR. L5 does not carry a smaller residual buffer than we do. It carries a
+    similar buffer and cycles far more matched inventory past it inside one market:
+
+                                            L5            PMUS arm 3      ratio
+       fills per ACTIVE minute (p50)       3.000            0.429          7.0x
+       inter-fill gap (p50)                   2s             127s           63x
+       recycle latency, fill -> opposite     10s             217s           22x
+       price drift over that latency      0.0300           0.0600          2.0x
+       acquisitions per market (p50)            6                2
+       |residual| growth across episode      3.1x             1.2x
+       MATCHED growth across episode        32.8x             6.0x
+       residual/matched, decile 0 -> 9   1.52 -> 0.14     2.55 -> 0.52
+
+    L5's r/m decays by 90% through a market because its matched book compounds 33x against a nearly
+    constant residual buffer. Ours decays by 80% but starts and ends at four times the level because
+    matched compounds only 6x. Same numerator behaviour, one sixth of the denominator.
+
+    The opportunity side measures the same thing from the habitat: over 2,463 residual-carrying minutes
+    we saw 415 prints compatible with our own join price -- 0.17 per residual-minute, about one every
+    six minutes. L5 filled every two seconds.
+
+  THE ONE MECHANIC THAT IS OURS TO OWN: INVENTORY_EXTEND, 28.9% of remaining units (43.8% of the settled
+    ones, -$4.62). Twenty-six of 28 were acquired by EXTEND while a complement was already resting
+    unfilled, at |residual| of 1 (17 units) or 2 (9 units). Next is QUEUE_REACH_LIMIT, 9 units where a
+    median 1,074 units of compatible volume reached a resting rung and never cleared the queue in front
+    of it -- depth, i.e. our queue position in deep sports books.
+
+Q1b. A SECOND FIDELITY DISCREPANCY SURFACED, AND IT IS THE SAME ONE SEEN TWICE
+
+  The cap-versus-no-cap dilemma is an artefact of the slow clock, not a real choice:
+
+       arm 2 (cap 0.98)   basis p50 0.9350   edge/unit +0.1155   r/m 2.150   standalone -25.23%
+       arm 3 (L5 rule)    basis p50 1.0000   edge/unit +0.0040   r/m 0.889   standalone -13.71%
+       L5                 basis      0.9708  edge/unit +0.0292   r/m 0.347   standalone  -0.14%
+
+  The cap buys basis and sells geometry. Removing it buys geometry and sells basis. L5 held BOTH,
+  because its completion landed 10 seconds and 1 cent after the acquisition -- at that distance the
+  touch still IS a 0.97 basis. Ours lands 217 seconds and 6 cents later, by which time the touch is par.
+  Basis and geometry are not two problems. They are one: the drift between an acquisition and its completion.
+
+  AND IT IS NOT THE SETTLEMENT CLOCK. bb6ae542 stands. L5's own lanes settle it: the 15-minute BTC lane
+  has the BEST geometry (r/m 0.187) and the BEST basis (0.9666) while the 5-minute BTC lane is six times
+  worse (1.115). Window length does not order the geometry; inter-fill drift does, monotonically across
+  the three lanes carrying real size. Selecting PMUS markets on time-to-settlement was never going to
+  work, and did not.
+
+Q2. WOULD ELIMINATING THAT GAP BRING PMUS CLOSE ENOUGH TO BREAKEVEN FOR INCENTIVES TO MATTER?
+
+  GEOMETRY ALONE: NO, AND NOT CLOSE. -13.71% -> -5.94%. It would need 594 bps of incentive. PMUS pays
+    a measured 97.59 bps. Six times short.
+  TOXICITY ALONE: NO. -5.89%, needs 589 bps.
+  GEOMETRY + TOXICITY: NO. -2.43%, needs 243 bps. Still 2.5x more than PMUS pays.
+  GEOMETRY + TOXICITY + MATCHED BASIS: YES, and only here. -0.14%, needs 14 bps, and the measured
+    97.59 bps covers it roughly seven times over (+0.83% of capital with the rebate credited).
+
+  So the answer is conditional and the condition is specific: the matched basis is the term that decides
+  it. It carries 2.29 of the 13.57 points of the total gap but it is the only one whose removal drops the
+  required incentive rate below what this venue actually pays. Fixing residual geometry without fixing
+  the basis leaves us needing a 6x richer incentive environment than the one we can document.
+
+  For scale, L5's own incentive intensity was +$68,208 against $728,500 of spend = 936 bps, roughly ten
+  times the PMUS rate. We do not need ten times. We need fourteen basis points -- but only from a state
+  we have not yet reached on any arm.
+
+  NONE OF THE REBATE ARITHMETIC IS CREDITED ANYWHERE. PMUS /v1/transfers carries no order id, so no
+  rebate is attributable to a fill. Lines 4 and 5 of the cashflow decomposition are ZERO BY EVIDENCE.
+  The 97.59 bps is one window-level observation ($0.51 on $52.2573 of maker volume) and is used above
+  only as a break-even yardstick. Nothing here is realized, filled, or submitted.
+
+WHAT THIS DOES NOT AUTHORISE
+  No live change. No unlock of near-$1 completion -- arm 3 is diagnostic, and on this cohort it buys its
+  better geometry by earning essentially nothing on matched pairs. No threshold was searched. Model A is
+  untouched (sha16 bbb55bf90638d2bd). Gemini A+B remain the unchanged negative control. International
+  remains reference-only. Cricket remains research-only. No orders, no arming, no probe.
