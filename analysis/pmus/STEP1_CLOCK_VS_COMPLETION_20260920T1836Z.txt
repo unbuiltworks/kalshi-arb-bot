@@ -1,0 +1,53 @@
+==============================================================================================================================
+STEP 1 -- DOES A SHORTER PMUS SETTLEMENT CLOCK CONVERGE TOWARD L5'S ECONOMIC GEOMETRY?
+Prospective non-cricket episodes, bucketed by EXPECTED REMAINING EVENT DURATION AT FIRST FILL.
+SETTLED-MODELED where the market has expired; never realized. Rebate EXCLUDED -- see the note at the end.
+L5 reference geometry: completion 85%% of acquired inventory, 0.35 residual units per matched unit.
+==============================================================================================================================
+
+
+########## QUEUE_AWARE   n=83 episodes with a resolvable clock ##########
+bucket      eps  match  mUnit   rUnit   compl%  r/mUnit    flow%    latP50 matchedP&L   residP&L standalone     ret%
+<=15m        13      1      3      24     20.0     8.00        8      761s    +0.0600    -4.4700    -4.4100    -42.4
+15-30m       12      3      4      26     23.5     6.50       25      371s    +0.0867    -3.1867    -3.1000    -23.7
+30-45m       27      2      2      52      7.1    26.00       11      171s    +0.0400    -6.7500    -6.7100    -32.4
+45-60m        3      1      1       4     33.3     4.00       33     5213s    +0.0000    -0.3300    -0.3300    -24.8
+60-90m        7      1      2      10     28.6     5.00       14      224s    +0.0400    +2.8900    +2.9300    +57.8
+>90m         21      0      0      43      0.0        -        0         -    +0.0000    -5.6700    -5.6700    -48.6
+ALL          83      8     12     159     13.1    13.25       11      344s    +0.2267   -17.5167   -17.2900    -27.8
+
+   CONTINUOUS (Spearman rho vs remaining-minutes-at-first-fill; NEGATIVE = shorter clock is better):
+     matched (yes/no)      rho=+0.280   n=83
+     compatible flow       rho=+0.279   n=83
+     settled episode P&L   rho=-0.049   n=73
+
+
+########## OPTIMISTIC   n=120 episodes with a resolvable clock ##########
+bucket      eps  match  mUnit   rUnit   compl%  r/mUnit    flow%    latP50 matchedP&L   residP&L standalone     ret%
+<=15m        14      1      3      25     19.4     8.33        7      572s    +0.0600    +0.7400    +0.8000     +7.8
+15-30m       18      6     10      33     37.7     3.30       33      217s    +1.1266    -3.8567    -2.7301    -13.2
+30-45m       29      3      3      70      7.9    23.33       10       96s    +0.4133    -6.6633    -6.2500    -22.1
+45-60m        7      1      1      11     15.4    11.00       14     5213s    +0.0000    -2.4700    -2.4700    -71.2
+60-90m       14      1      2      21     16.0    10.50        7      224s    +0.0400    -2.1400    -2.1000    -23.1
+>90m         38      0      0      84      0.0        -        0         -    +0.0000    -3.3400    -3.3400    -17.3
+ALL         120     12     19     244     13.5    12.84       10      297s    +1.6399   -17.7300   -16.0901    -17.7
+
+   CONTINUOUS (Spearman rho vs remaining-minutes-at-first-fill; NEGATIVE = shorter clock is better):
+     matched (yes/no)      rho=+0.333   n=120
+     compatible flow       rho=+0.333   n=120
+     settled episode P&L   rho=-0.108   n=102
+
+==============================================================================================================================
+BREAK-EVEN COMPLETION, DERIVED FROM OBSERVED NUMBERS (no assumed 93%)
+==============================================================================================================================
+  observed matched P&L per matched unit    +0.0206   (n=11 units, settled only)
+  observed residual P&L per residual unit  -0.1192   (n=147 units, settled only)
+  => break-even residual/matched ratio     0.1730
+  => break-even COMPLETION                 92.0% of acquired inventory
+  observed PMUS completion (all buckets)   13.1%   ratio 13.25
+  L5 reference                             85.0%%   ratio 0.35
+
+REBATE: NOT ADDED. Attribution is NOT established -- the 97.59 bps is WINDOW-LEVEL
+($0.51 / $52.2573) and /v1/transfers carries no order id, symbol or fill linkage.
+The owner's condition was "if and only if attribution is actually established".
+It is not, so no rebate line appears in any figure above.
