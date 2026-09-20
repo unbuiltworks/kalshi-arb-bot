@@ -296,3 +296,71 @@ def before_expiry(window):
 - Correlation across windows is not independence: consecutive windows in the
   same session share regime, so p-values are optimistic.
 
+
+## 6. Hybrid completion, and why L5's taker use does not transfer to Gemini
+
+Added 2026-09-20 from `analysis/gemini/hybrid_complete.json`. Offline study over
+59 corrected-queue Gemini contracts. Model A frozen; taker execution is not
+enabled anywhere and no order was sent.
+
+### 6.1 A maker OPEN completed by a taker cannot be cheap. This is arithmetic.
+
+- Rested a YES bid at `p`, hit by an aggressor SELL: the surviving best bid
+  `b <= p`, buying NO costs `(1 - b)`, so the gross pair is `p + 1 - b >= 1`.
+- Rested a NO bid at `n` (a YES ask at `1 - n`), lifted by an aggressor BUY: the
+  surviving ask `a >= 1 - n`, so the gross pair is `n + a >= 1`.
+
+Equality only when size survives at our own price; fees then make it a loss.
+**Every cent of sub-par pair basis must therefore come from the book moving
+after the fill, in favour of the leg already held.** Pinned by
+`test_A_MAKER_FILL_AT_THE_TOUCH_CANNOT_BE_COMPLETED_BELOW_PAR_AT_ONCE`.
+
+### 6.2 The measured "locked edge" is directional gain, not execution edge
+
+Exact identity across the 14 completions taken at `<= $1.00`:
+
+    locked = complement_decline - spread_paid_at_open - fees
+    +0.0869 =      +0.1857      -        +0.0811      - 0.0177
+
+Execution contributes **-9.9c** and never a positive. The rule is a take-profit
+with no stop: it banks the 14 episodes that moved our way and retains the 15
+that did not (their best achievable basis: median $1.11). Retained residual
+marks at a median **-28c/unit** against **-1c/unit** under maker/maker.
+
+Matched-pair economics and directional-residual P&L are reported separately
+above and are never summed. A mark is not realized P&L.
+
+### 6.3 L5's taker use is governed by TIME, not by inventory
+
+From `analysis/l5/l5_fidelity_pass.json`, n = 64,715 actions:
+
+| TTE | > 10m | 5-10m | 2-5m | 30-120s | < 30s |
+|---|---|---|---|---|---|
+| all actions | 0.0275 | 0.0369 | 0.2253 | 0.3999 | **0.5850** |
+| `complete` | 0.0254 | 0.0372 | 0.2071 | 0.4129 | **0.6495** |
+| `extend` | 0.0298 | 0.0364 | 0.2327 | 0.3812 | 0.5337 |
+
+**Time: yes, monotonically — 2.8% to 58.5%, a 21x rise.** L5 is maker-dominant
+early and majority-taker inside 30 seconds.
+
+**Inventory: no.** `complete` and `extend` both carry inventory and have
+near-identical taker rates in every bucket, so the inventory state does not
+drive the choice.
+
+**Correction.** This program has quoted `p_taker` mean **0.0289** as L5's taker
+rate. That is the mean pooled over states dominated by long TTE. Conditioned on
+TTE it reaches 0.585, so the pooled figure understated late-window taker use by
+an order of magnitude. Treat 0.0289 as superseded.
+
+### 6.4 The behaviour transfers; the economics do not
+
+| | L5 (Polymarket) | us (Gemini) |
+|---|---|---|
+| quoted spread at fill states | median **$0.01** (n=1072, p90 0.01, max 0.02) | median **$0.28** (n=1096, p10 0.11, max 0.98) |
+
+L5's taker completion is cheap: he pays about a cent. The identical action on
+Gemini pays a median 28c — **28x** — and section 6.1 shows that spread is paid
+in full, by construction. Hybrid completion on Gemini is a risk/turnover tool
+priced at roughly 9.9c per pair, not a source of pair edge.
+
+**Not promoted.** Offline only. Residual direction is not assumed to have skill.

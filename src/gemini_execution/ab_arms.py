@@ -50,7 +50,8 @@ settled or realized.
 from __future__ import annotations
 
 from decimal import Decimal as D
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import (Any, Callable, Dict, List, Mapping, Optional,
+                    Sequence)
 
 from src.gemini_execution import tape_replay as TR
 
@@ -175,8 +176,18 @@ def _fee(qty: D, price: D) -> D:
 
 
 def replay(symbol: str, cycles: Sequence[Mapping[str, Any]],
-           prints: Sequence[Mapping[str, Any]], *, arm: str) -> Dict[str, Any]:
-    """One contract under one arm. Rungs are the frozen policy's own."""
+           prints: Sequence[Mapping[str, Any]], *, arm: str,
+           on_cycle: Optional[Callable[..., None]] = None) -> Dict[str, Any]:
+    """One contract under one arm. Rungs are the frozen policy's own.
+
+    `on_cycle` is a neutral observation hook called at the end of every
+    cycle with the cycle, the clock, the inventory and the resting rungs. It
+    exists so a study can price something OTHER than a resting maker rung --
+    `hybrid_complete` prices an immediate complement through it -- without
+    that logic living in this module, which the live lane imports. Nothing
+    here submits, crosses or enables a taker order; with no hook the
+    behaviour is exactly the maker-only arm.
+    """
     from src.gemini_execution import continuous_probe as CP
     from src.gemini_execution import queue_replay as QR
 
@@ -240,6 +251,8 @@ def replay(symbol: str, cycles: Sequence[Mapping[str, Any]],
             if leg in kept_legs:
                 q.preserved = True
         exposure += abs(inv.residual())
+        if on_cycle is not None:
+            on_cycle(cycle=c, now_ms=now, inv=inv, live=live, fills=fills)
         prev = now
 
     r = inv.report()
