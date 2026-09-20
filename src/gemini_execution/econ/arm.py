@@ -49,6 +49,7 @@ from src.gemini_execution.econ import policy as PO
 from src.gemini_execution.econ import scoreboard as SB
 from src.gemini_execution.econ import veto as VT
 from src.gemini_execution.econ import counterfactual as CF
+from src.gemini_execution.econ import coverage as CVB
 from src.gemini_execution.econ import spread_census as SC
 from src.gemini_execution.econ import ws_flow as WF
 
@@ -238,6 +239,8 @@ class GeminiEconArm:
             self.spreads.advance(
                 now=now_t, bid=((book or {}).get("yes") or {}).get("bid"))
             self.cf.mark_open(book=book, t=now_t, tte_s=tte)
+            # follow every open candidate first fill down THIS contract's tape
+            self.state.blocked.advance(book=book, t=now_t, symbol=symbol)
         except Exception as exc:                                 # noqa: BLE001
             # observation must never be able to stop a decision
             pass
@@ -369,6 +372,32 @@ class GeminiEconArm:
                         flow_vouched=bool(wsf.get("vouched")),
                         flow_why=wsf.get("why"))
                     self.board.entry(dec)
+                    # ---- PROFIT SPRINT research capture. Attribution answers
+                    # WHICH gate blocks; the labeler answers whether being
+                    # blocked was GOOD. Neither is ever read by a gate.
+                    if bucket == CVB.STRATEGY_ELIGIBLE:
+                        yes = (book or {}).get("yes") or {}
+                        _b, _a = _dec(yes.get("bid")), _dec(yes.get("ask"))
+                        _sp = (None if (_b is None or _a is None)
+                               else str(_a - _b))
+                        att = self.state.attribution.record(
+                            cohort=self.cohort, symbol=symbol, t=now_t,
+                            tte_s=tte, leg=a.get("leg"), price=a.get("price"),
+                            spread=_sp, gates=dec.get("gates") or [],
+                            waived=dec.get("waived_unknown_gates") or [],
+                            admitted=bool(dec["admitted"]))
+                        self.state.blocked.open_candidate(
+                            cohort=self.cohort, symbol=symbol, t=now_t,
+                            tte_s=tte, leg=a.get("leg"),
+                            price=a.get("price"), spread=_sp,
+                            admitted=bool(dec["admitted"]),
+                            blocking=att["blocking"],
+                            marginal_blocker=att["marginal_blocker"],
+                            min_edge=(self.pol.thresholds.min_edge
+                                      if self.pol else "0.005"),
+                            features=self._fork_features(
+                                tte=tte, book=book, wsf=wsf, held=held,
+                                mode=mode, now_t=now_t))
                     # ONE outcome per CYCLE, recorded after the action loop.
                     # Recording here would count a cycle proposing two rungs
                     # twice, and would count it even on a warm-up-excluded
@@ -543,6 +572,10 @@ class GeminiEconArm:
         """
         n = self.cf.resolve_open(book=book or {}, t=time.time(),
                                  settlement=settlement)
+        # close this contract's candidates: the next window is a DIFFERENT
+        # instrument and following them there would mark one contract's fill
+        # against another contract's book.
+        self.state.blocked.settle_all(leg=settlement, symbol=self.symbol)
         # NOTE: the socket is NOT dropped here. The pre-warmer owns socket
         # lifetime now, because dropping at window end is precisely what made
         # every next window open blind.
@@ -556,6 +589,8 @@ class GeminiEconArm:
                                else "FROZEN_DEFAULT"),
                 "scoreboard": self.board.report(),
                 "coverage": self.state.coverage.report(),
+                "attribution": self.state.attribution.report(),
+                "blocked_labels": self.state.blocked.report(),
                 "counterfactual": self.cf.report(),
                 "spread_census": self.spreads.report(),
                 "prewarm": (self.prewarm.report() if self.prewarm else None),

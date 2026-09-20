@@ -995,6 +995,63 @@ def _print_econ(w) -> None:
                       w.get("symbol"), lbl[:20], pw.get("watching"),
                       pw.get("opened_total"), pw.get("dropped_total"),
                       pw.get("errors")), flush=True)
+        # ---- PROFIT SPRINT. Which gate is BINDING (sole blocker) versus a
+        # PASSENGER (blocks cycles something else blocked anyway), and what the
+        # ablations would have admitted. Nothing here is deployed.
+        at = e.get("attribution") or {}
+        if at.get("cycles"):
+            pg = at.get("per_gate") or {}
+            print("ECON_GATE %s %s cycles=%s admitted=%s | %s" % (
+                w.get("symbol"), lbl[:20], at.get("cycles"),
+                at.get("admitted_n"),
+                " ; ".join("%s %s blk=%.0f%% marg=%.0f%%"
+                           % (g, v["verdict"], v["blocked_pct"],
+                              v["marginal_pct"])
+                           for g, v in sorted(pg.items()))), flush=True)
+            print("ECON_ABLATE %s %s | %s" % (
+                w.get("symbol"), lbl[:20],
+                " ; ".join("%s=%s(%+d)" % (k, v["admitted_n"],
+                                           v["delta_vs_current"])
+                           for k, v in (at.get("ablations") or {}).items())),
+                  flush=True)
+            combos = at.get("blocker_combinations") or []
+            if combos:
+                print("ECON_COMBO %s %s | %s" % (
+                    w.get("symbol"), lbl[:20],
+                    " ; ".join("%s n=%d (%.0f%%)"
+                               % ("+".join(c["gates"]) or "NONE", c["n"],
+                                  c["pct"]) for c in combos[:5])), flush=True)
+        # ---- WAS BEING BLOCKED GOOD FOR US? Forward labels on candidate first
+        # fills, segmented by cohort/TTE/LEG -- YES and NO never pooled.
+        bl = e.get("blocked_labels") or {}
+        if bl.get("labelled"):
+            def _fmt(d):
+                if not d or d.get("empty"):
+                    return "n=0"
+                return ("n=%s mo8=%s mo30=%s mo60=%s mo120=%s adv60=%s "
+                        "opp=%s t2opp=%s basis=%s b<=1=%s maxAdv=%s" % (
+                            d.get("n"), d.get("markout_p50_8s"),
+                            d.get("markout_p50_30s"), d.get("markout_p50_60s"),
+                            d.get("markout_p50_120s"),
+                            d.get("adverse_share_60s"),
+                            d.get("opposite_available_share"),
+                            d.get("median_time_to_opposite_s"),
+                            d.get("best_pair_basis_p50"),
+                            d.get("best_pair_below_one_share"),
+                            d.get("max_adverse_markout_p50_ticks")))
+            print("ECON_LABEL %s %s labelled=%s open=%s | BLOCKED %s | "
+                  "ADMITTED %s" % (
+                      w.get("symbol"), lbl[:20], bl.get("labelled"),
+                      bl.get("open"), _fmt(bl.get("blocked")),
+                      _fmt(bl.get("admitted"))), flush=True)
+            for k, v in sorted((bl.get("by_cohort_tte_leg") or {}).items()):
+                if v.get("n"):
+                    print("ECON_SEG %s %s %s | %s" % (
+                        w.get("symbol"), lbl[:20], k, _fmt(v)), flush=True)
+            for k, v in sorted((bl.get("by_marginal_blocker") or {}).items()):
+                if v.get("n"):
+                    print("ECON_BYBLOCK %s %s %s | %s" % (
+                        w.get("symbol"), lbl[:20], k, _fmt(v)), flush=True)
         why = sb.get("entry_refusal_example_reasons") or {}
         if why:
             print("ECON_WHY %s %s %s" % (w.get("symbol"), lbl[:20], why),

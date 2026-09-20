@@ -41,6 +41,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from src.gemini_execution.econ import attribution as AT
+from src.gemini_execution.econ import blocked_labeler as BL
 from src.gemini_execution.econ import counterfactual as CF
 from src.gemini_execution.econ import coverage as CV
 from src.gemini_execution.econ import hazard as HZ
@@ -62,6 +64,10 @@ class CohortState:
     cf: CF.CounterfactualLedger = field(
         default_factory=CF.CounterfactualLedger)
     coverage: CV.CoverageLedger = field(default_factory=CV.CoverageLedger)
+    #: PROFIT SPRINT. Why eligible states are refused, and whether being
+    #: refused was good for us. Research only: the arm writes, never reads.
+    attribution: AT.GateAttribution = field(default_factory=AT.GateAttribution)
+    blocked: BL.BlockedLabeler = field(default_factory=BL.BlockedLabeler)
     #: ONE socket source and ONE pre-warmer per cohort. Both must outlive the
     #: window or pre-warming is pointless: a socket opened for the NEXT
     #: contract is worthless if it is dropped when THIS window ends.
