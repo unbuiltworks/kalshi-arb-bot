@@ -168,3 +168,82 @@ discovered after the fact and told as though it had been predicted.
 4. entry admission
 5. event-driven challenger — **off**, and a test asserts neither `shadow_soak`
    nor the arm reaches `event_driver`
+
+---
+
+# Update — coverage, keying and sign, 2026-09-20 ~14:44Z
+
+## Coverage: the structural gap is closed
+
+```
+ECON_COV GEMI-BTC05M2609201445-UP cohort=BTC5m
+  total=26 vouched=23 warmup_excl=3 not_quoting=4 eligible=19
+  admitted=0 refusals=19 rate_of_eligible=0.0
+  warmup_share=0.115 prewarmed=2 notPrewarmed=1
+  medTimeToVouched=37.96s exclusive=True
+```
+
+**Warm-up share fell from 1.00 to 0.115.** The 40%-of-contract structural gap is
+gone: contracts now become vouched a median **37.96 seconds** after first sight,
+comfortably inside the BTC5m entry band, because the pre-warmer holds the next
+contracts' sockets open and the flow source asks for the longest window the
+socket can actually attest rather than a fixed 120s that could not exist.
+
+`ECON_PREWARM` confirms the mechanism — three contracts held open ahead of the
+decision, `errors=0`.
+
+**And the denominator is now internally consistent.** `eligible=19`,
+`refusals=19`, `exclusive=True`. The earlier line read `eligible=0, refusals=4`,
+which was arithmetically impossible; that defect is fixed and pinned by a test
+that replays it.
+
+So `rate_of_eligible = 0.0` is, for the first time, a **real strategy result**
+rather than a coverage artefact: on 19 cycles where the socket vouched and the
+policy was seeking entry, the strategy refused every one. We know from
+`ECON_WHY` that this is `SPREAD`, and the spread bound is deliberately not being
+touched.
+
+## The census is uniquely keyed and accumulating
+
+```
+ECON_SPREAD obs=48 cellsOK=0 uniq=True persp=MAKER_BUY_YES_AT_BID
+```
+
+`obs=48` and rising across windows — before the registry fix it reset to 4–20
+every contract and could never have reached a sufficient cell. `uniq=True`
+asserts the guarantee the earlier duplicate line appeared to violate.
+
+`cells_sufficient` is still **0** (largest cell n=14 against a floor of 30), so
+no threshold inference yet, as agreed.
+
+## Signed markouts change what the numbers mean
+
+```
+BTC5m|121-300|0.26-0.45|silent  n=14  med=0.305
+   signed={8: 0.0, 30: 0.0, 60: +5.0}   abs={8: 0.5, 30: 9.0, 60: 12.0}
+   adverse={8: 0.29, 30: 0.43, 60: 0.50}
+
+BTC5m|61-120|0.56-0.75|thin     n=5   med=0.240
+   signed={8: +1.0, 30: -6.0, 60: -44.0}  abs={8: 1.0, 30: 6.0, 60: 44.0}
+   adverse={8: 0.20, 30: 0.80, 60: 1.00}
+```
+
+The second cell is the point of the whole convention. An absolute-only reading
+says "the touch moved 44 ticks at 60s". The signed reading says it moved **44
+ticks against a resting YES maker, adversely on 100% of observations** — late in
+a BTC5m window (tte 61–120) the touch runs away from the rung. Those are
+opposite operational facts and the earlier unsigned number could not tell them
+apart.
+
+Mid-window (tte 121–300) is roughly symmetric at 8s and 30s: adverse share
+0.29 and 0.43.
+
+## The 8-second markout keeps shrinking
+
+`abs` at 8s is **0.5 ticks** in the largest cell, against ~1.0 in the previous
+sample and against the A+B replay's "2–7 ticks between 8-second cycles".
+
+Both samples now point the same way: **the 8s cadence looks far less binding
+than the A+B replay implied**, which weakens rather than strengthens the case
+for event-driven decisions. n is still 14. Recorded, not concluded — and the
+event-driven lane stays off.
