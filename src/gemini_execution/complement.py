@@ -222,18 +222,16 @@ def maker_only_improvement(book: Mapping[str, Any], leg: str,
 
 
 def _size_ahead(depth: Any, leg: str, price: Any) -> Optional[D]:
-    """What a print must clear before it reaches us. YES ladder only."""
-    if str(leg).upper() != "YES":
-        return None
-    p = _dec(price)
-    if p is None or not isinstance(depth, Mapping) or not depth.get("readable"):
-        return None
-    tot = D("0")
-    for lv in ((depth.get("bids") or {}).get("levels") or []):
-        px, qty = _dec(lv.get("price")), _dec(lv.get("qty"))
-        if px is not None and qty is not None and px >= p:
-            tot += qty
-    return tot
+    """What a print must clear before it reaches us, for EITHER leg.
+
+    ONE IMPLEMENTATION, DELIBERATELY. This used to be its own copy that
+    returned None for every NO leg, and the caller then filled anyway with
+    `ahead or 0` -- so a NO rung was reported as having an unknown queue and
+    simultaneously traded as if it had none. Delegating to `tape_replay` means
+    there is exactly one place where queue position can be wrong.
+    """
+    from src.gemini_execution import tape_replay as TR
+    return TR.size_ahead(depth, leg, price)
 
 
 def trace(*, symbol: str, arm: str, seed_leg: str, seed_qty: Any,
@@ -320,9 +318,14 @@ def trace(*, symbol: str, arm: str, seed_leg: str, seed_qty: Any,
                     and now_ms < _dec(t["utc_ms"]) <= nxt
                     and reaches(leg, price, t)]
             reached = sum((_dec(t["amount"]) or D("0")) for t in hits)
+            # AN UNREADABLE QUEUE IS NOT AN EMPTY ONE. When the ladder
+            # cannot be read the fill is UNCOMPUTABLE and is reported as
+            # such; it is never resolved to a fill, which is what
+            # `ahead or 0` silently did on every NO rung.
             filled = D("0")
-            if hits and (ahead is None or reached > ahead):
-                spare = reached - (ahead or D("0"))
+            computable = ahead is not None
+            if computable and hits and reached > ahead:
+                spare = reached - ahead
                 filled = max(D("0"), min(_dec(a.get("qty")) or D("0.01"),
                                          spare))
             row = {
@@ -337,6 +340,12 @@ def trace(*, symbol: str, arm: str, seed_leg: str, seed_qty: Any,
                 "queue_readable": ahead is not None,
                 "reaching_prints": len(hits),
                 "reaching_contracts": str(reached),
+                # A NON-COMPUTABLE FILL IS RECORDED AS ZERO AND FLAGGED, not
+                # as None: every consumer already reads this as a number, and
+                # a nullable field would only move the `or 0` problem into
+                # them. The flag carries the distinction and the summary
+                # counts it, so an unreadable queue stays visible.
+                "fill_computable": computable,
                 "theoretical_fill": str(filled),
                 "utc_ms": str(now_ms), "tte_s": tte,
             }
@@ -380,8 +389,14 @@ def trace(*, symbol: str, arm: str, seed_leg: str, seed_qty: Any,
             "note": "no cycle reached this mark; the final state is reported"})
 
     settle = CP.settlement_report(inv, dict(resolution or {}))
-    comp_fills = [r for r in complements if _dec(r["theoretical_fill"]) > 0]
-    ext_fills = [r for r in extends if _dec(r["theoretical_fill"]) > 0]
+    comp_fills = [r for r in complements
+                  if r.get("fill_computable", True)
+                  and (_dec(r["theoretical_fill"]) or D("0")) > 0]
+    ext_fills = [r for r in extends
+                 if r.get("fill_computable", True)
+                 and (_dec(r["theoretical_fill"]) or D("0")) > 0]
+    not_computable = sum(1 for r in list(complements) + list(extends)
+                         if not r.get("fill_computable", True))
 
     out.update({
         "computable": True,
@@ -395,6 +410,7 @@ def trace(*, symbol: str, arm: str, seed_leg: str, seed_qty: Any,
         "complement_quotes": len(complements),
         "complement_quotes_with_a_reaching_print": sum(
             1 for r in complements if r["reaching_prints"]),
+        "quotes_with_an_unreadable_queue": not_computable,
         "complement_theoretical_fills": len(comp_fills),
         "extend_quotes": len(extends),
         "extend_theoretical_fills": len(ext_fills),

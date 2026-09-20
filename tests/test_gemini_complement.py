@@ -183,12 +183,22 @@ def test_size_ahead_counts_every_rung_at_or_better_than_ours():
     assert CM._size_ahead(depth, "YES", "0.40") == D("17")
 
 
-def test_size_ahead_is_unknown_for_a_NO_rung_and_for_an_unreadable_ladder():
-    depth = {"readable": True, "bids": {"levels": [
-        {"price": "0.45", "qty": "10"}]}}
-    assert CM._size_ahead(depth, "NO", "0.40") is None
-    assert CM._size_ahead({"readable": False}, "YES", "0.40") is None
-    assert CM._size_ahead(None, "YES", "0.40") is None
+def test_size_ahead_is_unknown_only_when_the_LADDER_is_unreadable():
+    """This used to assert a NO rung is unknown against a READABLE ladder.
+
+    That was the defect: it made the unknown permanent for one leg, and the
+    caller then filled it anyway with `ahead or D("0")`. Gemini publishes ONE
+    ladder and our NO bid at n rests at ask (1 - n) on it, so a readable
+    ladder gives BOTH legs a queue. Unknown now means unreadable, for both.
+    """
+    depth = {"readable": True,
+             "bids": {"levels": [{"price": "0.45", "qty": "10"}]},
+             "asks": {"levels": [{"price": "0.55", "qty": "12"}]}}
+    assert CM._size_ahead(depth, "YES", "0.40") == D("10")
+    assert CM._size_ahead(depth, "NO", "0.45") == D("12")   # ask (1-0.45)
+    for bad in ({"readable": False}, None, {}):
+        assert CM._size_ahead(bad, "YES", "0.40") is None
+        assert CM._size_ahead(bad, "NO", "0.40") is None
 
 
 # ========================================== the materiality bar, and its math

@@ -206,11 +206,20 @@ def test_a_preserved_quote_has_its_queue_eaten_a_requote_does_not():
 
 
 def test_an_unreadable_queue_stays_unknown_and_is_not_called_zero():
+    """The unknown is kept -- it just no longer belongs to a SIDE.
+
+    `_size_ahead` used to return None for every NO rung even against a
+    readable ladder, and `_fill_from` then computed `reached - (ahead or 0)`:
+    reported unknown, traded as zero. Both are corrected.
+    """
     q = CM._Quote(leg="NO", price=D("0.4"), placed_ms=D("0"),
                   ahead_at_place=None)
     assert q.ahead_now() is None
-    assert CM._size_ahead({"readable": True, "bids": {"levels": []}},
-                          "NO", "0.4") is None
+    # unreadable -> unknown for both legs
+    assert CM._size_ahead({"readable": False}, "NO", "0.4") is None
+    assert CM._size_ahead({"readable": False}, "YES", "0.4") is None
+    # and an unknown queue can no longer be cleared, so it fills nothing
+    assert CM._fill_from([{"amount": "9999"}], None, D("0.01")) == D("0")
 
 
 def test_size_ahead_counts_every_rung_at_or_better_than_ours():
@@ -230,13 +239,23 @@ def test_a_fill_only_happens_once_the_queue_is_cleared():
 
 # ============================================================ the replay
 
-def _cycle(ms, tte, ybid="0.40", yask="0.50", nbid="0.45", nask="0.55"):
+#: a shallow, READABLE ladder. Until 2026-09-20 this fixture was unreadable,
+#: so every theoretical fill these tests exercised existed only because an
+#: unknown queue was treated as an empty one. A test that can only pass under
+#: the bug is not testing the thing it names.
+READABLE_LADDER = {"readable": True,
+                   "bids": {"levels": [{"price": "0.40", "qty": "5"}]},
+                   "asks": {"levels": [{"price": "0.50", "qty": "5"}]}}
+
+
+def _cycle(ms, tte, ybid="0.40", yask="0.50", nbid="0.45", nask="0.55",
+           depth=None):
     return {"utc_ms": ms, "utc": "u", "tte_s": tte,
             "book": {"readable": True, "identity_consistent": True,
                      "tick": "0.01", "t_utc": ms / 1000.0,
                      "yes": {"bid": ybid, "ask": yask},
                      "no": {"bid": nbid, "ask": nask}},
-            "depth": {"readable": False}}
+            "depth": ({"readable": False} if depth is None else depth)}
 
 
 @pytest.fixture()
@@ -245,8 +264,9 @@ def _terms(monkeypatch):
     monkeypatch.setattr(MD, "terms_for", lambda s: {"priceIncrement": "0.01"})
 
 
-def _cycles(n=8, start=1000, step=8000, tte0=200):
-    return [_cycle(start + i * step, tte0 - i * 8) for i in range(n)]
+def _cycles(n=8, start=1000, step=8000, tte0=200, depth=None):
+    return [_cycle(start + i * step, tte0 - i * 8, depth=depth)
+            for i in range(n)]
 
 
 def test_EVERY_ARM_TAKES_THE_SAME_ACTIONS_IN_THE_SAME_ORDER(_terms):
@@ -268,7 +288,8 @@ def test_EVERY_ARM_TAKES_THE_SAME_ACTIONS_IN_THE_SAME_ORDER(_terms):
 def test_THE_EXTEND_VETO_RECORDS_WHAT_MODEL_A_WANTED(_terms):
     """The frozen policy still asks. Model B declines to act, and what it
     declined is on the record."""
-    cyc = _cycles()
+    # a READABLE ladder, so the fill is earned by clearing a real queue
+    cyc = _cycles(depth=READABLE_LADDER)
     prints = [{"utc_ms": 1500, "type": "sell", "price": "0.10",
                "amount": "900"}]
     plain = CM.trace(symbol="S", arm=CM.Arm(), seed_leg="YES",

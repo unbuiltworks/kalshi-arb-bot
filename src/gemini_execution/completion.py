@@ -165,31 +165,32 @@ def maker_price(book: Mapping[str, Any], leg: str, native: Any,
 
 
 def _size_ahead(depth: Any, leg: str, price: Any) -> Optional[D]:
-    """What a print must clear before it reaches us. YES ladder only.
+    """What a print must clear before it reaches us, for EITHER leg.
 
-    Gemini publishes a ladder for the YES side. There is none for NO, so a NO
-    rung's queue is UNKNOWN and is reported as unknown rather than as zero.
+    THE DOCSTRING AND THE CODE USED TO CONTRADICT EACH OTHER. This claimed a
+    NO rung's queue "is reported as unknown rather than as zero" while
+    `_fill_from` computed `reached - (ahead or D("0"))` -- reporting unknown
+    and then trading it as zero. Both are corrected: the queue comes from
+    `tape_replay`, the single implementation, and an unknown one no longer
+    resolves to a fill.
     """
-    if str(leg).upper() != "YES":
-        return None
-    p = _dec(price)
-    if p is None or not isinstance(depth, Mapping) or not depth.get("readable"):
-        return None
-    tot = D("0")
-    for lv in ((depth.get("bids") or {}).get("levels") or []):
-        px, qty = _dec(lv.get("price")), _dec(lv.get("qty"))
-        if px is not None and qty is not None and px >= p:
-            tot += qty
-    return tot
+    from src.gemini_execution import tape_replay as TR
+    return TR.size_ahead(depth, leg, price)
 
 
 def _fill_from(hits: Sequence[Mapping[str, Any]], ahead: Optional[D],
                want: Optional[D]) -> D:
-    """Theoretical fill: what is left of the reaching flow after the queue."""
-    if not hits:
+    """Theoretical fill: what is left of the reaching flow after the queue.
+
+    AN UNKNOWN QUEUE FILLS NOTHING. `ahead or D("0")` turned every
+    unreadable queue into an empty one, which on the old YES-only
+    `_size_ahead` meant every NO rung filled from the front. A queue that
+    cannot be read cannot be cleared, so there is no computable fill.
+    """
+    if not hits or ahead is None:
         return D("0")
     reached = sum((_dec(t.get("amount")) or D("0")) for t in hits)
-    spare = reached - (ahead or D("0"))
+    spare = reached - ahead
     if spare <= 0:
         return D("0")
     return max(D("0"), min(want if want is not None else D("0.01"), spare))
