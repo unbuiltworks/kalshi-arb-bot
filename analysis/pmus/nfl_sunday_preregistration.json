@@ -15,18 +15,29 @@
   "selection_rule_fixed_in_advance": {
     "rule": "per event, the markets whose mid sits nearest 0.50 within [0.30, 0.70] -- the price region L5 actually operates in -- capped at 2 per sportsMarketType family and 13 per NFL event / 9 per other event, so no family or game dominates",
     "never_uses": "reach, movement, depth or any outcome variable",
-    "selected": 286,
-    "events": 36,
+    "selected": 306,
+    "events": 43,
     "by_league": {
       "nfl": 130,
-      "mlb": 66,
+      "mlb": 67,
       "sea": 30,
       "lal": 29,
       "epl": 24,
-      "mls": 7
+      "wnba": 21,
+      "mls": 5
     },
     "rediscovery_s": 900,
-    "note": "re-discovery every 15 min refreshes each event's live flag, period and score, which is what makes the same-market PRE->LIVE pairing possible"
+    "note": "re-discovery every 15 min refreshes each event's live flag, period and score, which is what makes the same-market PRE->LIVE pairing possible",
+    "nfl_by_family": {
+      "football_team_full_game_spread": 20,
+      "football_team_first_half_spread": 20,
+      "football_game_first_half_total": 20,
+      "football_team_full_game_total": 20,
+      "football_team_points_full_game_total": 20,
+      "football_team_first_half_total": 20,
+      "football_team_full_game_winner (moneyline)": 6,
+      "football_team_second_half_spread": 4
+    }
   },
   "cadence": {
     "before_2026-09-20T15:00Z": "60s (cheap overnight PRE baseline)",
@@ -69,5 +80,21 @@
     "near-misses are reported with the failing dimension named",
     "the Gemini control keeps every prospective result exactly as recorded, including the economically bad shadow COMPLETE at pair basis 1.23"
   ],
-  "labels": "Every fill, pair and conversion produced by this experiment is SHADOW/HYPOTHETICAL. No order exists; nothing is submitted, filled, settled or realized."
+  "labels": "Every fill, pair and conversion produced by this experiment is SHADOW/HYPOTHETICAL. No order exists; nothing is submitted, filled, settled or realized.",
+  "amendments_made_before_any_result_was_computed": [
+    {
+      "n": 1,
+      "found": "the selection iterated sportsMarketType families ALPHABETICALLY before applying the per-event cap, so football_game_first_quarter_total sorted ahead of the canonical game-level markets and filled the cap first.",
+      "evidence": "the v1 NFL sample was 120 quarter/half TOTALS and 10 first-half spreads, with ZERO moneylines, ZERO full-game spreads and ZERO full-game totals -- while 6 moneylines, 111 full-game spreads and 136 full-game totals were in band and eligible.",
+      "fix": "family priority is now explicit and follows what the experiment must report separately: winner/moneyline, then full-game spread, full-game total, then halves, then quarters.",
+      "superseded_data": "scratchpad/nfl_sunday_v1_superseded_selection.jsonl"
+    },
+    {
+      "n": 2,
+      "found": "the corrected priority list matched soccer's 'full_time_winner' but not football's 'full_game_winner'. The family key is sportsMarketType, and NFL's game winner is football_team_full_game_winner -- it matches neither that nor 'moneyline', which is the marketType. Moneylines still ranked last.",
+      "fix": "'full_game_winner' added to the priority patterns.",
+      "superseded_data": "scratchpad/nfl_sunday_v2_superseded_selection.jsonl"
+    }
+  ],
+  "amendment_integrity": "Both bugs were found by inspecting the SELECTED SAMPLE, not by looking at any outcome. No reach, movement, recycling or conversion figure had been computed for this slate when either fix was made. The superseded collections are retained rather than deleted. The qualification thresholds are unchanged."
 }
