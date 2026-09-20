@@ -33,14 +33,27 @@ def test_a_quote_never_fills_more_than_its_own_size():
 
 
 def test_an_unknown_queue_is_treated_as_zero_and_that_is_OPTIMISTIC():
-    """Gemini publishes no NO ladder. Treating it as zero is the generous
-    assumption, so every fill that rests on it is counted separately."""
+    """An UNREADABLE ladder still yields no queue, and that is generous, so
+    every fill resting on it is counted separately.
+
+    THE PREMISE OF THIS TEST WAS THE BUG. It used to assert that a NO rung is
+    unknown even against a READABLE ladder -- "Gemini publishes no NO ladder"
+    -- which made the generous assumption permanent for one leg and
+    unreachable for the other. Gemini publishes ONE ladder; our NO bid at n
+    rests at ask (1 - n) on it. The optimism is still here, but it now
+    belongs to unreadability rather than to a side.
+    """
     q = TR.Quote(leg="NO", price=D("0.4"), qty=D("0.01"), placed_ms=D("0"),
                  ahead=None, queue_known=False, kind="COMPLETE")
     assert q.ahead_left == D("0")
     assert q.take(D("1"))[0] == D("0.01")
-    assert TR.size_ahead({"readable": True, "bids": {"levels": []}},
-                         "NO", "0.4") is None
+    # unreadable -> unknown, for BOTH legs
+    assert TR.size_ahead({"readable": False}, "NO", "0.4") is None
+    assert TR.size_ahead({"readable": False}, "YES", "0.4") is None
+    # readable -> a real queue from the ask ladder, no longer unknown
+    depth = {"readable": True,
+             "asks": {"levels": [{"price": "0.60", "qty": "42"}]}}
+    assert TR.size_ahead(depth, "NO", "0.4") == D("42")
 
 
 def test_size_ahead_counts_every_rung_at_or_better_than_ours():
