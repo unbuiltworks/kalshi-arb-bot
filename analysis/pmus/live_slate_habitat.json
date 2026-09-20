@@ -633,15 +633,42 @@
    "obs_min_total": 3879.5
   },
   "pre_by_league_pct_zero_move": {
-   "nfl": 96,
-   "mlb": 96,
-   "epl": 100,
-   "wnba": 84,
-   "lal": 84,
-   "nhl": 100,
-   "mls": 64,
-   "bun": 100,
-   "boxing": 100
+   "nfl": {
+    "segments": 392,
+    "pct_zero_move": 96.9
+   },
+   "mlb": {
+    "segments": 221,
+    "pct_zero_move": 96.8
+   },
+   "wnba": {
+    "segments": 69,
+    "pct_zero_move": 88.4
+   },
+   "epl": {
+    "segments": 68,
+    "pct_zero_move": 100.0
+   },
+   "lal": {
+    "segments": 56,
+    "pct_zero_move": 85.7
+   },
+   "nhl": {
+    "segments": 30,
+    "pct_zero_move": 100.0
+   },
+   "mls": {
+    "segments": 16,
+    "pct_zero_move": 75.0
+   },
+   "bun": {
+    "segments": 8,
+    "pct_zero_move": 100.0
+   },
+   "boxing": {
+    "segments": 8,
+    "pct_zero_move": 100.0
+   }
   },
   "live": {
    "segments": 35,
