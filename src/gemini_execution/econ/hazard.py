@@ -179,6 +179,15 @@ def features(*, tte_s: Any, held_leg: str, held_leg_price: Any,
                            else str(_dec(held_leg_price))),
         "required_complement_price": None if req is None else str(req),
         "complement_bid": None if comp_bid is None else str(comp_bid),
+        # the two PASSIVE acquisition prices, named by outcome rather than by
+        # held/complement, because the passive-pair test is about the CONTRACT
+        # and not about whichever leg we happen to hold
+        "yes_bid": (None if _dec(((book or {}).get("yes") or {}).get("bid"))
+                    is None else str(_dec(((book or {}).get("yes") or {})
+                                          .get("bid")))),
+        "no_bid": (None if _dec(((book or {}).get("no") or {}).get("bid"))
+                   is None else str(_dec(((book or {}).get("no") or {})
+                                         .get("bid")))),
         "complement_ask": None if comp_ask is None else str(comp_ask),
         "required_gap_ticks": gap_ticks,
         "side_alternation": alt,

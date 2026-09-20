@@ -55,6 +55,8 @@ from src.gemini_execution.econ import ws_flow as WF
 
 SCHEMA = "gemini_econ_arm/v1"
 LABEL = "GEMINI_ECON_V1"
+#: the passive-pair challenger, run BESIDE the boolean arm and never instead
+PASSIVE_PAIR_LABEL = "PASSIVE_PAIR_V1"
 
 FAITHFUL = "FAITHFUL"
 SUPPRESSED = "ADAPTATION_SUPPRESSED"
@@ -112,6 +114,7 @@ class GeminiEconArm:
                  label: str = LABEL,
                  ws: Any = None,
                  state: Any = None,
+                 variant: str = PO.BOOLEAN_VARIANT,
                  cohort_prefix_grid: Optional[str] = None,
                  cohort_minutes: Optional[int] = None):
         self.label = label
@@ -122,7 +125,7 @@ class GeminiEconArm:
         self.preserve = False
         self.error = None
         self.cohort = cohort_name
-        self.pol = PO.policy_for(cohort_name)
+        self.pol = PO.policy_for(cohort_name, variant=variant)
         self.guard = CP.WindowGuard(symbol, auth_id="SHADOW",
                                     cohort_prefix=cohort_prefix)
         self.inv = CP.Inventory()
@@ -133,7 +136,8 @@ class GeminiEconArm:
         # can ever accumulate to a sufficient cell.
         from src.gemini_execution.econ import registry as REG
         self.state = (state if state is not None
-                      else REG.state_for(cohort_name))
+                      else REG.state_for(cohort_name, arm=label))
+        self.state.fills.arm = label
         self.hazard = self.state.hazard
         self.symbol = symbol
         # FLOW COMES FROM THE MAINTAINED SOCKET, NOT THE POLLED TAPE. See
@@ -199,6 +203,9 @@ class GeminiEconArm:
         if fills:
             # a subsequent fill on the VETO path -- the one we actually walk
             self.cf.note_fill()
+        # THE FILL SEQUENCE. Price availability is not profit; these are the
+        # fills the COMMON hypothetical book says the tape actually reached.
+        self.state.fills.note_fills(fills, t=time.time(), symbol=symbol)
 
         ms = CP.state_from_venue(symbol, tte, self.inv, book=book)
         kw: Dict[str, Any] = {"now": time.time()}
@@ -241,6 +248,7 @@ class GeminiEconArm:
             self.cf.mark_open(book=book, t=now_t, tte_s=tte)
             # follow every open candidate first fill down THIS contract's tape
             self.state.blocked.advance(book=book, t=now_t, symbol=symbol)
+            self.state.fills.observe(book=book, t=now_t, symbol=symbol)
         except Exception as exc:                                 # noqa: BLE001
             # observation must never be able to stop a decision
             pass
@@ -412,6 +420,16 @@ class GeminiEconArm:
                         rec.update(gemini_disposition=act, fidelity=FAITHFUL,
                                    admitted=True, hazard=est)
                         self._note(FAITHFUL)
+                        # an ADMITTED entry opens a fill sequence: from here
+                        # the question is what filled, not what was quotable
+                        if act == CP.OPEN:
+                            sq = self.state.fills.candidate(
+                                cohort=self.cohort, symbol=symbol, t=now_t,
+                                tte_s=tte,
+                                min_edge=(self.pol.thresholds.min_edge
+                                          if self.pol else "0.005"))
+                            sq.note_rest([a.get("leg")] if a.get("leg")
+                                         else [])
                     else:
                         rec.update(gemini_disposition=None,
                                    fidelity=SUPPRESSED, admitted=False,
@@ -576,6 +594,9 @@ class GeminiEconArm:
         # instrument and following them there would mark one contract's fill
         # against another contract's book.
         self.state.blocked.settle_all(leg=settlement, symbol=self.symbol)
+        self.state.fills.close_symbol(
+            self.symbol, residual_qty=abs(self.inv.residual()),
+            settlement_leg=settlement)
         # NOTE: the socket is NOT dropped here. The pre-warmer owns socket
         # lifetime now, because dropping at window end is precisely what made
         # every next window open blind.
@@ -589,6 +610,9 @@ class GeminiEconArm:
                                else "FROZEN_DEFAULT"),
                 "scoreboard": self.board.report(),
                 "coverage": self.state.coverage.report(),
+                "variant": (self.pol.thresholds.spread_mode
+                            if self.pol else None),
+                "fill_sequence": self.state.fills.report(),
                 "attribution": self.state.attribution.report(),
                 "blocked_labels": self.state.blocked.report(),
                 "counterfactual": self.cf.report(),

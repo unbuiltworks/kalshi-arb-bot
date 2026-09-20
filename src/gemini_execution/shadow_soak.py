@@ -331,16 +331,29 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
             # rebuilt every window and its census, hazard, fork ledger, socket
             # and pre-warmer must all outlive that. A socket dropped at window
             # end is exactly what made every next window open blind.
-            st = REG.state_for(
-                cohort.name,
-                state_dir=os.environ.get("GEMINI_ECON_STATE_DIR"))
-            arms.append(ECON.GeminiEconArm(
-                symbol=symbol,
-                cohort_prefix="GEMI-%s" % cohort.prefix,
-                policy=policy, cohort_name=cohort.name,
-                state=st,
-                cohort_prefix_grid=cohort.prefix,
-                cohort_minutes=cohort.minutes))
+            from src.gemini_execution.econ import policy as ECPOL
+            sdir = os.environ.get("GEMINI_ECON_STATE_DIR")
+            # TWO ECONOMIC ARMS, on the SAME tape, the SAME cadence and the
+            # SAME hypothetical fill model, differing in the spread treatment
+            # and in nothing else:
+            #   GEMINI_ECON_V1  boolean max_spread 0.08   (unchanged)
+            #   PASSIVE_PAIR_V1 no fixed maximum spread; admission is
+            #                   yes_bid + no_bid + maker fees <= 1 - min_edge
+            # They share the market (one socket, one census) and keep their
+            # own coverage, attribution, labels, forks and fill sequences, so
+            # neither can contaminate the other's evidence.
+            for _lbl, _var in ((ECON.LABEL, ECPOL.BOOLEAN_VARIANT),
+                               (ECON.PASSIVE_PAIR_LABEL,
+                                ECPOL.PASSIVE_PAIR_VARIANT)):
+                arms.append(ECON.GeminiEconArm(
+                    symbol=symbol,
+                    cohort_prefix="GEMI-%s" % cohort.prefix,
+                    policy=policy, cohort_name=cohort.name,
+                    state=REG.state_for(cohort.name, arm=_lbl,
+                                        state_dir=sdir),
+                    variant=_var, label=_lbl,
+                    cohort_prefix_grid=cohort.prefix,
+                    cohort_minutes=cohort.minutes))
     except Exception as exc:                                     # noqa: BLE001
         arms_error = "%s: %s" % (type(exc).__name__, exc)
 
@@ -955,6 +968,42 @@ def _print_econ(w) -> None:
                   sb.get("PAIRS_ABOVE_CEILING_defect_counter"),
                   sb.get("PRIMARY_net_cents_per_capital_dollar_minute"),
                   e.get("divergences")), flush=True)
+        # ---- THE FILL SEQUENCE FUNNEL. Price availability is not profit:
+        # every step is counted separately, and the gap between a complement
+        # PRICE appearing and a complement FILLING is the thesis under test.
+        fs = e.get("fill_sequence") or {}
+        if fs.get("candidate_states"):
+            print("ECON_FUNNEL %s %s variant=%s | cand=%s rested=%s "
+                  "first=%s ffRate=%s | compPrice=%s compFill=%s "
+                  "m2mRate=%s medComplete=%ss | matched=%s basis=%s "
+                  "net=%s | residRate=%s residSettle=%s exitNet=%s | "
+                  "perDay cand=%s first=%s complete=%s" % (
+                      w.get("symbol"), lbl[:20], e.get("variant"),
+                      fs.get("candidate_states"),
+                      fs.get("orders_hypothetically_rested"),
+                      fs.get("first_fills"),
+                      fs.get("first_fill_rate_of_rested"),
+                      fs.get("complement_price_appearances"),
+                      fs.get("complement_fills"),
+                      fs.get("maker_to_maker_completion_rate_of_first_fills"),
+                      fs.get("median_completion_time_s"),
+                      fs.get("matched_pairs"), fs.get("matched_basis_p50"),
+                      fs.get("matched_net_total_excl_subsidy"),
+                      fs.get("residual_rate_of_first_fills"),
+                      fs.get("residual_settlement_p50"),
+                      fs.get("residual_best_exit_net_p50"),
+                      fs.get("candidates_per_day"),
+                      fs.get("first_fills_per_day"),
+                      fs.get("completions_per_day")), flush=True)
+            print("ECON_FUNNEL_MO %s %s mo8=%s mo30=%s mo60=%s mo120=%s | "
+                  "adv60=%s | byLeg=%s" % (
+                      w.get("symbol"), lbl[:20],
+                      fs.get("post_first_fill_markout_p50_8s"),
+                      fs.get("post_first_fill_markout_p50_30s"),
+                      fs.get("post_first_fill_markout_p50_60s"),
+                      fs.get("post_first_fill_markout_p50_120s"),
+                      fs.get("post_first_fill_adverse_share_60s"),
+                      fs.get("by_first_fill_leg")), flush=True)
         # THE DENOMINATOR. A cycle the socket could not vouch for is NOT an
         # entry refusal, and an admission rate over total cycles would report a
         # coverage gap as a strategy verdict.

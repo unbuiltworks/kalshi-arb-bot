@@ -44,6 +44,7 @@ from typing import Any, Dict, Optional
 from src.gemini_execution.econ import attribution as AT
 from src.gemini_execution.econ import blocked_labeler as BL
 from src.gemini_execution.econ import counterfactual as CF
+from src.gemini_execution.econ import fill_sequence as FS
 from src.gemini_execution.econ import coverage as CV
 from src.gemini_execution.econ import hazard as HZ
 from src.gemini_execution.econ import prewarm as PW
@@ -54,13 +55,49 @@ SCHEMA = "gemini_econ_cohort_state/v1"
 
 
 @dataclass
-class CohortState:
-    """Everything that must accumulate across windows for one cohort."""
+class MarketState:
+    """What is true of the MARKET, shared by every arm on this cohort.
+
+    The socket, the pre-warmer and the spread census describe the venue, not a
+    strategy. Giving each arm its own would open duplicate sockets for the same
+    symbol and split one distribution into several thinner ones for no gain.
+    """
 
     cohort: str
     state_dir: Optional[str] = None
-    hazard: HZ.HazardEstimator = field(default_factory=HZ.HazardEstimator)
+    ws: Optional[Any] = None
+    prewarm: Optional[Any] = None
     spreads: SC.SpreadCensus = field(default_factory=SC.SpreadCensus)
+    hazard: HZ.HazardEstimator = field(default_factory=HZ.HazardEstimator)
+
+    def ensure_ws(self, ws: Any = None) -> Any:
+        if self.ws is None:
+            self.ws = ws if ws is not None else WF.WsFlowSource()
+        return self.ws
+
+    def ensure_prewarm(self, *, prefix: str, minutes: int) -> Any:
+        if self.prewarm is None:
+            self.prewarm = PW.Prewarmer(cohort_name=self.cohort,
+                                        prefix=prefix, minutes=minutes)
+        return self.prewarm
+
+
+@dataclass
+class CohortState:
+    """Everything that must accumulate across windows for ONE ARM.
+
+    PER ARM, NOT PER COHORT, and the distinction is load-bearing now that a
+    second arm exists. Coverage, gate attribution, blocked-state labels and the
+    fork ledger are all statements about a STRATEGY's decisions; pooling two
+    arms' decisions into one ledger would silently destroy the comparison the
+    second arm exists to make. Market-level observation is shared through
+    `.market` instead of duplicated.
+    """
+
+    cohort: str
+    arm: str = "GEMINI_ECON_V1"
+    state_dir: Optional[str] = None
+    market: Optional[MarketState] = None
     cf: CF.CounterfactualLedger = field(
         default_factory=CF.CounterfactualLedger)
     coverage: CV.CoverageLedger = field(default_factory=CV.CoverageLedger)
@@ -68,27 +105,25 @@ class CohortState:
     #: refused was good for us. Research only: the arm writes, never reads.
     attribution: AT.GateAttribution = field(default_factory=AT.GateAttribution)
     blocked: BL.BlockedLabeler = field(default_factory=BL.BlockedLabeler)
-    #: ONE socket source and ONE pre-warmer per cohort. Both must outlive the
-    #: window or pre-warming is pointless: a socket opened for the NEXT
-    #: contract is worthless if it is dropped when THIS window ends.
-    ws: Optional[Any] = None
-    prewarm: Optional[Any] = None
+    fills: FS.FillSequenceLedger = field(
+        default_factory=FS.FillSequenceLedger)
     windows_seen: int = 0
     save_errors: int = 0
     last_save_error: Optional[str] = None
 
     # ------------------------------------------------------------ paths
     def _p(self, name: str) -> Optional[str]:
+        """Market-level files are keyed by COHORT so arms share one copy."""
         if not self.state_dir:
             return None
         return os.path.join(self.state_dir, "%s.%s.json" % (self.cohort, name))
 
     def load(self) -> "CohortState":
-        h, s = self._p("hazard"), self._p("spreads")
+        h, sp = self._p("hazard"), self._p("spreads")
         if h:
-            self.hazard = HZ.HazardEstimator.load(h)
-        if s:
-            self.spreads = SC.SpreadCensus.load(s)
+            self.market.hazard = HZ.HazardEstimator.load(h)
+        if sp:
+            self.market.spreads = SC.SpreadCensus.load(sp)
         return self
 
     def save(self) -> Dict[str, Any]:
@@ -103,7 +138,8 @@ class CohortState:
             self.last_save_error = str(exc)
             out["errors"].append(str(exc))
             return out
-        for name, obj in (("hazard", self.hazard), ("spreads", self.spreads)):
+        for name, obj in (("hazard", self.market.hazard),
+                          ("spreads", self.market.spreads)):
             p = self._p(name)
             try:
                 obj.save(p)
@@ -114,43 +150,70 @@ class CohortState:
                 out["errors"].append(self.last_save_error)
         return out
 
+    # ---- market-level state, SHARED with every other arm on this cohort
+    @property
+    def spreads(self) -> SC.SpreadCensus:
+        return self.market.spreads
+
+    @property
+    def hazard(self) -> HZ.HazardEstimator:
+        return self.market.hazard
+
+    @property
+    def ws(self) -> Any:
+        return self.market.ws
+
+    @property
+    def prewarm(self) -> Any:
+        return self.market.prewarm
+
     def ensure_ws(self, ws: Any = None) -> Any:
-        if self.ws is None:
-            self.ws = ws if ws is not None else WF.WsFlowSource()
-        return self.ws
+        return self.market.ensure_ws(ws)
 
     def ensure_prewarm(self, *, prefix: str, minutes: int) -> Any:
-        if self.prewarm is None:
-            self.prewarm = PW.Prewarmer(cohort_name=self.cohort,
-                                        prefix=prefix, minutes=minutes)
-        return self.prewarm
+        return self.market.ensure_prewarm(prefix=prefix, minutes=minutes)
 
     def window_done(self) -> None:
         self.windows_seen += 1
         self.save()
 
     def report(self) -> Dict[str, Any]:
-        return {"schema": SCHEMA, "cohort": self.cohort,
+        return {"schema": SCHEMA, "cohort": self.cohort, "arm": self.arm,
                 "windows_seen": self.windows_seen,
                 "state_dir": self.state_dir,
                 "save_errors": self.save_errors,
-                "last_save_error": self.last_save_error}
+                "last_save_error": self.last_save_error,
+                "market_shared_with_arms": True}
 
 
+_MARKETS: Dict[str, MarketState] = {}
 _REGISTRY: Dict[str, CohortState] = {}
 
 
-def state_for(cohort: str, *, state_dir: Optional[str] = None) -> CohortState:
-    """The one state object for this cohort in this process.
+def market_for(cohort: str, *,
+               state_dir: Optional[str] = None) -> MarketState:
+    m = _MARKETS.get(cohort)
+    if m is None:
+        m = MarketState(cohort=cohort, state_dir=state_dir)
+        _MARKETS[cohort] = m
+    return m
 
-    Created and loaded from disk on first use; returned as-is afterwards, so a
-    new arm every window inherits the accumulated sample instead of starting
-    over.
+
+def state_for(cohort: str, *, arm: str = "GEMINI_ECON_V1",
+              state_dir: Optional[str] = None) -> CohortState:
+    """The state for ONE ARM on one cohort, in this process.
+
+    Keyed by (cohort, arm): two arms on the same cohort share the market -- one
+    socket, one census -- and keep their own coverage, attribution, labels,
+    forks and fill sequences, because those describe decisions rather than the
+    venue.
     """
-    st = _REGISTRY.get(cohort)
+    key = "%s::%s" % (cohort, arm)
+    st = _REGISTRY.get(key)
     if st is None:
-        st = CohortState(cohort=cohort, state_dir=state_dir).load()
-        _REGISTRY[cohort] = st
+        st = CohortState(cohort=cohort, arm=arm, state_dir=state_dir,
+                         market=market_for(cohort, state_dir=state_dir)).load()
+        _REGISTRY[key] = st
     return st
 
 
@@ -158,5 +221,8 @@ def reset(cohort: Optional[str] = None) -> None:
     """Test hook only. Never called from the lane."""
     if cohort is None:
         _REGISTRY.clear()
-    else:
-        _REGISTRY.pop(cohort, None)
+        _MARKETS.clear()
+        return
+    _MARKETS.pop(cohort, None)
+    for k in [k for k in _REGISTRY if k.split("::")[0] == cohort]:
+        _REGISTRY.pop(k, None)

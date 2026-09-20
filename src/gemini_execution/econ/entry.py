@@ -43,6 +43,10 @@ SCHEMA = "gemini_econ_entry_admission/v1"
 
 SHADOW, LIVE = "SHADOW", "LIVE"
 
+#: How the spread is treated. BOOLEAN is the original arm, unchanged.
+SPREAD_BOOLEAN = "BOOLEAN"
+SPREAD_PASSIVE_PAIR = "PASSIVE_PAIR"
+
 #: Gates whose UNKNOWN is RECORDED but does not refuse, during SHADOW only.
 #:
 #: HAZARD is here for the bootstrap reason in the module docstring: refusing on
@@ -68,12 +72,13 @@ class Thresholds:
     __slots__ = ("cohort", "min_alternation", "max_largest_print_share",
                  "max_required_gap_ticks", "max_reference_disagreement",
                  "min_prints", "hazard_threshold", "min_edge",
-                 "max_spread", "phase", "advisory_gates")
+                 "max_spread", "phase", "advisory_gates", "spread_mode")
 
     def __init__(self, *, cohort: str, min_alternation: float,
                  max_largest_print_share: float, max_required_gap_ticks: int,
                  max_reference_disagreement: str, min_prints: int,
                  hazard_threshold: float, min_edge: str, max_spread: str,
+                 spread_mode: str = SPREAD_BOOLEAN,
                  phase: str = SHADOW,
                  advisory_gates: Sequence[str] = DEFAULT_ADVISORY):
         if phase not in (SHADOW, LIVE):
@@ -83,6 +88,11 @@ class Thresholds:
         # threshold set cannot carry advisory gates at all: the constructor
         # empties them, so there is no configuration in which real capital is
         # committed on a gate that was only being watched.
+        if spread_mode not in (SPREAD_BOOLEAN, SPREAD_PASSIVE_PAIR):
+            raise ValueError("spread_mode must be %r or %r, got %r"
+                             % (SPREAD_BOOLEAN, SPREAD_PASSIVE_PAIR,
+                                spread_mode))
+        self.spread_mode = spread_mode
         self.phase = phase
         self.advisory_gates = tuple() if phase == LIVE else tuple(advisory_gates)
         self.cohort = cohort
@@ -246,16 +256,54 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                        "complement cannot rest where there is no other side",
                        depth_evidence_only=feat.get("depth_evidence_only")))
 
-    # ---- 6. SPREAD. A flared spread means the makers have stepped away.
+    # ---- 6. SPREAD, treated one of two ways.
+    #
+    # BOOLEAN (the original arm, unchanged): a flared spread means the makers
+    # have stepped away.
+    #
+    # PASSIVE_PAIR: no fixed maximum spread at all. Instead the two PASSIVE
+    # acquisition prices must pay for themselves. `metadata.outcome_book`
+    # states the mechanic -- a resting BUY joins that outcome's SELL side --
+    # so the passive pair costs yes_bid + no_bid, and a WIDE spread pushes
+    # that sum DOWN. Gating on spread being small therefore screened out the
+    # states where passive pair economics are best, which is what profit
+    # sprint #1 measured. Here spread is an economic input in the correct
+    # direction rather than a boolean.
     spread = _dec(feat.get("spread"))
-    mx = _dec(thresholds.max_spread)
-    if spread is None or mx is None:
-        gates.append(_gate("SPREAD", None, "spread unreadable"))
+    if thresholds.spread_mode == SPREAD_PASSIVE_PAIR:
+        yb, nb = _dec(feat.get("yes_bid")), _dec(feat.get("no_bid"))
+        edge = _dec(thresholds.min_edge)
+        if yb is None or nb is None or edge is None:
+            gates.append(_gate("PASSIVE_PAIR_ECONOMIC", None,
+                               "both outcomes' bids are not readable; the "
+                               "passive pair cannot be priced"))
+        elif not (D("0") < yb < D("1") and D("0") < nb < D("1")):
+            gates.append(_gate("PASSIVE_PAIR_ECONOMIC", None,
+                               "a passive bid is not a price in (0,1)"))
+        else:
+            mk = regime.maker_rate
+            fees = (mk * yb * (D("1") - yb)) + (mk * nb * (D("1") - nb))
+            cost = yb + nb + fees
+            cap = D("1") - edge
+            ok = cost <= cap
+            gates.append(_gate(
+                "PASSIVE_PAIR_ECONOMIC", ok,
+                None if ok else
+                ("passive pair costs %s (bids %s + %s, fees %s) above the "
+                 "%s ceiling at edge %s" % (cost, yb, nb, fees, cap, edge)),
+                yes_bid=str(yb), no_bid=str(nb), fees=str(fees),
+                passive_pair_cost=str(cost), ceiling=str(cap),
+                spread=(None if spread is None else str(spread)),
+                rebate_excluded=True))
     else:
-        ok = spread <= mx
-        gates.append(_gate("SPREAD", ok, None if ok else
-                           "spread %s above %s" % (spread, mx),
-                           spread=str(spread)))
+        mx = _dec(thresholds.max_spread)
+        if spread is None or mx is None:
+            gates.append(_gate("SPREAD", None, "spread unreadable"))
+        else:
+            ok = spread <= mx
+            gates.append(_gate("SPREAD", ok, None if ok else
+                               "spread %s above %s" % (spread, mx),
+                               spread=str(spread)))
 
     # ---- 7. REFERENCE AGREEMENT. A prediction book that disagrees with the
     # settlement reference is a book about to reprice, and our resting rung is
@@ -317,6 +365,7 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
         "failed_gates": failed, "unknown_gates": unknown,
         "waived_unknown_gates": waived,
         "thresholds": thresholds.report(),
+        "spread_mode": thresholds.spread_mode,
         "complement_ceiling": cap,
         "why": (None if admitted else
                 ("refused by %s" % ", ".join(failed) if failed else
@@ -324,6 +373,8 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                  % ", ".join(unknown))),
         "labels": [
             "Volume is deliberately NOT a gate. Reversibility is.",
+            "PASSIVE_PAIR_ECONOMIC excludes rebates and rewards from "
+            "admission entirely; only trading economics may admit a state.",
             "An UNKNOWN gate refuses. UNREADABLE is not a pass.",
             "An uncalibrated hazard does not block ENTRY but never justifies "
             "WAITING; the asymmetry is intentional.",

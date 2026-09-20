@@ -190,7 +190,55 @@ BTC15M = CohortPolicy(
 COHORTS: Dict[str, CohortPolicy] = {"BTC5m": BTC5M, "BTC15m": BTC15M}
 
 
-def policy_for(cohort: Any) -> Optional[CohortPolicy]:
+def _passive_pair_variant(pol: CohortPolicy) -> CohortPolicy:
+    """The same policy with NO fixed maximum spread.
+
+    Everything else is copied field for field -- bands, modes, residual,
+    toxicity horizon, and every other threshold -- so the two arms differ in
+    the spread treatment AND NOTHING ELSE. That is what makes their comparison
+    attributable; a second arm that also moved min_alternation would answer a
+    different question.
+
+    `max_spread` is carried across unchanged and simply not consulted in
+    PASSIVE_PAIR mode, rather than deleted, so the two threshold sets stay
+    diffable.
+    """
+    t = pol.thresholds
+    return CohortPolicy(
+        cohort=pol.cohort, window_s=pol.window_s,
+        quote_band_s=pol.quote_band_s,
+        entry_until_tte_s=pol.entry_until_tte_s,
+        mixed_until_tte_s=pol.mixed_until_tte_s,
+        withdraw_below_tte_s=pol.withdraw_below_tte_s,
+        max_residual=pol.max_residual,
+        toxicity_horizon_s=pol.toxicity_horizon_s,
+        rescue_below_tte_s=pol.rescue_below_tte_s,
+        flow_window_s=pol.flow_window_s,
+        thresholds=EN.Thresholds(
+            cohort=t.cohort, min_alternation=t.min_alternation,
+            max_largest_print_share=t.max_largest_print_share,
+            max_required_gap_ticks=t.max_required_gap_ticks,
+            max_reference_disagreement=t.max_reference_disagreement,
+            min_prints=t.min_prints, hazard_threshold=t.hazard_threshold,
+            min_edge=t.min_edge, max_spread=t.max_spread,
+            spread_mode=EN.SPREAD_PASSIVE_PAIR,
+            phase=t.phase, advisory_gates=t.advisory_gates),
+        notes=("%s with NO fixed maximum spread. Admission uses the passive "
+               "pair instead: yes_bid + no_bid + maker fees <= 1.00 - "
+               "min_edge, rebates excluded. Every other field is the boolean "
+               "arm's, byte for byte." % pol.cohort))
+
+
+#: the passive-pair variants, derived rather than written out, so they cannot
+#: drift from the arm they are being compared against
+PASSIVE_PAIR_COHORTS: Dict[str, CohortPolicy] = {
+    k: _passive_pair_variant(v) for k, v in COHORTS.items()}
+
+BOOLEAN_VARIANT, PASSIVE_PAIR_VARIANT = "BOOLEAN", "PASSIVE_PAIR"
+
+
+def policy_for(cohort: Any, *, variant: str = BOOLEAN_VARIANT
+               ) -> Optional[CohortPolicy]:
     """The policy for a cohort, or None. NEVER a default.
 
     A cohort we have not written a policy for must not silently inherit
@@ -198,4 +246,6 @@ def policy_for(cohort: Any) -> Optional[CohortPolicy]:
     records.
     """
     name = getattr(cohort, "name", None) or str(cohort or "")
+    if variant == PASSIVE_PAIR_VARIANT:
+        return PASSIVE_PAIR_COHORTS.get(name)
     return COHORTS.get(name)
