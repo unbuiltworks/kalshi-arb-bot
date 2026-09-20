@@ -285,6 +285,19 @@ window-level attribution only, **never** merged into trading P&L.
 
 ## 8. Open questions
 
+0. **Objective changed 2026-09-20: rebate-first.** The target is confirmed rewards
+   minus realized drag, not trading P&L — the engine L5 actually ran. Kalshi pays
+   rewards for RESTING and drag is paid only on FILLING, so the two terms decouple;
+   that is structurally different from the L5 ladder, which maximised fills. Break-even
+   pool-share table, measured inputs and the three steps that close it are in
+   `analysis/kalshi/REBATE_FIRST_ECONOMICS_20260920.md`. Live pools measured today
+   ($20/market/15min, KXCRYPTOLEAD15M BTC/ETH/SOL/HYPE). Credited to us: **$0.00**.
+   Caution: our 693,112-print Kalshi habitat reading (I = 0.0212, r/m floor 0.043 —
+   four times better balanced than L5's habitat) is on KXBTC15M/KXETH15M, whose
+   programs were **WITHDRAWN 2026-05-12**. It must never be quoted as the incentivised
+   series. PMUS serves sports only (no crypto); Gemini BTC up/down trades 1.36
+   times/minute in total and has no usable flow.
+
 1. Does the frozen habitat selector retain predictive power on the fresh
    prospective cohort opened 2026-09-20T19:52:46Z? First read scheduled
    2026-09-20T22:01Z. The selector is frozen: features, signs, weights, tercile
