@@ -11,6 +11,16 @@
 > reviewer browsing the repository's default branch will not see it. Use
 > `?ref=claude/gemini-btc-economic-viability-h3u7zl` or check out that branch.
 >
+> **OPEN P0 — VENUE-SEMANTICS MISMATCH (flagged 2026-09-20, not fixed).**
+> Gemini's published schemas represent an account's holding as **one signed
+> position per instrument** (positive = yes, negative = no), which our
+> `Inventory(yes_qty, no_qty)` can over-represent. Evidence, including the
+> falsification of the "order is rejected"/"cash out first" readings, is in
+> [`EVIDENCE_PACKET_003_VENUE_SEMANTICS.md`](EVIDENCE_PACKET_003_VENUE_SEMANTICS.md).
+> The mismatch is **latent** — the faithful run has produced zero COMPLETE
+> fills, so no recorded state has depended on holding both outcomes. Nothing
+> was changed in response; the experiment runs unmodified.
+>
 > **HEADLINE STATUS: the faithful-transfer question is UNRESOLVED.** The
 > experiment has been running since 2026-09-20T19:42Z and no prospective
 > contract has yet produced a fill. Nothing here claims Gemini works, and
