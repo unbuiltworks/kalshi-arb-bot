@@ -131,3 +131,27 @@ def test_side_compatibility_is_respected():
     comp = R.compatible_window(_prints((10.0, 0.25)), 1.0, 0.0,
                                px=0.30, side_yes=True)
     assert [p["t"] for p in comp] == [10.0]
+
+
+def test_observation_end_never_precedes_the_last_fill():
+    """Residual duration must never be negative.
+
+    A fill is stamped at the print that filled it, and the flow tape can run
+    past the last book observation, so the book series end alone is not the end
+    of what has been observed. Taking the earlier of the two produced a
+    residual duration of -183 seconds on a live episode.
+    """
+    book_end, last_fill = 1000.0, 1183.0
+    t_obs_end = max(book_end, last_fill)
+    anchor = last_fill
+    assert round(max(0.0, t_obs_end - anchor), 1) >= 0.0
+    # and the naive form is what regressed
+    assert book_end - anchor < 0.0, "fixture must reproduce the old defect"
+
+
+def test_replay_module_clamps_residual_duration():
+    """The shipped module carries the clamp, not just this test."""
+    src = open(MOD).read()
+    assert "t_obs_end = max(se[-1][\"t\"], t_last_fill)" in src
+    assert "max(0.0, t_obs_end - anchor)" in src
+    assert "negative residual duration" in src

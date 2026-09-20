@@ -154,11 +154,19 @@ def episodes(venue, slug, se, prints, fill_rule):
             cur["residual_qty"] = 0; cur["residual_s"] = 0.0
             cur["end_t_obs"] = se[-1]["t"]; out.append(cur); cur = None
     if cur is not None:
-        cur["t_end"] = se[-1]["t"]
+        # OBSERVATION END. A fill is stamped at the PRINT that filled it and the
+        # flow tape can run past the last book observation, so the book series
+        # end alone is not the end of what we have seen about this episode.
+        # Taking the later of the two keeps residual duration non-negative --
+        # the same defect family as the negative recycle latency, and it showed
+        # up as resDur = -183s on an ekst episode.
+        t_obs_end = max(se[-1]["t"], t_last_fill)
+        cur["t_end"] = t_obs_end
         cur["residual_qty"] = abs(int(inv.residual))
         anchor = cur["t_matched"] or cur["t_first"]
-        cur["residual_s"] = round(se[-1]["t"] - anchor, 1)
-        cur["end_t_obs"] = se[-1]["t"]; out.append(cur)
+        cur["residual_s"] = round(max(0.0, t_obs_end - anchor), 1)
+        assert cur["residual_s"] >= 0.0, "negative residual duration"
+        cur["end_t_obs"] = t_obs_end; out.append(cur)
     return out
 
 

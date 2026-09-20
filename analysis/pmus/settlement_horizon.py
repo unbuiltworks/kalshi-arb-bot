@@ -41,8 +41,26 @@ def league_sport():
 _LS = league_sport()
 
 
+# OWNER 2026-09-20: cricket is RESEARCH-ONLY regardless of format. ODI and T20
+# settle inside a day, so this is not a horizon judgement and the horizon()
+# classification below still reports their true format. It is a separate
+# deployment exclusion, applied on top, and it exists so that the 0.52
+# Zimbabwe/Australia ODI episode cannot influence deployable economics.
+# Cricket data stays in the research corpus in full.
+CRICKET_LEAGUES = CRICKET_SHORT | CRICKET_LONG
+
+
+def is_cricket(league):
+    return league in CRICKET_LEAGUES or _LS.get(league) == "cricket"
+
+
 def horizon(league):
-    """'SHORT' (<=24h expected settlement), 'LONG', or 'UNKNOWN'."""
+    """'SHORT' (<=24h expected settlement), 'LONG', or 'UNKNOWN'.
+
+    This reports FORMAT DURATION only. It is deliberately not the deployment
+    test -- see deployable() -- so cricket keeps its honest horizon in research
+    statistics.
+    """
     if not league:
         return "UNKNOWN"
     if league in CRICKET_SHORT:
@@ -60,5 +78,17 @@ def horizon(league):
 
 
 def deployable(league):
-    """Promotion candidate only when expected settlement is <=24h."""
-    return horizon(league) == "SHORT"
+    """Promotion candidate: expected settlement <=24h AND not cricket."""
+    return horizon(league) == "SHORT" and not is_cricket(league)
+
+
+def exclusion_reason(league):
+    """Why a league is not a promotion candidate, or None if it is."""
+    if is_cricket(league):
+        return "CRICKET_RESEARCH_ONLY"
+    h = horizon(league)
+    if h == "LONG":
+        return "SETTLEMENT_OVER_24H"
+    if h == "UNKNOWN":
+        return "HORIZON_UNKNOWN"
+    return None
