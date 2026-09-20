@@ -1,29 +1,30 @@
 ======================================================================
-PMUS  FIRST FILLS = 11   (markets 11)
+PMUS  FIRST FILLS = 13   (markets 13)
 ======================================================================
   matched conversion per 100 first fills : 0.0
-  RESOLVED first fills (censored removed) : 10
+  RESOLVED first fills (censored removed) : 12
   matched conversion per 100 RESOLVED    : 0.0
-  first fills, OPTIMISTIC / QUEUE-AWARE  : 11 / 4
+  first fills, OPTIMISTIC / QUEUE-AWARE  : 13 / 5
   EXTENDs median / max                   : 2 / 2
   completion latency median              : None
   failure modes (count | per 100 first fills):
-     1a_POLICY_NEVER_RECOMMENDED_COMPLETE         10 |  90.9
-     7_CENSORED_TOO_LITTLE_POST_FILL_OBSERVATION    1 |   9.1
-  by league: {'cs2': 4, 'atpcq': 3, 'valorant': 2, 'sea': 1, 'flc': 1}
+     1a_POLICY_NEVER_RECOMMENDED_COMPLETE         12 |  92.3
+     7_CENSORED_TOO_LITTLE_POST_FILL_OBSERVATION    1 |   7.7
+  by league: {'cs2': 5, 'atpcq': 4, 'valorant': 2, 'sea': 1, 'flc': 1}
 
 ======================================================================
-INTL  FIRST FILLS = 18   (markets 15)
+INTL  FIRST FILLS = 33   (markets 23)
 ======================================================================
-  matched conversion per 100 first fills : 16.7
-  RESOLVED first fills (censored removed) : 18
-  matched conversion per 100 RESOLVED    : 16.7
-  first fills, OPTIMISTIC / QUEUE-AWARE  : 18 / 2
-  EXTENDs median / max                   : 2.0 / 2
-  completion latency median              : 300.6
+  matched conversion per 100 first fills : 33.3
+  RESOLVED first fills (censored removed) : 32
+  matched conversion per 100 RESOLVED    : 34.4
+  first fills, OPTIMISTIC / QUEUE-AWARE  : 33 / 5
+  EXTENDs median / max                   : 2 / 2
+  completion latency median              : 484.1
   failure modes (count | per 100 first fills):
-     1a_POLICY_NEVER_RECOMMENDED_COMPLETE         14 |  77.8
-     5_OPPOSITE_FILL_QTY_MISMATCH                  1 |   5.6
-     6_MATCHED                                     3 |  16.7
-  by league: {'atp': 4, 'cs2': 3, 'dota2': 3, 'lol': 2, 'kor': 1, 'sea': 1, 'scop': 1, 'elc': 1, 'wta': 1, 'val': 1}
+     1a_POLICY_NEVER_RECOMMENDED_COMPLETE         19 |  57.6
+     5_OPPOSITE_FILL_QTY_MISMATCH                  2 |   6.1
+     6_MATCHED                                    11 |  33.3
+     7_CENSORED_TOO_LITTLE_POST_FILL_OBSERVATION    1 |   3.0
+  by league: {'cs2': 10, 'atp': 9, 'elc': 3, 'dota2': 3, 'scop': 2, 'lol': 2, 'kor': 1, 'sea': 1, 'wta': 1, 'val': 1}
 
