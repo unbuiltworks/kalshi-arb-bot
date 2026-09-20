@@ -154,3 +154,61 @@ def test_module_holds_no_transport():
     for forbidden in ("requests", "httpx", "websocket", "order.place",
                       "api_key", "private_key"):
         assert forbidden not in src
+
+
+# ---- the owner ruling of 2026-09-18, and what it requires of this module ----
+
+def test_the_veto_is_classified_a_risk_overlay_not_a_fidelity_claim():
+    """L5_OPERATING_MODEL.md 2d: the Gemini live path takes NO pair-cost
+    ceiling, and any future ceiling must be labelled a risk overlay.
+
+    42.75% of L5's 33,765 historical COMPLETEs were above $1.00. This module
+    plainly does NOT reproduce that behaviour and must never be read as
+    evidence that L5 would have refused these pairs.
+    """
+    assert V.CLASSIFICATION == "RISK_OVERLAY"
+    assert any("RISK OVERLAY" in x for x in V.LABELS)
+    assert any("not strategy fidelity" in x for x in V.LABELS)
+
+
+def test_a_forbidden_pair_records_the_cost_the_ruling_demands():
+    """'Carry its stated cost' means a number measured on OUR tape, not the
+    ruling's historical shares restated back at it."""
+    f = V.forbidden_pair(held_qty="0.01", held_avg_cost="0.63",
+                         complement_qty="0.01", complement_price="0.50")
+    assert f["forbidden_by_overlay"] is True
+    assert f["classification"] == "RISK_OVERLAY"
+    assert D(f["pair_basis_before_fees"]) == D("1.13")
+    assert D(f["net_pair_economics"]) < 0
+
+
+def test_the_cost_record_states_what_it_cannot_see():
+    """The ruling's strongest counter is DOWNSTREAM -- 97.21% of expensive
+    completes were followed by further fills. An instantaneous record cannot
+    see that, and must say so rather than imply the cost is fully captured."""
+    f = V.forbidden_pair(held_qty="0.01", held_avg_cost="0.63",
+                         complement_qty="0.01", complement_price="0.50")
+    assert "97.21%" in f["cost_note"]
+    assert "INSTANTANEOUS" in f["cost_note"]
+
+
+def test_no_096_ceiling_is_imposed():
+    """The ruling names 0.96 specifically, and the scored evidence is that
+    `<= 0.96` was NEGATIVE (-28 / -119 bp) while 1.00-1.02 was BEST
+    (+98 / +61 bp). The overlay must not quietly become a 0.96 gate."""
+    # at the preregistered 0.005 edge a 0.63 held leg admits a 0.35 complement,
+    # i.e. a basis of 0.98 -- looser than 0.96, deliberately
+    r = V.max_complement_price(held_avg_cost="0.63", min_edge="0.005")
+    basis = D("0.63") + D(r["ceiling"])
+    assert basis > D("0.96")
+    # 0.96 appears in the module only as PROSE quoting the ruling, never as a
+    # value. Assert on the parsed module, not on the text.
+    import ast
+    tree = ast.parse(open(V.__file__).read())
+    literals = {n.value for n in ast.walk(tree)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                and not n.value.strip().startswith(("RISK", "A matched"))
+                and len(n.value) < 12}
+    assert "0.96" not in literals
+    assert not any(isinstance(n, ast.Constant) and n.value == 0.96
+                   for n in ast.walk(tree))

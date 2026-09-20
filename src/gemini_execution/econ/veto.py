@@ -56,6 +56,37 @@ accrual in its own field, computed by `rebate_program`, and `admits` never
 reads it. A test asserts that a pair which is negative on trading economics
 stays REFUSED no matter how large an accrual is passed in.
 
+THIS IS A RISK OVERLAY, NOT A FIDELITY CLAIM, AND THE OWNER RULING SAYS SO.
+`L5_OPERATING_MODEL.md` §2d (owner, 2026-09-18) rules that the Gemini
+continuous-inventory LIVE path contains no pair-cost gate and is not to be
+given one, on evidence that is not marginal: of 33,765 historical L5 COMPLETEs,
+**42.75% were above $1.00** and 33.60% above $1.05; on BTC-5m, our exact venue
+analogue, only 51.7% were at or below $1.00. A 0.96 gate would forbid roughly
+four completes in five. Worse for the naive reading, when those bands were
+scored by what the shares actually earned, the instantaneous **1.00-1.02 band
+was the BEST** in both periods (+98 / +61 bp) while **`<= 0.96` was NEGATIVE**
+(-28 / -119 bp).
+
+So this module is NOT evidence that L5 would refuse these pairs. It plainly
+implies he would not. The ruling permits a ceiling on one condition -- that any
+future ceiling be "labelled a risk overlay, set as a bound rather than a
+behavioural claim, and carry its stated cost" -- and that is exactly what this
+is:
+
+  * it is applied ONLY in the GEMINI_ECON_V1 challenger, never in the control,
+    whose completion behaviour is preserved unchanged;
+  * every divergence it causes is classified ADAPTATION_SUPPRESSED, never as
+    an L5 discovery;
+  * its COST IS MEASURED, not assumed: every vetoed completion records the pair
+    economics it forbade, so "the overlay cost us N completes at median basis
+    B" is a number in the scoreboard rather than a claim in a commit message.
+
+The ruling also states what this challenger exists to settle: ">$1 COMPLETEs
+being frequent for L5 does NOT establish that they are profitable ON GEMINI.
+That is precisely what live evidence must measure. Fidelity to L5 and
+profitability on our venue are separate claims and neither implies the other."
+This arm measures the second claim. It does not restate the first.
+
 FLOORED TO THE TICK, ALWAYS DOWNWARD. A ceiling rounded UP to a tick is not a
 ceiling. `tick_floor` truncates toward zero so a quoted price can never exceed
 the computed bound by a fraction of a tick.
@@ -76,7 +107,14 @@ SCHEMA = "gemini_econ_completion_veto/v1"
 LADDER = ("historical", "shadow", "submitted", "filled", "settled",
           "credited", "realized")
 
+#: what this module is, in the ruling's own vocabulary
+CLASSIFICATION = "RISK_OVERLAY"
+
 LABELS = (
+    "RISK OVERLAY, not strategy fidelity. L5_OPERATING_MODEL.md 2d rules that "
+    "the Gemini live path takes no pair-cost ceiling; 42.75% of L5's 33,765 "
+    "historical COMPLETEs were above $1.00. This bound is applied ONLY in the "
+    "GEMINI_ECON_V1 challenger and its cost is measured, never assumed.",
     "A matched pair pays exactly $1.00 at settlement. A basis above $1.00 is a "
     "loss before fees and is never a successful completion.",
     "Rebates are EXCLUDED from every admission test in this module. Any "
@@ -311,6 +349,39 @@ def admits(*, held_avg_cost: Any, proposed_price: Any, min_edge: Any,
         return rec
     rec.update(admitted=True, reason=None, headroom=str(cap - px))
     return rec
+
+
+def forbidden_pair(*, held_qty: Any, held_avg_cost: Any,
+                   complement_qty: Any, complement_price: Any,
+                   regime: FeeRegime = VERIFIED_REGIME,
+                   **kw: Any) -> Dict[str, Any]:
+    """The economics of a pair the overlay REFUSED, so its cost is a number.
+
+    The owner ruling requires any pair-cost ceiling to "carry its stated cost".
+    Asserting that cost from historical shares would be restating the ruling's
+    own evidence back at it; recording what THIS lane actually forbade, on
+    THIS tape, is the only version that can settle anything.
+
+    Note what this can and cannot show. It captures the INSTANTANEOUS pair the
+    overlay refused. The ruling's strongest counter-argument is downstream --
+    expensive completes were followed by further fills 97.21% of the time and
+    ended with improved window economics 96.78% of the time -- and an
+    instantaneous record cannot see that. The window-level comparison against
+    the control is what can, and it is why the control must keep running
+    untouched.
+    """
+    econ = pair_economics(held_qty=held_qty, held_avg_cost=held_avg_cost,
+                          complement_qty=complement_qty,
+                          complement_price=complement_price, regime=regime)
+    econ["classification"] = CLASSIFICATION
+    econ["forbidden_by_overlay"] = True
+    econ["cost_note"] = (
+        "INSTANTANEOUS pair refused by the risk overlay. It does NOT capture "
+        "the ruling's downstream argument (97.21% of expensive completes were "
+        "followed by further fills; 96.78% of those windows ended better than "
+        "the expensive complete itself). Only the window-level comparison "
+        "against the untouched control can speak to that.")
+    return econ
 
 
 def tick_ceil(price: D, tick: D) -> D:

@@ -92,6 +92,12 @@ class Scoreboard:
     completions_considered: int = 0
     completions_vetoed: int = 0
     veto_reasons: Dict[str, int] = field(default_factory=dict)
+    #: THE OVERLAY'S STATED COST. L5_OPERATING_MODEL.md 2d permits a pair-cost
+    #: ceiling only if it is labelled a risk overlay and CARRIES ITS COST. The
+    #: cost is what it forbade, measured on this tape -- not restated from the
+    #: ruling's historical shares.
+    forbidden_bases: List[str] = field(default_factory=list)
+    forbidden_would_have_been_fee_positive: int = 0
 
     matched_qty: D = D("0")
     residual_qty: D = D("0")
@@ -136,12 +142,22 @@ class Scoreboard:
         if acceptable:
             self.acceptable_complement_opportunities += 1
 
-    def completion_considered(self, admitted: bool, reason: Any = None) -> None:
+    def completion_considered(self, admitted: bool, reason: Any = None,
+                              forbidden: Optional[Mapping[str, Any]] = None
+                              ) -> None:
         self.completions_considered += 1
         if not admitted:
             self.completions_vetoed += 1
             key = str(reason or "UNSPECIFIED").split(":")[0]
             self.veto_reasons[key] = self.veto_reasons.get(key, 0) + 1
+            if forbidden:
+                b = forbidden.get("pair_basis_before_fees")
+                if b is not None:
+                    self.forbidden_bases.append(str(b))
+                if forbidden.get("fee_positive"):
+                    # the overlay refused a pair that WOULD have paid. This is
+                    # the counter it exists to expose, not to hide.
+                    self.forbidden_would_have_been_fee_positive += 1
 
     def pair(self, econ: Mapping[str, Any], *, both_maker: bool,
              ceiling: Any = None, complement_price: Any = None) -> None:
@@ -245,6 +261,27 @@ class Scoreboard:
             "completions_considered": self.completions_considered,
             "completions_vetoed": self.completions_vetoed,
             "veto_reasons": dict(self.veto_reasons),
+
+            "RISK_OVERLAY_cost": {
+                "classification": "RISK_OVERLAY, not strategy fidelity",
+                "ruling": ("L5_OPERATING_MODEL.md 2d (owner 2026-09-18): the "
+                           "Gemini live path takes NO pair-cost ceiling; any "
+                           "future ceiling must be labelled a risk overlay and "
+                           "carry its stated cost. This is that cost."),
+                "completes_forbidden": self.completions_vetoed,
+                "share_of_completes_forbidden": _pct(
+                    self.completions_vetoed, self.completions_considered),
+                "forbidden_basis_median": _median(
+                    [float(b) for b in self.forbidden_bases
+                     if _dec(b) is not None]),
+                "forbidden_that_would_have_been_fee_positive":
+                    self.forbidden_would_have_been_fee_positive,
+                "limit": ("INSTANTANEOUS. Does not capture the ruling's "
+                          "downstream argument that 97.21% of expensive "
+                          "completes were followed by further fills and 96.78% "
+                          "of those windows ended better. Only the window-level "
+                          "comparison against the untouched control can."),
+            },
 
             "same_side_exits": self.same_side_exits,
             "aggressive_exits": self.aggressive_exits,

@@ -198,7 +198,16 @@ class GeminiEconArm:
                     held_avg_cost=cost, proposed_price=a.get("price"),
                     min_edge=(self.pol.thresholds.min_edge if self.pol
                               else "0.005"))
-                self.board.completion_considered(adm["admitted"], adm["reason"])
+                forbidden = None
+                if not adm["admitted"] and cost is not None:
+                    # measure what the overlay refused, per the ruling's
+                    # "carry its stated cost" condition
+                    q = abs(held["residual"])
+                    forbidden = VT.forbidden_pair(
+                        held_qty=q, held_avg_cost=cost, complement_qty=q,
+                        complement_price=a.get("price"))
+                self.board.completion_considered(adm["admitted"], adm["reason"],
+                                                 forbidden=forbidden)
                 if adm["admitted"]:
                     acted.append(a)
                     rec.update(gemini_disposition=AC.COMPLETE,
@@ -215,12 +224,12 @@ class GeminiEconArm:
                                    fidelity=SUBSTITUTED, admitted=False,
                                    substituted_path=sub["path"],
                                    substituted_price=sub["price"],
-                                   why=adm["reason"])
+                                   why=adm["reason"], forbidden=forbidden)
                         self._note(SUBSTITUTED)
                     else:
                         rec.update(gemini_disposition=None,
                                    fidelity=SUPPRESSED, admitted=False,
-                                   why=adm["reason"])
+                                   why=adm["reason"], forbidden=forbidden)
                         self._note(SUPPRESSED)
 
             elif act in (CP.OPEN, CP.EXTEND):

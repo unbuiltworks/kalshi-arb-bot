@@ -61,6 +61,53 @@ From `src/gemini_execution/econ/policy.py`, fixed in the same commit:
 BTC5m is **stricter**, not merely faster: 300s leaves almost no room to recover
 a complement, so a bad entry is carried to settlement rather than worked out of.
 
+## 3b. The veto is a RISK OVERLAY, and the owner ruling governs it
+
+`L5_OPERATING_MODEL.md` §2d (owner, **2026-09-18**) rules that the Gemini
+continuous-inventory **live path** contains no pair-cost gate and is not to be
+given one. The evidence behind it is not marginal:
+
+- of **33,765** historical L5 COMPLETEs, **42.75% were above $1.00**, 33.60%
+  above $1.05;
+- on **BTC-5m**, our exact venue analogue, only **51.7%** were at or below $1.00;
+- a 0.96 gate would forbid roughly **four completes in five**;
+- scored by what the shares actually earned, the instantaneous **1.00–1.02 band
+  was the BEST** in both periods (+98 / +61 bp) while **`<= 0.96` was NEGATIVE**
+  (−28 / −119 bp).
+
+**So this challenger does not reproduce L5's completion behaviour, and must
+never be read as evidence that he would have refused these pairs. He plainly
+would not.** The ruling permits a ceiling on exactly one condition — that it be
+"labelled a risk overlay, set as a bound rather than a behavioural claim, and
+carry its stated cost". That condition is met here:
+
+1. the overlay applies **only** inside `GEMINI_ECON_V1`; the control's
+   completion behaviour is preserved unchanged;
+2. every divergence it causes is classified `ADAPTATION_SUPPRESSED`, never as
+   an L5 discovery;
+3. its cost is **measured**: every vetoed completion records the pair it
+   forbade, and `RISK_OVERLAY_cost` reports how many completes were forbidden,
+   at what median basis, and how many **would have been fee-positive**.
+
+**No 0.96 ceiling is imposed**, and a test asserts 0.96 never appears as a value
+in the module. At the preregistered 0.005 edge a 0.63 held leg admits a 0.35
+complement — a basis of 0.98, deliberately looser than 0.96.
+
+**What this arm is actually settling.** The ruling itself states the open
+question: ">$1 COMPLETEs being frequent for L5 does NOT establish that they are
+profitable on Gemini. That is precisely what live evidence must measure.
+Fidelity to L5 and profitability on our venue are separate claims and neither
+implies the other." This arm measures the **second** claim. The control
+continues to measure the first.
+
+**The limit of the cost measurement, stated up front.** What the overlay records
+is the **instantaneous** pair it refused. The ruling's strongest counter-argument
+is downstream — expensive completes were followed by further fills **97.21%** of
+the time, and **96.78%** of those windows ended with better economics than the
+expensive complete itself. An instantaneous record cannot see that. Only the
+**window-level comparison against the untouched control** can, which is a further
+reason the control must keep running exactly as it is.
+
 ## 4. Primary metric
 
 **Net cents per capital-dollar-minute**, per cohort, challenger vs control —
@@ -113,6 +160,11 @@ The gap between the first two is the lane's own doing and is the fastest
   a rung L5 never proposed. A test pins it at zero; a nonzero value in
   production is a defect, and any resulting economics are an adaptation, never
   an L5 discovery.
+- **The overlay costing more than it saves.** If
+  `forbidden_that_would_have_been_fee_positive > 0`, or if the control's
+  window-level economics beat the challenger's while the challenger forbade a
+  large share of completes, the overlay is the thing to remove — and that is a
+  result in the ruling's favour, to be reported as one rather than tuned away.
 
 ## 7. The event-driven sub-experiment
 
