@@ -182,7 +182,33 @@ def pmus_discover() -> list:
     collector cannot lose the same-market PRE->LIVE control to TOTAL_CAP.
     """
     try:
-        leagues = [l["slug"] for l in get(GATEWAY + "/v2/leagues")["leagues"]]
+        # /v2/leagues is an incomplete legacy index (~50 slugs). The venue's
+        # own /v2/sports payload is the authoritative discovery surface and
+        # currently exposes hundreds of operational league slugs, including
+        # ATP/WTA/CFB/Dota2 habitats seen by the independent PMUS surface tape.
+        sports_payload = get(GATEWAY + "/v2/sports")
+        leagues = []
+        def collect_leagues(obj):
+            if isinstance(obj, dict):
+                # Only objects carried in an explicit leagues collection are
+                # admitted below; recurse so wrapper shapes remain harmless.
+                for k, v in obj.items():
+                    if k == "leagues" and isinstance(v, list):
+                        for item in v:
+                            if isinstance(item, dict) and item.get("slug"):
+                                if item.get("isOperational", True):
+                                    leagues.append(str(item["slug"]))
+                            elif isinstance(item, str):
+                                leagues.append(item)
+                    else:
+                        collect_leagues(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    collect_leagues(item)
+        collect_leagues(sports_payload)
+        leagues = list(dict.fromkeys(leagues))
+        if not leagues:
+            raise ValueError("no leagues discovered from /v2/sports")
     except Exception:
         return []
     live, nfl_live_control, nfl_pre, pre, diag = [], [], [], [], []
