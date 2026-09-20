@@ -1,0 +1,64 @@
+============================================================================================================
+PMUS  --  PRIMARY EXECUTABLE TRANSFER TARGET
+   flow provenance: CAUSAL INFERRED flow from sharesTraded deltas -- never a real print
+============================================================================================================
+  cohort                         fill rule    1stFll   elig matched P(el|1st)  P(mt|el) P(mt|1st)  medEXT  medTopp
+  ----------------------------------------------------------------------------------------------------------------
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC      238    139      44     58.4      31.7      18.5     2.0    573.0
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE     174     98      21     56.3      21.4      12.1       2    899.8
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC      225     93      29     41.3      31.2      12.9       0    298.4
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE     167     79      13     47.3      16.5       7.8       1    448.2
+  frame_cap_10_imb1-10_boundary  OPTIMISTIC      225     91      29     40.4      31.9      12.9       0    298.4
+  frame_cap_10_imb1-10_boundary  QUEUE_AWARE     167     79      13     47.3      16.5       7.8       1    448.2
+  frame_cap_50_imb10-50_boundary OPTIMISTIC      225     93      29     41.3      31.2      12.9       0    298.4
+  frame_cap_50_imb10-50_boundary QUEUE_AWARE     167     79      13     47.3      16.5       7.8       1    448.2
+
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC   residual bins {'imb1-10': 238}  hit_cap=171  pair_basis med=0.9725 (<1: 90.9%, n=44)  modeled edge/pair=0.0275
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE  residual bins {'imb1-10': 174}  hit_cap=113  pair_basis med=0.955 (<1: 90.5%, n=21)  modeled edge/pair=0.045
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC   residual bins {'imb10-50': 86, 'imb1-10': 128, 'imb>50': 11}  hit_cap=0  pair_basis med=0.98 (<1: 86.2%, n=29)  modeled edge/pair=0.02
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE  residual bins {'imb1-10': 128, 'imb10-50': 38, 'imb>50': 1}  hit_cap=0  pair_basis med=0.955 (<1: 84.6%, n=13)  modeled edge/pair=0.045
+
+============================================================================================================
+INTL  --  REFERENCE / FIDELITY ONLY -- not executable
+   flow provenance: REAL PRINTS, direction known
+============================================================================================================
+  cohort                         fill rule    1stFll   elig matched P(el|1st)  P(mt|el) P(mt|1st)  medEXT  medTopp
+  ----------------------------------------------------------------------------------------------------------------
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC      216    143      74     66.2      51.7      34.3     1.0    160.0
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE     108     62      25     57.4      40.3      23.1       1    352.1
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC      188     92      40     48.9      43.5      21.3     0.0    131.5
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE     103     54      20     52.4      37.0      19.4     0.5    307.4
+  frame_cap_10_imb1-10_boundary  OPTIMISTIC      188     92      40     48.9      43.5      21.3     0.0    131.5
+  frame_cap_10_imb1-10_boundary  QUEUE_AWARE     103     54      20     52.4      37.0      19.4     0.5    307.4
+  frame_cap_50_imb10-50_boundary OPTIMISTIC      188     92      40     48.9      43.5      21.3     0.0    131.5
+  frame_cap_50_imb10-50_boundary QUEUE_AWARE     103     54      20     52.4      37.0      19.4     0.5    307.4
+
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC   residual bins {'imb1-10': 216}  hit_cap=110  pair_basis med=0.94 (<1: 97.3%, n=74)  modeled edge/pair=0.06
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE  residual bins {'imb1-10': 108}  hit_cap=48  pair_basis med=0.945 (<1: 100.0%, n=25)  modeled edge/pair=0.055
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC   residual bins {'imb10-50': 48, 'imb1-10': 138, 'imb>50': 2}  hit_cap=0  pair_basis med=0.9416 (<1: 95.0%, n=40)  modeled edge/pair=0.0584
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE  residual bins {'imb10-50': 10, 'imb1-10': 93}  hit_cap=0  pair_basis med=0.94 (<1: 100.0%, n=20)  modeled edge/pair=0.06
+
+================================================================================================================================
+NFL LIVE THROUGH THE UNCHANGED FROZEN FUNNEL -- REPORTED SEPARATELY, NOTHING TUNED FROM IT
+clock starts at kickoff 17:00:00Z; now 17:11:44Z
+================================================================================================================================
+
+########## QUEUE_AWARE ##########
+cohort                     1stFl  COMPL   FLOW   QCLR  MATCH    mQty conv/100  lat_p50  medEXT    basis   gross   unres  resDur
+NFL LIVE (separate)            0      0      0      0      0       0        -        -       -        -       -       0       -
+rest of deployable slate       0      0      0      0      0       0        -        -       -        -       -       0       -
+
+   NFL: zero first-fill episodes since kickoff.
+   NOT a finding about NFL liquidity -- local coverage since kickoff is
+   only ~6 minutes and the collector was down 16:55:30Z-17:04:32Z across
+   the kickoff itself. Reported as insufficient observation.
+
+########## OPTIMISTIC ##########
+cohort                     1stFl  COMPL   FLOW   QCLR  MATCH    mQty conv/100  lat_p50  medEXT    basis   gross   unres  resDur
+NFL LIVE (separate)            0      0      0      0      0       0        -        -       -        -       -       0       -
+rest of deployable slate       0      0      0      0      0       0        -        -       -        -       -       0       -
+
+   NFL: zero first-fill episodes since kickoff.
+   NOT a finding about NFL liquidity -- local coverage since kickoff is
+   only ~6 minutes and the collector was down 16:55:30Z-17:04:32Z across
+   the kickoff itself. Reported as insufficient observation.
