@@ -1,0 +1,87 @@
+======================================================================================================================
+P0-5  L5 STANDALONE TRADING ECONOMICS -- SETTLED-RECONSTRUCTED from L5's own public
+trades and the venue's own settlement outcomes. NOT a cash statement, NEVER 'realized'.
+Fees: corpus dollars == price*quantity exactly, no fee embedded, none inferred.
+INCENTIVES ARE NOT IN THIS CORPUS and are never inferred or added below.
+======================================================================================================================
+
+--- TOTAL ---
+cohort                 n     matched    residual         NET       spend      ret%  medBasis      %<1  $/mUnit  $/rUnit
+ALL                 2216   +18912.87   -19963.43    -1050.57      728500    -0.144    0.9705       61  +0.0292  -0.0888
+
+--- BY LANE (asset x duration) ---
+cohort                 n     matched    residual         NET       spend      ret%  medBasis      %<1  $/mUnit  $/rUnit
+BTC5m                957     +598.03     -540.43      +57.60      129035    +0.045    0.9763       56  +0.0072  -0.0059
+ETH5m                703     -232.85     +229.77       -3.08       24718    -0.012    1.0263       47  -0.0264  +0.0083
+BTC15m               527   +18597.61   -19712.25    -1114.64      573705    -0.194    0.9634       78  +0.0334  -0.1892
+ETH15m                29      -49.93      +59.48       +9.55        1042    +0.917    1.2334       31  -0.1251  +0.0776
+
+--- BY MONTH / ERA ---
+cohort                 n     matched    residual         NET       spend      ret%  medBasis      %<1  $/mUnit  $/rUnit
+2026-03               88     +191.96     -192.51       -0.55        7787    -0.007    0.9759       64  +0.0295  -0.0630
+2026-04              128     +833.90     -430.95     +402.96       22189    +1.816    0.9448       69  +0.0399  -0.0871
+2026-08             2000   +17887.00   -19339.97    -1452.97      698523    -0.208    0.9718       60  +0.0288  -0.0892
+
+--- LANE x ERA ---
+cohort                 n     matched    residual         NET       spend      ret%  medBasis      %<1  $/mUnit  $/rUnit
+2026-03 BTC15m        86     +191.96     -192.52       -0.56        7787    -0.007    0.9759       64  +0.0295  -0.0630
+2026-04 BTC15m       128     +833.90     -430.95     +402.96       22189    +1.816    0.9448       69  +0.0399  -0.0871
+2026-08 BTC15m       313   +17571.75   -19088.78    -1517.04      543728    -0.279    0.9653       84  +0.0332  -0.1984
+2026-08 BTC5m        955     +598.03     -540.44      +57.59      129035    +0.045    0.9763       56  +0.0072  -0.0059
+2026-08 ETH15m        29      -49.93      +59.48       +9.55        1042    +0.917    1.2334       31  -0.1251  +0.0776
+2026-08 ETH5m        703     -232.85     +229.77       -3.08       24718    -0.012    1.0263       47  -0.0264  +0.0083
+
+--- MAKER / TAKER MIX (window-level, by dominant tag) ---
+cohort                 n     matched    residual         NET       spend      ret%  medBasis      %<1  $/mUnit  $/rUnit
+has_taker           1707     +752.80     +206.28     +959.08      181078    +0.530    0.9856       54  +0.0065  +0.0017
+maker>=90%           293   +17134.20   -19546.26    -2412.06      517446    -0.466    0.9633       85  +0.0340  -0.2126
+other                216    +1025.87     -623.46     +402.41       29977    +1.342    0.9583       67  +0.0374  -0.0779
+
+======================================================================================================================
+THE RECONCILIATION: how a favourable pair basis coexists with ~zero standalone net
+======================================================================================================================
+  median pair basis                      0.9705   (61% below par)
+  matched P&L per matched unit           +0.0292
+  residual P&L per residual unit         -0.0888
+  residual units per matched unit        0.3471
+  => residual cost per MATCHED unit      -0.0308
+  => net per matched unit                -0.0016
+
+  The pair basis is REAL. It is also almost exactly cancelled: every matched unit
+  earns ~0.0292 and drags ~0.35 residual units losing ~-0.0888 each. The two lines are
+  the same size by construction of the strategy, not by coincidence.
+
+  CONTRAST WITH TODAY'S PMUS COHORT (6247777f), same decomposition:
+    L5   : 0.35 residual units per matched unit, residual -0.0888/unit -> net -0.0016/matched
+    PMUS : 12.00 residual units per matched unit, residual -0.1412/unit -> net -1.6736/matched
+    The MECHANISM is identical. The RATIO is 34x worse on PMUS.
+================================================================================================================
+CHRONOLOGICAL VALIDATION -- does standalone expectancy BEFORE INCENTIVES survive OOS?
+================================================================================================================
+
+--- ROLLING DAILY COHORTS, August 2026 (the mature era, n=2000 windows) ---
+day              n     matched    residual         NET       spend      ret%
+2026-08-28     401    +3382.39    -5044.79    -1662.41      135525    -1.227
+2026-08-29     567    +5470.84    -4917.14     +553.70      209385    +0.264
+2026-08-30     558    +4075.00    -6317.44    -2242.44      203991    -1.099
+2026-08-31     474    +4958.78    -3060.61    +1898.17      149622    +1.269
+  days net-positive: 2 of 4
+
+--- CHRONOLOGICAL TRAIN / OOS SPLIT (70/30 on window start time) ---
+  TRAIN (earliest 70%)   n=1551  matched  +11783.68  residual  -13453.64  NET   -1669.96  spend    503238  ret -0.332%  95%CI [-1.106, +0.508]
+  OOS   (latest 30%)     n= 665  matched   +7129.19  residual   -6509.79  NET    +619.40  spend    225262  ret +0.275%  95%CI [-1.068, +1.666]
+
+--- SAME SPLIT, BTC15m ONLY (the lane with the best pair basis) ---
+  TRAIN    n= 368  matched   +9731.63  residual  -10958.68  NET   -1227.04  ret -0.401%  95%CI [-1.229, +0.450]
+  OOS      n= 159  matched   +8865.98  residual   -8753.57  NET    +112.41  ret +0.042%  95%CI [-1.147, +1.225]
+
+--- IS ANY LANE POSITIVE WITH UNCERTAINTY? (full sample, window bootstrap) ---
+  BTC5m    n= 957  NET     +57.60  ret +0.045%  95%CI [-2.124, +2.331]  -> indistinguishable from zero
+  ETH5m    n= 703  NET      -3.08  ret -0.012%  95%CI [-4.672, +4.563]  -> indistinguishable from zero
+  BTC15m   n= 527  NET   -1114.64  ret -0.194%  95%CI [-0.908, +0.548]  -> indistinguishable from zero
+  ETH15m   n=  29  NET      +9.55  ret +0.917%  95%CI [-10.218, +11.642]  -> indistinguishable from zero
+
+--- MAKER-DOMINANT vs HAS-TAKER, with uncertainty ---
+  has_taker   n=1707  NET    +959.08  ret +0.530%  95%CI [-1.253, +2.382]  -> indistinguishable from zero
+  maker>=90%  n= 293  NET   -2412.06  ret -0.466%  95%CI [-1.173, +0.278]  -> indistinguishable from zero
+  other       n= 216  NET    +402.41  ret +1.342%  95%CI [-0.628, +3.321]  -> indistinguishable from zero
