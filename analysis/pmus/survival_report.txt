@@ -4,19 +4,19 @@ PMUS  --  PRIMARY EXECUTABLE TRANSFER TARGET
 ============================================================================================================
   cohort                         fill rule    1stFll   elig matched P(el|1st)  P(mt|el) P(mt|1st)  medEXT  medTopp
   ----------------------------------------------------------------------------------------------------------------
-  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC       41     21       4     51.2      19.0       9.8     1.5   1011.6
-  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE      29     16       2     55.2      12.5       6.9     1.0    938.9
-  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC       41     14       4     34.1      28.6       9.8     4.0    916.0
-  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE      29     14       2     48.3      14.3       6.9     3.5    683.2
-  frame_cap_10_imb1-10_boundary  OPTIMISTIC       41     14       4     34.1      28.6       9.8     4.0    916.0
-  frame_cap_10_imb1-10_boundary  QUEUE_AWARE      29     14       2     48.3      14.3       6.9     3.5    683.2
-  frame_cap_50_imb10-50_boundary OPTIMISTIC       41     14       4     34.1      28.6       9.8     4.0    916.0
-  frame_cap_50_imb10-50_boundary QUEUE_AWARE      29     14       2     48.3      14.3       6.9     3.5    683.2
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC       57     26       5     45.6      19.2       8.8       1    820.3
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE      39     20       2     51.3      10.0       5.1     1.0    938.9
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC       57     19       5     33.3      26.3       8.8       1    715.1
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE      39     18       2     46.2      11.1       5.1     3.5    683.2
+  frame_cap_10_imb1-10_boundary  OPTIMISTIC       57     19       5     33.3      26.3       8.8       1    715.1
+  frame_cap_10_imb1-10_boundary  QUEUE_AWARE      39     18       2     46.2      11.1       5.1     3.5    683.2
+  frame_cap_50_imb10-50_boundary OPTIMISTIC       57     19       5     33.3      26.3       8.8       1    715.1
+  frame_cap_50_imb10-50_boundary QUEUE_AWARE      39     18       2     46.2      11.1       5.1     3.5    683.2
 
-  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC   residual bins {'imb1-10': 41}  hit_cap=33  pair_basis med=0.8634 (<1: 100.0%, n=4)  modeled edge/pair=0.1366
-  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE  residual bins {'imb1-10': 29}  hit_cap=22  pair_basis med=0.8634 (<1: 100.0%, n=2)  modeled edge/pair=0.1366
-  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC   residual bins {'imb10-50': 20, 'imb1-10': 20, 'imb>50': 1}  hit_cap=0  pair_basis med=0.8355 (<1: 100.0%, n=4)  modeled edge/pair=0.1645
-  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE  residual bins {'imb1-10': 23, 'imb10-50': 6}  hit_cap=0  pair_basis med=0.8013 (<1: 100.0%, n=2)  modeled edge/pair=0.1987
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC   residual bins {'imb1-10': 57}  hit_cap=41  pair_basis med=0.98 (<1: 100.0%, n=5)  modeled edge/pair=0.02
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE  residual bins {'imb1-10': 39}  hit_cap=25  pair_basis med=0.8634 (<1: 100.0%, n=2)  modeled edge/pair=0.1366
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC   residual bins {'imb10-50': 22, 'imb1-10': 34, 'imb>50': 1}  hit_cap=0  pair_basis med=0.98 (<1: 100.0%, n=5)  modeled edge/pair=0.02
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE  residual bins {'imb1-10': 30, 'imb10-50': 9}  hit_cap=0  pair_basis med=0.8013 (<1: 100.0%, n=2)  modeled edge/pair=0.1987
 
 ============================================================================================================
 INTL  --  REFERENCE / FIDELITY ONLY -- not executable
@@ -43,62 +43,65 @@ P(compatible flow by t | COMPLETE-eligible)   clock = complement quote
 ========================================================================================================
   venue|rule             metric              by10s        by30s        by60s       by120s       by300s       by600s      mkt end
   ------------------------------------------------------------------------------------------------------------------------------
-  PMUS|OPTI              compat flow     4.3% n=23    4.5% n=22   14.3% n=21   14.3% n=21   21.1% n=19   26.7% n=15   47.8% n=23
-  PMUS|OPTI              qa fill         4.3% n=23    4.5% n=22   14.3% n=21   14.3% n=21   15.8% n=19   26.7% n=15   39.1% n=23
-  PMUS|OPTI              matched         0.0% n=23    0.0% n=22    0.0% n=21    0.0% n=21   10.5% n=19   20.0% n=15   30.4% n=23
-  PMUS|QUEU              compat flow     4.8% n=21   10.0% n=20   21.1% n=19   26.3% n=19   35.3% n=17   38.5% n=13   47.6% n=21
-  PMUS|QUEU              qa fill         4.8% n=21    5.0% n=20   15.8% n=19   21.1% n=19   23.5% n=17   30.8% n=13   47.6% n=21
-  PMUS|QUEU              matched         0.0% n=21    0.0% n=20    0.0% n=19    0.0% n=19    5.9% n=17   15.4% n=13   23.8% n=21
+  PMUS|OPTI              compat flow     3.6% n=28    3.8% n=26   11.5% n=26   11.5% n=26   20.0% n=20   25.0% n=16   46.4% n=28
+  PMUS|OPTI              qa fill         3.6% n=28    3.8% n=26   11.5% n=26   11.5% n=26   15.0% n=20   25.0% n=16   39.3% n=28
+  PMUS|OPTI              matched         0.0% n=28    0.0% n=26    0.0% n=26    0.0% n=26   10.0% n=20   18.8% n=16   28.6% n=28
+  PMUS|QUEU              compat flow     4.2% n=24    8.7% n=23   17.4% n=23   22.7% n=22   33.3% n=18   40.0% n=15   41.7% n=24
+  PMUS|QUEU              qa fill         4.2% n=24    4.3% n=23   13.0% n=23   18.2% n=22   22.2% n=18   33.3% n=15   41.7% n=24
+  PMUS|QUEU              matched         0.0% n=24    0.0% n=23    0.0% n=23    0.0% n=22    5.6% n=18   13.3% n=15   20.8% n=24
 
-  INTL|OPTI              compat flow     3.1% n=64   14.3% n=63   21.0% n=62   31.1% n=61   57.7% n=52   72.1% n=43   71.9% n=64
-  INTL|OPTI              qa fill         0.0% n=64    4.8% n=63    8.1% n=62   13.1% n=61   23.1% n=52   32.6% n=43   37.5% n=64
-  INTL|OPTI              matched         0.0% n=64    0.0% n=63    0.0% n=62   11.5% n=61   32.7% n=52   58.1% n=43   51.6% n=64
-  INTL|QUEU              compat flow    12.9% n=31   16.7% n=30   27.6% n=29   39.3% n=28   78.6% n=28   87.0% n=23   80.6% n=31
-  INTL|QUEU              qa fill         3.2% n=31    6.7% n=30   13.8% n=29   21.4% n=28   57.1% n=28   78.3% n=23   77.4% n=31
-  INTL|QUEU              matched         0.0% n=31    0.0% n=30    0.0% n=29    7.1% n=28   17.9% n=28   34.8% n=23   38.7% n=31
+  INTL|OPTI              compat flow     3.1% n=65   14.1% n=64   20.6% n=63   30.6% n=62   55.6% n=54   70.5% n=44   72.3% n=65
+  INTL|OPTI              qa fill         0.0% n=65    4.7% n=64    7.9% n=63   12.9% n=62   22.2% n=54   31.8% n=44   36.9% n=65
+  INTL|OPTI              matched         0.0% n=65    0.0% n=64    0.0% n=63   11.3% n=62   31.5% n=54   56.8% n=44   50.8% n=65
+  INTL|QUEU              compat flow    12.5% n=32   16.1% n=31   26.7% n=30   37.9% n=29   75.9% n=29   87.0% n=23   78.1% n=32
+  INTL|QUEU              qa fill         3.1% n=32    6.5% n=31   13.3% n=30   20.7% n=29   55.2% n=29   78.3% n=23   75.0% n=32
+  INTL|QUEU              matched         0.0% n=32    0.0% n=31    0.0% n=30    6.9% n=29   17.2% n=29   34.8% n=23   37.5% n=32
 
 ========================================================================================================
 PMUS COMPLETE-ELIGIBLE CHAINS, STRATIFIED (cohort A)
 ========================================================================================================
-  -- OPTIMISTIC: 23 eligible, 7 matched
+  -- OPTIMISTIC: 28 eligible, 8 matched
      sport          lol                        n=6   flow=6   matched=5   sprd=0.01    depth=81.0     mv/min=0.84  flow/min=0.801
-     sport          atpcq                      n=4   flow=1   matched=0   sprd=0.01    depth=19288.4  mv/min=0.57  flow/min=0.333
+     sport          epl                        n=5   flow=2   matched=1   sprd=0.01    depth=50556.4  mv/min=0.59  flow/min=1.386
+     sport          atpcq                      n=4   flow=1   matched=0   sprd=0.01    depth=17239.5  mv/min=0.5   flow/min=0.31
      sport          sea                        n=3   flow=1   matched=0   sprd=0.01    depth=42894.8  mv/min=0.23  flow/min=0.431
      sport          flc                        n=3   flow=1   matched=1   sprd=0.01    depth=3378.3   mv/min=0.67  flow/min=0.372
-     sport          lal                        n=3   flow=0   matched=0   sprd=0.02    depth=492.5    mv/min=1.09  flow/min=0.664
+     sport          lal                        n=3   flow=0   matched=0   sprd=0.01    depth=456.4    mv/min=0.71  flow/min=0.451
      sport          valorant                   n=2   flow=1   matched=0   sprd=0.01    depth=151.5    mv/min=0.33  flow/min=0.18
      sport          cs2                        n=2   flow=1   matched=1   sprd=0.01    depth=131.6    mv/min=0.28  flow/min=0.147
      market_type    esports_match_winner       n=10  flow=8   matched=6   sprd=0.01    depth=151.5    mv/min=0.33  flow/min=0.18
-     market_type    soccer_team_full_time_winn n=6   flow=2   matched=1   sprd=0.01    depth=42894.8  mv/min=0.23  flow/min=0.431
-     market_type    tennis_match_winner        n=4   flow=1   matched=0   sprd=0.01    depth=19288.4  mv/min=0.57  flow/min=0.333
-     market_type    soccer_team_full_game_tota n=2   flow=0   matched=0   sprd=0.01    depth=16240.0  mv/min=0.52  flow/min=0.205
-     market_type    soccer_team_full_game_spre n=1   flow=0   matched=0   sprd=0.02    depth=492.5    mv/min=1.09  flow/min=0.664
+     market_type    soccer_team_full_time_winn n=8   flow=4   matched=2   sprd=0.01    depth=42894.8  mv/min=0.23  flow/min=0.431
+     market_type    tennis_match_winner        n=4   flow=1   matched=0   sprd=0.01    depth=17239.5  mv/min=0.5   flow/min=0.31
+     market_type    soccer_team_full_game_tota n=3   flow=0   matched=0   sprd=0.01    depth=16240.0  mv/min=0.52  flow/min=0.205
+     market_type    soccer_team_full_game_spre n=3   flow=0   matched=0   sprd=0.01    depth=456.4    mv/min=0.71  flow/min=0.451
      matched chains:
         aec-cs2-wba-sawy-2026-09-20                cs2 esports_match_winn sprd=0.01 depth=131.6 mv/min=0.28 flow/min=0.147 basis=0.98
         aec-lol-ctbca-blgj-2026-09-20              lol esports_match_winn sprd=0.01 depth=81.0 mv/min=0.84 flow/min=0.801 basis=0.98
         aec-lol-ctbca-blgj-2026-09-20              lol esports_match_winn sprd=0.01 depth=81.0 mv/min=0.84 flow/min=0.801 basis=0.895
         atc-flc-hra-tep-2026-09-20-tep             flc soccer_team_full_t sprd=0.01 depth=3991.9 mv/min=0.34 flow/min=0.373 basis=0.7
-        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.66 flow/min=0.711 basis=0.98
-        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.66 flow/min=0.711 basis=0.98
-        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.66 flow/min=0.711 basis=0.98
+        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.55 flow/min=0.522 basis=0.98
+        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.55 flow/min=0.522 basis=0.98
+        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.55 flow/min=0.522 basis=0.98
+        atc-epl-mnc-sun-2026-09-20-draw            epl soccer_team_full_t sprd=0.01 depth=50556.4 mv/min=0.59 flow/min=1.386 basis=0.98
 
-  -- QUEUE_AWARE: 21 eligible, 5 matched
+  -- QUEUE_AWARE: 24 eligible, 5 matched
      sport          lol                        n=6   flow=6   matched=4   sprd=0.01    depth=81.0     mv/min=0.84  flow/min=0.801
-     sport          atpcq                      n=4   flow=1   matched=0   sprd=0.01    depth=19288.4  mv/min=0.57  flow/min=0.333
+     sport          atpcq                      n=4   flow=1   matched=0   sprd=0.01    depth=17239.5  mv/min=0.5   flow/min=0.31
      sport          sea                        n=3   flow=1   matched=0   sprd=0.01    depth=42894.8  mv/min=0.23  flow/min=0.431
+     sport          epl                        n=3   flow=0   matched=0   sprd=0.01    depth=3800.0   mv/min=0.59  flow/min=0.594
      sport          valorant                   n=2   flow=1   matched=0   sprd=0.01    depth=151.5    mv/min=0.33  flow/min=0.18
      sport          cs2                        n=2   flow=1   matched=1   sprd=0.01    depth=131.6    mv/min=0.28  flow/min=0.147
      sport          flc                        n=2   flow=0   matched=0   sprd=0.01    depth=3378.3   mv/min=0.67  flow/min=0.372
-     sport          lal                        n=2   flow=0   matched=0   sprd=0.02    depth=492.5    mv/min=1.09  flow/min=0.664
+     sport          lal                        n=2   flow=0   matched=0   sprd=0.01    depth=456.4    mv/min=0.71  flow/min=0.451
      market_type    esports_match_winner       n=10  flow=8   matched=5   sprd=0.01    depth=151.5    mv/min=0.33  flow/min=0.18
      market_type    soccer_team_full_time_winn n=5   flow=1   matched=0   sprd=0.01    depth=42894.8  mv/min=0.23  flow/min=0.431
-     market_type    tennis_match_winner        n=4   flow=1   matched=0   sprd=0.01    depth=19288.4  mv/min=0.57  flow/min=0.333
-     market_type    soccer_team_full_game_tota n=1   flow=0   matched=0   sprd=0.01    depth=16240.0  mv/min=0.52  flow/min=0.205
-     market_type    soccer_team_full_game_spre n=1   flow=0   matched=0   sprd=0.02    depth=492.5    mv/min=1.09  flow/min=0.664
+     market_type    tennis_match_winner        n=4   flow=1   matched=0   sprd=0.01    depth=17239.5  mv/min=0.5   flow/min=0.31
+     market_type    soccer_team_full_game_spre n=3   flow=0   matched=0   sprd=0.01    depth=456.4    mv/min=0.71  flow/min=0.451
+     market_type    soccer_team_full_game_tota n=2   flow=0   matched=0   sprd=0.01    depth=16240.0  mv/min=0.52  flow/min=0.205
      matched chains:
         aec-cs2-wba-sawy-2026-09-20                cs2 esports_match_winn sprd=0.01 depth=131.6 mv/min=0.28 flow/min=0.147 basis=0.98
         aec-lol-ctbca-blgj-2026-09-20              lol esports_match_winn sprd=0.01 depth=81.0 mv/min=0.84 flow/min=0.801 basis=0.98
         aec-lol-ctbca-blgj-2026-09-20              lol esports_match_winn sprd=0.01 depth=81.0 mv/min=0.84 flow/min=0.801 basis=0.92
-        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.66 flow/min=0.711 basis=0.98
-        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.66 flow/min=0.711 basis=0.98
+        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.55 flow/min=0.522 basis=0.98
+        aec-lol-mkf-ktc-2026-09-20                 lol esports_match_winn sprd=0.01 depth=54.8 mv/min=0.55 flow/min=0.522 basis=0.98
 

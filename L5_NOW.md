@@ -62,19 +62,31 @@ latency**, pending the >=25 COMPLETE-eligible checkpoint and the NFL LIVE test.
 On International, uncapping actually *costs* matches (A=26, B=15) because
 `last_rel=extend` persistence keeps sequences open instead of closing them.
 
-## 5. The queue-aware matches sit in a recognizable habitat
+## 5. Habitat signature: flow rate, not depth (CORRECTED)
 
-PMUS COMPLETE-eligible chains, cohort A, queue-aware branch, 600s look-ahead:
-5 matched of 21 eligible, and **all five are esports match-winner (LoL/CS2)**.
+At the 25-eligible checkpoint (28 optimistic / 24 queue-aware), the separator
+between matched and unmatched PMUS COMPLETE-eligible chains is **compatible
+flow rate**, not touch depth:
 
-| | touch depth (med) | compatible flow/min (med) |
+| feature | P(above overall median) matched | not matched |
 |---|---|---|
-| matched | **81.0** | **0.711** |
-| not matched | **1850.6** | 0.353 |
+| compatible flow/min — optimistic | **75%** | 40% |
+| compatible flow/min — queue-aware | **80%** | 42% |
+| touch depth — optimistic | 25% | 60% |
+| movement/min — either branch | 38–40% | 42–50% |
 
-A 23x depth difference. Thin touch plus higher compatible-flow rate — the same
-profile as the International BTC15m reference (depth ~80). Deep PMUS books
-(tennis 19k, soccer 43k) produced zero matches.
+**The depth signal I reported earlier is substantially tautological and I am
+withdrawing the strong form of it.** The queue-aware fill rule *is* "cumulative
+compatible volume must exceed the depth resting ahead", so thin-depth markets
+clear it by construction. On that branch matched depth separates perfectly
+(0% above median) — but that is the rule, not a discovery.
+
+The optimistic branch does not reference depth, and there matched chains span
+depth **55 to 50,556**: an EPL draw market with 50,556 depth matched because it
+carried the highest compatible-flow rate on the PMUS slate (1.386/min). Matched
+leagues on that branch are cs2, epl, flc and lol — not esports alone.
+
+Movement/min does not separate at all in either branch.
 
 ## 6. The old inventory-regime framing
 
