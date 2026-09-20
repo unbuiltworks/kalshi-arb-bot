@@ -164,24 +164,47 @@ def breakeven_residual(p_complete: float, pair_net: float
             "formula": "r* = -p * pair_net / (1 - p)"}
 
 
-def _bootstrap(units: Sequence[float], *, iters: int = 4000,
-               seed: int = 20260920) -> Optional[Dict[str, float]]:
-    """Percentile CI on a mean by resampling whole first-fill SEQUENCES.
+def _bootstrap(clusters: Sequence[Sequence[float]], *, iters: int = 4000,
+               seed: int = 20260920) -> Optional[Dict[str, Any]]:
+    """Percentile CI on a mean, RESAMPLING CONTRACTS rather than fills.
 
-    Resampling the sequence rather than the two terms separately keeps the
-    completion outcome and the residual payoff attached to each other, which
-    is how they actually arrive.
+    THE CORRELATION IS TOTAL, NOT PARTIAL. Every residual left behind on one
+    contract settles on that contract's SINGLE binary outcome: they all win
+    together or all lose together. Eight residuals on one contract are one
+    draw, not eight, and resampling them independently reports an interval
+    far narrower than the evidence supports -- in the first live window it
+    produced the degenerate interval [0.4856, 0.4856] from eight fills that
+    were one outcome.
+
+    So the bootstrap resamples whole CONTRACTS with replacement and takes
+    every unit belonging to the drawn contract. The effective sample size is
+    the number of contracts, and it is reported beside the interval so the
+    interval can never be read as though it came from the fill count.
     """
-    n = len(units)
-    if n < 2:
-        return None
+    groups = [list(c) for c in clusters if c]
+    k = len(groups)
+    if k < 2:
+        return ({"lo": None, "hi": None, "clusters": k,
+                 "why": ("a bootstrap over %d contract(s) is not an interval; "
+                         "residuals within one contract share one outcome"
+                         % k)} if k else None)
     rnd = random.Random(seed)
     means: List[float] = []
     for _ in range(iters):
-        means.append(sum(units[rnd.randrange(n)] for _ in range(n)) / n)
+        drawn: List[float] = []
+        for _ in range(k):
+            drawn.extend(groups[rnd.randrange(k)])
+        if drawn:
+            means.append(sum(drawn) / len(drawn))
+    if not means:
+        return None
     means.sort()
-    return {"lo": means[int(0.025 * iters)], "hi": means[int(0.975 * iters)],
-            "iters": iters, "seed": seed}
+    n = len(means)
+    return {"lo": means[int(0.025 * n)], "hi": means[int(0.975 * n)],
+            "iters": n, "seed": seed, "clusters": k,
+            "unit_of_resampling": "CONTRACT, not fill",
+            "why": ("residuals on one contract settle on one binary outcome, "
+                    "so the contract is the independent draw")}
 
 
 def expectancy(rows: Sequence[Mapping[str, Any]], *,
@@ -243,6 +266,11 @@ def expectancy(rows: Sequence[Mapping[str, Any]], *,
             sum(resid_nets) / len(resid_nets) if resid_nets else None),
         "residual_win_rate": wilson(sum(1 for t in settled if t["won"]),
                                     len(settled)) if settled else None,
+        "residual_contracts": len({str(t.get("symbol")) for t in settled}),
+        "residual_win_rate_by_contract": (
+            wilson(len({str(t.get("symbol")) for t in settled if t["won"]}),
+                   len({str(t.get("symbol")) for t in settled}))
+            if settled else None),
         "e_cycle_usd": None, "e_cycle_ci": None,
         "breakeven": None,
         "labels": list(LABELS),
@@ -261,7 +289,15 @@ def expectancy(rows: Sequence[Mapping[str, Any]], *,
              + [float(x) for x in resid_nets])
     if units:
         out["e_cycle_usd"] = sum(units) / len(units)
-        out["e_cycle_ci"] = _bootstrap(units)
+        # grouped by CONTRACT: a matched pair is its own outcome-independent
+        # value, but a residual is not -- it settles with its contract.
+        groups: Dict[str, List[float]] = {}
+        for r, v in zip(matched, pair_nets):
+            groups.setdefault(str(r.get("symbol")), []).append(float(v))
+        for t, v in zip(settled, resid_nets):
+            groups.setdefault(str(t.get("symbol")), []).append(float(v))
+        out["e_cycle_ci"] = _bootstrap(list(groups.values()))
+        out["independent_contracts"] = len(groups)
     p = out["completion_rate"]["p"] if out["completion_rate"] else None
     pn = out["completed_pair_net_per_contract_mean_usd"]
     if p is not None and pn is not None:
@@ -287,8 +323,11 @@ def checkpoint(rows: Sequence[Mapping[str, Any]], *, target: int,
     out["sign"] = (None if ev is None else
                    ("POSITIVE" if ev > 0 else
                     "NEGATIVE" if ev < 0 else "ZERO"))
+    lo, hi = (ci or {}).get("lo"), (ci or {}).get("hi")
+    # a single contract yields no interval at all, and "no interval" is never
+    # certainty -- it is the absence of one
     out["sign_is_certain_at_95"] = (
-        None if not ci else (ci["lo"] > 0 or ci["hi"] < 0))
+        None if (lo is None or hi is None) else (lo > 0 or hi < 0))
     be = e.get("breakeven") or {}
     r_star = be.get("breakeven_residual_net_per_contract_usd")
     mean_r = e.get("residual_terminal_net_per_contract_mean_usd")

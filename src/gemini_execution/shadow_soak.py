@@ -1218,6 +1218,18 @@ def _print_econ(w) -> None:
                           ex.get("e_cycle_usd"), ci.get("lo"), ci.get("hi"),
                           be.get("breakeven_residual_net_per_contract_usd"),
                           ex.get("why_incomplete")), flush=True)
+                # THE EFFECTIVE SAMPLE SIZE. Residuals on one contract share
+                # one binary outcome, so the contract is the independent
+                # draw and the fill count must never be read as n.
+                print("ECON_N %s %s %s | fills=%s contracts=%s "
+                      "residContracts=%s | winByFill=%s winByContract=%s" % (
+                          w.get("symbol"), lbl[:20], _leg,
+                          ex.get("residual_settled"),
+                          ex.get("independent_contracts"),
+                          ex.get("residual_contracts"),
+                          (ex.get("residual_win_rate") or {}).get("p"),
+                          (ex.get("residual_win_rate_by_contract")
+                           or {}).get("p")), flush=True)
             for _t, cp in sorted((fs.get("checkpoints") or {}).items(),
                                  key=lambda kv: int(kv[0])):
                 fr = cp.get("flip_requires") or {}

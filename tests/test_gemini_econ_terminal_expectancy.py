@@ -122,9 +122,9 @@ def test_expectancy_splits_by_leg_and_the_legs_do_not_contaminate():
 
 
 def test_the_confidence_interval_brackets_the_point_estimate_and_narrows():
-    few = [row(seq_id=i, first_fill_price="0.40",
+    few = [row(seq_id=i, symbol="S%d" % i, first_fill_price="0.40",
                settlement_leg=("YES" if i % 2 else "NO")) for i in range(8)]
-    many = [row(seq_id=i, first_fill_price="0.40",
+    many = [row(seq_id=i, symbol="S%d" % i, first_fill_price="0.40",
                 settlement_leg=("YES" if i % 2 else "NO"))
             for i in range(200)]
     a, b = TM.expectancy(few), TM.expectancy(many)
@@ -145,8 +145,8 @@ def test_wilson_never_leaves_the_unit_interval_at_the_extremes():
 
 # ------------------------------------------------------------ checkpoints
 def test_a_checkpoint_reports_the_sign_and_whether_it_is_certain():
-    rows = [row(seq_id=i, first_fill_price="0.40", settlement_leg="NO")
-            for i in range(25)]
+    rows = [row(seq_id=i, symbol="S%d" % i, first_fill_price="0.40",
+                settlement_leg="NO") for i in range(25)]
     cp = TM.checkpoint(rows, target=20, leg="YES")
     assert cp["reached"] is True
     assert cp["sign"] == "NEGATIVE"
@@ -154,10 +154,11 @@ def test_a_checkpoint_reports_the_sign_and_whether_it_is_certain():
 
 
 def test_a_checkpoint_says_what_the_REMAINING_sample_must_do_to_flip_it():
-    rows = ([row(seq_id=i, matched=True,
-                 pair_economics={"net_pair_economics": "0.0011337", "matched_qty": "0.01"})
+    rows = ([row(seq_id=i, symbol="M%d" % i, matched=True,
+                 pair_economics={"net_pair_economics": "0.0011337",
+                                 "matched_qty": "0.01"})
              for i in range(10)]
-            + [row(seq_id=100 + i, first_fill_price="0.40",
+            + [row(seq_id=100 + i, symbol="R%d" % i, first_fill_price="0.40",
                    settlement_leg="NO") for i in range(2)])
     cp = TM.checkpoint(rows, target=20, leg="YES")
     fr = cp["flip_requires"]
@@ -171,10 +172,13 @@ def test_a_checkpoint_says_what_the_REMAINING_sample_must_do_to_flip_it():
 
 
 def test_the_checkpoint_sign_is_UNCERTAIN_when_the_interval_straddles_zero():
-    rows = [row(seq_id=1, matched=True,
-                pair_economics={"net_pair_economics": "0.0011337", "matched_qty": "0.01"}),
-            row(seq_id=2, first_fill_price="0.40", settlement_leg="NO"),
-            row(seq_id=3, first_fill_price="0.40", settlement_leg="YES")]
+    rows = [row(seq_id=1, symbol="A", matched=True,
+                pair_economics={"net_pair_economics": "0.0011337",
+                                "matched_qty": "0.01"}),
+            row(seq_id=2, symbol="B", first_fill_price="0.40",
+                settlement_leg="NO"),
+            row(seq_id=3, symbol="C", first_fill_price="0.40",
+                settlement_leg="YES")]
     cp = TM.checkpoint(rows, target=50, leg="YES")
     assert cp["reached"] is False
     assert cp["sign_is_certain_at_95"] in (False, None)
@@ -252,3 +256,50 @@ def test_the_breakeven_at_the_CORRECTED_per_contract_pair_net():
     be = TM.breakeven_residual(10 / 14, per_contract)
     r = be["breakeven_residual_net_per_contract_usd"]
     assert r == pytest.approx(-0.0118094, abs=1e-6)
+
+
+# ----------------------------------------------- the clustered bootstrap
+def test_residuals_on_ONE_contract_are_ONE_draw_not_many():
+    """THE DEFECT THE LIVE RUN EXPOSED. Eight residuals on one contract all
+    settle on that contract's single binary outcome, and resampling them as
+    independent produced the degenerate interval [0.4856, 0.4856]."""
+    same = [row(seq_id=i, symbol="ONE", first_fill_price="0.40",
+                settlement_leg="YES") for i in range(8)]
+    e = TM.expectancy(same)
+    assert e["residual_settled"] == 8
+    assert e["residual_contracts"] == 1
+    assert e["independent_contracts"] == 1
+    ci = e["e_cycle_ci"]
+    assert ci["lo"] is None and ci["hi"] is None
+    assert "one outcome" in ci["why"]
+    # and a checkpoint must not call that certainty
+    cp = TM.checkpoint(same, target=20)
+    assert cp["sign_is_certain_at_95"] is None
+
+
+def test_spreading_the_SAME_fills_over_contracts_widens_the_interval():
+    kw = dict(first_fill_price="0.40")
+    clustered = ([row(seq_id=i, symbol="A", settlement_leg="YES", **kw)
+                  for i in range(10)]
+                 + [row(seq_id=10 + i, symbol="B", settlement_leg="NO", **kw)
+                    for i in range(10)])
+    spread = [row(seq_id=i, symbol="S%d" % i,
+                  settlement_leg=("YES" if i < 10 else "NO"), **kw)
+              for i in range(20)]
+    a, b = TM.expectancy(clustered), TM.expectancy(spread)
+    assert a["e_cycle_usd"] == pytest.approx(b["e_cycle_usd"])
+    assert a["independent_contracts"] == 2
+    assert b["independent_contracts"] == 20
+    # same point estimate, same fill count, VERY different honesty about it
+    assert (a["e_cycle_ci"]["hi"] - a["e_cycle_ci"]["lo"]) > \
+           (b["e_cycle_ci"]["hi"] - b["e_cycle_ci"]["lo"])
+
+
+def test_the_residual_win_rate_is_also_reported_per_CONTRACT():
+    rows = ([row(seq_id=i, symbol="A", settlement_leg="YES",
+                 first_fill_price="0.40") for i in range(9)]
+            + [row(seq_id=9, symbol="B", settlement_leg="NO",
+                   first_fill_price="0.40")])
+    e = TM.expectancy(rows)
+    assert e["residual_win_rate"]["p"] == pytest.approx(0.9)      # by fill
+    assert e["residual_win_rate_by_contract"]["p"] == pytest.approx(0.5)
