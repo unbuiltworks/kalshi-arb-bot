@@ -287,7 +287,11 @@ window-level attribution only, **never** merged into trading P&L.
 
 1. Does the frozen habitat selector retain predictive power on the fresh
    prospective cohort opened 2026-09-20T19:52:46Z? First read scheduled
-   2026-09-20T22:01Z.
+   2026-09-20T22:01Z. The selector is frozen: features, signs, weights, tercile
+   cutoff, cohort definition, success condition and exclusion rules are not to be
+   modified now that prospective data has begun. Reporting requirements and both
+   preregistered branches are in
+   `analysis/pmus/HABITAT_PROSPECTIVE_REPORTING_SPEC.md`.
 2. If it does: does the frozen L5 maker-ladder engine, applied only to selected
    markets, produce materially different economics from the broad-cohort −8.68%?
 3. Does any executable venue or category available to us exhibit I ≈ 0.083
@@ -297,6 +301,26 @@ window-level attribution only, **never** merged into trading P&L.
    can be worth.
 
 *Remove entries here when resolved. Do not accumulate stale TODOs.*
+
+---
+
+## 8a. Canonical measurement rule — permanent
+
+> **RAW IMBALANCE CANNOT BE COMPARED ACROSS UNEQUAL PRINT COUNTS.
+> `I_excess`, OR MATCHED-SAMPLE INFERENCE, IS CANONICAL.**
+
+A perfectly balanced market still measures non-zero imbalance from finite flow:
+E[I] = 0.246 at n=10, 0.185 at n=18, 0.112 at n=50, 0.079 at n=100, 0.003 at
+n=58,312. L5's 0.083 came from 58,312 fills and is therefore nearly all real; the
+same 0.083 in an 18-print window sits *below* the floor and is evidence of
+nothing. This rule is what killed graveyard #9, and it applies to **every venue
+and category** this framework is pointed at, not just PMUS.
+
+Implemented in `analysis/pmus/imbalance_sampling.py`, locked by
+`tests/test_imbalance_sampling.py`. `compare_raw()` raises rather than returning a
+number when the print counts differ. Uncertainty on any arm-to-arm separation uses
+a **cluster bootstrap over markets**, never over rows: rows from one market share
+its book, its flow and its crowd.
 
 ---
 
