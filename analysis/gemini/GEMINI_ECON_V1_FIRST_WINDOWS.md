@@ -94,3 +94,77 @@ provisional evidence about the gate rather than a measurement of the market.
 3. Only then read the entry-admission rate as evidence about the market.
 
 Doing (3) before (1) and (2) would report a gate defect as a market finding.
+
+---
+
+# Update — WS re-sourcing live, 2026-09-20 ~13:44–13:47Z
+
+## The re-source worked, and it is visible in the refusals
+
+```
+ECON_WHY GEMI-BTC05M2609201345-UP  {'SPREAD': 'spread 0.16 above 0.08',
+                                    'FLOW_REVERSIBLE': 'only 1 prints ...',
+                                    'NOT_CONCENTRATED': '100.0% of volume ...'}
+ECON_WHY GEMI-BTC05M2609201350-UP  {'SPREAD': 'spread 0.23 above 0.08'}
+```
+
+Two things changed against the polled tape:
+
+- the socket sees **1 print** where the poll reported **0** — and the refusal is
+  now a measurement rather than an absence;
+- in the second window **`FLOW_REVERSIBLE` does not appear at all** — the flow
+  gates **passed**. `SPREAD` is the sole remaining blocker.
+
+The 120-second socket warm-up predicted before deploy is visible too: early
+cycles carry `flow_bucket: unknown` with `flow_source: UNVOUCHED`, because a
+socket that has just connected cannot vouch for a trailing 120s window. Those
+rows pool into their own cells and never mix with measured-flow cells.
+
+## The spread distribution, measured rather than assumed
+
+```
+BTC5m|121-300|0.56-0.75|unknown  n=12  med=0.230  p90=0.260
+BTC5m|121-300|0.46-0.55|unknown  n=2   med=0.220
+BTC5m|121-300|0.76-0.90|thin     n=2   med=0.195
+BTC5m|121-300|0.56-0.75|unknown  n=2   med=0.315   (second window)
+```
+
+**Typical BTC5m spread is 0.20–0.32 against a preregistered bound of 0.08** —
+the bound is roughly 3–4× too tight. That is now a distribution rather than the
+single anecdote (0.05) it was set from.
+
+**It is still not being moved.** `cells_sufficient = 0`: no cell has reached the
+preregistered floor of 30 observations. The instruction was to measure first,
+and the measurement has begun, not finished.
+
+## An early markout signal, flagged and deliberately under-read
+
+Touch movement beside each observation:
+
+```
+mk = {'8': 1.0, '30': 6.5, '60': 14.5}     n=12
+```
+
+The touch moves about **1 tick in 8 seconds**, ~6.5 in 30s, ~14.5 in 60s.
+
+That bears directly on the event-driven hypothesis, and it points the *opposite*
+way to the A+B replay's "the touch commonly moves 2–7 ticks between 8-second
+cycles". If the touch really moves ~1 tick per 8s here, the 8s cadence is much
+less of a constraint than that replay implied, and the case for event-driven
+decisions weakens rather than strengthens.
+
+**n is 12.** This is a signal to test later under the preregistered
+event-driven comparison, not a finding. It is recorded now so it cannot be
+discovered after the fact and told as though it had been predicted.
+
+## Still not done, in the agreed order
+
+1. ~~re-source flow from the socket~~ — **done**, running at the unchanged 8s
+   cadence
+2. accumulate the spread census to `cells_sufficient > 0`, then preregister a
+   treatment — **in progress**
+3. hard-veto vs inventory-EV completion — the counterfactual ledger is live and
+   opens a fork at every veto; no fork has resolved yet
+4. entry admission
+5. event-driven challenger — **off**, and a test asserts neither `shadow_soak`
+   nor the arm reaches `event_driver`
