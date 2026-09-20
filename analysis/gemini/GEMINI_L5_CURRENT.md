@@ -4,7 +4,17 @@
 
 # Gemini L5 — Current State
 
-*Last updated 2026-09-20T20:05Z.*
+*Last updated 2026-09-20T20:00Z.*
+
+> **WHERE THIS FILE LIVES.** Branch
+> `claude/gemini-btc-economic-viability-h3u7zl`. It is **not on `main`**, so a
+> reviewer browsing the repository's default branch will not see it. Use
+> `?ref=claude/gemini-btc-economic-viability-h3u7zl` or check out that branch.
+>
+> **HEADLINE STATUS: the faithful-transfer question is UNRESOLVED.** The
+> experiment has been running since 2026-09-20T19:42Z and no prospective
+> contract has yet produced a fill. Nothing here claims Gemini works, and
+> nothing here claims Gemini failed.
 
 ## 1. Objective
 
@@ -19,7 +29,7 @@ The primary outcome is **terminal net economics after settlement** under
 executable assumptions — not markouts, not pair basis, not price
 availability, not intra-window matched inventory.
 
-## 2. Current Experiment
+## 2. CURRENT Experiment — the faithful prospective test
 
 | field | value |
 |---|---|
@@ -34,7 +44,8 @@ availability, not intra-window matched inventory.
 | status | **SHADOW**. No session is constructed; no `Driver.place`/`Driver.cancel` reference exists on this path |
 | mutations | `mutations_sent: 0` on every heartbeat, both cohorts |
 | started | 2026-09-20T19:42:02Z |
-| operational | BTC5m `windows: 1`, `cycles: 45`; BTC15m `windows: 0`, `cycles: 50`; `errors: 0`, `restarts: 0` (19:53:26Z) |
+| operational (point-in-time) | 19:58:38Z: BTC5m `GEMI-BTC05M2609202000-UP`, `windows: 2`, `cycles: 73`, last rollover `GEMI-BTC05M2609201955-UP` COMPLETED 19:54:39Z. BTC15m `GEMI-BTC15M2609202000-UP`, `windows: 0`, `cycles: 85`, first window not yet closed. `errors: 0`, `restarts: 0`, `mutations_sent: 0` |
+| collection-alive evidence | two `L5F_ACTIONS` lines emitted, both BTC5m. **This is a point-in-time observation, not a standing claim of health**; liveness must be re-confirmed from current logs before any result is read from this service |
 
 **Why this experiment exists.** Every previous Gemini service overrode the
 native L5 policy with `GEMINI_RECYCLE`, which vetoes the `EXTEND` the frozen
@@ -93,10 +104,12 @@ nothing in the canonical analysis determines a replacement. The surface quotes
 both outcomes and lets the market choose. That is the neutral implementation,
 **not a finding**, and it must not be reported as one.
 
-## 5. Previous Gemini Drift
+## 5. PREVIOUS ADAPTATION evidence — Gemini drift (not canonical L5)
 
-Prior Gemini work introduced venue-specific adaptations. **None of these is
-canonical L5.** They are preserved as experiments and history, and several
+Everything in this section is **PREVIOUS ADAPTATION evidence**. It was
+produced under `GEMINI_RECYCLE` or under the econ arms, **not** under the
+faithful policy, and it is therefore not evidence about L5 transfer. **None of
+these is canonical L5.** They are preserved as experiments and history, and several
 still run in `gemini-econ-shadow`, but they are not the current faithful test.
 
 - `GEMINI_RECYCLE` (`POLICY_B`) — vetoes EXTEND once residual exists
@@ -180,11 +193,16 @@ direction.
 
 **No shadow economics are ever to be called realized.**
 
-## 9. Current Money Question
+## 9. Current Money Question — STATUS: UNRESOLVED
 
 > **Does `FROZEN_L5_NATIVE` continuous inventory produce positive terminal
 > SHADOW economics on Gemini BTC5m/BTC15m under the corrected symmetric
 > execution model?**
+
+**Status: UNRESOLVED pending prospective evidence.** No prospective
+contract has produced a fill yet, so none of outcomes A–D in §10 is
+supported. Any earlier Gemini number is PREVIOUS ADAPTATION evidence (§5) and
+does not answer this question.
 
 Required outputs, **BTC5m and BTC15m separately, never pooled**:
 
@@ -233,17 +251,21 @@ Gemini-specific strategy.
 
 ## 12. Current Next Action
 
-`gemini-l5-faithful` has been operationally verified on all eight checks —
+The eight operational checks passed against runtime output at 19:58:38Z —
 serving `f689e6b`, `policy=FROZEN_L5_NATIVE`, econ arms absent from the
-heartbeat, both cohorts bound and cycling, isolated state root and volume,
+heartbeat (only `EXEC_A_PLUS_B` on BTC5m; `L5_ADAPTED_GEMINI_BTC15M_V2` plus
+`EXEC_A_PLUS_B` on BTC15m, against six arms in `gemini-econ-shadow` over the
+same minutes), both cohorts bound and cycling, isolated state root and volume,
 `mutations_sent: 0`, `errors: 0`, `restarts: 0`, control untouched at
-`a44de245` — and the first BTC5m `L5F_ACTIONS` has printed
-(`requested={'OPEN': 26}`, `rested={'OPEN': 26}`, no fills, nothing blocked,
-`policyVetoed={}`). BTC15m has not yet closed a window. The experiment is
-therefore **frozen**: accumulate prospective settled independent contracts on
-both cohorts and make no strategy, threshold, cap, TTE or policy change while
-collection runs. The next substantive report answers §9 against §10, BTC5m and
-BTC15m separately.
+`a44de245` — and two BTC5m `L5F_ACTIONS` lines have printed
+(`requested={'OPEN': 46}`, `rested={'OPEN': 46}`, no fills, nothing blocked,
+`policyVetoed={}`). **That is a point-in-time liveness observation, not a
+standing guarantee: re-confirm from current logs before reading any result.**
+BTC15m has not yet closed a window. The experiment is frozen; accumulate
+prospective settled independent contracts on both cohorts and make no
+strategy, threshold, cap, TTE or policy change while collection runs. The next
+substantive report answers §9 against §10, BTC5m and BTC15m separately, and
+until then the faithful-transfer question stays **UNRESOLVED**.
 
 ## 13. Change Log
 
@@ -251,7 +273,8 @@ BTC15m separately.
 
 | when | SHA | what | why | DGP changed? | prior evidence comparable? |
 |---|---|---|---|---|---|
-| 2026-09-20T20:05Z | *(this doc)* | Canonical current-state handoff created | Single entry point for independent reviewers | **No** | Yes |
+| 2026-09-20T20:00Z | `(pending)` | Branch-location note, UNRESOLVED headline, CURRENT/PREVIOUS labelling, fresh 19:58Z operational reading | Reviewer could not find the file on `main`; status wording tightened so liveness is not read as a standing claim | **No** (docs only) | Yes |
+| 2026-09-20T19:57Z | `13f56a3` | Canonical current-state handoff created | Single entry point for independent reviewers | **No** | Yes |
 | 2026-09-20T19:43Z | `3862722` | `PRE_LIVE_CHECKLIST.md` — PL-1, PL-2 + four more | Record inert/absent controls before they reach live | **No** (docs only) | Yes |
 | 2026-09-20T19:39Z | `f689e6b` | Action census: `would_be_action` on holds, `bound` on envelope holds, `L5F_ACTIONS` | Separate MODEL ACTION from EXECUTED SHADOW ACTION so a safety overlay is never read as L5 behaviour | **No** — labelling and counting only; `classify()` reads inventory alone | Yes |
 | 2026-09-20T19:34Z | `b86bc05` | `gemini-l5-faithful` service; `--policy FROZEN_L5_NATIVE`, `GEMINI_ECON_ARM=0` | The faithful continuous L5 process had never been run on Gemini | **YES — this is the experiment.** Not comparable with `GEMINI_RECYCLE` runs | **No** — different policy |
