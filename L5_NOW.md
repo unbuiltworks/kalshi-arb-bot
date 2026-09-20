@@ -24,7 +24,20 @@ records what the live sports-transfer experiment currently establishes.
    out of sample. It is not a gate, filter or selection rule, and nothing in
    the shipped path consults it.
 
-## 0a. DISCOVERY DEFECT — the PMUS slate has been 1/5 of the live venue
+## 0a. DISCOVERY DEFECT — FIXED AND DEPLOYED 2026-09-20T15:03Z
+
+**Status: corrected in the durable collector** (`5d70284d`, Railway deployment
+`62a54463`, SUCCESS 15:03:31Z) and in the local analysis collectors
+(`/v2/sports`, 264 operational slugs, sampling-frame marker written to
+`nfl_sunday.jsonl`, `shadow_pmus.jsonl`, `flow_pmus.jsonl` at 15:27Z).
+
+**EVERY PMUS VENUE-WIDE CONCLUSION DATED BEFORE 2026-09-20T15:03Z IS SUPERSEDED
+AS A VENUE STATEMENT.** Those numbers remain valid *conditional on the
+50-league slate* and are retained as such; none of them may be quoted as a
+property of PMUS. This applies to sections 1–5 below, to the habitat rankings,
+to the live-slate counts, and to the compatible-flow cohort's denominator.
+
+### The original defect
 
 **`/v2/leagues` is not the venue's league universe.** It returns 50 leagues.
 `/v2/sports` returns **265**, every one but `polyclas` marked
@@ -68,6 +81,24 @@ slate as its denominator.
 Not deployed. The durable collector is mid-NFL-PRE baseline for the 17:00Z
 natural experiment and a redeploy resets it. Recommended after that completes.
 
+## 0a-bis. What the corrected universe immediately showed
+
+First durable books window after the fix (100 KB, 15:18:21–15:18:29Z, 231 rows)
+carried **13 leagues the 50-league index could not reach**: `tdp` 11, `itfwo` 7,
+`nor1` 5, `itfme` 4, `khl` 3, `alsv` 2, `atp`, `ligpor`, `bra`, `els`, `swsl`,
+`lal2`, `nls`. `wta`/`cfb`/`dota2`/`setkawoua` were absent from that particular
+8-second window, which is not evidence of absence at that cadence.
+
+Local analysis slate after the same fix: **300 markets across 98 events in 40
+leagues** (was ~16 leagues), now including `odicr`, `odcup`, `dota2`,
+`setkameua`, `itfwo`, `atp`, `atpdb`, `utr`, `bbl`, `bcl`, `lkl`, `etpl`.
+
+**One suspicion retired rather than left open.** Two local collectors selected
+liveness via `eventState.live && !ended` while a third used the venue's own
+`event.live` boolean. Measured across 1791 events: 96 vs 96, intersection 96,
+**zero disagreement either way**. The two rules are equivalent on this venue;
+no change was made and no further narrowing exists there.
+
 ## 0b. Two accounting defects in the shipped PMUS_SURFACE report
 
 1. **`OPPOSITE_RECYCLING` is pooled across markets.** `recycling()` concatenates
@@ -86,6 +117,54 @@ natural experiment and a redeploy resets it. Recommended after that completes.
 
 Neither is a data-loss defect: the `evidenced_fill` rows on the volume retain
 the slug, so the underlying evidence is intact and recomputable.
+
+## 0b-bis. Recycling recomputed STRICTLY WITHIN SLUG
+
+The pooled `OPPOSITE_RECYCLING` is not used anywhere below. Rebuilt from the
+per-market report of the 14:17:52Z surface session (progress row 15:20:17Z,
+750 cycles, **49 resident surfaces**, verdict `TWO_SIDED_EVIDENCED_FILLS`):
+
+| quantity | value |
+|---|---|
+| surfaces resident | 49 |
+| markets with any evidenced fill | 14 |
+| **markets filled on BOTH sides (same-market recyclers)** | **7** |
+| markets with matched > 0 | 7 |
+| total evidenced fills | 50 |
+| fills inside a two-sided market | 42 (**84.0%**) |
+| same-market matched units | **15** |
+
+For contrast only, from the same row: pooled `n_opposite_within_300s` = 45/50
+(90.0%). **That number pairs fills across different markets and is not a
+same-market statistic.** The 84.0% above is a *market-level* measure — fills in
+a market that reached both sides at some point — and is therefore an upper
+bound on any timed same-market recycling rate, not the rate itself. The timed
+rate needs per-fill timestamps and is not yet computed.
+
+### The seven same-market recyclers, ranked
+
+| slug | league | PLACED | FLOW | FILL | MATCHED | flow/placed | fill/flow |
+|---|---|---|---|---|---|---|---|
+| `aec-odicr-zim-aus-2026-09-20` | ODI cricket | 223 | 48 | 13 | **6** | 21.5% | 27.1% |
+| `aec-itfwo-sarems-petkon-2026-09-20` | ITF Womens | 286 | 95 | 6 | 3 | 33.2% | 5.5% |
+| `aec-dota2-aur-navi-2026-09-20` | Dota 2 | 33 | 10 | 7 | 2 | 30.3% | 58.3% |
+| `atc-lal-atm-rma-2026-09-20-rma` | La Liga | 107 | 42 | 5 | 1 | 39.3% | — |
+| `aec-cs2-lav-vexar-2026-09-20` | CS2 | 53 | 12 | 5 | 1 | 22.6% | — |
+| `aec-setkameua-skhser-smyvas-2026-09-20` | Setka Cup UA | 215 | 36 | 4 | 1 | 16.7% | — |
+| `aec-odcup-lei-mid-2026-09-20` | One-Day Cup | 110 | 11 | 2 | 1 | 10.0% | 18.2% |
+
+**Five of the seven — `odicr`, `itfwo`, `dota2`, `setkameua`, `odcup` — are in
+leagues the 50-league index could not reach.** Only `lal` and `cs2` were
+reachable. Cricket is the leading category (7 of 15 matched units), a sport
+that was **100% invisible** before the fix.
+
+Per-league matched-per-fill: `odcup` 0.50, `itfwo` 0.50, `odicr` 0.46,
+`dota2` 0.29, `setkameua` 0.25, `lal` 0.17, `cs2` 0.14.
+
+This is SHADOW/MODELED throughout. `EVIDENCED_FILL` is a queue-ahead model of an
+unpublished queue, never venue confirmation, never submitted, filled, settled or
+realized. The surface watches ~49 of 1527 markets in the tape, so this ranks
+what it watches, not the venue.
 
 ## 0c. Where PMUS actually recycles L5-style inventory
 
@@ -145,6 +224,10 @@ property of the slate, not an established property of the venue. The esports
 habitat claim stays withdrawn.
 
 ## 1. The PMUS zero-match is NOT a liquidity failure
+
+> **SUPERSEDED AS A VENUE STATEMENT (see 0a).** Computed on the
+> 50-league slate; valid only conditional on it.
+
 
 Across the venue-separated chain run:
 
