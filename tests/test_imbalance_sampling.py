@@ -71,3 +71,28 @@ def test_cluster_bootstrap_resamples_markets_not_rows():
 
 def test_cluster_bootstrap_refuses_a_single_cluster():
     assert S.cluster_bootstrap_ci([{"slug": "a", "v": 1.0}], lambda rs: 1.0) is None
+
+
+def test_exact_branch_survives_large_n():
+    """REGRESSION. The exact branch used 2.0 ** n, a float, which overflows
+    above n = 1023 -- so every n from 1024 to 4000 raised OverflowError instead
+    of returning a floor. Found while measuring a 693,112-print Kalshi tape."""
+    for n in (1023, 1024, 2048, 4001, 20000):
+        v = S.noise_floor(n)
+        assert 0.0 < v < 1.0, (n, v)
+
+
+def test_approximation_agrees_with_exact_at_the_boundary():
+    """The normal approximation takes over at EXACT_MAX_N; it must not introduce
+    a step change there."""
+    n = S.EXACT_MAX_N
+    exact = S.noise_floor(n)
+    approx = (2.0 / (3.141592653589793 * n)) ** 0.5
+    assert abs(exact - approx) / exact < 0.001
+
+
+def test_very_large_n_floor_is_tiny_but_positive():
+    """L5's 58,312-fill reading has an essentially zero floor -- which is why
+    its 0.083 is real and an 18-print 0.083 is not."""
+    assert S.noise_floor(58312) < 0.005
+    assert S.noise_floor(58312) > 0.0

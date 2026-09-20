@@ -37,6 +37,11 @@ import random
 
 _FLOOR_CACHE = {}
 
+# Above this the exact sum costs more than it is worth and the normal
+# approximation sqrt(2/(pi*n)) is accurate to better than 0.1% -- verified
+# against the exact value at the boundary by a regression test.
+EXACT_MAX_N = 20000
+
 
 def noise_floor(n):
     """E[ |2y-n| / n ] for y ~ Binomial(n, 1/2): the imbalance a PERFECTLY
@@ -46,10 +51,12 @@ def noise_floor(n):
         raise ValueError("noise_floor needs at least one print")
     if n in _FLOOR_CACHE:
         return _FLOOR_CACHE[n]
-    if n > 4000:                       # exact terms underflow long before this
+    if n > EXACT_MAX_N:
         v = math.sqrt(2.0 / (math.pi * n))
     else:
-        v = sum(math.comb(n, y) * abs(2 * y - n) for y in range(n + 1)) / (n * 2.0 ** n)
+        # INTEGER 2 ** n, never 2.0 ** n: the float form overflows above n = 1023
+        # and silently broke the exact branch for 1024 <= n <= 4000.
+        v = sum(math.comb(n, y) * abs(2 * y - n) for y in range(n + 1)) / (n * 2 ** n)
     _FLOOR_CACHE[n] = v
     return v
 
