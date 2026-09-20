@@ -156,6 +156,12 @@ class Sequence:
     complement_fill_qty: Optional[D] = None
 
     markouts: Dict[str, float] = field(default_factory=dict)
+    #: WHAT THE MARKOUT WAS ACTUALLY MEASURED AGAINST. The horizon is the
+    #: REQUESTED age; the observation that satisfied it is the first cycle at
+    #: or after that age, so the realised age is >= h and was not recorded
+    #: anywhere until now. Reporting a 68s reading as "60s" is the same class
+    #: of quiet fiction the pre-fill ring already refuses to commit.
+    markout_meta: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     max_adverse_ticks: float = 0.0
     best_exit_price: Optional[D] = None
     residual_qty: Optional[D] = None
@@ -211,16 +217,47 @@ class Sequence:
             return
         held, comp = self.first_fill_leg, (
             "NO" if self.first_fill_leg == "YES" else "YES")
-        age = float(t) - float(self.first_fill_t or t)
+        # `self.first_fill_t or t` would fall back to `t` for a fill stamped
+        # exactly 0.0, making every age zero and every markout unrecordable.
+        # Latent rather than live -- time.time() is never 0 -- but it is the
+        # expression this audit is about, so it is stated explicitly.
+        age = float(t) - float(self.first_fill_t
+                               if self.first_fill_t is not None else t)
 
         b = _bid(book, held)
         if b is not None and self.tick > 0 and self.first_fill_price is not None:
             mo = float((b - self.first_fill_price) / self.tick)
             self.max_adverse_ticks = min(self.max_adverse_ticks, mo)
+            _set_now: List[str] = []
             for h in MARKOUT_HORIZONS_S:
                 k = str(h)
                 if k not in self.markouts and age >= h:
                     self.markouts[k] = mo
+                    _set_now.append(k)
+                    self.markout_meta[k] = {
+                        "requested_age_s": float(h),
+                        "realised_age_s": round(age, 3),
+                        "age_error_s": round(age - float(h), 3),
+                        "ref_t": float(t),
+                        "ref_field": "held_leg_bid",
+                        "ref_price": str(b),
+                        "entry_price": str(self.first_fill_price),
+                        "tick": str(self.tick),
+                        "formula": ("markout_ticks = (held_leg_bid - "
+                                    "first_fill_price) / tick; POSITIVE is "
+                                    "favourable to the maker who is LONG the "
+                                    "held leg"),
+                    }
+            # ALIASING. One observation can satisfy several horizons at once
+            # -- if the book was unreadable for two minutes the first reading
+            # afterwards fills 8s, 30s, 60s and 120s with the SAME number.
+            # Those horizons are then not independent measurements, and any
+            # claim about markout DETERIORATING with horizon is void on such
+            # a row. Recorded per horizon rather than inferred later.
+            if len(_set_now) > 1:
+                for k in _set_now:
+                    self.markout_meta[k]["aliased_with"] = [
+                        x for x in _set_now if x != k]
             # best price we could have REDUCED/EXITED at, passively (the ask)
             a = _dec(((book or {}).get(held.lower()) or {}).get("ask"))
             if a is not None and (self.best_exit_price is None
@@ -295,6 +332,7 @@ class Sequence:
             # joining on it is what desynchronised the two stores.
             "first_fill_t": self.first_fill_t,
             "markout_ticks_by_horizon_s": dict(self.markouts),
+            "markout_measurement": dict(self.markout_meta),
             "max_adverse_markout_ticks": self.max_adverse_ticks,
             "complement_price_appeared": self.complement_price_t is not None,
             "time_to_complement_price_s": (

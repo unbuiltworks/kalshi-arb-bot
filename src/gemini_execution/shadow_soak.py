@@ -1257,6 +1257,29 @@ def _print_econ(w) -> None:
                        " | *** DISAGREEMENT *** %s %s"
                        % (rec_.get("why"), rec_.get("mismatches")[:3]))),
                   flush=True)
+        for _rr in (e.get("toxicity_reconciliation_rows") or [])[:10]:
+            print("ECON_TOX_ROW %s %s id=%s obs=%s %s %s | t=%s/%s agree=%s "
+                  "| px=%s/%s qty=%s | cmp_t=%s reqAge=%s realAge=%s "
+                  "err=%s aliased=%s | ref=%s@%s mo60_fs=%s | "
+                  "mo60_tox=%s agree=%s toxic=%s join=%s" % (
+                      w.get("symbol"), lbl[:20], _rr.get("fill_seq_id"),
+                      _rr.get("observation_id"),
+                      _rr.get("leg_fill_sequence"), _rr.get("leg_toxicity"),
+                      _rr.get("fill_t_fill_sequence"),
+                      _rr.get("fill_t_toxicity"), _rr.get("fill_t_agrees"),
+                      _rr.get("fill_price_fill_sequence"),
+                      _rr.get("fill_price_toxicity"), _rr.get("quantity"),
+                      _rr.get("comparison_t_selected"),
+                      _rr.get("comparison_requested_age_s"),
+                      _rr.get("comparison_realised_age_s"),
+                      _rr.get("comparison_age_error_s"),
+                      _rr.get("aliased_with_horizons"),
+                      _rr.get("reference_field_fill_sequence"),
+                      _rr.get("reference_price_fill_sequence"),
+                      _rr.get("markout_60s_fill_sequence"),
+                      _rr.get("markout_60s_toxicity"),
+                      _rr.get("markouts_agree"), _rr.get("toxicity_label"),
+                      _rr.get("join_method")), flush=True)
         tox = e.get("toxicity_dataset") or {}
         if tox.get("rows"):
             print("ECON_TOX %s %s rows=%s labelled=%s toxic=%s | byLeg=%s" % (

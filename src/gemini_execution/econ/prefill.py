@@ -333,6 +333,64 @@ class ToxicityDataset:
                       "leg-based conclusion is void until this is explained.")
         return out
 
+    def reconciliation_rows(self, fill_rows: Sequence[Mapping[str, Any]], *,
+                            limit: int = 25) -> List[Dict[str, Any]]:
+        """THE ROW-LEVEL TABLE, for every fill present in BOTH stores.
+
+        One row per shared fill id, carrying what each store measured and the
+        sample it measured against. Only rows joined by fill id appear: a
+        legacy row has no id and cannot honestly be placed in this table.
+        """
+        by_id = {r.get("seq_id"): r for r in fill_rows
+                 if r.get("seq_id") is not None}
+        out: List[Dict[str, Any]] = []
+        for r in self.rows:
+            o = r.get("outcome") or {}
+            sid = o.get("fill_seq_id")
+            if sid is None or sid not in by_id:
+                continue
+            f = by_id[sid]
+            meta = (f.get("markout_measurement") or {}).get("60") or {}
+            theirs = (f.get("markout_ticks_by_horizon_s") or {}).get("60")
+            out.append({
+                "fill_seq_id": sid,
+                "observation_id": f.get("observation_id"),
+                "symbol": f.get("symbol"),
+                "cohort": f.get("cohort"),
+                "arm": r.get("arm"),
+                "leg_fill_sequence": f.get("first_fill_leg"),
+                "leg_toxicity": r.get("leg"),
+                "leg_agrees": (str(f.get("first_fill_leg") or "").upper()
+                               == str(r.get("leg") or "").upper()),
+                "fill_t_fill_sequence": f.get("first_fill_t"),
+                "fill_t_toxicity": r.get("t"),
+                "fill_t_agrees": (f.get("first_fill_t") == r.get("t")),
+                "fill_price_fill_sequence": f.get("first_fill_price"),
+                "fill_price_toxicity": r.get("price"),
+                "quantity": f.get("first_fill_qty"),
+                # what the 60s number was actually measured against
+                "comparison_t_selected": meta.get("ref_t"),
+                "comparison_requested_age_s": meta.get("requested_age_s"),
+                "comparison_realised_age_s": meta.get("realised_age_s"),
+                "comparison_age_error_s": meta.get("age_error_s"),
+                "aliased_with_horizons": meta.get("aliased_with"),
+                "reference_field_fill_sequence": meta.get("ref_field"),
+                "reference_price_fill_sequence": meta.get("ref_price"),
+                "markout_60s_fill_sequence": theirs,
+                "reference_field_toxicity": ("NONE -- the label is a COPY; "
+                                             "this store computes no markout"),
+                "markout_60s_toxicity": o.get("markout_60s_ticks"),
+                "markouts_agree": theirs == o.get("markout_60s_ticks"),
+                "toxicity_label": o.get("toxic"),
+                "join_method": o.get("join_method"),
+                "formula_fill_sequence": meta.get("formula"),
+                "formula_toxicity": ("toxic = markout_60s < 0, on the value "
+                                     "copied from fill_sequence"),
+            })
+            if len(out) >= limit:
+                break
+        return out
+
     # -- DURABILITY. The labelled cohort is the one thing a freeze exists to
     # accumulate, and the service runs restartPolicyType ALWAYS: a crash would
     # silently wipe hours of labelling and the wait would produce nothing.

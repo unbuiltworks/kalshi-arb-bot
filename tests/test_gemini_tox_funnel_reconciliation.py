@@ -34,6 +34,8 @@ from src.gemini_execution.econ import prefill as PF
 
 
 CYCLE_S = 8.0
+#: a realistic epoch stamp. 0.0 is falsy and was itself a latent defect.
+T0 = 1789000000.0
 OLD_TOLERANCE_S = 12.0
 
 
@@ -281,3 +283,123 @@ def test_there_is_exactly_one_markout_computation_in_the_system():
     kw = {k.arg: k.value for k in calls[0].keywords}
     assert "markout_60s" in kw
     assert not isinstance(kw["markout_60s"], ast.BinOp)
+
+
+# ------------------------------------------- what the 60s number measures
+def test_the_markout_records_the_sample_it_ACTUALLY_used_not_the_horizon():
+    """A 60s markout is taken at the first cycle at or AFTER 60s. At an 8s
+    cadence that lands anywhere in [60, 68), and nothing recorded which. The
+    realised age and its error now travel with the number."""
+    from decimal import Decimal as D
+
+    from src.gemini_execution.econ import fill_sequence as FS
+
+    led = FS.FillSequenceLedger(arm="PP_F0")
+    sq = led.candidate(cohort="btc5m", symbol="S", t=0.0, tte_s=250,
+                       leg="YES", price="0.40")
+    sq.note_rest(["YES"])
+    sq.note_fill({"leg": "YES", "price": "0.40", "qty": "1"}, t=T0)
+    book = {"yes": {"bid": "0.37", "ask": "0.45"},
+            "no": {"bid": "0.55", "ask": "0.63"}}
+    sq.observe(book=book, t=T0 + 65.0)            # first cycle at or after 60s
+
+    m = sq.markout_meta["60"]
+    assert m["requested_age_s"] == 60.0
+    assert m["realised_age_s"] == 65.0
+    assert m["age_error_s"] == 5.0
+    assert m["ref_t"] == T0 + 65.0
+    assert m["ref_field"] == "held_leg_bid"
+    assert m["ref_price"] == "0.37"
+    assert m["entry_price"] == "0.40"
+    # (0.37 - 0.40) / 0.01 = -3 ticks, negative = adverse to a long YES maker
+    assert sq.markouts["60"] == pytest.approx(-3.0)
+    assert "POSITIVE is favourable" in m["formula"]
+
+
+def test_ALIASING_one_late_reading_fills_every_horizon_with_the_same_number():
+    """THE DEFECT THIS EXPOSES. If the book is unreadable for two minutes the
+    first reading afterwards satisfies 8s, 30s, 60s and 120s at once, so the
+    four horizons are NOT independent measurements and any claim that markout
+    'deteriorates with horizon' is void on such a row."""
+    from src.gemini_execution.econ import fill_sequence as FS
+
+    led = FS.FillSequenceLedger(arm="PP_F0")
+    sq = led.candidate(cohort="btc5m", symbol="S", t=0.0, tte_s=250,
+                       leg="YES", price="0.40")
+    sq.note_rest(["YES"])
+    sq.note_fill({"leg": "YES", "price": "0.40", "qty": "1"}, t=T0)
+    sq.observe(book={"yes": {"bid": "0.30", "ask": "0.45"},
+                     "no": {"bid": "0.55", "ask": "0.70"}}, t=T0 + 130.0)
+
+    assert set(sq.markouts) == {"8", "30", "60", "120"}
+    assert len(set(sq.markouts.values())) == 1          # one number, four keys
+    assert sorted(sq.markout_meta["60"]["aliased_with"]) == ["120", "30", "8"]
+    assert sq.markout_meta["8"]["age_error_s"] == 122.0
+
+
+def test_a_normally_sampled_row_is_NOT_flagged_as_aliased():
+    from src.gemini_execution.econ import fill_sequence as FS
+
+    led = FS.FillSequenceLedger(arm="PP_F0")
+    sq = led.candidate(cohort="btc5m", symbol="S", t=0.0, tte_s=250,
+                       leg="YES", price="0.40")
+    sq.note_rest(["YES"])
+    sq.note_fill({"leg": "YES", "price": "0.40", "qty": "1"}, t=T0)
+    for dt, bid in ((9.0, "0.39"), (33.0, "0.38"), (62.0, "0.37"),
+                    (121.0, "0.36")):
+        sq.observe(book={"yes": {"bid": bid, "ask": "0.45"},
+                         "no": {"bid": "0.55", "ask": "0.61"}}, t=T0 + dt)
+    assert [sq.markouts[k] for k in ("8", "30", "60", "120")] == \
+        pytest.approx([-1.0, -2.0, -3.0, -4.0])
+    for k in ("8", "30", "60", "120"):
+        assert "aliased_with" not in sq.markout_meta[k]
+
+
+# ------------------------------------------------------ the row-level table
+def test_the_row_table_carries_every_field_the_audit_asked_for():
+    from src.gemini_execution.econ import fill_sequence as FS
+
+    led = FS.FillSequenceLedger(arm="PP_F0")
+    sq = led.candidate(cohort="btc5m", symbol="S", t=0.0, tte_s=250,
+                       leg="YES", price="0.40")
+    sq.note_rest(["YES"])
+    sq.note_fill({"leg": "YES", "price": "0.40", "qty": "1"}, t=T0 + 100.0)
+    sq.observe(book={"yes": {"bid": "0.37", "ask": "0.45"},
+                     "no": {"bid": "0.55", "ask": "0.63"}}, t=T0 + 165.0)
+    led.close_symbol("S", residual_qty="1")
+    frow = led.rows[0]
+
+    ds = PF.ToxicityDataset()
+    tox_row(ds, t=T0 + 100.0, leg="YES", price="0.40")
+    _exact_join(ds, [frow])
+
+    tbl = ds.reconciliation_rows([frow])
+    assert len(tbl) == 1
+    r = tbl[0]
+    for k in ("fill_seq_id", "observation_id", "symbol", "leg_fill_sequence",
+              "leg_toxicity", "fill_t_fill_sequence", "fill_t_toxicity",
+              "fill_price_fill_sequence", "quantity",
+              "comparison_t_selected", "comparison_realised_age_s",
+              "comparison_age_error_s", "reference_field_fill_sequence",
+              "reference_price_fill_sequence", "markout_60s_fill_sequence",
+              "markout_60s_toxicity", "toxicity_label", "join_method",
+              "formula_fill_sequence", "formula_toxicity"):
+        assert k in r, k
+    assert r["leg_agrees"] is True
+    assert r["fill_t_agrees"] is True
+    assert r["markouts_agree"] is True
+    assert r["comparison_age_error_s"] == 5.0
+    assert r["markout_60s_fill_sequence"] == pytest.approx(-3.0)
+    assert r["toxicity_label"] is True
+    assert "COPY" in r["reference_field_toxicity"]
+
+
+def test_a_LEGACY_row_never_appears_in_the_row_table():
+    """It has no fill id, so it cannot honestly be placed beside a fill."""
+    ds = PF.ToxicityDataset()
+    a = tox_row(ds, t=8.0)
+    PF.ToxicityDataset.label(a, markout_60s=-3.0, complement_filled=False,
+                             max_adverse_ticks=-3.0)
+    assert ds.reconciliation_rows([fill_row(seq_id=1, t_candidate=0.0,
+                                            first_fill_t=8.0,
+                                            markout_60s=-3.0)]) == []

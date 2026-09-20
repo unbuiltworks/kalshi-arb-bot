@@ -732,6 +732,10 @@ class GeminiEconArm:
                 # equal the fill row it claims to come from?
                 "toxicity_reconciliation": self.state.toxicity.reconcile(
                     self.state.fills.rows),
+                # the row-level table, for fills present in BOTH stores
+                "toxicity_reconciliation_rows":
+                    self.state.toxicity.reconciliation_rows(
+                        self.state.fills.rows),
                 "toxicity_walk_forward": TX.walk_forward(
                     self.state.toxicity.rows),
                 "attribution": self.state.attribution.report(),
