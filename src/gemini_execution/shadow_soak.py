@@ -867,6 +867,10 @@ def _print_econ(w) -> None:
                   sb.get("PAIRS_ABOVE_CEILING_defect_counter"),
                   sb.get("PRIMARY_net_cents_per_capital_dollar_minute"),
                   e.get("divergences")), flush=True)
+        why = sb.get("entry_refusal_example_reasons") or {}
+        if why:
+            print("ECON_WHY %s %s %s" % (w.get("symbol"), lbl[:20], why),
+                  flush=True)
 
 
 def _print_arms(w) -> None:

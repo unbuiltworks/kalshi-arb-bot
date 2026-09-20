@@ -87,6 +87,10 @@ class Scoreboard:
     entries_considered: int = 0
     entries_admitted: int = 0
     entry_refusals: Dict[str, int] = field(default_factory=dict)
+    #: one example reason per gate. A gate name alone cannot distinguish
+    #: "only 2 prints on the tape" from "alternation 0.1 -- one-directional",
+    #: and those call for opposite responses.
+    entry_refusal_reasons: Dict[str, str] = field(default_factory=dict)
 
     #: completion admission, the veto's own record
     completions_considered: int = 0
@@ -129,6 +133,10 @@ class Scoreboard:
         for g in (decision.get("failed_gates") or
                   decision.get("unknown_gates") or ["UNKNOWN"]):
             self.entry_refusals[g] = self.entry_refusals.get(g, 0) + 1
+        for row in (decision.get("gates") or []):
+            if row.get("pass") is False and row.get("why"):
+                self.entry_refusal_reasons.setdefault(row["gate"],
+                                                      str(row["why"])[:160])
 
     def first_fill(self, *, maker: bool, zero_ahead: bool) -> None:
         self.first_fills += 1
@@ -242,6 +250,7 @@ class Scoreboard:
             "entry_admission_rate": _pct(self.entries_admitted,
                                          self.entries_considered),
             "entry_refusals_by_gate": dict(self.entry_refusals),
+            "entry_refusal_example_reasons": dict(self.entry_refusal_reasons),
 
             "first_fills": self.first_fills,
             "maker_first_fill_rate": _pct(self.maker_first_fills,

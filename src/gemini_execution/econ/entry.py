@@ -163,13 +163,32 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
 
     # ---- 3. FLOW REVERSIBILITY. The gate the brief singles out. Volume is
     # deliberately absent.
+    #
+    # PROVENANCE PROBLEM, RECORDED RATHER THAN QUIETLY LIVED WITH. In the
+    # fixed-cycle lane these features are computed from `habitat.public_flow`,
+    # a polled REST read carrying the label "EVIDENCE ONLY: no price, size or
+    # decision is taken from this". Gating an entry on it takes a decision from
+    # it. The label exists because a polled tape has its own clock and its own
+    # staleness relative to the book the controller decided on.
+    #
+    # The correct source is the maintained WEBSOCKET tape -- `l5_shadow
+    # .gemini_ws` delivers real trade events with `reason == "trade"` and
+    # millisecond venue timestamps, and `prints_since` returns None rather than
+    # [] when it cannot vouch for an interval, so "we saw nothing" is
+    # distinguishable from "we were not watching". That is what the
+    # event-driven lane reads.
+    #
+    # Until this gate is sourced there, every decision it produces carries
+    # `flow_source_provisional` and is to be read as PROVISIONAL evidence, not
+    # as a measurement of the market.
     alt = feat.get("side_alternation")
     n = feat.get("n_prints") or 0
     if n < thresholds.min_prints:
         gates.append(_gate("FLOW_REVERSIBLE", False,
                            "only %d prints in the window, below the minimum "
                            "of %d; flow direction is not yet evidence"
-                           % (n, thresholds.min_prints), n_prints=n))
+                           % (n, thresholds.min_prints), n_prints=n,
+                           flow_source_provisional=True))
     elif alt is None:
         gates.append(_gate("FLOW_REVERSIBLE", None,
                            "aggressor direction unreadable on this tape"))
@@ -181,7 +200,8 @@ def admit_entry(*, feat: Mapping[str, Any], thresholds: Thresholds,
                            "directional and a resting rung on the far side is "
                            "adverse selection"
                            % (alt, thresholds.min_alternation),
-                           side_alternation=alt))
+                           side_alternation=alt, n_prints=n,
+                           flow_source_provisional=True))
 
     # ---- 4. NOT CONCENTRATED. One print is not a two-sided market however
     # large it is.
