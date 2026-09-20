@@ -458,6 +458,13 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
                          "quote_between_tte_s": _band_of(arm),
                          "hypothetical": arm.hyp.report(),
                          "inventory": arm.inv.report(),
+                         # the economic challenger carries a scoreboard the
+                         # other arms have no equivalent of. WITHOUT IT a
+                         # starved arm is indistinguishable from a broken one:
+                         # both read "rested=0" and neither says which gate
+                         # refused.
+                         **({"econ": arm.report()}
+                            if getattr(arm, "IS_ECON_ARM", False) else {}),
                          "error": arm.error}
              for arm in arms} or None,
          "correction_arms_error": arms_error,
@@ -757,6 +764,7 @@ async def cohort_loop(a, cohort_name: str) -> None:
                                      policy=a.policy, on_cycle=hb.cycle)
                 _print_window(w)
                 _print_arms(w)
+                _print_econ(w)
                 _print_bands(w)
                 w.pop("cycles_detail", None)
                 hb.window_done(w)
@@ -829,6 +837,36 @@ def _print_bands(w) -> None:
                           r["matched_gross"]), flush=True)
     except Exception as exc:                                     # noqa: BLE001
         print("ARM_BAND_ERROR %s: %s" % (type(exc).__name__, exc), flush=True)
+
+
+def _print_econ(w) -> None:
+    """The economic challenger's own scoreboard, which no other arm has.
+
+    "rested=0" on the WINDOW_ARM line is ambiguous by itself -- an arm that was
+    refused by its own gates and an arm that crashed look identical. This line
+    makes the refusal auditable: which gate refused, how many completes the
+    risk overlay forbade, and at what basis.
+    """
+    for lbl, rec in (w.get("correction_arms") or {}).items():
+        e = rec.get("econ")
+        if not e:
+            continue
+        sb = e.get("scoreboard") or {}
+        ov = sb.get("RISK_OVERLAY_cost") or {}
+        print("ECON %s %s spec=%s | entries %s/%s refused=%s | firstFills=%s "
+              "compOpp=%s acceptable=%s | veto=%s fbBasis=%s fbFeePos=%s | "
+              "defect_above_ceiling=%s | primary=%s | div=%s" % (
+                  w.get("symbol"), lbl[:20], e.get("spec_label"),
+                  sb.get("entries_admitted"), sb.get("entries_considered"),
+                  sb.get("entry_refusals_by_gate"), sb.get("first_fills"),
+                  sb.get("complement_opportunities"),
+                  sb.get("acceptable_complement_opportunities"),
+                  ov.get("completes_forbidden"),
+                  ov.get("forbidden_basis_median"),
+                  ov.get("forbidden_that_would_have_been_fee_positive"),
+                  sb.get("PAIRS_ABOVE_CEILING_defect_counter"),
+                  sb.get("PRIMARY_net_cents_per_capital_dollar_minute"),
+                  e.get("divergences")), flush=True)
 
 
 def _print_arms(w) -> None:
