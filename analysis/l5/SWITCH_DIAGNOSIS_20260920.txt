@@ -1,0 +1,115 @@
+0 constant base rate               OOS logloss=0.61457  AUC=0.5000
+1 run_len empirical only           OOS logloss=0.60441  AUC=0.5817
+2 LR: run_len                      OOS logloss=0.61289  AUC=0.5817
+3 LR: +complement_delta            OOS logloss=0.61778  AUC=0.5760
+4 LR: +move_since_prev             OOS logloss=0.62195  AUC=0.5746
+5 LR: ALL features                 OOS logloss=0.74131  AUC=0.5511
+
+standardized coefficients, |w| descending (model 5):
+   cum_spend                              +0.9837
+   run_len                                -0.7316
+   imbalance_abs                          -0.4084
+   residual_abs                           -0.4084
+   dt_since_prev_fill                     -0.4076
+   maker                                  -0.3203
+   move_since_prev_fill                   -0.3188
+   qty_down                               -0.2865
+   complement_delta_vs_run_start          +0.2597
+   move_since_run_began                   -0.2493
+   n_fills                                -0.2386
+   matched                                -0.2259
+   qty_up                                 -0.2171
+   avg_cost_surplus                       +0.1903
+   price_surplus                          +0.1568
+   complement_price                       -0.1568
+   tte_s                                  +0.0732
+   pair_cost_if_complete_now              -0.0632
+   complement_cheaper_than_run_start      -0.0122
+NON-PARAMETRIC OOS CHECK: does the complement getting cheaper raise the
+switch rate WITHIN a run-length stratum? (terciles of complement_delta_vs_run_start;
+T1 = complement cheapest vs run start, T3 = most expensive)
+
+run_len       n             T1 cheaper                     T2              T3 dearer     T1-T3
+1          6888         0.361 (n=6888)                      -                      -    +0.000
+2          4205         0.414 (n=1402)         0.281 (n=1402)         0.358 (n=1401)    +0.057
+3-4        4472         0.303 (n=1514)         0.294 (n=1786)         0.294 (n=1172)    +0.009
+5-7        2954          0.231 (n=985)          0.229 (n=985)          0.241 (n=984)    -0.009
+8+         2954          0.174 (n=988)         0.218 (n=1015)          0.160 (n=951)    +0.014
+PMUS prospective queue-aware episodes that never matched:
+   policy never recommended COMPLETE : 12
+   COMPLETE recommended but no match : 10
+
+slug                                       league    fills resid horizon  L5 P(opp)        n match basis
+atc-lal-atm-rma-2026-09-20-atm             lal           3     3   SHORT      0.340       94 run_len x imbalance
+tsc-lal-atm-rma-2026-09-20-1pt5            lal           3     3   SHORT      0.340       94 run_len x imbalance
+aec-odcup-lei-mid-2026-09-20               odcup         3     3   SHORT      0.340       94 run_len x imbalance
+aec-lol-g2-mkoi-2026-09-20                 lol           3     3   SHORT      0.340       94 run_len x imbalance
+aec-bcl-svv-ora-2026-09-20                 bcl           3     3   SHORT      0.340       94 run_len x imbalance
+asc-lal-atm-rma-2026-09-20-neg-1pt5        lal           2     2   SHORT      0.270      163 run_len x imbalance
+aec-cs2-qua-g2a-2026-09-20                 cs2           2     2   SHORT      0.270      163 run_len x imbalance
+aec-dota2-pips4-yb-2026-09-20              dota2         2     2   SHORT      0.270      163 run_len x imbalance
+aec-setkameua-necvol-pondmy-2026-09-20     setkameua     1     1   SHORT      0.321      383 run_len x imbalance
+atc-tsl-erz-sam-2026-09-20-erz             tsl           1     1   SHORT      0.321      383 run_len x imbalance
+atc-ere-nec-goa-2026-09-20-goa             ere           1     1   SHORT      0.321      383 run_len x imbalance
+atc-epl-ful-mnu-2026-09-20-mnu             epl           1     1   SHORT      0.321      383 run_len x imbalance
+
+MEAN historical L5 P(opposite next) across the 12 frozen states: 0.316
+=> historically L5 CONTINUED EXTENDING in 68% of comparable states.
+
+Same lookup for the 10 episodes where COMPLETE WAS recommended but no match:
+   atc-lal-atm-rma-2026-09-20-rma             lal       fills=3 resid=3  L5 P(opp)=0.340 n=94
+   atc-lal-atm-rma-2026-09-20-draw            lal       fills=3 resid=3  L5 P(opp)=0.340 n=94
+   aec-dota2-aur-navi-2026-09-20              dota2     fills=3 resid=3  L5 P(opp)=0.340 n=94
+   aec-setkamemd-meraur-scovla-2026-09-20     setkamemd fills=3 resid=3  L5 P(opp)=0.340 n=94
+   aec-setkameua-varvol-konvas-2026-09-20     setkameua fills=3 resid=3  L5 P(opp)=0.340 n=94
+   aec-cs2-brute-33-2026-09-20                cs2       fills=1 resid=1  L5 P(opp)=0.321 n=383
+   aec-cs2-aur-vit-2026-09-20                 cs2       fills=1 resid=1  L5 P(opp)=0.321 n=383
+   aec-setkameua-novrus-tebyar-2026-09-20     setkameua fills=1 resid=1  L5 P(opp)=0.321 n=383
+   aec-setkamecz-halpav-kolleo-2026-09-20     setkamecz fills=1 resid=1  L5 P(opp)=0.321 n=383
+   asc-lal-atm-rma-2026-09-20-neg-2pt5        lal       fills=1 resid=1  L5 P(opp)=0.321 n=383
+================================================================================================
+IS MODEL A UNDER-COMPLETING RELATIVE TO HISTORICAL L5?
+================================================================================================
+
+QUEUE_AWARE  episodes=26
+   Model A RECOMMENDED COMPLETE in            14 / 26 = 53.8%
+   historical L5 P(opposite acquisition) mean 32.0%  (OOS corpus analogues)
+   Model A is +21.9 pp vs historical L5  -> MORE willing to complete
+
+OPTIMISTIC  episodes=42
+   Model A RECOMMENDED COMPLETE in            19 / 42 = 45.2%
+   historical L5 P(opposite acquisition) mean 31.8%  (OOS corpus analogues)
+   Model A is +13.4 pp vs historical L5  -> MORE willing to complete
+
+READING. Across ALL prospective episodes Model A asks for the opposite side MORE
+often than historical L5 switched sides at comparable states. The "12 episodes
+where COMPLETE was never recommended" is therefore NOT a fidelity failure: it is
+the majority-extend behaviour L5 itself shows, and 12/26 non-recommendation sits
+close to L5's own ~68% continue-extending rate.
+
+CENSORING. Those 12 episodes also had NO further acquisition of any kind inside
+the window, so they are right-censored and must never be scored as "refused to
+switch". The comparison above is on the POLICY's recommendation, which is not
+censored.
+
+================================================================================================
+PROSPECTIVE FUNNEL: FULL RESEARCH UNIVERSE vs DEPLOYABLE SHORT-HORIZON (<=24h)
+Horizon is a DEPLOYMENT constraint outside Model A. No market is removed from
+research statistics; both universes are reported.
+================================================================================================
+
+### QUEUE_AWARE
+universe       stage             eps  COMPLrec  opp fill   matched     mQty     basis   lat_p50
+FULL RESEARCH  funnel             26        14         4         4        6    0.9800      293s
+SHORT <=24h    funnel             26        14         4         4        6    0.9800      293s
+LONG >24h      -                   0         -         -         -        -         -         -
+UNKNOWN        -                   0         -         -         -        -         -         -
+   league horizons present: bcl:SHORT, cs2:SHORT, dota2:SHORT, epl:SHORT, ere:SHORT, lal:SHORT, lol:SHORT, odcup:SHORT, odicr:SHORT, setkamecz:SHORT, setkamemd:SHORT, setkameua:SHORT, tsl:SHORT
+
+### OPTIMISTIC
+universe       stage             eps  COMPLrec  opp fill   matched     mQty     basis   lat_p50
+FULL RESEARCH  funnel             42        19         7         7       10    0.9800       64s
+SHORT <=24h    funnel             42        19         7         7       10    0.9800       64s
+LONG >24h      -                   0         -         -         -        -         -         -
+UNKNOWN        -                   0         -         -         -        -         -         -
+   league horizons present: alsv:SHORT, atbl:SHORT, bcl:SHORT, bra:SHORT, brb:SHORT, cs2:SHORT, dota2:SHORT, epl:SHORT, ere:SHORT, lal:SHORT, ligpor:SHORT, lol:SHORT, nor1:SHORT, odcup:SHORT, odicr:SHORT, setkamecz:SHORT, setkamemd:SHORT, setkameua:SHORT, sld:SHORT, swsl:SHORT, tsl:SHORT

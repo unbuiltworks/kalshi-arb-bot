@@ -54,6 +54,34 @@ def frame_epoch():
     return t
 
 
+
+def compatible_window(prints, t_decision, t_last_fill, px, side_yes,
+                      lookahead=LOOKAHEAD):
+    """Compatible prints usable by a decision at `t_decision`.
+
+    CAUSALITY INVARIANT. The window starts at max(t_decision, t_last_fill), so
+    a fill can never be credited before the fill that preceded it in the same
+    sequence. Without this a later decision whose print lands early would be
+    stamped ahead of an earlier decision's late print, producing an inventory
+    path that runs backwards and a NEGATIVE recycle latency.
+    """
+    t0 = max(float(t_decision), float(t_last_fill))
+    return C.compatible(prints, t0, t0 + lookahead, px, side_yes)
+
+
+def fill_candidates(prints, t_decision, t_last_fill, px, side_yes, depth,
+                    lookahead=LOOKAHEAD):
+    """(compatible prints, queue-aware fill time or None) for one decision."""
+    comp = compatible_window(prints, t_decision, t_last_fill, px, side_yes,
+                             lookahead)
+    cum = 0.0
+    for p in comp:
+        cum += p["size"]
+        if cum > depth:
+            return comp, p["t"]
+    return comp, None
+
+
 def episodes(venue, slug, se, prints, fill_rule):
     """One slug. Returns closed and open episodes with full sequence detail."""
     inv = dec.Inventory(); last_rel = ""; t_prev = 0.0
@@ -78,12 +106,8 @@ def episodes(venue, slug, se, prints, fill_rule):
         if plan["decision"] != "quote": continue
         px = float(plan["_px"]); side_yes = plan["_side_yes"]; rl = plan["relation"]
         depth = float((r["bid_qty"] if side_yes else r["ask_qty"]) or 0.0)
-        t0 = max(t, t_last_fill)
-        comp = C.compatible(prints, t0, t0 + LOOKAHEAD, px, side_yes)
-        cum = 0.0; t_qa = None
-        for p in comp:
-            cum += p["size"]
-            if cum > depth: t_qa = p["t"]; break
+        comp, t_qa = fill_candidates(prints, t, t_last_fill, px, side_yes,
+                                     depth)
         if cur is not None and rl == "complete":
             if cur["t_complete_quote"] is None:
                 cur["t_complete_quote"] = t; cur["quote_depth"] = depth
