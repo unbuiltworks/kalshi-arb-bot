@@ -75,9 +75,13 @@ class HypotheticalBook:
     """The rungs this lane would have rested, walked against the real tape."""
 
     def __init__(self, *, symbol: str, policy: str,
-                 default_qty: Any = "0.01") -> None:
+                 default_qty: Any = "0.01",
+                 queue_mode: str = TR.QUEUE_SYMMETRIC) -> None:
         self.symbol = symbol
         self.policy = policy
+        #: SYMMETRIC is correct. FRONT_OF_QUEUE reproduces the pre-2026-09-20
+        #: upper bound in which an unobservable NO queue was silently zero.
+        self.queue_mode = queue_mode
         self.qty = TR._dec(default_qty) or D("0.01")
         self.live: Dict[str, TR.Quote] = {}
         self.fills: List[Dict[str, Any]] = []
@@ -92,7 +96,8 @@ class HypotheticalBook:
         """Bring the hypothetical rungs in line with what the lane wants."""
         ev = TR._reconcile(self.live, list(actions or []),
                            now_ms=TR._dec(now_ms) or D("0"), depth=depth,
-                           default_qty=self.qty)
+                           default_qty=self.qty,
+                           queue_mode=self.queue_mode)
         self.placed += ev["placed"]
         self.requoted += ev["requoted"]
         return ev

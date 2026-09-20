@@ -89,17 +89,60 @@ def reaches(leg: str, price: Any, print_: Mapping[str, Any]) -> bool:
     return (tp <= p) if str(leg).upper() == "YES" else (tp >= (D("1") - p))
 
 
-def size_ahead(depth: Any, leg: str, price: Any) -> Optional[D]:
-    """Displayed size that must clear before we do. YES ladder only."""
-    if str(leg).upper() != "YES":
-        return None
+#: how a rung's queue position is modelled.
+#:
+#:   SYMMETRIC     both legs are queued against the ladder an aggressor
+#:                 actually consumes. The correct default.
+#:   FRONT_OF_QUEUE  no queue on either leg -- the absolute upper bound on
+#:                 what a rung could have caught. Kept so the pre-correction
+#:                 numbers stay reproducible and comparable; never a default.
+QUEUE_SYMMETRIC = "SYMMETRIC"
+QUEUE_FRONT = "FRONT_OF_QUEUE"
+
+
+def size_ahead(depth: Any, leg: str, price: Any, *,
+               mode: str = QUEUE_SYMMETRIC) -> Optional[D]:
+    """Displayed size an aggressor must clear before it reaches OUR rung.
+
+    THIS WAS THE BUG, AND IT HAD A DIRECTION. Until 2026-09-20 this returned
+    None for every NO leg ("YES ladder only"), and `Quote.__post_init__`
+    turns None into ZERO size ahead. So a NO rung filled from the front of
+    the queue on any reaching print however small, while a YES rung had to
+    clear the whole displayed ladder first. Nine consecutive BTC15m windows
+    ended long NO and never once long YES, and a symmetric book with mirrored
+    prints filled the NO leg and not the YES leg. That is not the market and
+    it is not L5 -- it is this function.
+
+    WHAT IS AND IS NOT DERIVED. `metadata.contract_depth` refuses to relabel
+    an ask size as a "NO bid size", and that refusal stands: no such number is
+    invented here. What is computed is OUR QUEUE POSITION. Our NO bid at n
+    rests, through the complement identity `outcome_book` already verifies, at
+    ask price (1 - n); an aggressor BUY walks the ASK ladder upward and clears
+    everything displayed at or below that price before reaching us. Those are
+    ask sizes used as ask sizes -- the quantity the buyer actually eats.
+
+    UNKNOWN STAYS UNKNOWN, AND NOW SYMMETRICALLY. An unreadable ladder still
+    returns None for BOTH legs, so neither is silently advantaged.
+    """
     p = _dec(price)
-    if p is None or not isinstance(depth, Mapping) or not depth.get("readable"):
+    if p is None:
         return None
+    if mode == QUEUE_FRONT:
+        return D("0")
+    if not isinstance(depth, Mapping) or not depth.get("readable"):
+        return None
+    if str(leg).upper() == "YES":
+        # a SELLER walks the BID ladder down; everything displayed at or
+        # above our price is ahead of us
+        side, ahead_of_us = "bids", (lambda px: px >= p)
+    else:
+        # a BUYER walks the ASK ladder up to (1 - n)
+        q = D("1") - p
+        side, ahead_of_us = "asks", (lambda px: px <= q)
     tot = D("0")
-    for lv in ((depth.get("bids") or {}).get("levels") or []):
+    for lv in ((depth.get(side) or {}).get("levels") or []):
         px, qty = _dec(lv.get("price")), _dec(lv.get("qty"))
-        if px is not None and qty is not None and px >= p:
+        if px is not None and qty is not None and ahead_of_us(px):
             tot += qty
     return tot
 
@@ -164,7 +207,8 @@ def desired(policy: str, *, symbol: str, tte_s: Any, inv: Any,
 
 
 def _reconcile(live: Dict[str, Quote], want: Sequence[Mapping[str, Any]], *,
-               now_ms: D, depth: Any, default_qty: D) -> Dict[str, Any]:
+               now_ms: D, depth: Any, default_qty: D,
+               queue_mode: str = QUEUE_SYMMETRIC) -> Dict[str, Any]:
     """Bring the live rungs in line. A PRICE CHANGE LOSES QUEUE POSITION.
 
     Keeping the same price keeps the place in the queue; any other change is a
@@ -192,7 +236,7 @@ def _reconcile(live: Dict[str, Quote], want: Sequence[Mapping[str, Any]], *,
             cur.kind = str(a.get("action"))
             events["kept"] += 1
             continue
-        ahead = size_ahead(depth, leg, p)
+        ahead = size_ahead(depth, leg, p, mode=queue_mode)
         live[leg] = Quote(leg=leg, price=p, qty=q, placed_ms=now_ms,
                           ahead=ahead, queue_known=ahead is not None,
                           kind=str(a.get("action")))
