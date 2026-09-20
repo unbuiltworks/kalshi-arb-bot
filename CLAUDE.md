@@ -196,6 +196,9 @@ Do not repeatedly rerun failed Gemini experiments without a materially new hypot
 
 ## Durable references
 
+**Gemini BTC5m/BTC15m current-state source of truth:
+`analysis/gemini/GEMINI_L5_CURRENT.md`**
+
 Read these before redefining strategy or live progression:
 
 - `L5_OPERATING_MODEL.md` — current behavioral thesis and operating rules; primary durable source of truth.
