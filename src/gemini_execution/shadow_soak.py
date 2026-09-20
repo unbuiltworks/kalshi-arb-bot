@@ -979,6 +979,15 @@ def _print_econ(w) -> None:
                       cov.get("warmup_not_prewarmed"),
                       cov.get("median_time_to_vouched_s"),
                       cov.get("buckets_are_exclusive")), flush=True)
+            if not cov.get("accounting_consistent", True):
+                print("ECON_COV_INCONSISTENT %s %s admitted+refusals != "
+                      "counted<=eligible | %s" % (
+                          w.get("symbol"), lbl[:20],
+                          {k: cov.get(k) for k in (
+                              "entries_admitted", "strategy_refusals",
+                              "strategy_eligible_cycles",
+                              "decisions_refused_wrong_bucket",
+                              "decisions_refused_over_count")}), flush=True)
         pw = e.get("prewarm") or {}
         if pw:
             print("ECON_PREWARM %s %s watching=%s opened=%s dropped=%s "

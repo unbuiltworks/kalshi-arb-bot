@@ -293,3 +293,62 @@ def test_a_full_view_is_not_truncated():
     got = src.flow("S", window_s=120, min_window_s=30, now=t)
     assert got["window_used_s"] == 120.0
     assert got["truncated_by_view"] is False
+
+
+# ------------------------------- the accounting bug the first live run found
+
+def test_a_warmup_cycle_can_never_be_counted_as_a_strategy_refusal():
+    """REPRODUCES THE LIVE DEFECT. The first run printed
+
+        total=2 vouched=0 warmup_excl=2 eligible=0 refusals=4
+
+    which is arithmetically impossible: four refusals from zero eligible
+    cycles. The caller was recording an outcome on warm-up cycles AND once per
+    proposed rung rather than once per cycle. The ledger now refuses both.
+    """
+    c = CV.CoverageLedger()
+    b = c.cycle(symbol="S", t=1.0, vouched=False, quoting=True)
+    assert b == CV.WARMUP_EXCLUDED
+    for _ in range(4):
+        assert c.decision(False, bucket=b) is False
+    r = c.report()
+    assert r["strategy_eligible_cycles"] == 0
+    assert r["strategy_refusals"] == 0
+    assert r["decisions_refused_wrong_bucket"] == 4
+    assert r["accounting_consistent"] is True
+
+
+def test_one_cycle_cannot_record_two_outcomes():
+    """A cycle proposing two rungs is still ONE cycle."""
+    c = CV.CoverageLedger()
+    b = c.cycle(symbol="S", t=1.0, vouched=True, quoting=True)
+    assert c.decision(True, bucket=b) is True
+    assert c.decision(False, bucket=b) is False
+    r = c.report()
+    assert r["entries_admitted"] == 1 and r["strategy_refusals"] == 0
+    assert r["decisions_refused_over_count"] == 1
+    assert r["accounting_consistent"] is True
+
+
+def test_the_consistency_invariant_is_reported_every_time():
+    c = CV.CoverageLedger()
+    for i in range(5):
+        b = c.cycle(symbol="S", t=float(i), vouched=True, quoting=True)
+        c.decision(admitted=(i % 2 == 0), bucket=b)
+    r = c.report()
+    assert r["accounting_consistent"] is True
+    assert r["eligible_cycles_without_a_decision"] == 0
+    assert r["entries_admitted"] + r["strategy_refusals"] == 5
+
+
+def test_an_eligible_cycle_with_no_proposal_is_not_a_refusal():
+    """The policy may simply not propose anything. That is not the strategy
+    refusing an entry, and must not inflate the refusal count."""
+    c = CV.CoverageLedger()
+    for i in range(3):
+        c.cycle(symbol="S", t=float(i), vouched=True, quoting=True)
+    r = c.report()
+    assert r["strategy_eligible_cycles"] == 3
+    assert r["strategy_refusals"] == 0
+    assert r["eligible_cycles_without_a_decision"] == 3
+    assert r["accounting_consistent"] is True

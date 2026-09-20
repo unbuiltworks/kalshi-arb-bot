@@ -260,6 +260,8 @@ class GeminiEconArm:
         acted: List[Dict[str, Any]] = []
         records: List[Dict[str, Any]] = []
         paths: Dict[str, Any] = {}
+        cycle_decided = False
+        cycle_admitted = False
 
         # ---------------- INVENTORY STATE: evaluate all four paths first,
         # because what we do with a held leg governs whether a further OPEN
@@ -367,7 +369,13 @@ class GeminiEconArm:
                         flow_vouched=bool(wsf.get("vouched")),
                         flow_why=wsf.get("why"))
                     self.board.entry(dec)
-                    self.state.coverage.decision(bool(dec["admitted"]))
+                    # ONE outcome per CYCLE, recorded after the action loop.
+                    # Recording here would count a cycle proposing two rungs
+                    # twice, and would count it even on a warm-up-excluded
+                    # cycle.
+                    cycle_admitted = bool(cycle_admitted) or bool(
+                        dec["admitted"])
+                    cycle_decided = True
                     self.hazard.observe(feat, resolved=False,
                                         filled_acceptably=False)
                     if dec["admitted"]:
@@ -397,6 +405,11 @@ class GeminiEconArm:
                            admitted=False, why="unhandled action %r" % act)
                 self._note(SUPPRESSED)
             records.append(rec)
+
+        # ONE COVERAGE OUTCOME PER ELIGIBLE CYCLE. The ledger refuses a
+        # decision from any other bucket, so this is belt and braces.
+        if cycle_decided:
+            self.state.coverage.decision(cycle_admitted, bucket=bucket)
 
         # EXECUTION ADAPTATION A on the admitted rungs only -- price is
         # improved to reach zero queue-ahead, and an improvement that would

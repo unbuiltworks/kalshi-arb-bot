@@ -71,6 +71,11 @@ class CoverageLedger:
     strategy_eligible: int = 0
     entries_admitted: int = 0
     strategy_refusals: int = 0
+    #: how many eligible cycles produced a counted outcome, and how many
+    #: attempts were refused for being in the wrong bucket or over-counting
+    counted_decisions: int = 0
+    decisions_refused_wrong_bucket: int = 0
+    decisions_refused_over_count: int = 0
     #: warm-up cycles split by whether pre-warming had been possible at all
     warmup_prewarmed: int = 0
     warmup_not_prewarmed: int = 0
@@ -104,12 +109,37 @@ class CoverageLedger:
         self.strategy_eligible += 1
         return STRATEGY_ELIGIBLE
 
-    def decision(self, admitted: bool) -> None:
-        """One STRATEGY_ELIGIBLE cycle's outcome."""
+    def decision(self, admitted: bool, *, bucket: Optional[str] = None
+                 ) -> bool:
+        """ONE ELIGIBLE CYCLE's outcome. Returns whether it was counted.
+
+        GUARDED, because the first live run proved the guard necessary: it
+        printed `eligible=0 ... refusals=4`, which is arithmetically
+        impossible. Two mistakes produced it, and both are now refused here
+        rather than trusted to the caller:
+
+          * the caller invoked this on cycles the socket could not vouch for,
+            so warm-up exclusions were being recounted as strategy refusals --
+            the exact conflation this whole module exists to prevent;
+          * it invoked it once per ACTION, so a cycle proposing two rungs
+            recorded two outcomes against one cycle.
+
+        A decision is counted only when `bucket` is STRATEGY_ELIGIBLE, and only
+        as many times as there are eligible cycles -- `counted_decisions`
+        cannot exceed `strategy_eligible`.
+        """
+        if bucket is not None and bucket != STRATEGY_ELIGIBLE:
+            self.decisions_refused_wrong_bucket += 1
+            return False
+        if self.counted_decisions >= self.strategy_eligible:
+            self.decisions_refused_over_count += 1
+            return False
+        self.counted_decisions += 1
         if admitted:
             self.entries_admitted += 1
         else:
             self.strategy_refusals += 1
+        return True
 
     # ------------------------------------------------------------ report
     def report(self) -> Dict[str, Any]:
@@ -140,5 +170,14 @@ class CoverageLedger:
             "buckets_are_exclusive": (
                 self.warmup_excluded + self.not_quoting
                 + self.strategy_eligible == self.total_cycles),
+            # the invariant the first live run violated
+            "accounting_consistent": (
+                self.entries_admitted + self.strategy_refusals
+                == self.counted_decisions <= self.strategy_eligible),
+            "eligible_cycles_without_a_decision": (
+                self.strategy_eligible - self.counted_decisions),
+            "decisions_refused_wrong_bucket":
+                self.decisions_refused_wrong_bucket,
+            "decisions_refused_over_count": self.decisions_refused_over_count,
             "labels": list(LABELS),
         }
