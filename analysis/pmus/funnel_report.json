@@ -1,0 +1,45 @@
+{
+ "labels": "SHADOW/HYPOTHETICAL. Nothing submitted, filled, settled or realized. Venues never pooled.",
+ "model_sha16": "bbb55bf90638d2bd",
+ "as_of_utc": "2026-09-20T12:49:55Z",
+ "complete_eligible_definition": "after the first fill and while imbalanced, v2 returned recommended_relation == 'complete' at least once",
+ "PMUS": {
+  "first_fills": 38,
+  "complete_eligible": 19,
+  "p_complete_eligible_given_first_fill": 50.0,
+  "p_matched_given_complete_eligible": 21.1,
+  "stage_counts": {
+   "FIRST FILL": 38,
+   "POLICY COMPLETE RECOMMENDATION": 19,
+   "COMPLEMENT QUOTED": 19,
+   "FEE-SAFE": 19,
+   "REACHED": 4,
+   "COMPATIBLE FLOW": 5,
+   "HYP. OPPOSITE FILL (optimistic)": 5,
+   "HYP. OPPOSITE FILL (queue-aware)": 4,
+   "MATCHED": 4
+  },
+  "checkpoint_25_met": false
+ },
+ "INTL": {
+  "first_fills": 77,
+  "complete_eligible": 58,
+  "p_complete_eligible_given_first_fill": 75.3,
+  "p_matched_given_complete_eligible": 69.0,
+  "stage_counts": {
+   "FIRST FILL": 77,
+   "POLICY COMPLETE RECOMMENDATION": 58,
+   "COMPLEMENT QUOTED": 58,
+   "FEE-SAFE": 58,
+   "REACHED": 21,
+   "COMPATIBLE FLOW": 43,
+   "HYP. OPPOSITE FILL (optimistic)": 43,
+   "HYP. OPPOSITE FILL (queue-aware)": 19,
+   "MATCHED": 40
+  },
+  "checkpoint_25_met": true
+ },
+ "SUPERSEDES": "the 11:42Z figures PMUS 13 first fills / 0 matched / 1a_POLICY_NEVER_RECOMMENDED_COMPLETE 92.3%. With 38 first fills, P(COMPLETE-eligible | first fill) on PMUS is 50.0%, not 7.7%, and PMUS has matched 4 times. The early figure was sample-limited, not wrong arithmetic. This is the SECOND time today a PMUS read moved substantially with sample size, which is itself the argument for the 25-eligible checkpoint.",
+ "FUNNEL_IS_NOT_STRICTLY_MONOTONE_AND_HERE_IS_WHY": "COMPATIBLE FLOW (PMUS 5) exceeds REACHED (PMUS 4). That is not a bug. REACHED is evaluated on the 8-second BOOK sample; COMPATIBLE FLOW is evaluated on PRINTS, which are continuous. A print can land at or through the resting price in a gap where the sampled book never showed ask <= px. REACHED is therefore NOT a prerequisite for the later stages and must not be read as one.",
+ "MATCHED_IS_ON_THE_OPTIMISTIC_BRANCH": "The inventory replay records a fill whenever a compatible print exists, so MATCHED tracks the OPTIMISTIC rule. The queue-aware bracket is reported separately and is much lower: PMUS 4 vs 5 optimistic, INTL 19 vs 43. Do not read MATCHED as queue-proven."
+}

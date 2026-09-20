@@ -1,0 +1,40 @@
+==========================================================================
+PMUS  -- PRIMARY EXECUTABLE TRANSFER TARGET
+==========================================================================
+  stage                                       n  per 100
+  FIRST FILL                                 38    100.0
+  POLICY COMPLETE RECOMMENDATION             19     50.0
+  COMPLEMENT QUOTED                          19     50.0
+  FEE-SAFE                                   19     50.0
+  REACHED                                     4     10.5
+  COMPATIBLE FLOW                             5     13.2
+  HYP. OPPOSITE FILL (optimistic)             5     13.2
+  HYP. OPPOSITE FILL (queue-aware)            4     10.5
+  MATCHED                                     4     10.5
+
+  P(COMPLETE-eligible | first fill) = 19/38 = 50.0%
+  P(matched | COMPLETE-eligible)    = 4/19 = 21.1%
+  CHECKPOINT: 19 of 25 COMPLETE-eligible chains  -- BELOW THRESHOLD, no conditional conclusion
+  by league: {'cs2': 11, 'atpcq': 8, 'sea': 6, 'flc': 4, 'lal': 4, 'lol': 3, 'valorant': 2}
+  diagnostic-stratum chains: 0
+
+==========================================================================
+INTL  -- REFERENCE / FIDELITY ONLY, not executable
+==========================================================================
+  stage                                       n  per 100
+  FIRST FILL                                 77    100.0
+  POLICY COMPLETE RECOMMENDATION             58     75.3
+  COMPLEMENT QUOTED                          58     75.3
+  FEE-SAFE                                   58     75.3
+  REACHED                                    21     27.3
+  COMPATIBLE FLOW                            43     55.8
+  HYP. OPPOSITE FILL (optimistic)            43     55.8
+  HYP. OPPOSITE FILL (queue-aware)           19     24.7
+  MATCHED                                    40     51.9
+
+  P(COMPLETE-eligible | first fill) = 58/77 = 75.3%
+  P(matched | COMPLETE-eligible)    = 40/58 = 69.0%
+  CHECKPOINT: 58 of 25 COMPLETE-eligible chains
+  by league: {'cs2': 15, 'dota2': 14, 'atp': 11, 'lol': 8, 'bl2': 8, 'scop': 6, 'kor': 4, 'elc': 4, 'sea': 2, 'wta': 1, 'val': 1, 'ere': 1, 'swe': 1, 'nor': 1}
+  diagnostic-stratum chains: 0
+
