@@ -1,5 +1,13 @@
 # L5_NOW — current operating note
 
+> **EXTERNAL REVIEWERS: START AT
+> [`analysis/l5/L5_EXTERNAL_REVIEW_CONTEXT.md`](analysis/l5/L5_EXTERNAL_REVIEW_CONTEXT.md).**
+> That file is the canonical review handoff and carries the current mechanism,
+> economics, falsified-hypothesis graveyard, transfer status, P0 and safety state.
+> This file and every other L5 report are historical evidence and may contain
+> superseded conclusions — notably the blended `0.35` residual:matched reference,
+> which is NOT the maker-ladder target (it is `0.182`).
+
 Updated 2026-09-20. Supersedes nothing in `L5_OPERATING_MODEL.md`; this file
 records what the live sports-transfer experiment currently establishes.
 
