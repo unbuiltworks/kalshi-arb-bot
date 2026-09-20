@@ -17,9 +17,11 @@
 > `Inventory(yes_qty, no_qty)` can over-represent. Evidence, including the
 > falsification of the "order is rejected"/"cash out first" readings, is in
 > [`EVIDENCE_PACKET_003_VENUE_SEMANTICS.md`](EVIDENCE_PACKET_003_VENUE_SEMANTICS.md).
-> The mismatch is **latent** — the faithful run has produced zero COMPLETE
-> fills, so no recorded state has depended on holding both outcomes. Nothing
-> was changed in response; the experiment runs unmodified.
+> **No longer latent as of 2026-09-20T22:59:42Z**: the first COMPLETE fill in
+> the programme closed a BTC5m window holding matched inventory
+> (`windows_ending_matched: 1`), which is the state a signed-scalar venue
+> cannot represent. Nothing was changed in response; the experiment runs
+> unmodified.
 >
 > **HEADLINE STATUS: the faithful-transfer question is UNRESOLVED.** The
 > experiment has been running since 2026-09-20T19:42Z and no prospective

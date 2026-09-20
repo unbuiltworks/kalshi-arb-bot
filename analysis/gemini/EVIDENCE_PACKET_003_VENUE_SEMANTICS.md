@@ -228,7 +228,35 @@ maker fill is unchanged either way, which matters for the rebate-first line of w
 
 ---
 
-## 9. Why this has NOT yet contaminated the prospective evidence
+## 9-UPDATE (2026-09-20T23:07Z) — IT IS NO LONGER LATENT
+
+**The first COMPLETE fill in the programme landed at 22:59:42Z**, ~52 minutes after
+this packet was written, on BTC5m `GEMI-BTC05M2609202300-UP`:
+
+```
+L5F_ACTIONS GEMI-BTC05M2609202300-UP policy=FROZEN_L5_NATIVE
+  requested={'OPEN': 8, 'EXTEND': 7, 'COMPLETE': 23}
+  rested   ={'OPEN': 8, 'COMPLETE': 23, 'EXTEND': 7}
+  filled   ={OPEN:1, EXTEND:3, COMPLETE:1}
+  blocked  ={'EXTEND': {'OSCILLATOR': 12, 'END_OF_WINDOW': 4}}
+  policyVetoed={}
+```
+
+One OPEN plus three EXTENDs is four fills on one leg; the COMPLETE fill then puts
+`min(yes_qty, no_qty) = 0.01 > 0`. The cohort heartbeat confirms the window closed in
+that state: `COMPLETE_fills_cumulative: 1`, `windows_ending_matched: 1`.
+
+**That is precisely the state §7 says a signed-scalar venue cannot represent.** The
+shadow model is now carrying matched inventory. Everything measured from this window
+forward that depends on `matched()`, `effective_matched_pair_cost()`, gross `spend()`
+or two-leg settlement economics is affected by the mismatch. The residual-only
+quantities (`residual()`, the 0.04 imbalance cap, the action sequence from
+`classify()`) are not.
+
+Nothing was changed in response. The section below records the state as of when this
+packet was written and is kept for the record.
+
+## 9. Why this had NOT yet contaminated the prospective evidence (as of 22:07Z)
 
 As of the 22:07Z trigger report, `gemini-l5-faithful` had:
 
