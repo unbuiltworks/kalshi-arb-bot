@@ -1,0 +1,81 @@
+========================================================================================================
+ECONOMICS -- MODELED, SHADOW ONLY. No order submitted; nothing filled, settled or realized.
+Known fees: PMUS maker fee $0.0000 per pair. Maker rebate EXCLUDED, never estimated
+(/v1/transfers carries no order id, so fill-level attribution does not exist).
+========================================================================================================
+
+### QUEUE_AWARE  deployable non-cricket: 53 episodes, 6 matched, 9 matched units
+   MATCHED PAIR BASIS, FULL DISTRIBUTION (not just the median):
+      every value: 0.9733, 0.9800, 0.9800, 0.9800, 0.9800, 0.9800
+      min 0.9733  p25 0.9800  median 0.9800  p75 0.9800  max 0.9800
+      below $1.00: 6 of 6 (100%)
+      modeled gross per pair before rebates: min +0.0200 median +0.0200 max +0.0267
+      TOTAL modeled gross across all matched units: +0.1867 USD on 9 units
+
+   PER-EPISODE detail, matched only:
+   slug                                     league     yes_n  no_n    mQty     basis     gross
+   aec-setkameua-cherom-pysyev-2026-09-20   setkameua      1     3       1    0.9733   +0.0267
+   asc-lal-atm-rma-2026-09-20-neg-1pt5      lal            1     1       1    0.9800   +0.0200
+   aec-cs2-lav-vexar-2026-09-20             cs2            3     3       3    0.9800   +0.0200
+   aec-setkamecz-halpav-kolleo-2026-09-20   setkamecz      1     1       1    0.9800   +0.0200
+   aec-setkameua-varvol-konvas-2026-09-20   setkameua      3     2       2    0.9800   +0.0200
+   asc-lal-atm-rma-2026-09-20-neg-2pt5      lal            1     1       1    0.9800   +0.0200
+
+   UNRESOLVED RESIDUAL, kept SEPARATE from matched economics (never summed):
+      episodes 49, residual units 104, size distribution {1: 19, 2: 5, 3: 25} (cap 3)
+      expected remaining event duration at first fill: p50 37 min  p90 102 min  max 146 min
+      these carry DIRECTIONAL exposure with UNMEASURED economics until settlement.
+      matched-pair and directional-residual P&L are NEVER summed.
+
+### OPTIMISTIC  deployable non-cricket: 70 episodes, 8 matched, 12 matched units
+   MATCHED PAIR BASIS, FULL DISTRIBUTION (not just the median):
+      every value: 0.9733, 0.9800, 0.9800, 0.9800, 0.9800, 0.9800, 0.9800, 0.9900
+      min 0.9733  p25 0.9800  median 0.9800  p75 0.9800  max 0.9900
+      below $1.00: 8 of 8 (100%)
+      modeled gross per pair before rebates: min +0.0100 median +0.0200 max +0.0267
+      TOTAL modeled gross across all matched units: +0.2267 USD on 12 units
+
+   PER-EPISODE detail, matched only:
+   slug                                     league     yes_n  no_n    mQty     basis     gross
+   aec-setkameua-cherom-pysyev-2026-09-20   setkameua      1     3       1    0.9733   +0.0267
+   asc-lal-atm-rma-2026-09-20-neg-1pt5      lal            1     1       1    0.9800   +0.0200
+   aec-cs2-lav-vexar-2026-09-20             cs2            3     3       3    0.9800   +0.0200
+   aec-setkameua-novrus-tebyar-2026-09-20   setkameua      1     1       1    0.9800   +0.0200
+   aec-setkamecz-halpav-kolleo-2026-09-20   setkamecz      1     1       1    0.9800   +0.0200
+   aec-setkameua-varvol-konvas-2026-09-20   setkameua      3     2       2    0.9800   +0.0200
+   asc-lal-atm-rma-2026-09-20-neg-2pt5      lal            1     1       1    0.9800   +0.0200
+   aec-setkamecz-halpav-kolleo-2026-09-20   setkamecz      2     2       2    0.9900   +0.0100
+
+   UNRESOLVED RESIDUAL, kept SEPARATE from matched economics (never summed):
+      episodes 64, residual units 145, size distribution {1: 21, 2: 5, 3: 38} (cap 3)
+      expected remaining event duration at first fill: p50 41 min  p90 106 min  max 146 min
+      these carry DIRECTIONAL exposure with UNMEASURED economics until settlement.
+      matched-pair and directional-residual P&L are NEVER summed.
+====================================================================================================
+RISK SCALE: modeled matched gross vs directional residual carried, same sample
+Per-unit notional is the ACTUAL modeled acquisition cost, not an assumed $1.
+====================================================================================================
+
+### QUEUE_AWARE
+   matched units                     9
+   TOTAL modeled gross (pre-rebate)  +0.1867 USD
+   residual units carried            104
+   residual units per matched unit   11.6
+   residual NOTIONAL at cost         36.22 USD  (median unit cost 0.330)
+   modeled gross as % of residual notional carried: 0.52%
+   that exposure is held for a median of 37 minutes of remaining event
+
+### OPTIMISTIC
+   matched units                     12
+   TOTAL modeled gross (pre-rebate)  +0.2267 USD
+   residual units carried            145
+   residual units per matched unit   12.1
+   residual NOTIONAL at cost         52.33 USD  (median unit cost 0.340)
+   modeled gross as % of residual notional carried: 0.43%
+   that exposure is held for a median of 41 minutes of remaining event
+
+L5 REFERENCE FOR THE SAME RATIO. L5's residual was extinguished by a 5-15 minute
+settlement clock, so the same carrying behaviour bought far less exposure-time per
+unit. The BEHAVIOUR matched (90.4% of L5 residual episodes carried to settlement,
+92.5% here); the CLOCK does not.
+
