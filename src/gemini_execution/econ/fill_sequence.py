@@ -55,11 +55,16 @@ from decimal import InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src.gemini_execution.econ import book_move as BM
+from src.gemini_execution.econ import terminal as TM
 from src.gemini_execution.econ import veto as VT
 
 SCHEMA = "gemini_econ_fill_sequence/v1"
 
 MARKOUT_HORIZONS_S = (8, 30, 60, 120)
+
+#: confirmed-settlement checkpoints the audit reports the sign and its
+#: uncertainty at. Fixed in advance so the read is not chosen after the fact.
+CHECKPOINTS = (20, 50, 100)
 
 LABELS = (
     "SHADOW/HYPOTHETICAL. Fills come from the common HypotheticalBook and are "
@@ -75,6 +80,17 @@ def _dec(v: Any) -> Optional[D]:
     try:
         return D(str(v))
     except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _utc(t: Any) -> Optional[str]:
+    if t is None:
+        return None
+    import datetime
+    try:
+        return datetime.datetime.fromtimestamp(
+            float(t), datetime.timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError):
         return None
 
 
@@ -118,6 +134,12 @@ class Sequence:
     #: candidate instant, and how the book had moved by each horizon
     book_t0: Dict[str, Any] = field(default_factory=dict)
     book_moves: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+    #: what the entry rule WANTED, before anything filled. Kept so the
+    #: per-leg funnel has a denominator: "48 YES first fills" means nothing
+    #: without the number of YES rungs that were offered in the first place.
+    candidate_leg: Optional[str] = None
+    candidate_price: Optional[str] = None
 
     first_fill_leg: Optional[str] = None
     first_fill_price: Optional[D] = None
@@ -257,6 +279,8 @@ class Sequence:
                 for k, v in sorted(self.book_moves.items())},
             "cohort": self.cohort, "symbol": self.symbol,
             "t_candidate": self.t_candidate, "tte_s": self.tte_candidate,
+            "candidate_leg": self.candidate_leg,
+            "candidate_price": self.candidate_price,
             "rested": self.rested, "rested_legs": list(self.rested_legs),
             "first_fill": self.first_fill_leg is not None,
             "first_fill_leg": self.first_fill_leg,
@@ -318,6 +342,9 @@ class FillSequenceLedger:
                       arm=self.arm, t_candidate=float(t),
                       tte_candidate=(None if tte_s is None else float(tte_s)),
                       min_edge=str(min_edge), tick=_dec(tick) or D("0.01"),
+                      candidate_leg=(str(leg).upper()
+                                     if leg is not None else None),
+                      candidate_price=(None if price is None else str(price)),
                       observation_id=observation_id(
                           symbol=symbol, t=t, leg=leg, price=price),
                       book_t0=(BM.snapshot(book) if book else {}))
@@ -460,6 +487,112 @@ class FillSequenceLedger:
                 setattr(led, k, None)
         return led
 
+    # ------------------------------------------------- per-leg denominators
+    @staticmethod
+    def _leg_funnel(rows: List[Dict[str, Any]], leg: str) -> Dict[str, Any]:
+        """The WHOLE funnel for one leg, not a first-fill-conditional rate.
+
+        THE DENOMINATOR IS THE POINT. "24 of 48 YES first fills completed"
+        and "0 of 140 NO first fills completed" are conditional on being
+        filled, and being filled is itself side-dependent -- a rung that
+        rarely fills and a rung that fills constantly are not comparable at
+        the fill. So every step is counted from the rung that was offered.
+
+        NOTE the arm rests BOTH legs from one candidate state, so these do
+        not partition the candidates and must not be summed against them.
+        The unit here is a RUNG on a leg, not a candidate.
+        """
+        L = leg.upper()
+        offered = [r for r in rows
+                   if L in [str(x).upper() for x in (r.get("rested_legs") or [])]]
+        cand = [r for r in rows
+                if str(r.get("candidate_leg") or "").upper() == L]
+        first = [r for r in rows
+                 if str(r.get("first_fill_leg") or "").upper() == L]
+        capp = [r for r in first if r.get("complement_price_appeared")]
+        cfill = [r for r in first if r.get("complement_filled")]
+        # the same leg acting as the COMPLEMENT of the other leg's first fill
+        as_comp = [r for r in rows
+                   if r.get("complement_filled")
+                   and str(r.get("first_fill_leg") or "").upper() not in
+                   ("", L)]
+        settled = [r for r in first
+                   if not r.get("matched")
+                   and r.get("residual_settlement_value") is not None]
+        return {
+            "leg": L,
+            "candidate_rungs": len(cand),
+            "rungs_rested": len(offered),
+            "first_fills": len(first),
+            "first_fill_rate_of_rested_rungs": (len(first) / len(offered)
+                                                if offered else None),
+            "complement_price_appeared": len(capp),
+            "complement_fills": len(cfill),
+            "completion_rate_of_first_fills": (len(cfill) / len(first)
+                                               if first else None),
+            "completion_rate_of_rested_rungs": (len(cfill) / len(offered)
+                                                if offered else None),
+            "fills_as_the_OTHER_legs_complement": len(as_comp),
+            "residuals_settled": len(settled),
+            "why": ("a candidate state may rest BOTH legs, so these counts "
+                    "overlap across legs and never sum to the candidate "
+                    "total"),
+        }
+
+    @staticmethod
+    def _bucket_tte(v: Any) -> str:
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            return "unknown"
+        for hi, name in ((60, "0-60"), (120, "60-120"), (180, "120-180"),
+                         (300, "180-300"), (600, "300-600")):
+            if x <= hi:
+                return name
+        return "600+"
+
+    @staticmethod
+    def _bucket_price(v: Any) -> str:
+        p = _dec(v)
+        if p is None:
+            return "unknown"
+        for hi, name in ((D("0.20"), "<=0.20"), (D("0.40"), "0.20-0.40"),
+                         (D("0.60"), "0.40-0.60"), (D("0.80"), "0.60-0.80")):
+            if p <= hi:
+                return name
+        return ">0.80"
+
+    def _breakouts(self, first: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """First fills cut every way the audit asked for, always BY LEG.
+
+        A cut that pools the legs would hide the only effect being tested.
+        """
+        def cell(rs):
+            cf = sum(1 for r in rs if r.get("complement_filled"))
+            return {"first_fills": len(rs), "complement_fills": cf,
+                    "completion_rate": (cf / len(rs)) if rs else None}
+
+        def by(keyfn):
+            out: Dict[str, Dict[str, Any]] = {}
+            for r in first:
+                leg = str(r.get("first_fill_leg") or "?").upper()
+                out.setdefault(str(keyfn(r)), {}).setdefault(leg, []).append(r)
+            return {k: {leg: cell(rs) for leg, rs in v.items()}
+                    for k, v in sorted(out.items())}
+
+        return {
+            "by_cohort": by(lambda r: r.get("cohort")),
+            "by_tte_bucket_s": by(lambda r: self._bucket_tte(r.get("tte_s"))),
+            "by_entry_price_bucket": by(
+                lambda r: self._bucket_price(r.get("first_fill_price"))),
+            "by_market_direction": by(
+                lambda r: (r.get("settlement_leg") or "UNRESOLVED")),
+            "why": ("by_market_direction is the contract's PUBLISHED outcome "
+                    "and is only populated once settlement has been read; "
+                    "UNRESOLVED is an absence of evidence, not a third "
+                    "outcome"),
+        }
+
     # ------------------------------------------------------------ funnel
     def report(self) -> Dict[str, Any]:
         rows = self.rows
@@ -530,6 +663,36 @@ class FillSequenceLedger:
                     for r in rows
                     if (r["book_move_by_horizon_s"].get(h) or {}).get("klass")))
                 for h in (str(x) for x in MARKOUT_HORIZONS_S)},
+            # ---- THE AUDIT SECTIONS
+            "window": {
+                "first_t": self.first_t, "last_t": self.last_t,
+                "first_utc": _utc(self.first_t), "last_utc": _utc(self.last_t),
+                "symbols": sorted({r.get("symbol") for r in rows
+                                   if r.get("symbol")}),
+                "cohorts": sorted({r.get("cohort") for r in rows
+                                   if r.get("cohort")}),
+                "seq_id_range": ([rows[0].get("seq_id"),
+                                  rows[-1].get("seq_id")] if rows else None),
+            },
+            "by_leg": {leg: self._leg_funnel(rows, leg)
+                       for leg in ("YES", "NO")},
+            "breakouts": self._breakouts(first),
+            "terminal": {
+                "settled_residuals": len(
+                    [r for r in resid
+                     if r.get("residual_settlement_value") is not None]),
+                "rows": [t for t in (TM.residual_terminal(r) for r in resid)
+                         if t],
+            },
+            "expectancy": {
+                "ALL": TM.expectancy(rows),
+                "YES": TM.expectancy(rows, leg="YES"),
+                "NO": TM.expectancy(rows, leg="NO"),
+            },
+            "checkpoints": {
+                str(t): TM.checkpoint(rows, target=t, leg="YES")
+                for t in CHECKPOINTS
+            },
             "candidates_per_day": (None if per_day is None
                                    else round(self.candidates * per_day, 1)),
             "first_fills_per_day": (None if per_day is None

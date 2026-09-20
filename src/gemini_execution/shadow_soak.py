@@ -1161,6 +1161,74 @@ def _print_econ(w) -> None:
                       fs.get("post_first_fill_markout_p50_120s"),
                       fs.get("post_first_fill_adverse_share_60s"),
                       fs.get("by_first_fill_leg")), flush=True)
+            # ---- THE AUDIT. The leg asymmetry is the leading money
+            # hypothesis, so the denominator is printed from the RUNG that
+            # was offered, not from the fill -- being filled is itself
+            # side-dependent and a fill-conditional rate hides that.
+            for _leg in ("YES", "NO"):
+                bl = (fs.get("by_leg") or {}).get(_leg) or {}
+                if not bl.get("rungs_rested"):
+                    continue
+                print("ECON_BYLEG %s %s %s | cand=%s rested=%s first=%s "
+                      "ffRate=%s | compPrice=%s compFill=%s compOfFirst=%s "
+                      "compOfRested=%s | asComplement=%s settled=%s" % (
+                          w.get("symbol"), lbl[:20], _leg,
+                          bl.get("candidate_rungs"), bl.get("rungs_rested"),
+                          bl.get("first_fills"),
+                          bl.get("first_fill_rate_of_rested_rungs"),
+                          bl.get("complement_price_appeared"),
+                          bl.get("complement_fills"),
+                          bl.get("completion_rate_of_first_fills"),
+                          bl.get("completion_rate_of_rested_rungs"),
+                          bl.get("fills_as_the_OTHER_legs_complement"),
+                          bl.get("residuals_settled")), flush=True)
+            win = fs.get("window") or {}
+            print("ECON_SPAN %s %s | %s -> %s | symbols=%s cohorts=%s "
+                  "seq=%s" % (
+                      w.get("symbol"), lbl[:20], win.get("first_utc"),
+                      win.get("last_utc"), len(win.get("symbols") or []),
+                      win.get("cohorts"), win.get("seq_id_range")),
+                  flush=True)
+            for _cut in ("by_cohort", "by_tte_bucket_s",
+                         "by_entry_price_bucket", "by_market_direction"):
+                cells = (fs.get("breakouts") or {}).get(_cut) or {}
+                if cells:
+                    print("ECON_CUT %s %s %s %s" % (
+                        w.get("symbol"), lbl[:20], _cut, cells), flush=True)
+            # ---- E_cycle, its interval, and the break-even the pair term
+            # implies. Reported for YES because that is the candidate loop.
+            for _leg in ("YES", "NO"):
+                ex = (fs.get("expectancy") or {}).get(_leg) or {}
+                if not ex.get("first_fills"):
+                    continue
+                cr = ex.get("completion_rate") or {}
+                ci = ex.get("e_cycle_ci") or {}
+                be = ex.get("breakeven") or {}
+                print("ECON_E %s %s %s | first=%s matched=%s settled=%s "
+                      "unresolved=%s | comp=%s [%s,%s] | pairNet=%s "
+                      "residNet=%s | E=%s [%s,%s] | breakeven=%s | %s" % (
+                          w.get("symbol"), lbl[:20], _leg,
+                          ex.get("first_fills"), ex.get("matched"),
+                          ex.get("residual_settled"),
+                          ex.get("residual_unresolved"),
+                          cr.get("p"), cr.get("lo"), cr.get("hi"),
+                          ex.get("completed_pair_net_per_contract_mean_usd"),
+                          ex.get(
+                              "residual_terminal_net_per_contract_mean_usd"),
+                          ex.get("e_cycle_usd"), ci.get("lo"), ci.get("hi"),
+                          be.get("breakeven_residual_net_per_contract_usd"),
+                          ex.get("why_incomplete")), flush=True)
+            for _t, cp in sorted((fs.get("checkpoints") or {}).items(),
+                                 key=lambda kv: int(kv[0])):
+                fr = cp.get("flip_requires") or {}
+                print("ECON_CHECKPOINT %s %s n=%s/%s reached=%s sign=%s "
+                      "certain95=%s | needRemaining=%s" % (
+                          w.get("symbol"), lbl[:20], cp.get("settled_so_far"),
+                          _t, cp.get("reached"), cp.get("sign"),
+                          cp.get("sign_is_certain_at_95"),
+                          fr.get(
+                              "mean_residual_net_per_contract_needed_usd")),
+                      flush=True)
         # ---- TOXICITY. Can the adverse SIDE be identified before it fills?
         tox = e.get("toxicity_dataset") or {}
         if tox.get("rows"):
