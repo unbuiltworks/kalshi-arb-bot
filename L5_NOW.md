@@ -24,6 +24,126 @@ records what the live sports-transfer experiment currently establishes.
    out of sample. It is not a gate, filter or selection rule, and nothing in
    the shipped path consults it.
 
+## 0a. DISCOVERY DEFECT — the PMUS slate has been 1/5 of the live venue
+
+**`/v2/leagues` is not the venue's league universe.** It returns 50 leagues.
+`/v2/sports` returns **265**, every one but `polyclas` marked
+`isOperational: true`. League slugs absent from the 50-list still serve events
+when queried directly:
+
+| league | in `/v2/leagues` | events returned |
+|---|---|---|
+| `cfb` (College Football) | no | 197 |
+| `itfwo` (ITF Womens) | no | 87 |
+| `atp` (ATP main tour) | no | 59 |
+| `wta` | no | 46 |
+| `dota2` | no | 5 |
+| `itfw` | **yes** | **0** |
+
+The index is both incomplete and partly wrong: it lists `itfw`, which is empty,
+while the real slug `itfwo` is unlisted. This is NOT the `?limit` truncation
+found earlier — the index returns 50 at every limit tried.
+
+Full-slate census on the venue's own `event.live` flag, 2026-09-20 ~14:45Z:
+
+| stage | all 265 leagues | reachable via `/v2/leagues` | share |
+|---|---|---|---|
+| events | 1786 | 353 | 19.8% |
+| **live events** | **104** | **21** | **20.2%** |
+| markets | 21926 | 11486 | 52.4% |
+| two-sided markets | 17790 | 10829 | 60.9% |
+| **live two-sided markets** | **260** | **121** | **46.5%** |
+
+Largest live two-sided habitat on the slate is **Taça de Portugal (37)** — more
+than EPL (32) — and it is invisible to the collector. Table-tennis, cricket,
+basketball and ice-hockey live two-sided markets are **100% invisible**.
+
+**Two earlier numbers are corrected by this.** PMUS was reported as a
+50-league venue with 16 live events against International's 58. The venue index
+is 265 leagues and 104 live events, so PMUS currently carries *more* live events
+than International, not fewer. Every PMUS universe, ranking, habitat and
+cohort number in this file was computed on the 50-league slate and has that
+slate as its denominator.
+
+Not deployed. The durable collector is mid-NFL-PRE baseline for the 17:00Z
+natural experiment and a redeploy resets it. Recommended after that completes.
+
+## 0b. Two accounting defects in the shipped PMUS_SURFACE report
+
+1. **`OPPOSITE_RECYCLING` is pooled across markets.** `recycling()` concatenates
+   every surface's fills and looks for an opposite-outcome fill within the mark
+   with no slug check, so a BUY_YES fill in one market followed by a BUY_NO fill
+   in a different market counts. The reported 52/64 (81.2%) at 300s is therefore
+   not same-market inventory recycling. The same-market ceiling on that counter
+   is 49/64 = 76.6%, so at least 3 of the 52 are cross-market by construction.
+   The unambiguous same-market evidence is per-market
+   `matched = min(qty_Up, qty_Down)`: **22.0 units across 8 of 42 markets**.
+2. **Ladder totals are not session-cumulative.** `resync` retires a surface when
+   its market leaves the slate, taking its fills and ladder with it. The 10:xxZ
+   heartbeat (41/46 fills over 62 surfaces) and the 14:17Z one (33/31 over 42)
+   are both point-in-time over *resident* surfaces. Full-session totals are
+   strictly larger and recoverable only from the per-fill rows.
+
+Neither is a data-loss defect: the `evidenced_fill` rows on the volume retain
+the slug, so the underlying evidence is intact and recomputable.
+
+## 0c. Where PMUS actually recycles L5-style inventory
+
+From the closed `pmus_surface_20260920T043537Z.jsonl` session, final `progress`
+row at 14:17:04Z (6978 cycles, 42 resident surfaces, tape 14732 readable
+observations, 0 unreadable):
+
+| slug | fills | matched | resid | YES/NO fills | obs |
+|---|---|---|---|---|---|
+| `aec-atp-norgom-stesak-2026-09-20` | 19 | **8** | +2 | 10 / 9 | 918 |
+| `atc-lal-get-mal-2026-09-20-get` | 8 | 3 | −2 | 3 / 5 | 1558 |
+| `aec-cs2-lav-ence-2026-09-20` | 8 | 3 | −2 | 3 / 5 | 1032 |
+| `atc-epl-bor-liv-2026-09-20-liv` | 7 | 3 | −1 | 3 / 4 | 798 |
+| `atc-lal-get-mal-2026-09-20-draw` | 5 | 2 | −1 | 2 / 3 | 1156 |
+| `aec-dota2-pips4-yb-2026-09-20` | 5 | 1 | +3 | 4 / 1 | 558 |
+| `aec-wta-gabknu-lispig-2026-09-20` | 3 | 1 | +1 | 2 / 1 | 406 |
+| `aec-cfb-miss-fl-2026-09-26` | 2 | 1 | 0 | 1 / 1 | 198 |
+| 6 further slugs | 1–2 | 0 | ±1..2 | — | 78–3918 |
+
+**The venue's top recycler is main-tour ATP tennis, in a league the collector
+cannot see.** Four of the eight matched slugs — ATP, WTA, Dota 2, CFB — are in
+unlisted leagues. This is also the second time today a habitat conclusion has
+turned on discovery coverage rather than market behaviour.
+
+## 0d. The two PMUS pipelines barely intersect
+
+Of the 14 fill-producing surface slugs, 6 exist in the local collector at all
+and only **1** is a COMPLETE-eligible chain in the frozen pipeline
+(`atc-lal-get-mal-2026-09-20-get`, flow/min 0.928, queue-aware fill yes,
+queue-aware matched no / optimistic matched yes; the surface independently
+recorded 8 fills and 3 matched units on that same slug).
+
+**n=1 cannot corroborate or contradict the preregistered compatible-flow
+hypothesis**, and that chain predates the preregistration stamp, so it is
+exploratory. The hypothesis and Model A are unchanged. No selector was fitted.
+
+## 0e. Modeled pair basis, matched sequences only
+
+MODELED. No order was ever submitted. Maker fee is 0 on both venues; the PMUS
+maker rebate is venue-credited but not attributable at fill level
+(`/v1/transfers` carries no order id) and is **excluded, not estimated**.
+
+| branch | venue | eligible | matched | median basis | range | % < $1 |
+|---|---|---|---|---|---|---|
+| queue-aware | PMUS | 27 | 5 | **0.9800** | 0.9200–0.9800 | 100% |
+| optimistic | PMUS | 37 | 14 | 0.9800 | 0.7000–0.9950 | 100% |
+| queue-aware | INTL *(ref)* | 33 | 12 | 0.9475 | 0.6858–1.0342 | 92% |
+| optimistic | INTL *(ref)* | 68 | 33 | 0.9600 | 0.6600–1.0500 | 91% |
+
+Queue-aware and optimistic are never compared across venues and never pooled.
+Median modeled gross on the PMUS queue-aware branch is +$0.0200 per pair on
+n=5. That is an observation, not edge, profit or expectancy.
+
+All five PMUS queue-aware matches are LoL/CS2 — but that pipeline's slate
+excludes ATP, WTA, CFB and table-tennis entirely, so "esports" here is a
+property of the slate, not an established property of the venue. The esports
+habitat claim stays withdrawn.
+
 ## 1. The PMUS zero-match is NOT a liquidity failure
 
 Across the venue-separated chain run:
