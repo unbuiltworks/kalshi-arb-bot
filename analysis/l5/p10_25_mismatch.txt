@@ -1,0 +1,40 @@
+MISMATCH TABLE -- cells where v2 says EXTEND but L5 actually acquires the
+opposite side >=40% of the time.  14 of 165 cells (n>=30) mismatch.
+
+state bucket                                  L5 COMPL% v2 action              n   OOS%   <=300s
+------------------------------------------------------------------------------------------------
+p55-75c|tte>10m|imb>50|last=extend                 35.9 extend              2628    0.0     99.8
+p10-25c|tte5-10m|imb>50|last=extend                21.0 extend              2596    0.0     99.9
+p10-25c|tte5-10m|imb>50|last=complete              81.3 complete            2396    0.0    100.0
+p25-45c|tte>10m|imb>50|last=complete               72.7 complete            2078    0.0    100.0
+p<10c|tte2-5m|imb>50|last=extend                   23.6 extend              2013    0.0     91.6
+p25-45c|tte5-10m|imb>50|last=complete              75.4 complete            1785    0.0     99.9
+p55-75c|tte5-10m|imb>50|last=extend                38.8 extend              1780    0.0     99.9
+p10-25c|tte2-5m|imb>50|last=extend                 25.9 extend              1723    0.0     97.8
+p<10c|tte30-120s|imb>50|last=extend                22.9 extend              1543    0.0     74.2
+p25-45c|tte5-10m|imb>50|last=extend                27.1 extend              1496    0.0     99.7
+p25-45c|tte>10m|imb>50|last=extend                 27.5 extend              1463    0.0     99.9
+p10-25c|tte>10m|imb>50|last=complete               72.2 complete            1327    0.0    100.0
+p75-90c|tte5-10m|imb>50|last=extend                44.9 extend              1267    0.0    100.0
+p55-75c|tte2-5m|imb>50|last=extend                 39.5 extend              1133    0.0     98.0
+p<10c|tte5-10m|imb>50|last=extend                  21.6 extend              1127    0.0     98.1
+p75-90c|tte2-5m|imb>50|last=extend                 39.4 extend              1109    0.0     95.8
+p10-25c|tte2-5m|imb>50|last=complete               74.7 complete            1105    0.0     99.5
+p55-75c|tte5-10m|imb>50|last=complete              69.7 complete            1089    0.0    100.0
+p75-90c|tte5-10m|imb>50|last=complete              62.7 complete            1082    0.0     99.7
+p75-90c|tte>10m|imb>50|last=extend                 40.0 extend              1026    0.0     99.8
+p75-90c|tte2-5m|imb>50|last=complete               65.5 complete            1017    0.0     99.5
+p45-55c|tte>10m|imb>50|last=extend                 38.5 extend               893    0.0     99.7
+p55-75c|tte>10m|imb>50|last=complete               72.3 complete             844    0.0    100.0
+p10-25c|tte30-120s|imb>50|last=extend              24.6 extend               832    0.0     90.9
+p>90c|tte2-5m|imb>50|last=complete                 58.7 complete             812    0.0     94.3
+p25-45c|tte2-5m|imb>50|last=extend                 32.5 extend               799    0.0     96.9
+p45-55c|tte>10m|imb>50|last=complete               80.1 complete             768    0.0    100.0
+p25-45c|tte2-5m|imb>50|last=complete               72.1 complete             767    0.0     99.6
+p25-45c|tte>10m|imb10-50|last=complete             66.1 complete             755    0.0     99.6
+p55-75c|tte2-5m|imb>50|last=complete               75.8 complete             737    0.0     99.6
+p<10c|tte5-10m|imb>50|last=complete                77.4 complete             731    0.0     99.5
+p55-75c|tte30-120s|imb>50|last=extend              36.8 extend               666    0.0     90.7
+
+DECISIONS inside mismatching cells: 4401 of 67722  (6.5%)
+cells whose ACTUAL complete rate is between 40% and 60% (a coin flip): 49 of 165, carrying 10015 decisions (14.8%)
