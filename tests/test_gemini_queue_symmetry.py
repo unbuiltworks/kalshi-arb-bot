@@ -89,3 +89,37 @@ def test_THE_LEDGER_DEFAULTS_TO_THE_CORRECTED_MODEL():
     from src.gemini_execution import hypothetical as HY
     assert HY.HypotheticalBook(symbol="S", policy="P").queue_mode \
         == TR.QUEUE_SYMMETRIC
+
+
+# ------------------------------------------- the corrected evidence cohort
+
+def test_EVERY_WINDOW_AND_HEARTBEAT_STAMPS_THE_EVIDENCE_COHORT():
+    """Old biased rows must not be summable with corrected ones.
+
+    Separating them by timestamp means every future reader has to remember
+    which day the fill simulator changed. Stamping the cohort makes the
+    separation a property of the evidence.
+    """
+    import inspect
+    from src.gemini_execution import shadow_soak as SS
+    assert SS.EVIDENCE_COHORT == "CORRECTED_QUEUE_V1"
+    win = inspect.getsource(SS.one_window)
+    assert '"evidence_cohort": EVIDENCE_COHORT' in win
+    assert '"queue_model": getattr(hyp, "queue_mode", None)' in win
+    hb = inspect.getsource(SS.CohortHeartbeat.emit)
+    assert '"evidence_cohort": EVIDENCE_COHORT' in hb
+
+
+def test_THE_COHORT_NOTE_SAYS_WHAT_UNSTAMPED_ROWS_MEAN():
+    from src.gemini_execution import shadow_soak as SS
+    note = SS.EVIDENCE_COHORT_NOTE.lower()
+    assert "symmetric" in note and "do not count" in note
+
+
+def test_THE_RUNNING_LEDGER_IS_THE_CORRECTED_ONE():
+    """A cohort stamped CORRECTED_QUEUE_V1 while running the old model would
+    be worse than no stamp at all."""
+    from src.gemini_execution import hypothetical as HY
+    from src.gemini_execution import tape_replay as TR
+    assert HY.HypotheticalBook(symbol="S", policy="P").queue_mode \
+        == TR.QUEUE_SYMMETRIC

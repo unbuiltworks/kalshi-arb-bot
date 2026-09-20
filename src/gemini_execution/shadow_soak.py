@@ -416,6 +416,9 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
          "state": (CR.COMPLETED if (gate["safe"] or rolled_on_shadow)
                    else gate["state"]),
          "mutations_sent": 0,
+         "evidence_cohort": EVIDENCE_COHORT,
+         "queue_model": getattr(hyp, "queue_mode", None),
+         "evidence_cohort_note": EVIDENCE_COHORT_NOTE,
          "labels": ("SHADOW: zero orders were sent and no session exists. "
                     "SUBMITTED/FILLED/SETTLED/REALIZED are all zero and a "
                     "recorded plan is none of them.")}
@@ -443,6 +446,22 @@ async def one_window(runner: CR.ContinuousRunner, *, cycles: int,
     } for r in rows]
     return w
 
+
+#: WHICH EVIDENCE COHORT THIS PROCESS WRITES.
+#:
+#: Every row written before 2026-09-20 came from a fill simulator that gave a
+#: NO rung no queue to clear while a YES rung cleared the real ladder, so its
+#: fills, matched pairs and pair bases are upper bounds of unknown size. They
+#: are not comparable with rows written after the correction and must never be
+#: summed with them. The cohort is stamped on every window and heartbeat so
+#: the separation is a property of the evidence rather than of remembering
+#: which day it was.
+EVIDENCE_COHORT = "CORRECTED_QUEUE_V1"
+EVIDENCE_COHORT_NOTE = (
+    "rows stamped CORRECTED_QUEUE_V1 use symmetric queue accounting: both "
+    "legs queue behind the ladder an aggressor actually consumes. Unstamped "
+    "rows predate the 2026-09-20 correction, carry a one-legged queue and do "
+    "not count toward this cohort's scoreboard.")
 
 #: how often a cohort prints its compact heartbeat, in cycles
 HEARTBEAT_EVERY = 5
@@ -595,6 +614,7 @@ class CohortHeartbeat:
     def emit(self, *, tte_s=None) -> None:
         print("L5_COHORT_HB " + json.dumps({
             "cohort": self.cohort,
+            "evidence_cohort": EVIDENCE_COHORT,
             "current_contract": self.current_contract,
             "tte_s": (round(tte_s, 1) if isinstance(tte_s, (int, float))
                       else None),
