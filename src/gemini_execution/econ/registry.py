@@ -125,12 +125,23 @@ class CohortState:
             return None
         return os.path.join(self.state_dir, "%s.%s.json" % (self.cohort, name))
 
+    def _pa(self, name: str) -> Optional[str]:
+        """ARM-level files carry the arm in the name. Two arms' labelled
+        cohorts describe different strategies and must never share a file."""
+        if not self.state_dir:
+            return None
+        return os.path.join(self.state_dir,
+                            "%s.%s.%s.json" % (self.cohort, self.arm, name))
+
     def load(self) -> "CohortState":
         h, sp = self._p("hazard"), self._p("spreads")
         if h:
             self.market.hazard = HZ.HazardEstimator.load(h)
         if sp:
             self.market.spreads = SC.SpreadCensus.load(sp)
+        tx = self._pa("toxicity")
+        if tx:
+            self.toxicity = PF.ToxicityDataset.load(tx)
         return self
 
     def save(self) -> Dict[str, Any]:
@@ -145,9 +156,10 @@ class CohortState:
             self.last_save_error = str(exc)
             out["errors"].append(str(exc))
             return out
-        for name, obj in (("hazard", self.market.hazard),
-                          ("spreads", self.market.spreads)):
-            p = self._p(name)
+        for name, obj, per_arm in (("hazard", self.market.hazard, False),
+                                   ("spreads", self.market.spreads, False),
+                                   ("toxicity", self.toxicity, True)):
+            p = self._pa(name) if per_arm else self._p(name)
             try:
                 obj.save(p)
                 out["saved"].append(name)

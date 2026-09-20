@@ -201,3 +201,46 @@ def test_legs_are_counted_separately():
     rep = ds.report()
     assert rep["by_leg"]["NO"]["toxic_share"] == 1.0
     assert rep["by_leg"]["YES"]["toxic_share"] == 0.0
+
+
+# ------------------------------------------------- durability of the cohort
+
+def test_the_labelled_cohort_survives_a_restart(tmp_path):
+    """The service runs restartPolicyType ALWAYS. Without this, a crash wipes
+    hours of labelling and the waiting period produces nothing."""
+    from src.gemini_execution.econ import registry as REG
+    REG.reset()
+    d = str(tmp_path)
+    st = REG.state_for("BTC5m", arm="PP_F0", state_dir=d)
+    r = st.toxicity.add(features={"held_bid_drift_60s": -0.02},
+                        cohort="BTC5m", arm="PP_F0", symbol="S", leg="NO",
+                        price="0.33", t=1.0)
+    PF.ToxicityDataset.label(r, markout_60s=-52.0, complement_filled=False,
+                             max_adverse_ticks=-60.0)
+    st.window_done()
+    REG.reset()                                    # the container restarts
+    back = REG.state_for("BTC5m", arm="PP_F0", state_dir=d)
+    assert back.toxicity.report()["labelled"] == 1
+    assert back.toxicity.report()["toxic"] == 1
+    REG.reset()
+
+
+def test_two_arms_never_share_a_cohort_file(tmp_path):
+    """Two arms' labelled fills describe different strategies."""
+    from src.gemini_execution.econ import registry as REG
+    REG.reset()
+    d = str(tmp_path)
+    a = REG.state_for("BTC5m", arm="PP_F0", state_dir=d)
+    b = REG.state_for("BTC5m", arm="PP_F1", state_dir=d)
+    ra = a.toxicity.add(features={}, cohort="BTC5m", arm="PP_F0", symbol="S",
+                        leg="NO", price="0.3", t=1.0)
+    PF.ToxicityDataset.label(ra, markout_60s=-5.0, complement_filled=False,
+                             max_adverse_ticks=-5.0)
+    a.window_done()
+    b.window_done()
+    REG.reset()
+    assert REG.state_for("BTC5m", arm="PP_F0",
+                         state_dir=d).toxicity.report()["labelled"] == 1
+    assert REG.state_for("BTC5m", arm="PP_F1",
+                         state_dir=d).toxicity.report()["labelled"] == 0
+    REG.reset()

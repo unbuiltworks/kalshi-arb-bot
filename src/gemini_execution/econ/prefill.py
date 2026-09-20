@@ -271,6 +271,27 @@ class ToxicityDataset:
                            "into the definition."),
         }
 
+    # -- DURABILITY. The labelled cohort is the one thing a freeze exists to
+    # accumulate, and the service runs restartPolicyType ALWAYS: a crash would
+    # silently wipe hours of labelling and the wait would produce nothing.
+    def save(self, path: str) -> None:
+        import json
+        import os as _os
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump({"schema": SCHEMA, "rows": self.rows}, fh, default=str)
+        _os.replace(tmp, path)          # atomic; a torn file is not a cohort
+
+    @classmethod
+    def load(cls, path: str) -> "ToxicityDataset":
+        import json
+        try:
+            with open(path) as fh:
+                d = json.load(fh)
+            return cls(rows=list(d.get("rows") or []))
+        except (OSError, ValueError, TypeError):
+            return cls()
+
     def labelled(self) -> List[Dict[str, Any]]:
         return [r for r in self.rows
                 if (r.get("outcome") or {}).get("toxic") is not None]
