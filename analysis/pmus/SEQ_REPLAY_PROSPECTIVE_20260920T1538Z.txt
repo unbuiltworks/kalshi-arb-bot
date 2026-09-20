@@ -1,0 +1,126 @@
+============================================================================================================
+PMUS  --  PRIMARY EXECUTABLE TRANSFER TARGET
+   flow provenance: CAUSAL INFERRED flow from sharesTraded deltas -- never a real print
+============================================================================================================
+  cohort                         fill rule    1stFll   elig matched P(el|1st)  P(mt|el) P(mt|1st)  medEXT  medTopp
+  ----------------------------------------------------------------------------------------------------------------
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC      173     98      38     56.6      38.8      22.0     2.0    609.8
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE     124     71      16     57.3      22.5      12.9     2.0    975.3
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC      162     65      25     40.1      38.5      15.4       0    298.4
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE     120     57      11     47.5      19.3       9.2       1    684.3
+  frame_cap_10_imb1-10_boundary  OPTIMISTIC      162     63      25     38.9      39.7      15.4       0    298.4
+  frame_cap_10_imb1-10_boundary  QUEUE_AWARE     120     57      11     47.5      19.3       9.2       1    684.3
+  frame_cap_50_imb10-50_boundary OPTIMISTIC      162     65      25     40.1      38.5      15.4       0    298.4
+  frame_cap_50_imb10-50_boundary QUEUE_AWARE     120     57      11     47.5      19.3       9.2       1    684.3
+
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC   residual bins {'imb1-10': 173}  hit_cap=120  pair_basis med=0.98 (<1: 89.5%, n=38)  modeled edge/pair=0.02
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE  residual bins {'imb1-10': 124}  hit_cap=79  pair_basis med=0.9475 (<1: 87.5%, n=16)  modeled edge/pair=0.0525
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC   residual bins {'imb10-50': 62, 'imb1-10': 92, 'imb>50': 8}  hit_cap=0  pair_basis med=0.98 (<1: 84.0%, n=25)  modeled edge/pair=0.02
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE  residual bins {'imb1-10': 90, 'imb10-50': 29, 'imb>50': 1}  hit_cap=0  pair_basis med=0.955 (<1: 81.8%, n=11)  modeled edge/pair=0.045
+
+============================================================================================================
+INTL  --  REFERENCE / FIDELITY ONLY -- not executable
+   flow provenance: REAL PRINTS, direction known
+============================================================================================================
+  cohort                         fill rule    1stFll   elig matched P(el|1st)  P(mt|el) P(mt|1st)  medEXT  medTopp
+  ----------------------------------------------------------------------------------------------------------------
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC      177    120      59     67.8      49.2      33.3       0    131.5
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE      89     52      17     58.4      32.7      19.1       2    532.7
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC      153     76      32     49.7      42.1      20.9     0.0     64.0
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE      85     45      13     52.9      28.9      15.3       2    516.7
+  frame_cap_10_imb1-10_boundary  OPTIMISTIC      153     76      32     49.7      42.1      20.9     0.0     64.0
+  frame_cap_10_imb1-10_boundary  QUEUE_AWARE      85     45      13     52.9      28.9      15.3       2    516.7
+  frame_cap_50_imb10-50_boundary OPTIMISTIC      153     76      32     49.7      42.1      20.9     0.0     64.0
+  frame_cap_50_imb10-50_boundary QUEUE_AWARE      85     45      13     52.9      28.9      15.3       2    516.7
+
+  A_SAFE_TRANSFER_CONTROL        OPTIMISTIC   residual bins {'imb1-10': 177}  hit_cap=92  pair_basis med=0.94 (<1: 96.6%, n=59)  modeled edge/pair=0.06
+  A_SAFE_TRANSFER_CONTROL        QUEUE_AWARE  residual bins {'imb1-10': 89}  hit_cap=43  pair_basis med=0.95 (<1: 100.0%, n=17)  modeled edge/pair=0.05
+  B_FIDELITY_DIAGNOSTIC          OPTIMISTIC   residual bins {'imb10-50': 39, 'imb1-10': 112, 'imb>50': 2}  hit_cap=0  pair_basis med=0.9491 (<1: 93.8%, n=32)  modeled edge/pair=0.0509
+  B_FIDELITY_DIAGNOSTIC          QUEUE_AWARE  residual bins {'imb10-50': 10, 'imb1-10': 75}  hit_cap=0  pair_basis med=0.95 (<1: 100.0%, n=13)  modeled edge/pair=0.05
+
+====================================================================================================
+P0-B FROZEN L5 SEQUENTIAL REPLAY -- STRICTLY SAME-MARKET -- SHADOW/MODELED ONLY
+Model A unchanged. Episodes run OPEN -> EXTEND* -> COMPLETE*, closed only on return
+to flat; legs are NOT forced equal and pair basis uses per-side AVERAGE cost.
+PROSPECTIVE WINDOW: after the 15:24:09Z sampling-frame marker. PMUS flow is CAUSAL
+INFERRED from sharesTraded deltas -- never a real print.
+====================================================================================================
+
+
+########## QUEUE_AWARE ##########
+
+--- BY CATEGORY (league) ---
+league       new?     eps    opp  matched   match/100   lat_p50   medEXT     mQty     basis
+odicr        NEW        1      1        1       100.0      308s        2        3    0.5200
+lal          ctrl       7      1        1        14.3       24s        2        1    0.9800
+cs2          ctrl       4      1        1        25.0      508s        1        1    0.9800
+setkamecz    NEW        2      1        1        50.0      279s        0        1    0.9800
+setkameua    NEW        3      0        0         0.0         -        0        0         -
+dota2        NEW        2      0        0         0.0         -        2        0         -
+odcup        NEW        1      0        0         0.0         -        2        0         -
+lol          ctrl       1      0        0         0.0         -        2        0         -
+bcl          NEW        1      0        0         0.0         -        2        0         -
+setkamemd    NEW        1      0        0         0.0         -        2        0         -
+tsl          NEW        1      0        0         0.0         -        0        0         -
+ere          NEW        1      0        0         0.0         -        0        0         -
+epl          ctrl       1      0        0         0.0         -        0        0         -
+
+--- BY SLUG, episodes that reached a same-market opposite fill ---
+slug                                         league       eps  EXTb4   lat_s     mQty   basis    gross
+aec-odicr-zim-aus-2026-09-20                 odicr          6      2     308        3  0.5200  +0.4800
+asc-lal-atm-rma-2026-09-20-neg-1pt5          lal            2      0      24        1  0.9800  +0.0200
+aec-cs2-lav-vexar-2026-09-20                 cs2            4      2     508        1  0.9800  +0.0200
+aec-setkamecz-halpav-kolleo-2026-09-20       setkamecz      2      0     279        1  0.9800  +0.0200
+
+--- WHERE THE CHAIN BREAKS (episodes with NO same-market opposite fill) ---
+   1 policy never recommended COMPLETE               12  (54.5% of 22 unmatched)
+   3 COMPLETE quoted, NO compatible opposing flow     9  (40.9% of 22 unmatched)
+   4 flow arrived but queue never cleared             1  (4.5% of 22 unmatched)
+   unresolved residual at end: 23 episodes, qty distribution {1: 9, 2: 4, 3: 10}
+   residual duration p50=330s p90=684s
+
+
+########## OPTIMISTIC ##########
+
+--- BY CATEGORY (league) ---
+league       new?     eps    opp  matched   match/100   lat_p50   medEXT     mQty     basis
+setkamecz    NEW        3      2        2        66.7       60s        1        3    0.9850
+odicr        NEW        1      1        1       100.0      308s        2        3    0.5200
+lal          ctrl       7      2        2        28.6       60s        2        2    0.9800
+cs2          ctrl       4      1        1        25.0      572s        2        1    0.9800
+setkameua    NEW        4      1        1        25.0       32s        2        1    0.9800
+nor1         NEW        3      0        0         0.0         -        0        0         -
+epl          ctrl       3      0        0         0.0         -        0        0         -
+dota2        NEW        2      0        0         0.0         -        2        0         -
+atbl         NEW        2      0        0         0.0         -        0        0         -
+bra          NEW        2      0        0         0.0         -        0        0         -
+odcup        NEW        1      0        0         0.0         -        2        0         -
+lol          ctrl       1      0        0         0.0         -        2        0         -
+bcl          NEW        1      0        0         0.0         -        2        0         -
+setkamemd    NEW        1      0        0         0.0         -        2        0         -
+tsl          NEW        1      0        0         0.0         -        2        0         -
+alsv         NEW        1      0        0         0.0         -        1        0         -
+ligpor       NEW        1      0        0         0.0         -        0        0         -
+brb          NEW        1      0        0         0.0         -        1        0         -
+sld          NEW        1      0        0         0.0         -        0        0         -
+swsl         NEW        1      0        0         0.0         -        0        0         -
+ere          NEW        1      0        0         0.0         -        0        0         -
+
+--- BY SLUG, episodes that reached a same-market opposite fill ---
+slug                                         league       eps  EXTb4   lat_s     mQty   basis    gross
+aec-odicr-zim-aus-2026-09-20                 odicr          6      2     308        3  0.5200  +0.4800
+asc-lal-atm-rma-2026-09-20-neg-1pt5          lal            2      0      24        1  0.9800  +0.0200
+aec-cs2-lav-vexar-2026-09-20                 cs2            4      2     572        1  0.9800  +0.0200
+aec-setkameua-novrus-tebyar-2026-09-20       setkameua      2      0      32        1  0.9800  +0.0200
+aec-setkamecz-halpav-kolleo-2026-09-20       setkamecz      2      0      64        1  0.9800  +0.0200
+asc-lal-atm-rma-2026-09-20-neg-2pt5          lal            2      0      96        1  0.9800  +0.0200
+aec-setkamecz-halpav-kolleo-2026-09-20       setkamecz      4      1      56        2  0.9900  +0.0100
+
+--- WHERE THE CHAIN BREAKS (episodes with NO same-market opposite fill) ---
+   1 policy never recommended COMPLETE               23  (65.7% of 35 unmatched)
+   3 COMPLETE quoted, NO compatible opposing flow    12  (34.3% of 35 unmatched)
+   unresolved residual at end: 36 episodes, qty distribution {1: 15, 2: 6, 3: 15}
+   residual duration p50=471s p90=716s
+
+
+PROVENANCE: nfl_sunday.jsonl + flow_pmus.jsonl, post-marker window 13.7 min, generated 15:37:51Z
