@@ -52,11 +52,10 @@ LIVE_PER_EVENT = int(os.getenv("L5_LIVE_PER_EVENT", "6"))
 INTL_PER_EVENT = int(os.getenv("L5_INTL_PER_EVENT", "4"))
 INTL_CAP = int(os.getenv("L5_INTL_CAP", "150"))
 BAND_LO, BAND_HI = 0.30, 0.70
-# PREREGISTERED DIAGNOSTIC STRATUM, not a selection-rule change and not a
-# deployment recommendation: the frozen v2 model only recommends COMPLETE in
-# p10-25c, so the observation set must contain live markets that actually sit
-# there or the policy can never be tested where it operates. Rows carry
-# stratum so this is always separable from the [0.30,0.70] cohort.
+# PREREGISTERED DIAGNOSTIC STRATUM retained for continuity. The earlier
+# rationale that v2 COMPLETE was confined to p10-25c was falsified by the
+# canonical audit; rows remain explicitly labelled so this diagnostic sample
+# can never be confused with the [0.30,0.70] transfer cohort.
 DIAG_LO, DIAG_HI = 0.10, 0.25
 
 _CTX = (ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")
@@ -89,6 +88,25 @@ def qf(v):
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+def kickoff_within_hours(value, hours: float = 12.0) -> bool:
+    """True for an event whose scheduled start is from now through +hours.
+
+    Used only to guarantee today's NFL PRE control survives the generic
+    pregame cap. It is an observation-priority rule, never an execution gate.
+    """
+    if not value:
+        return False
+    try:
+        s = str(value).replace("Z", "+00:00")
+        k = dt.datetime.fromisoformat(s)
+        if k.tzinfo is None:
+            k = k.replace(tzinfo=dt.timezone.utc)
+        delta_s = (k - dt.datetime.now(dt.timezone.utc)).total_seconds()
+        return 0.0 <= delta_s <= hours * 3600.0
+    except (TypeError, ValueError):
+        return False
 
 
 def stream(name: str):
@@ -128,14 +146,17 @@ def rank(k) -> tuple:
 
 # --------------------------------------------------------------- PMUS books
 def pmus_discover() -> list:
-    """LIVE first (uncapped by band), then the [0.30,0.70] pregame control,
-    then the p10-25c DIAGNOSTIC STRATUM. ?limit is mandatory: without it the
-    endpoint silently returns only ten events per league."""
+    """LIVE first, today's NFL PRE control second, then generic pregame.
+
+    ?limit is mandatory: without it the endpoint silently returns only ten
+    events per league. NFL PRE is explicitly prioritized so the durable
+    collector cannot lose the same-market PRE->LIVE control to TOTAL_CAP.
+    """
     try:
         leagues = [l["slug"] for l in get(GATEWAY + "/v2/leagues")["leagues"]]
     except Exception:
         return []
-    live, pre, diag = [], [], []
+    live, nfl_pre, pre, diag = [], [], [], []
     for lg in leagues:
         try:
             ev = get(GATEWAY + "/v2/leagues/%s/events?limit=500" % lg)
@@ -172,14 +193,22 @@ def pmus_discover() -> list:
             else:
                 for row, mid in picked[:9]:
                     if BAND_LO <= mid <= BAND_HI:
-                        pre.append({**row, "stratum": "pre_band"})
+                        base = {**row, "stratum": "pre_band"}
+                        pre.append(base)
+                        if lg == "nfl" and kickoff_within_hours(
+                                row.get("kickoff_utc"), 12.0):
+                            nfl_pre.append(
+                                {**row, "stratum": "nfl_pre_control"})
     seen, out = set(), []
-    for r in live + diag + pre:
+    # NFL PRE must be ahead of generic PRE so today's same-market control
+    # cannot be crowded out by other leagues under TOTAL_CAP.
+    for r in live + diag + nfl_pre + pre:
         if r["slug"] in seen:
             continue
         seen.add(r["slug"])
         out.append(r)
-        if len(out) >= max(TOTAL_CAP, len(live) + len(diag)):
+        if len(out) >= max(
+                TOTAL_CAP, len(live) + len(diag) + len(nfl_pre)):
             break
     return out
 
@@ -243,11 +272,19 @@ def pmus_books_loop(state: dict) -> None:
 
 # ---------------------------------------------------------------- PMUS flow
 def pmus_flow_loop(state: dict) -> None:
+    sweep = 0
     while True:
         t0 = time.time()
+        sweep += 1
         livemap = state.get("pmus_live") or {}
-        sel = [r for r in (state.get("pmus") or [])
-               if livemap.get(r["event"], (False,))[0]]
+        # LIVE flow stays at 8s. Today's NFL PRE control is sampled every
+        # fourth sweep (~32s) so PRE compatible-flow can be compared with the
+        # same markets after kickoff without materially increasing load.
+        sel = [
+            r for r in (state.get("pmus") or [])
+            if livemap.get(r["event"], (False,))[0]
+            or (r.get("stratum") == "nfl_pre_control" and sweep % 4 == 0)
+        ]
         qq: queue.Queue = queue.Queue()
         for r in sel:
             qq.put(r)
