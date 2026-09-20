@@ -1,0 +1,73 @@
+{
+  "experiment": "PMUS NFL Sunday PRE->LIVE habitat test, 2026-09-20",
+  "status": "PREREGISTERED. Written and committed BEFORE any reach, movement or recycling figure was computed for this slate.",
+  "posture": "READ-ONLY / SHADOW. GET requests to the public PMUS gateway only. No credentials, no order path, no venue writes, no arming, no change to Model A or any execution system. The Gemini corrected A+B prospective shadow keeps running untouched as the control.",
+  "why_this_slate": "the previous Phase-2 reach test ran 02:40-03:10 UTC when essentially no US sport was live and 176 of 229 sampled markets were NFL PREGAME for games days away. Those reach figures are valid only as a lower bound for that hour and cannot answer whether LIVE sport supplies L5-like habitat. Today's slate is the natural experiment.",
+  "slate_as_the_venue_serves_it": {
+    "nfl_events": 10,
+    "nfl_markets_total": 3394,
+    "kickoffs_utc": {
+      "2026-09-20T17:00Z (13:00 ET)": 8,
+      "2026-09-20T20:05Z (16:05 ET)": 2
+    },
+    "SNF_note": "no 20:20 ET / 00:20 UTC Sunday Night Football event is present in the league feed at selection time. The SNF cohort stays DEFINED and will be reported EMPTY if no such game appears, rather than dropped."
+  },
+  "selection_rule_fixed_in_advance": {
+    "rule": "per event, the markets whose mid sits nearest 0.50 within [0.30, 0.70] -- the price region L5 actually operates in -- capped at 2 per sportsMarketType family and 13 per NFL event / 9 per other event, so no family or game dominates",
+    "never_uses": "reach, movement, depth or any outcome variable",
+    "selected": 286,
+    "events": 36,
+    "by_league": {
+      "nfl": 130,
+      "mlb": 66,
+      "sea": 30,
+      "lal": 29,
+      "epl": 24,
+      "mls": 7
+    },
+    "rediscovery_s": 900,
+    "note": "re-discovery every 15 min refreshes each event's live flag, period and score, which is what makes the same-market PRE->LIVE pairing possible"
+  },
+  "cadence": {
+    "before_2026-09-20T15:00Z": "60s (cheap overnight PRE baseline)",
+    "from_15:00Z_to_2026-09-21T03:30Z": "8s",
+    "why": "the 8s PRE window from 15:00-17:00Z is a like-for-like control for the 8s LIVE measurement. Reach at 30/60/120s is computed ONLY on 8s rows."
+  },
+  "cohorts_reported_separately_never_pooled": [
+    "PRE (8s, pre-kickoff)",
+    "NFL 1PM ET LIVE",
+    "NFL 4:05/4:25 ET LIVE",
+    "NFL SNF LIVE (may be empty)",
+    "late-game / high-TTE-pressure states where sample permits",
+    "and, crosscutting, moneyline vs spread vs total vs other"
+  ],
+  "preregistered_qualification_thresholds": {
+    "median_spread": "<= 0.02",
+    "share_of_states_at_or_below_2c": ">= 95%",
+    "resting_price_reach_within_120s": ">= 70%",
+    "median_reach_s": "<= 30",
+    "near_qualifiers": "ranked and reported with the exact failing dimension named; never silently discarded"
+  },
+  "frozen_reference": {
+    "international_btc15m_8s": {
+      "median_spread": 0.01,
+      "share_at_or_below_1c": 96.1,
+      "reach120": 80.6,
+      "median_reach_s": 16
+    },
+    "note": "reach120 for both reference venues was corrected to EXCLUDE right-censored states rather than score them as misses (International 76.0 -> 80.6, Gemini 16.8 -> 24.4). The corrected figures are canonical and the same exclusion applies to every figure in this experiment."
+  },
+  "primary_discriminator": "REACH and recycling, not spread. A resting BUY at p can only fill if the market later offers at or below p; the mirror test applies to the complement. Spread alone already failed to separate Gemini (wide, 24.4% reach), PMUS pregame (tight but frozen) and International (tight and churning, 80.6%).",
+  "recycling_resource_being_tested": {
+    "not": "literal PositionSplit behaviour -- the mechanism autopsy established that L5 never mints; the venue operator does, as matching plumbing",
+    "but": "the economically equivalent resource: how often complementary or opposing demand arrives at a price that would let resting inventory recycle, measured as FIRST MAKER FILL -> OPPOSITE EXECUTABLE INTEREST -> MATCHED at 30s / 60s / 120s / remainder-of-market"
+  },
+  "if_a_cohort_qualifies": "run the EXISTING frozen continuous-inventory L5 model in corrected shadow on it, preserving unequal sizing, same-side EXTEND runs, inventory imbalance, patient opposite acquisition, price-dependent sizing and TTE behaviour. It is NOT to be converted into equal-size YES/NO pair trading. Shadow only; no trading.",
+  "anti_fitting_commitments": [
+    "thresholds above are fixed and will not be moved after seeing results",
+    "cohorts will not be pooled to manufacture a pass",
+    "near-misses are reported with the failing dimension named",
+    "the Gemini control keeps every prospective result exactly as recorded, including the economically bad shadow COMPLETE at pair basis 1.23"
+  ],
+  "labels": "Every fill, pair and conversion produced by this experiment is SHADOW/HYPOTHETICAL. No order exists; nothing is submitted, filled, settled or realized."
+}
