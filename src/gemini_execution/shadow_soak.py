@@ -1084,6 +1084,31 @@ def _print_econ(w) -> None:
                       fs.get("post_first_fill_markout_p50_120s"),
                       fs.get("post_first_fill_adverse_share_60s"),
                       fs.get("by_first_fill_leg")), flush=True)
+        # ---- TOXICITY. Can the adverse SIDE be identified before it fills?
+        tox = e.get("toxicity_dataset") or {}
+        if tox.get("rows"):
+            print("ECON_TOX %s %s rows=%s labelled=%s toxic=%s | byLeg=%s" % (
+                w.get("symbol"), lbl[:20], tox.get("rows"),
+                tox.get("labelled"), tox.get("toxic"),
+                tox.get("by_leg")), flush=True)
+        wf = e.get("toxicity_walk_forward") or {}
+        if wf.get("labelled"):
+            if not wf.get("sufficient"):
+                print("ECON_TOX_WF %s %s INSUFFICIENT | %s" % (
+                    w.get("symbol"), lbl[:20], wf.get("why")), flush=True)
+            else:
+                o = wf.get("oos_summary") or {}
+                print("ECON_TOX_WF %s %s folds=%s | OOS toxicAvoided=%s "
+                      "goodBlocked=%s retained=%s | mo50 unfiltered=%s "
+                      "filtered=%s | compRate unfiltered=%s filtered=%s" % (
+                          w.get("symbol"), lbl[:20], o.get("folds_scored"),
+                          o.get("toxic_avoided_share_p50"),
+                          o.get("good_blocked_share_p50"),
+                          o.get("opportunity_retained_p50"),
+                          o.get("markout_p50_unfiltered"),
+                          o.get("markout_p50_filtered"),
+                          o.get("complement_rate_unfiltered"),
+                          o.get("complement_rate_filtered")), flush=True)
         # THE DENOMINATOR. A cycle the socket could not vouch for is NOT an
         # entry refusal, and an admission rate over total cycles would report a
         # coverage gap as a strategy verdict.

@@ -149,6 +149,13 @@ def terms_for(symbol: str) -> Dict[str, Any]:
         "market_state": c.get("marketState"),
         "event_status": ev.get("status"),
         "expiry": c.get("expiryDate"),
+        # THE STRIKE, published on the contract and previously reachable only
+        # through _strike_check. Distance from it is the single most obvious
+        # causal driver of which side of a prediction book goes toxic, and it
+        # was not being surfaced. The settlement rule is the contract's own:
+        # UP resolves yes when settlementValue >= strike.value.
+        "strike": ((c.get("strike") or {}).get("value")
+                   if isinstance(c.get("strike"), Mapping) else None),
         "missing_fields": missing,
         "source": "%s/{eventTicker} contract object (PUBLIC)" % EVENTS_PATH,
         "why": (None if not missing

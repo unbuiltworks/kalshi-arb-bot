@@ -46,11 +46,13 @@ from src.gemini_execution.econ import actions as AC
 from src.gemini_execution.econ import entry as EN
 from src.gemini_execution.econ import hazard as HZ
 from src.gemini_execution.econ import policy as PO
+from src.gemini_execution.econ import prefill as PF
 from src.gemini_execution.econ import scoreboard as SB
 from src.gemini_execution.econ import veto as VT
 from src.gemini_execution.econ import counterfactual as CF
 from src.gemini_execution.econ import coverage as CVB
 from src.gemini_execution.econ import spread_census as SC
+from src.gemini_execution.econ import toxicity as TX
 from src.gemini_execution.econ import ws_flow as WF
 
 SCHEMA = "gemini_econ_arm/v1"
@@ -91,6 +93,11 @@ def spec_for(cohort_name: str):
                "GEMINI_ECON_V1 so the challenger differs from the deployed "
                "BTC15M_V2 arm in economics only; %s"
                % (label, probe.notes or "")))
+
+
+def _flt(v: Any) -> Optional[float]:
+    d = _dec(v)
+    return None if d is None else float(d)
 
 
 def _dec(v: Any) -> Optional[D]:
@@ -205,7 +212,22 @@ class GeminiEconArm:
             self.cf.note_fill()
         # THE FILL SEQUENCE. Price availability is not profit; these are the
         # fills the COMMON hypothetical book says the tape actually reached.
-        self.state.fills.note_fills(fills, t=time.time(), symbol=symbol)
+        _now = time.time()
+        for _f in (fills or []):
+            if not _f.get("was_first_fill"):
+                continue
+            # CAUSAL ONLY: assembled from ring samples at or before this
+            # instant. The outcome is attached later and is the LABEL.
+            try:
+                self.state.toxicity.add(
+                    features=self.state.ring.features_before(
+                        symbol, t=_now, leg=_f.get("leg") or "YES"),
+                    cohort=self.cohort, arm=self.label, symbol=symbol,
+                    leg=_f.get("leg") or "YES", price=_f.get("price"),
+                    t=_now)
+            except Exception:                                    # noqa: BLE001
+                pass
+        self.state.fills.note_fills(fills, t=_now, symbol=symbol)
 
         ms = CP.state_from_venue(symbol, tte, self.inv, book=book)
         kw: Dict[str, Any] = {"now": time.time()}
@@ -249,6 +271,22 @@ class GeminiEconArm:
             # follow every open candidate first fill down THIS contract's tape
             self.state.blocked.advance(book=book, t=now_t, symbol=symbol)
             self.state.fills.observe(book=book, t=now_t, symbol=symbol)
+            # THE CAUSAL RING. Everything a pre-fill rule may look at, sampled
+            # at the lane's own cadence. Shared across arms, since it is a
+            # property of the market rather than of a strategy.
+            self.ws.watch_spot()
+            _y = (book or {}).get("yes") or {}
+            _n = (book or {}).get("no") or {}
+            _pr = wsf.get("prints") or []
+            self.state.ring.observe(symbol, PF.Sample(
+                t=now_t, tte_s=(None if tte is None else float(tte)),
+                yes_bid=_flt(_y.get("bid")), yes_ask=_flt(_y.get("ask")),
+                no_bid=_flt(_n.get("bid")), no_ask=_flt(_n.get("ask")),
+                spot=self.ws.spot_mid(), strike=self._strike(symbol),
+                n_prints=len(_pr),
+                buy_prints=sum(1 for p in _pr if p.get("side") == "buy"),
+                sell_prints=sum(1 for p in _pr if p.get("side") == "sell"),
+                same_side_run_len=self.inv.run_len))
         except Exception as exc:                                 # noqa: BLE001
             # observation must never be able to stop a decision
             pass
@@ -500,6 +538,14 @@ class GeminiEconArm:
         }
         return self.last
 
+    def _strike(self, symbol: str):
+        """The contract's own published strike, or None. Never inferred."""
+        try:
+            from src.gemini_execution import metadata as MD
+            return _flt((MD.terms_for(symbol) or {}).get("strike"))
+        except Exception:                                        # noqa: BLE001
+            return None
+
     def _fork_features(self, *, tte, book, wsf, held, mode,
                        now_t) -> Dict[str, Any]:
         """Every candidate feature AT THE FORK. Captured, never fitted.
@@ -599,6 +645,32 @@ class GeminiEconArm:
         self.state.fills.close_symbol(
             self.symbol, residual_qty=abs(self.inv.residual()),
             settlement_leg=settlement)
+        # LABEL the captured pre-fill rows with what actually happened. The
+        # outcome never enters a feature; it is only ever the target.
+        try:
+            byt = {round(float(r.get("t") or 0), 1): r
+                   for r in self.state.toxicity.rows
+                   if r.get("outcome") is None
+                   and r.get("symbol") == self.symbol}
+            for row in self.state.fills.rows:
+                if row.get("symbol") != self.symbol or not row.get("first_fill"):
+                    continue
+                key = round(float(row.get("t_candidate") or 0), 1)
+                tgt = byt.get(key)
+                if tgt is None and byt:
+                    # nearest capture for this contract, within a cycle
+                    k = min(byt, key=lambda x: abs(x - key))
+                    tgt = byt[k] if abs(k - key) <= 12.0 else None
+                if tgt is None:
+                    continue
+                PF.ToxicityDataset.label(
+                    tgt,
+                    markout_60s=(row.get("markout_ticks_by_horizon_s") or {}
+                                 ).get("60"),
+                    complement_filled=row.get("complement_filled"),
+                    max_adverse_ticks=row.get("max_adverse_markout_ticks"))
+        except Exception:                                        # noqa: BLE001
+            pass
         # NOTE: the socket is NOT dropped here. The pre-warmer owns socket
         # lifetime now, because dropping at window end is precisely what made
         # every next window open blind.
@@ -615,6 +687,9 @@ class GeminiEconArm:
                 "variant": (self.pol.thresholds.spread_mode
                             if self.pol else None),
                 "fill_sequence": self.state.fills.report(),
+                "toxicity_dataset": self.state.toxicity.report(),
+                "toxicity_walk_forward": TX.walk_forward(
+                    self.state.toxicity.rows),
                 "attribution": self.state.attribution.report(),
                 "blocked_labels": self.state.blocked.report(),
                 "counterfactual": self.cf.report(),

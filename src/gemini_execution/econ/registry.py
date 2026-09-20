@@ -47,6 +47,7 @@ from src.gemini_execution.econ import counterfactual as CF
 from src.gemini_execution.econ import fill_sequence as FS
 from src.gemini_execution.econ import coverage as CV
 from src.gemini_execution.econ import hazard as HZ
+from src.gemini_execution.econ import prefill as PF
 from src.gemini_execution.econ import prewarm as PW
 from src.gemini_execution.econ import spread_census as SC
 from src.gemini_execution.econ import ws_flow as WF
@@ -69,6 +70,9 @@ class MarketState:
     prewarm: Optional[Any] = None
     spreads: SC.SpreadCensus = field(default_factory=SC.SpreadCensus)
     hazard: HZ.HazardEstimator = field(default_factory=HZ.HazardEstimator)
+    #: the causal pre-fill history is a property of the MARKET, so every arm
+    #: reads the same one rather than keeping duplicate copies of one book
+    ring: PF.PreFillRing = field(default_factory=PF.PreFillRing)
 
     def ensure_ws(self, ws: Any = None) -> Any:
         if self.ws is None:
@@ -107,6 +111,9 @@ class CohortState:
     blocked: BL.BlockedLabeler = field(default_factory=BL.BlockedLabeler)
     fills: FS.FillSequenceLedger = field(
         default_factory=FS.FillSequenceLedger)
+    #: labelled first fills: causal features in, realised outcome out. PER ARM,
+    #: because which fills happened is a property of the strategy.
+    toxicity: PF.ToxicityDataset = field(default_factory=PF.ToxicityDataset)
     windows_seen: int = 0
     save_errors: int = 0
     last_save_error: Optional[str] = None
@@ -158,6 +165,10 @@ class CohortState:
     @property
     def hazard(self) -> HZ.HazardEstimator:
         return self.market.hazard
+
+    @property
+    def ring(self) -> PF.PreFillRing:
+        return self.market.ring
 
     @property
     def ws(self) -> Any:

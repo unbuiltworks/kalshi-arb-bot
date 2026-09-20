@@ -152,6 +152,37 @@ class WsFlowSource:
         except Exception:                                        # noqa: BLE001
             pass
 
+    #: Gemini's own spot market for the BTC contracts' underlying. Read from
+    #: the SAME public market-data socket as the prediction book, so the
+    #: reference carries the same provenance as everything else a decision
+    #: uses -- rather than the polled REST tape, which is EVIDENCE ONLY.
+    SPOT_SYMBOL = "btcusd"
+
+    def watch_spot(self, symbol: Optional[str] = None) -> None:
+        self.watch(symbol or self.SPOT_SYMBOL)
+
+    def spot_mid(self, symbol: Optional[str] = None) -> Optional[float]:
+        """Mid of the spot book, or None. Never the last trade, never stale.
+
+        `snapshot()` already fails closed on an unready or stale socket, so a
+        None here means we genuinely do not know the reference -- which is
+        what a caller must see rather than a last-known value.
+        """
+        sym = symbol or self.SPOT_SYMBOL
+        book = getattr(self.feed, "_books", {}).get(sym)
+        if book is None:
+            return None
+        snap = book.snapshot()
+        if not snap:
+            return None
+        bids, asks = snap.get("bids") or [], snap.get("asks") or []
+        if not bids or not asks:
+            return None
+        try:
+            return (float(bids[0]["price"]) + float(asks[0]["price"])) / 2.0
+        except (KeyError, TypeError, ValueError):
+            return None
+
     def flow(self, symbol: str, *, window_s: float,
              min_window_s: float = 30.0,
              now: Optional[float] = None) -> Dict[str, Any]:
