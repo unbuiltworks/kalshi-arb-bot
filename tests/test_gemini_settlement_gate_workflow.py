@@ -408,13 +408,58 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     wf = WF.read_text()
     armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
     assert "--cohort" in armed, "the armed step must bind a mutation cohort"
-    # the FRESH cohort. C5 is spent at 3/6 and its three unused slots stay
-    # unused; rebinding it would be recycling a spent budget.
-    assert "COHORT-2026-09-18-C8B" in armed
+    # the FRESH cohort. Every earlier one is spent, and its unused slots stay
+    # unused; rebinding one would be recycling a spent budget.
+    assert "COHORT-2026-09-21-Q1LIVE-1" in armed
     run = armed.split("run:", 1)[1]
     for spent in ("COHORT-2026-09-18-C5", "COHORT-2026-09-18-C6",
-                  "COHORT-2026-09-18-C7"):
+                  "COHORT-2026-09-18-C7", "COHORT-2026-09-18-C8B"):
         assert spent not in run, spent
+
+
+def test_the_armed_step_names_the_reviewed_q1_envelope_explicitly():
+    """The q=1 bounds reach the driver ONLY through this flag.
+
+    Without it `run_continuous` builds the Driver on LE.DEFAULT, which is the
+    0.01 SHADOW envelope -- so an armed step that omitted it would run bounds
+    nobody authorized while every document said otherwise.
+    """
+    wf = WF.read_text()
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+    run = armed.split("run:", 1)[1]
+    assert "--envelope live_q1" in run
+    assert "--entry-tte-band \"240:280\"" in run
+    assert "shadow_q001" not in run
+
+
+def test_the_q1_cohort_is_exactly_twelve_and_chained_to_C8B():
+    """Budget 12 = CP.MAX_ACTIONS = LIVE_Q1.max_actions.
+
+    It is a FRESH DURABLE LEDGER, not a bigger budget: the authorized limit
+    is twelve action attempts and this is exactly twelve. Consumption must be
+    monotonic and must never exceed it -- a count that FELL would be a reset
+    wearing the cohort's name.
+    """
+    import json
+    import pathlib
+    from src.gemini_execution import cohort as CO
+    from src.gemini_execution import continuous_probe as CPX
+    from src.gemini_execution import live_envelope as LEX
+
+    c = CO.state("COHORT-2026-09-21-Q1LIVE-1")
+    assert c["budget"] == 12 == CPX.MAX_ACTIONS == LEX.LIVE_Q1.max_actions
+    assert 0 <= c["consumed"] <= c["budget"]
+    assert c["remaining"] == c["budget"] - c["consumed"]
+    pre = c["predecessor"]
+    assert pre["intact"] is True
+    assert pre["predecessor_ledger"].endswith(
+        "COHORT-2026-09-18-C8B/ledger.jsonl")
+    assert pre["recorded_consumed"] == 11
+    manifest = json.loads(pathlib.Path(
+        "analysis/gemini/cohorts/COHORT-2026-09-21-Q1LIVE-1/cohort.json"
+    ).read_text())
+    assert manifest["envelope_max_actions"] == CPX.MAX_ACTIONS
+    assert manifest["budget"] <= CPX.MAX_ACTIONS
 
 
 def test_the_abandoned_C8_cohort_is_never_bound_and_stays_at_zero():

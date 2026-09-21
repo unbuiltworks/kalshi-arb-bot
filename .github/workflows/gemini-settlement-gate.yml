@@ -422,7 +422,8 @@ jobs:
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort  "COHORT-2026-09-18-C8B" \
+            --cohort  "COHORT-2026-09-21-Q1LIVE-1" \
+            --envelope live_q1 \
             --entry-tte-band "240:280" \
             --ledger  analysis/gemini/continuous_ledger.jsonl \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
