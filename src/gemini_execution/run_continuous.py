@@ -1166,6 +1166,15 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # point of the spec is that they cannot be. Checked BEFORE the latch, so
     # a mismatch spends no authorization.
     rep["readiness_mode"] = bool(readiness)
+    # DECLARED AT THE TOP, FAIL-CLOSED. This was only assigned where the
+    # session is wrapped, far below -- so every run that returned EARLIER
+    # (the authorization gate, a family mismatch, an unreadable position)
+    # left it None, and the readiness gate then could not tell "the boundary
+    # was blocked" from "the boundary was never reached". Run 35615018494
+    # failed on exactly that. The value is re-stated at the wrap; here it
+    # records the mode the process is in from its first line.
+    rep["mutation_boundary"] = ("BLOCKED (readiness)" if readiness
+                                else "ENABLED")
     rep["probe_spec"] = probe_spec.as_dict() if probe_spec is not None else None
     #: recorded even with no --expect-spec-sha: the READINESS run is the one
     #: that produces this value, and the armed step is the one that asserts
@@ -1533,6 +1542,8 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     if readiness:
         from src.gemini_execution import live_readiness as LR
         session = LR.ReadinessSession(session)
+        # already declared at the top; restated here so the value and the
+        # wrapping that makes it true sit in one place when read.
         rep["mutation_boundary"] = "BLOCKED (readiness)"
     else:
         rep["mutation_boundary"] = "ENABLED"

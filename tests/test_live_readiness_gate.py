@@ -338,3 +338,66 @@ def test_a_btc15m_envelope_narrower_than_its_own_geometry_is_caught():
     assert any("UNFROZEN EXECUTION RULE" in x for x in v), v
     # and NOT the "envelope too small for the policy" rule
     assert not any("envelope allows" in x for x in v), v
+
+
+# ======================= THREE GATE READER DEFECTS, FROM RUN 35615018494
+#
+# The driver fix worked: family BTC15m, envelope ..._Q1_BTC15M_V1, band
+# 840:880, symbol GEMI-BTC15M2609211515-UP, spec hash matching, zero
+# mutations. The gate then reported three failures that were ITS OWN
+# misreadings of that evidence. A gate that misreads is worse than no gate,
+# because it is believed. Each is pinned on the REAL payload shape.
+
+#: verbatim from run 35615018494's report. There is NO `terms_accepted` key.
+REAL_TERMS = {"readable": True, "verdict": "ACCEPTED", "method": "GET",
+              "status": 200, "hasAcceptedLatest": True, "acceptedVersion": 1,
+              "latestVersion": 1, "blocks_orders": False, "why": None}
+
+#: verbatim shape: the symbol lives under `chosen`, not at the top level
+REAL_SELECTION = {"eligible": True,
+                  "chosen": {"symbol": "GEMI-BTC15M2609211515-UP",
+                             "tte_s": 877.81, "contract_status": "active",
+                             "market_state": "open"},
+                  "band": [840.0, 880.0], "cohort": "BTC15m"}
+
+
+def test_the_venues_own_ACCEPTED_is_not_rendered_UNREADABLE():
+    """RETRACTION_001 WITH THE SIGN FLIPPED. I read only `terms_accepted`,
+    which metadata.terms_status does not emit, so an authenticated 200
+    ACCEPTED came back UNREADABLE and failed the gate."""
+    got = LR.terms_provenance(REAL_TERMS)
+    assert got["state"] == LR.TERMS_TRUE, got
+
+
+def test_an_explicit_refusal_still_beats_the_verdict_summary():
+    """Fail closed: the specific field wins over the summary word."""
+    ts = dict(REAL_TERMS, hasAcceptedLatest=False)
+    assert LR.terms_provenance(ts)["state"] == LR.TERMS_FALSE
+
+
+def test_a_readable_response_that_says_neither_is_still_UNREADABLE():
+    ts = {"readable": True, "verdict": "SOMETHING_NEW"}
+    assert LR.terms_provenance(ts)["state"] == LR.TERMS_UNREADABLE
+
+
+def test_the_chosen_symbol_is_read_from_where_the_report_puts_it():
+    rep = {"symbol_selection": REAL_SELECTION}
+    assert LR._chosen_symbol(rep) == "GEMI-BTC15M2609211515-UP"
+    assert LR._chosen_symbol({}) == ""
+    # the flat spelling still works, so an older report is not misread
+    assert LR._chosen_symbol({"symbol_selection": {"symbol": "X"}}) == "X"
+
+
+def test_the_mutation_boundary_is_declared_before_any_early_return():
+    """It was assigned only where the session is wrapped, so every run that
+    returned earlier -- the authorization gate, a family mismatch -- left it
+    None and the gate could not tell BLOCKED from never-reached."""
+    import inspect
+
+    from src.gemini_execution import run_continuous as RCX
+    src = inspect.getsource(RCX._build)
+    first_set = src.index('rep["mutation_boundary"]')
+    first_return = src.index("return rep")
+    assert first_set < first_return, (
+        "the boundary must be declared before the first early return")
+    assert 'BLOCKED (readiness)' in src[first_set:first_set + 400]

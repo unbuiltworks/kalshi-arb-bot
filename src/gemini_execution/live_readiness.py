@@ -358,14 +358,40 @@ def terms_provenance(ts: Any) -> Dict[str, Any]:
                  else TERMS_UNREADABLE)
         return {"state": state, "why": "the venue was not actually asked",
                 "raw": ts}
-    acc = ts.get("terms_accepted")
-    if acc is True:
+    # THE VENUE'S OWN VOCABULARY, NOT A FIELD I WISHED FOR. metadata's
+    # terms_status returns {"verdict": "ACCEPTED", "hasAcceptedLatest": true}
+    # and has NO `terms_accepted` key at all. Reading only that key turned a
+    # readable, authenticated ACCEPTED into UNREADABLE on run 35615018494 --
+    # RETRACTION_001's defect with the sign flipped. Both spellings are read,
+    # and a readable response that says neither is still UNREADABLE.
+    for acc in (ts.get("terms_accepted"), ts.get("hasAcceptedLatest")):
+        if acc is True:
+            return {"state": TERMS_TRUE, "raw": ts}
+        if acc is False:
+            return {"state": TERMS_FALSE, "raw": ts}
+    if verdict == "ACCEPTED":
         return {"state": TERMS_TRUE, "raw": ts}
-    if acc is False:
+    if verdict in ("NOT_ACCEPTED", "REJECTED", "DECLINED"):
         return {"state": TERMS_FALSE, "raw": ts}
     return {"state": TERMS_UNREADABLE,
-            "why": "terms_accepted absent from a readable response",
+            "why": ("a readable response that states neither acceptance nor "
+                    "refusal (verdict=%r); reported as UNREADABLE, never as "
+                    "FALSE" % (ts.get("verdict"),)),
             "raw": ts}
+
+
+def _chosen_symbol(rep: Dict[str, Any]) -> str:
+    """The contract the run actually bound to.
+
+    `symbol_selection` carries the symbol under `chosen`, not at the top
+    level. Reading `symbol_selection["symbol"]` returned "" on run
+    35615018494 and the gate reported "the symbol is not GEMI-BTC15M" while
+    the run's own log shows GEMI-BTC15M2609211515-UP. A gate that misreads
+    the evidence is worse than no gate, because it is believed.
+    """
+    sel = rep.get("symbol_selection") or {}
+    return str((sel.get("chosen") or {}).get("symbol")
+               or sel.get("symbol") or "")
 
 
 def expectation_from_spec(spec: Any, *, branch: str, auth_id: str,
@@ -501,7 +527,7 @@ def resolve_from_report(rep: Dict[str, Any], spec: Any) -> Dict[str, Any]:
         "mutations_sent": int(rep.get("readiness_mutations_sent") or 0),
         # ---- provenance, reported not compared
         "spec_sha": rep.get("spec_sha"),
-        "symbol": (rep.get("symbol_selection") or {}).get("symbol"),
+        "symbol": _chosen_symbol(rep),
         "mutation_boundary": rep.get("mutation_boundary"),
         "state": rep.get("state"),
         "why": rep.get("why"),
@@ -517,7 +543,7 @@ def structural_checks(rep: Dict[str, Any], spec: Any,
 
     missing = [k for k in REQUIRED_REPORT_KEYS if k not in rep]
     terms = terms_provenance(rep.get("terms_status"))
-    sym = str((rep.get("symbol_selection") or {}).get("symbol") or "")
+    sym = _chosen_symbol(rep)
     return {
         "report_complete": {"ok": not missing, "missing": missing},
         "call_graph": call_graph_audit(),
