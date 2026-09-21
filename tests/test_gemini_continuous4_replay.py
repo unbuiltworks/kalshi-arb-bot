@@ -435,11 +435,7 @@ def test_the_envelope_bounds_are_unchanged():
     # against the old envelope is dead rather than silently carried forward.
     assert WC.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    # ARMED 2026-09-21 under OWNER-2026-09-21-GEMINI-Q1-LIVE-1. The grant
-    # names the envelope ACTUALLY IN FORCE, so a changed bound still kills it
-    # automatically, and the dual key's live half remains outside the repo.
-    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
-    assert WC.authorized() is False
+    assert WC.AUTHORIZED_ENVELOPE is None and not WC.authorized()
 
 
 # ====================================================== KEEP SEMANTICS INTACT

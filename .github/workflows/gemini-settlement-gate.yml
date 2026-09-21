@@ -423,7 +423,7 @@ jobs:
           # then could not push the latch, so an infrastructure fault consumed
           # a grant with nothing traded. can_make_durable() now runs BEFORE
           # the consume, so that failure mode costs nothing.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-Q1-LIVE-2"
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
@@ -444,7 +444,7 @@ jobs:
           set -o pipefail
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-21-GEMINI-Q1-LIVE-2" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
             --cohort  "COHORT-2026-09-21-Q1LIVE-1" \
             --envelope live_q1 \
             --entry-tte-band "240:280" \

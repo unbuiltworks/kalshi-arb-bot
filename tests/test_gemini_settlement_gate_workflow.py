@@ -573,7 +573,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-Q1-LIVE-2"
+LIVE_AUTHORIZATION = None
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -655,6 +655,11 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         # because it WAS granted -- the registry records grants, not
         # outcomes -- and a spent authorization never arms again.
         "OWNER-2026-09-21-GEMINI-Q1-LIVE-1",
+        # Owner-granted 2026-09-21 after LIVE-1 was spent by the unpushable
+        # latch. LIVE-2 REACHED THE VENUE: run 35573430715 placed real orders
+        # and took one fill. Its latch is on disk; spent authorizations never
+        # arm again.
+        "OWNER-2026-09-21-GEMINI-Q1-LIVE-2",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
@@ -833,10 +838,16 @@ def test_the_plumbing_fix_moved_no_bound_and_no_flag():
     assert LEX.LIVE_Q1.max_working_orders == 2
     assert LEX.LIVE_Q1.max_concurrent_markets == 1
     assert LEX.LIVE_Q1.max_actions == 12
-    # and the cohort is the SAME one, still unspent
+    # AND THE COHORT IS THE SAME ONE, NOW SPENT BY THE WINDOW IT WAS FOR.
+    # This asserted consumed == 0, which pinned a MOMENT rather than an
+    # invariant -- it had to break the first time the probe actually traded,
+    # and it did. The durable properties are that the budget was never
+    # raised, and that consumption never exceeds it.
     from src.gemini_execution import cohort as CO
     c = CO.state("COHORT-2026-09-21-Q1LIVE-1")
-    assert c["budget"] == 12 and c["consumed"] == 0
+    assert c["budget"] == 12
+    assert 0 <= c["consumed"] <= 12
+    assert c["consumed"] + c["remaining"] == 12
 
 
 def test_an_unpushable_latch_refuses_without_spending_the_grant():

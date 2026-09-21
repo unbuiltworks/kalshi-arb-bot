@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 #: The sha256 of the bundle as reviewed. None means NO BUNDLE AUTHORIZATION
 #: HAS BEEN ISSUED. Nothing reads an environment variable to fill it in.
-AUTHORIZED_BUNDLE: Optional[str] = "1a6b5be0fecffcd109659fbde0b75f6124f4ecba21952962edb86d79ee711d94"  # noqa: E501
+AUTHORIZED_BUNDLE: Optional[str] = None
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
