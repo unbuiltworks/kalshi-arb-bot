@@ -77,3 +77,46 @@ Reported because a zero from a typo is indistinguishable from a zero from the
 market.
 
 ## 4. Gemini q=1 lane — see GEMINI_Q1_STATE_20260921.md
+
+---
+
+# Addendum, 2026-09-21T11:2xZ
+
+## PMUS: the 43 characterized (re-measured 40/69 on a later slate)
+
+`analysis/pmus/executable_state_profile.py`, 20 sweeps at 8 s. Full table in
+`analysis/pmus/EXECUTABLE_STATE_PROFILE_20260921.txt`. The 43/61 census is
+preserved; a later slate gave **40 ELIGIBLE / 27 model_no_open / 2 one_sided**.
+The count moves with the slate — it is a live census, not a constant.
+
+| market type | n | median spread | median bid shares | shadow reach |
+|---|---|---|---|---|
+| tennis_match_winner | 18 | **2.0c** | 56,000 | 8/18 |
+| esports_match_winner | 8 | **1.0c** | 31,000 | 2/8 |
+| table_tennis_match_winner | 4 | 1.5c | 48,500 | 3/4 |
+| tennis_match_total_games | 3 | 11.0c | 27 | 0/3 |
+| esports_series_total_maps | 2 | 20.5c | 34,500 | 0/2 |
+| tennis_match_games_spread | 2 | 35.0c | 300 | 0/2 |
+| tennis_match_sets_spread | 1 | 39.0c | 76 | 0/1 |
+| hockey_team_full_game_winner | 1 | 21.0c | 26,000 | 0/1 |
+| tennis_match_total_sets | 1 | 1.0c | 100 | 0/1 |
+
+**Every proposed action is `open`** — correct, since the census evaluates a flat
+inventory. Sides split YES/NO by the cheaper touch, as the convention requires.
+
+**The NFL anti-correlation does not hold here.** On the NFL slate, tight spreads
+and good recycling were anti-correlated by market type. On this live
+esports/tennis slate the **match-winner** types carry *both*: 1–2c spreads
+**and** 26k–190k shares at the touch **and** all 13 of the shadow reaches.
+Totals and spreads markets carry 10–39c spreads and 27–500 shares, and reach
+nothing. That is a different habitat from the one the NFL study rejected.
+
+**SHADOW/HYPOTHETICAL: 13 of 40** proposed resting prices were reached by the
+opposing touch within the ~160 s observation. Several reach at 0.0 s — the
+touch was already there at first observation, so the price was immediately
+marketable rather than requiring a wait.
+
+**This is not a fill.** It is whether the opposing touch visited the price. It
+assumes nothing about queue position, and today's prospective evidence says
+depth ahead is exactly the quantity we cannot yet interpret. Not submitted, not
+filled, not settled, not realized.
