@@ -114,6 +114,25 @@ line makes the total unmeasured.
 
 ---
 
+## 3a. WITHDRAWN CLAIMS OF MY OWN — corrected 2026-09-21
+
+Found by re-auditing after the owner said they did not believe the numbers. Both were
+mine, both were load-bearing, and neither survived.
+
+| claim | status | why |
+|---|---|---|
+| "Phase 2 proves the multi-rung ladder: held-out distance 1.229 → 0.410" | **WITHDRAWN** | `l5_ladder_heldout` never models rungs. `band(R)` turns a rung count into a band width and `covered()` is a band test; R=4 and one order spanning −2..+1 are the same predicate. A null arm widening a SINGLE rung to equal fill count scores **0.410, identical to the digit**. It showed a wider band captures more fills — true by construction, not a mechanism. |
+| "R/M = 2I/(1−I); every arm sits on its floor, so execution captures 100% of available pairing" | **WITHDRAWN as circular** | Algebraic identity, verified on 20,000 random trials with 0 exceptions. Holds for any execution. Both sides come from the same acquisition counts. |
+| pooled flow imbalance on Kalshi | **CORRECTED** | see graveyard #10 |
+
+**What still stands, and does not depend on either:** Phase 1's on-chain evidence —
+**3,434 transactions** with fills at different prices on the same outcome inside one
+atomic transaction. A cancel/replace cannot occur inside an atomic transaction, so
+≥2 simultaneously resting orders is proven. *The ladder is real; Phase 2 never tested
+it.* And STOP CONDITION B still has genuine empirical support: the zero-queue 20-rung
+±10-tick upper bound produced I = 0.327 against the 4-rung arm's 0.315 — far more
+reach, no better balance.
+
 ## 4. Falsified hypotheses — the graveyard
 
 Do not resurrect these. Each names where it died.
@@ -168,8 +187,12 @@ I = (a − b)/(a + b):
 R/M = 2I/(1 − I)     exactly
 ```
 
-Every arm sits on its own floor to three decimals, i.e. **our execution already
-captures 100% of the pairing its markets offer**:
+**CORRECTED 2026-09-21: `R/M = 2I/(1-I)` IS AN ALGEBRAIC IDENTITY, NOT A BOUND.**
+It holds for any acquisitions whatsoever — perfect, terrible or random — because both
+sides are computed from the same counts. The earlier claim that "every arm sits on its
+own floor, so our execution already captures 100% of the pairing its markets offer"
+was **circular and is withdrawn**. What remains, and is genuinely empirical, is the
+zero-queue upper bound: vastly more reach did **not** improve balance.
 
 | | I | r:m floor | r:m achieved |
 |---|---|---|---|

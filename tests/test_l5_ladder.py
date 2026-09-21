@@ -66,9 +66,18 @@ def test_geometry_sums_absolute_residual_per_window():
 
 
 @pytest.mark.parametrize("a,b", [(10, 10), (13, 7), (100, 1), (55, 45)])
-def test_flow_imbalance_floor_identity(a, b):
-    """R/M = 2I/(1-I) exactly. This identity is why the geometry gap is a
-    property of the FLOW and not of the execution surface."""
+def test_flow_imbalance_floor_is_an_identity_not_a_bound(a, b):
+    """R/M = 2I/(1-I) EXACTLY, for any acquisitions whatsoever.
+
+    CORRECTED 2026-09-21. This test previously claimed the identity showed the
+    geometry gap was a property of the flow rather than the execution surface. It
+    shows no such thing. Both sides are computed from the SAME acquisition counts,
+    so the equality is arithmetic and holds for a perfect execution, a terrible one
+    or a random one. Reporting that an arm "sits on its floor" was circular.
+
+    The real evidence for STOP CONDITION B is empirical and lives elsewhere: a
+    zero-queue 20-rung +/-10-tick upper bound produced I = 0.327 against the 4-rung
+    arm's 0.315, i.e. vastly more reach did not improve balance."""
     I_ = abs(a - b) / (a + b)
     rm = abs(a - b) / min(a, b)
     assert rm == pytest.approx(2 * I_ / (1 - I_), rel=1e-9)

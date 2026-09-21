@@ -1,4 +1,29 @@
-"""PHASE 2 -- does a multi-rung ladder representation explain HELD-OUT L5 windows
+"""PHASE 2 -- WITHDRAWN AS A TEST OF MULTI-RUNG STRUCTURE. Corrected 2026-09-21.
+
+THIS MODULE DOES NOT MODEL RUNGS. `band(R)` converts a rung COUNT into a band WIDTH
+and `covered()` then asks only whether a price falls inside that band. Nothing here
+indexes a rung, holds per-rung queue state, or distinguishes four orders from one
+order spanning the same prices. R=4 and "a single order covering -2..+1" are the
+SAME PREDICATE.
+
+So the headline result -- held-out distance to L5 falling 1.229 -> 0.410 as R rises --
+established only that A WIDER PRICE BAND CAPTURES MORE OF L5's FILLS. That is true by
+construction, not a mechanism, and it is not evidence for a ladder. A null arm built
+by widening a SINGLE rung to the same fill count scores 0.410, identical to the digit,
+because it is the same computation.
+
+WHAT STILL STANDS is Phase 1, which does not depend on this module: 3,434 transactions
+in which L5 was filled at DIFFERENT PRICES on the SAME OUTCOME inside ONE atomic
+transaction. A cancel/replace cannot occur inside an atomic transaction, so those
+prove at least two simultaneously resting orders. The ladder is real. This module
+never tested it.
+
+Kept for provenance and for the recapture/coverage measurements, which are valid as
+coverage statements. Do not cite its distance figures as fidelity evidence.
+
+Original docstring follows.
+--------------------------------------------------------------------------------
+PHASE 2 -- does a multi-rung ladder representation explain HELD-OUT L5 windows
 better than the one-quote-per-side representation we transferred to PMUS?
 
 The test is run on L5 history alone. If the ladder does not improve L5 held-out
