@@ -130,9 +130,15 @@ def test_it_commits_evidence_only():
 
 
 def test_it_checks_out_the_designated_branch():
+    """MOVED 2026-09-21 to the q=1 branch, after run 35553352750 proved the
+    old pin was the defect: the workflow came from the dispatched ref and the
+    SOURCE came from the instrumentation branch, so the armed step ran a
+    driver that had never heard of --envelope live_q1 and placed ZERO ORDERS.
+    The checkout and the push target must name the SAME branch, or an
+    evidence commit merges one tree into the other as a side effect."""
     wf = WF.read_text()
-    assert "ref: claude/l5-execution-instrumentation-io6nzi" in wf
-    assert "HEAD:claude/l5-execution-instrumentation-io6nzi" in wf
+    assert "ref: claude/gemini-btc-economic-viability-h3u7zl" in wf
+    assert "HEAD:claude/gemini-btc-economic-viability-h3u7zl" in wf
 
 
 def test_it_is_manual_only():
@@ -682,3 +688,96 @@ def test_c5_stays_frozen_while_c6_spends_its_own_budget():
         "COHORT-2026-09-18-C5/ledger.jsonl")
     assert c6["predecessor"]["recorded_consumed"] == 3
     assert c6["predecessor"]["intact"] is True
+
+
+# ============================================================================
+# EXECUTION PLUMBING, from the post-mortem of run 35553352750 (ZERO ORDERS)
+# ============================================================================
+
+Q1_BRANCH = "claude/gemini-btc-economic-viability-h3u7zl"
+OLD_BRANCH = "claude/l5-execution-instrumentation-io6nzi"
+
+
+def test_the_runner_checks_out_the_reviewed_tree():
+    """DEFECT 1. The checkout pinned the instrumentation branch, so a dispatch
+    from the q=1 branch took its WORKFLOW from one tree and its SOURCE from
+    another. The armed step carried the right flags at a driver that had never
+    heard of them."""
+    wf = WF.read_text()
+    assert re.search(r"^\s*ref:\s*%s\s*$" % re.escape(Q1_BRANCH), wf, re.M)
+    # ASSERTED ON THE CONSTRUCTS, NOT ON THE WORD. The comment above the
+    # checkout names the old branch on purpose -- that is the post-mortem, and
+    # a test that forbade the name would delete the reason. What must not
+    # exist is the old branch as an EFFECTIVE ref or push target.
+    for construct in (r"^\s*ref:\s*%s" % re.escape(OLD_BRANCH),
+                      r"git push\s+origin\s+HEAD:%s" % re.escape(OLD_BRANCH),
+                      r"git fetch\s+origin\s+%s" % re.escape(OLD_BRANCH)):
+        assert not re.search(construct, wf, re.M), construct
+
+
+def test_evidence_is_pushed_back_where_it_came_from():
+    """The push target FOLLOWS the checkout, necessarily. Left alone, it would
+    have pushed the q=1 HEAD onto the instrumentation branch -- merging the
+    reviewed tree into it as a side effect of an evidence commit."""
+    wf = WF.read_text()
+    assert "git push origin HEAD:%s" % Q1_BRANCH in wf
+    assert "git fetch origin %s" % Q1_BRANCH in wf
+
+
+def test_the_armed_step_can_fail():
+    """DEFECT 2. `python ... | tee` exits with TEE's status, so the armed step
+    of run 35553352750 died on argparse in 0.09s and was recorded SUCCESS."""
+    wf = WF.read_text()
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+    run = armed.split("run:", 1)[1]
+    pipefail = run.index("set -o pipefail")
+    driver = run.index("python -m src.gemini_execution.run_continuous")
+    assert pipefail < driver, (
+        "pipefail must be set BEFORE the driver runs, not after it")
+    assert "| tee" in run, "the tee is deliberate; the swallowed status was not"
+
+
+def test_pipefail_actually_propagates_under_the_runner_shell():
+    """The property itself, not a promise about it. GitHub runs these steps as
+    `bash -e {0}`; this drives a deliberately failing command through the same
+    shape both ways."""
+    import subprocess
+    import tempfile
+
+    def _status(prelude):
+        with tempfile.NamedTemporaryFile("w", suffix=".sh",
+                                         delete=False) as fh:
+            fh.write(prelude
+                     + 'python3 -c "import sys; sys.exit(3)" 2>&1 | tee '
+                     + fh.name + '.out\n')
+            path = fh.name
+        return subprocess.run(["bash", "-e", path]).returncode
+
+    assert _status("") == 0, (
+        "without pipefail a failing command exits 0 -- this is the defect")
+    assert _status("set -o pipefail\n") == 3, (
+        "with pipefail the driver's status reaches the step")
+
+
+def test_the_plumbing_fix_moved_no_bound_and_no_flag():
+    """The corrected run must be the SAME experiment. Nothing about the
+    envelope, the size, the band, the cohort or the policy may have moved."""
+    from src.gemini_execution import continuous_probe as CPX
+    from src.gemini_execution import live_envelope as LEX
+
+    wf = WF.read_text()
+    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
+    run = armed.split("run:", 1)[1]
+    assert "--envelope live_q1" in run
+    assert '--entry-tte-band "240:280"' in run
+    assert '--cohort  "COHORT-2026-09-21-Q1LIVE-1"' in run
+    assert LEX.LIVE_Q1.action_size == CPX.D("1")
+    assert LEX.LIVE_Q1.max_committed_usd == CPX.D("2.50")
+    assert LEX.LIVE_Q1.max_residual_usd == CPX.D("2.00")
+    assert LEX.LIVE_Q1.max_working_orders == 2
+    assert LEX.LIVE_Q1.max_concurrent_markets == 1
+    assert LEX.LIVE_Q1.max_actions == 12
+    # and the cohort is the SAME one, still unspent
+    from src.gemini_execution import cohort as CO
+    c = CO.state("COHORT-2026-09-21-Q1LIVE-1")
+    assert c["budget"] == 12 and c["consumed"] == 0

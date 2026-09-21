@@ -78,9 +78,19 @@ jobs:
     # job > every step.
     timeout-minutes: 60
     steps:
+      # THE RUNNER MUST EXECUTE THE REVIEWED TREE.
+      #
+      # This pinned claude/l5-execution-instrumentation-io6nzi, so run
+      # 35553352750 dispatched from the q=1 branch took its WORKFLOW from that
+      # branch and its SOURCE from this one. The armed step therefore carried
+      # the right flags at a driver that had never heard of them, and died on
+      # `unrecognized arguments: --envelope live_q1`. Its
+      # driver_executable_sha was 50996ee0..., not the authorized c1ada77a...,
+      # and REQUIRED_AUTH_ID read None: the authorization was never even in
+      # scope. ZERO ORDERS -- execution plumbing, not a strategy result.
       - uses: actions/checkout@v4
         with:
-          ref: claude/l5-execution-instrumentation-io6nzi
+          ref: claude/gemini-btc-economic-viability-h3u7zl
 
       - uses: actions/setup-python@v5
         with:
@@ -417,8 +427,17 @@ jobs:
           # dispatches refused -- correctly, before the latch, spending
           # nothing. Bounded to a few hours past this authorization, never
           # open-ended.
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T06:00:00Z"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T11:00:00Z"
         run: |
+          # THE ARMED STEP MUST BE ABLE TO FAIL.
+          #
+          # A pipeline's exit status is its LAST command's, so `python ... |
+          # tee` reports tee's success whatever the driver did. Run
+          # 35553352750's armed step died on an argparse error in 0.09s and
+          # was recorded as SUCCESS. A step that cannot fail is worse than
+          # the branch mismatch that exposed it: a driver that crashed
+          # mid-window would report the same green.
+          set -o pipefail
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
             --auth-id "OWNER-2026-09-21-GEMINI-Q1-LIVE-1" \
@@ -552,12 +571,17 @@ jobs:
             # non-fast-forward; rebase onto the remote and retry rather than
             # discard a reading that cannot be reproduced (the venue has
             # moved on by the next run).
+            # THE PUSH TARGET FOLLOWS THE CHECKOUT, NECESSARILY. With the
+            # checkout moved above and this left alone, HEAD is the q=1
+            # branch and this line would push it onto the instrumentation
+            # branch -- merging the reviewed tree into it by a side effect of
+            # an evidence commit. Evidence goes back where it came from.
             for attempt in 1 2 3; do
-              if git push origin HEAD:claude/l5-execution-instrumentation-io6nzi; then
+              if git push origin HEAD:claude/gemini-btc-economic-viability-h3u7zl; then
                 exit 0
               fi
               echo "push rejected (attempt $attempt); rebasing onto remote"
-              git fetch origin claude/l5-execution-instrumentation-io6nzi
+              git fetch origin claude/gemini-btc-economic-viability-h3u7zl
               git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
               sleep $((attempt * 3))
             done
