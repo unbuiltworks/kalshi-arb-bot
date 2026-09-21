@@ -181,7 +181,59 @@ LIVE_Q1 = Envelope(
     cohort_prefix=COHORT_PREFIX,
 )
 
-#: THE SMALLEST ENVELOPE THAT ADMITS A q=1 TWO-LEVEL BTC15m PROBE.
+#: THE ENVELOPE FOR A q=1 BTC15m WINDOW UNDER THE POLICY AS FROZEN.
+#:
+#: DERIVED FROM THE ENGINE, NOT FROM A CEILING, and the derivation overturned
+#: the four-rung proposal outright:
+#:
+#:   EVERY frozen lane -- L5_ADAPTED_GEMINI_BTC15M_V2 included -- carries
+#:   rung_count = 1 and tick_offsets = [0], with both inventory skews zero.
+#:   desired_surface computes px = bid - (offset + shift) * tick, so the
+#:   policy emits EXACTLY ONE rung per outcome, AT THE BID. A four-rung
+#:   surface is not merely unlikely under FROZEN_L5_NATIVE; it is
+#:   UNREACHABLE without changing rung_count or tick_offsets, which is a
+#:   behavioural change and is out of scope.
+#:
+#:   So the largest simultaneously executable surface is TWO orders: one YES
+#:   at yes.bid and one NO at no.bid. Their combined cost is bounded by the
+#:   venue's own complement identity, which held on all 855 shadow snapshots
+#:   (no_bid == 1 - yes_ask exactly):
+#:
+#:       yes.bid + no.bid = 1 - yes_spread   <=   1 - tick   =   0.99
+#:
+#:   MEASURED on the 833 QUOTABLE snapshots: max 0.98. The 22 snapshots that
+#:   exceed it are CROSSED books (max 1.34), and state_from_venue refuses a
+#:   crossed book with inventory_known=False, so the probe never quotes there.
+#:
+#: WHICH MEANS THIS ENVELOPE IS LIVE_Q1's, WITH THE BTC15m PREFIX. Two
+#: working orders and $2.50 committed already admit everything the frozen
+#: policy can generate, so nothing is widened for BTC15m at all -- the
+#: smallest sufficient envelope turns out to be the one already reviewed.
+LIVE_Q1_BTC15M = Envelope(
+    name="GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    action_size=D("1"),
+    max_same_side_run=2,
+    max_yes=D("2"),
+    max_no=D("2"),
+    max_total_spend_usd=D("2.50"),
+    max_committed_usd=D("2.50"),
+    max_residual_usd=D("2.00"),
+    max_working_orders=2,
+    max_concurrent_markets=1,
+    max_actions=12,
+    cohort_prefix="GEMI-BTC15M",
+)
+
+#: CAPABILITY, NOT AN AUTHORIZATION REQUEST. Retained so the two-level
+#: lifecycle stays exercised and tested, and so a future lane that actually
+#: emits two rungs has an envelope sized for it. It is NOT proposed for the
+#: next probe, because no frozen lane can emit the surface it pays for.
+#:
+#: Its $4.00 was 4 rungs x the $1.00 ceiling a maker BUY cannot exceed. That
+#: ceiling is real but slack: two adjacent levels per side cost
+#: 2*(yes.bid + no.bid) - 2*tick <= $1.96, and the reachable surface costs
+#: <= $0.99. The number was never wrong; it was answering a question the
+#: engine does not ask.
 #:
 #: DERIVED, NOT CHOSEN, and LIVE_Q1 is deliberately left untouched so BTC5m's
 #: authorized limits are not silently widened to pay for BTC15m's geometry.

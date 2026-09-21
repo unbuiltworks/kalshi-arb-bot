@@ -343,5 +343,6 @@ def test_7b_no_module_on_the_live_path_hardcodes_a_quantity():
     by_file = Counter(d.split(":")[0] for d in definitions)
     assert dict(by_file) == {
         "continuous_probe.py": 1,   # ACTION_SIZE, the shadow constant
-        "live_envelope.py": 3,      # SHADOW_Q001, LIVE_Q1, LIVE_Q1_BTC15M_2LVL
+        "live_envelope.py": 4,      # SHADOW_Q001, LIVE_Q1,
+                                    # LIVE_Q1_BTC15M, LIVE_Q1_BTC15M_2LVL
     }, definitions

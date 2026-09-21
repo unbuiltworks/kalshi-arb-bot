@@ -267,3 +267,66 @@ def test_diff_surface_is_a_facade_over_one_implementation():
     w = _working(("NO", "0.58", "1", 0.5))
     out = WC.diff_surface([_rung("NO", "0.68")], w)
     assert len(out["cancel"]) == 1 and out["retain"] == []
+
+
+# ============ RETAIN COSTS ZERO MUTATIONS AND FULL RISK ============
+
+def test_a_retained_order_still_counts_as_a_working_order():
+    """RETAIN removes nothing from the working set, so the venue still holds
+    it and every bound must still see it."""
+    w = _working(("YES", "0.69", "1", 1.0), ("NO", "0.29", "1", 1.0))
+    out = WC.reconcile_surface([_rung("YES", "0.60")], w, now=T0,
+                               cohort_prefix=BTC15M)
+    # NOTE: on BTC15m a retained order leaves the SECOND slot free, so an ADD
+    # is correct here. My first version asserted mutations == 0 and was
+    # wrong about the code, not the other way round. What this test is
+    # actually about is RISK, below.
+    assert len(out["retain"]) == 2
+    assert len(w.rungs()) == 2, "RETAIN must not drop the order"
+    why = LE.would_breach("YES", "0.10", CP.Inventory(), qty=D("1"),
+                          resting=w.rungs(), env=LE.LIVE_Q1_BTC15M)
+    assert why is not None and "resting" in why
+
+
+def test_a_retained_orders_notional_still_counts_as_committed_cash():
+    """Zero mutations is NOT zero capital. Two retained rungs at $0.99 plus a
+    third would exceed $2.50, and must be refused on CASH, not on count."""
+    w = _working(("YES", "0.99", "1", 1.0))
+    out = WC.reconcile_surface([_rung("YES", "0.10")], w, now=T0,
+                               cohort_prefix=BTC5M)      # one slot: no ADD
+    assert len(out["retain"]) == 1 and out["mutations"] == 0
+    inv = CP.Inventory()
+    inv.apply_fill("NO", "1", "0.99", source="t")      # $0.99 already spent
+    why = LE.would_breach("NO", "0.99", inv, qty=D("1"), resting=w.rungs(),
+                          env=LE.LIVE_Q1_BTC15M)
+    # 0.99 spent + 0.99 retained + 0.99 new = 2.97 > 2.50
+    # the breach names the arithmetic, which is the point: filled 0.99 +
+    # resting 0.99 + this rung 0.99 = 2.97, past 2.50. The RETAINED rung's
+    # $0.99 is in that sum -- zero mutations, full capital.
+    assert why is not None
+    assert "resting 0.99" in why and "2.97" in why and "2.50" in why
+
+
+def test_the_btc15m_probe_envelope_is_live_q1s_numbers():
+    """The frozen policy emits ONE rung per outcome, so nothing is widened."""
+    a, b = LE.LIVE_Q1_BTC15M, LE.LIVE_Q1
+    for f in ("action_size", "max_same_side_run", "max_yes", "max_no",
+              "max_total_spend_usd", "max_committed_usd", "max_residual_usd",
+              "max_working_orders", "max_concurrent_markets", "max_actions"):
+        assert getattr(a, f) == getattr(b, f), f
+    assert a.cohort_prefix == "GEMI-BTC15M"
+
+
+def test_every_frozen_lane_emits_one_rung_at_the_bid():
+    """The fact the four-rung envelope was sized for: no lane can produce a
+    second level, so a four-order surface is UNREACHABLE under any of them."""
+    from src.l5_surface import params as PR
+    for name, lane in PR.load_frozen().items():
+        assert str(lane.params["rung_count"].value) == "1", name
+        assert list(lane.params["tick_offsets"].value) == [0], name
+
+
+def test_the_two_level_envelope_is_capability_not_the_proposal():
+    """Kept and tested, but it pays for a surface nothing can emit."""
+    assert LE.LIVE_Q1_BTC15M_2LVL.max_working_orders == 4
+    assert LE.LIVE_Q1_BTC15M.max_working_orders == 2
