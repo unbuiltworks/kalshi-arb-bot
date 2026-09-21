@@ -167,3 +167,70 @@ The tree is DISARMED: `REQUIRED_AUTH_ID`, `AUTHORIZED_SHA`,
 `AUTHORIZED_ENVELOPE` and `AUTHORIZED_BUNDLE` are `None`; `EXPECTED_AUTH_ID`
 and `GEMINI_CANARY_AUTH` are `NO-AUTHORIZATION-IN-FORCE`. Arming is the owner's
 next step, not this commit's.
+
+## Readiness on the credentialed runner — PASS
+
+Run [35659676167](https://github.com/unbuiltworks/kalshi-arb-bot/actions/runs/35659676167)
+on `b6c72ee`, 21:52:47Z–22:00:39Z. The armed step was **skipped**; the tree is
+disarmed and nothing could have armed it.
+
+```
+verdict       PASS
+manifest_sha  f608216c8fc7a31d8d577228304fd95ee8c838700b72c0db234a9563b997ab2f
+report        analysis/gemini/readiness_manifest_20260921T215759Z.json
+spec_sha      7fda21b1…  declared == run          symbol GEMI-BTC15M2609212215-UP
+commit_sha    b6c72ee…   entered tte 875.4        terms ACCEPTED
+```
+
+All eleven checks green:
+
+```
+PASS boundary_blocked           mutation_boundary BLOCKED (readiness), mutations_sent 0
+PASS call_graph                 unreached []
+PASS cross_field                violations []
+PASS dead_safety                dead []
+PASS envelope_is_live_not_shadow GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1
+PASS fields                     diffs []
+PASS report_complete            missing []
+PASS spec_hash_matches          7fda21b1… == 7fda21b1…
+PASS stale_references
+PASS symbol_is_the_right_family GEMI-BTC15M
+PASS terms                      hasAcceptedLatest true, blocks_orders false
+```
+
+Expected == resolved on every hash, and the experiment is unchanged:
+
+```
+spec_sha       7fda21b1f989961664f55a3a033b7689758d1bd3471b14d46f7b70563aa8f862   same as both CAP-4 windows
+envelope_sha   be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d   same as both CAP-4 windows
+executable_sha 38f751801d475e636fa1ed1f79201d7de6b3d2e9768c87172982a47dfd17d306   moved (this change)
+bundle_sha     40eefccda57862a1cb1b07f44a6361d59f7e2093bc8ebe6bbaf9383cc614e5f3   moved (this change)
+policy_max_rungs 2   lifecycle_max_rungs 2   surface {outcomes 2, rung_count 1, leg_slots 2}
+max_working_orders 2   max_committed_usd 4.00   max_residual_usd 4.00   minimum_rest_time_s 30.0
+cohort COHORT-2026-09-21-BTC15M-CAP4-2, 0/12 consumed, predecessor intact
+```
+
+The driver refused at the boundary for the right reason — all three constants
+`None` plus no transport arm:
+
+```
+state  READY_TO_MUTATE_BUT_UNAUTHORIZED
+why    REQUIRED_AUTH_ID is None ... AUTHORIZED_SHA is None ... AUTHORIZED_ENVELOPE is None
+       ... transport arm: GEMINI_CANARY_LIVE is not YES
+```
+
+**Defect 2 confirmed on the real credentialed payload**, which is where it was
+found:
+
+```
+position_gate  n_rows_for_symbol 0   n_rows_on_account 2   verdict AGREE
+```
+
+Before this commit that first number read `2`. The two rows are the unrelated
+NFL positions from `NFL_ORDER_PROVENANCE.md`, not this instrument's.
+
+**Note on scope:** the readiness path stops at the mutation boundary and never
+enters the cycle loop, so it exercises resolution, hashing and refusal — not
+the hold itself. The hold is proved by the 25 regressions, including the
+end-to-end `run_window` trace. Its first live exercise will be the next
+authorized window.
