@@ -32,10 +32,69 @@
 > 77.3% maker (venue field); real run structure (vs shuffle null); the two-mode split
 > (independent separator); the exact matched+residual=net decomposition with standalone
 > **indistinguishable from zero**; PMUS take-both = 1 + spread.
+>
+> ## ⛔ READ SECOND — EXECUTION-MECHANISM PASS 2026-09-21 (`007feaab` → this commit)
+>
+> Full evidence: **`analysis/l5/EXECUTION_MECHANISM_20260921.md`**. It overrides
+> every execution/queue statement below.
+>
+> **TWO MORE NUMBERS WITHDRAWN — never cite them:**
+> * **"83.1% of our complement rungs were never reached."** Measured over `comp_log`
+>   intervals of which **78.0% had zero length**, because a rung's window was closed by
+>   any sibling — and by its own placement. Fixed (median 0.0 s → 69.6 s); the fix is
+>   diagnostic-only, verified by pre-fix vs post-fix over the same tape: **304 markets,
+>   0 differing fields**. The corrected figure is **75.4% never reached, and that is an
+>   UPPER BOUND** — the PMUS book is polled every ~8 s.
+> * **"1.5% vs 99.86% — a near-perfect mint discriminator"** (`ZENODO_OVERLAP_FINDINGS.md`
+>   §2). It is an **algebraic identity**: complement bid = 1 − own ask (exactly 1.0000 in
+>   **97.86%** of synchronized snapshot pairs), so `mint_feasible ⟺ price ≥ own_ask`,
+>   which *is* the class being separated. Agrees **120/120, zero disagreements**. The
+>   observation that 26.4% of L5's maker buys price at or above the ask still stands —
+>   only the book-based explanation is withdrawn.
+>
+> **ESTABLISHED, by a test that could have come back negative (on-chain, block-clustered):**
+> * L5's maker fills settle by **minting a complete set** — `PositionSplit`, directly
+>   observed — in **73.5%–85.5%** of single-match transactions, against a **58.6%**
+>   baseline for non-L5 fills **in the same blocks**. Three of four classes have a 95%
+>   block-clustered CI excluding 0. Minting is the majority path in **every** class,
+>   including apparent book fills; the 16.3% of fills at prices the ask never offered
+>   mint at 81.3%.
+> * **Therefore visible-book queue depth is NOT the correct queue variable** for most of
+>   L5's maker fills. A mint consumes no offer on either buyer's book.
+> * **PMUS flow is a bound, not a tape.** `last_trade_px` sits outside the quote in its
+>   OWN response in **22.8%** of volume increments; Δvolume aggregates an ~8 s interval
+>   onto one lagging price. Every PMUS fill count is now reported bracketed
+>   **ALL / ATTRIBUTABLE**. The queue effect survives the correction (+1,409 matched on
+>   ALL flow, **+1,000 on ATTRIBUTABLE**) but is ~29% inflated by unattributable rows.
+> * **Removing the queue worsens the basis**: 0.8851 → 0.9587. More fills, worse price.
+>   The only two arms with positive matched-pair economics are the two that trade LESS.
+>   No arm was selected on its P&L and none is proposed for deployment.
+> * **Buccaneers, settled.** A persistent maker gets **0 acquisitions** at the real
+>   queue and one pair after **228 minutes** at zero queue: 283k resting depth against
+>   **52 volume increments per game**. The human succeeded by TAKING at 1.0050. This was
+>   never an executor defect.
+>
+> **REVISED MINIMUM MODEL:** rest as a BUYER on **both** outcomes simultaneously (forced —
+> a mint needs a complement buyer); ≥2 prices one tick apart on a side; patience of
+> minutes (opportunity→fill p50 194–294 s); maker-only. Rung count beyond two, ladder
+> symmetry, replenishment, sizing curves, completion caps and incentive magnitudes remain
+> **NOT required by evidence** and are not in the model.
+>
+> **THE VENUE TEST CHANGES:** not habitat flow imbalance — *does this market hold a
+> standing population of buyers on the OTHER outcome?* Not yet instrumented.
+>
+> **OPEN, AND LOAD-BEARING:** whether PMUS or Kalshi support mint-style matching **at
+> all** is **UNTESTED**. The entire revised model rests on a mechanism confirmed only on
+> Polymarket International. **Build nothing on it until that is established.**
+>
+> **Freeze status:** habitat selector **INTACT**, verified by
+> `analysis/pmus/freeze_check.py`. Note the recorded `artifact_sha256`
+> `f9dcd886…861959` is the digest of the selector's decision content, **not** of the
+> file (`a1e7340b…a2fb18`); comparing the two reports a false violation.
 
 
 
-Last updated **2026-09-20**, at commit `fd91d38e`. Branch
+Last updated **2026-09-21**, execution-mechanism pass. Branch
 `claude/l5-execution-instrumentation-io6nzi`.
 
 Durable behavioural source of truth remains `L5_OPERATING_MODEL.md`. This file is

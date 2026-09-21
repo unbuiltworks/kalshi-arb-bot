@@ -1,0 +1,78 @@
+{
+ "classes": {
+  "MINT_MATCH_FEASIBLE": 220,
+  "RESTING_BID_PRICE_NEVER_OFFERED": 220,
+  "BOOK_FILL_FIFO_CONSISTENT": 220,
+  "NEWLY_POSTED_IMPROVED_THE_TOUCH": 23,
+  "NO_BOOK": 12
+ },
+ "receipts_fetched": 695,
+ "comparison": {
+  "MINT_MATCH_FEASIBLE": {
+   "all_transactions": {
+    "n": 220,
+    "with_split": 189,
+    "share": 0.8591
+   },
+   "single_match_only": {
+    "n": 131,
+    "with_split": 112,
+    "share": 0.855
+   },
+   "merges_present": 6
+  },
+  "RESTING_BID_PRICE_NEVER_OFFERED": {
+   "all_transactions": {
+    "n": 220,
+    "with_split": 190,
+    "share": 0.8636
+   },
+   "single_match_only": {
+    "n": 150,
+    "with_split": 122,
+    "share": 0.8133
+   },
+   "merges_present": 1
+  },
+  "BOOK_FILL_FIFO_CONSISTENT": {
+   "all_transactions": {
+    "n": 220,
+    "with_split": 175,
+    "share": 0.7955
+   },
+   "single_match_only": {
+    "n": 136,
+    "with_split": 100,
+    "share": 0.7353
+   },
+   "merges_present": 5
+  },
+  "NEWLY_POSTED_IMPROVED_THE_TOUCH": {
+   "all_transactions": {
+    "n": 23,
+    "with_split": 15,
+    "share": 0.6522
+   },
+   "single_match_only": {
+    "n": 17,
+    "with_split": 10,
+    "share": 0.5882
+   },
+   "merges_present": 1
+  },
+  "NO_BOOK": {
+   "all_transactions": {
+    "n": 12,
+    "with_split": 12,
+    "share": 1.0
+   },
+   "single_match_only": {
+    "n": 2,
+    "with_split": 2,
+    "share": 1.0
+   },
+   "merges_present": 0
+  }
+ },
+ "labels": "PositionSplit is the ConditionalTokens complete-set mint event. single_match_only restricts to transactions carrying exactly one exchange fill pair, where no other match in the same transaction could have produced the split. No order or address is attributed to any named trader."
+}

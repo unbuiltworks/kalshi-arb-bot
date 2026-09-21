@@ -43,10 +43,11 @@ BAND_FROZEN = (2, 1)          # ticks below, ticks above the touch
 
 
 class Q:
-    __slots__ = ("sy", "px", "t", "qa", "cum", "rel")
+    __slots__ = ("sy", "px", "t", "qa", "cum", "rel", "ci")
 
     def __init__(s, sy, px, t, qa, rel):
         s.sy, s.px, s.t, s.qa, s.cum, s.rel = sy, float(px), t, float(qa or 0.0), 0.0, rel
+        s.ci = None                       # index of this rung's comp_log interval
 
 
 def _ok(p, px, sy):
@@ -76,10 +77,25 @@ def rung_prices(touch, sy, r, rungs, band):
     return out
 
 
-def _closelog(stats, sy, tt):
-    for c in stats.setdefault("comp_log", []):
-        if c[2] == sy and c[1] is None:
-            c[1] = tt
+def _closelog(stats, q, tt):
+    """Close the interval belonging to rung `q`, and only that one.
+
+    THIS TOOK A WRONG ANSWER TO FIND. The first version closed EVERY open
+    interval on the side, so a rung's window was ended by any sibling being
+    cancelled or filled -- and, because `_place` appends the new rungs before
+    it cancels the old ones, by its own placement. Median interval duration
+    came out 0.0 s with a single book snapshot inside it, which then made a
+    reach test report "83.1% never reached" as a near-certainty of the
+    instrumentation rather than a fact about the market. comp_log is
+    DIAGNOSTIC ONLY -- no fill, inventory or price decision reads it -- so
+    this changes what is measured, never what is simulated.
+    """
+    i = getattr(q, "ci", None)
+    if i is None:
+        return
+    c = stats["comp_log"][i]
+    if c[1] is None:
+        c[1] = tt
 
 
 def _place(live, stats, sy, pxs, t, depth, rel, preserve, touch, depth_mult):
@@ -99,20 +115,26 @@ def _place(live, stats, sy, pxs, t, depth, rel, preserve, touch, depth_mult):
         keep.append(Q(sy, px, t, qa, rel))
         stats["placed"] += 1
         if rel == "complete":
-            stats.setdefault("comp_log", []).append([t, None, sy, float(px), qa])
+            cl = stats.setdefault("comp_log", [])
+            keep[-1].ci = len(cl)
+            cl.append([t, None, sy, float(px), qa])
     for q in cur.values():
         stats["resets"] += 1
         stats["lifetimes"].append(t - q.t)
         if q.rel == "complete":
-            _closelog(stats, sy, t)
+            _closelog(stats, q, t)
     live[sy] = keep
 
 
-def replay(slug, se, prints, rungs=R_FROZEN, band=BAND_FROZEN, preserve=True,
-           completion="L5_HISTORICAL", ladder_sides="both", depth_mult=1.0):
-    """ladder_sides: 'acquire' puts the ladder only on the side a decision is
-    working and leaves the complement as arm 3's single rung; 'both' ladders the
-    complement too. Reported separately -- one mechanic at a time."""
+def _replay_body(slug, se, prints, rungs, band, preserve, completion,
+                 ladder_sides, depth_mult, px_offset_ticks):
+    """px_offset_ticks shifts where the ladder RESTS without moving the price the
+    queue is measured against. A negative offset rests a tick behind the touch; a
+    positive one improves the touch, and `_place`'s own rule then charges it zero
+    queue because it becomes the best bid. Passing the shifted price as the queue
+    reference instead would have charged a price-improving order full touch depth,
+    which is the opposite of what price improvement does. Default 0 leaves the
+    frozen arm byte-identical."""
     inv = dec.Inventory(); last_rel = ""; t_prev = 0.0; t_last = 0.0
     live = {}; fills = []; pi = 0
     stats = {"placed": 0, "resets": 0, "preserved": 0, "lifetimes": [], "comp_log": []}
@@ -143,7 +165,7 @@ def replay(slug, se, prints, rungs=R_FROZEN, band=BAND_FROZEN, preserve=True,
                     t_last = max(t_last, p["t"]); last_rel = q.rel
                     stats["lifetimes"].append(p["t"] - q.t)
                     if q.rel == "complete":
-                        _closelog(stats, sy, p["t"])
+                        _closelog(stats, q, p["t"])
                     live[sy] = [x for x in live[sy] if x is not q]
         if t - t_prev < dec.DECISION_MIN_GAP_S:
             continue
@@ -162,7 +184,8 @@ def replay(slug, se, prints, rungs=R_FROZEN, band=BAND_FROZEN, preserve=True,
                     px = float(tch)
             depth = float((r["bid_qty"] if sy else r["ask_qty"]) or 0.0)
             n = rungs if (ladder_sides == "both" or rl != "complete") else 1
-            pxs = rung_prices(px, sy, r, n, band if n > 1 else (0, 0))
+            base = round(px + px_offset_ticks * TICK, 4)
+            pxs = rung_prices(base, sy, r, n, band if n > 1 else (0, 0))
             if pxs:
                 _place(live, stats, sy, pxs, t, depth, rl, preserve, px, depth_mult)
             last_rel = rl
@@ -175,7 +198,8 @@ def replay(slug, se, prints, rungs=R_FROZEN, band=BAND_FROZEN, preserve=True,
                 if cpx is not None:
                     depth = float((r["bid_qty"] if dsy else r["ask_qty"]) or 0.0)
                     n = rungs if ladder_sides == "both" else 1
-                    pxs = rung_prices(float(cpx), dsy, r, n, band if n > 1 else (0, 0))
+                    cbase = round(float(cpx) + px_offset_ticks * TICK, 4)
+                    pxs = rung_prices(cbase, dsy, r, n, band if n > 1 else (0, 0))
                     if pxs:
                         _place(live, stats, dsy, pxs, t, depth, "complete", preserve,
                                float(cpx), depth_mult)
@@ -208,3 +232,13 @@ def run(since, venue="PMUS", **kw):
             rr["prints"] = [p for p in fls.get((v, slug), []) if p["t"] > since]
             out.append(rr)
     return out
+
+
+def replay(slug, se, prints, rungs=R_FROZEN, band=BAND_FROZEN, preserve=True,
+           completion="L5_HISTORICAL", ladder_sides="both", depth_mult=1.0,
+           px_offset_ticks=0):
+    """ladder_sides: 'acquire' puts the ladder only on the side a decision is
+    working and leaves the complement as arm 3's single rung; 'both' ladders the
+    complement too. Reported separately -- one mechanic at a time."""
+    return _replay_body(slug, se, prints, rungs, band, preserve, completion,
+                        ladder_sides, depth_mult, px_offset_ticks)
