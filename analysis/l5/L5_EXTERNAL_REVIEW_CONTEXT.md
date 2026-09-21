@@ -3,6 +3,37 @@
 > **THIS FILE IS THE CANONICAL EXTERNAL-REVIEW HANDOFF. READ THIS BEFORE OLDER L5
 > REPORTS. OLDER REPORTS ARE HISTORICAL EVIDENCE AND MAY CONTAIN SUPERSEDED
 > CONCLUSIONS.**
+>
+> ## ⛔ READ FIRST — FALSIFICATION AUDIT 2026-09-21
+>
+> A falsification pass at checkpoint `4778d686` **killed or downgraded most of the
+> quantitative claims in the rest of this file.** The audit register and the surviving
+> model are in **`analysis/l5/AUDIT_20260921_FALSIFICATION_PASS.md`**, which
+> **overrides every section below**.
+>
+> **FALSIFIED — do not cite these numbers as evidence, anywhere:**
+> * "PMUS flow is ~4× more one-sided than L5's habitat" (0.315 vs 0.083). Under matched
+>   sampling L5 gives **0.3286 [0.2948, 0.3700]** against PMUS **0.3148** — overlapping.
+>   A sample-size artifact.
+> * "More reach did not repair PMUS balance." Removing the **queue** does repair it
+>   (**0.1705–0.1857**, overlapping L5's 0.1774); excessive reach breaks it again.
+> * "STOP CONDITION B: structurally impossible." Both supports are gone → **UNVERIFIED**,
+>   reopened, neither proven nor disproven.
+> * Phase 2 multi-rung fidelity (1.229 → 0.410); `R/M = 2I/(1−I)` as evidence; all pooled
+>   Kalshi imbalance figures.
+>
+> **UNVERIFIED — previously stated as established:** ladder depth beyond 2–3 levels;
+> persistence; replenishment; posted sizes; **two-sided simultaneous resting**;
+> repricing; **the +$68,208 / 936 bps incentive figure** (not re-derivable from the
+> corpus, and not comparable to the 97.59 bps PMUS rate — different venue, different
+> denominator); fees.
+>
+> **SURVIVING:** ≥2 simultaneous resting orders one tick apart (on-chain, direct);
+> 77.3% maker (venue field); real run structure (vs shuffle null); the two-mode split
+> (independent separator); the exact matched+residual=net decomposition with standalone
+> **indistinguishable from zero**; PMUS take-both = 1 + spread.
+
+
 
 Last updated **2026-09-20**, at commit `fd91d38e`. Branch
 `claude/l5-execution-instrumentation-io6nzi`.
