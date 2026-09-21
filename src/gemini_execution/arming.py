@@ -53,7 +53,7 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: inside run_window on a stale ledger row and sent NOTHING. No
 #: authorization is in force, and this sentinel matches no environment
 #: value, so the transport cannot arm at all until a human installs one.
-EXPECTED_AUTH_ID = "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1"
+EXPECTED_AUTH_ID = "NO-AUTHORIZATION-IN-FORCE"
 
 
 class NotArmed(Exception):

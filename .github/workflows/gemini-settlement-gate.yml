@@ -493,13 +493,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # ARMED for OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1: ONE
-          # BTC15m q=1 window under the CAP-4 envelope, cohort
-          # COHORT-2026-09-21-BTC15M-CAP4-1 (0/12, chained to
-          # COHORT-2026-09-21-BTC15M-Q1LIVE-1 at 3/12 whose 9 unused slots
-          # stay unused). The predecessor grant is SPENT and never arms
-          # again. Worst case $4.00 = max_committed_usd.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1"
+          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1 IS SPENT:
+          # run 35641166387 traded GEMI-BTC15M2609211915-UP, consumed 5 of 12
+          # slots, took THREE fills (YES 1 @ 0.19, NO 1 @ 0.72, NO 1 @ 0.56),
+          # FORMED A MATCHED PAIR at 0.83, and stopped on the $4.00 committed
+          # cap -- not on imbalance, which never exceeded 1. A spent
+          # authorization never arms again.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
