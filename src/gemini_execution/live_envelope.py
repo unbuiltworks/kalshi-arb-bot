@@ -272,13 +272,60 @@ LIVE_Q1_BTC15M_2LVL = Envelope(
 
 DEFAULT = SHADOW_Q001
 
+
+#: THE CAP-4 BTC15m ENVELOPE. OWNER-AUTHORIZED 2026-09-21 to remove the cap-2
+#: truncation and observe the existing oscillator through the run-4 regime.
+#:
+#: WHY 4 IS NOT A NEW NUMBER. `continuous_probe` already derives the SHADOW
+#: cap as MAX_SAME_SIDE_RUN = 4, because "run 4+ is the out-of-sample
+#: validated persistence regime; the modal run is about 2.9". LIVE_Q1 then
+#: halved it to 2, with its own stated reason: "reaches the behaviour WITHOUT
+#: FUNDING IT". That was a cash decision, not a behavioural finding, and the
+#: q=1 BTC15m window proved what it costs -- run 35628347483 took NO 1 @ 0.22
+#: and NO 1 @ 0.17, and the next EXTEND the frozen controller requested was
+#: refused with "a fill would take imbalance to 3, past 2". The window ended
+#: there, which is what then cancelled the still-resting COMPLETE.
+#:
+#: MEASURED ON CANONICAL L5 HISTORY (2,216 windows, 35,576 same-side actions,
+#: q-normalized to each window's own action unit):
+#:   peak imbalance per window   p50 2.76   p75 5.21
+#:   coverage of a cap           k=2 38.2%   k=4 66.9%
+#:   L5 extends while ALREADY holding >= 2 units in 82.1% of same-side actions
+#:   P(opposite next | holding k) = .479 .481 .503 .487 .490 for k=1..5+, FLAT
+#: so a 2-unit cap is not anticipating a completion pressure that exists.
+#:
+#: WHAT IS NOT WIDENED. max_working_orders stays 2: order count is a different
+#: axis, the frozen surface emits one rung per outcome, and this is NOT the
+#: four-order envelope. q, family, TTE band, the 30s floor, the lifecycle and
+#: the controller are all untouched. The ONLY change is how much inventory the
+#: oscillator may carry, and the dollars that bounds.
+#:
+#: WORST CASE $4.00 = max_committed_usd, the owner-authorized ceiling. Four
+#: binary contracts cannot cost more than that, and a contract that resolves
+#: against pays nothing back.
+LIVE_Q1_BTC15M_CAP4 = Envelope(
+    name="GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1",
+    action_size=D("1"),
+    max_same_side_run=4,          # -> max_residual 4, max_imbalance 4
+    max_yes=D("4"),
+    max_no=D("4"),
+    max_total_spend_usd=D("4.00"),
+    max_committed_usd=D("4.00"),
+    max_residual_usd=D("4.00"),
+    max_working_orders=2,         # UNCHANGED, deliberately
+    max_concurrent_markets=1,
+    max_actions=12,
+    cohort_prefix="GEMI-BTC15M",
+)
+
 #: EVERY DECLARED ENVELOPE, in one place, so the authorization hash can name
 #: them all instead of a hand-kept pair. `ws_continuous.envelope()` listed
 #: SHADOW_Q001 and LIVE_Q1 by hand; LIVE_Q1_BTC15M was therefore OUTSIDE the
 #: authorized envelope hash and could have changed unreviewed -- the same
 #: hand-maintained-list defect as the workflow's two command lines.
 #: Order is part of the hash, and appending one is a reviewable change.
-ALL: "tuple" = (SHADOW_Q001, LIVE_Q1, LIVE_Q1_BTC15M, LIVE_Q1_BTC15M_2LVL)
+ALL: "tuple" = (SHADOW_Q001, LIVE_Q1, LIVE_Q1_BTC15M, LIVE_Q1_BTC15M_2LVL,
+       LIVE_Q1_BTC15M_CAP4)
 
 #: module-level aliases kept for readers; the ENVELOPE is what gates use
 MAX_CONCURRENT_MARKETS = LIVE_Q1.max_concurrent_markets

@@ -49,9 +49,9 @@ on:
         required: false
         default: "4"
       spec_id:
-        description: "Declared LiveProbeSpec id consumed by BOTH readiness and the armed window. Default btc15m_q1."
+        description: "Declared LiveProbeSpec id consumed by BOTH readiness and the armed window. Default btc15m_q1_cap4."
         required: false
-        default: "btc15m_q1"
+        default: "btc15m_q1_cap4"
       spec_sha:
         description: "The spec hash LIVE_READINESS_GATE proved. The armed step refuses before the latch if the resolved spec hashes differently."
         required: false
@@ -438,7 +438,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
-          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1' }}
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1_cap4' }}
           BRANCH: claude/gemini-btc-economic-viability-h3u7zl
         run: |
           # NO ARM IS SET HERE. GEMINI_CANARY_LIVE is absent, so the transport
@@ -493,13 +493,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1 IS SPENT: run
-          # 35628347483 reached the venue on GEMI-BTC15M2609211715-UP,
-          # consumed 3 of 12 cohort slots, took TWO maker fills (NO 1 @ 0.22,
-          # NO 1 @ 0.17) and withdrew with zero orders live. A spent
-          # authorization never arms again, and the grant required disarming
-          # regardless of outcome.
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          # ARMED for OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1: ONE
+          # BTC15m q=1 window under the CAP-4 envelope, cohort
+          # COHORT-2026-09-21-BTC15M-CAP4-1 (0/12, chained to
+          # COHORT-2026-09-21-BTC15M-Q1LIVE-1 at 3/12 whose 9 unused slots
+          # stay unused). The predecessor grant is SPENT and never arms
+          # again. Worst case $4.00 = max_committed_usd.
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
@@ -507,8 +507,8 @@ jobs:
           # dispatches refused -- correctly, before the latch, spending
           # nothing. Bounded to a few hours past this authorization, never
           # open-ended.
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T18:00:00Z"  # spent; see above
-          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1' }}
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T21:00:00Z"
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1_cap4' }}
           #: the hash readiness proved. Live refuses before the latch if the
           #: spec it resolves hashes to anything else.
           SPEC_SHA: ${{ github.event.inputs.spec_sha }}

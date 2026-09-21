@@ -341,8 +341,17 @@ def test_7b_no_module_on_the_live_path_hardcodes_a_quantity():
     # Counting keeps the guard exact: a NEW setter anywhere still fails here.
     from collections import Counter
     by_file = Counter(d.split(":")[0] for d in definitions)
-    assert dict(by_file) == {
-        "continuous_probe.py": 1,   # ACTION_SIZE, the shadow constant
-        "live_envelope.py": 4,      # SHADOW_Q001, LIVE_Q1,
-                                    # LIVE_Q1_BTC15M, LIVE_Q1_BTC15M_2LVL
-    }, definitions
+    # AND THE COUNT IS DERIVED, NOT PINNED. Counting to a literal 4 was still
+    # an assertion about how many envelopes happen to exist: declaring the
+    # owner-authorized CAP-4 envelope broke it, which is noise, not a finding.
+    # What must hold is that EVERY size setter in live_envelope.py is a
+    # DECLARED envelope in LE.ALL -- so a setter added outside the declared
+    # set still fails here -- and that continuous_probe defines exactly the
+    # one shadow constant.
+    from src.gemini_execution import live_envelope as LEQ
+    assert by_file["continuous_probe.py"] == 1, definitions
+    assert by_file["live_envelope.py"] == len(LEQ.ALL), definitions
+    assert set(by_file) <= {"continuous_probe.py", "live_envelope.py"}, definitions
+    # no live envelope may carry a size other than the shadow 0.01 or q=1
+    for e in LEQ.ALL:
+        assert str(e.action_size) in ("0.01", "1"), e.name

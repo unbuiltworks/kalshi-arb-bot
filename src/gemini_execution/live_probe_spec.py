@@ -47,6 +47,7 @@ ENVELOPES: Dict[str, Any] = {
     "shadow_q001": LE.SHADOW_Q001,
     "live_q1": LE.LIVE_Q1,
     "live_q1_btc15m": LE.LIVE_Q1_BTC15M,
+    "live_q1_btc15m_cap4": LE.LIVE_Q1_BTC15M_CAP4,
 }
 
 FAMILIES: Dict[str, Any] = {"btc5m": CC.BTC5M, "btc15m": CC.BTC15M}
@@ -201,6 +202,22 @@ BTC15M_Q1 = _declare(LiveProbeSpec(
     #: budget does not move spec_sha away from the reviewed
     #: d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c.
     live_cohort="COHORT-2026-09-21-BTC15M-Q1LIVE-1",
+))
+
+#: THE CAP-4 CANDIDATE. Identical to BTC15M_Q1 in family, band, q, cohort
+#: prefix and controller; the ONLY difference is the envelope, and the only
+#: difference in the envelope is how much inventory the oscillator may carry.
+#: A DIFFERENT spec_sha is correct here: this is a different experiment, and
+#: the hash is what says so.
+BTC15M_Q1_CAP4 = _declare(LiveProbeSpec(
+    spec_id="btc15m_q1_cap4",
+    family="btc15m",
+    envelope="live_q1_btc15m_cap4",
+    entry_tte_band="840:880",
+    cohort=None,
+    auth_id=SENTINEL_AUTH,
+    action_size="1",
+    live_cohort="COHORT-2026-09-21-BTC15M-CAP4-1",
 ))
 
 #: the BTC5m probe, declared so the shape is not BTC15m-only

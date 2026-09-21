@@ -1664,7 +1664,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                           "explicitly to contract_cohort.BTC15M; there is no "
                           "inference from the envelope or the symbol."))
     ap.add_argument("--envelope", default="shadow_q001",
-                    choices=("shadow_q001", "live_q1", "live_q1_btc15m"),
+                    choices=("shadow_q001", "live_q1", "live_q1_btc15m",
+                             "live_q1_btc15m_cap4"),
                     help=("which RISK ENVELOPE the driver runs under. The "
                           "default is the 0.01 shadow envelope; `live_q1` is "
                           "the reviewed q=1 manifest and must be asked for "
@@ -1699,7 +1700,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # never resolve to live_q1.
     env = {"shadow_q001": LE.SHADOW_Q001,
            "live_q1": LE.LIVE_Q1,
-           "live_q1_btc15m": LE.LIVE_Q1_BTC15M}[a.envelope]
+           "live_q1_btc15m": LE.LIVE_Q1_BTC15M,
+           "live_q1_btc15m_cap4": LE.LIVE_Q1_BTC15M_CAP4}[a.envelope]
     from src.gemini_execution import contract_cohort as CC
     fam = {"btc5m": CC.BTC5M, "btc15m": CC.BTC15M}[a.family]
     rep = asyncio.run(main_async(a.auth_id, state_dir=a.state_dir,
