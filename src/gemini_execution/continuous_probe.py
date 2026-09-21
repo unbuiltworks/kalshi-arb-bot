@@ -642,6 +642,21 @@ def crossed(book: Mapping[str, Any]) -> bool:
     return False
 
 
+def cohort_label(symbol: str) -> str:
+    """The family label for a market state, DERIVED from the symbol.
+
+    This was the literal "BTC5m" in both returns below, so every BTC15m
+    market state the driver built announced itself as BTC5m. The engine
+    carries `state["cohort"]` into its Surface record, so the label decides
+    nothing -- and that is exactly why it went unnoticed while corrupting
+    every BTC15m evidence row it touched. An unknown symbol keeps the
+    standing default rather than inventing a family.
+    """
+    from src.gemini_execution import contract_cohort as _CC
+    c = _CC.for_symbol(symbol)
+    return c.name if c is not None else _CC.DEFAULT.name
+
+
 def state_from_venue(symbol: str, tte_s: float, inv: "Inventory", *,
                      now: Optional[float] = None,
                      book: Optional[Mapping[str, Any]] = None
@@ -662,7 +677,7 @@ def state_from_venue(symbol: str, tte_s: float, inv: "Inventory", *,
             or crossed(b):
         return {"market_key": symbol, "state_id": "unreadable",
                 "t_utc": now if now is not None else _t.time(),
-                "tte_s": tte_s, "cohort": "BTC5m",
+                "tte_s": tte_s, "cohort": cohort_label(symbol),
                 "inventory_known": False, "outcomes": {},
                 "unreadable_why": (
                     "book not readable" if not b.get("readable")
@@ -674,7 +689,8 @@ def state_from_venue(symbol: str, tte_s: float, inv: "Inventory", *,
     t = now if now is not None else _t.time()
     return {
         "market_key": symbol, "state_id": "%s@%d" % (symbol, int(t)),
-        "t_utc": t, "state_age_s": 0.0, "tte_s": tte_s, "cohort": "BTC5m",
+        "t_utc": t, "state_age_s": 0.0, "tte_s": tte_s,
+        "cohort": cohort_label(symbol),
         "inventory_known": True,
         "outcomes": {
             "Up": {"bid": b["yes"]["bid"], "ask": b["yes"]["ask"],

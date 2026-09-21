@@ -246,7 +246,7 @@ def cross_field_invariants(r: Dict[str, Any]) -> Dict[str, Any]:
             r.get("frame_quantity")) not in ("1", "1.0", None, "None"):
         bad.append("q=1 authorized but the serialized frame carries %s"
                    % r.get("frame_quantity"))
-    # the envelope must cover the biggest surface the POLICY can emit
+    # (2) THE ENVELOPE MUST COVER WHAT THE FROZEN POLICY AUTHORIZES.
     try:
         emit = int(r.get("policy_max_rungs") or 0)
         if emit > int(r.get("max_working_orders") or 0):
@@ -254,6 +254,29 @@ def cross_field_invariants(r: Dict[str, Any]) -> Dict[str, Any]:
                        "working orders" % (emit, r.get("max_working_orders")))
     except Exception:                                          # noqa: BLE001
         bad.append("policy emission width unreadable")
+    # (1) AND THE LIFECYCLE MUST NOT BE ABLE TO EXCEED IT.
+    #
+    # Capacity is not authority. `reconcile_surface` places a moved desired
+    # price BESIDE a retained order whenever a leg slot is free, so on a
+    # family where _leg_slots is 2 it rests more orders than the frozen
+    # surface ever asked for. EP006 established that L5 HAD two adjacent
+    # levels resting; it did not establish WHEN the second is created, and
+    # no frozen rule says. Widening the envelope to fit would be adopting an
+    # execution rule nobody wrote by way of a capital limit.
+    try:
+        life = int(r.get("lifecycle_max_rungs") or 0)
+        pol = int(r.get("policy_max_rungs") or 0)
+        if life > pol:
+            bad.append(
+                "UNFROZEN EXECUTION RULE: the lifecycle can rest %d orders "
+                "where the frozen policy authorizes %d. The extra level is "
+                "created by reconcile_surface placing a moved desired price "
+                "beside a RETAINed order because a leg slot is free -- not "
+                "by the desired surface, which emits rung_count=1 per "
+                "outcome. Widen nothing until a frozen rule says when that "
+                "second level is created." % (life, pol))
+    except Exception:                                          # noqa: BLE001
+        bad.append("lifecycle emission width unreadable")
     if not r.get("rest_floor_invoked"):
         bad.append("the frozen minimum_rest_time is not invoked on the live "
                    "call graph")
@@ -384,23 +407,7 @@ def expectation_from_spec(spec: Any, *, branch: str, auth_id: str,
         argv=spec.canonical_argv(out="<out>", wire="<wire>", readiness=True))
 
 
-def policy_max_rungs(spec: Any) -> int:
-    """The WIDEST surface that can be RESTING AT ONCE under this spec.
-
-    Derived, not asserted, from three things the frozen policy already fixes:
-
-      outcomes    `both_sides_policy` is {'outcomes': ['Up', 'Down']}, so the
-                  engine builds rungs for BOTH legs in one desired surface.
-      rung_count  1, with tick_offsets [0] -- one rung per leg per turn.
-      leg_slots   `ws_continuous._leg_slots`: 2 for GEMI-BTC15M (EP006), 1
-                  otherwise.
-
-    Per turn the surface asks for `outcomes x rung_count` rungs. CONCURRENTLY
-    a leg may hold up to `leg_slots`, because RETAIN keeps a valid young order
-    resting while the moved desired price is ADDed beside it -- that is the
-    whole point of the two-level BTC15m geometry. So the worst case is
-    `outcomes x rung_count x leg_slots`, and the envelope must cover it.
-    """
+def _surface_shape(spec: Any) -> Dict[str, int]:
     from src.gemini_execution import continuous_probe as CP
     from src.gemini_execution import ws_continuous as WC
 
@@ -409,7 +416,42 @@ def policy_max_rungs(spec: Any) -> int:
         "outcomes") or [])
     rung_count = int(sp.params["rung_count"].value)
     slots = WC._leg_slots(str(spec.envelope_obj.cohort_prefix))
-    return outcomes * rung_count * slots
+    return {"outcomes": outcomes, "rung_count": rung_count,
+            "leg_slots": slots}
+
+
+def policy_max_rungs(spec: Any) -> int:
+    """(2) THE MOST ORDERS THE FROZEN BEHAVIORAL POLICY AUTHORIZES.
+
+    `outcomes x rung_count`, and nothing else. The frozen surface emits ONE
+    rung per outcome -- `rung_count` is 1 and `tick_offsets` is [0] -- so at
+    any instant the policy has asked for at most one price per leg.
+
+    THIS IS THE NUMBER THE ENVELOPE MUST COVER. It is deliberately NOT
+    multiplied by `leg_slots`: see `lifecycle_max_rungs` for why that
+    multiplication is a statement about capacity rather than authority.
+    """
+    s = _surface_shape(spec)
+    return s["outcomes"] * s["rung_count"]
+
+
+def lifecycle_max_rungs(spec: Any) -> int:
+    """(1) THE MOST ORDERS THE LIFECYCLE CAN TECHNICALLY REPRESENT.
+
+    `outcomes x rung_count x leg_slots`. `reconcile_surface` admits an ADD at
+    a leg while `occupied[leg] < slots`, and a RETAIN occupies one slot -- so
+    on a family where `_leg_slots` is 2 a moved desired price is placed
+    BESIDE the retained order instead of waiting for it.
+
+    THAT SECOND LEVEL IS NOT IN THE FROZEN SURFACE. EP006 measured that L5
+    HAD two adjacent same-side levels resting on BTC15m; it did not establish
+    WHEN L5 creates the second one. Treating the spare slot as permission to
+    place one is an execution rule nobody froze -- manufactured to match an
+    observed concurrency statistic. It is reported, and the gate refuses
+    rather than letting the capacity silently become the authority.
+    """
+    s = _surface_shape(spec)
+    return s["outcomes"] * s["rung_count"] * s["leg_slots"]
 
 
 def resolve_from_report(rep: Dict[str, Any], spec: Any) -> Dict[str, Any]:
@@ -452,6 +494,8 @@ def resolve_from_report(rep: Dict[str, Any], spec: Any) -> Dict[str, Any]:
         "frame_quantity": (qtys[0] if len(qtys) == 1 else
                            (None if not qtys else "/".join(qtys))),
         "policy_max_rungs": policy_max_rungs(spec),
+        "lifecycle_max_rungs": lifecycle_max_rungs(spec),
+        "surface_shape": _surface_shape(spec),
         "rest_floor_invoked": True,
         "retained_counts_as_risk": True,
         "mutations_sent": int(rep.get("readiness_mutations_sent") or 0),

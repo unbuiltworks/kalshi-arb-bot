@@ -1,0 +1,41 @@
+frozen minimum_rest_time  = 30.0s
+_leg_slots(GEMI-BTC15M)   = 2
+_leg_slots(GEMI-BTC05M)   = 1
+
+==================================================================
+FAMILY GEMI-BTC15M
+==================================================================
+t=0s   desired YES@0.50, NO@0.47  (flat, nothing resting)
+   PLACE   leg=YES px=0.50  qty=1   
+   PLACE   leg=NO  px=0.47  qty=1   
+   mutations=2  leg_slots=2  resting_after=2
+
+t=12s  model price moves YES 0.50 -> 0.51 (age 12s < 30s floor)
+   KEEP    leg=NO  px=0.47  qty=1   
+   RETAIN  leg=YES px=0.50  qty=1     age=12.0s
+   PLACE   leg=YES px=0.51  qty=1   
+   mutations=1  leg_slots=2  resting_after=3
+
+   >>> RETAIN issued for the moved leg: True
+   >>> CANCEL issued for the moved leg: False
+   >>> a SECOND YES level was ADDED:    True
+   >>> concurrent resting orders:       3
+
+==================================================================
+FAMILY GEMI-BTC05M
+==================================================================
+t=0s   desired YES@0.50, NO@0.47  (flat, nothing resting)
+   PLACE   leg=YES px=0.50  qty=1   
+   PLACE   leg=NO  px=0.47  qty=1   
+   mutations=2  leg_slots=1  resting_after=2
+
+t=12s  model price moves YES 0.50 -> 0.51 (age 12s < 30s floor)
+   KEEP    leg=NO  px=0.47  qty=1   
+   RETAIN  leg=YES px=0.50  qty=1     age=12.0s
+   mutations=0  leg_slots=1  resting_after=2
+
+   >>> RETAIN issued for the moved leg: True
+   >>> CANCEL issued for the moved leg: False
+   >>> a SECOND YES level was ADDED:    False
+   >>> concurrent resting orders:       2
+

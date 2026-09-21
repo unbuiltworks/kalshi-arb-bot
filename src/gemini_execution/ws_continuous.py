@@ -194,7 +194,14 @@ def envelope() -> Dict[str, str]:
         "max_no": str(CP.MAX_NO),
         "no_new_open_extend_tte_s": str(CP.NO_NEW_OPEN_EXTEND_TTE_S),
         "withdraw_all_tte_s": str(CP.WITHDRAW_ALL_TTE_S),
-        "cohort_prefix": CP.COHORT_PREFIX,
+        # THE FAMILIES THIS DRIVER MAY BE BOUND TO, not one hard-coded name.
+        # This said `CP.COHORT_PREFIX` -- the literal BTC5m prefix -- so an
+        # authorization's envelope hash asserted BTC5m no matter which
+        # envelope the driver was actually constructed with. The family now
+        # comes from the ENVELOPE (see Driver.__init__), so what the hash
+        # must pin is the set of families that are selectable at all.
+        "cohort_prefixes": ",".join(CP.COHORT_PREFIXES),
+        "default_cohort_prefix": CP.COHORT_PREFIX,
         "maker_tif": spec.WS_TIF_MAKER_ONLY,
         # THE BOUNDS THAT ACTUALLY HOLD ON THE ORDER PATH. Leaving these out
         # would let an authorization be granted against an envelope hash that
@@ -204,11 +211,15 @@ def envelope() -> Dict[str, str]:
         # envelope a driver happened to be constructed with would let the
         # OTHER one change unreviewed, and the choice between them is one
         # constructor argument.
-        "envelope_shadow_q001_sha": LE.SHADOW_Q001.sha(),
-        "envelope_live_q1_sha": LE.LIVE_Q1.sha(),
-        "envelope_shadow_q001": json.dumps(LE.SHADOW_Q001.as_dict(),
-                                           sort_keys=True),
-        "envelope_live_q1": json.dumps(LE.LIVE_Q1.as_dict(), sort_keys=True),
+        # EVERY DECLARED ENVELOPE, NOT A HAND-KEPT PAIR. This named
+        # SHADOW_Q001 and LIVE_Q1 only, so LIVE_Q1_BTC15M -- the envelope a
+        # BTC15m authorization would actually run under -- sat OUTSIDE the
+        # hash and could have changed unreviewed. LE.ALL is the declaration;
+        # adding an envelope moves this hash, which is correct.
+        "envelopes": json.dumps(
+            {e.name: e.as_dict() for e in LE.ALL}, sort_keys=True),
+        "envelope_shas": json.dumps(
+            {e.name: e.sha() for e in LE.ALL}, sort_keys=True),
     }
 
 
@@ -880,15 +891,41 @@ MAX_CLEANUP_SECONDS = 45.0
 
 
 class Driver:
-    """One BTC5m window, and then STOPPED. STOPPED is terminal."""
+    """ONE window on ONE contract, and then STOPPED. STOPPED is terminal.
+
+    THE FAMILY COMES FROM THE ENVELOPE, NOT FROM A MODULE CONSTANT. This
+    class used to open with `startswith(CP.COHORT_PREFIX)`, which is the
+    literal "GEMI-BTC05M" -- so discovery, the family selector, the envelope
+    and the entry band could all resolve BTC15m correctly and the DRIVER
+    would still refuse the contract:
+
+        ProbeStop: GEMI-BTC15M2609211430-UP is not a GEMI-BTC05M contract
+
+    That is run 35609233642, and it is the tenth instance of the same class:
+    a selector threaded everywhere except the one place that decides. The
+    envelope already carries `cohort_prefix` -- it is the field that says
+    which market these bounds were derived for -- so that is what the symbol
+    is checked against, and what the guard is bound to. An envelope naming a
+    family the module does not know is still refused by WindowGuard.
+
+    Nothing is loosened: a symbol outside the envelope's own family is
+    refused exactly as before, and the ONLY way to reach BTC15m is to hand
+    over an envelope that was sized for BTC15m.
+    """
 
     def __init__(self, auth_id: str, symbol: str, *, ledger_path: str,
                  now_fn: Callable[[], float] = time.time,
                  max_actions: Optional[int] = None,
                  envelope: "LE.Envelope" = LE.DEFAULT) -> None:
-        if not str(symbol).startswith(CP.COHORT_PREFIX):
+        want_prefix = str(getattr(envelope, "cohort_prefix", "")
+                          or CP.COHORT_PREFIX)
+        if not str(symbol).startswith(want_prefix):
             raise CP.ProbeStop("%s is not a %s contract"
-                               % (symbol, CP.COHORT_PREFIX))
+                               % (symbol, want_prefix))
+        #: the family this driver is bound to, decided ONCE, in the
+        #: constructor, from the envelope -- never re-derived from the symbol
+        #: and never read from a module default afterwards.
+        self._family_prefix = want_prefix
         # IMMUTABLE BEFORE THE FIRST MUTATION. Bound in the constructor and
         # never reassigned; WindowGuard re-checks it on every single turn.
         self._symbol = str(symbol)
@@ -971,7 +1008,12 @@ class Driver:
         answer applies.
         """
         g = getattr(self, "guard", None)
-        return str(getattr(g, "cohort_prefix", "") or "")
+        # The guard is authoritative once bound; before bind() the family the
+        # CONSTRUCTOR already fixed is the answer, because it came from the
+        # envelope and cannot change. Falling back to "" here would have made
+        # a pre-bind reconcile silently single-level.
+        return str(getattr(g, "cohort_prefix", "") or ""
+                   or getattr(self, "_family_prefix", "") or "")
 
     def budget_left(self) -> int:
         used = self.budget_consumed if self.budget_consumed is not None else 0
@@ -1104,7 +1146,14 @@ class Driver:
                          self.env.max_concurrent_markets))
             return {"bound": False, "why": self.why}
         _BOUND_MARKETS[self._symbol] = self
-        self.guard = CP.WindowGuard(self._symbol, auth_id=self._auth_id)
+        # AND THE GUARD IS BOUND TO THE SAME FAMILY. It already accepted a
+        # cohort_prefix and was never given one, so every window -- BTC15m
+        # included -- guarded as BTC5m. That is not only a wrong label:
+        # `_cohort_prefix` reads the guard, so `_leg_slots` returned 1 on a
+        # BTC15m contract and the two-level geometry was unreachable even
+        # with the constructor's check fixed.
+        self.guard = CP.WindowGuard(self._symbol, auth_id=self._auth_id,
+                                    cohort_prefix=self._family_prefix)
         self.guard.actions_taken = int(self.budget_consumed or 0)
         self.state = BOUND
         return {"bound": True, "symbol": self._symbol,

@@ -211,15 +211,31 @@ def test_the_authorization_hash_covers_BOTH_sizes():
     """The live size is one constructor argument away, so an authorization
     that named only the envelope a driver happened to be built with would
     leave the other one changeable without review."""
+    import json as _json
     env = WC.envelope()
-    assert env["envelope_shadow_q001_sha"] == LE.SHADOW_Q001.sha()
-    assert env["envelope_live_q1_sha"] == LE.LIVE_Q1.sha()
+    shas = _json.loads(env["envelope_shas"])
+    # EVERY DECLARED ENVELOPE, not the hand-kept pair this used to read.
+    # LIVE_Q1_BTC15M -- the envelope a BTC15m authorization actually runs
+    # under -- was OUTSIDE the hash entirely and could have changed
+    # unreviewed.
+    assert {e.name for e in LE.ALL} == set(shas)
+    for e in LE.ALL:
+        assert shas[e.name] == e.sha()
+    assert LE.LIVE_Q1_BTC15M.name in shas
+
     before = WC.envelope_sha()
     import dataclasses
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(LE, "LIVE_Q1",
-                   dataclasses.replace(LE.LIVE_Q1,
-                                       max_committed_usd=CP.D("1000")))
+        widened = dataclasses.replace(LE.LIVE_Q1,
+                                      max_committed_usd=CP.D("1000"))
+        mp.setattr(LE, "ALL", tuple(widened if e is LE.LIVE_Q1 else e
+                                    for e in LE.ALL))
+        assert WC.envelope_sha() != before
+    # and the same must hold for the BTC15m one
+    with pytest.MonkeyPatch.context() as mp:
+        widened = dataclasses.replace(LE.LIVE_Q1_BTC15M, max_working_orders=9)
+        mp.setattr(LE, "ALL", tuple(widened if e is LE.LIVE_Q1_BTC15M else e
+                                    for e in LE.ALL))
         assert WC.envelope_sha() != before
 
 

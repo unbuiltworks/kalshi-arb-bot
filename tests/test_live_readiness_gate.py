@@ -40,6 +40,7 @@ def _resolved(**over):
           "max_working_orders", "max_committed_usd", "max_residual_usd",
           "max_concurrent_markets", "minimum_rest_time_s")}
     r.update({"frame_quantity": "1", "policy_max_rungs": 2,
+              "lifecycle_max_rungs": 2,
               "rest_floor_invoked": True, "retained_counts_as_risk": True,
               "mutations_sent": 0})
     r.update(over)
@@ -290,27 +291,50 @@ def test_the_four_terms_states_stay_four():
 
 
 def test_the_widest_surface_is_DERIVED_from_the_frozen_policy():
-    """Not a fixture. outcomes x rung_count x leg_slots, read out of the
-    frozen lane and the EP006 geometry."""
+    """Not a fixture -- and CAPACITY IS NOT AUTHORITY.
+
+    My first version returned `outcomes x rung_count x leg_slots` from
+    `policy_max_rungs` and compared the envelope against it. That conflated
+    two different quantities, and comparing capital against the larger one
+    would have made "the lifecycle can reach for a fourth order" into an
+    argument for authorizing a fourth order. They are now separate:
+
+      policy_max_rungs     (2) what the FROZEN surface authorizes
+      lifecycle_max_rungs  (1) what reconcile_surface can represent
+
+    The envelope must cover (2). (1) > (2) is an unfrozen execution rule.
+    """
     from src.gemini_execution import live_probe_spec as SPEC
-    assert LR.policy_max_rungs(SPEC.BTC5M_Q1) == 2     # 2 legs x 1 x 1 slot
-    assert LR.policy_max_rungs(SPEC.BTC15M_Q1) == 4    # 2 legs x 1 x 2 slots
+    assert LR.policy_max_rungs(SPEC.BTC5M_Q1) == 2      # 2 legs x 1 rung
+    assert LR.policy_max_rungs(SPEC.BTC15M_Q1) == 2     # SAME: rung_count 1
+    assert LR.lifecycle_max_rungs(SPEC.BTC5M_Q1) == 2   # x 1 slot
+    assert LR.lifecycle_max_rungs(SPEC.BTC15M_Q1) == 4  # x 2 slots
 
 
 def test_a_btc15m_envelope_narrower_than_its_own_geometry_is_caught():
-    """THE FINDING THIS GATE WAS BUILT TO PRODUCE. BTC15m's whole reason for
-    existing is the two adjacent resting levels EP006 measured, and RETAIN
-    lets a leg hold both at once -- so four orders can rest. An envelope
-    permitting two cannot contain that surface, and the run would refuse
-    mid-window instead of before authorization."""
-    from src.gemini_execution import live_envelope as LE
+    """THE FINDING, RESTATED CORRECTLY.
+
+    The 2-order envelope is NOT too small for the frozen policy: the policy
+    authorizes 2 and the envelope allows 2. What exceeds it is the LIFECYCLE,
+    which places a moved desired price beside a RETAINed order whenever a leg
+    slot is free. EP006 proved L5 HAD two adjacent levels resting on BTC15m;
+    it did not establish WHEN the second is created. So the gate names the
+    unfrozen rule instead of demanding more capital.
+    """
+    from src.gemini_execution import live_envelope as LEX
     from src.gemini_execution import live_probe_spec as SPEC
 
-    wide = LR.policy_max_rungs(SPEC.BTC15M_Q1)
-    assert wide > LE.LIVE_Q1_BTC15M.max_working_orders
-    assert wide <= LE.LIVE_Q1_BTC15M_2LVL.max_working_orders
+    pol = LR.policy_max_rungs(SPEC.BTC15M_Q1)
+    life = LR.lifecycle_max_rungs(SPEC.BTC15M_Q1)
+    assert pol <= LEX.LIVE_Q1_BTC15M.max_working_orders
+    assert life > LEX.LIVE_Q1_BTC15M.max_working_orders
+    assert life <= LEX.LIVE_Q1_BTC15M_2LVL.max_working_orders
+
     m = _gate(resolved=_resolved(
-        policy_max_rungs=wide,
-        max_working_orders=LE.LIVE_Q1_BTC15M.max_working_orders))
+        policy_max_rungs=pol, lifecycle_max_rungs=life,
+        max_working_orders=LEX.LIVE_Q1_BTC15M.max_working_orders))
     assert m["verdict"] == LR.FAIL
-    assert any("rungs" in v for v in m["checks"]["cross_field"]["violations"])
+    v = m["checks"]["cross_field"]["violations"]
+    assert any("UNFROZEN EXECUTION RULE" in x for x in v), v
+    # and NOT the "envelope too small for the policy" rule
+    assert not any("envelope allows" in x for x in v), v

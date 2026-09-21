@@ -99,6 +99,21 @@ COHORTS.update({c.prefix.lower(): c for c in (BTC5M, BTC15M)})
 DEFAULT = BTC5M
 
 
+def for_symbol(symbol: str) -> "Optional[Cohort]":
+    """Which family a venue symbol belongs to, or None.
+
+    NONE, NEVER A DEFAULT. A symbol nobody recognises must not be labelled
+    BTC5m: that is how `state_from_venue` stamped "BTC5m" onto every BTC15m
+    market state it built, which then travelled into the engine's Surface
+    record and into the evidence.
+    """
+    s = str(symbol or "")
+    for c in (BTC5M, BTC15M):
+        if s.startswith("GEMI-" + c.prefix):
+            return c
+    return None
+
+
 def resolve(name: Optional[str]) -> Cohort:
     """A cohort by name, or the standing 5-minute default.
 

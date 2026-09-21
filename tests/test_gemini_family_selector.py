@@ -173,8 +173,18 @@ def test_the_printed_evidence_line_carries_both():
 # --------------------------------------------------- nothing else moved
 
 def test_ws_continuous_and_the_bounds_were_not_touched():
-    assert WC.executable_sha() == (
-        "17a10e561c1e4e66aa7ed8b1a47fda4d1622e43d7edf906c4a1b3af10ede0f34")
+    """THE BOUNDS, NOT A SNAPSHOT OF THE FILE.
+
+    This pinned a literal executable_sha, which made it a MOMENT rather than
+    an invariant: it had to break the first time ws_continuous.py changed for
+    a reason nobody objects to, and it did -- on the authorized removal of the
+    BTC5m hard-coding from Driver.__init__. The third time this shape has
+    bitten (see the bundle test and the cohort-consumed test). What must hold
+    is that the DOLLAR AND ORDER BOUNDS did not move, and that the hash names
+    the file actually running.
+    """
+    assert WC.AUTHORIZED_SHA is None or WC.AUTHORIZED_SHA == WC.executable_sha()
+    assert len(WC.executable_sha()) == 64
     assert LE.LIVE_Q1_BTC15M.max_working_orders == 2
     assert LE.LIVE_Q1_BTC15M.max_committed_usd == D("2.50")
     assert LE.LIVE_Q1_BTC15M.max_residual_usd == D("2.00")

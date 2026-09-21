@@ -272,6 +272,14 @@ LIVE_Q1_BTC15M_2LVL = Envelope(
 
 DEFAULT = SHADOW_Q001
 
+#: EVERY DECLARED ENVELOPE, in one place, so the authorization hash can name
+#: them all instead of a hand-kept pair. `ws_continuous.envelope()` listed
+#: SHADOW_Q001 and LIVE_Q1 by hand; LIVE_Q1_BTC15M was therefore OUTSIDE the
+#: authorized envelope hash and could have changed unreviewed -- the same
+#: hand-maintained-list defect as the workflow's two command lines.
+#: Order is part of the hash, and appending one is a reviewable change.
+ALL: "tuple" = (SHADOW_Q001, LIVE_Q1, LIVE_Q1_BTC15M, LIVE_Q1_BTC15M_2LVL)
+
 #: module-level aliases kept for readers; the ENVELOPE is what gates use
 MAX_CONCURRENT_MARKETS = LIVE_Q1.max_concurrent_markets
 
