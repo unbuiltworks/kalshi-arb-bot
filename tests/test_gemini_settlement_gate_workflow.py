@@ -567,7 +567,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = None
+LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-Q1-LIVE-1"
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():

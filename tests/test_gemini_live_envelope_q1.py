@@ -72,12 +72,28 @@ def _rung(leg, price, qty="1"):
 
 # ============================================== the manifest is not armed
 
-def test_the_shipped_driver_cannot_mutate_anything():
-    """The whole point: this work is engineering, not arming."""
-    assert WC.REQUIRED_AUTH_ID is None
-    assert WC.AUTHORIZED_SHA is None
-    assert WC.AUTHORIZED_ENVELOPE is None
-    assert not WC.authorized()
+def test_the_tree_is_armed_for_exactly_one_named_authorization():
+    """THE TREE IS NOW ARMED, for exactly ONE named authorization.
+
+    This used to assert the disarmed shape. The owner granted
+    OWNER-2026-09-21-GEMINI-Q1-LIVE-1 on 2026-09-21, so asserting
+    "never armed" would now assert that the authorization mechanism may never
+    be used -- which is not a safety property, it is a broken one.
+
+    What must hold instead, and is strictly stronger than the old text:
+    the constants name the RUNNING code and the RUNNING envelope, so any edit
+    to either disarms automatically; and the DUAL KEY's live half is an
+    environment variable that is NOT in this repository, so a checkout alone
+    can never mutate anything. That second half is what the old test was
+    really protecting, and it is unchanged.
+    """
+    assert WC.REQUIRED_AUTH_ID == "OWNER-2026-09-21-GEMINI-Q1-LIVE-1"
+    assert WC.AUTHORIZED_SHA == WC.executable_sha()
+    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+    # the env half is absent here, so the gate is still shut in this process
+    assert WC.authorized() is False
+    assert any("GEMINI_CANARY_LIVE" in r or "transport arm" in r
+               for r in WC.authorization_state()["why_not"])
 
 
 def test_the_live_envelope_is_never_the_default():

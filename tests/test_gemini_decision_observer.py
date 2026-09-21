@@ -392,7 +392,11 @@ def test_the_capture_did_not_move_the_envelope():
     # ever land. The two invariants worth pinning are kept and are stronger:
     # the SHADOW (0.01) bounds did not move, and the authorization granted
     # against the old envelope is dead rather than silently carried forward.
-    assert WC.AUTHORIZED_ENVELOPE is None and not WC.authorized()
+    # ARMED 2026-09-21 under OWNER-2026-09-21-GEMINI-Q1-LIVE-1. The grant
+    # names the envelope ACTUALLY IN FORCE, so a changed bound still kills it
+    # automatically, and the dual key's live half remains outside the repo.
+    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+    assert WC.authorized() is False
     assert str(CP.MAX_ACTIONS) == "12" and str(CP.MAX_RESIDUAL) == "0.04"
     assert str(CP.MAX_IMBALANCE) == "0.04" and str(CP.ACTION_SIZE) == "0.01"
 

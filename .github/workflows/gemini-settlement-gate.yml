@@ -409,7 +409,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-Q1-LIVE-1"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
@@ -417,11 +417,11 @@ jobs:
           # dispatches refused -- correctly, before the latch, spending
           # nothing. Bounded to a few hours past this authorization, never
           # open-ended.
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-19T06:00:00Z"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T06:00:00Z"
         run: |
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --auth-id "OWNER-2026-09-21-GEMINI-Q1-LIVE-1" \
             --cohort  "COHORT-2026-09-21-Q1LIVE-1" \
             --envelope live_q1 \
             --entry-tte-band "240:280" \
