@@ -72,33 +72,33 @@ def _rung(leg, price, qty="1"):
 
 # ============================================== the manifest is not armed
 
-def test_the_tree_is_disarmed_and_the_q1_grant_is_spent():
-    """DISARMED AGAIN 2026-09-21, after the q=1 grant was spent without
-    trading.
+def test_the_tree_is_armed_for_exactly_one_named_authorization():
+    """ARMED for LIVE-2, the SECOND grant for this one window.
 
-    OWNER-2026-09-21-GEMINI-Q1-LIVE-1 was granted, armed, and consumed by run
-    35570948794: the latch persisted as INTENT_PERSISTED with venue_order_id
-    null and the driver then refused, because run_canary.BRANCH still named
-    the instrumentation branch and the latch could not be pushed. ZERO ORDERS,
-    cohort 0/12, no cash moved.
+    LIVE-1 is spent and can never arm again: run 35570948794 latched it and
+    then could not push the latch, so an infrastructure fault consumed a grant
+    with ZERO ORDERS placed. can_make_durable() now runs BEFORE the consume,
+    so that failure mode costs nothing and this grant survives it.
 
-    A spent authorization never arms again -- so the constants return to the
-    sentinel rather than the latch being cleared, which is the same rule
-    CONTINUOUS-1 and CONTINUOUS-3 died under. Re-arming requires a NEW
-    owner-granted identifier; it is not something this tree can restore to
-    itself.
+    What must hold, and is stronger than naming a constant: the constants name
+    the RUNNING code and the RUNNING envelope, so any edit to either disarms
+    automatically; and the dual key's live half is an environment variable
+    that is NOT in this repository, so a checkout alone can never mutate.
     """
-    assert WC.REQUIRED_AUTH_ID is None
-    assert WC.AUTHORIZED_SHA is None
-    assert WC.AUTHORIZED_ENVELOPE is None
-    assert WC.authorized() is False
-    # AND THE REVIEWED TREE IS UNCHANGED UNDERNEATH. The hashes the spent
-    # grant named still describe this code, so a re-grant is two identifier
-    # lines and needs no re-review of the bounds.
-    assert WC.executable_sha() == (
+    assert WC.REQUIRED_AUTH_ID == "OWNER-2026-09-21-GEMINI-Q1-LIVE-2"
+    assert WC.AUTHORIZED_SHA == WC.executable_sha()
+    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+    # THE OWNER'S OWN NUMBERS, not merely self-consistent ones. A tree that
+    # agreed with itself but not with the grant would pass the two asserts
+    # above and still be unauthorized code.
+    assert WC.AUTHORIZED_SHA == (
         "c1ada77a919c9c0cf226b4eb0c56aed6495f7e8fe1ece9261150aa6c26377763")
-    assert WC.envelope_sha() == (
+    assert WC.AUTHORIZED_ENVELOPE == (
         "47f257f208017841d633c1bf5e2420eda2ca87b0ab502da34bd9d7e19690cf22")
+    # the env half is absent here, so the gate is still shut in this process
+    assert WC.authorized() is False
+    assert any("GEMINI_CANARY_LIVE" in r or "transport arm" in r
+               for r in WC.authorization_state()["why_not"])
 
 
 def test_the_live_envelope_is_never_the_default():
