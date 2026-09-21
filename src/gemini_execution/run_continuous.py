@@ -1400,15 +1400,38 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         rep["latch"] = {"consumed": False, "spent_by_this_run": False}
         return rep
 
+    # THE LATCH RECORDS THE ENVELOPE THIS RUN IS UNDER, NOT THE SHADOW ONE.
+    #
+    # This intent is consumed BEFORE the mutation and is the durable, auditable
+    # record of what was authorized and attempted. It used to hardcode
+    # `CP.ACTION_SIZE` and `CP.MAX_RESIDUAL` -- the 0.01 module constants --
+    # whichever envelope was actually in force. LIVE-2 therefore left a latch
+    # reading `amount 0.01`, `max_residual 0.04` on a window the owner had
+    # authorized at q=1, and the durable record contradicted the order path.
+    #
+    # That is the same failure `resolve_action_size` refuses in the controller:
+    # after the fact, an authorized q=1 run whose record says 0.01 is
+    # indistinguishable from one that was never authorized at q=1 at all. The
+    # record has to name the bounds that actually held.
+    #
+    # `max_residual` stays CONTRACT-denominated, as it has always been, so the
+    # field keeps its meaning across old and new latches; the dollar bound the
+    # money actually runs against is `max_residual_usd`, carried beside it.
     intent = {
         "intent_id": "cont-%s" % datetime.now(timezone.utc).strftime(
             "%Y%m%dT%H%M%SZ"),
         "symbol": symbol, "side": "buy", "outcome": "both",
-        "price": None, "amount": str(CP.ACTION_SIZE),
-        "max_orders": CP.MAX_ACTIONS, "max_residual": str(CP.MAX_RESIDUAL),
+        "price": None, "amount": str(envelope.action_size),
+        "max_orders": int(envelope.max_actions),
+        "max_residual": str(envelope.max_residual),
+        "max_residual_usd": str(envelope.max_residual_usd),
+        "max_committed_usd": str(envelope.max_committed_usd),
+        "max_working_orders": int(envelope.max_working_orders),
+        "envelope_name": envelope.name,
         "maker_only": True, "transport": "WEBSOCKET",
         "executable_sha": WC.executable_sha(),
         "envelope_sha": WC.envelope_sha(),
+        "active_envelope_sha": envelope.sha(),
     }
     try:
         rec0 = latch.consume(auth_id, intent, state_dir,
