@@ -989,7 +989,30 @@ class Driver:
         now = self.now_fn()
         st = CP.state_from_venue(self._symbol, tte_s, self.inv, now=now,
                                  book=book)
-        turn = self.guard.step(st, self.inv, now=now)
+        # THE AUTHORIZED q REACHES THE DECISION. The policy chooses side,
+        # price, ordering and classification; q is stamped by the execution
+        # layer and is not a behavioural output. Passing the envelope's own
+        # action_size is what makes an explicitly authorized LIVE_Q1 run at
+        # q=1 instead of silently at the shadow constant.
+        turn = self.guard.step(st, self.inv, now=now,
+                               action_size=self.env.action_size)
+
+        # AND IT CANNOT SILENTLY REVERT. LE.would_breach permits a rung
+        # SMALLER than action_size, because a partial remainder is legitimately
+        # smaller -- which means it would NOT catch a freshly decided rung that
+        # came back at 0.01 under a q=1 authorization. That is precisely the
+        # failure this whole change exists to close, so it is checked here on
+        # the decision itself, where every rung is fresh.
+        for a in (turn.get("actions") or []):
+            if str(a.get("qty")) != str(self.env.action_size):
+                self.stop(DO_NOT_TRADE,
+                          "decided rung carries qty %s but the authorized "
+                          "envelope %s is q=%s; a silently downsized action "
+                          "is refused rather than sent"
+                          % (a.get("qty"), self.env.name,
+                             self.env.action_size))
+                return {"state": self.state, "turn": turn, "plan": None,
+                        "market_state": st, "why": self.why}
 
         phase = turn.get("window_phase")
         if phase == CP.WINDOW_WITHDRAWN or turn.get("stop"):

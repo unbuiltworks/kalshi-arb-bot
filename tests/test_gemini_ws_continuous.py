@@ -1026,3 +1026,61 @@ def test_the_place_ack_is_returned_for_the_record(tmp_path, _authorized):
     ack = {"status": 200, "result": {"orderId": 7}}
     out = _run(d.place(FakeSession(default=ack), _rung("YES", "0.55")))
     assert out["ack"] == ack
+
+
+# ============================================ q AS AN EXECUTION-LAYER PARAM
+
+from decimal import Decimal as D   # noqa: E402  (section-local, see below)
+
+def test_the_driver_sends_quantity_1_under_the_authorized_live_envelope(
+        tmp_path, _authorized):
+    """PROOF 2, end to end: what the DRIVER actually put on the wire.
+
+    Not the plan, not frames_for -- the params handed to the session. Run
+    35573430715 was authorized at q=1 and sent 0.01, and nothing between the
+    authorization and the wire noticed.
+    """
+    from src.gemini_execution import live_envelope as LE
+    d = _ready(tmp_path, envelope=LE.LIVE_Q1)
+    s = FakeSession()
+    _run(d.place(s, _rung("YES", "0.55", qty="1")))
+    assert len(s.sent) == 1
+    params = s.sent[0]["params"]
+    assert D(str(params["quantity"])) == D("1"), params
+    # and the dollars the envelope reasoned about are the ACTUAL ones
+    assert d.inv.spend() == D("0")          # nothing filled yet
+    rung = d.working.rungs()[0]
+    assert D(str(rung["qty"])) == D("1")
+
+
+def test_the_shadow_driver_still_sends_0_01(tmp_path, _authorized):
+    d = _ready(tmp_path)                    # DEFAULT envelope
+    s = FakeSession()
+    _run(d.place(s, _rung("YES", "0.55")))
+    assert D(str(s.sent[0]["params"]["quantity"])) == D("0.01")
+
+
+def test_a_downsized_rung_under_a_q1_authorization_is_refused(tmp_path,
+                                                              _authorized):
+    """PROOF 6, on the driver rather than on source text.
+
+    decide() is where every rung is fresh, so that is where a silent revert
+    has to be caught: the envelope alone permits a SMALLER rung, because a
+    partial remainder legitimately is smaller.
+    """
+    from src.gemini_execution import live_envelope as LE
+    d = _ready(tmp_path, envelope=LE.LIVE_Q1)
+
+    class _Guard:
+        state = CP.PROBE_RUNNING
+
+        def step(self, st, inv, **kw):
+            # the failure mode: a rung that came back at the shadow size
+            return {"actions": [_rung("YES", "0.55", qty="0.01")],
+                    "holds": [], "stop": None,
+                    "window_phase": CP.WINDOW_OPEN}
+
+    d.guard = _Guard()
+    out = d.decide(tte_s=200.0, book=None)
+    assert d.state == WC.DO_NOT_TRADE
+    assert "silently downsized" in (out.get("why") or "")

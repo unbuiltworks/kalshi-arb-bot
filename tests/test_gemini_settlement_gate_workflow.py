@@ -796,28 +796,24 @@ def test_the_latch_pushes_to_the_branch_the_runner_checked_out():
 def test_the_latch_is_a_safety_dependency_outside_the_bundle():
     """A fact worth failing on if it silently changes.
 
-    run_canary.py can refuse every mutation, yet it is NOT a bundle member, so
+    run_canary.py can refuse every mutation -- make_durable() aborts the send
+    when the latch cannot be pushed -- yet it is NOT a bundle member, so
     editing it does not invalidate an authorization. That is why DEFECT 3 was
-    fixable without re-granting -- and equally why a future edit to the latch
-    would not disarm anything. Recorded so the next person knows the gap is
-    known rather than overlooked.
+    fixable without re-granting, and equally why a future edit to the latch
+    would disarm nothing. Recorded so the gap is known rather than overlooked.
     """
     from src.gemini_execution import bundle as B
 
     assert "run_canary.py" not in B.MEMBERS
-    # THE DRIVER IS STILL BYTE-IDENTICAL to what was reviewed: ws_continuous.py
-    # holds every BOUND and no fix since has touched it.
-    from src.gemini_execution import ws_continuous as WCX
-    assert WCX.executable_sha() == (
-        "c1ada77a919c9c0cf226b4eb0c56aed6495f7e8fe1ece9261150aa6c26377763")
-    # THE BUNDLE HAS MOVED, AND MUST HAVE. Protecting the grant meant adding a
-    # probe to run_continuous.py, which IS a member -- so bundle_sha changes,
-    # which is the mechanism working, not failing: a re-grant names the new
-    # bundle. Pinning the OLD value here would assert that an ordering fix in
-    # the invoker is invisible to the authorization, which is the precise
-    # failure bundle_sha exists to prevent.
-    assert B.bundle_sha() != (
-        "6b35be2ac54bf0e4e4b2fee8396d52402f1362af4737e28a1e29da0bdc7b3983")
+    # AND THE MEMBERS THAT DO CARRY BOUNDS ARE STILL COVERED. This previously
+    # pinned literal hashes, which made it a MOMENT rather than an invariant:
+    # it had to break the moment ws_continuous.py or continuous_probe.py
+    # legitimately changed, and it did, on the q-size wiring. What must hold
+    # is that every file carrying a bound is inside the hash.
+    for carries_a_bound in ("ws_continuous.py", "continuous_probe.py",
+                            "live_envelope.py", "run_continuous.py"):
+        assert carries_a_bound in B.MEMBERS
+    assert len(B.bundle_sha()) == 64
 
 
 def test_the_plumbing_fix_moved_no_bound_and_no_flag():

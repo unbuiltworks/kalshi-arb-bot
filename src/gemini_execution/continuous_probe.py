@@ -159,7 +159,8 @@ class ProbeStop(Exception):
     a limit."""
 
 
-def probe_params(lane: Optional[PR.SurfaceParams] = None) -> PR.SurfaceParams:
+def probe_params(lane: Optional[PR.SurfaceParams] = None,
+                 action_size: Any = None) -> PR.SurfaceParams:
     """The lane set with probe-scoped size and residual, marked as OURS.
 
     The frozen L5_ADAPTED_GEMINI_CRYPTO artifact is READ and never written:
@@ -171,10 +172,23 @@ def probe_params(lane: Optional[PR.SurfaceParams] = None) -> PR.SurfaceParams:
     """
     if lane is None:
         lane = PR.load_frozen()["L5_ADAPTED_GEMINI_CRYPTO"]
+    # THE ENGINE DOES SEE A SIZE, THROUGH THESE THREE OVERRIDES. That makes
+    # this the SECOND size setter on the path, and the one that actually
+    # reaches the policy: the oscillator suppresses the widening side by
+    # comparing inventory against max_residual, so leaving these at the 0.01
+    # scale while sending q=1 SUPPRESSES AN EXTEND that shadow emits. It is a
+    # behavioural divergence, and proof 1 caught it.
+    #
+    # Scaling all three by the same k keeps every ratio the engine reasons
+    # about identical, so the surface it returns is identical and only the
+    # quantity differs. Note the frozen artifact's OWN values are qty 1 and
+    # max_residual 3.00, so q=1 moves these back TOWARDS the frozen record
+    # rather than away from it.
+    b = scaled_bounds(action_size)
     over = {
-        "base_parent_qty": str(ACTION_SIZE),
-        "secondary_rung_qty": str(ACTION_SIZE),
-        "max_residual": str(MAX_RESIDUAL),
+        "base_parent_qty": str(b["action_size"]),
+        "secondary_rung_qty": str(b["action_size"]),
+        "max_residual": str(b["max_residual"]),
     }
     out: Dict[str, PR.Param] = {}
     for f in PR.FIELDS:
@@ -299,8 +313,12 @@ def classify(outcome: str, inv: Inventory) -> str:
 
 # ----------------------------------------------------------------- gates
 
-def risk_gates(inv: Inventory, actions_taken: int) -> List[str]:
+def risk_gates(inv: Inventory, actions_taken: int,
+               action_size: Any = None) -> List[str]:
     """Every hard bound, checked together so a report names all of them."""
+    b = scaled_bounds(action_size)
+    MAX_IMBALANCE, MAX_YES = b["max_imbalance"], b["max_yes"]
+    MAX_NO, MAX_TOTAL_SPEND = b["max_no"], b["max_total_spend"]
     hit = []
     if actions_taken >= MAX_ACTIONS:
         hit.append("max_actions %d reached" % MAX_ACTIONS)
@@ -317,10 +335,74 @@ def risk_gates(inv: Inventory, actions_taken: int) -> List[str]:
     return hit
 
 
-def would_breach(leg: str, price: Any, inv: Inventory) -> Optional[str]:
+class ActionSizeRefused(ValueError):
+    """An action size was supplied that cannot be used. Never defaulted."""
+
+
+def resolve_action_size(action_size: Any = None) -> Any:
+    """The q ONE action carries. Absent means the shadow constant; present
+    means exactly what was passed, or a refusal.
+
+    WHY A RESOLVER RATHER THAN `action_size or ACTION_SIZE`. That idiom turns
+    0, "", None and a malformed value into the shadow size SILENTLY -- which
+    is the exact shape of the bug this parameter exists to close. An
+    explicitly authorized q=1 invocation that quietly became q=0.01 is
+    indistinguishable, after the fact, from one that was never authorized.
+    So a supplied value is parsed or REFUSED; only absence defaults.
+    """
+    if action_size is None:
+        return ACTION_SIZE
+    try:
+        q = D(str(action_size))
+    except Exception as exc:                                   # noqa: BLE001
+        raise ActionSizeRefused(
+            "action_size %r is not a number (%s); refused rather than "
+            "defaulted to the shadow size" % (action_size, exc))
+    if q <= 0:
+        raise ActionSizeRefused(
+            "action_size %s is not positive; refused rather than defaulted "
+            "to the shadow size" % q)
+    return q
+
+
+def scaled_bounds(action_size: Any = None) -> Dict[str, Any]:
+    """This module's own bounds, expressed for the q actually being sent.
+
+    THE BOUNDS SCALE SO THE DECISIONS DO NOT. These are the FROZEN controller's
+    internal limits and they are denominated in 0.01 units: MAX_RESIDUAL is
+    ACTION_SIZE * MAX_SAME_SIDE_RUN, MAX_TOTAL_SPEND is 15 rungs' worth. Left
+    unscaled, a q=1 action would breach every one of them on the FIRST rung
+    and the probe would suppress quotes it allows in shadow -- which is a
+    BEHAVIOURAL change, and the thing we are required not to do.
+
+    Scaling by k = q / ACTION_SIZE keeps each bound at the same number of
+    RUNGS, so classification, suppression and the same-side-run logic see an
+    identical picture and emit identical actions. Only the quantity differs.
+
+    These are NOT the authorized dollar limits. LIVE_Q1's $2.50 committed /
+    $2.00 residual / 2 working orders / 1 market are enforced separately by
+    live_envelope.would_breach against the rung's ACTUAL qty, and they bind
+    far tighter than these do at q=1. This function widens nothing that
+    actually constrains the money.
+    """
+    q = resolve_action_size(action_size)
+    k = q / ACTION_SIZE
+    return {"action_size": q, "k": k,
+            "max_residual": MAX_RESIDUAL * k,
+            "max_imbalance": MAX_IMBALANCE * k,
+            "max_yes": MAX_YES * k,
+            "max_no": MAX_NO * k,
+            "max_total_spend": MAX_TOTAL_SPEND * k}
+
+
+def would_breach(leg: str, price: Any, inv: Inventory,
+                 action_size: Any = None) -> Optional[str]:
     """Would filling THIS action breach a bound? Checked before quoting, so
     the probe never rests an order it could not afford to have filled."""
-    q, p = ACTION_SIZE, D(str(price))
+    b = scaled_bounds(action_size)
+    MAX_IMBALANCE, MAX_YES = b["max_imbalance"], b["max_yes"]
+    MAX_NO, MAX_TOTAL_SPEND = b["max_no"], b["max_total_spend"]
+    q, p = b["action_size"], D(str(price))
     yes = inv.yes_qty + (q if leg == "YES" else D("0"))
     no = inv.no_qty + (q if leg == "NO" else D("0"))
     if abs(yes - no) > MAX_IMBALANCE:
@@ -341,6 +423,7 @@ def would_breach(leg: str, price: Any, inv: Inventory) -> Optional[str]:
 def plan(state: Mapping[str, Any], inv: Inventory, *,
          sp: Optional[PR.SurfaceParams] = None,
          actions_taken: int = 0,
+         action_size: Any = None,
          now: Optional[float] = None) -> Dict[str, Any]:
     """ONE turn of the loop: market state -> L5 surface -> classified actions.
 
@@ -350,7 +433,15 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
     the engine's own reason, so the report says whether the OSCILLATOR
     withheld a quote or the ENVELOPE did.
     """
-    sp = sp or probe_params()
+    # THE q THIS TURN WILL CARRY. Resolved ONCE, refused rather than
+    # defaulted, and used for the stamped qty AND for both gates -- so the
+    # size an action is checked against is always the size it is sent at.
+    q = resolve_action_size(action_size)
+    # AND THE SURFACE PARAMS ARE BUILT FOR IT. probe_params overrides the
+    # lane's quantity and residual, and the ENGINE reads them -- so they must
+    # be built at the same scale as the q being sent, or the policy sees a
+    # different picture and emits different actions.
+    sp = sp or probe_params(action_size=q)
 
     # UNKNOWN IS A STOP, NEVER AN ASSUMED FLAT.
     if state.get("inventory_known") is False:
@@ -368,7 +459,7 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
                         % (float(age), DEADMAN_S),
                 "actions": [], "holds": [], "surface": None}
 
-    hard = risk_gates(inv, actions_taken)
+    hard = risk_gates(inv, actions_taken, action_size=q)
     if hard:
         return {"stop": "; ".join(hard), "actions": [], "holds": [],
                 "surface": None}
@@ -411,7 +502,7 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
         leg = OUTCOME_TO_LEG.get(r.outcome)
         base = {"outcome": r.outcome, "leg": leg,
                 "price": r.max_acceptable_price,
-                "qty": str(ACTION_SIZE), "rung_index": r.rung_index,
+                "qty": str(q), "rung_index": r.rung_index,
                 "ticks_behind_bid": r.ticks_behind_bid}
         # WHAT THIS RUNG WOULD HAVE BEEN. A pure label from outcome and
         # inventory, computed for HELD rungs too so a report can say
@@ -427,7 +518,8 @@ def plan(state: Mapping[str, Any], inv: Inventory, *,
                           "would_be_action": would_be,
                           "why": r.suppressed_by})
             continue
-        breach = would_breach(leg, r.max_acceptable_price, inv)
+        breach = would_breach(leg, r.max_acceptable_price, inv,
+                              action_size=q)
         if breach:
             holds.append({**base, "action": HOLD, "held_by": "ENVELOPE",
                           "would_be_action": would_be,
