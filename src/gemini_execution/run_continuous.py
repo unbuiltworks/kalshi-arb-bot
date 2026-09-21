@@ -1099,7 +1099,8 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                      wire_path: Optional[str] = None,
                      cohort_id: Optional[str] = None,
                      entry_band: Optional[Sequence[float]] = None,
-                     envelope: "LE.Envelope" = LE.DEFAULT
+                     envelope: "LE.Envelope" = LE.DEFAULT,
+                     family: Any = None
                      ) -> Dict[str, Any]:
     """Always writes its report, however it exits.
 
@@ -1111,7 +1112,7 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
     """
     rep: Dict[str, Any] = {}
     try:
-        rep = await _build(auth_id, state_dir=state_dir,
+        rep = await _build(auth_id, state_dir=state_dir, family=family,
                            ledger_path=ledger_path, wire_path=wire_path,
                            cohort_id=cohort_id, entry_band=entry_band,
                            envelope=envelope)
@@ -1130,7 +1131,8 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                  wire_path: Optional[str] = None,
                  cohort_id: Optional[str] = None,
                  entry_band: Optional[Sequence[float]] = None,
-                 envelope: "LE.Envelope" = LE.DEFAULT
+                 envelope: "LE.Envelope" = LE.DEFAULT,
+                 family: Any = None
                  ) -> Dict[str, Any]:
     from src.gemini_execution.ws_session import GeminiMakerSession
 
@@ -1151,13 +1153,44 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                          "ws_continuous.Driver."),
     }
 
+    # WHICH CONTRACT FAMILY, RESOLVED ONCE AND RECORDED BEFORE ANYTHING ELSE.
+    #
+    # The selector already existed -- eligible_symbol(cohort=...) and
+    # contract_cohort.BTC15M -- but nothing threaded it, so every invocation
+    # fell through to CC.DEFAULT (BTC5m). A BTC15m envelope could therefore
+    # have been asked for and a BTC05M contract entered: the authorization
+    # saying one thing and the wire doing another, which is exactly the
+    # failure the q-size work already cost a live grant to find.
+    from src.gemini_execution import contract_cohort as CC
+    fam = family if family is not None else CC.DEFAULT
+
+    # FAMILY AND ENVELOPE MUST AGREE, AND A MISMATCH IS A REFUSAL, NOT A
+    # PREFERENCE. An envelope carries the family it was sized for in
+    # `cohort_prefix`; running it against another family would apply bounds
+    # nobody derived for that market. Checked here, before the preflight,
+    # the latch and any mutation.
+    want_prefix = str(getattr(envelope, "cohort_prefix", "") or "")
+    got_prefix = "GEMI-" + str(fam.prefix)
+    rep["family"] = {"name": fam.name, "prefix": fam.prefix,
+                     "minutes": fam.minutes, "resolved_symbol_prefix":
+                     got_prefix, "explicit": family is not None}
+    rep["envelope_family"] = want_prefix
+    if want_prefix and want_prefix != got_prefix:
+        rep["state"] = WC.DO_NOT_TRADE
+        rep["why"] = ("envelope %s is sized for %s but family %s resolves to "
+                      "%s; a bound derived for one market does not transfer "
+                      "to another, so this is refused before the latch"
+                      % (envelope.name, want_prefix, fam.name, got_prefix))
+        rep["latch"] = {"consumed": False, "spent_by_this_run": False}
+        return rep
+
     # EXPERIMENTAL SCHEDULING, FIRST AND READ-ONLY. Before the preflight, the
     # recovery, the authorization gate and the latch -- so a wait that never
     # reaches the band refuses with the authorization STILL UNSPENT, and every
     # read that follows is taken against the contract actually entered rather
     # than one that expired while we waited.
     if entry_band is not None:
-        sched = await await_entry_band(entry_band)
+        sched = await await_entry_band(entry_band, cohort=fam)
         rep["entry_schedule"] = sched
         sel = sched.get("selection") or {"eligible": False,
                                          "why": sched.get("why")}
@@ -1174,7 +1207,7 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
             "scheduled": False,
             "why": ("no entry band configured; the contract is whichever one "
                     "is eligible at dispatch time")}
-        sel = eligible_symbol()
+        sel = eligible_symbol(cohort=fam)
     rep["symbol_selection"] = sel
     if not sel.get("eligible"):
         rep["state"] = WC.DO_NOT_TRADE
@@ -1548,13 +1581,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          "bounded budget and must already exist")
     ap.add_argument("--out", default="analysis/gemini/continuous_run.json")
     ap.add_argument("--wire", default="analysis/gemini/continuous_wire.json")
+    ap.add_argument("--family", default="btc5m",
+                    choices=("btc5m", "btc15m"),
+                    help=("which CONTRACT FAMILY the window binds to. "
+                          "DEFAULT btc5m, so every existing invocation keeps "
+                          "the contract it already picked. btc15m resolves "
+                          "explicitly to contract_cohort.BTC15M; there is no "
+                          "inference from the envelope or the symbol."))
     ap.add_argument("--envelope", default="shadow_q001",
-                    choices=("shadow_q001", "live_q1"),
+                    choices=("shadow_q001", "live_q1", "live_q1_btc15m"),
                     help=("which RISK ENVELOPE the driver runs under. The "
                           "default is the 0.01 shadow envelope; `live_q1` is "
                           "the reviewed q=1 manifest and must be asked for "
                           "explicitly. A bigger size is a decision, never a "
-                          "default that arrives."))
+                          "default that arrives. `live_q1_btc15m` is the same "
+                          "q=1 bounds sized for the 15-minute family and must "
+                          "be paired with --family btc15m; a mismatch is "
+                          "refused rather than reconciled."))
     ap.add_argument("--entry-tte-band", default=None,
                     help=("LO:HI seconds-to-expiry the window must BEGIN "
                           "inside, e.g. 240:280. Omitted, the contract is "
@@ -1562,15 +1605,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                           "how CONTINUOUS-7 got 136s. This narrows the "
                           "standing entry band and can never widen it."))
     a = ap.parse_args(argv)
-    env = {"shadow_q001": LE.SHADOW_Q001, "live_q1": LE.LIVE_Q1}[a.envelope]
+    # EXACT MAPPING, NO FALLBACK. A dict lookup raises KeyError on anything
+    # unknown rather than quietly yielding a smaller envelope -- the live_q1
+    # name must never resolve to the shadow one, and live_q1_btc15m must
+    # never resolve to live_q1.
+    env = {"shadow_q001": LE.SHADOW_Q001,
+           "live_q1": LE.LIVE_Q1,
+           "live_q1_btc15m": LE.LIVE_Q1_BTC15M}[a.envelope]
+    from src.gemini_execution import contract_cohort as CC
+    fam = {"btc5m": CC.BTC5M, "btc15m": CC.BTC15M}[a.family]
     rep = asyncio.run(main_async(a.auth_id, state_dir=a.state_dir,
                                  ledger_path=a.ledger, out_path=a.out,
                                  wire_path=a.wire, cohort_id=a.cohort,
                                  entry_band=parse_entry_band(
                                      a.entry_tte_band),
-                                 envelope=env))
+                                 envelope=env, family=fam))
     print("GEMINI_CONTINUOUS " + json.dumps(
         {k: rep.get(k) for k in ("state", "why", "symbol_selection",
+                                 "family", "envelope_name", "envelope_family",
                                  "driver_executable_sha")}, default=str),
           flush=True)
     w = rep.get("window") or {}
