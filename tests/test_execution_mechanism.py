@@ -223,3 +223,35 @@ def test_every_counterfactual_arm_changes_exactly_one_knob():
     for name, kw in XC.ARMS:
         assert len(kw) <= 1, (name, kw)
     assert XC.ARMS[0] == ("REAL_QUEUE", {})
+
+
+# ------------------------------------------------ one book, or two? (the fix)
+from analysis.l5.historical_l2 import book_duality as BD
+
+
+def test_a_mirrored_bid_ladder_is_recognised_as_the_same_offers():
+    """Measured on the real L2 at 99.9% price and 99.1% size agreement. If this
+    ever reads TWO_SEPARATE_POPULATIONS for a venue, a complement pool is real
+    liquidity there -- and that would change the model."""
+    own = {"ask_prices": [0.60, 0.61], "ask_sizes": [10.0, 20.0]}
+    comp = {"bid_prices": [0.40, 0.39], "bid_sizes": [10.0, 20.0]}
+    r = BD.compare(own, comp)
+    assert r == {"levels_shared": 2, "levels_on_one_side_only": 0,
+                 "sizes_equal": 2, "sizes_differing": 0}
+    assert BD.verdict({"levels_shared": 2, "levels_on_one_side_only": 0,
+                       "sizes_equal": 2, "sizes_differing": 0})["verdict"] \
+        == "ONE_BOOK_TWO_CONVENTIONS"
+
+
+def test_genuinely_independent_ladders_are_not_called_one_book():
+    own = {"ask_prices": [0.60, 0.61], "ask_sizes": [10.0, 20.0]}
+    comp = {"bid_prices": [0.30, 0.25], "bid_sizes": [5.0, 7.0]}
+    r = BD.compare(own, comp)
+    assert r["levels_shared"] == 0 and r["levels_on_one_side_only"] == 4
+    assert BD.verdict(r)["verdict"] == "TWO_SEPARATE_POPULATIONS"
+
+
+def test_an_empty_ladder_is_unmeasured_not_a_disagreement():
+    assert BD.compare({"ask_prices": [], "ask_sizes": []},
+                      {"bid_prices": [0.4], "bid_sizes": [1.0]}) is None
+    assert BD.compare(None, {"bid_prices": [0.4], "bid_sizes": [1.0]}) is None

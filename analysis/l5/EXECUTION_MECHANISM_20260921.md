@@ -4,13 +4,42 @@ P0 of 2026-09-21. Checkpoint `007feaab`. No live orders, no new selector, no
 parameter fitted to P&L. The frozen habitat selector is untouched and verified
 (`analysis/pmus/freeze_check.py` — FROZEN VALUES INTACT).
 
-## Headline
+## ⛔ CORRECTION — THE FIRST HEADLINE OF THIS FILE WAS WRONG
 
-**Visible-book queue depth is the wrong queue variable for most of L5's maker
-fills.** They do not consume resting offers. They settle by MINTING a complete
-set against a counterparty buying the other outcome — confirmed directly on
-chain, not inferred from the book. What binds is the availability of a
-complement BUYER, and that is what PMUS sports markets do not have.
+Committed at `703581d9`, overturned the same day by my own follow-up check,
+before anything was built on it.
+
+**Withdrawn:** *"Visible-book queue depth is the wrong queue variable"* and the
+claim that resting on both outcomes is a separate fill mechanism.
+
+**Why it was wrong.** I treated the two outcome tokens as carrying two
+independent books, so a "complement buyer pool" looked like liquidity the own
+book could not see. Tested level by level, they are **one book in two
+conventions**: token A's ask ladder is token B's bid ladder mirrored, at
+**99.9% price-level agreement and 99.1% size agreement** across 2,803 snapshot
+pairs and 148,828 shared levels. The `complement_pool` column in §A is the same
+liquidity as the own-book ask, measured under a second name. Resting a NO bid
+IS resting a YES offer. There is one queue, and visible-book depth is it.
+
+**What the on-chain evidence still establishes** — narrower, and not
+tautological: L5's fills settle against **buyers of the other outcome rather
+than sellers of the same outcome**, more often than the venue baseline
+(73.5–85.5% vs 58.6%, block-clustered CIs excluding 0). That is a fact about
+**who fills him**, not about standing in a different queue. Read plainly: he is
+filled by fresh two-sided demand entering the market, not by existing holders
+liquidating.
+
+Everything in §B (flow attribution), §C (counterfactuals) and §E (Buccaneers)
+is unaffected. §A's mechanism *counts* stand; its two depth columns do not
+mean what the original headline said. §D is replaced below.
+
+## Corrected headline
+
+**There is one book and its depth is the queue. PMUS sports fails on depth
+against flow, not on queue modelling or habitat imbalance:** the Buccaneers
+market rested ~283,000 shares at the touch against **52 volume increments in
+4.8 hours**. No queue position and no ladder geometry closes a gap of that
+shape.
 
 ## Two numbers are withdrawn before anything is added
 
@@ -182,32 +211,33 @@ selection effect on a near-zero edge looks like.
 
 ## D. The simplest executor the evidence actually requires
 
-Built only from what survived `007feaab` plus today's on-chain result. Nothing
-below assumes four rungs, both-side simultaneous ladders, replenishment rules,
-incentive magnitude, or any completion cap.
+Built only from what survived `007feaab` plus today's on-chain result, **after**
+the correction above. Nothing here assumes four rungs, both-side simultaneous
+ladders, replenishment rules, incentive magnitude, or any completion cap.
 
 **Required:**
 
-1. **Rest as a BUYER on both outcomes at once.** This is the one genuinely new
-   requirement, and it is forced: the fills are mints, and a mint needs a
-   counterparty buying the complement. Two-sided resting bids are what makes an
-   order *mintable* at all. Under the old book model, two-sided resting was a
-   risk-management choice; under the mint evidence it is the fill mechanism.
-2. **At least two prices resting simultaneously on a side, one tick apart.**
+1. **At least two prices resting simultaneously on a side, one tick apart.**
    (3,434 atomic multi-price sweeps, 99.9% one-tick — survives `007feaab`.)
-3. **Patience measured in minutes.** Time from first observable opportunity to
-   fill is p50 194–294 s, and the touch falls toward the resting order rather
-   than the order chasing the touch.
-4. **Maker-only.** 77.3% maker is a venue-supplied field; no taker crossing is
-   required by any of this.
+2. **Patience measured in minutes.** Opportunity→fill is p50 194–294 s, and the
+   touch falls toward the resting order rather than the order chasing the touch
+   (61.6% of fills beyond −4 ticks at T−30 against 12.7% at T−1).
+3. **Maker-only.** 77.3% maker is a venue-supplied field; nothing here requires
+   taker crossing.
 
-**Not required by evidence, and therefore not in the model:** rung count beyond
-two, ladder symmetry, replenishment, sizing curves, a completion cap, any
-incentive magnitude.
+**Explicitly NOT required, and deliberately absent:** two-sided simultaneous
+resting as a *mechanism* (it is one book — a NO bid is a YES offer); rung count
+beyond two; ladder symmetry; replenishment; sizing curves; a completion cap;
+any incentive magnitude.
 
-**The selection rule this implies** is not habitat imbalance. It is: *does this
-market have a standing population of buyers on the OTHER outcome?* That is a
-different measurement from flow imbalance and is not yet instrumented.
+So the executor the evidence supports is **smaller than the one we have been
+building**, not larger. The ladder geometry work added structure the evidence
+never required.
+
+**The venue test this implies** is not habitat flow imbalance and not
+complement-pool depth. It is the ratio the Buccaneers market fails so badly:
+**arriving flow against resting depth at the touch.** That is one number, it is
+observable before entry, and it is not yet instrumented.
 
 ## E. The Buccaneers sanity check
 
@@ -239,22 +269,28 @@ exist. It was never an executor defect.
 
 ## What this changes
 
-- Stop treating **visible-book queue depth** as the model of L5's fills. For the
-  majority of them it is not the binding variable.
-- Stop treating **habitat flow imbalance** as the venue test. The evidenced
-  requirement is a standing population of complement BUYERS.
-- PMUS sports is not disqualified by imbalance — it is disqualified here by
-  **depth ≫ flow**: 283k resting against 52 increments per game.
+- Stop treating **habitat flow imbalance** as the venue test. Replace it with
+  **arriving flow against resting touch depth**.
+- Stop adding ladder structure. The evidence requires two prices and patience;
+  everything beyond that we added ourselves.
+- PMUS sports is disqualified here by **depth ≫ flow**: ~283k resting against
+  52 volume increments per game.
+- Keep the counterparty-composition result, but read it correctly: it says who
+  fills L5, not that he occupies a different queue.
 
 ## Open and not claimed
 
 - **Per-fill attribution of a mint is bounded, not exact.** Single-match
   transactions remove the batching confound; they do not prove L5's specific
   order caused the split.
-- **Whether PMUS or Kalshi supports mint-style matching at all is untested.**
-  The whole D model rests on a mechanism confirmed only on Polymarket
-  International. This is the next thing to establish and nothing should be
-  built on D until it is.
+- **The venue-structure question is now answered, and it closed off the model
+  that depended on it.** Polymarket International, PMUS and Kalshi all publish a
+  single consolidated binary book — PMUS as one `bestBid`/`bestAsk` per market,
+  Kalshi as `yes_dollars`/`no_dollars` ladders that are complements of each
+  other. There is no venue here with a separately fillable complement pool.
+- **Why L5's counterparties skew toward complement buyers is not explained.**
+  The effect is measured and survives its control; the cause is not established,
+  and no strategy should be built on it until it is.
 - **PMUS flow reconstruction remains a bound**, not a tape: 22.8% of increments
   carry an unattributable price, and every PMUS fill count is bracketed by
   ALL/ATTRIBUTABLE rather than stated as one number.

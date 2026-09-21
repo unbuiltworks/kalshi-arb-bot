@@ -33,7 +33,21 @@
 > (independent separator); the exact matched+residual=net decomposition with standalone
 > **indistinguishable from zero**; PMUS take-both = 1 + spread.
 >
-> ## ⛔ READ SECOND — EXECUTION-MECHANISM PASS 2026-09-21 (`007feaab` → this commit)
+> ## ⛔ READ SECOND — EXECUTION-MECHANISM PASS 2026-09-21, AS CORRECTED
+>
+> **`703581d9` OVERSTATED ITS OWN HEADLINE AND IS CORRECTED HERE.** Do not cite
+> *"visible-book queue depth is the wrong queue variable"* or *"rest on both
+> outcomes because a mint needs a complement buyer"*. Both assumed the two outcome
+> tokens carry two independent books. Level by level they are **one book in two
+> conventions** — token A's ask ladder is token B's bid ladder mirrored at
+> **99.9% price-level and 99.1% size agreement** (2,803 snapshot pairs, 148,828
+> shared levels; `analysis/l5/historical_l2/book_duality.py`). Resting a NO bid IS
+> resting a YES offer. **There is one queue and visible-book depth is it.**
+> All three venues in scope are like this: PMUS publishes one `bestBid`/`bestAsk`
+> per market, Kalshi publishes complementary `yes_dollars`/`no_dollars` ladders.
+> The venue-structure question is therefore ANSWERED, and it closes off the model
+> that depended on it.
+>
 >
 > Full evidence: **`analysis/l5/EXECUTION_MECHANISM_20260921.md`**. It overrides
 > every execution/queue statement below.
@@ -59,8 +73,9 @@
 >   block-clustered CI excluding 0. Minting is the majority path in **every** class,
 >   including apparent book fills; the 16.3% of fills at prices the ask never offered
 >   mint at 81.3%.
-> * **Therefore visible-book queue depth is NOT the correct queue variable** for most of
->   L5's maker fills. A mint consumes no offer on either buyer's book.
+> * Read correctly, that is a fact about **who fills him** — fresh two-sided demand
+>   rather than existing holders liquidating — **not** about standing in a different
+>   queue. The stronger inference drawn from it at `703581d9` is withdrawn.
 > * **PMUS flow is a bound, not a tape.** `last_trade_px` sits outside the quote in its
 >   OWN response in **22.8%** of volume increments; Δvolume aggregates an ~8 s interval
 >   onto one lagging price. Every PMUS fill count is now reported bracketed
@@ -74,18 +89,20 @@
 >   **52 volume increments per game**. The human succeeded by TAKING at 1.0050. This was
 >   never an executor defect.
 >
-> **REVISED MINIMUM MODEL:** rest as a BUYER on **both** outcomes simultaneously (forced —
-> a mint needs a complement buyer); ≥2 prices one tick apart on a side; patience of
-> minutes (opportunity→fill p50 194–294 s); maker-only. Rung count beyond two, ladder
-> symmetry, replenishment, sizing curves, completion caps and incentive magnitudes remain
-> **NOT required by evidence** and are not in the model.
+> **REVISED MINIMUM MODEL — SMALLER THAN WHAT WE BUILT:** ≥2 prices one tick apart on a
+> side; patience of minutes (opportunity→fill p50 194–294 s); maker-only. **Two-sided
+> simultaneous resting is NOT a mechanism** (one book). Rung count beyond two, ladder
+> symmetry, replenishment, sizing curves, completion caps and incentive magnitudes are
+> **NOT required by evidence** and are not in the model. The ladder-geometry programme
+> added structure the evidence never asked for.
 >
-> **THE VENUE TEST CHANGES:** not habitat flow imbalance — *does this market hold a
-> standing population of buyers on the OTHER outcome?* Not yet instrumented.
+> **THE VENUE TEST CHANGES:** not habitat flow imbalance, and not complement-pool depth.
+> It is **arriving flow against resting touch depth** — the ratio Buccaneers fails at
+> ~283k resting against 52 volume increments per game. One number, observable before
+> entry, **not yet instrumented**.
 >
-> **OPEN, AND LOAD-BEARING:** whether PMUS or Kalshi support mint-style matching **at
-> all** is **UNTESTED**. The entire revised model rests on a mechanism confirmed only on
-> Polymarket International. **Build nothing on it until that is established.**
+> **OPEN:** why L5's counterparties skew toward complement buyers is measured but
+> **unexplained**. Build nothing on it until the cause is established.
 >
 > **Freeze status:** habitat selector **INTACT**, verified by
 > `analysis/pmus/freeze_check.py`. Note the recorded `artifact_sha256`
