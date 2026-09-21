@@ -96,3 +96,38 @@ def test_very_large_n_floor_is_tiny_but_positive():
     its 0.083 is real and an 18-print 0.083 is not."""
     assert S.noise_floor(58312) < 0.005
     assert S.noise_floor(58312) > 0.0
+
+
+def test_aggregate_imbalance_does_not_net_across_markets():
+    """REGRESSION. Two markets, each 100% one-sided in OPPOSITE directions, is
+    total imbalance -- not zero. Pooling first gives 0.0 and reverses conclusions."""
+    per_market = [(100.0, 0.0), (0.0, 100.0)]
+    assert S.aggregate_imbalance(per_market) == pytest.approx(1.0)
+    pooled = S.imbalance(100.0, 100.0)          # the WRONG form, for contrast
+    assert pooled == pytest.approx(0.0)
+
+
+def test_aggregate_imbalance_matches_pooled_when_markets_agree():
+    """When every market leans the same way the two forms coincide, which is
+    exactly why the bug survives casual checking."""
+    per_market = [(80.0, 20.0), (160.0, 40.0)]
+    assert S.aggregate_imbalance(per_market) == pytest.approx(0.6)
+    assert S.imbalance(240.0, 60.0) == pytest.approx(0.6)
+
+
+def test_aggregate_imbalance_reproduces_the_measured_kalshi_correction():
+    """The real numbers that reversed a venue conclusion."""
+    assert S.aggregate_imbalance([(24451.0, 24295.0)]) == pytest.approx(0.0032, abs=1e-4)
+    assert S.rm_floor(0.4144) == pytest.approx(1.415, abs=0.002)
+    assert S.rm_floor(0.0032) == pytest.approx(0.0064, abs=1e-4)
+
+
+def test_aggregate_imbalance_returns_none_on_no_flow():
+    assert S.aggregate_imbalance([(0.0, 0.0)]) is None
+
+
+def test_rm_floor_matches_the_identity_and_rejects_bad_input():
+    for I in (0.083, 0.315, 0.1054, 0.4144):
+        assert S.rm_floor(I) == pytest.approx(2 * I / (1 - I))
+    with pytest.raises(ValueError):
+        S.rm_floor(1.0)

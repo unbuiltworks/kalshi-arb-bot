@@ -82,6 +82,46 @@ def imbalance(a, b):
     return abs(a - b) / t if t > 0 else None
 
 
+def aggregate_imbalance(per_market):
+    """Aggregate flow imbalance across markets, the ONLY correct way.
+
+    `per_market` is an iterable of (side_a_volume, side_b_volume), ONE PAIR PER
+    MARKET. Returns sum|a_m - b_m| / sum(a_m + b_m).
+
+    THIS EXISTS BECAUSE THE WRONG FORM IS ONE CHARACTER AWAY AND LOOKS RIGHT.
+    Pooling first --
+
+        I = |sum(a) - sum(b)| / sum(a + b)          # WRONG
+
+    -- lets a yes-heavy market cancel a no-heavy one, and the answer collapses
+    toward zero no matter how imbalanced every individual market is. It is the same
+    defect as summing SIGNED residual across windows, which `l5_ladder_heldout.
+    geometry` documents; that one was caught, and then this one was written anyway.
+
+    Measured cost of the confusion, on real data:
+        Kalshi KXCRYPTOLEAD15M   pooled 0.0032 vs correct 0.4144   (130x)
+        Kalshi KXBTC15M/ETH15M   pooled 0.0011 vs correct 0.1054   (96x)
+    Both pooled figures were reported, and both reversed a venue conclusion.
+
+    A market is imbalanced on its OWN book. Imbalance does not net across markets
+    because you cannot pair a YES in one market against a NO in another."""
+    num = 0.0
+    den = 0.0
+    for a, b in per_market:
+        num += abs(a - b)
+        den += a + b
+    return (num / den) if den > 0 else None
+
+
+def rm_floor(I):
+    """residual:matched floor implied by imbalance I. R/M = 2I/(1-I), exact."""
+    if I is None:
+        return None
+    if not 0.0 <= I < 1.0:
+        raise ValueError("imbalance must be in [0, 1): got %r" % (I,))
+    return 2.0 * I / (1.0 - I)
+
+
 def excess(observed_I, n):
     """The only cross-market-comparable form of an imbalance reading.
 

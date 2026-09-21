@@ -19,20 +19,30 @@ legs — not a binary up/down. Settlement confirms it: **1,120 `no` to 280 `yes`
 across 1,400 markets, exactly the 4:1 a 5-way race produces. A two-sided maker on one
 leg is not running L5's inventory problem.
 
-### 2. The flow IS balanced — but unreadably thin per market
+### 2. The flow is BADLY imbalanced — worse than PMUS sports
+
+> **CORRECTED 2026-09-21.** The first version of this section reported
+> `I = 0.0032` and called it "the most balanced flow we have ever measured". **That
+> was wrong by two orders of magnitude.** It pooled signed volume across 120 markets
+> first, letting a yes-heavy market cancel a no-heavy one. Imbalance does not net
+> across markets — you cannot pair a YES in one market against a NO in another. The
+> correct form is per-market absolute, then aggregate. See
+> `imbalance_sampling.aggregate_imbalance`, which now exists to make the wrong form
+> hard to write.
 
 | | value |
 |---|---|
 | trades | 2,542 across 120 markets |
 | taker side | 1,214 yes / 1,328 no |
-| I by count | 0.0448 (floor 0.0158, excess **+0.0290**) |
-| **I by volume** | **0.0032** (24,451 / 24,295 contracts) |
-| implied r/m floor | **0.006** vs L5 habitat 0.182, PMUS sports 0.919 |
-| trades per market | p10 6, p50 **14**, p90 40 |
+| ~~pooled I by volume~~ | ~~0.0032~~ **wrong — signed cancellation across markets** |
+| **I, per-market absolute** | **0.4144** |
+| **implied r/m floor** | **1.415** vs L5 habitat 0.182, PMUS sports 0.919 |
+| per-market I by volume | p10 0.101, p50 **0.433**, p90 0.878 |
+| trades per market | p10 9, p50 **18**, p90 46 |
 
-Pooled, this is the most balanced flow we have ever measured. But at the median of
-**14 trades**, a *perfectly balanced* market still measures I = 0.209 — so per-market
-imbalance is unreadable here and only the pooled figure carries information.
+**This series is a WORSE habitat than PMUS sports**, which was already declared
+structurally unfixable. At the median 18 trades a perfectly balanced market still
+measures I = 0.185, so the p50 of 0.433 is real imbalance and not sampling noise.
 
 ### 3. Maker drag is not a bleed — it is a fat tail, and that is what kills it
 
@@ -61,13 +71,21 @@ distribution running from −$344 to +$512. Sizing a small bankroll against a
 fat-tailed, median-negative distribution to harvest a pool that is a rounding error
 on its variance is not a rebate strategy — it is a lottery with a coupon attached.
 
-This is a **different failure from PMUS**. PMUS failed on flow balance (I = 0.315,
-structurally unfixable). KXCRYPTOLEAD15M has excellent pooled balance (I = 0.0032)
-and fails instead on **thin per-market flow and fat-tailed settlement risk**.
+This is the **same** failure as PMUS, only worse, plus a second one. PMUS failed on
+flow balance at I = 0.315 (floor 0.919). KXCRYPTOLEAD15M is at **I = 0.4144 (floor
+1.415)** and *additionally* carries thin per-market flow and fat-tailed settlement
+risk. A five-way race is structurally hostile to a two-sided maker: the legs are
+mutually exclusive, so flow concentrates on whichever crypto is leading.
 
 ## What is NOT concluded
 
-- Not that Kalshi is dead. The **commodity 15-minute series** (`KXGOLD15M`, `KXWTI15M`,
+- **Not that Kalshi is dead, and the corrected numbers strengthen this.** Kalshi's
+  *binary* crypto series `KXBTC15M`/`KXETH15M` measure **I = 0.1054 (floor 0.236)**
+  on the same corrected method — close to L5's own habitat (0.083 / 0.182) and far
+  better than PMUS sports. Their reward programs were withdrawn 2026-05-12, so they
+  pay nothing, but they establish that **binary** Kalshi crypto markets carry
+  L5-quality balance while the **race** series does not.
+- The **commodity 15-minute series** (`KXGOLD15M`, `KXWTI15M`,
   `KXSILVER15M`, `KXNATGAS15M`, `KXCOPPER15M`) carry the same $20 pool against a
   **300** target size rather than 1,000, and are genuine binary markets rather than a
   5-way race. They are unmeasured and are the obvious next candidate.

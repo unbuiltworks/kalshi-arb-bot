@@ -303,8 +303,13 @@ window-level attribution only, **never** merged into trading P&L.
 
 0b. **Kalshi Step 1 done: KXCRYPTOLEAD15M is not the answer.** See
    `analysis/kalshi/KXCRYPTOLEAD15M_STEP1_README.md`. It is a **5-way race**, not a
-   binary up/down. Pooled flow is the most balanced we have measured (I by volume
-   **0.0032**, r/m floor 0.006) but per-market flow is ~14 trades, below readability.
+   binary up/down. **CORRECTED 2026-09-21:** its flow is the WORST we have measured —
+   **I = 0.4144, r/m floor 1.415**, against PMUS sports 0.919. The first reading of
+   0.0032 pooled signed volume across 120 markets and was wrong by two orders of
+   magnitude; imbalance does not net across markets. Kalshi's *binary* crypto series
+   KXBTC15M/KXETH15M measure **I = 0.1054 (floor 0.236)** on the corrected method,
+   close to L5's 0.083/0.182 — but their programs were withdrawn 2026-05-12 and pay
+   nothing. Per-market flow is also thin, ~18 trades.
    Maker drag on real settled flow is **+$0.0413/contract headline but median −$0.0100**,
    with 77.9% of P&L in 50 of 2,542 trades and per-market swings −$344 to +$512 — **15–25×
    the $20 reward pool**. The reward cannot overcome that because it is not the same
