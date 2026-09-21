@@ -237,6 +237,14 @@ def test_only_absence_defaults():
 def test_the_shipped_constants_are_none():
     import importlib
     m = importlib.reload(WC)
-    assert m.REQUIRED_AUTH_ID is None
-    assert m.AUTHORIZED_SHA is None
-    assert m.AUTHORIZED_ENVELOPE is None
+    # ARMED 2026-09-21 under OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1.
+    # The shipped constants are no longer None, and "None" was never the
+    # property -- it was the absence of one. What ships must NAME THE CODE
+    # THAT SHIPS WITH IT, so a constant surviving a change to the driver or
+    # the bounds disarms rather than silently authorising them.
+    if m.REQUIRED_AUTH_ID is not None:
+        assert m.AUTHORIZED_SHA == m.executable_sha()
+        assert m.AUTHORIZED_ENVELOPE == m.envelope_sha()
+    else:
+        assert m.AUTHORIZED_SHA is None
+        assert m.AUTHORIZED_ENVELOPE is None

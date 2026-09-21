@@ -192,9 +192,31 @@ def test_ws_continuous_and_the_bounds_were_not_touched():
 
 
 def test_the_tree_is_unarmed():
+    """THE TREE IS ARMED, and this asserts the property that survives it.
+
+    ARMED 2026-09-21 under OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1
+    for ONE BTC15m q=1 window on cohort COHORT-2026-09-21-BTC15M-Q1LIVE-1.
+
+    "every constant is None" was the shape of a DISARMED tree, not an
+    invariant: asserting it means no authorization may ever be granted, and
+    a test that must be deleted to do authorized work protects nothing. What
+    holds in BOTH states is that an installed authorization names the code
+    ACTUALLY RUNNING -- so any edit to the driver, the bounds or the bundle
+    after the grant disarms it automatically, without anyone remembering to.
+
+    The dual key's live half is an environment variable that is not in this
+    repository, so a checkout alone still cannot mutate regardless.
+    """
     from src.gemini_execution import arming, bundle
-    assert WC.REQUIRED_AUTH_ID is None
-    assert WC.AUTHORIZED_SHA is None
-    assert WC.AUTHORIZED_ENVELOPE is None
-    assert bundle.AUTHORIZED_BUNDLE is None
-    assert arming.EXPECTED_AUTH_ID == "NO-AUTHORIZATION-IN-FORCE"
+    if WC.REQUIRED_AUTH_ID is None:
+        assert WC.AUTHORIZED_SHA is None
+        assert WC.AUTHORIZED_ENVELOPE is None
+        assert bundle.AUTHORIZED_BUNDLE is None
+        assert arming.EXPECTED_AUTH_ID == "NO-AUTHORIZATION-IN-FORCE"
+    else:
+        assert WC.REQUIRED_AUTH_ID == arming.EXPECTED_AUTH_ID, (
+            "the driver and the transport must name ONE authorization; two "
+            "names is a way to spend one grant under the label of another")
+        assert WC.AUTHORIZED_SHA == WC.executable_sha()
+        assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+        assert bundle.AUTHORIZED_BUNDLE == bundle.bundle_sha()

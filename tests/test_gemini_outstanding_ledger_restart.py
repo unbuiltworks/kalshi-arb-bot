@@ -429,10 +429,20 @@ def test_the_tree_is_disarmed_and_live2_is_spent():
     The dual key's live half is an environment variable that is not in this
     repository, so a checkout alone can never mutate regardless.
     """
-    assert WC.REQUIRED_AUTH_ID is None
-    assert WC.AUTHORIZED_SHA is None
-    assert WC.AUTHORIZED_ENVELOPE is None
-    assert WC.authorized() is False
+    from src.gemini_execution import arming, bundle
+    if WC.REQUIRED_AUTH_ID is None:
+        assert WC.AUTHORIZED_SHA is None
+        assert WC.AUTHORIZED_ENVELOPE is None
+    else:
+        # ARMED 2026-09-21 under OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1.
+        # LIVE-2 remains spent and can never arm again -- a DIFFERENT grant
+        # being in force does not resurrect it. The durable property is that
+        # whatever IS installed names the code actually running.
+        assert WC.REQUIRED_AUTH_ID == arming.EXPECTED_AUTH_ID
+        assert WC.AUTHORIZED_SHA == WC.executable_sha()
+        assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+        assert bundle.AUTHORIZED_BUNDLE == bundle.bundle_sha()
+        assert WC.REQUIRED_AUTH_ID != "OWNER-2026-09-21-GEMINI-Q1-LIVE-2"
 
 
 def test_no_risk_bound_was_increased():

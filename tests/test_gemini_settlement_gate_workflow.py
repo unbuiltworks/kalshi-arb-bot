@@ -233,7 +233,12 @@ def test_the_armed_step_names_the_exact_authorization():
     from src.gemini_execution import arming
     wf = WF.read_text()
     assert 'GEMINI_CANARY_AUTH: "%s"' % arming.EXPECTED_AUTH_ID in wf
-    assert '--auth-id "%s"' % arming.EXPECTED_AUTH_ID in wf
+    # THE ARMED STEP DEREFERENCES THAT ONE BINDING rather than repeating the
+    # id. Same reason as `test_the_tree_is_armed_for_exactly_one_named_
+    # authorization`: arming is one line, and a `sed` can no longer arm the
+    # unarmed proof step by accident -- which it once did.
+    assert '--auth-id "${GEMINI_CANARY_AUTH}"' in _code(
+        _step("ONE authorized Gemini continuous window"))
     assert "GEMINI_CANARY_AUTH_EXPIRES" in wf
     # AND IT MUST NOT BE IN THE PAST while the tree is armed. It was stale
     # from the 09-18 windows when CONTINUOUS-8 was armed and refused twice on
@@ -620,7 +625,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = None
+LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1"
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():

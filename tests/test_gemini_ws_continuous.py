@@ -199,12 +199,18 @@ def test_the_envelope_moved_and_the_old_authorization_died_with_it():
     remembering to."""
     assert WC.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    assert WC.AUTHORIZED_ENVELOPE is None, (
+    # THE RETIRED HASH MUST NEVER BE THE ONE IN FORCE. That is the property;
+    # "AUTHORIZED_ENVELOPE is None" was merely how it was true while the tree
+    # was disarmed. Armed 2026-09-21, it is true because the installed hash
+    # names the CURRENT envelope, which is not the retired one.
+    assert WC.AUTHORIZED_ENVELOPE != (
+        "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17"), (
         "the retired hash must not be re-pointed at the new envelope; that "
         "would pre-authorise bounds nobody approved")
-    assert not WC.authorized()
-    st = WC.authorization_state()
-    assert any("AUTHORIZED_ENVELOPE" in r for r in st["why_not"])
+    assert WC.AUTHORIZED_ENVELOPE in (None, WC.envelope_sha())
+    if WC.AUTHORIZED_ENVELOPE is None:
+        st = WC.authorization_state()
+        assert any("AUTHORIZED_ENVELOPE" in r for r in st["why_not"])
 
 
 def test_the_authorization_hash_covers_BOTH_sizes():

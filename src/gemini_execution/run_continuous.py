@@ -1690,8 +1690,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         a.family = spec.family
         a.envelope = spec.envelope
         a.entry_tte_band = spec.entry_tte_band
-        if spec.cohort:
-            a.cohort = spec.cohort
+        if spec.budget_cohort:
+            a.cohort = spec.budget_cohort
 
     # EXACT MAPPING, NO FALLBACK. A dict lookup raises KeyError on anything
     # unknown rather than quietly yielding a smaller envelope -- the live_q1

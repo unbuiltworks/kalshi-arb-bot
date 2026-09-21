@@ -297,7 +297,14 @@ def test_the_envelope_and_the_controller_did_not_move():
     # against the old envelope is dead rather than silently carried forward.
     assert WC.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    assert WC.AUTHORIZED_ENVELOPE is None and not WC.authorized()
+    # ARMED 2026-09-21 under OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1.
+    # "AUTHORIZED_ENVELOPE is None" was the shape of a DISARMED TREE, not a
+    # property this change must preserve -- asserting it would mean no
+    # authorization may ever be granted. The durable invariant is that an
+    # authorization never names an envelope OTHER than the one running, so a
+    # grant made against an older envelope is dead rather than carried
+    # forward. That holds armed and disarmed alike.
+    assert WC.AUTHORIZED_ENVELOPE in (None, WC.envelope_sha())
     assert str(CP.MAX_ACTIONS) == "12" and str(CP.ACTION_SIZE) == "0.01"
     assert str(CP.MAX_TOTAL_SPEND) == "0.15"
     assert str(CP.MAX_RESIDUAL) == "0.04" and str(CP.MAX_IMBALANCE) == "0.04"

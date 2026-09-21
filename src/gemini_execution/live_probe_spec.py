@@ -67,6 +67,20 @@ class LiveProbeSpec:
     auth_id: str
     action_size: str
     ledger: str = "analysis/gemini/continuous_ledger.jsonl"
+    #: THE BUDGET LEDGER THIS PROBE SPENDS FROM. Carried, reported and
+    #: compared, but deliberately NOT in `invocation_fingerprint` -- for the
+    #: same reason `auth_id` is not, and it is worth stating rather than
+    #: leaving to be discovered:
+    #:
+    #:   `cohort` above is part of the EXPERIMENT's identity. A readiness run
+    #:   and its live counterpart are the same experiment, and folding a
+    #:   ledger id into that identity would mean the spec hash moved the
+    #:   moment an owner granted a budget -- so the hash reviewed before the
+    #:   grant could never equal the hash the armed run resolves, and the
+    #:   readiness==live invariant would be unprovable by construction.
+    #:
+    #: Both steps take it from THIS object, so they still cannot disagree.
+    live_cohort: Optional[str] = None
 
     # ---- resolution -----------------------------------------------------
 
@@ -77,6 +91,12 @@ class LiveProbeSpec:
     @property
     def envelope_obj(self) -> Any:
         return ENVELOPES[self.envelope]
+
+    @property
+    def budget_cohort(self) -> Optional[str]:
+        """The ledger a run actually binds: the granted one, else the hashed
+        one. One accessor, so no caller has to know which field is set."""
+        return self.live_cohort or self.cohort
 
     @property
     def symbol_family(self) -> str:
@@ -107,8 +127,8 @@ class LiveProbeSpec:
                 "--entry-tte-band", self.entry_tte_band,
                 "--ledger", self.ledger,
                 "--out", out, "--wire", wire]
-        if self.cohort:
-            argv += ["--cohort", self.cohort]
+        if self.budget_cohort:
+            argv += ["--cohort", self.budget_cohort]
         if readiness:
             argv += ["--readiness"]
         return tuple(argv)
@@ -136,6 +156,13 @@ class LiveProbeSpec:
     def as_dict(self) -> Dict[str, Any]:
         d = dict(self.invocation_fingerprint())
         d["auth_id"] = self.auth_id
+        d["live_cohort"] = self.live_cohort
+        d["budget_cohort"] = self.budget_cohort
+        d["live_cohort_note"] = (
+            "carried but NOT in spec_sha, for the same reason as auth_id: a "
+            "readiness run and its live counterpart are one experiment, and "
+            "folding the granted budget ledger into the experiment's identity "
+            "would move the hash at the moment of the grant")
         d["auth_id_note"] = (
             "carried but NOT in spec_sha: readiness runs with the sentinel "
             "and live with the grant, so folding it in would make the "
@@ -164,9 +191,16 @@ BTC15M_Q1 = _declare(LiveProbeSpec(
     #: would leave the process unattached for the entire interval the
     #: correction is about. See contract_cohort.BTC15M and TTE_PROVENANCE_1.
     entry_tte_band="840:880",
-    cohort=None,                       # set when a live cohort is created
+    cohort=None,                       # HASHED field: stays None, see below
     auth_id=SENTINEL_AUTH,             # replaced only by an owner grant
     action_size="1",
+    #: GRANTED 2026-09-21 under OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1.
+    #: Exactly 12 action attempts, chained to COHORT-2026-09-21-Q1LIVE-1
+    #: (12/12 SPENT). ONE window: when this is spent its unused slots stay
+    #: unused. It is carried HERE rather than in `cohort` so that granting a
+    #: budget does not move spec_sha away from the reviewed
+    #: d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c.
+    live_cohort="COHORT-2026-09-21-BTC15M-Q1LIVE-1",
 ))
 
 #: the BTC5m probe, declared so the shape is not BTC15m-only

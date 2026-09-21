@@ -392,7 +392,14 @@ def test_the_capture_did_not_move_the_envelope():
     # ever land. The two invariants worth pinning are kept and are stronger:
     # the SHADOW (0.01) bounds did not move, and the authorization granted
     # against the old envelope is dead rather than silently carried forward.
-    assert WC.AUTHORIZED_ENVELOPE is None and not WC.authorized()
+    # ARMED 2026-09-21 under OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1.
+    # "AUTHORIZED_ENVELOPE is None" was the shape of a DISARMED TREE, not a
+    # property this change must preserve -- asserting it would mean no
+    # authorization may ever be granted. The durable invariant is that an
+    # authorization never names an envelope OTHER than the one running, so a
+    # grant made against an older envelope is dead rather than carried
+    # forward. That holds armed and disarmed alike.
+    assert WC.AUTHORIZED_ENVELOPE in (None, WC.envelope_sha())
     assert str(CP.MAX_ACTIONS) == "12" and str(CP.MAX_RESIDUAL) == "0.04"
     assert str(CP.MAX_IMBALANCE) == "0.04" and str(CP.ACTION_SIZE) == "0.01"
 
