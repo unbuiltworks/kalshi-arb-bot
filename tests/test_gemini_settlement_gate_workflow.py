@@ -800,11 +800,18 @@ def test_the_latch_is_a_safety_dependency_outside_the_bundle():
     from src.gemini_execution import bundle as B
 
     assert "run_canary.py" not in B.MEMBERS
-    # AND THE FIX PROVABLY MOVED NO HASH. The bundle still hashes to the value
-    # the q=1 grant named, so a re-grant needs no re-review of the tree: only
-    # the authorization-identifier lines, which are normalized out of the hash
-    # by design, have to change.
-    assert B.bundle_sha() == (
+    # THE DRIVER IS STILL BYTE-IDENTICAL to what was reviewed: ws_continuous.py
+    # holds every BOUND and no fix since has touched it.
+    from src.gemini_execution import ws_continuous as WCX
+    assert WCX.executable_sha() == (
+        "c1ada77a919c9c0cf226b4eb0c56aed6495f7e8fe1ece9261150aa6c26377763")
+    # THE BUNDLE HAS MOVED, AND MUST HAVE. Protecting the grant meant adding a
+    # probe to run_continuous.py, which IS a member -- so bundle_sha changes,
+    # which is the mechanism working, not failing: a re-grant names the new
+    # bundle. Pinning the OLD value here would assert that an ordering fix in
+    # the invoker is invisible to the authorization, which is the precise
+    # failure bundle_sha exists to prevent.
+    assert B.bundle_sha() != (
         "6b35be2ac54bf0e4e4b2fee8396d52402f1362af4737e28a1e29da0bdc7b3983")
 
 
@@ -830,3 +837,90 @@ def test_the_plumbing_fix_moved_no_bound_and_no_flag():
     from src.gemini_execution import cohort as CO
     c = CO.state("COHORT-2026-09-21-Q1LIVE-1")
     assert c["budget"] == 12 and c["consumed"] == 0
+
+
+def test_an_unpushable_latch_refuses_without_spending_the_grant():
+    """THE FAILURE THAT COST A GRANT, made free.
+
+    latch.consume() marks the authorization spent on disk BEFORE
+    make_durable() pushes it. So when the push could never have succeeded, the
+    old ordering burned an owner grant for an infrastructure reason with
+    nothing traded -- which is precisely how
+    OWNER-2026-09-21-GEMINI-Q1-LIVE-1 died in run 35570948794.
+
+    The probe must therefore run BEFORE the consume, and it must push nothing.
+    """
+    import inspect
+    from src.gemini_execution import run_canary as RC
+    from src.gemini_execution import run_continuous as RCN
+
+    src = inspect.getsource(RCN)
+    # ON THE CALL, NEVER THE MENTION. Both names appear in the explanatory
+    # comment above the probe, so index() finds the prose and reports an
+    # ordering that is not the code's. This file has walked into that exact
+    # trap twice before (see _sets_the_arm); assert on the ASSIGNMENT.
+    probe = re.search(r"^\s*\w+ = can_make_durable\(\)", src, re.M).start()
+    consume = re.search(r"^\s*\w+ = latch\.consume\(", src, re.M).start()
+    assert probe < consume, (
+        "the pushability probe must run BEFORE the latch is consumed, or it "
+        "cannot protect the grant it exists to protect")
+
+    # AND IT PUSHES NOTHING. A probe that pushed would be a mutation of its
+    # own, and on the wrong side of the arm.
+    probe_src = inspect.getsource(RC.can_make_durable)
+    assert '"push"' not in probe_src
+    assert '"fetch"' in probe_src and '"merge-base"' in probe_src
+
+
+def test_the_pushability_probe_rejects_exactly_the_run69_situation():
+    """Unrelated history -- the run-69 failure -- must come back not-ok, and a
+    branch that IS an ancestor of HEAD must come back ok. Driven on real git
+    repositories rather than on a mock of git's opinion."""
+    import subprocess
+    import tempfile
+    import pathlib
+    from src.gemini_execution import run_canary as RC
+
+    def _run(*a, cwd):
+        return subprocess.run(["git", *a], cwd=cwd, capture_output=True,
+                              text=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        remote = pathlib.Path(tmp) / "remote.git"
+        work = pathlib.Path(tmp) / "work"
+        subprocess.run(["git", "init", "--bare", "-q", str(remote)],
+                       check=True)
+        subprocess.run(["git", "clone", "-q", str(remote), str(work)],
+                       check=True)
+        _run("config", "user.email", "t@t", cwd=work)
+        _run("config", "user.name", "t", cwd=work)
+        (work / "a").write_text("1")
+        _run("add", "a", cwd=work)
+        _run("commit", "-qm", "base", cwd=work)
+        base_branch = _run("rev-parse", "--abbrev-ref", "HEAD",
+                           cwd=work).stdout.strip()
+        _run("push", "-q", "origin", "HEAD:refs/heads/good", cwd=work)
+        # an UNRELATED branch on the same remote: no shared history at all
+        _run("checkout", "-q", "--orphan", "other", cwd=work)
+        (work / "b").write_text("2")
+        _run("add", "b", cwd=work)
+        _run("commit", "-qm", "orphan", cwd=work)
+        _run("push", "-q", "origin", "HEAD:refs/heads/unrelated", cwd=work)
+        _run("checkout", "-q", base_branch, cwd=work)
+
+        import os
+        cwd0 = os.getcwd()
+        branch0 = RC.BRANCH
+        try:
+            os.chdir(work)
+            RC.BRANCH = "good"
+            assert RC.can_make_durable()["ok"] is True
+            RC.BRANCH = "unrelated"
+            bad = RC.can_make_durable()
+            assert bad["ok"] is False
+            assert "ancestor" in bad["why"]
+            RC.BRANCH = "no-such-branch"
+            assert RC.can_make_durable()["ok"] is False
+        finally:
+            os.chdir(cwd0)
+            RC.BRANCH = branch0

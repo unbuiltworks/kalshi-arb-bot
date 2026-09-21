@@ -72,6 +72,41 @@ def durable_check(auth_id: str) -> bool:
     return r.returncode == 0
 
 
+def can_make_durable() -> Dict[str, Any]:
+    """Could make_durable() push, if it were called right now? Pushes NOTHING.
+
+    WHY THIS EXISTS, AND WHY IT IS NOT MERELY A NICETY. latch.consume() marks
+    the authorization spent BEFORE make_durable() pushes it -- deliberately,
+    because a lost order is preferred to a double order. The consequence
+    nobody priced: when the PUSH fails, the grant is already spent on disk and
+    is swept into the evidence commit, so an INFRASTRUCTURE fault costs an
+    owner authorization even though nothing traded. That is exactly how
+    OWNER-2026-09-21-GEMINI-Q1-LIVE-1 died: run 35570948794 could not push the
+    latch onto a branch it shared no history with, and the grant went with it.
+
+    Asking FIRST costs nothing and changes no guarantee: the latch is still
+    written, committed and pushed before any mutation. This only moves the
+    infrastructure failure to a point where it is free.
+
+    The condition checked is the one a fast-forward push needs: the remote
+    branch exists and is an ancestor of HEAD. An unrelated branch -- the
+    run-68/69 failure -- fails this precisely.
+    """
+    fetch = _git("fetch", "origin", BRANCH)
+    if fetch.returncode != 0:
+        return {"ok": False,
+                "why": "cannot fetch origin/%s: %s"
+                       % (BRANCH, fetch.stderr.strip()[:200])}
+    anc = _git("merge-base", "--is-ancestor", "FETCH_HEAD", "HEAD")
+    if anc.returncode != 0:
+        return {"ok": False,
+                "why": ("origin/%s is not an ancestor of HEAD, so the latch "
+                        "push would be rejected and the rebase would run on "
+                        "unrelated history; refusing BEFORE the grant is "
+                        "spent rather than after" % BRANCH)}
+    return {"ok": True, "why": None, "branch": BRANCH}
+
+
 def make_durable(auth_id: str, record: Mapping[str, Any]) -> None:
     """Commit and push the latch. Raises on failure, which aborts the send."""
     path = _durable_path(auth_id)

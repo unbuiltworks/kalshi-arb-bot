@@ -1379,7 +1379,26 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # executable stays byte-for-byte what was authorized. The guarantee is the
     # same: nothing mutates until the latch is durably spent.
     from src.gemini_execution import latch
-    from src.gemini_execution.run_canary import durable_check, make_durable
+    from src.gemini_execution.run_canary import (can_make_durable,
+                                                 durable_check, make_durable)
+
+    # ASK BEFORE SPENDING. latch.consume() marks the grant spent on disk, and
+    # make_durable() pushes it only afterwards -- so a push that CANNOT
+    # succeed costs an owner authorization for an infrastructure reason, with
+    # nothing traded. That is how OWNER-2026-09-21-GEMINI-Q1-LIVE-1 died.
+    # This probe pushes nothing and weakens nothing: the latch is still
+    # written, committed and pushed before any mutation. It only moves an
+    # unavoidable failure to the side of the line where it is free.
+    pushable = can_make_durable()
+    rep["latch_pushable"] = pushable
+    if not pushable.get("ok"):
+        rep["state"] = WC.DO_NOT_TRADE
+        rep["why"] = ("the latch could not have been made durable (%s); "
+                      "refused BEFORE consuming the authorization, so the "
+                      "grant is INTACT and re-dispatchable once the "
+                      "infrastructure is fixed" % pushable.get("why"))
+        rep["latch"] = {"consumed": False, "spent_by_this_run": False}
+        return rep
 
     intent = {
         "intent_id": "cont-%s" % datetime.now(timezone.utc).strftime(
