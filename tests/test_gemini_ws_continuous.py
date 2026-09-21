@@ -21,7 +21,25 @@ import re
 import pytest
 
 from src.gemini_execution import continuous_probe as CP
+from src.gemini_execution import live_envelope as LE
 from src.gemini_execution import ws_continuous as WC
+
+
+def _roomy(**over):
+    """A test-only envelope with the CASH and ORDER-COUNT caps lifted.
+
+    Used ONLY by tests whose subject is something else -- budget accounting,
+    partial-fill bookkeeping -- so that a cap they are not testing cannot make
+    them pass or fail for the wrong reason. Each cap lifted here is itself
+    driven to its limit in tests/test_gemini_live_envelope_q1.py, which is
+    where those properties are actually proven.
+    """
+    import dataclasses
+    return dataclasses.replace(
+        LE.SHADOW_Q001, max_working_orders=64,
+        max_committed_usd=CP.D("1000"), max_total_spend_usd=CP.D("1000"),
+        max_residual_usd=CP.D("1000"), max_yes=CP.D("1000"),
+        max_no=CP.D("1000"), max_same_side_run=100000, **over)
 
 SYM = "GEMI-BTC05M2609181200-UP"
 OTHER = "GEMI-BTC05M2609181205-UP"
@@ -62,9 +80,10 @@ def _authorized(monkeypatch):
     assert WC.authorized(), WC.authorization_state()["why_not"]
 
 
-def _driver(tmp_path, symbol=SYM, t=1_789_000_000.0):
+def _driver(tmp_path, symbol=SYM, t=1_789_000_000.0, envelope=None):
+    kw = {} if envelope is None else {"envelope": envelope}
     return WC.Driver(AUTH, symbol, ledger_path=str(tmp_path / "mut.jsonl"),
-                     now_fn=lambda: t)
+                     now_fn=lambda: t, **kw)
 
 
 def _ready(tmp_path, *, fills=None, open_orders=None, orders=None, **kw):
@@ -172,12 +191,36 @@ def test_the_gate_is_reachable_and_not_merely_always_closed(monkeypatch):
     assert WC.authorized() is True, WC.authorization_state()["why_not"]
 
 
-def test_the_envelope_did_not_move_across_the_renewal():
-    """CONTINUOUS-3 renewed the EXECUTABLE. No bound changed, and the envelope
-    hash is what proves it rather than a promise that none did."""
-    assert WC.envelope_sha() == (
+def test_the_envelope_moved_and_the_old_authorization_died_with_it():
+    """The q=1 live bounds joined the hash, so b3bff654... no longer describes
+    the envelope in force. The property worth pinning is not that the hash
+    never changes -- it is that a changed bound KILLS the authorization that
+    was granted against the old one, automatically and without anyone
+    remembering to."""
+    assert WC.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
+    assert WC.AUTHORIZED_ENVELOPE is None, (
+        "the retired hash must not be re-pointed at the new envelope; that "
+        "would pre-authorise bounds nobody approved")
+    assert not WC.authorized()
+    st = WC.authorization_state()
+    assert any("AUTHORIZED_ENVELOPE" in r for r in st["why_not"])
+
+
+def test_the_authorization_hash_covers_BOTH_sizes():
+    """The live size is one constructor argument away, so an authorization
+    that named only the envelope a driver happened to be built with would
+    leave the other one changeable without review."""
+    env = WC.envelope()
+    assert env["envelope_shadow_q001_sha"] == LE.SHADOW_Q001.sha()
+    assert env["envelope_live_q1_sha"] == LE.LIVE_Q1.sha()
+    before = WC.envelope_sha()
+    import dataclasses
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(LE, "LIVE_Q1",
+                   dataclasses.replace(LE.LIVE_Q1,
+                                       max_committed_usd=CP.D("1000")))
+        assert WC.envelope_sha() != before
 
 
 def test_without_the_transport_arm_no_mutation_is_possible(monkeypatch):
@@ -348,7 +391,9 @@ def test_a_rejected_order_still_costs_its_slot(tmp_path, _authorized):
 
 
 def test_twelve_cannot_become_thirteen(tmp_path, _authorized):
-    d = _ready(tmp_path)
+    # the subject is the BUDGET. Twelve un-cancelled rungs would also trip
+    # the working-order and committed-cash caps, which are proven separately.
+    d = _ready(tmp_path, envelope=_roomy())
     s = FakeSession()
     for i in range(CP.MAX_ACTIONS):
         _run(d.place(s, _rung("YES" if i % 2 else "NO", "0.%02d" % (10 + i))))
@@ -373,7 +418,8 @@ def test_a_plan_that_would_overrun_the_budget_stops_instead(tmp_path,
 # ------------------------------------------------------------------- restart
 
 def test_restart_cannot_reset_the_action_count(tmp_path, _authorized):
-    d = _ready(tmp_path)
+    # subject is the durable budget across a restart, not the cash caps
+    d = _ready(tmp_path, envelope=_roomy())
     s = FakeSession()
     for i in range(3):
         _run(d.place(s, _rung("YES", "0.%02d" % (50 + i))))
@@ -496,7 +542,11 @@ def test_a_full_fill_updates_inventory_and_retires_the_order(tmp_path,
 
 def test_a_partial_fill_updates_inventory_and_leaves_the_rest_resting(
         tmp_path, _authorized):
-    d = _ready(tmp_path)
+    # a 0.02 rung is deliberately ABOVE the shadow action size, so the live
+    # gate refuses it -- correctly, and that refusal is proven in
+    # test_gemini_live_envelope_q1.py. Here the subject is partial-fill
+    # bookkeeping, so the size cap is lifted to reach it.
+    d = _ready(tmp_path, envelope=_roomy(action_size=CP.D("0.02")))
     out = _run(d.place(FakeSession(), {"leg": "YES", "price": "0.55",
                                        "qty": "0.02"}))
     coid = out["client_order_id"]

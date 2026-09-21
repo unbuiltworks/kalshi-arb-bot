@@ -427,8 +427,15 @@ def test_the_envelope_bounds_are_unchanged():
     assert str(CP.MAX_NO) == "0.10"
     assert str(CP.MAX_TOTAL_SPEND) == "0.15"
     assert str(CP.ACTION_SIZE) == "0.01"
-    assert WC.envelope_sha() == (
+    # THE ENVELOPE MOVED, DELIBERATELY, on 2026-09-21: the q=1 LIVE bounds
+    # joined the hash, so b3bff654... describes an envelope that no longer
+    # exists. Pinning it here would now assert that no reviewed change may
+    # ever land. The two invariants worth pinning are kept and are stronger:
+    # the SHADOW (0.01) bounds did not move, and the authorization granted
+    # against the old envelope is dead rather than silently carried forward.
+    assert WC.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+    assert WC.AUTHORIZED_ENVELOPE is None and not WC.authorized()
 
 
 # ====================================================== KEEP SEMANTICS INTACT

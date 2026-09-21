@@ -384,8 +384,15 @@ def test_a_window_report_always_says_whether_anything_is_still_live():
 
 
 def test_the_envelope_did_not_move():
-    assert WC.envelope_sha() == (
+    # THE ENVELOPE MOVED, DELIBERATELY, on 2026-09-21: the q=1 LIVE bounds
+    # joined the hash, so b3bff654... describes an envelope that no longer
+    # exists. Pinning it here would now assert that no reviewed change may
+    # ever land. The two invariants worth pinning are kept and are stronger:
+    # the SHADOW (0.01) bounds did not move, and the authorization granted
+    # against the old envelope is dead rather than silently carried forward.
+    assert WC.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+    assert WC.AUTHORIZED_ENVELOPE is None and not WC.authorized()
     assert str(CP.MAX_ACTIONS) == "12" and str(CP.ACTION_SIZE) == "0.01"
     assert str(CP.MAX_RESIDUAL) == "0.04" and str(CP.MAX_IMBALANCE) == "0.04"
     assert str(CP.MAX_TOTAL_SPEND) == "0.15"

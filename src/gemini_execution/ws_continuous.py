@@ -79,11 +79,13 @@ import re
 import tempfile
 import time
 import uuid
+import weakref
 from decimal import Decimal as D
 from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
                     Tuple)
 
 from src.gemini_execution import arming, continuous_probe as CP, spec
+from src.gemini_execution import live_envelope as LE
 from src.gemini_execution import executions as EX
 from src.gemini_execution import continuous_preflight as PF
 
@@ -107,7 +109,14 @@ AUTHORIZED_SHA: Optional[str] = None
 #: The sha256 of the frozen risk envelope the authorization was granted
 #: against. Changing any bound changes this, and the authorization stops
 #: applying -- so an envelope cannot be widened under an old approval.
-AUTHORIZED_ENVELOPE: Optional[str] = "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17"  # noqa: E501
+#
+# RETIRED 2026-09-21. It named the 0.01 envelope; the live q=1 bounds are now
+# part of the hash, so that value describes an envelope that no longer exists.
+# It is set to None rather than re-pointed at the new hash: re-pointing it
+# would be PRE-AUTHORIZING an envelope nobody has approved, which is the exact
+# thing this constant exists to prevent. Installing one is a human editing
+# this line in a reviewed commit.
+AUTHORIZED_ENVELOPE: Optional[str] = None
 
 
 class NotAuthorized(RuntimeError):
@@ -186,6 +195,19 @@ def envelope() -> Dict[str, str]:
         "withdraw_all_tte_s": str(CP.WITHDRAW_ALL_TTE_S),
         "cohort_prefix": CP.COHORT_PREFIX,
         "maker_tif": spec.WS_TIF_MAKER_ONLY,
+        # THE BOUNDS THAT ACTUALLY HOLD ON THE ORDER PATH. Leaving these out
+        # would let an authorization be granted against an envelope hash that
+        # said nothing about the caps the live gate enforces -- which is the
+        # same defect as a bound that exists only in a document.
+        # BOTH SIZES ARE NAMED. An authorization hash that covered only the
+        # envelope a driver happened to be constructed with would let the
+        # OTHER one change unreviewed, and the choice between them is one
+        # constructor argument.
+        "envelope_shadow_q001_sha": LE.SHADOW_Q001.sha(),
+        "envelope_live_q1_sha": LE.LIVE_Q1.sha(),
+        "envelope_shadow_q001": json.dumps(LE.SHADOW_Q001.as_dict(),
+                                           sort_keys=True),
+        "envelope_live_q1": json.dumps(LE.LIVE_Q1.as_dict(), sort_keys=True),
     }
 
 
@@ -618,6 +640,37 @@ def diff_surface(desired: Sequence[Mapping[str, Any]],
                        "forget when they size a budget.")}
 
 
+# ------------------------------------------------------ ONE MARKET AT A TIME
+
+#: symbol -> weakref to the Driver currently holding that market in THIS
+#: PROCESS.
+#:
+#: WHY A MODULE-LEVEL REGISTRY AND NOT A FLAG ON THE DRIVER. "one concurrent
+#: market" is a property of the ACCOUNT, and a second Driver object cannot see
+#: a field on the first one. This is the smallest thing that can actually
+#: refuse. It is a PROCESS bound and it says so: exclusion across processes is
+#: supplied by the deployment -- one service, one replica, restartPolicyType
+#: NEVER -- and that is stated in the manifest rather than implied here.
+#:
+#: WHY WEAK REFERENCES. A lease belongs to a LIVE driver. A driver that was
+#: dropped without stopping -- abandoned mid-window, or simply garbage after a
+#: test -- is holding nothing, and a lease it never gave back would refuse the
+#: next authorized window forever for no reason. A strong dict turns a bound
+#: meant to stop CONCURRENCY into a bound that stops the SECOND window ever.
+_BOUND_MARKETS: "weakref.WeakValueDictionary[str, Any]" = (
+    weakref.WeakValueDictionary())
+
+
+def bound_markets() -> Dict[str, str]:
+    """Markets held by a LIVE driver in this process, symbol -> auth_id."""
+    return {sym: getattr(d, "_auth_id", "")
+            for sym, d in list(_BOUND_MARKETS.items()) if d is not None}
+
+
+def _release_market(symbol: str) -> None:
+    _BOUND_MARKETS.pop(str(symbol), None)
+
+
 # ------------------------------------------------------------- THE STATE MACHINE
 
 INIT = "INIT"
@@ -663,7 +716,8 @@ class Driver:
 
     def __init__(self, auth_id: str, symbol: str, *, ledger_path: str,
                  now_fn: Callable[[], float] = time.time,
-                 max_actions: Optional[int] = None) -> None:
+                 max_actions: Optional[int] = None,
+                 envelope: "LE.Envelope" = LE.DEFAULT) -> None:
         if not str(symbol).startswith(CP.COHORT_PREFIX):
             raise CP.ProbeStop("%s is not a %s contract"
                                % (symbol, CP.COHORT_PREFIX))
@@ -671,6 +725,12 @@ class Driver:
         # never reassigned; WindowGuard re-checks it on every single turn.
         self._symbol = str(symbol)
         self._auth_id = str(auth_id)
+        # WHICH BOUNDS THIS DRIVER RUNS UNDER, chosen by the caller and never
+        # by a default that could drift upward. LE.DEFAULT is the SHADOW size
+        # (0.01); the q=1 manifest is obtained only by handing over
+        # LE.LIVE_Q1 explicitly, in a reviewed commit. A bigger size is a
+        # decision, not an upgrade.
+        self.env = envelope
         self.now_fn = now_fn
         self.state = INIT
         self.why: Optional[str] = None
@@ -692,12 +752,13 @@ class Driver:
         # CP.MAX_ACTIONS is REFUSED rather than clamped: silently granting
         # less than was asked for leaves the caller believing it holds budget
         # it does not hold, which is the failure this bound exists to prevent.
+        ceiling = min(int(CP.MAX_ACTIONS), int(self.env.max_actions))
         if max_actions is None:
-            self._max_actions = int(CP.MAX_ACTIONS)
+            self._max_actions = ceiling
         else:
             if int(max_actions) < 1:
                 raise CP.ProbeStop("a window with no mutation slots cannot act")
-            if int(max_actions) > int(CP.MAX_ACTIONS):
+            if int(max_actions) > ceiling:
                 raise CP.ProbeStop(
                     "max_actions %d exceeds the envelope's %d; the envelope is "
                     "the ceiling" % (int(max_actions), int(CP.MAX_ACTIONS)))
@@ -720,6 +781,12 @@ class Driver:
             self.state = state
             self.why = why
             self.log.append({"event": state, "why": why, "t": self.now_fn()})
+            # THE MARKET LEASE IS RELEASED ON THE WAY INTO A TERMINAL STATE,
+            # not in a finally somewhere: a Driver that stopped is holding
+            # nothing, and a lease it never gave back would block the NEXT
+            # authorized window for no reason. Releasing here does not
+            # re-arm anything -- STOPPED is still terminal for this object.
+            _release_market(self._symbol)
 
     def budget_left(self) -> int:
         used = self.budget_consumed if self.budget_consumed is not None else 0
@@ -795,6 +862,19 @@ class Driver:
                       "bind() before recovery: the window may not be bound "
                       "until authoritative state is established")
             return {"bound": False, "why": self.why}
+        # ONE MARKET AT A TIME, REFUSED RATHER THAN QUEUED. A second symbol
+        # bound in this process is how a one-market probe becomes a portfolio.
+        other = {k: v for k, v in bound_markets().items()
+                 if k != self._symbol}
+        if len(other) + 1 > self.env.max_concurrent_markets:
+            self.stop(DO_NOT_TRADE,
+                      "%d market(s) already bound in this process (%s); "
+                      "MAX_CONCURRENT_MARKETS is %d and this envelope does "
+                      "not queue, it refuses"
+                      % (len(other), ", ".join(sorted(other)),
+                         self.env.max_concurrent_markets))
+            return {"bound": False, "why": self.why}
+        _BOUND_MARKETS[self._symbol] = self
         self.guard = CP.WindowGuard(self._symbol, auth_id=self._auth_id)
         self.guard.actions_taken = int(self.budget_consumed or 0)
         self.state = BOUND
@@ -907,7 +987,17 @@ class Driver:
             raise CP.ProbeStop(self.why or "terminal")
 
         leg, price, qty = str(rung["leg"]), str(rung["price"]), str(rung["qty"])
-        breach = CP.would_breach(leg, price, self.inv)
+        # THE LIVE ENVELOPE, NOT THE SHADOW ONE. `CP.would_breach` is sized in
+        # units of 0.01 and measures the prospective fill with its own module
+        # constant rather than the qty being sent, and it bounds FILLED spend
+        # only -- resting orders are cash the venue may take without asking
+        # again. `LE.would_breach` is handed the rung's ACTUAL qty and the
+        # ACTUAL resting set, and it names every bound it breaks rather than
+        # the first. It replaces the shadow check here rather than adding to
+        # it: at q=1 every rung breaches the 0.01-sized bounds, so ANDing the
+        # two would refuse the manifest it is meant to authorise.
+        breach = LE.would_breach(leg, price, self.inv, qty=qty,
+                                 resting=self.working.rungs(), env=self.env)
         if breach:
             self.stop(STOPPED, "risk gate refused the rung: %s" % breach)
             raise CP.ProbeStop(self.why or breach)

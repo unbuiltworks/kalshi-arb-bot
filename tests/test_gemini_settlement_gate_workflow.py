@@ -557,9 +557,17 @@ def test_the_tree_is_armed_for_exactly_one_named_authorization():
         assert WCX.AUTHORIZED_SHA == WCX.executable_sha()
         assert BUN.AUTHORIZED_BUNDLE == BUN.bundle_sha()
         assert WCX.AUTHORIZED_ENVELOPE == WCX.envelope_sha()
-    # THE ENVELOPE NEVER MOVES. That is the invariant worth pinning here.
-    assert WCX.envelope_sha() == (
+    # THE ENVELOPE MOVED, DELIBERATELY, on 2026-09-21: the q=1 LIVE bounds
+    # joined the hash, so b3bff654... describes an envelope that no longer
+    # exists. Pinning it here would now assert that no reviewed change may
+    # ever land. The two invariants worth pinning are kept and are stronger:
+    # the SHADOW (0.01) bounds did not move, and the authorization granted
+    # against the old envelope is dead rather than silently carried forward.
+    assert WCX.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
+    from src.gemini_execution import continuous_probe as CPX
+    assert str(CPX.ACTION_SIZE) == "0.01" and str(CPX.MAX_RESIDUAL) == "0.04"
+    assert str(CPX.MAX_TOTAL_SPEND) == "0.15"
     # The executable hash is deliberately NOT pinned in this test. It pinned
     # 7dc3daae... and broke the moment an authorized fix landed -- a test
     # asserting that no fix may ever land. The hash belongs in the

@@ -49,6 +49,25 @@ a control."*
    working orders behind.
 4. `actions_remaining` is asserted to decrease in the live evidence record.
 
+**RESOLVED 2026-09-21 — and the live path never had this hole.** The four
+requirements above are met on `ws_continuous.Driver`, which does not use
+`guard.record()` as its accountant at all: `MutationLedger.attempt` writes and
+fsyncs the slot BEFORE the frame goes out, `budget_consumed` is incremented
+before the send, and `guard.actions_taken` is set from it. A slot is therefore
+spent by the ATTEMPT, so a send that times out has already cost one -- which is
+stricter than recording transmitted actions, because an order that may be
+resting is exactly the one that must not be free.
+
+`tests/test_gemini_live_envelope_q1.py::test_the_action_budget_binds_on_the_live_path`
+drives 12 places, asserts the 13th raises, that only 12 frames went out, that
+the durable ledger reads 12 and that `guard.actions_taken` tracks it rather than
+sitting at zero. `::test_a_spent_slot_survives_a_restart` proves a restart
+cannot re-open the budget.
+
+The shadow-collector statement above remains true and unchanged: `shadow_soak`
+still never calls `guard.record()`, and that is still fine there, because it can
+place nothing.
+
 *Recorded 2026-09-20. Found while verifying assumption A3 of
 `L5_CONTINUOUS_FAITHFUL_SETUP.md`, which had cited the wrong call path.*
 
@@ -61,10 +80,28 @@ a control."*
 been refused *by the venue path* on their account. Before live, each must be
 shown refusing a real transmission attempt, not merely a hypothetical rung.
 
-**Note the gap already visible:** `would_breach` checks imbalance and the
-per-leg caps but **not `MAX_TOTAL_SPEND`**. Spend is only checked by
-`risk_gates`, which is a whole-turn stop rather than a per-action refusal. A
-live runner must not rely on `would_breach` alone to keep spend bounded.
+**CORRECTION, 2026-09-21 — the gap named here was WRONG.** This document
+said `would_breach` does not check `MAX_TOTAL_SPEND`. It does, and always has:
+the check is in `continuous_probe.would_breach`, and `git log -L 333,335` shows
+it in the commit that created the function. A safety document that overstates a
+gap is repaired in the open, the same as one that understates it.
+
+**The real gaps, all four now closed in `live_envelope.py`:**
+
+1. the gate measured the prospective fill with `q = ACTION_SIZE`, the MODULE
+   CONSTANT, not the qty of the rung being sent, so the gate and the frame
+   could disagree about size. `qty` is now a REQUIRED keyword with no default;
+2. `inv.spend()` is FILLED cost — nothing bounded RESTING commitments, which
+   are cash the venue may take at any moment without asking again. Each rung
+   could pass its own check while the set of them exceeded the cap together.
+   `max_committed_usd` bounds filled + resting + the rung being sent;
+3. residual was bounded in contracts but not in dollars (`max_residual_usd`,
+   priced at the leg's average cost);
+4. nothing bounded how many orders may rest at once (`max_working_orders`).
+
+Proven in `tests/test_gemini_live_envelope_q1.py`, including a regression that
+shows `CP.would_breach` returning `None` for the exact rung the live gate
+refuses. See `analysis/gemini/LIVE_MANIFEST_Q1.md`.
 
 ---
 
