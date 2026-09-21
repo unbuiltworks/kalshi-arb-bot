@@ -165,6 +165,13 @@ def _arm_everything(monkeypatch, tmp_path, ledger_rows, spy):
                 "orders_seen": [], "order_history_raw": {"readable": True},
                 "active_raw": {"ok": True}}
     monkeypatch.setattr(RC, "authoritative_state", _auth_state)
+    async def _positions(**k):
+        # THE NEW AUTHORITATIVE POSITION GATE. A test that did not answer it
+        # would refuse before the latch -- correctly -- and would then be
+        # asserting the gate rather than its own subject.
+        return {"path": "/v1/prediction-markets/positions", "rows": [],
+                "status": 200, "ok": True, "total": 0}
+    monkeypatch.setattr(RC.MD, "positions", _positions)
     monkeypatch.setattr(L, "consume", spy)
     return str(p)
 

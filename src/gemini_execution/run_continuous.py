@@ -39,6 +39,8 @@ from src.gemini_execution import habitat as HB
 from src.gemini_execution import metadata as MD
 from src.gemini_execution import spec
 from src.gemini_execution import ws_continuous as WC
+from src.gemini_execution import live_envelope as LE
+from src.gemini_execution import position_ledger as PL
 
 LABEL = "GEMINI_L5_CONTINUOUS_RUN_V1"
 
@@ -1096,7 +1098,8 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                      out_path: str,
                      wire_path: Optional[str] = None,
                      cohort_id: Optional[str] = None,
-                     entry_band: Optional[Sequence[float]] = None
+                     entry_band: Optional[Sequence[float]] = None,
+                     envelope: "LE.Envelope" = LE.DEFAULT
                      ) -> Dict[str, Any]:
     """Always writes its report, however it exits.
 
@@ -1110,7 +1113,8 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
     try:
         rep = await _build(auth_id, state_dir=state_dir,
                            ledger_path=ledger_path, wire_path=wire_path,
-                           cohort_id=cohort_id, entry_band=entry_band)
+                           cohort_id=cohort_id, entry_band=entry_band,
+                           envelope=envelope)
         return rep
     finally:
         rep.setdefault("finished_utc",
@@ -1125,7 +1129,8 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
 async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                  wire_path: Optional[str] = None,
                  cohort_id: Optional[str] = None,
-                 entry_band: Optional[Sequence[float]] = None
+                 entry_band: Optional[Sequence[float]] = None,
+                 envelope: "LE.Envelope" = LE.DEFAULT
                  ) -> Dict[str, Any]:
     from src.gemini_execution.ws_session import GeminiMakerSession
 
@@ -1133,6 +1138,11 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         "label": LABEL, "started_utc": datetime.now(timezone.utc).isoformat(),
         "authorization_id": auth_id,
         "driver_executable_sha": WC.executable_sha(),
+        # WHICH BOUNDS THIS RUN IS UNDER, in the artifact, so a report can
+        # never be read against the wrong envelope after the fact.
+        "envelope_name": envelope.name,
+        "envelope_sha": envelope.sha(),
+        "envelope": envelope.as_dict(),
         "driver_envelope_sha": WC.envelope_sha(),
         "bundle_sha": BUNDLE.bundle_sha(),
         "invoker_note": ("this invoker is NOT covered by the authorized "
@@ -1277,7 +1287,7 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # window below builds its own Driver and recovers again authoritatively;
     # this one exists solely to refuse before the latch.
     probe = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
-                      max_actions=cohort_budget)
+                      max_actions=cohort_budget, envelope=envelope)
     pre = probe.recover(venue_fills=st.get("fills"),
                         venue_open=st.get("open_orders"),
                         venue_orders=st.get("orders_seen"))
@@ -1289,6 +1299,31 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     rep["pre_latch_recovery"] = {"checked_before_latch": True,
                                  "checked_before_authorization": True,
                                  **pre}
+
+    # ---- THE AUTHORITATIVE POSITION GATE, BEFORE THE LATCH.
+    #
+    # Inventory above is rebuilt from FILLS. This asks the venue what it says
+    # the account HOLDS, and refuses unless the two agree exactly. It is also
+    # the read that answers, from our own account rather than from published
+    # schemas, whether Gemini carries one signed position per instrument or
+    # independent YES and NO inventories -- `position_ledger` records which
+    # shape it saw. Unreadable is a refusal, not a flat account.
+    pos = await MD.positions()
+    pos_rec = PL.reconcile(probe.inv if probe.inv is not None else CP.Inventory(),
+                           pos.get("rows"), symbol)
+    rep["position_gate"] = {
+        "read": {k: pos.get(k) for k in ("path", "status", "ok", "why",
+                                         "total")},
+        "n_rows_for_symbol": (None if pos.get("rows") is None
+                              else len(pos["rows"])),
+        "reconciliation": pos_rec,
+    }
+    if not pos.get("ok") or not pos_rec.get("tradeable"):
+        rep["state"] = WC.DO_NOT_TRADE
+        rep["why"] = ("the venue's own position could not be established or "
+                      "does not agree with our ledger (%s); nothing is sent"
+                      % (pos_rec.get("why") or pos.get("why")))
+        return rep
     if probe.state in WC.TERMINAL or not pre.get("recovered"):
         rep["state"] = probe.state
         rep["why"] = (probe.why or pre.get("why")
@@ -1379,7 +1414,7 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         return rep
 
     driver = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
-                       max_actions=cohort_budget)
+                       max_actions=cohort_budget, envelope=envelope)
     # the observer wraps the real session; the arm gate and every bound
     # still run inside the objects it delegates to.
     session = RecordingSession(GeminiMakerSession(id_prefix="l5cp"))
@@ -1471,6 +1506,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          "bounded budget and must already exist")
     ap.add_argument("--out", default="analysis/gemini/continuous_run.json")
     ap.add_argument("--wire", default="analysis/gemini/continuous_wire.json")
+    ap.add_argument("--envelope", default="shadow_q001",
+                    choices=("shadow_q001", "live_q1"),
+                    help=("which RISK ENVELOPE the driver runs under. The "
+                          "default is the 0.01 shadow envelope; `live_q1` is "
+                          "the reviewed q=1 manifest and must be asked for "
+                          "explicitly. A bigger size is a decision, never a "
+                          "default that arrives."))
     ap.add_argument("--entry-tte-band", default=None,
                     help=("LO:HI seconds-to-expiry the window must BEGIN "
                           "inside, e.g. 240:280. Omitted, the contract is "
@@ -1478,11 +1520,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                           "how CONTINUOUS-7 got 136s. This narrows the "
                           "standing entry band and can never widen it."))
     a = ap.parse_args(argv)
+    env = {"shadow_q001": LE.SHADOW_Q001, "live_q1": LE.LIVE_Q1}[a.envelope]
     rep = asyncio.run(main_async(a.auth_id, state_dir=a.state_dir,
                                  ledger_path=a.ledger, out_path=a.out,
                                  wire_path=a.wire, cohort_id=a.cohort,
                                  entry_band=parse_entry_band(
-                                     a.entry_tte_band)))
+                                     a.entry_tte_band),
+                                 envelope=env))
     print("GEMINI_CONTINUOUS " + json.dumps(
         {k: rep.get(k) for k in ("state", "why", "symbol_selection",
                                  "driver_executable_sha")}, default=str),

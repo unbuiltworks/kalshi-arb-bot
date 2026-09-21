@@ -41,6 +41,15 @@ MEMBERS = (
     "metadata.py",             # the authoritative venue reads recovery uses
     "executions.py",           # the ONE canonical execution view both consume
     "arming.py",               # the transport arm and the identifier
+    # ADDED 2026-09-21 WITH THE q=1 AUTHORIZATION. These three carry safety
+    # properties the authorization is being granted against, and a bundle that
+    # did not cover them would let the caps, the restart gate or the position
+    # reconciliation be edited without invalidating the approval. Adding a
+    # member changes the hash, which is correct: it is a change to what was
+    # reviewed.
+    "live_envelope.py",        # the q=1 bounds and the gate that enforces them
+    "outstanding_ledger.py",   # what may still be resting, across a restart
+    "position_ledger.py",      # our ledger against the venue's own position
     "bundle.py",               # this file, so the member list cannot be edited
 )
 
@@ -66,6 +75,9 @@ EXPECTED_AUTH_LINES = {
     "continuous_preflight.py": 0,
     "metadata.py": 0,
     "arming.py": 1,
+    "live_envelope.py": 0,
+    "outstanding_ledger.py": 0,
+    "position_ledger.py": 0,
     "bundle.py": 1,
 }
 

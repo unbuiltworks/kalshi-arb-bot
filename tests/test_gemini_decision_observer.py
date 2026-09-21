@@ -484,6 +484,18 @@ def test_the_observer_has_a_caller_and_its_output_reaches_the_report(
                 "active_raw": {"ok": True}}
     monkeypatch.setattr(RC, "authoritative_state", _auth_state)
 
+    async def _positions(**k):
+        # THE AUTHORITATIVE POSITION GATE, answered CONSISTENTLY with the
+        # fills above: the fixture holds NO 0.01, so the venue must say the
+        # signed position is -0.01. An empty read here would be a genuine
+        # disagreement and the run would refuse -- correctly -- but this
+        # test's subject is the observer, not the gate.
+        return {"path": "/v1/prediction-markets/positions",
+                "rows": [{"symbol": SYMBOL, "outcome": "no",
+                          "totalQuantity": "0.01"}],
+                "status": 200, "ok": True, "total": 1}
+    monkeypatch.setattr(RC.MD, "positions", _positions)
+
     monkeypatch.setattr(WC, "authorization_state", lambda *a, **k: {
         "authorized": True, "why_not": [], "required_auth_id": "AUTH-WIRING"})
     monkeypatch.setattr(RC.BUNDLE, "state", lambda: {

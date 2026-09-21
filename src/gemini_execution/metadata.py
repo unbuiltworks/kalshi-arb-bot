@@ -526,6 +526,50 @@ async def terms_status() -> Dict[str, Any]:
                     "for that reason alone.")}
 
 
+POSITIONS_PATH = "/v1/prediction-markets/positions"
+
+
+async def positions(*, timeout: float = 20.0) -> Dict[str, Any]:
+    """The account's OPEN positions. READ-ONLY, and fail-closed.
+
+    THE ONLY THING THAT MAY RELEASE OR CONFIRM A POSITION. `rows` is None
+    whenever the read did not succeed -- an exception, a non-200, an
+    unparseable body, or a payload whose `positions` key is not a list. None is
+    UNREADABLE and is never an empty account: a caller that treated it as
+    "flat" would be assuming exactly the state that costs money to be wrong
+    about.
+
+    Gemini authenticates a read with POST. The verb is not a mutation, and
+    this module has no order transport of its own.
+    """
+    from src.gemini_prediction_auth import private_rest_request
+    out: Dict[str, Any] = {"path": POSITIONS_PATH, "rows": None,
+                           "status": None, "ok": False}
+    try:
+        r = await private_rest_request("POST", POSITIONS_PATH, timeout=timeout)
+    except Exception as exc:                                   # noqa: BLE001
+        out["why"] = "positions read raised %s" % type(exc).__name__
+        return out
+    out["status"] = r.status_code
+    if r.status_code != 200:
+        out["why"] = "positions read returned %s" % r.status_code
+        return out
+    try:
+        body = r.json()
+    except ValueError:
+        out["why"] = "positions body was not JSON"
+        return out
+    rows = body.get("positions") if isinstance(body, dict) else body
+    if not isinstance(rows, list):
+        out["why"] = ("positions payload carried no list under `positions`; "
+                      "the shape is unrecognised and is not read as empty")
+        return out
+    out["rows"] = rows
+    out["total"] = (body.get("total") if isinstance(body, dict) else None)
+    out["ok"] = True
+    return out
+
+
 ORDER_HISTORY_PATH = "/v1/prediction-markets/orders/history"
 
 
