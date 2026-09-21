@@ -307,36 +307,38 @@ def test_the_widest_surface_is_DERIVED_from_the_frozen_policy():
     from src.gemini_execution import live_probe_spec as SPEC
     assert LR.policy_max_rungs(SPEC.BTC5M_Q1) == 2      # 2 legs x 1 rung
     assert LR.policy_max_rungs(SPEC.BTC15M_Q1) == 2     # SAME: rung_count 1
-    assert LR.lifecycle_max_rungs(SPEC.BTC5M_Q1) == 2   # x 1 slot
-    assert LR.lifecycle_max_rungs(SPEC.BTC15M_Q1) == 4  # x 2 slots
+    # (1) is now MEASURED by driving the production reconciler through the
+    # worst case, not computed. It read 4 on BTC15m while a free leg slot
+    # could become a second price level; the lifecycle now caps each leg at
+    # what the desired surface asks for, so the two agree.
+    assert LR.lifecycle_max_rungs(SPEC.BTC5M_Q1) == 2
+    assert LR.lifecycle_max_rungs(SPEC.BTC15M_Q1) == 2
 
 
 def test_a_btc15m_envelope_narrower_than_its_own_geometry_is_caught():
-    """THE FINDING, RESTATED CORRECTLY.
+    """THE RULE THAT PRODUCED THE BLOCKER, KEPT AFTER THE BLOCKER IS FIXED.
 
-    The 2-order envelope is NOT too small for the frozen policy: the policy
-    authorizes 2 and the envelope allows 2. What exceeds it is the LIFECYCLE,
-    which places a moved desired price beside a RETAINed order whenever a leg
-    slot is free. EP006 proved L5 HAD two adjacent levels resting on BTC15m;
-    it did not establish WHEN the second is created. So the gate names the
-    unfrozen rule instead of demanding more capital.
+    The lifecycle no longer rests more than the frozen policy authorises, so
+    the live derivation now agrees. What must survive is the CHECK: a
+    resolved set where it does not agree still has to FAIL, or re-widening
+    the reconciler would pass silently.
     """
     from src.gemini_execution import live_envelope as LEX
     from src.gemini_execution import live_probe_spec as SPEC
 
-    pol = LR.policy_max_rungs(SPEC.BTC15M_Q1)
-    life = LR.lifecycle_max_rungs(SPEC.BTC15M_Q1)
-    assert pol <= LEX.LIVE_Q1_BTC15M.max_working_orders
-    assert life > LEX.LIVE_Q1_BTC15M.max_working_orders
-    assert life <= LEX.LIVE_Q1_BTC15M_2LVL.max_working_orders
+    # today, on the real code
+    assert LR.lifecycle_max_rungs(SPEC.BTC15M_Q1) == \
+        LR.policy_max_rungs(SPEC.BTC15M_Q1)
+    assert LR.policy_max_rungs(SPEC.BTC15M_Q1) <= \
+        LEX.LIVE_Q1_BTC15M.max_working_orders
 
+    # and the rule still bites on the state that produced run 35616887007
     m = _gate(resolved=_resolved(
-        policy_max_rungs=pol, lifecycle_max_rungs=life,
+        policy_max_rungs=2, lifecycle_max_rungs=4,
         max_working_orders=LEX.LIVE_Q1_BTC15M.max_working_orders))
     assert m["verdict"] == LR.FAIL
     v = m["checks"]["cross_field"]["violations"]
     assert any("UNFROZEN EXECUTION RULE" in x for x in v), v
-    # and NOT the "envelope too small for the policy" rule
     assert not any("envelope allows" in x for x in v), v
 
 

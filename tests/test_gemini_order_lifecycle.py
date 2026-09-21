@@ -154,8 +154,16 @@ def test_one_fill_leaves_the_other_valid_rung_resting():
     assert out["cancel"] == []
     assert len(out["retain"]) == 1
     assert out["retain"][0]["order"]["price"] == "0.69"
-    # one slot is now free, so the new desired level may be added
-    assert len(out["place"]) == 1
+    # A FREE SLOT IS NO LONGER PERMISSION. This asserted `place == 1` on the
+    # reasoning that the filled rung freed a slot -- which is precisely the
+    # rule that turned capacity into authority: the desired surface asks for
+    # ONE YES rung, 0.69 is still holding it, so 0.68 is HELD until 0.69
+    # passes the floor and cancels. The part of this test that matters is
+    # unchanged: the sibling rung is not cancelled because something else
+    # filled.
+    assert out["place"] == []
+    assert [h["rung"]["price"] for h in out["hold"]] == ["0.68"]
+    assert out["mutations"] == 0
 
 
 # ================================= 5. the bounds see every live rung

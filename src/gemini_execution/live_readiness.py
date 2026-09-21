@@ -462,22 +462,50 @@ def policy_max_rungs(spec: Any) -> int:
 
 
 def lifecycle_max_rungs(spec: Any) -> int:
-    """(1) THE MOST ORDERS THE LIFECYCLE CAN TECHNICALLY REPRESENT.
+    """(1) THE MOST ORDERS THE LIFECYCLE ACTUALLY RESTS AT ONCE.
 
-    `outcomes x rung_count x leg_slots`. `reconcile_surface` admits an ADD at
-    a leg while `occupied[leg] < slots`, and a RETAIN occupies one slot -- so
-    on a family where `_leg_slots` is 2 a moved desired price is placed
-    BESIDE the retained order instead of waiting for it.
+    MEASURED, NOT COMPUTED. This returned `outcomes x rung_count x leg_slots`
+    -- a formula that happened to describe the reconciler on the day it was
+    written. A formula cannot notice the reconciler changing, and the whole
+    point of this number is to catch the lifecycle exceeding the policy. So
+    it DRIVES the production `reconcile_surface` through the worst case and
+    counts what is left resting:
 
-    THAT SECOND LEVEL IS NOT IN THE FROZEN SURFACE. EP006 measured that L5
-    HAD two adjacent same-side levels resting on BTC15m; it did not establish
-    WHEN L5 creates the second one. Treating the spare slot as permission to
-    place one is an execution rule nobody froze -- manufactured to match an
-    observed concurrency statistic. It is reported, and the gate refuses
-    rather than letting the capacity silently become the authority.
+      open one rung per outcome, then move EVERY desired price while every
+      resting order is younger than the floor -- the exact state in which a
+      free leg slot used to become a second price level.
+
+    If someone re-widens the reconciler, this goes back up on its own and the
+    cross-field rule fails again. That is the property a formula would not
+    have had.
     """
+    from src.gemini_execution import ws_continuous as WC
+
     s = _surface_shape(spec)
-    return s["outcomes"] * s["rung_count"] * s["leg_slots"]
+    prefix = str(spec.envelope_obj.cohort_prefix)
+    legs = ["YES", "NO"][:max(1, s["outcomes"])]
+    qty = str(spec.action_size)
+
+    def surface(px):
+        return [{"leg": lg, "price": "%.2f" % (px + i * 0.01), "qty": qty}
+                for lg in legs for i in range(max(1, s["rung_count"]))]
+
+    now = 1000.0
+    working = WC.WorkingOrders()
+    plan = WC.reconcile_surface(surface(0.50), working, now=now,
+                                cohort_prefix=prefix)
+    for a in plan["add"]:
+        r = a["rung"]
+        working.add("probe-%s-%s" % (r["leg"], r["price"]), leg=r["leg"],
+                    price=r["price"], qty=r["qty"], now=now)
+    best = len(plan["keep"]) + len(plan["retain"]) + len(plan["add"])
+
+    # every price moves, every resting order still inside the floor
+    moved = WC.reconcile_surface(surface(0.60), working,
+                                 now=now + (WC.CP.STALE_ORDER_S / 2.0),
+                                 cohort_prefix=prefix)
+    return max(best, len(moved["keep"]) + len(moved["retain"])
+               + len(moved["add"]))
 
 
 def resolve_from_report(rep: Dict[str, Any], spec: Any) -> Dict[str, Any]:

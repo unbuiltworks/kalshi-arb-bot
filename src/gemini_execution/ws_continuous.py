@@ -454,6 +454,12 @@ RETAIN = "RETAIN"
 #: ADD is PLACE in the lifecycle vocabulary. Same action, named for the
 #: RETAIN / ADD / CANCEL contract rather than for the transport.
 ADD = PLACE
+#: HOLD is a desired rung that did NOT go on the book, because its leg
+#: already holds every order the frozen policy authorises there. The same
+#: word `continuous_probe` uses when the OSCILLATOR or the ENVELOPE withholds
+#: a quote, for the same reason: the report must say which control withheld
+#: it, and "the rung is simply absent" says nothing.
+HOLD = CP.HOLD
 
 #: THE ONLY REASONS A CANCEL MAY BYPASS THE REST FLOOR.
 #:
@@ -722,9 +728,34 @@ def reconcile_surface(desired: Sequence[Mapping[str, Any]],
     REFUSED rather than honoured, because a free-text reason would be a way to
     bypass the floor by inventing a label.
 
-    HOW MANY LEVELS PER SIDE: see `_leg_slots`. BTC15m may expose two adjacent
-    same-side levels because EP006 measured L5 doing so; BTC5m keeps one,
-    because the same test measured zero.
+    HOW MANY LEVELS PER SIDE. Two bounds, and the TIGHTER one wins:
+
+      `_leg_slots`        CAPACITY. BTC15m can represent two adjacent
+                          same-side levels because EP006 measured L5 with two
+                          resting; BTC5m keeps one, because the same test
+                          measured zero of 6,229.
+      the DESIRED surface AUTHORITY. However many rungs the frozen policy
+                          asks for on that leg right now -- `rung_count`,
+                          which is 1 with `tick_offsets` [0].
+
+    CAPACITY IS NOT AUTHORITY, and reading only `_leg_slots` conflated them.
+    On BTC15m a RETAINed order left a second slot free, so the moved quote
+    went on BESIDE it: three orders resting after one price move, four if
+    both legs moved. Nothing in the desired surface asked for that. EP006
+    established that L5 HAD two adjacent levels; it did not establish WHEN
+    the second is created, and no frozen rule says -- so creating one here
+    was an execution rule nobody wrote, inferred from a spare slot.
+
+    The paragraph above ("Its slot is then considered occupied, so the moved
+    quote does NOT also go on as a second order") described the intended
+    behaviour all along; on BTC15m the code did the opposite. It now does
+    what it says.
+
+    A desired rung that cannot go on because its leg is at the cap is HOLD,
+    reported with the order holding the slot -- not silently dropped. Once
+    the retained order passes the floor it CANCELs and the replacement ADDs
+    on the same turn: the existing cancel/replace lifecycle, with the working
+    set never temporarily wider than the policy authorises.
 
     `now` is required in practice. It defaults to None only so that callers
     that never had a clock keep working, and in that case the floor cannot be
@@ -739,8 +770,13 @@ def reconcile_surface(desired: Sequence[Mapping[str, Any]],
 
     slots = _leg_slots(cohort_prefix)
     want: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    #: how many rungs the POLICY is asking for on each leg, this turn. This
+    #: is `rung_count` as the frozen surface actually emitted it, read off
+    #: the request rather than re-derived from the lane.
+    wanted_per_leg: Dict[str, int] = {}
     for a in desired:
         want[(str(a["leg"]), str(a["price"]), str(a["qty"]))] = dict(a)
+        wanted_per_leg[str(a["leg"])] = wanted_per_leg.get(str(a["leg"]), 0) + 1
 
     keep: List[Dict[str, Any]] = []
     retain: List[Dict[str, Any]] = []
@@ -782,23 +818,53 @@ def reconcile_surface(desired: Sequence[Mapping[str, Any]],
                               % float(min_rest_s)})
 
     add: List[Dict[str, Any]] = []
+    hold: List[Dict[str, Any]] = []
+    #: CAPACITY capped by AUTHORITY, per leg. `slots` is what the family can
+    #: represent; `wanted_per_leg` is what the frozen policy asked for. The
+    #: tighter one binds, so a free slot can never become permission.
+    caps = {leg: min(slots, n) for leg, n in wanted_per_leg.items()}
     for k, v in want.items():
         if k in matched:
             continue
         leg = str(v["leg"])
-        if occupied.get(leg, 0) >= slots:
-            continue        # the slot is held by a KEEP or a RETAIN
+        cap = caps.get(leg, 0)
+        if occupied.get(leg, 0) >= cap:
+            # HELD, NOT DROPPED. The slot is taken by a KEEP or a RETAIN, and
+            # the policy authorises no second level on this leg. Reported
+            # with the order holding it so the report says WHY the desired
+            # price is not on the book.
+            holder = next((r["order"] for r in retain
+                           if str(r["order"]["leg"]) == leg), None) \
+                or next((r["order"] for r in keep
+                         if str(r["order"]["leg"]) == leg), None)
+            hold.append({"action": HOLD, "rung": v, "held_by": "LIFECYCLE",
+                         "holder": holder, "leg_cap": cap,
+                         "leg_slots": slots,
+                         "why": ("leg %s already holds %d of %d authorised "
+                                 "order(s); the frozen surface asks for %d "
+                                 "rung(s) on this leg, so a free capacity "
+                                 "slot is NOT permission to add a second "
+                                 "price level. The replacement goes on when "
+                                 "the retained order passes the %.1fs floor "
+                                 "and cancels."
+                                 % (leg, occupied.get(leg, 0), cap,
+                                    wanted_per_leg.get(leg, 0),
+                                    float(min_rest_s)))})
+            continue
         occupied[leg] = occupied.get(leg, 0) + 1
         add.append({"action": ADD, "rung": v})
 
     return {"keep": keep, "retain": retain, "place": add, "add": add,
-            "cancel": cancel,
+            "cancel": cancel, "hold": hold,
             "mutations": len(add) + len(cancel),
-            "leg_slots": slots,
+            "leg_slots": slots, "leg_caps": caps,
             "labels": ("RETAIN is not KEEP: KEEP means the desired surface "
                        "still asks for this order, RETAIN means it does not "
                        "and the order is held anyway because it is valid and "
-                       "young. Neither costs a mutation.")}
+                       "young. Neither costs a mutation. HOLD is neither: it "
+                       "is a desired rung that did NOT go on, because the "
+                       "leg already holds every order the frozen policy "
+                       "authorises there.")}
 
 
 def diff_surface(desired: Sequence[Mapping[str, Any]],
