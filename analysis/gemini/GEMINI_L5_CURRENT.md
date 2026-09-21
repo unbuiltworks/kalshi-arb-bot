@@ -4,7 +4,7 @@
 
 # Gemini L5 — Current State
 
-*Last updated 2026-09-20T20:00Z.*
+*Last updated 2026-09-21T21:25Z.*
 
 > **WHERE THIS FILE LIVES.** Branch
 > `claude/gemini-btc-economic-viability-h3u7zl`. It is **not on `main`**, so a
@@ -29,6 +29,32 @@
 > experiment has been running since 2026-09-20T19:42Z and no prospective
 > contract has yet produced a fill. Nothing here claims Gemini works, and
 > nothing here claims Gemini failed.
+
+## 0. Bounded live windows — current state (2026-09-21T21:25Z)
+
+**THE TREE IS DISARMED.** `REQUIRED_AUTH_ID`, `AUTHORIZED_SHA`,
+`AUTHORIZED_ENVELOPE`, `AUTHORIZED_BUNDLE` are all `None`; `EXPECTED_AUTH_ID`
+and `GEMINI_CANARY_AUTH` are `NO-AUTHORIZATION-IN-FORCE`. No authorization is
+in force and none may be inferred from anything below.
+
+Four bounded BTC15m q=1 windows have been executed under separate owner grants.
+Each was disarmed immediately afterwards, regardless of outcome.
+
+| grant | run | envelope | orders | fills | what stopped it | packet |
+|---|---|---|---|---|---|---|
+| `…BTC15M-Q1-LIVE-1` | [35628347483](https://github.com/unbuiltworks/kalshi-arb-bot/actions/runs/35628347483) | CAP-2 $2.50 | yes | yes | imbalance cap at 2 | [EP010](EVIDENCE_PACKET_010_BTC15M_Q1_LIVE_WINDOW.md) |
+| `…Q1-CAP4-LIVE-1` | [35641166387](https://github.com/unbuiltworks/kalshi-arb-bot/actions/runs/35641166387) | CAP-4 $4.00 | 5 | 3, **matched pair at 0.83** | committed-cash cap, inflated by a phantom $2.16 | [EP011](EVIDENCE_PACKET_011_CAP4_WINDOW.md) |
+| — (accounting investigation) | — | — | — | — | the $2.16 was C+D: never live, double-counted | [EP012](EVIDENCE_PACKET_012_DURABLE_OUTSTANDING.md) |
+| `…Q1-CAP4-LIVE-2` | [35653449506](https://github.com/unbuiltworks/kalshi-arb-bot/actions/runs/35653449506) | CAP-4 $4.00 | **0** | 0 | one CROSSED book tick at tte 332.4, 32s before the `[0,300]` quoting window opened | [EP013](EVIDENCE_PACKET_013_CAP4_LIVE_2.md) |
+
+**Realized P&L across all four: still only EP011's settled window.** EP013 moved
+no cash in either direction — nothing submitted, nothing filled, nothing settled
+on our account.
+
+**Open, unauthorized proposal from EP013:** a transient crossed book terminates
+the entire window rather than holding one cycle, and under the 840–880 entry
+band with a frozen `quote_between_tte_s = [0, 300]` that costs the whole
+quoting window. Needs its own grant; not implemented.
 
 ## 1. Objective
 

@@ -493,13 +493,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # ARMED for OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-2: ONE
-          # BTC15m q=1 window, the SAME CAP-4 experiment as LIVE-1 (spec_sha
-          # 7fda21b1... is unchanged) on a fresh ledger
-          # COHORT-2026-09-21-BTC15M-CAP4-2, differing only by the EP012
-          # accounting fix. LIVE-1 is SPENT and never arms again. No
-          # parameter changed; worst case is still $4.00.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-2"
+          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-2 IS SPENT:
+          # run 35653449506 bound GEMI-BTC15M2609212115-UP at tte 874.0s,
+          # ran 55 cycles, and STOPPED AT tte 332.4 on a single CROSSED book
+          # read -- 32 seconds before the frozen surface's [0, 300] quoting
+          # window opened. Zero orders, zero fills, 0 of 12 slots consumed,
+          # no cashflow of any kind. A spent authorization never arms again,
+          # whatever it did or did not do.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
