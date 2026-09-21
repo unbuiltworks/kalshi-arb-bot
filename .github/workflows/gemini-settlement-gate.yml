@@ -48,6 +48,18 @@ on:
         description: "How many SHADOW windows the soak runs. Each is ~5 min, and the step's own 45-minute cap bounds this whatever is typed. Default 4."
         required: false
         default: "4"
+      spec_id:
+        description: "Declared LiveProbeSpec id consumed by BOTH readiness and the armed window. Default btc15m_q1."
+        required: false
+        default: "btc15m_q1"
+      spec_sha:
+        description: "The spec hash LIVE_READINESS_GATE proved. The armed step refuses before the latch if the resolved spec hashes differently."
+        required: false
+        default: ""
+      readiness_gate:
+        description: "Set to true to run LIVE_READINESS_GATE on the credentialed runner (read-only; mutation boundary blocked)."
+        required: false
+        default: "false"
       fill_forensics:
         description: "Set to true to capture RAW historical prediction order rows (read-only; submits nothing)."
         required: false
@@ -420,13 +432,63 @@ jobs:
       # disarms it automatically. The dual key is still required and its live
       # half is NOT in the repository.
       # ==================================================================
+      - name: LIVE_READINESS_GATE (credentialed; mutation boundary BLOCKED)
+        if: ${{ github.event.inputs.readiness_gate == 'true' }}
+        timeout-minutes: 25
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1' }}
+          BRANCH: claude/gemini-btc-economic-viability-h3u7zl
+        run: |
+          # NO ARM IS SET HERE. GEMINI_CANARY_LIVE is absent, so the transport
+          # cannot arm at all -- and --readiness additionally replaces the
+          # mutation boundary with a recorder that REFUSES. Two independent
+          # reasons nothing can be sent.
+          #
+          # THE INVOCATION COMES FROM THE SPEC, exactly as the armed step's
+          # does. That is the point: they can no longer be assembled
+          # differently.
+          set -o pipefail
+          mkdir -p analysis/gemini
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          REPORT=analysis/gemini/readiness_run_${STAMP}.json
+          python -m src.gemini_execution.run_continuous \
+            --spec "${SPEC_ID}" \
+            --readiness \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --out   "${REPORT}" \
+            --wire  /tmp/readiness_wire.json \
+            2>&1 | tee /tmp/readiness.txt
+
+          # AND THE GATE ITSELF, IN THIS STEP, ON THIS RUN'S OWN REPORT.
+          # Having live_readiness.py in the repository proves nothing if the
+          # Actions path never calls it -- that is the same "believed, not
+          # proven" class the gate exists to close, one level up. It exits
+          # nonzero on FAIL and `set -o pipefail` is already in force, so the
+          # step cannot record green over a failed gate.
+          python -m src.gemini_execution.live_readiness \
+            --spec    "${SPEC_ID}" \
+            --report  "${REPORT}" \
+            --branch  "${BRANCH}" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --out     analysis/gemini/readiness_manifest_${STAMP}.json \
+            2>&1 | tee /tmp/readiness_gate.txt
+
       - name: ONE authorized Gemini continuous window
         if: ${{ github.event.inputs.armed_continuous == 'true' }}
         # 12 was sized for a window that started immediately. C8 WAITS for
         # its entry band -- bounded at 420s -- and then runs ~250s, so the
         # step needs room for both plus the venue reads between them. The
         # wait is bounded in the code; this is the outer backstop.
-        timeout-minutes: 18
+        #
+        # 18 -> 28 FOR BTC15m, AND THIS IS NOT A RISK BOUND. The spec's band
+        # tops out at 880s where BTC5m's topped out at 280, so the worst-case
+        # wait alone is 420 + 880 = 1300s and an 18-minute step would have
+        # been KILLED mid-window. A killed runner never reaches the terminal
+        # withdrawal, so its orders stay live on the venue with nothing left
+        # to cancel them. Money bounds are untouched; only the backstop moves.
+        timeout-minutes: 28
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
@@ -444,6 +506,10 @@ jobs:
           # nothing. Bounded to a few hours past this authorization, never
           # open-ended.
           GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T12:30:00Z"
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1' }}
+          #: the hash readiness proved. Live refuses before the latch if the
+          #: spec it resolves hashes to anything else.
+          SPEC_SHA: ${{ github.event.inputs.spec_sha }}
         run: |
           # THE ARMED STEP MUST BE ABLE TO FAIL.
           #
@@ -455,12 +521,16 @@ jobs:
           # mid-window would report the same green.
           set -o pipefail
           mkdir -p analysis/gemini
+          # THE SPEC IS THE SOURCE. Family, envelope, entry band, cohort and
+          # action size all come from the SAME declared object readiness
+          # proved. Hand-built --family/--envelope/--entry-tte-band literals
+          # are what let run 35601903823's two steps resolve different
+          # experiments, so they are gone from both steps and a test forbids
+          # their return.
           python -m src.gemini_execution.run_continuous \
-            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
-            --cohort  "COHORT-2026-09-21-Q1LIVE-1" \
-            --envelope live_q1 \
-            --entry-tte-band "240:280" \
-            --ledger  analysis/gemini/continuous_ledger.jsonl \
+            --spec "${SPEC_ID}" \
+            --expect-spec-sha "${SPEC_SHA}" \
+            --auth-id "${GEMINI_CANARY_AUTH}" \
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/continuous.txt
@@ -573,6 +643,8 @@ jobs:
                    analysis/gemini/reconcile_slot_*.json \
                    analysis/gemini/continuous_unarmed_*.json \
                    analysis/gemini/premutation_proof_*.json \
+                   analysis/gemini/readiness_run_*.json \
+                   analysis/gemini/readiness_manifest_*.json \
                    analysis/gemini/fill_forensics_*.json \
                    analysis/gemini/rebate_surface_probe_*.json \
                    analysis/gemini/rebate_reconciliation_*.json \
@@ -600,7 +672,7 @@ jobs:
           # thrown the record away -- and the NEXT window would have read a
           # cohort with 0 consumed. That is a budget reset by accident, which
           # is the one thing the cohort mechanism exists to make impossible.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

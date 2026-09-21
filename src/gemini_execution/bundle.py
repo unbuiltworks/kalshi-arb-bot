@@ -50,6 +50,13 @@ MEMBERS = (
     "live_envelope.py",        # the q=1 bounds and the gate that enforces them
     "outstanding_ledger.py",   # what may still be resting, across a restart
     "position_ledger.py",      # our ledger against the venue's own position
+    # ADDED WITH THE LiveProbeSpec. The spec DECLARES the experiment -- family,
+    # envelope, entry band, cohort and action size -- and both the readiness
+    # run and the armed run take their invocation from it. A bundle that did
+    # not cover it would let the envelope be swapped for a wider one, or the
+    # band moved, without invalidating the approval: exactly the property the
+    # spec exists to make unforgeable.
+    "live_probe_spec.py",      # the one declaration both invocations consume
     "bundle.py",               # this file, so the member list cannot be edited
 )
 
@@ -78,6 +85,7 @@ EXPECTED_AUTH_LINES = {
     "live_envelope.py": 0,
     "outstanding_ledger.py": 0,
     "position_ledger.py": 0,
+    "live_probe_spec.py": 0,
     "bundle.py": 1,
 }
 

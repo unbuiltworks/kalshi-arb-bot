@@ -307,3 +307,250 @@ def compare(expected: Expectation, resolved: Dict[str, Any]) -> Dict[str, Any]:
             diffs.append({"field": key, "expected": str(want),
                           "resolved": str(got)})
     return {"ok": not diffs, "diffs": diffs}
+
+
+# =========================================================== THE GATE ITSELF
+
+#: what the readiness report must carry for a verdict to be possible at all
+REQUIRED_REPORT_KEYS = ("family", "envelope", "driver_executable_sha",
+                        "driver_envelope_sha", "bundle_sha", "spec_sha",
+                        "mutation_boundary", "readiness_mode")
+
+#: the four terms states, kept DISTINCT. RETRACTION_001: a local run with no
+#: credentials returned {"readable": false, "verdict": "NO_CREDENTIALS"} and
+#: was summarized as "terms not accepted", which cost the owner an
+#: unnecessary account action. UNREADABLE and NO_CREDENTIALS are not FALSE.
+TERMS_TRUE, TERMS_FALSE = "TRUE", "FALSE"
+TERMS_UNREADABLE, TERMS_NO_CREDENTIALS = "UNREADABLE", "NO_CREDENTIALS"
+
+
+def terms_provenance(ts: Any) -> Dict[str, Any]:
+    """Four states, never three. Absence is not falsity."""
+    if not isinstance(ts, dict):
+        return {"state": TERMS_UNREADABLE, "why": "no terms_status recorded",
+                "raw": ts}
+    verdict = str(ts.get("verdict") or "").upper()
+    if verdict == "NO_CREDENTIALS" or ts.get("readable") is False:
+        state = (TERMS_NO_CREDENTIALS if verdict == "NO_CREDENTIALS"
+                 else TERMS_UNREADABLE)
+        return {"state": state, "why": "the venue was not actually asked",
+                "raw": ts}
+    acc = ts.get("terms_accepted")
+    if acc is True:
+        return {"state": TERMS_TRUE, "raw": ts}
+    if acc is False:
+        return {"state": TERMS_FALSE, "raw": ts}
+    return {"state": TERMS_UNREADABLE,
+            "why": "terms_accepted absent from a readable response",
+            "raw": ts}
+
+
+def expectation_from_spec(spec: Any, *, branch: str, auth_id: str,
+                          commit_sha: Optional[str] = None) -> Expectation:
+    """The claim, built from the DECLARED spec rather than typed by hand.
+
+    Typing the expectation out is the same defect one level up: it would be a
+    second hand-built copy of the experiment, free to disagree with the spec
+    the runner consumed. So it is derived.
+    """
+    from src.gemini_execution import bundle as BUNDLE
+    from src.gemini_execution import continuous_probe as CP
+    from src.gemini_execution import ws_continuous as WC
+
+    e = spec.envelope_obj
+    return Expectation(
+        branch=branch,
+        commit_sha=commit_sha or _git("rev-parse", "HEAD"),
+        executable_sha=WC.executable_sha(),
+        envelope_sha=WC.envelope_sha(),
+        bundle_sha=BUNDLE.bundle_sha(),
+        auth_id=auth_id,
+        family=spec.family,
+        symbol_family=spec.symbol_family,
+        envelope_id=e.name,
+        action_size=str(e.action_size),
+        cohort_prefix=str(e.cohort_prefix),
+        #: NO COHORT IS DECLARED FOR A READINESS RUN, and inventing one would
+        #: be creating a live budget the owner has not authorized. Both sides
+        #: carry the same sentinel, so the field is reported rather than
+        #: silently skipped -- and an armed run, which does carry a cohort,
+        #: is compared on its real remaining budget.
+        remaining_budget=(spec.cohort or "NO_COHORT_DECLARED"),
+        max_working_orders=e.max_working_orders,
+        max_committed_usd=str(e.max_committed_usd),
+        max_residual_usd=str(e.max_residual_usd),
+        max_concurrent_markets=e.max_concurrent_markets,
+        minimum_rest_time_s=str(CP.STALE_ORDER_S),
+        argv=spec.canonical_argv(out="<out>", wire="<wire>", readiness=True))
+
+
+def policy_max_rungs(spec: Any) -> int:
+    """The WIDEST surface that can be RESTING AT ONCE under this spec.
+
+    Derived, not asserted, from three things the frozen policy already fixes:
+
+      outcomes    `both_sides_policy` is {'outcomes': ['Up', 'Down']}, so the
+                  engine builds rungs for BOTH legs in one desired surface.
+      rung_count  1, with tick_offsets [0] -- one rung per leg per turn.
+      leg_slots   `ws_continuous._leg_slots`: 2 for GEMI-BTC15M (EP006), 1
+                  otherwise.
+
+    Per turn the surface asks for `outcomes x rung_count` rungs. CONCURRENTLY
+    a leg may hold up to `leg_slots`, because RETAIN keeps a valid young order
+    resting while the moved desired price is ADDed beside it -- that is the
+    whole point of the two-level BTC15m geometry. So the worst case is
+    `outcomes x rung_count x leg_slots`, and the envelope must cover it.
+    """
+    from src.gemini_execution import continuous_probe as CP
+    from src.gemini_execution import ws_continuous as WC
+
+    sp = CP.probe_params(action_size=spec.action_size)
+    outcomes = len((sp.params["both_sides_policy"].value or {}).get(
+        "outcomes") or [])
+    rung_count = int(sp.params["rung_count"].value)
+    slots = WC._leg_slots(str(spec.envelope_obj.cohort_prefix))
+    return outcomes * rung_count * slots
+
+
+def resolve_from_report(rep: Dict[str, Any], spec: Any) -> Dict[str, Any]:
+    """What the RUN actually did, read out of its own report."""
+    from src.gemini_execution import continuous_probe as CP
+    from src.gemini_execution import ws_continuous as WC
+
+    fam = rep.get("family") or {}
+    env = rep.get("envelope") or {}
+    attempted = rep.get("readiness_attempted") or []
+    qtys = sorted({str((a.get("params") or {}).get("quantity"))
+                   for a in attempted
+                   if isinstance(a, dict)
+                   and (a.get("params") or {}).get("quantity") is not None})
+
+    r: Dict[str, Any] = {
+        "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+        "commit_sha": _git("rev-parse", "HEAD"),
+        "executable_sha": rep.get("driver_executable_sha"),
+        "envelope_sha": rep.get("driver_envelope_sha"),
+        "bundle_sha": rep.get("bundle_sha"),
+        "auth_id": (rep.get("authorization") or {}).get("auth_id")
+        or rep.get("authorization_id"),
+        "family": str(fam.get("name") or "").lower(),
+        "symbol_family": fam.get("resolved_symbol_prefix"),
+        "envelope_id": env.get("name"),
+        "action_size": env.get("action_size"),
+        "cohort_prefix": rep.get("envelope_family"),
+        "remaining_budget": ((rep.get("cohort") or {}).get("id")
+                             if rep.get("cohort") else "NO_COHORT_DECLARED"),
+        "max_working_orders": env.get("max_working_orders"),
+        "max_committed_usd": env.get("max_committed_usd"),
+        "max_residual_usd": env.get("max_residual_usd"),
+        "max_concurrent_markets": env.get("max_concurrent_markets"),
+        "minimum_rest_time_s": str(CP.STALE_ORDER_S),
+        # ---- cross-field inputs
+        #: the frame that WOULD have gone. None when the window never reached
+        #: an action, which is not itself a failure: the q=1 rule only bites
+        #: on a frame that exists.
+        "frame_quantity": (qtys[0] if len(qtys) == 1 else
+                           (None if not qtys else "/".join(qtys))),
+        "policy_max_rungs": policy_max_rungs(spec),
+        "rest_floor_invoked": True,
+        "retained_counts_as_risk": True,
+        "mutations_sent": int(rep.get("readiness_mutations_sent") or 0),
+        # ---- provenance, reported not compared
+        "spec_sha": rep.get("spec_sha"),
+        "symbol": (rep.get("symbol_selection") or {}).get("symbol"),
+        "mutation_boundary": rep.get("mutation_boundary"),
+        "state": rep.get("state"),
+        "why": rep.get("why"),
+        "attempted_frames": attempted,
+    }
+    return r
+
+
+def structural_checks(rep: Dict[str, Any], spec: Any,
+                      branch: str) -> Dict[str, Dict[str, Any]]:
+    """Everything that is true of the TREE rather than of one run."""
+    from src.gemini_execution import live_envelope as LE
+
+    missing = [k for k in REQUIRED_REPORT_KEYS if k not in rep]
+    terms = terms_provenance(rep.get("terms_status"))
+    sym = str((rep.get("symbol_selection") or {}).get("symbol") or "")
+    return {
+        "report_complete": {"ok": not missing, "missing": missing},
+        "call_graph": call_graph_audit(),
+        "dead_safety": dead_safety_sweep(),
+        "stale_references": stale_reference_sweep(
+            branch=branch, cohort_prefix=str(spec.envelope_obj.cohort_prefix),
+            envelope_id=spec.envelope_obj.name),
+        "spec_hash_matches": {
+            "ok": str(rep.get("spec_sha")) == spec.spec_sha(),
+            "declared": spec.spec_sha(), "run": rep.get("spec_sha")},
+        "boundary_blocked": {
+            "ok": str(rep.get("mutation_boundary", "")).startswith("BLOCKED")
+            and bool(rep.get("readiness_mode")),
+            "mutation_boundary": rep.get("mutation_boundary"),
+            "readiness_mode": rep.get("readiness_mode")},
+        # FOUR STATES, NOT THREE. Only TRUE passes; UNREADABLE and
+        # NO_CREDENTIALS FAIL THE GATE and are reported as themselves --
+        # never rendered as, or summarized as, FALSE.
+        "terms": {"ok": terms["state"] == TERMS_TRUE, **terms},
+        "symbol_is_the_right_family": {
+            "ok": sym.startswith(spec.symbol_family), "symbol": sym,
+            "expected_prefix": spec.symbol_family},
+        "envelope_is_live_not_shadow": {
+            "ok": spec.envelope_obj is not LE.SHADOW_Q001,
+            "envelope": spec.envelope_obj.name},
+    }
+
+
+def run_gate(*, spec_id: str, report_path: str, branch: str,
+             auth_id: str) -> Dict[str, Any]:
+    from src.gemini_execution import live_probe_spec as SPEC
+
+    spec = SPEC.get(spec_id)
+    with open(report_path, "r", encoding="utf-8") as fh:
+        rep = json.load(fh)
+
+    expected = expectation_from_spec(spec, branch=branch, auth_id=auth_id)
+    resolved = resolve_from_report(rep, spec)
+    checks: Dict[str, Any] = {"fields": compare(expected, resolved),
+                              "cross_field": cross_field_invariants(resolved)}
+    checks.update(structural_checks(rep, spec, branch))
+    m = build_manifest(expected, resolved, checks)
+    m["spec"] = spec.as_dict()
+    m["report_path"] = report_path
+    m["manifest_sha"] = manifest_hash(m)
+    return m
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(
+        description=("LIVE_READINESS_GATE. Reads the report a REAL readiness "
+                     "invocation wrote and returns PASS or FAIL. Exit status "
+                     "is 0 only on PASS, so a workflow step cannot record "
+                     "green over a failed gate."))
+    ap.add_argument("--spec", required=True, help="a declared LiveProbeSpec id")
+    ap.add_argument("--report", required=True,
+                    help="the readiness run's JSON report")
+    ap.add_argument("--branch", required=True)
+    ap.add_argument("--auth-id", default="NO-AUTHORIZATION-IN-FORCE")
+    ap.add_argument("--out", default=None, help="where to write the manifest")
+    a = ap.parse_args(argv)
+
+    m = run_gate(spec_id=a.spec, report_path=a.report, branch=a.branch,
+                 auth_id=a.auth_id)
+    if a.out:
+        with open(a.out, "w", encoding="utf-8") as fh:
+            json.dump(m, fh, indent=2, default=str, sort_keys=True)
+    print("LIVE_READINESS_GATE " + json.dumps(
+        {"verdict": m["verdict"], "manifest_sha": m["manifest_sha"],
+         "spec_sha": m["spec"]["spec_sha"],
+         "failed": sorted(k for k, v in m["checks"].items()
+                          if not v.get("ok"))}, default=str), flush=True)
+    if m["verdict"] != PASS:
+        print(json.dumps(m["checks"], indent=2, default=str), flush=True)
+    return 0 if m["verdict"] == PASS else 1
+
+
+if __name__ == "__main__":                                # pragma: no cover
+    raise SystemExit(main())

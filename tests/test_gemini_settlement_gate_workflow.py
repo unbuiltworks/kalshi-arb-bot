@@ -10,6 +10,21 @@ from scripts import gemini_settlement_gate_report as REP
 
 WF = pathlib.Path(".github/workflows/gemini-settlement-gate.yml")
 
+def _code(text):
+    """`text` with its `#` comment lines removed.
+
+    THE THIRD TIME THIS TRAP HAS BITTEN -- see `_sets_the_arm` below. The
+    armed step's post-mortem comment explains the drift by NAMING the flags
+    it forbids ("Hand-built --family/--envelope/--entry-tte-band literals are
+    what let run 35601903823's two steps resolve different experiments"), so
+    a substring assertion flags the explanation instead of the command. These
+    checks are about what the step RUNS; comments are not what it runs.
+    """
+    return "\n".join(ln for ln in text.splitlines()
+                      if not ln.lstrip().startswith("#"))
+
+
+
 
 # ------------------------------------------------------- expiry selection
 
@@ -410,17 +425,31 @@ def test_the_armed_step_binds_the_cohort_not_the_spent_historical_ledger():
     moment it matters, and the repair would be improvised under arm-time
     pressure. CONTINUOUS-5's budget lives in COHORT-2026-09-18-C5, so the
     armed step must name it.
+
+    THE BINDING MOVED, THE INVARIANT DID NOT. Hand-written `--cohort` in the
+    armed step is exactly the drift class run 35601903823 exposed, so the
+    cohort is now a LiveProbeSpec field and both steps consume the spec. What
+    must still hold is that a spent ledger can never be the one bound.
     """
+    from src.gemini_execution import live_probe_spec as SPECX
+
+    SPENT = ("COHORT-2026-09-18-C5", "COHORT-2026-09-18-C6",
+             "COHORT-2026-09-18-C7", "COHORT-2026-09-18-C8B",
+             "COHORT-2026-09-21-Q1LIVE-1")
+
     wf = WF.read_text()
     armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
-    assert "--cohort" in armed, "the armed step must bind a mutation cohort"
-    # the FRESH cohort. Every earlier one is spent, and its unused slots stay
-    # unused; rebinding one would be recycling a spent budget.
-    assert "COHORT-2026-09-21-Q1LIVE-1" in armed
     run = armed.split("run:", 1)[1]
-    for spent in ("COHORT-2026-09-18-C5", "COHORT-2026-09-18-C6",
-                  "COHORT-2026-09-18-C7", "COHORT-2026-09-18-C8B"):
+    run = _code(run)
+    assert "--spec" in run, "the armed step must consume the declared spec"
+    assert "--cohort" not in run, (
+        "a hand-built --cohort is the drift class; it belongs to the spec")
+    for spent in SPENT:
         assert spent not in run, spent
+
+    # and no DECLARED spec may name a spent ledger either
+    for sid, s in sorted(SPECX.SPECS.items()):
+        assert s.cohort not in SPENT, (sid, s.cohort)
 
 
 def test_the_armed_step_names_the_reviewed_q1_envelope_explicitly():
@@ -429,13 +458,25 @@ def test_the_armed_step_names_the_reviewed_q1_envelope_explicitly():
     Without it `run_continuous` builds the Driver on LE.DEFAULT, which is the
     0.01 SHADOW envelope -- so an armed step that omitted it would run bounds
     nobody authorized while every document said otherwise.
+
+    THE FLAG MOVED INTO THE SPEC. What must not change is that the driver
+    cannot end up on LE.DEFAULT: the spec names a LIVE envelope explicitly,
+    and no step may name one by hand where the two could disagree.
     """
+    from src.gemini_execution import live_envelope as LEQ
+    from src.gemini_execution import live_probe_spec as SPECX
+
     wf = WF.read_text()
     armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
-    run = armed.split("run:", 1)[1]
-    assert "--envelope live_q1" in run
-    assert "--entry-tte-band \"240:280\"" in run
+    run = _code(armed.split("run:", 1)[1])
+    assert "--spec" in run
+    assert "--envelope" not in run
     assert "shadow_q001" not in run
+
+    for sid, s in sorted(SPECX.SPECS.items()):
+        assert s.envelope_obj is not LEQ.DEFAULT, sid
+        assert s.envelope_obj is not LEQ.SHADOW_Q001, sid
+        assert str(s.envelope_obj.action_size) == "1", sid
 
 
 def test_the_q1_cohort_is_exactly_twelve_and_chained_to_C8B():
@@ -526,10 +567,13 @@ def test_the_unarmed_band_defaults_to_the_standing_rule():
     unarmed = wf.split("Unarmed production path", 1)[1].split(
         "ONE authorized Gemini continuous window", 1)[0]
     assert "unarmed_entry_band" in unarmed and "'90:300'" in unarmed
-    # and the ARMED step's band is fixed in the file, never dispatch-supplied
-    armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
-    assert '--entry-tte-band "240:280"' in armed
+    # and the ARMED step's band is FIXED IN THE SPEC, never dispatch-supplied
+    # (it used to be a literal in the step; that is the drift class).
+    from src.gemini_execution import live_probe_spec as SPECX
+    armed = _code(wf.split("ONE authorized Gemini continuous window", 1)[1])
+    assert "--entry-tte-band" not in armed
     assert "github.event.inputs.unarmed_entry_band" not in armed
+    assert SPECX.BTC15M_Q1.entry_tte_band == "840:880"
 
 
 def test_the_job_outlives_the_armed_step_which_outlives_the_bounded_wait():
@@ -549,9 +593,12 @@ def test_the_job_outlives_the_armed_step_which_outlives_the_bounded_wait():
                          _re.M | _re.S).group(1))
     armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
     step = int(_re.search(r"timeout-minutes: (\d+)", armed).group(1))
-    # the window itself: entry band top, less the driver's withdraw floor
-    band_hi = float(_re.search(r'--entry-tte-band "\d+:(\d+)"',
-                               armed).group(1))
+    # the window itself: entry band top, less the driver's withdraw floor.
+    # The band now comes from the SPEC the armed step consumes, not from a
+    # literal in the step -- and BTC15m's 880s ceiling is nearly three times
+    # BTC5m's 280, so this bound is the one that actually had to be rechecked.
+    from src.gemini_execution import live_probe_spec as SPECX
+    band_hi = float(SPECX.BTC15M_Q1.entry_tte_band.split(":")[1])
     need_s = RCX.MAX_ENTRY_WAIT_S + band_hi
     assert step * 60 > need_s, (step, need_s)
     assert job > step, (job, step)
@@ -593,15 +640,23 @@ def test_the_tree_is_armed_for_exactly_one_named_authorization():
     assert 'GEMINI_CANARY_AUTH: "%s"' % want in wf
     assert ARM.EXPECTED_AUTH_ID == want
     ids = set(re.findall(r'--auth-id "([^"]+)"', wf))
+    # THE ARMED STEP NOW DEREFERENCES THE ENV BLOCK rather than repeating the
+    # id. That is strictly better -- arming is one line, and a `sed` can no
+    # longer arm the unarmed proof step by accident, which it once did -- but
+    # it means the literal set must admit the reference.
+    REF = "${GEMINI_CANARY_AUTH}"
+    assert REF in ids, ("the armed step must take its id from the single "
+                        "GEMINI_CANARY_AUTH binding: %s" % ids)
+    literals = ids - {REF}
     # the UNARMED production-path step keeps the sentinel: it exists to be
     # refused, and an armed one would prove nothing.
-    assert ids <= {want, sentinel} and sentinel in ids, ids
+    assert literals <= {want, sentinel} and sentinel in literals, ids
     if LIVE_AUTHORIZATION is None:
-        assert ids == {sentinel}, ids
+        assert literals == {sentinel}, ids
         assert WCX.REQUIRED_AUTH_ID is None and WCX.AUTHORIZED_SHA is None
         assert BUN.AUTHORIZED_BUNDLE is None
     else:
-        assert want in ids, ids
+        assert 'GEMINI_CANARY_AUTH: "%s"' % want in wf, want
         assert WCX.REQUIRED_AUTH_ID == want
         # the constants must name the RUNNING code, not a remembered hash:
         # an authorization naming something else cannot arm, by design.
@@ -825,9 +880,16 @@ def test_the_plumbing_fix_moved_no_bound_and_no_flag():
     wf = WF.read_text()
     armed = wf.split("ONE authorized Gemini continuous window", 1)[1]
     run = armed.split("run:", 1)[1]
-    assert "--envelope live_q1" in run
-    assert '--entry-tte-band "240:280"' in run
-    assert '--cohort  "COHORT-2026-09-21-Q1LIVE-1"' in run
+    # The three literals this used to read are gone from the step BY DESIGN
+    # -- they are the drift class -- so the same experiment is now pinned on
+    # the spec that both steps consume.
+    from src.gemini_execution import live_probe_spec as SPECX
+    run = _code(run)
+    assert "--spec" in run and "--expect-spec-sha" in run
+    for gone in ("--envelope", "--entry-tte-band", "--cohort"):
+        assert gone not in run, gone
+    assert SPECX.BTC5M_Q1.envelope == "live_q1"
+    assert SPECX.BTC5M_Q1.entry_tte_band == "240:280"
     assert LEX.LIVE_Q1.action_size == CPX.D("1")
     assert LEX.LIVE_Q1.max_committed_usd == CPX.D("2.50")
     assert LEX.LIVE_Q1.max_residual_usd == CPX.D("2.00")

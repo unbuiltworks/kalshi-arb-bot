@@ -1100,7 +1100,10 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
                      cohort_id: Optional[str] = None,
                      entry_band: Optional[Sequence[float]] = None,
                      envelope: "LE.Envelope" = LE.DEFAULT,
-                     family: Any = None
+                     family: Any = None,
+                     probe_spec: Any = None,
+                     readiness: bool = False,
+                     expect_spec_sha: Optional[str] = None
                      ) -> Dict[str, Any]:
     """Always writes its report, however it exits.
 
@@ -1113,6 +1116,8 @@ async def main_async(auth_id: str, *, state_dir: str, ledger_path: str,
     rep: Dict[str, Any] = {}
     try:
         rep = await _build(auth_id, state_dir=state_dir, family=family,
+                           probe_spec=probe_spec, readiness=readiness,
+                           expect_spec_sha=expect_spec_sha,
                            ledger_path=ledger_path, wire_path=wire_path,
                            cohort_id=cohort_id, entry_band=entry_band,
                            envelope=envelope)
@@ -1132,7 +1137,10 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                  cohort_id: Optional[str] = None,
                  entry_band: Optional[Sequence[float]] = None,
                  envelope: "LE.Envelope" = LE.DEFAULT,
-                 family: Any = None
+                 family: Any = None,
+                 probe_spec: Any = None,
+                 readiness: bool = False,
+                 expect_spec_sha: Optional[str] = None
                  ) -> Dict[str, Any]:
     from src.gemini_execution.ws_session import GeminiMakerSession
 
@@ -1152,6 +1160,30 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                          "no bound of its own; every limit is enforced inside "
                          "ws_continuous.Driver."),
     }
+
+    # THE SPEC HASH INVARIANT. If readiness proved one invocation and live
+    # resolves another, they are not the same experiment -- and the whole
+    # point of the spec is that they cannot be. Checked BEFORE the latch, so
+    # a mismatch spends no authorization.
+    rep["readiness_mode"] = bool(readiness)
+    rep["probe_spec"] = probe_spec.as_dict() if probe_spec is not None else None
+    #: recorded even with no --expect-spec-sha: the READINESS run is the one
+    #: that produces this value, and the armed step is the one that asserts
+    #: it. A hash that is only printed when it is already known would be
+    #: useless for exactly the step that has to establish it.
+    rep["spec_sha"] = probe_spec.spec_sha() if probe_spec is not None else None
+    if probe_spec is not None and expect_spec_sha:
+        got = probe_spec.spec_sha()
+        rep["spec_sha_check"] = {"expected": expect_spec_sha, "resolved": got,
+                                 "ok": got == str(expect_spec_sha)}
+        if got != str(expect_spec_sha):
+            rep["state"] = WC.DO_NOT_TRADE
+            rep["why"] = ("spec hash mismatch: readiness proved %s but this "
+                          "invocation resolves %s. They are not the same "
+                          "experiment, so live refuses before the latch."
+                          % (expect_spec_sha, got))
+            rep["latch"] = {"consumed": False, "spent_by_this_run": False}
+            return rep
 
     # WHICH CONTRACT FAMILY, RESOLVED ONCE AND RECORDED BEFORE ANYTHING ELSE.
     #
@@ -1493,6 +1525,17 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # the observer wraps the real session; the arm gate and every bound
     # still run inside the objects it delegates to.
     session = RecordingSession(GeminiMakerSession(id_prefix="l5cp"))
+    # THE ONLY DIFFERENCE BETWEEN READINESS AND LIVE. Everything above this
+    # line -- family, envelope, band, cohort, discovery, preflight, recovery,
+    # position gate, latch, lifecycle -- is byte-identical. Here and only
+    # here does readiness diverge: the boundary records the frame and refuses
+    # to send it.
+    if readiness:
+        from src.gemini_execution import live_readiness as LR
+        session = LR.ReadinessSession(session)
+        rep["mutation_boundary"] = "BLOCKED (readiness)"
+    else:
+        rep["mutation_boundary"] = "ENABLED"
     # BOUND BEFORE THE WINDOW RUNS, not after it, so a window that dies
     # mid-cycle still leaves every decision it had already made on disk.
     # These are the observer's own lists, so later appends land in `rep`.
@@ -1539,6 +1582,13 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         # BEFORE close(), and in `finally`, because the whole point is to
         # still have the ack when the window ends badly.
         rep["wire"] = session.wire
+        # THE FRAMES THAT WOULD HAVE GONE. Readiness has to be auditable on
+        # the ONE thing it proves -- that nothing was sent and that what
+        # would have been sent carried the authorized size -- so the boundary
+        # publishes both into the report rather than leaving them in memory.
+        if readiness:
+            rep["readiness_attempted"] = getattr(session, "attempted", None)
+            rep["readiness_mutations_sent"] = int(getattr(session, "sent", 0))
         rep["decision_capture"] = decisions.summary()
         rep["place_acks_observed"] = observed_place_acks(session.wire)
         rep["place_ack_note"] = (
@@ -1581,6 +1631,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          "bounded budget and must already exist")
     ap.add_argument("--out", default="analysis/gemini/continuous_run.json")
     ap.add_argument("--wire", default="analysis/gemini/continuous_wire.json")
+    ap.add_argument("--spec", default=None,
+                    help=("a DECLARED LiveProbeSpec id. When given it is the "
+                          "single source of family, envelope, entry band, "
+                          "cohort and action size -- readiness and live "
+                          "consume the SAME object, so two hand-built "
+                          "command lines can no longer disagree."))
+    ap.add_argument("--readiness", action="store_true",
+                    help=("LIVE_READINESS_GATE mode. The mutation boundary "
+                          "is replaced by a recorder that REFUSES; every "
+                          "other resolved value is identical to live."))
+    ap.add_argument("--expect-spec-sha", default=None,
+                    help=("the spec hash readiness proved. Live refuses "
+                          "before the latch if the spec it resolves hashes "
+                          "to anything else."))
     ap.add_argument("--family", default="btc5m",
                     choices=("btc5m", "btc15m"),
                     help=("which CONTRACT FAMILY the window binds to. "
@@ -1605,6 +1669,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                           "how CONTINUOUS-7 got 136s. This narrows the "
                           "standing entry band and can never widen it."))
     a = ap.parse_args(argv)
+    # THE SPEC IS THE SOURCE WHEN GIVEN. Hand-built flags remain for the
+    # unarmed/diagnostic paths, but a spec overrides every one of them so
+    # readiness and live cannot be assembled differently.
+    spec = None
+    if a.spec:
+        from src.gemini_execution import live_probe_spec as SPEC
+        spec = SPEC.get(a.spec)
+        a.family = spec.family
+        a.envelope = spec.envelope
+        a.entry_tte_band = spec.entry_tte_band
+        if spec.cohort:
+            a.cohort = spec.cohort
+
     # EXACT MAPPING, NO FALLBACK. A dict lookup raises KeyError on anything
     # unknown rather than quietly yielding a smaller envelope -- the live_q1
     # name must never resolve to the shadow one, and live_q1_btc15m must
@@ -1619,10 +1696,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                                  wire_path=a.wire, cohort_id=a.cohort,
                                  entry_band=parse_entry_band(
                                      a.entry_tte_band),
-                                 envelope=env, family=fam))
+                                 envelope=env, family=fam,
+                                 probe_spec=spec, readiness=a.readiness,
+                                 expect_spec_sha=a.expect_spec_sha))
     print("GEMINI_CONTINUOUS " + json.dumps(
         {k: rep.get(k) for k in ("state", "why", "symbol_selection",
                                  "family", "envelope_name", "envelope_family",
+                                 "entry_schedule", "readiness_mode",
+                                 "mutation_boundary", "spec_sha",
+                                 "spec_sha_check", "terms_status",
                                  "driver_executable_sha")}, default=str),
           flush=True)
     w = rep.get("window") or {}

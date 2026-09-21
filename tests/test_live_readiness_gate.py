@@ -236,3 +236,81 @@ def test_the_sweep_does_not_flag_a_correct_branch_followed_by_a_separator():
     got = LR.stale_reference_sweep(branch=BRANCH, cohort_prefix="GEMI-BTC15M",
                                    envelope_id="GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1")
     assert got["ok"] is True, got["hits"]
+
+
+# ============================ the gate as the WORKFLOW actually invokes it
+
+def test_the_workflow_invokes_the_gate_module_not_just_the_readiness_run():
+    """`run_continuous --readiness` proves the boundary held. It does NOT run
+    the comparison, the call-graph audit or the stale sweep. Having
+    live_readiness.py in the repo while the Actions path never calls it is
+    the same believed-not-proven class the gate exists to close."""
+    import pathlib
+    import yaml
+    doc = yaml.safe_load(pathlib.Path(
+        ".github/workflows/gemini-settlement-gate.yml").read_text())
+    step = [str(s.get("run") or "") for s in doc["jobs"]["gate"]["steps"]
+            if "LIVE_READINESS_GATE" in str(s.get("name") or "")]
+    assert step, "no LIVE_READINESS_GATE step"
+    run = step[0]
+    assert "src.gemini_execution.live_readiness" in run
+    assert "--report" in run and "--branch" in run
+    # and it must be able to fail the step
+    assert run.index("set -o pipefail") < run.index("live_readiness")
+
+
+def test_the_gate_cli_exits_nonzero_on_FAIL(tmp_path):
+    """A gate that returns FAIL and exits 0 is a green step over a red gate."""
+    import json
+    rep = tmp_path / "r.json"
+    rep.write_text(json.dumps({"state": "DO_NOT_TRADE"}))
+    rc = LR.main(["--spec", "btc15m_q1", "--report", str(rep),
+                  "--branch", BRANCH])
+    assert rc == 1
+
+
+def test_the_four_terms_states_stay_four():
+    """RETRACTION_001. A no-credential read is NOT `terms_accepted: False`,
+    and rendering it as False cost the owner an account action they did not
+    need to take."""
+    assert LR.terms_provenance(
+        {"readable": False, "verdict": "NO_CREDENTIALS"}
+    )["state"] == LR.TERMS_NO_CREDENTIALS
+    assert LR.terms_provenance({"readable": False})["state"] == \
+        LR.TERMS_UNREADABLE
+    assert LR.terms_provenance(None)["state"] == LR.TERMS_UNREADABLE
+    assert LR.terms_provenance({"terms_accepted": True})["state"] == \
+        LR.TERMS_TRUE
+    assert LR.terms_provenance({"terms_accepted": False})["state"] == \
+        LR.TERMS_FALSE
+    # and only TRUE passes the gate -- the other three are FAIL, as themselves
+    for ts in ({"readable": False, "verdict": "NO_CREDENTIALS"},
+               {"readable": False}, None, {"terms_accepted": False}):
+        assert LR.terms_provenance(ts)["state"] != LR.TERMS_TRUE
+
+
+def test_the_widest_surface_is_DERIVED_from_the_frozen_policy():
+    """Not a fixture. outcomes x rung_count x leg_slots, read out of the
+    frozen lane and the EP006 geometry."""
+    from src.gemini_execution import live_probe_spec as SPEC
+    assert LR.policy_max_rungs(SPEC.BTC5M_Q1) == 2     # 2 legs x 1 x 1 slot
+    assert LR.policy_max_rungs(SPEC.BTC15M_Q1) == 4    # 2 legs x 1 x 2 slots
+
+
+def test_a_btc15m_envelope_narrower_than_its_own_geometry_is_caught():
+    """THE FINDING THIS GATE WAS BUILT TO PRODUCE. BTC15m's whole reason for
+    existing is the two adjacent resting levels EP006 measured, and RETAIN
+    lets a leg hold both at once -- so four orders can rest. An envelope
+    permitting two cannot contain that surface, and the run would refuse
+    mid-window instead of before authorization."""
+    from src.gemini_execution import live_envelope as LE
+    from src.gemini_execution import live_probe_spec as SPEC
+
+    wide = LR.policy_max_rungs(SPEC.BTC15M_Q1)
+    assert wide > LE.LIVE_Q1_BTC15M.max_working_orders
+    assert wide <= LE.LIVE_Q1_BTC15M_2LVL.max_working_orders
+    m = _gate(resolved=_resolved(
+        policy_max_rungs=wide,
+        max_working_orders=LE.LIVE_Q1_BTC15M.max_working_orders))
+    assert m["verdict"] == LR.FAIL
+    assert any("rungs" in v for v in m["checks"]["cross_field"]["violations"])
