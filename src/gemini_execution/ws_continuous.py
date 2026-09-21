@@ -1810,6 +1810,40 @@ class Driver:
         except ReconcileRequired as exc:
             self.stop(DO_NOT_TRADE, str(exc))
             return None
+
+        # AND THE DURABLE LEDGER AGAINST THE SAME AUTHORITATIVE READ.
+        #
+        # THE DEFECT THIS CLOSES. `reconcile` is the only thing that may
+        # release committed cash, and it ran ONCE, at recovery. The live loop
+        # rebuilds inventory and the working set from the venue every cycle
+        # but never touched the durable ledger, so an order stayed at its
+        # PLACEMENT state -- ACCEPTED, filled_qty 0 -- for the rest of the
+        # window no matter what the venue did with it. Its full notional went
+        # on being charged as "potentially live" while the same cash was ALSO
+        # counted as filled inventory by `inv.spend()`.
+        #
+        # Run 35641166387 stopped on exactly that: "durable outstanding 2.16"
+        # was 0.19 + 0.72 + 0.56 (three orders the venue had FILLED, already
+        # inside the 1.47 of filled spend) plus 0.69 (an order the venue had
+        # CANCELED under maker-or-cancel). None of it was live. The one order
+        # that WAS live, YES 0.11, was counted correctly and separately as
+        # `resting`.
+        #
+        # `reconcile` is used here exactly as at recovery and keeps every
+        # fail-closed property: an unreadable read releases NOTHING, an order
+        # the venue still lists is refreshed and stays charged (with its
+        # filled_qty taken from the venue, so a PARTIAL keeps only its
+        # remainder), and an active order we do not recognise still counts.
+        # The VERDICT is not a mid-window stop the way it is at recovery:
+        # BLOCKED there means "do not start", and here it is the ordinary
+        # state of a window with an order resting.
+        out_rec = self.outstanding.reconcile(st.get("open_orders"))
+        if out_rec["verdict"] == OL.UNREADABLE:
+            self.stop(DO_NOT_TRADE, out_rec["why"] or
+                      "durable outstanding unreadable mid-window; an unread "
+                      "venue is never an empty one and nothing is released")
+            return None
+
         before = self.inv.report() if self.inv is not None else None
         self.inv = inv
         after = inv.report()
@@ -1817,6 +1851,12 @@ class Driver:
                                                  Mapping) else {}
         return {"working": note, "changed": before != after,
                 "coherent": True, "reconcile_attempts": attempts,
+                # the durable ledger's own reconciliation, so a reader can
+                # see WHICH reservations the venue released and when
+                "outstanding": {"verdict": out_rec.get("verdict"),
+                                "committed_usd": str(out_rec.get("committed_usd")),
+                                "released": out_rec.get("released"),
+                                "foreign": out_rec.get("foreign")},
                 # THE VIEW BOTH CONSUMERS READ, reported so a later reader can
                 # see that `coherent` and the inventory came from one object.
                 "executions": {
