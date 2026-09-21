@@ -625,7 +625,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = None
+LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-2"
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -734,6 +734,9 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         # q=1 window under the CAP-4 envelope, cohort
         # COHORT-2026-09-21-BTC15M-CAP4-1, worst case $4.00.
         "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1",
+        # Owner-granted 2026-09-21: the SAME CAP-4 experiment rerun on a fresh
+        # ledger after the EP012 durable-commitment fix. No parameter changed.
+        "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-2",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
