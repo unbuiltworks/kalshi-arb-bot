@@ -493,14 +493,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-2 IS SPENT:
-          # run 35653449506 bound GEMI-BTC15M2609212115-UP at tte 874.0s,
-          # ran 55 cycles, and STOPPED AT tte 332.4 on a single CROSSED book
-          # read -- 32 seconds before the frozen surface's [0, 300] quoting
-          # window opened. Zero orders, zero fills, 0 of 12 slots consumed,
-          # no cashflow of any kind. A spent authorization never arms again,
-          # whatever it did or did not do.
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          # ARMED for OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3: ONE
+          # BTC15m q=1 window, the SAME CAP-4 experiment as LIVE-1 and
+          # LIVE-2 (spec_sha 7fda21b1... and envelope_sha be8b544b... are
+          # both unchanged), on the transient-UNREADABLE recovery build
+          # b6c72ee whose readiness gate passed 11/11. Fresh ledger
+          # COHORT-2026-09-21-BTC15M-CAP4-3. LIVE-1 and LIVE-2 are SPENT and
+          # never arm again. No parameter changed; worst case is still $4.00.
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
@@ -508,7 +508,7 @@ jobs:
           # dispatches refused -- correctly, before the latch, spending
           # nothing. Bounded to a few hours past this authorization, never
           # open-ended.
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T23:30:00Z"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-22T02:00:00Z"
           SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1_cap4' }}
           #: the hash readiness proved. Live refuses before the latch if the
           #: spec it resolves hashes to anything else.

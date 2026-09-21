@@ -217,7 +217,7 @@ BTC15M_Q1_CAP4 = _declare(LiveProbeSpec(
     cohort=None,
     auth_id=SENTINEL_AUTH,
     action_size="1",
-    live_cohort="COHORT-2026-09-21-BTC15M-CAP4-2",
+    live_cohort="COHORT-2026-09-21-BTC15M-CAP4-3",
 ))
 
 #: the BTC5m probe, declared so the shape is not BTC15m-only
