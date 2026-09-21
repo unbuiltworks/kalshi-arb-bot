@@ -22,7 +22,8 @@ def _expectation(**over):
         family="btc15m", symbol_family="GEMI-BTC15M",
         envelope_id="GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
         action_size="1", cohort_prefix="GEMI-BTC15M",
-        remaining_budget=36, max_working_orders=2,
+        cohort_id="COHORT-2026-09-21-BTC15M-Q1LIVE-1",
+        remaining_budget=12, max_working_orders=2,
         max_committed_usd="2.50", max_residual_usd="2.00",
         max_concurrent_markets=1, minimum_rest_time_s="30.0",
         argv=("--family", "btc15m", "--envelope", "live_q1_btc15m"))
@@ -36,11 +37,11 @@ def _resolved(**over):
     r = {k: getattr(e, k) for k in
          ("branch", "commit_sha", "executable_sha", "envelope_sha",
           "bundle_sha", "auth_id", "family", "symbol_family", "envelope_id",
-          "action_size", "cohort_prefix", "remaining_budget",
+          "action_size", "cohort_prefix", "cohort_id", "remaining_budget",
           "max_working_orders", "max_committed_usd", "max_residual_usd",
           "max_concurrent_markets", "minimum_rest_time_s")}
     r.update({"frame_quantity": "1", "policy_max_rungs": 2,
-              "lifecycle_max_rungs": 2,
+              "lifecycle_max_rungs": 2, "cohort_predecessor_intact": True,
               "rest_floor_invoked": True, "retained_counts_as_risk": True,
               "mutations_sent": 0})
     r.update(over)
@@ -403,3 +404,64 @@ def test_the_mutation_boundary_is_declared_before_any_early_return():
     assert first_set < first_return, (
         "the boundary must be declared before the first early return")
     assert 'BLOCKED (readiness)' in src[first_set:first_set + 400]
+
+
+# ============== THE COHORT FIELD, FROM RUN 35623377568 ("expected
+# ============== NO_COHORT_DECLARED, resolved None" -- and neither was true)
+
+def test_the_granted_cohort_is_expected_and_resolved_as_the_SAME_thing():
+    """BOTH SIDES WERE WRONG AT ONCE, which is why they disagreed loudly
+    enough to notice. The expectation read `spec.cohort`, which stays None by
+    design because the granted ledger lives in `live_cohort`; the resolved
+    side read `cohort["id"]` where the key is `cohort_id`. The truth was
+    COHORT-2026-09-21-BTC15M-Q1LIVE-1 at 12/12 available, and neither side
+    said so."""
+    from src.gemini_execution import cohort as CO
+    from src.gemini_execution import live_probe_spec as SPEC
+
+    s = SPEC.BTC15M_Q1
+    e = LR.expectation_from_spec(s, branch=BRANCH, auth_id="A")
+    r = LR.resolve_from_report({"cohort": CO.state(s.budget_cohort)}, s)
+
+    assert e.cohort_id == s.budget_cohort
+    assert r["cohort_id"] == s.budget_cohort
+    assert e.remaining_budget == 12 and r["remaining_budget"] == 12
+
+    # and the two agree THROUGH `compare`, which is where the disagreement
+    # actually surfaced. Only the cohort fields are under test here, so the
+    # rest of the resolved set is the passing fixture -- mixing a real
+    # expectation's git sha and hashes with it would fail on those instead
+    # and prove nothing about the cohort.
+    diffs = LR.compare(e, {**_resolved(),
+                           "cohort_id": r["cohort_id"],
+                           "remaining_budget": r["remaining_budget"]})["diffs"]
+    assert [d["field"] for d in diffs if d["field"] in
+            ("cohort_id", "remaining_budget")] == [], diffs
+
+
+def test_a_partly_spent_cohort_fails_the_ONE_window_grant():
+    """"No second window" as a CHECK rather than as prose: the expectation is
+    the envelope's full max_actions, so a ledger with any slot already spent
+    can no longer satisfy a one-window grant."""
+    m = _gate(resolved=_resolved(remaining_budget=11))
+    assert m["verdict"] == LR.FAIL
+    assert any(d["field"] == "remaining_budget"
+               for d in m["checks"]["fields"]["diffs"])
+
+
+def test_binding_a_different_cohort_than_the_grant_named_fails():
+    m = _gate(resolved=_resolved(cohort_id="COHORT-2026-09-21-Q1LIVE-1"))
+    assert m["verdict"] == LR.FAIL
+    assert any(d["field"] == "cohort_id"
+               for d in m["checks"]["fields"]["diffs"])
+
+
+def test_a_broken_predecessor_chain_fails():
+    """A rewritten predecessor ledger is how a spent budget becomes unspent.
+    UNREADABLE is not intact: only an explicit True passes."""
+    for bad in (False, None, "yes"):
+        got = LR.cross_field_invariants(_resolved(
+            cohort_predecessor_intact=bad))
+        assert got["ok"] is False, bad
+        assert any("predecessor" in v for v in got["violations"]), bad
+    assert LR.cross_field_invariants(_resolved())["ok"] is True

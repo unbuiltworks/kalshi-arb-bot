@@ -96,6 +96,9 @@ class Expectation:
     envelope_id: str
     action_size: str
     cohort_prefix: str
+    #: the GRANTED budget ledger, by name. Compared in its own right: the
+    #: run must bind the ledger the grant named, not merely "a" cohort.
+    cohort_id: str
     remaining_budget: int
     max_working_orders: int
     max_committed_usd: str
@@ -285,6 +288,17 @@ def cross_field_invariants(r: Dict[str, Any]) -> Dict[str, Any]:
                    "committed-capital limits")
     if int(r.get("mutations_sent") or 0) != 0:
         bad.append("a mutation was sent in readiness mode")
+    # THE CHAIN. A cohort records what came before it; a predecessor that no
+    # longer matches what was recorded is a ledger that has been rewritten,
+    # which is how a spent budget becomes an unspent one. UNREADABLE is not
+    # intact: only an explicit True passes.
+    if str(r.get("cohort_id")) not in ("NO_COHORT_DECLARED", "None", ""):
+        if r.get("cohort_predecessor_intact") is not True:
+            bad.append("cohort %s does not verify against its predecessor "
+                       "ledger (intact=%r); a rewritten chain is how a spent "
+                       "budget becomes an unspent one"
+                       % (r.get("cohort_id"),
+                          r.get("cohort_predecessor_intact")))
     return {"ok": not bad, "violations": bad}
 
 
@@ -320,7 +334,7 @@ def compare(expected: Expectation, resolved: Dict[str, Any]) -> Dict[str, Any]:
     diffs = []
     for key in ("branch", "commit_sha", "executable_sha", "envelope_sha",
                 "bundle_sha", "auth_id", "family", "symbol_family",
-                "envelope_id", "action_size", "cohort_prefix",
+                "envelope_id", "action_size", "cohort_prefix", "cohort_id",
                 "remaining_budget", "max_working_orders", "max_committed_usd",
                 "max_residual_usd", "max_concurrent_markets",
                 "minimum_rest_time_s"):
@@ -419,12 +433,26 @@ def expectation_from_spec(spec: Any, *, branch: str, auth_id: str,
         envelope_id=e.name,
         action_size=str(e.action_size),
         cohort_prefix=str(e.cohort_prefix),
-        #: NO COHORT IS DECLARED FOR A READINESS RUN, and inventing one would
-        #: be creating a live budget the owner has not authorized. Both sides
-        #: carry the same sentinel, so the field is reported rather than
-        #: silently skipped -- and an armed run, which does carry a cohort,
-        #: is compared on its real remaining budget.
-        remaining_budget=(spec.cohort or "NO_COHORT_DECLARED"),
+        #: THE GRANTED LEDGER, AND THE WHOLE GRANT STILL AVAILABLE.
+        #:
+        #: Two defects lived in this line and its resolved counterpart, and
+        #: run 35623377568 failed on both at once ("expected
+        #: NO_COHORT_DECLARED, resolved None"). It read `spec.cohort`, which
+        #: stays None by design because the granted ledger lives in
+        #: `live_cohort`; and the resolved side read `cohort["id"]` where the
+        #: key is `cohort_id`. So BOTH sides were wrong and NEITHER was the
+        #: truth, which was COHORT-2026-09-21-BTC15M-Q1LIVE-1 at 12/12
+        #: available.
+        #:
+        #: The field also claimed to be a budget while carrying an
+        #: identifier. It now carries the NUMBER, and the expectation is the
+        #: envelope's full max_actions -- so a grant for ONE window fails
+        #: here the moment any slot has already been spent, which is exactly
+        #: what "no second window" has to mean in a check rather than in
+        #: prose.
+        cohort_id=(spec.budget_cohort or "NO_COHORT_DECLARED"),
+        remaining_budget=(int(e.max_actions) if spec.budget_cohort
+                          else "NO_COHORT_DECLARED"),
         max_working_orders=e.max_working_orders,
         max_committed_usd=str(e.max_committed_usd),
         max_residual_usd=str(e.max_residual_usd),
@@ -534,8 +562,14 @@ def resolve_from_report(rep: Dict[str, Any], spec: Any) -> Dict[str, Any]:
         "envelope_id": env.get("name"),
         "action_size": env.get("action_size"),
         "cohort_prefix": rep.get("envelope_family"),
-        "remaining_budget": ((rep.get("cohort") or {}).get("id")
+        "cohort_id": ((rep.get("cohort") or {}).get("cohort_id")
+                      if rep.get("cohort") else "NO_COHORT_DECLARED"),
+        "remaining_budget": ((rep.get("cohort") or {}).get("remaining")
                              if rep.get("cohort") else "NO_COHORT_DECLARED"),
+        "cohort_budget": (rep.get("cohort") or {}).get("budget"),
+        "cohort_consumed": (rep.get("cohort") or {}).get("consumed"),
+        "cohort_predecessor_intact": (
+            ((rep.get("cohort") or {}).get("predecessor") or {}).get("intact")),
         "max_working_orders": env.get("max_working_orders"),
         "max_committed_usd": env.get("max_committed_usd"),
         "max_residual_usd": env.get("max_residual_usd"),
