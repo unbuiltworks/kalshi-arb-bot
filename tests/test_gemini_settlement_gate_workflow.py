@@ -625,7 +625,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3"
+LIVE_AUTHORIZATION = None
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -652,7 +652,24 @@ def test_the_tree_is_armed_for_exactly_one_named_authorization():
     REF = "${GEMINI_CANARY_AUTH}"
     assert REF in ids, ("the armed step must take its id from the single "
                         "GEMINI_CANARY_AUTH binding: %s" % ids)
-    literals = ids - {REF}
+    # AND THE STATIC READINESS STEP TAKES A READ-ONLY REFERENCE. It measures
+    # the tree against a NAMED authorization without ever arming one, so it
+    # dereferences a dispatch input rather than the arm. Admitted only on
+    # proof that the input defaults to the sentinel and that the step
+    # carrying it sets no GEMINI_CANARY_LIVE -- otherwise this would be a
+    # second, quieter way to arm.
+    STATIC_REF = "${AUTH_ID}"
+    if STATIC_REF in ids:
+        assert re.search(r"cohort_auth_id:.*?default: \"\"",
+                         wf, re.S), "cohort_auth_id must default to blank"
+        step = wf[wf.index("Static readiness ("):]
+        step = step[:step.index("      - name:", 10)]
+        assert "GEMINI_CANARY_LIVE" not in step, (
+            "the static readiness step must never set the transport arm")
+        assert "--static-readiness" in step
+        assert "NO-AUTHORIZATION-IN-FORCE" in step, (
+            "a blank input must fall back to the sentinel, not to an arm")
+    literals = ids - {REF, STATIC_REF}
     # the UNARMED production-path step keeps the sentinel: it exists to be
     # refused, and an armed one would prove nothing.
     assert literals <= {want, sentinel} and sentinel in literals, ids
@@ -955,7 +972,13 @@ def test_an_unpushable_latch_refuses_without_spending_the_grant():
     # comment above the probe, so index() finds the prose and reports an
     # ordering that is not the code's. This file has walked into that exact
     # trap twice before (see _sets_the_arm); assert on the ASSIGNMENT.
-    probe = re.search(r"^\s*\w+ = can_make_durable\(\)", src, re.M).start()
+    # the assignment, however it is spelled. It is now conditional -- a
+    # cohort proves pushability once, before it consumes the grant's latch --
+    # so the pattern matches `x = can_make_durable()` and
+    # `x = (can_make_durable() if ...)` alike, and still refuses to match the
+    # prose.
+    probe = re.search(r"^\s*\w+ = \(?can_make_durable\(\)", src,
+                      re.M).start()
     consume = re.search(r"^\s*\w+ = latch\.consume\(", src, re.M).start()
     assert probe < consume, (
         "the pushability probe must run BEFORE the latch is consumed, or it "

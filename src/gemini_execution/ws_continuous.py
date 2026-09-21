@@ -100,13 +100,13 @@ LABEL = "GEMINI_L5_WS_CONTINUOUS_V1"
 #: default to be overridden at runtime: nothing reads an environment variable
 #: to fill it in. A human edits it in a reviewed commit, or the driver cannot
 #: mutate anything, ever.
-REQUIRED_AUTH_ID: Optional[str] = "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3"
+REQUIRED_AUTH_ID: Optional[str] = None
 
 #: The sha256 of THIS FILE as reviewed under that authorization. An
 #: authorization names the exact executable it was granted against, so editing
 #: the driver afterwards invalidates it automatically rather than silently
 #: carrying it forward onto code nobody reviewed.
-AUTHORIZED_SHA: Optional[str] = "38f751801d475e636fa1ed1f79201d7de6b3d2e9768c87172982a47dfd17d306"
+AUTHORIZED_SHA: Optional[str] = None
 
 #: The sha256 of the frozen risk envelope the authorization was granted
 #: against. Changing any bound changes this, and the authorization stops
@@ -118,7 +118,7 @@ AUTHORIZED_SHA: Optional[str] = "38f751801d475e636fa1ed1f79201d7de6b3d2e9768c871
 # would be PRE-AUTHORIZING an envelope nobody has approved, which is the exact
 # thing this constant exists to prevent. Installing one is a human editing
 # this line in a reviewed commit.
-AUTHORIZED_ENVELOPE: Optional[str] = "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d"
+AUTHORIZED_ENVELOPE: Optional[str] = None
 
 
 class NotAuthorized(RuntimeError):
@@ -1019,6 +1019,7 @@ class Driver:
     def __init__(self, auth_id: str, symbol: str, *, ledger_path: str,
                  now_fn: Callable[[], float] = time.time,
                  max_actions: Optional[int] = None,
+                 quote_band: Optional[Sequence[float]] = None,
                  envelope: "LE.Envelope" = LE.DEFAULT) -> None:
         want_prefix = str(getattr(envelope, "cohort_prefix", "")
                           or CP.COHORT_PREFIX)
@@ -1029,6 +1030,22 @@ class Driver:
         #: constructor, from the envelope -- never re-derived from the symbol
         #: and never read from a module default afterwards.
         self._family_prefix = want_prefix
+        # WHICH TTE INTERVAL THE FROZEN SURFACE MAY QUOTE IN, built ONCE.
+        #
+        # None is the standing behaviour and the lane's own
+        # quote_between_tte_s is used untouched -- byte-identical to every
+        # window this programme has run. A band arrives only from a declared
+        # LiveProbeSpec, whose `spec_sha` covers it, so the interval cannot
+        # move without the hash readiness compares moving with it.
+        #
+        # Built here rather than per cycle because probe_params reads the
+        # frozen artifact off disk; one object, used every turn, also means
+        # the surface the controller sees cannot differ between cycles.
+        self._quote_band = (None if quote_band is None
+                            else (float(quote_band[0]), float(quote_band[1])))
+        self._sp = (None if self._quote_band is None
+                    else CP.probe_params(action_size=envelope.action_size,
+                                         quote_band=self._quote_band))
         # IMMUTABLE BEFORE THE FIRST MUTATION. Bound in the constructor and
         # never reassigned; WindowGuard re-checks it on every single turn.
         self._symbol = str(symbol)
@@ -1358,7 +1375,9 @@ class Driver:
         # action_size is what makes an explicitly authorized LIVE_Q1 run at
         # q=1 instead of silently at the shadow constant.
         turn = self.guard.step(st, self.inv, now=now,
-                               action_size=self.env.action_size)
+                                action_size=self.env.action_size,
+                                **({} if self._sp is None
+                                   else {"sp": self._sp}))
 
         # AND IT CANNOT SILENTLY REVERT. LE.would_breach permits a rung
         # SMALLER than action_size, because a partial remainder is legitimately

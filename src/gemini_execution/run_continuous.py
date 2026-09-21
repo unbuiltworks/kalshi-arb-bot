@@ -1147,8 +1147,6 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
                  readiness: bool = False,
                  expect_spec_sha: Optional[str] = None
                  ) -> Dict[str, Any]:
-    from src.gemini_execution.ws_session import GeminiMakerSession
-
     rep: Dict[str, Any] = {
         "label": LABEL, "started_utc": datetime.now(timezone.utc).isoformat(),
         "authorization_id": auth_id,
@@ -1260,6 +1258,60 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         rep["why"] = sel.get("why")
         return rep
     symbol = sel["chosen"]["symbol"]
+    # ------------------------------------------------- ONE WINDOW, ONE BODY
+    # Everything from the preflight down lives in `run_one_window` so that
+    # the PERSISTENT COHORT RUNNER drives the identical sequence. A second
+    # copy of this gate order is how a runner and a launcher drift apart, and
+    # this programme has already paid for that class of defect more than once
+    # (the readiness/live invocation split, the BTC5m family pin). There is
+    # one implementation; the cohort runner supplies discovery and the latch,
+    # nothing else.
+    return await run_one_window(
+        rep, auth_id, symbol, state_dir=state_dir, ledger_path=ledger_path,
+        wire_path=wire_path, cohort_id=cohort_id, envelope=envelope,
+        readiness=readiness, probe_spec=probe_spec)
+
+
+async def run_one_window(rep: Dict[str, Any], auth_id: str, symbol: str, *,
+                         state_dir: str, ledger_path: str,
+                         wire_path: Optional[str] = None,
+                         cohort_id: Optional[str] = None,
+                         envelope: "LE.Envelope" = LE.DEFAULT,
+                         readiness: bool = False,
+                         probe_spec: Any = None,
+                         latch_held_by: Optional[Mapping[str, Any]] = None,
+                         ) -> Dict[str, Any]:
+    """ONE contract, from preflight to settlement read. The verified body.
+
+    EXTRACTED, NOT REWRITTEN. Every gate below is in the order it has always
+    been in, for the reasons recorded beside it: read-only preflight ->
+    authoritative state -> recovery -> position gate -> authorization ->
+    bundle -> latch -> mutation. The only new parameter is `latch_held_by`.
+
+    `latch_held_by` is how a COHORT spends one owner authorization across
+    several contracts without either double-spending it or re-consuming it
+    per window. When it is None this function consumes the grant's latch
+    itself, exactly as a single-window launcher always has. When a cohort
+    runner passes its own already-consumed latch record, the guarantee is
+    unchanged in substance -- the authorization is durably spent BEFORE the
+    cohort's first mutation -- and this window records which latch covers it
+    rather than pretending it spent one. A window that is handed no latch and
+    consumes none never reaches a mutation.
+    """
+    from src.gemini_execution.ws_session import GeminiMakerSession
+
+    # THE QUOTING INTERVAL, FROM THE SPEC AND FROM NOWHERE ELSE. None is the
+    # standing behaviour: the frozen lane's own quote_between_tte_s, used
+    # untouched. A spec that names a band carries it inside `spec_sha`, so an
+    # armed run whose band differs from the one readiness proved refuses at
+    # the hash check above, before the latch.
+    quote_band = getattr(probe_spec, "quote_band", None)
+    rep["quote_band"] = (None if quote_band is None
+                         else [float(quote_band[0]), float(quote_band[1])])
+    rep["quote_band_note"] = (
+        "null means the frozen lane's own quote_between_tte_s is in force "
+        "unmodified. A band is a declared, hashed experiment parameter; "
+        "there is no default and no environment variable.")
 
     # ------------------------------------------------- PREFLIGHT, THEN LATCH
     # THE READS ARE DONE HERE AND PASSED IN AS VALUES. MD.terms_status is a
@@ -1366,7 +1418,8 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # window below builds its own Driver and recovers again authoritatively;
     # this one exists solely to refuse before the latch.
     probe = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
-                      max_actions=cohort_budget, envelope=envelope)
+                      max_actions=cohort_budget, envelope=envelope,
+                      quote_band=quote_band)
     pre = probe.recover(venue_fills=st.get("fills"),
                         venue_open=st.get("open_orders"),
                         venue_orders=st.get("orders_seen"))
@@ -1476,7 +1529,9 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     # This probe pushes nothing and weakens nothing: the latch is still
     # written, committed and pushed before any mutation. It only moves an
     # unavoidable failure to the side of the line where it is free.
-    pushable = can_make_durable()
+    pushable = (can_make_durable() if latch_held_by is None
+                else {"ok": True, "why": "the cohort proved this before it "
+                                         "consumed the grant's latch"})
     rep["latch_pushable"] = pushable
     if not pushable.get("ok"):
         rep["state"] = WC.DO_NOT_TRADE
@@ -1520,20 +1575,39 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         "envelope_sha": WC.envelope_sha(),
         "active_envelope_sha": envelope.sha(),
     }
-    try:
+    if latch_held_by is not None:
+        # A COHORT SPENT IT ONCE, FOR ALL OF ITS WINDOWS. Re-consuming here
+        # would raise AlreadyConsumed on window 2 and stop a cohort the owner
+        # authorized; pretending to consume would put a second spend record
+        # against one grant. Neither is honest, so this window records WHICH
+        # latch covers it. The substantive guarantee is unchanged: the
+        # authorization was durably spent, and pushed, before the cohort's
+        # FIRST mutation -- which is before this window's, too.
+        rep["latch"] = {"consumed": False, "held_by_cohort": True,
+                        "intent_id": latch_held_by.get("intent_id"),
+                        "cohort_id": latch_held_by.get("cohort_id"),
+                        "state": latch_held_by.get("state"),
+                        "when": ("spent once, durably, before the COHORT's "
+                                 "first mutation"),
+                        "why": ("one owner authorization covers this cohort; "
+                                "per-window mutations are bounded by the "
+                                "cohort's shared append-only ledger and by "
+                                "its aggregate loss stop")}
+    else:
+      try:
         rec0 = latch.consume(auth_id, intent, state_dir,
                              durable_check=durable_check)
         make_durable(auth_id, rec0)
         rep["latch"] = {"consumed": True, "intent_id": rec0.get("intent_id"),
                         "state": rec0.get("state"),
                         "when": "BEFORE the session connected"}
-    except latch.AlreadyConsumed as exc:
+      except latch.AlreadyConsumed as exc:
         rep["state"] = WC.DO_NOT_TRADE
         rep["why"] = ("authorization already consumed: %s. This is "
                       "reconciliation work, never a re-run." % exc)
         rep["latch"] = {"consumed": False, "already": True}
         return rep
-    except Exception as exc:                                   # noqa: BLE001
+      except Exception as exc:                                 # noqa: BLE001
         rep["state"] = WC.DO_NOT_TRADE
         rep["why"] = ("the latch could not be made durable (%s: %s); nothing "
                       "is sent, because a mutation whose authorization is not "
@@ -1543,7 +1617,8 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         return rep
 
     driver = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
-                       max_actions=cohort_budget, envelope=envelope)
+                       max_actions=cohort_budget, envelope=envelope,
+                       quote_band=quote_band)
     # the observer wraps the real session; the arm gate and every bound
     # still run inside the objects it delegates to.
     session = RecordingSession(GeminiMakerSession(id_prefix="l5cp"))

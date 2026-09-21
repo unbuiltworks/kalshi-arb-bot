@@ -52,7 +52,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal as D
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import (Any, Dict, List, Mapping, Optional, Sequence, Tuple)
 
 from src.l5_surface import engine as ENG, params as PR
 
@@ -160,7 +160,9 @@ class ProbeStop(Exception):
 
 
 def probe_params(lane: Optional[PR.SurfaceParams] = None,
-                 action_size: Any = None) -> PR.SurfaceParams:
+                 action_size: Any = None,
+                 quote_band: Optional[Sequence[float]] = None
+                 ) -> PR.SurfaceParams:
     """The lane set with probe-scoped size and residual, marked as OURS.
 
     The frozen L5_ADAPTED_GEMINI_CRYPTO artifact is READ and never written:
@@ -190,6 +192,33 @@ def probe_params(lane: Optional[PR.SurfaceParams] = None,
         "secondary_rung_qty": str(b["action_size"]),
         "max_residual": str(b["max_residual"]),
     }
+    # THE QUOTING INTERVAL, WHEN AND ONLY WHEN A SPEC NAMES ONE.
+    #
+    # `quote_between_tte_s` is OURS_ADAPTED, never measured from L5. The
+    # standing [0, 300] is the LENGTH OF A BTC5m CONTRACT: chosen for the
+    # 5-minute cohort and then inherited unchanged when the same lane was
+    # bound to BTC15m (TTE_PROVENANCE_1.md), where it means the clone quotes
+    # only the last five minutes of a fifteen-minute market.
+    #
+    # Passing None leaves the lane's own value untouched, so every existing
+    # caller is byte-identical. A caller that passes a band is making a
+    # BEHAVIOURAL change, which is why the band lives on the LiveProbeSpec
+    # and is inside `spec_sha`: it cannot be moved without the hash the
+    # readiness gate compares moving with it. There is no module default and
+    # no environment variable; a band arrives from a declared spec or not at
+    # all.
+    if quote_band is not None:
+        lo, hi = float(quote_band[0]), float(quote_band[1])
+        if not (0 <= lo < hi):
+            raise ProbeStop(
+                "a quoting interval must be LO < HI with LO >= 0, got %r"
+                % (quote_band,))
+        if lo < WITHDRAW_ALL_TTE_S:
+            raise ProbeStop(
+                "a quoting interval may not open below the frozen withdraw "
+                "floor of %.1fs; terminal safety near settlement is not a "
+                "parameter" % WITHDRAW_ALL_TTE_S)
+        over["TTE_policy"] = {"quote_between_tte_s": [lo, hi]}
     out: Dict[str, PR.Param] = {}
     for f in PR.FIELDS:
         if f in over:

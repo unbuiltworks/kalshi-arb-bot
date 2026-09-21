@@ -60,6 +60,14 @@ on:
         description: "Set to true to run LIVE_READINESS_GATE on the credentialed runner (read-only; mutation boundary blocked)."
         required: false
         default: "false"
+      static_readiness:
+        description: "Set to true to run the TTE-INDEPENDENT readiness check (read-only; binds no contract, waits for no entry band)."
+        required: false
+        default: "false"
+      cohort_auth_id:
+        description: "Authorization id the static readiness check measures the tree against. Blank = the sentinel."
+        required: false
+        default: ""
       fill_forensics:
         description: "Set to true to capture RAW historical prediction order rows (read-only; submits nothing)."
         required: false
@@ -432,6 +440,39 @@ jobs:
       # disarms it automatically. The dual key is still required and its live
       # half is NOT in the repository.
       # ==================================================================
+      # ==================================================================
+      # STATIC READINESS -- THE CHECK THAT HAS NO CLOCK.
+      #
+      # LIVE_READINESS_GATE below runs the whole production path, which means
+      # it first WAITS for a contract to reach the 840:880 entry band. That
+      # makes it a good end-to-end proof and a bad answer to "is the tree
+      # ready": a perfectly ready tree failed readiness for being dispatched
+      # at the wrong minute, and market timing and software correctness were
+      # the same check.
+      #
+      # This one asks only about the TREE and the ACCOUNT -- hashes, declared
+      # spec, budget ledger, terms, and whether the venue will state our
+      # position. It binds no contract, waits for no band, and sends nothing.
+      # Neither GEMINI_CANARY_LIVE nor an auth id is set here.
+      # ==================================================================
+      - name: Static readiness (credentialed; TTE-independent, sends nothing)
+        if: ${{ github.event.inputs.static_readiness == 'true' }}
+        timeout-minutes: 5
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1_cap4' }}
+          AUTH_ID: ${{ github.event.inputs.cohort_auth_id || 'NO-AUTHORIZATION-IN-FORCE' }}
+        run: |
+          set -o pipefail
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.cohort_runner \
+            --auth-id "${AUTH_ID}" \
+            --spec    "${SPEC_ID}" \
+            --static-readiness \
+            --out analysis/gemini/static_readiness_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/static_readiness.txt
+
       - name: LIVE_READINESS_GATE (credentialed; mutation boundary BLOCKED)
         if: ${{ github.event.inputs.readiness_gate == 'true' }}
         timeout-minutes: 25
@@ -493,14 +534,15 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # ARMED for OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3: ONE
-          # BTC15m q=1 window, the SAME CAP-4 experiment as LIVE-1 and
-          # LIVE-2 (spec_sha 7fda21b1... and envelope_sha be8b544b... are
-          # both unchanged), on the transient-UNREADABLE recovery build
-          # b6c72ee whose readiness gate passed 11/11. Fresh ledger
-          # COHORT-2026-09-21-BTC15M-CAP4-3. LIVE-1 and LIVE-2 are SPENT and
-          # never arm again. No parameter changed; worst case is still $4.00.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3"
+          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3 IS SPENT:
+          # run 35664464001 bound GEMI-BTC15M2609212315-UP at tte 878.4,
+          # placed YES 0.90 and NO 0.02, took ONE maker fill (NO 1 @ 0.02,
+          # fee 0.0000), released that order's durable reservation on the
+          # very next authoritative read, and stopped on the bounded
+          # UNREADABLE hold after six consecutive crossed books. 3 of 12
+          # slots consumed, 0 orders live after stop. A spent authorization
+          # never arms again.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the

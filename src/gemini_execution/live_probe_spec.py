@@ -82,6 +82,15 @@ class LiveProbeSpec:
     #:
     #: Both steps take it from THIS object, so they still cannot disagree.
     live_cohort: Optional[str] = None
+    #: THE TTE INTERVAL THE FROZEN SURFACE MAY QUOTE IN, and it IS hashed.
+    #:
+    #: None means the lane's own `quote_between_tte_s` is used untouched --
+    #: [0, 300] for L5_ADAPTED_GEMINI_CRYPTO, which is where every window
+    #: this programme has run got its quoting interval. A spec that names a
+    #: band is a BEHAVIOURAL change, so unlike `live_cohort` and `auth_id`
+    #: this field is inside `invocation_fingerprint`: the interval cannot
+    #: move without spec_sha moving, and readiness compares spec_sha.
+    quote_band: Optional[Tuple[float, float]] = None
 
     # ---- resolution -----------------------------------------------------
 
@@ -147,7 +156,26 @@ class LiveProbeSpec:
                 "envelope_id": self.envelope_obj.name,
                 "entry_tte_band": self.entry_tte_band,
                 "cohort": self.cohort, "action_size": self.action_size,
-                "ledger": self.ledger, "bounds": self.bounds()}
+                "ledger": self.ledger, "bounds": self.bounds(),
+                **self._quote_band_fingerprint()}
+
+    def _quote_band_fingerprint(self) -> Dict[str, Any]:
+        """The quoting interval's contribution to spec_sha, and its absence.
+
+        PRESENT ONLY WHEN A BAND IS NAMED, deliberately. The property that
+        matters is "the quoting interval cannot move without spec_sha moving",
+        and that holds either way: None -> a band moves the hash, and one band
+        -> another moves it. Including the key as an explicit null instead
+        would ALSO move the hash of every spec that never had a band, which
+        would retire reviewed identities -- among them the
+        7fda21b1... the owner approved for the CAP-4 windows -- for a
+        refactor that changed none of their behaviour. A hash should move when
+        behaviour moves and not otherwise.
+        """
+        if self.quote_band is None:
+            return {}
+        return {"quote_band": [float(self.quote_band[0]),
+                               float(self.quote_band[1])]}
 
     def spec_sha(self) -> str:
         return hashlib.sha256(json.dumps(
@@ -218,6 +246,40 @@ BTC15M_Q1_CAP4 = _declare(LiveProbeSpec(
     auth_id=SENTINEL_AUTH,
     action_size="1",
     live_cohort="COHORT-2026-09-21-BTC15M-CAP4-3",
+))
+
+#: PROPOSED, NOT AUTHORIZED. Identical to BTC15M_Q1_CAP4 in family, envelope,
+#: entry band, q, cohort prefix, rung count, pricing and every risk bound. The
+#: ONLY difference is `quote_band`, and the different spec_sha is the point:
+#: this is a different experiment and the hash says so before anyone runs it.
+#:
+#: WHY [60, 880]. The standing [0, 300] is OURS_ADAPTED and was never measured
+#: from L5: it is the LENGTH OF A BTC5m CONTRACT, chosen for the 5-minute
+#: cohort and inherited unchanged when the same lane was bound to BTC15m
+#: (TTE_PROVENANCE_1.md), where it means the clone is absent for the first two
+#: thirds of every market. The L5 BTC15m source evidence -- 63,569 deduped
+#: fills across 527 windows -- puts 560 of 626 OPEN fills (89.5%) at tte
+#: 600-900 and NONE below tte 60. The frozen shadow lane
+#: L5_ADAPTED_GEMINI_BTC15M_V2 already corrects this to [0, 900] and has been
+#: running alongside as evidence; 880 is the top of the entry band (a contract
+#: does not exist above 900) and 60 is NO_NEW_OPEN_EXTEND_TTE_S, so the
+#: proposal quotes exactly where the evidence says L5 opens and stops where
+#: the existing terminal safety already stops it.
+#:
+#: NOT CHANGED: pricing, tick_offsets, rung_count, both_sides_policy, q, the
+#: CAP-4 envelope, aggressiveness, the 30s rest floor, and the two settlement
+#: guards (NO_NEW_OPEN_EXTEND_TTE_S 60s, WITHDRAW_ALL_TTE_S 30s), which still
+#: bind inside this band exactly as they do outside it.
+BTC15M_Q1_CAP4_W60_880 = _declare(LiveProbeSpec(
+    spec_id="btc15m_q1_cap4_w60_880",
+    family="btc15m",
+    envelope="live_q1_btc15m_cap4",
+    entry_tte_band="840:880",
+    cohort=None,
+    auth_id=SENTINEL_AUTH,
+    action_size="1",
+    live_cohort=None,                  # no budget granted for it yet
+    quote_band=(60.0, 880.0),
 ))
 
 #: the BTC5m probe, declared so the shape is not BTC15m-only

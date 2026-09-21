@@ -201,9 +201,17 @@ def test_a_downsized_rung_is_refused_under_a_q1_authorization(tmp_path,
 
 # ============================== (1) THE LATCH RECORDS THE LIVE ENVELOPE
 def test_the_latch_intent_records_the_active_envelope_not_the_shadow():
-    """LIVE-2's latch said amount 0.01 / max_residual 0.04 on a q=1 window."""
+    """LIVE-2's latch said amount 0.01 / max_residual 0.04 on a q=1 window.
+
+    READ FROM `run_one_window`, which is where the intent is built now that
+    the window body is a reusable primitive the cohort runner also drives.
+    The invariant is unchanged and is checked in the SAME function that
+    consumes the latch, so the record and the spend cannot come apart.
+    """
     import inspect
-    src = inspect.getsource(RC._build)
+    src = inspect.getsource(RC.run_one_window)
+    assert "latch.consume(" in src, (
+        "the intent must live with the consume that spends it")
     assert '"amount": str(envelope.action_size)' in src
     assert '"max_residual": str(envelope.max_residual)' in src
     assert '"max_residual_usd": str(envelope.max_residual_usd)' in src
