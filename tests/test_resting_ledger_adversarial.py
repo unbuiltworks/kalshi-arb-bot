@@ -43,7 +43,10 @@ def crash_sequence(p):
     c = led.record_place_intent(leg="NO", price="0.55", qty="1")
     led.record_place_result(c, R.WORKING, venue_order_id="V-C")
     led.record_fill(c, "0.4")                       # opposite-side partial
-    return a, b, c                                  # process dies here
+    # The process dies here. A dead process's flock is dropped by the kernel,
+    # so close() is how a test models death -- NOT a graceful shutdown.
+    led.close()
+    return a, b, c
 
 
 # ----------------------------------------------------------------- the core
@@ -87,6 +90,7 @@ def test_a_confirmed_cancel_releases_only_the_unfilled_part(path):
     led.record_place_result(a, R.WORKING, venue_order_id="V-A")
     led.record_fill(a, "0.25")
     led.record_cancel_result(a, R.CANCELLED)
+    led.close()
     o = reopen(path).orders()[a]
     assert o["remaining_qty"] == D("0") and o["filled_qty"] == D("0.25")
     assert o["state"] == R.FILLED                # partially filled, then closed
@@ -101,6 +105,7 @@ def test_cleanup_cannot_accidentally_create_additional_exposure(path):
     for coid in (a, b, c):
         led.record_cancel_intent(coid)
         led.record_cancel_result(coid, R.CANCELLED)
+    led.close()
     after = reopen(path).committed_usd()
     assert after == D("0") and after <= before
 
@@ -117,6 +122,8 @@ def test_venue_and_store_disagreement_cannot_arm(path):
 def test_unreadable_venue_cannot_arm(path):
     led = R.RestingOrderLedger(path)                 # nothing placed at all
     assert R.preflight(led, [])["may_arm"] is True
+    led.close()
+    led = R.RestingOrderLedger(path)
     pf = R.preflight(led, None)
     assert pf["may_arm"] is False and pf["verdict"] == R.UNREADABLE
 
@@ -144,6 +151,7 @@ def test_a_torn_final_line_becomes_exposure_not_a_skipped_row(path):
     led.record_place_result(a, R.WORKING, venue_order_id="V-A")
     with open(path, "a", encoding="utf-8") as fh:
         fh.write('{"kind": "PLACE_INTENT", "client_order_id": "q1-tr')  # torn
+    led.close()
     led2 = reopen(path)
     assert led2.torn == 1
     assert any(e["client_order_id"].startswith("TORN-") for e in led2.uncertain())
@@ -161,6 +169,7 @@ def test_intent_is_on_disk_before_the_caller_can_transmit(path):
     """
     led = R.RestingOrderLedger(path)
     coid = led.record_place_intent(leg="YES", price="0.40", qty="1")
+    led.close()
     rows = [json.loads(l) for l in open(path)]
     assert rows and rows[-1]["kind"] == R.PLACE_INTENT
     assert rows[-1]["client_order_id"] == coid
@@ -171,6 +180,7 @@ def test_an_intent_whose_result_never_arrived_blocks_on_restart(path):
     """Crash exactly between transmit and ack: the worst case."""
     led = R.RestingOrderLedger(path)
     led.record_place_intent(leg="YES", price="0.40", qty="1")
+    led.close()
     led2 = reopen(path)
     assert led2.orders()[list(led2.orders())[0]]["state"] == R.INTENT
     assert led2.working_orders() == 1
@@ -182,6 +192,7 @@ def test_an_unrecognised_place_outcome_becomes_uncertain_not_accepted(path):
     led = R.RestingOrderLedger(path)
     a = led.record_place_intent(leg="YES", price="0.40", qty="1")
     led.record_place_result(a, "WEIRD_TRANSPORT_STATE")
+    led.close()
     assert reopen(path).orders()[a]["state"] == R.UNCERTAIN
 
 
@@ -190,6 +201,7 @@ def test_a_fill_arriving_before_the_ack_is_not_lost(path):
     a = led.record_place_intent(leg="YES", price="0.40", qty="1")
     led.record_fill(a, "0.5")                        # fill beats the ack
     led.record_place_result(a, R.WORKING, venue_order_id="V-A")
+    led.close()
     o = reopen(path).orders()[a]
     assert o["filled_qty"] == D("0.5") and o["state"] == R.PARTIAL
 
@@ -199,6 +211,7 @@ def test_budgets_are_computed_from_durable_state_not_process_memory(path):
     led = R.RestingOrderLedger(path)
     a = led.record_place_intent(leg="YES", price="0.40", qty="1")
     led.record_place_result(a, R.WORKING, venue_order_id="V-A")
+    led.close()
     fresh = reopen(path)                             # no memory of anything
     v = R.admit_place(fresh, leg="NO", price="0.55", qty="1")
     assert v["computed_from"] == "DURABLE_LEDGER_NOT_PROCESS_MEMORY"
@@ -210,6 +223,7 @@ def test_max_working_orders_counts_durable_live_orders(path):
     for i, px in enumerate(("0.40", "0.41")):
         c = led.record_place_intent(leg="YES", price=px, qty="1")
         led.record_place_result(c, R.WORKING, venue_order_id="V-%d" % i)
+    led.close()
     v = R.admit_place(reopen(path), leg="YES", price="0.42", qty="1")
     assert v["admit"] is False and "max_working_orders" in v["reason"]
 
@@ -218,6 +232,7 @@ def test_max_committed_usd_is_enforced_against_the_durable_total(path):
     led = R.RestingOrderLedger(path)
     c = led.record_place_intent(leg="YES", price="0.80", qty="1")
     led.record_place_result(c, R.WORKING, venue_order_id="V-A")
+    led.close()
     v = R.admit_place(reopen(path), leg="NO", price="0.79", qty="1",
                       max_committed=D("1.00"))
     assert v["admit"] is False and "max_committed_usd" in v["reason"]
@@ -229,6 +244,7 @@ def test_projected_residual_counts_resting_orders_not_only_fills(path):
     led = R.RestingOrderLedger(path)
     c = led.record_place_intent(leg="YES", price="0.40", qty="1")
     led.record_place_result(c, R.WORKING, venue_order_id="V-A")
+    led.close()
     fresh = reopen(path)
     assert fresh.directional_residual_usd() == D("0")      # nothing FILLED yet
     assert fresh.projected_residual_usd("YES", D("1")) == D("2") * D("2.00")
@@ -255,3 +271,147 @@ def test_this_module_authorizes_nothing():
     for forbidden in ("requests", "urllib", "http", "api_key", "secret",
                       "REQUIRED_AUTH_ID", "AUTHORIZED_SHA", "AUTHORIZED_ENVELOPE"):
         assert forbidden not in src, forbidden
+
+
+# ------------------------------------------- D. two REAL processes, one ledger
+import subprocess
+import sys
+import textwrap
+
+
+def _child(path, body, timeout=30):
+    """Run `body` in a genuinely separate interpreter against the same path."""
+    head = ("import sys\n"
+            "sys.path.insert(0, '/home/user/kalshi-arb-bot')\n"
+            "from src import pmus_resting_ledger as R\n"
+            "PATH = %r\n" % (path,))
+    p = subprocess.run([sys.executable, "-c", head + textwrap.dedent(body)],
+                       capture_output=True, text=True, timeout=timeout)
+    return p.returncode, p.stdout.strip(), p.stderr.strip()
+
+
+def test_a_second_live_process_cannot_open_the_same_ledger(path):
+    """The hole: two writers each enforce the envelope at half strength."""
+    holder = R.RestingOrderLedger(path, session_id="A")
+    try:
+        rc, out, err = _child(path, """
+try:
+    R.RestingOrderLedger(PATH, session_id="B")
+    print("ACQUIRED")
+except R.LedgerLocked:
+    print("REFUSED")
+""")
+        assert out == "REFUSED", (out, err)
+    finally:
+        holder.close()
+
+
+def test_a_second_process_cannot_place_while_the_first_holds_the_ledger(path):
+    holder = R.RestingOrderLedger(path, session_id="A")
+    c = holder.record_place_intent(leg="YES", price="0.40", qty="1")
+    holder.record_place_result(c, R.WORKING, venue_order_id="V-A")
+    try:
+        rc, out, err = _child(path, """
+try:
+    led = R.RestingOrderLedger(PATH, session_id="B")
+    v = R.admit_place(led, leg="NO", price="0.55", qty="1")
+    print("PLACED" if v["admit"] else "REFUSED_BY_ENVELOPE")
+except R.LedgerLocked:
+    print("REFUSED_BY_LOCK")
+""")
+        assert out == "REFUSED_BY_LOCK", (out, err)
+    finally:
+        holder.close()
+
+
+def test_two_children_racing_for_the_same_ledger_yield_exactly_one_owner(path):
+    """Neither is holding it beforehand: exactly one must win."""
+    src = textwrap.dedent("""
+        import sys, time
+        sys.path.insert(0, "/home/user/kalshi-arb-bot")
+        from src import pmus_resting_ledger as R
+        PATH = %r
+        try:
+            led = R.RestingOrderLedger(PATH, session_id="R")
+            print("ACQUIRED"); sys.stdout.flush(); time.sleep(2.0); led.close()
+        except R.LedgerLocked:
+            print("REFUSED")
+    """) % (path,)
+    ps = [subprocess.Popen([sys.executable, "-c", src], stdout=subprocess.PIPE,
+                           text=True) for _ in range(2)]
+    outs = [p.communicate(timeout=30)[0].strip() for p in ps]
+    assert sorted(outs) == ["ACQUIRED", "REFUSED"], outs
+
+
+def test_a_crashed_owner_does_not_block_its_own_restart(path):
+    """The kernel drops a dead process's flock, so a restart is not deadlocked
+    by its predecessor -- while a LIVE peer still refuses."""
+    src = textwrap.dedent("""
+        import sys, os
+        sys.path.insert(0, "/home/user/kalshi-arb-bot")
+        from src import pmus_resting_ledger as R
+        led = R.RestingOrderLedger(%r, session_id="DOOMED")
+        led.record_place_intent(leg="YES", price="0.40", qty="1")
+        os._exit(9)                      # die holding the lock
+    """) % (path,)
+    p = subprocess.run([sys.executable, "-c", src], capture_output=True, text=True)
+    assert p.returncode == 9
+    led = R.RestingOrderLedger(path, session_id="RESTART")   # must not hang
+    try:
+        assert led.working_orders() == 1                     # exposure survived
+        assert R.admit_place(led, leg="YES", price="0.40", qty="1")["admit"] is False
+    finally:
+        led.close()
+
+
+def test_opting_out_of_the_lock_is_explicit_and_never_the_default(path):
+    import inspect
+    sig = inspect.signature(R.RestingOrderLedger.__init__)
+    assert sig.parameters["exclusive"].default is True
+    a = R.RestingOrderLedger(path, session_id="A")
+    try:
+        b = R.RestingOrderLedger(path, session_id="B", exclusive=False)
+        assert b.working_orders() == 0            # readable, but unowned
+    finally:
+        a.close()
+
+
+# --------------------------------- venue fill reconciliation bounds the risk
+def test_a_fill_we_never_observed_is_caught_by_the_venue_record(path):
+    """preflight cannot see this: the fill REMOVES the order from the venue's
+    open list, so open-order agreement is restored by the very event that
+    matters. Residual is the number that reads low, and residual is the one
+    that gates further one-sided exposure."""
+    led = R.RestingOrderLedger(path)
+    c = led.record_place_intent(leg="YES", price="0.40", qty="1")
+    led.record_place_result(c, R.WORKING, venue_order_id="V-A")
+    assert R.preflight(led, [])["reasons"]        # still shows our live order
+    r = R.reconcile_fills(led, [{"leg": "YES", "qty": "1"}])
+    assert r["ok"] is False and r["verdict"] == "FILL_DISAGREEMENT"
+    assert r["unobserved_by_us"] == {"YES": "1"}
+    assert r["authoritative_residual_units"] == "1"
+
+
+def test_reconciliation_agrees_when_we_saw_every_fill(path):
+    led = R.RestingOrderLedger(path)
+    c = led.record_place_intent(leg="YES", price="0.40", qty="1")
+    led.record_place_result(c, R.WORKING, venue_order_id="V-A")
+    led.record_fill(c, "1")
+    r = R.reconcile_fills(led, [{"leg": "YES", "qty": "1"}])
+    assert r["ok"] is True and r["verdict"] == "CLEAN"
+
+
+def test_unreadable_venue_fills_are_not_treated_as_none(path):
+    led = R.RestingOrderLedger(path)
+    assert R.reconcile_fills(led, None)["verdict"] == R.UNREADABLE
+    bad = R.reconcile_fills(led, [{"leg": "YES"}])          # no quantity
+    assert bad["ok"] is False and bad["verdict"] == R.UNREADABLE
+
+
+def test_reconciliation_never_rewrites_the_ledger(path):
+    led = R.RestingOrderLedger(path)
+    c = led.record_place_intent(leg="YES", price="0.40", qty="1")
+    led.record_place_result(c, R.WORKING, venue_order_id="V-A")
+    before = open(path, encoding="utf-8").read()
+    R.reconcile_fills(led, [{"leg": "YES", "qty": "1"}])
+    assert open(path, encoding="utf-8").read() == before

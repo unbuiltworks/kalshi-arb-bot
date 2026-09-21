@@ -33,6 +33,52 @@
 > (independent separator); the exact matched+residual=net decomposition with standalone
 > **indistinguishable from zero**; PMUS take-both = 1 + spread.
 >
+> ## ⛔ CURRENT FRONT — PROSPECTIVE EXECUTION OBSERVABILITY 2026-09-21
+>
+> Full evidence: **`analysis/l5/PROSPECTIVE_OBSERVABILITY_20260921.md`**;
+> preregistration: **`analysis/l5/PROSPECTIVE_PREREGISTRATION_20260921.md`**.
+>
+> **Match mechanism does NOT distinguish maker from taker.** Single-match
+> transactions: MAKER 86.5% carry a `PositionSplit`, TAKER 90.0%; difference
+> **−3.5 pp, 95% CI [−11.3, +4.2] — includes zero**. Minting is the venue's
+> ordinary settlement path, not a maker-execution advantage. Treat
+> `PositionSplit` as transaction context only: **never** infer a separate queue
+> or priority mechanism from it.
+>
+> **The chain PRE-FILL BOOK → L5 ACTION → MATCH TYPE → POST-FILL BOOK is now
+> DIRECTLY OBSERVED** on real fills with full ladders
+> (`src/l5_prospective_recorder.py`, public GETs, no order path).
+>
+> **FIRST FLOW OBSERVATIONS — and they are surprising.** L5 filled as a maker
+> with **`arriving executable flow / depth ahead` of 0.0000–0.0336** — three to
+> four orders of magnitude less arriving flow than the queue resting ahead of
+> him. Under a conventional FIFO model those fills should not have happened.
+> n=16, ONE market: **descriptive only**, far below the preregistered floor of
+> 200, and no threshold is fitted.
+>
+> **MEASURED VENUE LIMITS (verified, not assumed):**
+> * `/trades?market=` **lags ~90 s** — the flow numerator is structurally
+>   unavailable at capture time and must be **backfilled**. The book side has no
+>   such lag.
+> * Gamma date-ordering **cannot find the live window** (112 tokens returned,
+>   every one ending 11+ hours out). The live window is arithmetic on the slug
+>   epoch.
+>
+> **NEXT FALSIFIABLE HYPOTHESIS — H-QUEUE-IRRELEVANT:** conditional on L5
+> resting at a price, maker-fill probability is **independent of
+> `depth_ahead_of_fill_price`** and is driven instead by complement-buyer
+> arrival. This **supersedes H-FLOW as the primary test**, because H-FLOW
+> assumed the denominator was binding and the first observations put that in
+> doubt. Neither is fitted before 200 maker fills with pre-fill books.
+>
+> **q=1 CONCURRENCY HOLE CLOSED.** Single-writer `flock`; a second live process
+> refuses, a crashed owner does not deadlock its own restart (kernel drops the
+> lock), two racing children yield exactly one owner. `reconcile_fills()` bounds
+> unobserved fills: an unseen fill **removes** the order from the venue's open
+> list, so open-order agreement is restored by the very event that matters while
+> **residual reads low** — the venue record is authoritative and a shortfall is
+> a refusal, never a silent repair.
+>
 > ## ⛔ READ FIRST-AND-A-HALF — TAKER AUTOPSY 2026-09-21: H1 **FALSIFIED**
 >
 > Full evidence: **`analysis/l5/TAKER_AUTOPSY_20260921.md`**. Venue-supplied
@@ -173,7 +219,7 @@
 
 
 
-Last updated **2026-09-21**, taker-autopsy + observability pass. Branch
+Last updated **2026-09-21**, prospective-observability pass. Branch
 `claude/l5-execution-instrumentation-io6nzi`.
 
 Durable behavioural source of truth remains `L5_OPERATING_MODEL.md`. This file is

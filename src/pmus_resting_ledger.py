@@ -25,8 +25,11 @@ transport and has no order verb. It is a record and a set of refusals.
 """
 from __future__ import annotations
 
+import errno
+import fcntl
 import json
 import os
+import socket
 import time
 import uuid
 from decimal import Decimal as D
@@ -68,6 +71,21 @@ class LedgerUnreadable(Exception):
     """The ledger exists but cannot be trusted. Never downgraded to empty."""
 
 
+class LedgerLocked(Exception):
+    """Another live process owns this ledger.
+
+    THE HOLE THIS CLOSES. Two processes sharing one ledger path each read the
+    same live set and each admit a place, so the envelope is enforced twice at
+    half strength and exceeded in aggregate. Nothing in the fold could detect
+    it: both writes are well-formed and both are true.
+
+    Refusing is the only safe answer. A second process cannot be allowed to
+    "take over" on its own say-so, because the first may still have orders
+    resting -- and the whole point of the ledger is that we do not guess about
+    resting orders.
+    """
+
+
 def _dec(v: Any) -> Optional[D]:
     if v is None or isinstance(v, bool):
         return None
@@ -80,13 +98,74 @@ def _dec(v: Any) -> Optional[D]:
 class RestingOrderLedger:
     """Append-only, fsynced lifecycle record for every order we tried to rest."""
 
-    def __init__(self, path: str, *, session_id: str = "") -> None:
+    def __init__(self, path: str, *, session_id: str = "",
+                 exclusive: bool = True) -> None:
         self.path = str(path)
         self.session_id = str(session_id)
         self.rows: List[Dict[str, Any]] = []
         self.torn = 0
         self.readable = True
+        self._lock_fd: Optional[int] = None
+        self.exclusive = bool(exclusive)
+        if self.exclusive:
+            self._acquire()
         self._load()
+
+    # ------------------------------------------------- single-writer ownership
+    @property
+    def lock_path(self) -> str:
+        return self.path + ".lock"
+
+    def _acquire(self) -> None:
+        """Take exclusive ownership, or refuse.
+
+        flock is advisory and tied to the open file description, so the fd is
+        held for the ledger's whole life and released only by close() or by the
+        kernel when the process dies. That last part is what makes it correct
+        across a CRASH: a killed process's lock is dropped automatically, so a
+        restart is not blocked by its own dead predecessor, while a LIVE peer
+        still refuses.
+        """
+        d = os.path.dirname(self.lock_path)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            held = ""
+            try:
+                held = os.read(fd, 400).decode("utf-8", "replace").strip()
+            except OSError:
+                pass
+            os.close(fd)
+            if exc.errno in (errno.EACCES, errno.EAGAIN):
+                raise LedgerLocked(
+                    "resting-order ledger %s is owned by another live process "
+                    "(%s); refusing to open a second writer, because two "
+                    "writers each enforce the envelope at half strength"
+                    % (self.path, held or "owner unknown"))
+            raise
+        os.ftruncate(fd, 0)
+        os.write(fd, json.dumps({"pid": os.getpid(), "host": socket.gethostname(),
+                                 "session_id": self.session_id,
+                                 "acquired_t": time.time()}).encode())
+        os.fsync(fd)
+        self._lock_fd = fd
+
+    def close(self) -> None:
+        if self._lock_fd is not None:
+            try:
+                fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(self._lock_fd)
+                self._lock_fd = None
+
+    def __enter__(self) -> "RestingOrderLedger":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self.close()
 
     # ------------------------------------------------------------- durability
     def _append(self, row: Mapping[str, Any]) -> None:
@@ -415,3 +494,56 @@ def admit_place(ledger: RestingOrderLedger, *, leg: str, price: Any, qty: Any,
             "committed_after_usd": str(committed_after),
             "projected_residual_usd": str(residual_after),
             "computed_from": "DURABLE_LEDGER_NOT_PROCESS_MEMORY"}
+
+
+def reconcile_fills(ledger: RestingOrderLedger,
+                    venue_fills: Optional[Sequence[Mapping[str, Any]]],
+                    legs: Tuple[str, str] = ("YES", "NO")) -> Dict[str, Any]:
+    """Bound the risk from fills this process never observed.
+
+    WHY THE OPEN-ORDER CHECK IS NOT ENOUGH. `preflight` compares our live set
+    against the venue's OPEN orders. A fill that happened while we were dead
+    removes the order from that list, so open-order agreement is restored
+    exactly by the event we most need to notice. Remaining quantity then reads
+    high (safe for admission, since we think we still owe it) but the DIRECTIONAL
+    RESIDUAL reads low, because residual counts FILLED quantity and we recorded
+    none. Under-reporting residual is the dangerous direction: it is the number
+    that decides whether we may take on more one-sided exposure.
+
+    So the venue's own fill record is the authority, and any shortfall against
+    it is a refusal rather than a correction. Nothing here rewrites the ledger:
+    a silent repair would destroy the evidence that the two disagreed.
+    """
+    if venue_fills is None:
+        return {"ok": False, "verdict": UNREADABLE,
+                "reason": ("venue fill history unreadable; a restart never "
+                           "assumes it observed every fill")}
+    try:
+        local = ledger.filled_by_leg()
+    except LedgerUnreadable as exc:
+        return {"ok": False, "verdict": UNREADABLE, "reason": str(exc)}
+    remote: Dict[str, D] = {}
+    for f in venue_fills:
+        leg = str(f.get("leg") or f.get("side") or "")
+        q = _dec(f.get("qty", f.get("quantity", f.get("size"))))
+        if q is None:
+            return {"ok": False, "verdict": UNREADABLE,
+                    "reason": "a venue fill carried no readable quantity: %r" % (f,)}
+        remote[leg] = remote.get(leg, D("0")) + q
+    short = {k: (remote.get(k, D("0")) - local.get(k, D("0")))
+             for k in set(remote) | set(local)}
+    unobserved = {k: v for k, v in short.items() if v > 0}
+    extra = {k: -v for k, v in short.items() if v < 0}
+    a, b = remote.get(legs[0], D("0")), remote.get(legs[1], D("0"))
+    return {"ok": not unobserved and not extra,
+            "verdict": ("CLEAN" if (not unobserved and not extra)
+                        else "FILL_DISAGREEMENT"),
+            "local_filled": {k: str(v) for k, v in local.items()},
+            "venue_filled": {k: str(v) for k, v in remote.items()},
+            "unobserved_by_us": {k: str(v) for k, v in unobserved.items()},
+            "unknown_to_venue": {k: str(v) for k, v in extra.items()},
+            "authoritative_residual_units": str(abs(a - b)),
+            "reason": ("" if (not unobserved and not extra) else
+                       "venue fill record disagrees with the durable ledger; the "
+                       "venue is authoritative and the difference is refused, "
+                       "never silently written into the ledger")}

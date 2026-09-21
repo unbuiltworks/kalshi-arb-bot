@@ -1,0 +1,35 @@
+{
+ "maker": {
+  "all": [
+   {
+    "SPLIT_PRESENT": 271,
+    "MERGE_PRESENT": 11,
+    "NEITHER": 38
+   },
+   320
+  ],
+  "single": [
+   {
+    "SPLIT_PRESENT": 115,
+    "NEITHER": 18
+   },
+   133
+  ]
+ },
+ "taker": {
+  "all": [
+   {
+    "SPLIT_PRESENT": 304,
+    "NEITHER": 16
+   },
+   320
+  ],
+  "single": [
+   {
+    "SPLIT_PRESENT": 117,
+    "NEITHER": 13
+   },
+   130
+  ]
+ }
+}
