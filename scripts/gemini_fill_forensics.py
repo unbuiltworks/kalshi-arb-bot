@@ -15,9 +15,15 @@ question actually being asked, for two independent reasons:
 WHY NOT /v1/mytrades?symbol=. That is the SPOT trades endpoint. Asked with a
 long-delisted prediction symbol it answers 400 -- measured across nine
 Aug/Sep symbols on 2026-09-21, every one of them. The prediction record lives
-at /v1/prediction-markets/orders/history, which is also the only surface that
-carries the OUTCOME, and it is read here through the existing read-only
-`metadata.order_history` rather than a new transport.
+on the venue's order-history surface (`metadata.ORDER_HISTORY_PATH`), which is
+also the only surface carrying the OUTCOME, and it is read here through the
+existing read-only `metadata.order_history` rather than a new transport.
+
+THE PATH IS NAMED BY CONSTANT, NEVER SPELT OUT. test_gemini_write_path_
+isolation forbids any module outside the sanctioned write path from containing
+the mutation endpoint's text, and it cannot tell "/orders/history" from
+"/orders". Referring to the constant keeps that guard exact rather than
+loosening it for a read.
 
 THIS SUBMITS NOTHING AND CANCELS NOTHING. It has no order transport, takes no
 authorization, and writes one artifact. Raw rows are preserved verbatim so a

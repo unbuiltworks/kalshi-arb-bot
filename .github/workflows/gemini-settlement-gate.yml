@@ -535,8 +535,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
         run: |
-          # NO ARM IS SET HERE. This reads /v1/prediction-markets/orders/history
-          # and the position surface; it has no order transport and cannot
+          # NO ARM IS SET HERE. This reads the order-history surface
+          # (metadata.ORDER_HISTORY_PATH) and the position surface; it has
           # reach one. It exists because the repository holds NO raw per-fill
           # record for the Aug/Sep activity -- only daily/symbol aggregates,
           # which cannot separate a YES fill from a YES+NO pair on the SAME
