@@ -1,0 +1,87 @@
+KALSHI STEP 1 -- KXCRYPTOLEAD15M, THE CURRENTLY REWARDED SERIES.  READ-ONLY, ZERO ORDERS EVER PLACED.
+============================================================================================================
+
+WHAT THIS SERIES ACTUALLY IS, and it is NOT L5's habitat: rules_primary reads "If
+Ripple has the highest return out of BTC, ETH, SOL, XRP, HYPE". It is a FIVE-WAY
+MUTUALLY EXCLUSIVE RACE expressed as five binary legs, not a binary up/down coin
+flip. Settlement confirms it: 1,120 'no' against 280 'yes' across 1,400 markets,
+exactly the 4:1 a 5-way race produces. A two-sided maker on one leg is not running
+L5's inventory problem.
+
+1. FLOW AND TWO-SIDED IMBALANCE   (finite-sample corrected)
+   trades 2542 across 120 markets   taker yes 1214 / no 1328
+   I by COUNT  0.0448   floor at n=2542 0.0158   EXCESS +0.0290
+   I by VOLUME 0.0032   (yes 24451 / no 24295 contracts)
+   implied r/m floor  0.006      L5 maker-ladder habitat 0.182, PMUS sports 0.919
+   trades per market  p10 6  p50 14  p90 40   -> per-market n is far below the 100 needed
+   at the median 14 trades, a PERFECTLY BALANCED market still measures I=0.209, so
+   per-market imbalance is not readable here; only the pooled figure carries information.
+
+2. MAKER DRAG, MEASURED ON REAL EXECUTED FLOW -- no modelled fill anywhere
+   For every trade, the MAKER took the other side at the traded price. Settled P&L:
+   trades scored 2542 (0 skipped, unsettled/no price)   contracts 48746
+   MAKER settled P&L total  +2013.65   per contract +0.04131
+   maker-side wins 972 of 2542 (38.2%)
+   THIS IS THE DRAG A PASSIVE MAKER ACTUALLY EXPERIENCED on this series' real flow.
+   It is SETTLED-MODELED from public trades, NOT realized by us: we have placed zero orders.
+
+3. LIVE BOOK -- spread, depth, competing qualifying liquidity
+   ticker                                yes_bid  yes_ask   spread     bidSz     askSz
+   RYPTOLEAD15M-26SEP202015-XRP             0.00     0.12     0.12      0.00     76.00
+   RYPTOLEAD15M-26SEP202015-SOL             0.00     0.06     0.06      0.00     71.00
+   YPTOLEAD15M-26SEP202015-HYPE             0.00     0.03     0.03      0.00     63.00
+   RYPTOLEAD15M-26SEP202015-ETH             0.99     1.00     0.01     68.00      0.00
+   RYPTOLEAD15M-26SEP202015-BTC             0.00     0.04     0.04      0.00     70.00
+   spread p50 0.040  -> TAKE both = 1.040   REST both = 0.960
+
+4. REWARD RULES, MEASURED FROM /incentive_programs
+   active KXCRYPTOLEAD15M programs: 5
+     XCRYPTOLEAD15M-26SEP202015-XRP     reward=200000 target=1000.00 discount_bps=5000 ends=2026-09-21T00:15:00Z
+     CRYPTOLEAD15M-26SEP202015-HYPE     reward=200000 target=1000.00 discount_bps=5000 ends=2026-09-21T00:15:00Z
+     XCRYPTOLEAD15M-26SEP202015-BTC     reward=200000 target=1000.00 discount_bps=5000 ends=2026-09-21T00:15:00Z
+     XCRYPTOLEAD15M-26SEP202015-ETH     reward=200000 target=1000.00 discount_bps=5000 ends=2026-09-21T00:15:00Z
+     XCRYPTOLEAD15M-26SEP202015-SOL     reward=200000 target=1000.00 discount_bps=5000 ends=2026-09-21T00:15:00Z
+   period_reward 200000 centi-cents = $20.00 per market per 15-minute period.
+   CREDITED TO US: $0.00. We have never placed an order on this venue.
+
+STRESS TEST OF THE +$0.0413/CONTRACT MAKER RESULT   (total +2013.65 on 48746 contracts)
+====================================================================================================
+
+A. CONCENTRATION -- is it a handful of trades?
+   top 1   by |P&L| carry   +285.92 =  14.2% of the total
+   top 5   by |P&L| carry   +579.03 =  28.8% of the total
+   top 10  by |P&L| carry   +696.95 =  34.6% of the total
+   top 25  by |P&L| carry  +1203.94 =  59.8% of the total
+   top 50  by |P&L| carry  +1568.84 =  77.9% of the total
+   MEDIAN trade P&L -0.0100   mean +0.0164
+
+B. BY TRADED YES PRICE -- is it just cheap longshots in a 5-way race?
+   yes price      trades   contracts   P&L/contract
+   0.0-0.1           786       10366        -0.0063
+   0.1-0.2           235        4232        +0.0174
+   0.2-0.3           255        5379        +0.0105
+   0.3-0.4           257        4748        +0.1381
+   0.4-0.5           206        5258        +0.0989
+   0.5-0.6           143        2433        +0.0086
+   0.6-0.7           154        5108        +0.1854
+   0.7-0.8           131        3679        -0.0026
+   0.8-0.9            97        3146        -0.0529
+   0.9-1.0           278        4398        -0.0042
+
+C. BY TIME TO CLOSE -- late trades happen once the race is effectively decided
+   time to close   trades   contracts   P&L/contract
+   <60s              374        5406        +0.1146
+   60-180s           579       11614        +0.0919
+   180-420s          679       14531        -0.0231
+   >420s             910       17196        +0.0385
+
+D. SAMPLE REPRESENTATIVENESS
+   markets in sample 120   settled YES 24 = 20.0%   (full 1,400-market population: 20.0%)
+
+E. PER-MARKET -- positive in MOST markets, or a few?
+   markets with positive maker P&L: 72 of 120 (60.0%)
+   per-market P&L p10 -42.10  p50 +1.65  p90 +74.92   max +512.13  min -344.03
+
+F. MAKER BUYING YES vs MAKER BUYING NO
+   maker bought YES  1328 trades     24295 contracts  P&L  +1565.02  per contract +0.0644  mean px 0.241
+   maker bought NO   1214 trades     24451 contracts  P&L   +448.62  per contract +0.0183  mean px 0.497

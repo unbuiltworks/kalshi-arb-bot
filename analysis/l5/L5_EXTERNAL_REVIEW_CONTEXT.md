@@ -285,6 +285,33 @@ window-level attribution only, **never** merged into trading P&L.
 
 ## 8. Open questions
 
+0a. **PMUS habitat experiment: REPAIRED, and its historical basis is compromised.**
+   `habitat_selector.observations()` was bridging collector outages — building a window
+   from data on either side of a hole and presenting it as continuous. Fixed by
+   `continuous()` (no observation gap above 120 s across the whole window), five
+   regression tests. The audit: **76.5% of the historical dataset (199 of 260 rows,
+   56 of 62 markets) is invalid**. TRAIN collapses 167 → 7 rows, so **the frozen
+   selector's reference distributions and cutoff were fitted on a TRAIN set that is 96%
+   bridged**; its OOS behaviour does survive on valid rows only (Spearman +0.319 →
+   +0.245, separation −0.191 → −0.172 on 43 rows / 7 markets), but the fit behind it
+   does not rest on data we can stand behind. The failed cohort is preserved as
+   `analysis/pmus/inadequate_cohort_20260920/`, labelled INADEQUATE — INFRASTRUCTURE /
+   DATA CONTINUITY, explicitly **not** a selector PASS/FAIL. Artefact untouched.
+   **BLOCKED:** re-baselining onto the durable Railway tape needs a read path that does
+   not exist — that service writes rows to its volume and logs only heartbeats, and its
+   own docstring records the volume is not readable from outside.
+
+0b. **Kalshi Step 1 done: KXCRYPTOLEAD15M is not the answer.** See
+   `analysis/kalshi/KXCRYPTOLEAD15M_STEP1_README.md`. It is a **5-way race**, not a
+   binary up/down. Pooled flow is the most balanced we have measured (I by volume
+   **0.0032**, r/m floor 0.006) but per-market flow is ~14 trades, below readability.
+   Maker drag on real settled flow is **+$0.0413/contract headline but median −$0.0100**,
+   with 77.9% of P&L in 50 of 2,542 trades and per-market swings −$344 to +$512 — **15–25×
+   the $20 reward pool**. The reward cannot overcome that because it is not the same
+   order of magnitude as the variance. Next candidate: the **commodity 15m series**
+   (GOLD/WTI/SILVER/NATGAS/COPPER), same $20 pool, target size 300, genuine binaries.
+   Credited rewards remain **$0.00**; no order has ever been placed on Kalshi.
+
 0. **Objective changed 2026-09-20: rebate-first.** The target is confirmed rewards
    minus realized drag, not trading P&L — the engine L5 actually ran. Kalshi pays
    rewards for RESTING and drag is paid only on FILLING, so the two terms decouple;
