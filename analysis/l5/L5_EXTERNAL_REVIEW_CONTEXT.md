@@ -33,6 +33,68 @@
 > (independent separator); the exact matched+residual=net decomposition with standalone
 > **indistinguishable from zero**; PMUS take-both = 1 + spread.
 >
+> ## ⛔ READ FIRST-AND-A-HALF — TAKER AUTOPSY 2026-09-21: H1 **FALSIFIED**
+>
+> Full evidence: **`analysis/l5/TAKER_AUTOPSY_20260921.md`**. Venue-supplied
+> maker/taker labels, two complete windows three weeks apart (TRAIN 2026-08-30
+> n=10,500, OOS 2026-09-20 n=10,488), shuffled and state-matched nulls,
+> cluster-bootstrap intervals.
+>
+> **FALSIFIED: taker is NOT materially associated with complementing accumulated
+> inventory.** Do not cite the opposite.
+> * P(taker) falls MONOTONICALLY with same-side run length — 23%→5% (TRAIN),
+>   8%→1% (OOS) — **inside every time-to-settlement band**, so it is not a clock
+>   confound; the confound would push the other way.
+> * `MAKER EXTEND → TAKER OPPOSITE` is the **rarest of the four transitions**
+>   (1.8% TRAIN, 0.4% OOS). After a maker extend the next action is a maker
+>   action 94.7%/99.1% of the time.
+> * The pooled TRAIN effect (+0.0536) is reproduced almost exactly by a
+>   **within-market label shuffle (+0.0562)** — it is between-market composition,
+>   not behaviour. Out of sample it is zero and sign-reversed (−0.0043).
+> * Tie-break spread never flips a sign, so the 53.4% of fills sharing a second
+>   do not drive the verdict.
+>
+> **WHAT TAKER ACTUALLY IS:** an **OPEN** instrument — P(taker|OPEN) **87%/77%** —
+> and an **URGENCY** instrument — P(taker) **5%→52%** as TTE runs 900s→0s.
+> Inventory enters only because an OPEN has none by construction. (The
+> “87% at zero imbalance” row is 97% OPEN fills; do not read it as an
+> inventory effect.)
+>
+> **L5 NEVER SELLS:** 100% BUY across 20,988 labelled fills.
+>
+> **RETIRED BY THIS:** any reading in which the completion leg is taken
+> aggressively; any model escalating aggressiveness as imbalance grows (he does
+> the reverse); any transfer rule keyed to run length as a completion trigger.
+> The three-state machine (OPEN-by-taking → WORK-as-maker → URGENCY-by-clock) is
+> in the report.
+>
+> ## ⛔ OBSERVABILITY LIMITS — verified against live API responses, not assumed
+>
+> Full detail: **`analysis/l5/OBSERVABILITY_20260921.md`**.
+> * Canonical tape rebuilt independently: **760,817 unique fills**, 17,046
+>   markets, 2026-03-19→2026-08-31. Join key is
+>   `(tx, conditionId, outcomeIndex, side, price, size, ts)` — `asset` is absent
+>   from all 692,461 gap items and cannot be the key.
+> * **The corpus CANNOT be labelled maker/taker.** `/activity` carries no such
+>   field; `/trades` max usable offset is exactly **10,000** (10,001 → HTTP 400);
+>   `startTs`/`endTs`/`before`/`after`/`from`/`min_timestamp` are **all silently
+>   ignored**. No time filter exists.
+> * Venue label gives **80.9% maker**; chain-derived `l5_role` gives 88.3% on a
+>   different window. Independent sources, not merged, neither overwritten.
+> * **Vendors: DO NOT BUY.** Marketlens covers from 2026-03-01 at tick/ms with
+>   deltas and has a **free 1M rows/day tier**; PolymarketData is 1-minute
+>   snapshots only ("sub-minute data doesn't exist historically"). **None can say
+>   which resting orders are L5's** — anonymous depth is anonymous everywhere, so
+>   no archive at any price answers the queue question. We already hold 1-second
+>   full depth (Zenodo 22084977) for the product family that matters. Evaluate
+>   Marketlens on the free tier only.
+> * **The recorder throws away the data we need.** `clob/book?token_id=` returns
+>   the FULL ladder — verified live at **43 bid / 42 ask levels** — and
+>   `intl_books_loop` collapses it to one bid and one ask before writing. Nothing
+>   polls L5's own address. Three small changes (persist the ladder; add a
+>   `user=` poller; join `PositionSplit` post hoc) would make pre-fill book,
+>   action and match type **directly observed**. L5 is still active today.
+>
 > ## ⛔ READ SECOND — EXECUTION-MECHANISM PASS 2026-09-21, AS CORRECTED
 >
 > **`703581d9` OVERSTATED ITS OWN HEADLINE AND IS CORRECTED HERE.** Do not cite
@@ -111,7 +173,7 @@
 
 
 
-Last updated **2026-09-21**, execution-mechanism pass. Branch
+Last updated **2026-09-21**, taker-autopsy + observability pass. Branch
 `claude/l5-execution-instrumentation-io6nzi`.
 
 Durable behavioural source of truth remains `L5_OPERATING_MODEL.md`. This file is
