@@ -120,9 +120,41 @@ def target(se, bt, prints, t):
             "n_fwd": ny + nn}
 
 
-def observations(books, flows, venue="PMUS", stride_s=300.0):
+# A book observation gap wider than this means the COLLECTOR was not watching.
+# The sweep cadence is ~8s, so 120s cannot be quiet trading -- it is an outage.
+MAX_OBS_GAP_S = 120.0
+
+
+def continuous(bt, t0, t1, max_gap_s=MAX_OBS_GAP_S):
+    """Were we actually WATCHING for the whole of [t0, t1]?
+
+    THIS EXISTS BECAUSE ITS ABSENCE PRODUCED FABRICATED OBSERVATIONS. The tape is
+    append-mode across collector restarts, so a window spanning an outage was being
+    built from the data on either side with the missing minutes invisible: not an
+    observation of a continuous window, but two fragments with a hole. On the first
+    prospective read, 28 of 33 rows were bridged, one of them across 18.3 minutes of
+    missing book. Such a row cannot be scored, and a selector separation computed
+    from them would be measuring our own downtime.
+
+    Requires coverage at BOTH ends -- an observation that merely starts after the
+    last sample, or ends before the first, is not covered either."""
+    if t1 <= t0:
+        return False
+    lo = bisect.bisect_right(bt, t0) - 1
+    hi = bisect.bisect_left(bt, t1)
+    if lo < 0 or hi >= len(bt):
+        return False
+    seg = bt[lo:hi + 1]
+    return all((b - a) <= max_gap_s for a, b in zip(seg, seg[1:]))
+
+
+def observations(books, flows, venue="PMUS", stride_s=300.0,
+                 max_gap_s=MAX_OBS_GAP_S):
     """One row per (market, decision time) on a fixed grid. The feature window
-    ends at t and the target window starts at t, so they never overlap."""
+    ends at t and the target window starts at t, so they never overlap.
+
+    A row is emitted ONLY when the collector was continuously watching across the
+    whole of [t - LOOKBACK_S, t + HORIZON_S]. See `continuous`."""
     out = []
     for (v, slug), se in books.items():
         if v != venue or len(se) < 10:
@@ -134,15 +166,16 @@ def observations(books, flows, venue="PMUS", stride_s=300.0):
         t_lo, t_hi = se[0]["t"] + LOOKBACK_S, se[-1]["t"] - HORIZON_S
         t = t_lo
         while t <= t_hi:
-            f = features(se, bt, pr, t)
-            if f is not None:
-                g = target(se, bt, pr, t)
-                if g is not None:
-                    row = {"slug": slug, "t": t,
-                           "league": se[0].get("league"),
-                           "sports_type": se[0].get("sports_type")}
-                    row.update(f); row.update(g)
-                    out.append(row)
+            if continuous(bt, t - LOOKBACK_S, t + HORIZON_S, max_gap_s):
+                f = features(se, bt, pr, t)
+                if f is not None:
+                    g = target(se, bt, pr, t)
+                    if g is not None:
+                        row = {"slug": slug, "t": t,
+                               "league": se[0].get("league"),
+                               "sports_type": se[0].get("sports_type")}
+                        row.update(f); row.update(g)
+                        out.append(row)
             t += stride_s
     out.sort(key=lambda r: r["t"])
     return out

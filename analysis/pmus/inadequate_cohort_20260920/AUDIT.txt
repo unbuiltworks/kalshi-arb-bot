@@ -1,0 +1,21 @@
+P0-4  HISTORICAL TRAIN/OOS AUDIT FOR BRIDGED WINDOWS
+      Frozen selector NOT refitted: cutoff 0.377246, features ['mid_dist_half', 'imb_cnt_lb', 'min_side_share'], reference distributions untouched.
+========================================================================================================
+  historical rows as originally extracted    260   across  62 markets
+  INVALIDATED (window bridges an outage)     199   across  56 markets   = 76.5% of rows
+  surviving valid rows                        61   across  18 markets
+
+  SAME chronological cut and SAME straddling-market exclusion as the frozen run:
+    TRAIN  167 ->   7 rows  ( 43 ->   5 markets)
+    OOS     63 ->  43 rows  ( 12 ->   7 markets)
+
+  FROZEN SELECTOR METRICS, BEFORE vs AFTER excluding bridged windows
+    TRAIN  as published (bridged incl.) n=167 | sel 56 / rej 111 | sel I_exc p50 +0.170  rej +0.425  SEP -0.256 | Spearman +0.293
+    TRAIN  valid only                  n=  7 | sel  3 / rej  4 | sel I_exc p50 +0.041  rej +0.499  SEP -0.458 | Spearman +0.464
+    OOS    as published (bridged incl.) n= 63 | sel 29 / rej 34 | sel I_exc p50 +0.092  rej +0.283  SEP -0.191 | Spearman +0.319
+    OOS    valid only                  n= 43 | sel 25 / rej 18 | sel I_exc p50 +0.095  rej +0.267  SEP -0.172 | Spearman +0.245
+
+  The published OOS figures were Spearman 0.315 and a SELECTED-minus-REJECTED separation
+  of -0.192. The 'as published' rows above re-derive them from the stored dataset; the
+  'valid only' rows are the same frozen selector applied to the same rows MINUS those whose
+  window spans an outage. Nothing was refitted.

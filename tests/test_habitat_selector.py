@@ -95,3 +95,54 @@ def test_no_economic_input_reaches_the_selector():
     banned = ("pnl", "settle", "realized", "fill", "matched", "residual", "basis")
     for f, _ in HS.FROZEN_FEATURES:
         assert not any(b in f for b in banned), f
+
+
+def _bt(*spans):
+    """Build an observation-time list from (start, end, step) spans."""
+    out = []
+    for a, b, step in spans:
+        t = a
+        while t <= b:
+            out.append(float(t)); t += step
+    return sorted(out)
+
+
+def test_continuous_accepts_an_unbroken_window():
+    bt = _bt((0, 4000, 8))
+    assert HS.continuous(bt, 600.0, 2400.0)
+
+
+def test_continuous_rejects_a_window_spanning_an_outage():
+    """REGRESSION. 28 of the 33 rows in the first prospective read bridged a
+    collector outage, one across 18.3 minutes of missing book. The tape is
+    append-mode across restarts, so the hole is invisible without this check."""
+    bt = _bt((0, 1000, 8), (2100, 4000, 8))      # 1100s hole
+    assert not HS.continuous(bt, 600.0, 2400.0)
+
+
+def test_continuous_requires_coverage_at_both_ends():
+    bt = _bt((1000, 4000, 8))
+    assert not HS.continuous(bt, 600.0, 2400.0)   # starts before first sample
+    bt2 = _bt((0, 2000, 8))
+    assert not HS.continuous(bt2, 600.0, 2400.0)  # ends after last sample
+
+
+def test_continuous_tolerates_ordinary_cadence_jitter():
+    bt = _bt((0, 4000, 60))      # 60s sampling, well inside the 120s bound
+    assert HS.continuous(bt, 600.0, 2400.0)
+
+
+def test_observations_emits_nothing_across_a_gap():
+    """End to end: a market whose tape has a hole in the middle must yield no row
+    whose window spans it."""
+    se_a = [{"t": float(i), "bid": 0.48, "ask": 0.52, "bid_qty": 100.0, "ask_qty": 100.0}
+            for i in range(0, 1000, 8)]
+    se_b = [{"t": float(i), "bid": 0.48, "ask": 0.52, "bid_qty": 100.0, "ask_qty": 100.0}
+            for i in range(2100, 5000, 8)]
+    books = {("PMUS", "gapped"): se_a + se_b}
+    prints = [{"t": float(i), "px": 0.48 if i % 2 else 0.52, "size": 10.0}
+              for i in range(0, 5000, 20)]
+    rows = HS.observations(books, {("PMUS", "gapped"): prints})
+    for r in rows:
+        assert HS.continuous([o["t"] for o in books[("PMUS", "gapped")]],
+                             r["t"] - HS.LOOKBACK_S, r["t"] + HS.HORIZON_S), r["t"]
