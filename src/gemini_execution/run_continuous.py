@@ -597,6 +597,11 @@ class DecisionObserver:
                 "turn": {k: sanitize(turn.get(k)) for k in
                          ("actions_remaining", "probe_state", "stop",
                           "why_no_surface", "blocked_by")},
+                # A HELD CYCLE SAYS SO, cycle by cycle. Without this an
+                # unreadable hold looks identical in the record to a cycle
+                # the surface simply had nothing to say about.
+                "unreadable_hold": sanitize((out or {}).get(
+                    "unreadable_hold")),
                 "budget_after_decision": self._budget(driver),
             })
         except Exception as exc:                               # noqa: BLE001
@@ -1388,7 +1393,15 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
     rep["position_gate"] = {
         "read": {k: pos.get(k) for k in ("path", "status", "ok", "why",
                                          "total")},
+        # FOR THE SYMBOL, as the name has always claimed. This was
+        # len(pos["rows"]) -- every row on the account -- so EP013's report
+        # read "2 rows for this instrument" beside "FLAT_NO_ROWS" for a
+        # contract we had never traded. The two unrelated rows were another
+        # market's. The reconciliation itself always filtered correctly;
+        # only this counter lied.
         "n_rows_for_symbol": (None if pos.get("rows") is None
+                              else len(PL.rows_for(pos["rows"], symbol))),
+        "n_rows_on_account": (None if pos.get("rows") is None
                               else len(pos["rows"])),
         "reconciliation": pos_rec,
     }
@@ -1570,6 +1583,14 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
         async def refresh() -> Dict[str, Any]:
             return await authoritative_state(symbol)
 
+        # THE SECOND AUTHORITATIVE READ, called by the driver ONLY while it
+        # is holding on an unreadable snapshot. The normal path never touches
+        # it, so nothing about ordinary cycles changes; when the book cannot
+        # be read this is what can still say the account disagrees with our
+        # ledger, and a disagreement is terminal wherever it is found.
+        async def positions() -> Dict[str, Any]:
+            return await MD.positions()
+
         # EVIDENCE ONLY: same decide call, same returned object, same plan,
         # same ordering. `attach` returns the observed refresh; the driver is
         # otherwise untouched and its executable_sha does not move.
@@ -1582,6 +1603,7 @@ async def _build(auth_id: str, *, state_dir: str, ledger_path: str,
             venue_orders=st.get("orders_seen"),
             readers=readers,
             refresh_fn=observed_refresh,
+            position_fn=positions,
             interval_s=5.0)
         rep["window"] = out
         rep["refresh_link"] = decisions.link_refreshes(out.get("refreshes"))

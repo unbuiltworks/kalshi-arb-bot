@@ -87,6 +87,7 @@ from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
 from src.gemini_execution import arming, continuous_probe as CP, spec
 from src.gemini_execution import live_envelope as LE
 from src.gemini_execution import outstanding_ledger as OL
+from src.gemini_execution import position_ledger as PL
 from src.gemini_execution import executions as EX
 from src.gemini_execution import continuous_preflight as PF
 
@@ -925,6 +926,42 @@ RECOVERED = "RECOVERED"
 BOUND = "BOUND"
 RUNNING = "RUNNING"
 WITHDRAWING = "WITHDRAWING"
+
+#: WHY AN UNREADABLE SNAPSHOT IS A HOLD AND NOT A FUNERAL.
+#:
+#: EP013 ended a live BTC15m window on ONE crossed tick at tte 332.4s -- 32
+#: seconds before the frozen surface's [0, 300] quoting window would have
+#: opened. Zero orders, zero evidence, a whole authorized window spent. The
+#: refusal itself was right: a book we cannot read is not one to quote into,
+#: and that is not negotiable below. What was wrong was the BLAST RADIUS --
+#: one bad snapshot terminated the window instead of costing one cycle.
+#:
+#: THE BOUND IS MEASURED, NOT INVENTED. scripts/gemini_unreadable_census.py
+#: walks every per-cycle recording in the tree -- 1,543 cycles, 225
+#: unreadable, 40 distinct runs -- and asks how long an unreadable run lasts
+#: when it recovers at all:
+#:
+#:     recovered in 1 cycle   7 runs   63.6%
+#:     recovered in 2 cycles  2 runs   81.8%
+#:     recovered in 5 cycles  2 runs  100.0%
+#:     longer than 5 cycles   0 runs  NEVER RECOVERED, not once in 40
+#:
+#: Every run that came back came back within five cycles (41.9s of wall clock
+#: at the longest). Every run that exceeded five cycles ran to the end of its
+#: contract in the dark -- those are the last minutes of an expiring market,
+#: not a transient. So five is not a compromise between recall and safety: it
+#: is the entire observed recovery distribution with nothing outside it.
+UNREADABLE_MAX_CONSEC = 5
+
+#: The same bound in wall clock, because a loop that stalls could sit inside
+#: five cycles for a very long time. The longest RECOVERED run spanned 41.9s;
+#: five cycles at the observed ~9.4s cadence is ~47s. 60s covers both with a
+#: margin and still fails closed long before the frozen surface could care.
+#: Whichever bound trips first ends the hold.
+UNREADABLE_MAX_S = 60.0
+
+#: who is holding a rung off the book, in the plan's own vocabulary
+HELD_UNREADABLE = "UNREADABLE_STATE"
 STOPPED = "STOPPED"
 DO_NOT_TRADE = "DO_NOT_TRADE"
 RECONCILE = "SUBMISSION_UNKNOWN_RECONCILE_REQUIRED"
@@ -1025,6 +1062,26 @@ class Driver:
         #: trades-only execution before filled-history catches up.
         self._legs: Dict[str, str] = {}
         self.log: List[Dict[str, Any]] = []
+        # ---- BOUNDED RECOVERY FROM AN UNREADABLE AUTHORITATIVE SNAPSHOT ----
+        #: how many CONSECUTIVE cycles have refused to yield a coherent
+        #: market state. Reset to 0 by a fresh coherent read, and by nothing
+        #: else -- in particular not by the passage of time.
+        self._unreadable_n = 0
+        #: when the current run of unreadable cycles began, for the wall-clock
+        #: half of the bound.
+        self._unreadable_since: Optional[float] = None
+        #: the venue timestamp of the most recent UNREADABLE snapshot. Resume
+        #: requires a coherent snapshot at least this new, so a cached or
+        #: replayed read cannot end a hold.
+        self._unreadable_last_t: Optional[float] = None
+        self._unreadable_whys: List[str] = []
+        #: PROVENANCE ONLY. The last snapshot that WAS coherent, kept so a
+        #: report can say what we last legitimately saw. It is never handed to
+        #: the controller, never priced against and never treated as current:
+        #: a remembered book is not an authoritative one.
+        self._last_coherent: Optional[Dict[str, Any]] = None
+        #: the most recent mid-hold position re-read, for the report.
+        self._position_recheck: Optional[Dict[str, Any]] = None
         # A COHORT MAY TIGHTEN THE ENVELOPE, NEVER EXTEND IT. A request above
         # CP.MAX_ACTIONS is REFUSED rather than clamped: silently granting
         # less than was asked for leaves the caller believing it holds budget
@@ -1256,6 +1313,45 @@ class Driver:
         now = self.now_fn()
         st = CP.state_from_venue(self._symbol, tte_s, self.inv, now=now,
                                  book=book)
+
+        # AN UNREADABLE SNAPSHOT NEVER REACHES THE POLICY.
+        #
+        # This branch sits ABOVE guard.step deliberately. The safety invariant
+        # is not "the policy declines to act on a bad book" -- it is that the
+        # policy is NEVER SHOWN one. Nothing below this line runs: no surface,
+        # no pricing, no sizing, no inventory-dependent classification. The
+        # only thing this snapshot is allowed to do is be counted.
+        if st.get("inventory_known") is False:
+            return self._hold_unreadable(st, tte_s, now)
+
+        # RESUMING TAKES A FRESH COHERENT READ, not merely a coherent one.
+        # `state_from_venue` stamps the snapshot with the clock it was built
+        # against, so a cached or replayed object cannot end a hold: the
+        # resume read must be at least as new as the last refusal.
+        if self._unreadable_n:
+            t = st.get("t_utc")
+            if (t is not None and self._unreadable_last_t is not None
+                    and float(t) < float(self._unreadable_last_t)):
+                return self._hold_unreadable(
+                    dict(st, inventory_known=False,
+                         unreadable_why=(
+                             "a coherent-looking snapshot older than the last "
+                             "refusal (%.3f < %.3f) is a stale read, not a "
+                             "recovery" % (float(t),
+                                           float(self._unreadable_last_t)))),
+                    tte_s, now)
+            self.log.append({"event": "UNREADABLE_RECOVERED",
+                             "after_cycles": self._unreadable_n,
+                             "state_id": st.get("state_id"),
+                             "t": now})
+        # A coherent read clears the run and becomes the provenance record.
+        self._unreadable_n = 0
+        self._unreadable_since = None
+        self._unreadable_last_t = None
+        self._unreadable_whys = []
+        self._last_coherent = {"state_id": st.get("state_id"),
+                               "t_utc": st.get("t_utc"), "tte_s": tte_s}
+
         # THE AUTHORIZED q REACHES THE DECISION. The policy chooses side,
         # price, ordering and classification; q is stamped by the execution
         # layer and is not a behavioural output. Passing the envelope's own
@@ -1297,7 +1393,11 @@ class Driver:
                             % (tte_s, c["why"]))
             return {"state": self.state, "turn": turn, "plan": plan,
                     "market_state": st,
-                    "why": turn.get("stop") or "window withdrawn"}
+                    "why": (turn.get("stop")
+                            or ("window withdrawn at tte %.1f: the frozen "
+                                "surface's phase is WINDOW_WITHDRAWN. One "
+                                "contract only, no continuation into the "
+                                "next." % float(tte_s)))}
 
         # THE PRODUCTION LIFECYCLE. Ordinary desired-price movement may no
         # longer cancel a valid resting maker order younger than the frozen
@@ -1315,6 +1415,153 @@ class Driver:
         return {"state": self.state, "turn": turn, "plan": plan,
                 "market_state": st,
                 "window_phase": phase, "budget_left": self.budget_left()}
+
+    # ------------------------------------------- UNREADABLE, BOUNDED
+
+    def _hold_plan(self, why: str) -> Dict[str, Any]:
+        """The plan for a cycle we are not allowed to think during.
+
+        Every resting order is RETAINED exactly as it is -- not re-priced, not
+        replaced, not cancelled, not forgotten. Zero mutations, so the
+        strategy budget is untouched and `run_window` has nothing to send.
+        """
+        retain = [{"action": RETAIN, "order": o, "held_by": HELD_UNREADABLE,
+                   "why": ("authoritative state is UNREADABLE (%s). A resting "
+                           "order is left EXACTLY where it is: replacing it "
+                           "would be a decision taken on a snapshot we just "
+                           "refused to read, and cancelling it would be a "
+                           "mutation nothing asked for." % why)}
+                  for o in self.working.rungs()]
+        return {"keep": [], "retain": retain, "place": [], "add": [],
+                "cancel": [], "hold": [], "mutations": 0,
+                "held_by": HELD_UNREADABLE,
+                "labels": ("a HOLD is not a withdrawal and not a surface. "
+                           "Nothing goes on, nothing comes off, and the "
+                           "next cycle re-reads the venue from scratch.")}
+
+    def _hold_unreadable(self, st: Mapping[str, Any], tte_s: float,
+                         now: float) -> Dict[str, Any]:
+        """One unreadable cycle: HOLD, or -- past the bound -- withdraw.
+
+        WHAT IS PRESERVED, and it is the whole point:
+
+          * zero placements and zero strategy decisions from this snapshot;
+          * inventory is NEVER assumed flat -- `self.inv` is whatever the last
+            authoritative fill reconciliation established and is not touched
+            here, and `_refresh` keeps re-establishing it every cycle;
+          * the last coherent state is kept as PROVENANCE and is not consulted;
+          * resting orders stay accounted for and stay exactly as they are;
+          * the withdrawal path stays available and runs on every exit.
+
+        Past `UNREADABLE_MAX_CONSEC` cycles or `UNREADABLE_MAX_S` seconds, a
+        transient is no longer a transient and terminal withdrawal is the
+        correct answer -- which is what the census says too: no run longer
+        than five cycles has ever recovered.
+        """
+        why = str(st.get("unreadable_why")
+                  or "authoritative market state is not readable")
+        self._unreadable_n += 1
+        if self._unreadable_since is None:
+            self._unreadable_since = now
+        # MONOTONE, deliberately. A stale snapshot arrives here too (the
+        # resume check re-enters this method with it), and letting its older
+        # clock overwrite the watermark would make the NEXT replay of the
+        # original look fresh. The high-water mark only ever rises.
+        t = st.get("t_utc")
+        newt = float(t) if t is not None else float(now)
+        self._unreadable_last_t = (
+            newt if self._unreadable_last_t is None
+            else max(float(self._unreadable_last_t), newt))
+        self._unreadable_whys.append(why)
+        elapsed = float(now) - float(self._unreadable_since)
+
+        hold: Dict[str, Any] = {
+            "label": "UNREADABLE_HOLD_V1",
+            "why": why,
+            "consecutive": self._unreadable_n,
+            "elapsed_s": round(elapsed, 3),
+            "bound": {"max_consecutive": UNREADABLE_MAX_CONSEC,
+                      "max_s": UNREADABLE_MAX_S},
+            "tte_s": tte_s,
+            "resting": len(self.working.rungs()),
+            "inventory": (self.inv.report() if self.inv is not None else None),
+            "inventory_note": (
+                "carried from the last AUTHORITATIVE fill reconciliation and "
+                "re-established every cycle by _refresh. An unreadable book "
+                "says nothing about what we hold, and flat is never assumed."),
+            "last_coherent": self._last_coherent,
+            "last_coherent_note": (
+                "PROVENANCE ONLY. Recorded so a reader can see what we last "
+                "legitimately saw. It is not passed to the controller, not "
+                "priced against, and cannot end this hold."),
+            "position_recheck": self._position_recheck,
+            "whys": list(self._unreadable_whys),
+        }
+
+        if (self._unreadable_n > UNREADABLE_MAX_CONSEC
+                or elapsed > UNREADABLE_MAX_S):
+            hold["verdict"] = "BOUND_EXCEEDED"
+            stop_why = (
+                "authoritative state unreadable for %d consecutive cycle(s) "
+                "over %.1fs, past the bound of %d cycle(s) / %.1fs: %s. No "
+                "unreadable run longer than %d cycles has ever recovered, so "
+                "this is withdrawn rather than waited out."
+                % (self._unreadable_n, elapsed, UNREADABLE_MAX_CONSEC,
+                   UNREADABLE_MAX_S, why, UNREADABLE_MAX_CONSEC))
+            self.state = WITHDRAWING
+            plan = reconcile_surface([], self.working, now=now,
+                                     cohort_prefix=self._cohort_prefix(),
+                                     safety="TERMINAL_WITHDRAWAL")
+            for c in plan["cancel"]:
+                c["why"] = ("unreadable past the recovery bound at tte %s; %s"
+                            % (tte_s, c["why"]))
+            return {"state": self.state, "turn": None, "plan": plan,
+                    "market_state": st, "unreadable_hold": hold,
+                    "why": stop_why}
+
+        hold["verdict"] = "HOLD"
+        return {"state": self.state, "turn": None,
+                "plan": self._hold_plan(why),
+                "market_state": st, "unreadable_hold": hold,
+                "window_phase": None, "budget_left": self.budget_left(),
+                "why": ("HOLD %d/%d: %s. Nothing is placed, replaced or "
+                        "cancelled on a state we cannot read."
+                        % (self._unreadable_n, UNREADABLE_MAX_CONSEC, why))}
+
+    async def _recheck_position(self, position_fn: Callable
+                                ) -> Dict[str, Any]:
+        """Re-read the venue's own position DURING a hold.
+
+        The book is re-read every cycle by the loop; this is the other
+        authoritative read, and it is the one that could say our inventory is
+        not what we think. A DISAGREEMENT is terminal here exactly as it is at
+        startup. An UNREADABLE position is NOT terminal and is NOT flat: it
+        leaves the hold running under the same bound.
+        """
+        try:
+            pos = await position_fn()
+        except Exception as exc:                              # noqa: BLE001
+            rec = {"verdict": PL.UNREADABLE, "tradeable": False,
+                   "why": "%s: %s" % (type(exc).__name__, exc)}
+        else:
+            rec = PL.reconcile(
+                self.inv if self.inv is not None else CP.Inventory(),
+                (pos or {}).get("rows"), self._symbol)
+        out = {"verdict": rec.get("verdict"), "why": rec.get("why"),
+               "our_signed": rec.get("our_signed"),
+               "venue_signed": rec.get("venue_signed"),
+               "venue_representation": rec.get("venue_representation"),
+               "terminal": rec.get("verdict") == PL.DISAGREE,
+               "note": ("UNREADABLE keeps the hold and is never read as flat; "
+                        "DISAGREE is terminal, because an account whose "
+                        "position contradicts our ledger is not one to trade "
+                        "on however readable its book becomes.")}
+        self._position_recheck = out
+        if out["terminal"]:
+            self.stop(DO_NOT_TRADE,
+                      "position disagreement during an unreadable hold: %s"
+                      % (rec.get("why") or "venue and ledger disagree"))
+        return out
 
     def apply_fill(self, client_order_id: str, qty: Any, price: Any,
                    *, partial: bool) -> Dict[str, Any]:
@@ -1879,6 +2126,7 @@ class Driver:
                          venue_orders: Optional[Sequence[Mapping[str, Any]]] = None,
                          readers: Optional[Mapping[str, Callable]] = None,
                          refresh_fn: Optional[Callable] = None,
+                         position_fn: Optional[Callable] = None,
                          interval_s: float = 5.0,
                          max_cycles: int = 400) -> Dict[str, Any]:
         """Drive ONE window. Every exit is terminal; nothing re-arms.
@@ -1925,8 +2173,25 @@ class Driver:
                     "cycle": report["cycles"], "state": out.get("state"),
                     "window_phase": out.get("window_phase"),
                     "plan": _plan_summary(out.get("plan")),
+                    "unreadable_hold": (out.get("unreadable_hold") or {}
+                                        ).get("verdict"),
                     "inventory": (self.inv.report() if self.inv else None),
                     "budget_left": self.budget_left()})
+                # THE OTHER AUTHORITATIVE READ, and only while held. The book
+                # is re-read every cycle anyway; the position is what could
+                # say our inventory is not what we think, and a hold is
+                # exactly when that matters. It runs on a HOLD and on the
+                # bound-exceeded cycle alike: the withdrawal below still
+                # needs to know whether the account agrees with us.
+                hold_rec = out.get("unreadable_hold")
+                if hold_rec is not None:
+                    if position_fn is not None:
+                        hold_rec["position_recheck"] = \
+                            await self._recheck_position(position_fn)
+                    report.setdefault("unreadable_holds", []).append(
+                        dict(hold_rec, cycle=report["cycles"]))
+                    if self.state in TERMINAL:
+                        break
                 plan = out.get("plan") or {}
                 for c in plan.get("cancel", []):
                     await self.cancel(session, c["order"])
@@ -1946,8 +2211,16 @@ class Driver:
                 for p in plan.get("place", []):
                     await self.place(session, p["rung"])
                 if self.state == WITHDRAWING:
-                    self.stop(STOPPED, "window withdrawn; one contract only, "
-                                       "no continuation into the next")
+                    # THE REASON SURVIVES THE WITHDRAWAL. This used to
+                    # overwrite every cause with one sentence about contract
+                    # rollover, so EP013's report said the contract rolled
+                    # when what actually happened was a crossed book 32
+                    # seconds before the quoting window opened. `decide`
+                    # already knows why it withdrew; the withdrawal is the
+                    # consequence, not the explanation.
+                    self.stop(STOPPED, out.get("why")
+                              or ("window withdrawn; one contract only, no "
+                                  "continuation into the next"))
                     break
                 await asyncio.sleep(max(0.0, interval_s))
         except (CP.ProbeStop, ReconcileRequired, NotAuthorized) as exc:
@@ -2001,6 +2274,23 @@ class Driver:
             "one strategy-owned order may still be executable; inert:true "
             "means the venue showed none resting and says nothing about "
             "fills already taken.")
+        # THE UNREADABLE-RECOVERY LEDGER, so a window that held and came
+        # back says so rather than looking like a quiet one.
+        holds = report.get("unreadable_holds") or []
+        report["unreadable"] = {
+            "holds": len(holds),
+            "bound": {"max_consecutive": UNREADABLE_MAX_CONSEC,
+                      "max_s": UNREADABLE_MAX_S},
+            "longest_run": max([h.get("consecutive") or 0
+                                for h in holds] or [0]),
+            "bound_exceeded": any(h.get("verdict") == "BOUND_EXCEEDED"
+                                  for h in holds),
+            "recoveries": len([e for e in self.log
+                               if e.get("event") == "UNREADABLE_RECOVERED"]),
+            "note": ("a HOLD costs one cycle and no mutation. Nothing was "
+                     "placed, replaced or cancelled on an unreadable "
+                     "snapshot, and inventory was never assumed flat."),
+        }
         report["realized"] = None
         report["realized_note"] = (
             "REALIZED stays null until a venue-confirmed cash movement is "

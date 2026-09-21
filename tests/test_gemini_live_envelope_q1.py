@@ -316,15 +316,30 @@ def test_the_symbol_family_is_still_refused_at_construction(tmp_path):
                   envelope=LE.LIVE_Q1)
 
 
+def _readable_book(ybid="0.55", yask="0.60"):
+    """Identity-consistent and uncrossed: everything `state_from_venue` asks
+    for, so a test about POLICY is never answered by book readability."""
+    return {"readable": True, "identity_consistent": True,
+            "yes": {"bid": ybid, "ask": yask},
+            "no": {"bid": str(round(1 - float(yask), 2)),
+                   "ask": str(round(1 - float(ybid), 2))}}
+
+
 # ======================================== 5. deadman / withdrawal / cancel
 
 def test_below_the_withdraw_floor_everything_resting_is_cancelled(
         tmp_path, _authorized):
+    """A READABLE book, deliberately. Without one this test used to pass on
+    the WRONG path: `decide(book=None)` reached for a live venue read, got an
+    unreadable book for a symbol that does not exist, and the withdrawal it
+    asserted came from THAT rather than from the withdraw floor it names."""
     d = _live(tmp_path)
     assert d.bind()["bound"]
     s = FakeSession()
     _run(d.place(s, _rung("YES", "0.50")))
-    out = d.decide(CP.WITHDRAW_ALL_TTE_S - 1.0)
+    out = d.decide(CP.WITHDRAW_ALL_TTE_S - 1.0, book=_readable_book())
+    assert out["market_state"]["inventory_known"] is True, \
+        "the floor must be what withdrew this window, not an unread book"
     assert d.state == WC.WITHDRAWING
     assert out["plan"]["place"] == [], "nothing new may be quoted on the way out"
     assert len(out["plan"]["cancel"]) == len(d.working.rungs()) == 1

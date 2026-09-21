@@ -85,6 +85,18 @@ def _rows_for(rows: Sequence[Mapping[str, Any]], symbol: str
     return out
 
 
+def rows_for(rows: Optional[Sequence[Mapping[str, Any]]], symbol: str
+             ) -> List[Mapping[str, Any]]:
+    """The account's rows FOR THIS INSTRUMENT. Public because reports need it.
+
+    `_rows_for` has always been the right filter and was only ever used
+    internally, so callers that wanted to COUNT this instrument's rows
+    counted the whole account instead. That is a report saying "2 rows for
+    this instrument" about a contract it never traded.
+    """
+    return list(_rows_for(rows or [], symbol))
+
+
 def venue_signed(rows: Optional[Sequence[Mapping[str, Any]]], symbol: str
                  ) -> Dict[str, Any]:
     """Reduce whatever shape the venue sent to ONE signed quantity.

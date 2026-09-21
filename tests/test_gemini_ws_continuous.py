@@ -1103,6 +1103,11 @@ def test_a_downsized_rung_under_a_q1_authorization_is_refused(tmp_path,
                     "window_phase": CP.WINDOW_OPEN}
 
     d.guard = _Guard()
-    out = d.decide(tte_s=200.0, book=None)
+    # A READABLE book, so the refusal under test is the SIZE check and not
+    # book readability. `book=None` reached for a live venue read here, got
+    # nothing for a symbol that does not exist, and the assertion below used
+    # to be answered by the wrong refusal.
+    out = d.decide(tte_s=200.0, book=_book())
+    assert out["market_state"]["inventory_known"] is True
     assert d.state == WC.DO_NOT_TRADE
     assert "silently downsized" in (out.get("why") or "")
