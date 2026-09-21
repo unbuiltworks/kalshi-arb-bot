@@ -526,13 +526,20 @@ def intl_flow_loop(state: dict) -> None:
     single request. Direction is KNOWN, never inferred."""
     seen: collections.deque = collections.deque(maxlen=80000)
     seenset: set = set()
+    sweeps = 0
+    errors = 0
     while True:
         t0 = time.time()
+        sweeps += 1
         try:
             tr = get(DATA + "/trades?limit=1000")
         except Exception:
+            # Swallowed with no counter, this is the silent-failure shape:
+            # a tape that stops answering looks exactly like a quiet market.
+            errors += 1
             tr = []
         cmap = state.get("intl_cond") or {}
+        written = 0
         for x in (tr if isinstance(tr, list) else []):
             ident = cmap.get(x.get("conditionId"))
             if ident is None:
@@ -554,6 +561,19 @@ def intl_flow_loop(state: dict) -> None:
                 "side": x.get("side"), "outcome": x.get("outcome"),
                 "wallet": x.get("proxyWallet"),
                 "trade_provenance": "REAL_PRINT_DIRECTION_KNOWN"})
+            written += 1
+        # The intl_flow analogue of pmus_flow_selected. A FLAT rows_written on
+        # this stream has two causes and they are not the same fact: the loop
+        # ran and no tape trade fell in a watched condition, or the loop is
+        # stuck. `sweeps` rising with `selected` 0 is the first; `sweeps`
+        # frozen is the second. This ambiguity cost two hours of misdiagnosis
+        # on pmus_flow (see analysis/l5/PMUS_FLOW_INCIDENT_20260921.md) and the
+        # same blind spot was still open here.
+        state["intl_flow_sweeps"] = sweeps
+        state["intl_flow_selected"] = written
+        state["intl_flow_conditions"] = len(cmap)
+        state["intl_flow_tape"] = len(tr) if isinstance(tr, list) else 0
+        state["intl_flow_fetch_errors"] = errors
         d = INTL_FLOW_CAD - (time.time() - t0)
         if d > 0:
             time.sleep(d)
@@ -598,6 +618,8 @@ def prospective_loop(state: dict) -> None:
                        else not e["is_taker"]),
                 pre_book=bool(e.get("pre_fill_book")),
                 trail=e.get("queue_trail_snapshots"),
+                scorable_hint=(e.get("is_taker") is False
+                               and bool(e.get("pre_fill_book"))),
                 ahead_first=e.get("depth_ahead_at_first_look"),
                 ahead_last=e.get("depth_ahead_at_last_look"),
                 vanished=e.get("depth_ahead_disappeared"),
@@ -684,6 +706,14 @@ def heartbeat_loop(state: dict, t_start: float) -> None:
                 pmus_flow_selected=state.get("pmus_flow_selected"),
                 pmus_live_events=sum(1 for v in (state.get("pmus_live") or {})
                                      .values() if v[0]),
+                # intl_flow's own version of the same disambiguation:
+                # sweeps rising with selected 0 is a quiet slate; sweeps
+                # frozen is a stuck loop.
+                intl_flow_sweeps=state.get("intl_flow_sweeps"),
+                intl_flow_selected=state.get("intl_flow_selected"),
+                intl_flow_conditions=state.get("intl_flow_conditions"),
+                intl_flow_tape=state.get("intl_flow_tape"),
+                intl_flow_fetch_errors=state.get("intl_flow_fetch_errors"),
                 volume_free_gb=free_gb,
                 prospective_tokens=state.get("prospective_tokens"),
                 prospective=dict(state.get("prospective_counts") or {}),

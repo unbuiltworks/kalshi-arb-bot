@@ -492,6 +492,22 @@ FILL_CADENCE_S = float(os.getenv("L5_PROSPECTIVE_FILL_CAD", "3"))
 PRINTS_CADENCE_S = float(os.getenv("L5_PROSPECTIVE_PRINTS_CAD", "10"))
 DISCOVER_CADENCE_S = float(os.getenv("L5_PROSPECTIVE_DISCOVER_CAD", "15"))
 POST_FILL_GRACE_S = float(os.getenv("L5_PROSPECTIVE_GRACE_S", "8"))
+# How long a token retired for repeated book failures stays out of habitat
+# rediscovery. Longer than any updown window, so a rolled-over market is not
+# re-adopted while it is still gone, and short enough that a market which comes
+# back is picked up again within one window.
+TOMBSTONE_S = float(os.getenv("L5_PROSPECTIVE_TOMBSTONE_S", "900"))
+
+
+def book_gone(exc: BaseException) -> bool:
+    """Is this the venue correctly saying the book no longer exists?
+
+    404 and 410 mean the market rolled over or closed -- expected, and NOT a
+    health signal. A timeout, a 5xx or a connection reset is a real failure and
+    must stay countable, or a degrading venue hides inside rollover noise.
+    """
+    code = getattr(exc, "code", None)
+    return code in (404, 410)
 
 
 def _get(url: str, timeout: float = 20.0):
@@ -601,7 +617,14 @@ class Recorder:
         self.prints: Dict[str, List[dict]] = {}
         self.settle: Dict[str, float] = {}
         self.counts: Dict[str, int] = {"raw_books": 0, "raw_fills": 0,
-                                       "events": 0, "book_errors": 0}
+                                       "events": 0,
+                                       # GENUINE fetch-health failures only
+                                       "book_errors": 0,
+                                       # EXPECTED: the market rolled over and
+                                       # its book is gone. Not a health signal.
+                                       "book_gone": 0,
+                                       "tokens_retired": 0,
+                                       "habitat_readd_suppressed": 0}
         self._lk = threading.Lock()
         self._shedding = False
         self.token_order: List[str] = []
@@ -610,6 +633,9 @@ class Recorder:
         # because an unbounded set of print keys is its own leak -- at observed
         # print rates it would reach hundreds of MB of RSS in a day, trading a
         # disk problem for a memory one.
+        # token -> epoch until which it must NOT be re-added by habitat
+        # discovery. See poll_books for what this prevents.
+        self.tombstones: Dict[str, float] = {}
         self._raw_seen: set = set()
         self._raw_order: collections.deque = collections.deque()
         self._raw_print_seen: set = set()
@@ -702,17 +728,38 @@ class Recorder:
             tok, meta = it
             try:
                 bk = _get("%s/book?token_id=%s" % (CLOB, tok))
-            except Exception:
+            except Exception as e:
                 # A rolled-over window's market closes and its book 404s.
                 # Left in the sweep it burns request budget every cycle.
-                self.counts["book_errors"] += 1
+                #
+                # TWO DIFFERENT FACTS, COUNTED SEPARATELY. A 404 on a window
+                # that has rolled over is the venue working correctly; a
+                # timeout or a 5xx is a health signal. Lumping them made
+                # `book_errors` climb into the thousands overnight purely from
+                # expected rollovers, so the counter could not be read as
+                # health at all.
+                if book_gone(e):
+                    self.counts["book_gone"] = self.counts.get("book_gone", 0) + 1
+                else:
+                    self.counts["book_errors"] += 1
                 meta["errors"] = int(meta.get("errors", 0)) + 1
                 if meta["errors"] >= 3:
                     self.tokens.pop(tok, None)
                     self.counts["tokens_retired"] = \
                         self.counts.get("tokens_retired", 0) + 1
+                    # TOMBSTONE, or this retirement is undone in <=15s.
+                    # `refresh_habitat_for_settlement` re-adds every habitat
+                    # token it does not already hold, so a retired one came
+                    # straight back, failed three more fetches and retired
+                    # again -- measured at 2,888 retirements and 8,724 errors
+                    # in 80 minutes for ~40 tokens. The tombstone is what makes
+                    # the retirement mean anything.
+                    self.tombstones[tok] = time.time() + TOMBSTONE_S
                 return None
             meta["errors"] = 0
+            # A token that answers again is alive; drop any stale tombstone so
+            # a recovered market is not held out for the rest of its window.
+            self.tombstones.pop(tok, None)
             t = time.time()
             row = dict(bk)
             row["_t"] = t
@@ -918,10 +965,20 @@ class Recorder:
         return out
 
     def refresh_habitat_for_settlement(self) -> None:
+        now = time.time()
+        # Expired tombstones stop being tombstones.
+        for t in [t for t, exp in self.tombstones.items() if exp <= now]:
+            self.tombstones.pop(t, None)
         for m in discover_habitat():
             m = dict(m, habitat=True)
             cur = self.tokens.get(m["token"])
             if cur is None:
+                if self.tombstones.get(m["token"], 0.0) > now:
+                    # Retired for repeated book failures and still cooling
+                    # down. Re-adding here is what created the churn loop.
+                    self.counts["habitat_readd_suppressed"] = \
+                        self.counts.get("habitat_readd_suppressed", 0) + 1
+                    continue
                 self.tokens[m["token"]] = m
             else:
                 cur["habitat"] = True
