@@ -931,3 +931,31 @@ def test_the_pushability_probe_rejects_exactly_the_run69_situation():
         finally:
             os.chdir(cwd0)
             RC.BRANCH = branch0
+
+
+def test_the_workflow_is_actually_parseable_yaml():
+    """THE GAP THAT LET A BROKEN WORKFLOW BE PUSHED.
+
+    Every other test in this file reads the workflow as TEXT, so all 59 of
+    them stayed green while the file was unparseable and GitHub refused the
+    dispatch with "Workflow does not have 'workflow_dispatch' trigger" -- a
+    message that points at the trigger and not at the real cause.
+
+    The break was an inserted line indented LESS than the `run: |` block it
+    sat in, which terminates the block scalar and makes YAML read the next
+    shell line as a mapping key. A text assertion cannot see that; a parse
+    can.
+    """
+    yaml = pytest.importorskip("yaml")
+    doc = yaml.safe_load(WF.read_text())
+    # `on` is the YAML 1.1 boolean True unless quoted, so accept either
+    on = doc.get("on", doc.get(True))
+    assert isinstance(on, dict), "the workflow lost its trigger block"
+    assert "workflow_dispatch" in on
+    steps = doc["jobs"]["gate"]["steps"]
+    assert len(steps) > 10
+    # and every step that runs a shell block has a non-empty one, which is
+    # what a silently-truncated block scalar would destroy
+    for s in steps:
+        if "run" in s:
+            assert str(s["run"]).strip(), s.get("name")

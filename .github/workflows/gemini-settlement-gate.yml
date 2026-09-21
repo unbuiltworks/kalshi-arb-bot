@@ -573,7 +573,7 @@ jobs:
                    analysis/gemini/reconcile_slot_*.json \
                    analysis/gemini/continuous_unarmed_*.json \
                    analysis/gemini/premutation_proof_*.json \
-         analysis/gemini/fill_forensics_*.json \
+                   analysis/gemini/fill_forensics_*.json \
                    analysis/gemini/rebate_surface_probe_*.json \
                    analysis/gemini/rebate_reconciliation_*.json \
                    analysis/gemini/continuous_shadow_soak_*.json \
