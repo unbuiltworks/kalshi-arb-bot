@@ -335,8 +335,13 @@ def test_7b_no_module_on_the_live_path_hardcodes_a_quantity():
         for n, line in enumerate(path.read_text().splitlines(), 1):
             if re.match(r"^\s*(ACTION_SIZE|action_size)\s*=\s*D\(", line):
                 definitions.append("%s:%d" % (path.name, n))
-    assert definitions == [
-        "continuous_probe.py:64",       # the shadow constant
-        "live_envelope.py:142",         # SHADOW_Q001
-        "live_envelope.py:171",         # LIVE_Q1
-    ], definitions
+    # COUNTED PER FILE, NOT PINNED TO LINE NUMBERS. The first version listed
+    # "live_envelope.py:171" and broke the moment a line was inserted above
+    # it -- a brittle assertion about layout rather than about size setters.
+    # Counting keeps the guard exact: a NEW setter anywhere still fails here.
+    from collections import Counter
+    by_file = Counter(d.split(":")[0] for d in definitions)
+    assert dict(by_file) == {
+        "continuous_probe.py": 1,   # ACTION_SIZE, the shadow constant
+        "live_envelope.py": 3,      # SHADOW_Q001, LIVE_Q1, LIVE_Q1_BTC15M_2LVL
+    }, definitions

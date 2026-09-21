@@ -436,6 +436,59 @@ def reconstruct_budget(ledger: MutationLedger,
 # ------------------------------------------------------- WORKING-ORDER MEMORY
 
 KEEP = "KEEP"
+#: RETAINED is a KEEP the desired surface did NOT ask for: a still-valid
+#: resting maker order younger than the frozen minimum_rest_time, held
+#: because cancelling it would surrender queue position for nothing.
+RETAIN = "RETAIN"
+#: ADD is PLACE in the lifecycle vocabulary. Same action, named for the
+#: RETAIN / ADD / CANCEL contract rather than for the transport.
+ADD = PLACE
+
+#: THE ONLY REASONS A CANCEL MAY BYPASS THE REST FLOOR.
+#:
+#: Ordinary desired-price movement is NOT one of them, and that omission is
+#: the entire point: LIVE-2 cancelled three of five NO rungs at 9s, 19s and
+#: 11s because a moved quote looked like a reason, while the frozen lane's own
+#: minimum_rest_time is 30.0s and the code enforcing it
+#: (continuous_probe.stale_orders) is called nowhere in production.
+#:
+#: Each of these is a state in which continuing to rest is itself unsafe, so
+#: queue position is worth nothing and the floor must not protect the order.
+SAFETY_CANCEL_REASONS = (
+    "TERMINAL_WITHDRAWAL",      # window withdrawn / end-of-window teardown
+    "ENVELOPE_BREACH",          # a bound would be or has been exceeded
+    "MARKET_INVALIDATED",       # symbol/window no longer the bound one
+    "POSITION_CONFLICT",        # authoritative position disagrees with ours
+    "RECOVERY_SAFETY",          # restart/recovery cannot vouch for the order
+    "FAIL_CLOSED",              # any existing fail-closed stop
+)
+
+
+class SafetyCancelUnknown(ValueError):
+    """A cancel claimed a safety reason that is not an enumerated one.
+
+    Refused rather than honoured: an unrecognised reason string would become
+    a way to bypass the rest floor by inventing a label.
+    """
+
+
+def _leg_slots(cohort_prefix: Optional[str]) -> int:
+    """How many same-side maker levels this family may expose AT ONCE.
+
+    EVIDENCE, NOT PREFERENCE (EP006):
+
+      BTC15m  3,434 maker transactions consumed >=2 distinct L5 prices at
+              adjacent ticks in ONE taker action, so >=2 orders were resting
+              simultaneously. One transaction required 3.
+      BTC5m   ZERO such transactions in 6,229. At BTC15m's rate ~356 were
+              expected, so this is a measured negative, not a thin sample --
+              and BTC5m therefore KEEPS ITS EXISTING SINGLE LEVEL. BTC15m's
+              geometry is not inherited without its own evidence.
+
+    Three is representable and deliberately NOT returned: one historical
+    transaction is not an authorization.
+    """
+    return 2 if str(cohort_prefix or "").startswith("GEMI-BTC15M") else 1
 
 
 def canonical_order_id(value: Any) -> str:
@@ -629,42 +682,130 @@ def unexplained_disappearances(known: Mapping[str, Mapping[str, Any]],
     return out
 
 
-def diff_surface(desired: Sequence[Mapping[str, Any]],
-                 working: WorkingOrders) -> Dict[str, List[Dict[str, Any]]]:
-    """Controller's desired surface vs what is actually resting.
+def reconcile_surface(desired: Sequence[Mapping[str, Any]],
+                      working: WorkingOrders, *,
+                      now: Optional[float] = None,
+                      min_rest_s: float = CP.STALE_ORDER_S,
+                      cohort_prefix: Optional[str] = None,
+                      safety: Optional[str] = None,
+                      ) -> Dict[str, List[Dict[str, Any]]]:
+    """desired surface -> RETAIN / ADD / CANCEL -> venue. The whole lifecycle.
 
-    THE WHOLE POINT: a rung the venue already holds at the right price and
-    size is KEPT and costs nothing, however many times the controller
-    re-decides it. Matching is exact on (leg, price, qty) -- a near match is a
-    different order, and treating it as the same one would leave the venue
-    holding something we stopped intending.
+    THE DEFECT THIS REPLACES. The old reconciliation matched exactly on
+    (leg, price, qty) and cancelled everything else. Any quote movement
+    therefore destroyed a resting maker order and its queue position, which is
+    what LIVE-2 did at 9s, 19s and 11s -- all three below the frozen lane's own
+    minimum_rest_time of 30.0s. The discipline existed
+    (continuous_probe.stale_orders) and was called nowhere in production.
+
+    THE RULE. A resting order that is still VALID -- right leg, right size,
+    inside the envelope -- and YOUNGER than the floor is RETAINED even when
+    the newly computed desired price has moved away from it. Its slot is then
+    considered occupied, so the moved quote does NOT also go on as a second
+    order; that would manufacture concurrency this family may not have
+    evidence for.
+
+    WHAT MAY STILL CANCEL IMMEDIATELY: `safety`, one of
+    SAFETY_CANCEL_REASONS. In those states continuing to rest is itself
+    unsafe, so queue position is worth nothing. An unrecognised reason is
+    REFUSED rather than honoured, because a free-text reason would be a way to
+    bypass the floor by inventing a label.
+
+    HOW MANY LEVELS PER SIDE: see `_leg_slots`. BTC15m may expose two adjacent
+    same-side levels because EP006 measured L5 doing so; BTC5m keeps one,
+    because the same test measured zero.
+
+    `now` is required in practice. It defaults to None only so that callers
+    that never had a clock keep working, and in that case the floor cannot be
+    evaluated and NOTHING is retained on age -- the conservative direction,
+    matching the previous behaviour exactly.
     """
+    if safety is not None and safety not in SAFETY_CANCEL_REASONS:
+        raise SafetyCancelUnknown(
+            "%r is not an enumerated safety reason; the rest floor is not "
+            "bypassed by an unrecognised label. Known: %s"
+            % (safety, ", ".join(SAFETY_CANCEL_REASONS)))
+
+    slots = _leg_slots(cohort_prefix)
     want: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     for a in desired:
         want[(str(a["leg"]), str(a["price"]), str(a["qty"]))] = dict(a)
 
-    keep, cancel = [], []
+    keep: List[Dict[str, Any]] = []
+    retain: List[Dict[str, Any]] = []
+    cancel: List[Dict[str, Any]] = []
     matched: set = set()
+    occupied: Dict[str, int] = {}
+
     for o in working.rungs():
         key = (o["leg"], o["price"], o["qty"])
         if key in want and key not in matched:
             matched.add(key)
+            occupied[o["leg"]] = occupied.get(o["leg"], 0) + 1
             keep.append({"action": KEEP, "order": o,
                          "why": "already resting at the desired price and "
                                 "size; re-placing it would cost a slot AND "
                                 "surrender queue position"})
-        else:
-            cancel.append({"action": CANCEL, "order": o,
-                           "why": "resting rung is not in the desired "
-                                  "surface"})
-    place = [{"action": PLACE, "rung": v}
-             for k, v in want.items() if k not in matched]
-    return {"keep": keep, "place": place, "cancel": cancel,
-            "mutations": len(place) + len(cancel),
-            "labels": ("KEEP costs no slot. PLACE and CANCEL each cost one. A "
-                       "changed price is a CANCEL plus a PLACE, so it costs "
-                       "two -- stated plainly because that is the case people "
-                       "forget when they size a budget.")}
+            continue
+        if safety is not None:
+            cancel.append({"action": CANCEL, "order": o, "safety": safety,
+                           "why": "safety cancel (%s): continuing to rest is "
+                                  "itself unsafe, so the rest floor does not "
+                                  "protect this order" % safety})
+            continue
+        age = (None if now is None
+               else float(now) - float(o.get("resting_since") or now))
+        if age is not None and age < float(min_rest_s):
+            occupied[o["leg"]] = occupied.get(o["leg"], 0) + 1
+            retain.append({"action": RETAIN, "order": o, "age_s": age,
+                           "why": "valid resting maker order %.1fs old, below "
+                                  "the frozen minimum_rest_time of %.1fs; a "
+                                  "moved desired price is NOT a reason to "
+                                  "surrender queue position"
+                                  % (age, float(min_rest_s))})
+            continue
+        cancel.append({"action": CANCEL, "order": o,
+                       "age_s": age,
+                       "why": "resting rung is not in the desired surface and "
+                              "has rested at least the minimum %.1fs"
+                              % float(min_rest_s)})
+
+    add: List[Dict[str, Any]] = []
+    for k, v in want.items():
+        if k in matched:
+            continue
+        leg = str(v["leg"])
+        if occupied.get(leg, 0) >= slots:
+            continue        # the slot is held by a KEEP or a RETAIN
+        occupied[leg] = occupied.get(leg, 0) + 1
+        add.append({"action": ADD, "rung": v})
+
+    return {"keep": keep, "retain": retain, "place": add, "add": add,
+            "cancel": cancel,
+            "mutations": len(add) + len(cancel),
+            "leg_slots": slots,
+            "labels": ("RETAIN is not KEEP: KEEP means the desired surface "
+                       "still asks for this order, RETAIN means it does not "
+                       "and the order is held anyway because it is valid and "
+                       "young. Neither costs a mutation.")}
+
+
+def diff_surface(desired: Sequence[Mapping[str, Any]],
+                 working: WorkingOrders) -> Dict[str, List[Dict[str, Any]]]:
+    """The clockless façade over `reconcile_surface`. ONE implementation.
+
+    Without a clock the rest floor cannot be evaluated, so nothing is retained
+    on age and every unmatched resting rung is cancelled -- which is exactly
+    the behaviour this function had before the floor existed. Callers that
+    care about queue position must pass a clock, which means calling
+    `reconcile_surface` directly; the driver does.
+
+    Kept because several call sites and tests describe budget arithmetic in
+    terms of it: KEEP costs no slot, PLACE and CANCEL each cost one, and a
+    changed price is therefore two -- the fact people forget when they size a
+    budget.
+    """
+    return reconcile_surface(desired, working, now=None)
 
 
 # ------------------------------------------------------ ONE MARKET AT A TIME
@@ -820,6 +961,17 @@ class Driver:
             # authorized window for no reason. Releasing here does not
             # re-arm anything -- STOPPED is still terminal for this object.
             _release_market(self._symbol)
+
+    def _cohort_prefix(self) -> str:
+        """Which contract family this driver is bound to.
+
+        Taken from the GUARD, which refused any symbol outside a known family
+        when it was constructed, rather than re-parsed from the symbol here.
+        Before bind() there is no family and the conservative single-level
+        answer applies.
+        """
+        g = getattr(self, "guard", None)
+        return str(getattr(g, "cohort_prefix", "") or "")
 
     def budget_left(self) -> int:
         used = self.budget_consumed if self.budget_consumed is not None else 0
@@ -1018,16 +1170,26 @@ class Driver:
         if phase == CP.WINDOW_WITHDRAWN or turn.get("stop"):
             # withdraw: cancel everything, keep nothing, then STOP
             self.state = WITHDRAWING
-            plan = {"keep": [], "place": [],
-                    "cancel": [{"action": CANCEL, "order": o,
-                                "why": "window withdrawn at tte %s" % tte_s}
-                               for o in self.working.rungs()],
-                    "mutations": len(self.working.rungs())}
+            # THE REST FLOOR DOES NOT PROTECT A WITHDRAWAL. This is an
+            # enumerated safety cancel: at the end of the window a resting
+            # order is exposure with no time left to be complemented, so
+            # queue position is worth nothing.
+            plan = reconcile_surface([], self.working, now=now,
+                                     cohort_prefix=self._cohort_prefix(),
+                                     safety="TERMINAL_WITHDRAWAL")
+            for c in plan["cancel"]:
+                c["why"] = ("window withdrawn at tte %s; %s"
+                            % (tte_s, c["why"]))
             return {"state": self.state, "turn": turn, "plan": plan,
                     "market_state": st,
                     "why": turn.get("stop") or "window withdrawn"}
 
-        plan = diff_surface(turn.get("actions") or [], self.working)
+        # THE PRODUCTION LIFECYCLE. Ordinary desired-price movement may no
+        # longer cancel a valid resting maker order younger than the frozen
+        # minimum_rest_time; it is RETAINED and its slot counted as occupied.
+        plan = reconcile_surface(turn.get("actions") or [], self.working,
+                                 now=now,
+                                 cohort_prefix=self._cohort_prefix())
         if plan["mutations"] > self.budget_left():
             self.stop(STOPPED,
                       "budget: %d mutation(s) required, %d slot(s) left of %d"

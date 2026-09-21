@@ -181,6 +181,43 @@ LIVE_Q1 = Envelope(
     cohort_prefix=COHORT_PREFIX,
 )
 
+#: THE SMALLEST ENVELOPE THAT ADMITS A q=1 TWO-LEVEL BTC15m PROBE.
+#:
+#: DERIVED, NOT CHOSEN, and LIVE_Q1 is deliberately left untouched so BTC5m's
+#: authorized limits are not silently widened to pay for BTC15m's geometry.
+#:
+#:   simultaneously live rungs   2 adjacent levels x 2 sides          = 4
+#:   max_working_orders          4, because every one of those rungs is
+#:                               separately cancellable and separately fillable
+#:   max_committed_usd           4 rungs x $1.00 ceiling              = $4.00
+#:                               the absolute worst case is every live rung
+#:                               filling; a maker BUY cannot fill above $1.00,
+#:                               so this is the smallest cap that cannot refuse
+#:                               a legitimate four-rung exposure
+#:   max_residual_usd            $2.00, UNCHANGED from LIVE_Q1: two contracts
+#:                               on one side is still the directional cap, and
+#:                               two levels do not widen it
+#:   max_same_side_run           2, UNCHANGED
+#:   max_yes / max_no            2 contracts, UNCHANGED
+#:
+#: WHAT IS NOT HERE. Three levels. EP006 found exactly ONE historical
+#: transaction requiring three, and one transaction is not an authorization.
+#: The model can represent it; this envelope does not permit it.
+LIVE_Q1_BTC15M_2LVL = Envelope(
+    name="GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_2LVL_V1",
+    action_size=D("1"),
+    max_same_side_run=2,
+    max_yes=D("2"),
+    max_no=D("2"),
+    max_total_spend_usd=D("4.00"),
+    max_committed_usd=D("4.00"),
+    max_residual_usd=D("2.00"),
+    max_working_orders=4,
+    max_concurrent_markets=1,
+    max_actions=12,
+    cohort_prefix="GEMI-BTC15M",
+)
+
 DEFAULT = SHADOW_Q001
 
 #: module-level aliases kept for readers; the ENVELOPE is what gates use
