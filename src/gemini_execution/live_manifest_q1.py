@@ -30,6 +30,7 @@ from typing import Any, Dict, List
 
 from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import live_envelope as LE
+from src.gemini_execution import outstanding_ledger as OL
 from src.gemini_execution import position_ledger as PL
 from src.gemini_execution import ws_continuous as WC
 
@@ -155,6 +156,66 @@ def position_reads() -> List[Dict[str, str]]:
     ]
 
 
+def restart_state_machine() -> Dict[str, Any]:
+    """Exactly what happens when a process comes back up.
+
+    Every transition is a refusal except the last one, and the ONLY thing that
+    releases committed cash is an authoritative active-order read.
+    """
+    return {
+        "order_states": {
+            "potentially_live": [
+                OL.INTENT, OL.ACCEPTED, OL.PARTIAL, OL.FILLED,
+                OL.SUBMISSION_UNKNOWN, OL.CANCEL_REQUESTED, OL.CANCEL_ACKED,
+                OL.CANCEL_UNKNOWN],
+            "terminal": list(OL.TERMINAL),
+            "note": ("FILLED commits no further cash but is still not PROVEN "
+                     "gone, so it blocks a new window until a read clears "
+                     "it. REJECTED is terminal because the venue itself said "
+                     "it did not create the order."),
+        },
+        "steps": [
+            {"n": 1, "at": "process start",
+             "does": "OutstandingLedger replays its append-only file. A torn "
+                     "final row becomes an order of UNKNOWN fate, never a "
+                     "skipped one.",
+             "on_failure": "an unreadable row keeps its order potentially "
+                           "live"},
+            {"n": 2, "at": "recover(), BEFORE anything else",
+             "does": "reconcile the durable ledger against the venue's "
+                     "authoritative active-order read",
+             "on_failure": "read is None or malformed -> UNREADABLE -> "
+                           "DO_NOT_TRADE. Nothing is released."},
+            {"n": 3, "at": "reconcile",
+             "does": "ours still listed -> BLOCKED, commitment refreshed "
+                     "from the venue's own filledQuantity. Ours not listed "
+                     "-> VENUE_ABSENT, released. An active order we do NOT "
+                     "recognise -> BLOCKED, and its notional counts.",
+             "on_failure": "BLOCKED -> DO_NOT_TRADE, and nothing further is "
+                           "settled"},
+            {"n": 4, "at": "after a CLEAN read only",
+             "does": "each released order's dangling mutation attempt is "
+                     "settled by client order id",
+             "on_failure": "the slot is NOT freed; consumed budget never "
+                           "re-opens"},
+            {"n": 5, "at": "the rest of recover()",
+             "does": "inventory, working set and consumed budget, each from "
+                     "the venue plus the durable ledger",
+             "on_failure": "any one unreadable -> DO_NOT_TRADE"},
+            {"n": 6, "at": "bind()",
+             "does": "re-asserts that nothing is potentially live, then takes "
+                     "the single-market lease",
+             "on_failure": "anything outstanding -> DO_NOT_TRADE"},
+            {"n": 7, "at": "place()",
+             "does": "filled spend + in-process resting + DURABLE "
+                     "OUTSTANDING (de-duplicated against the working set) + "
+                     "this rung, against max_committed_usd",
+             "on_failure": "unreadable durable total -> DO_NOT_TRADE; over "
+                           "the cap -> the rung is refused"},
+        ],
+    }
+
+
 def safety() -> List[Dict[str, str]]:
     """Each requirement, what enforces it, and the test that drives it."""
     t = "tests/test_gemini_live_envelope_q1.py"
@@ -196,6 +257,21 @@ def safety() -> List[Dict[str, str]]:
          "proved_by": "%s::test_below_the_withdraw_floor_everything_resting_"
                       "is_cancelled and ::test_a_cancel_without_a_venue_"
                       "order_id_is_refused_not_sent" % t},
+        {"requirement": "outstanding orders survive a restart",
+         "enforced_by": "outstanding_ledger: fsynced INTENT before the frame; "
+                        "only an authoritative active-order read releases "
+                        "committed cash; a cancel ack is a receipt",
+         "proved_by": ("tests/test_gemini_outstanding_ledger_restart.py::"
+                       "test_the_reported_sequence_refuses_order_C_after_a_"
+                       "restart and ::test_restart_with_an_unreadable_active_"
+                       "order_read_sends_nothing")},
+        {"requirement": "the $2.50 and $2.00 bounds hold exhaustively",
+         "enforced_by": "live_envelope.would_breach, with durable "
+                        "outstanding commitment as a term",
+         "proved_by": ("tests/test_gemini_outstanding_ledger_restart.py::"
+                       "test_no_permitted_rung_can_push_committed_cash_past_"
+                       "2_50 and ::test_no_permitted_rung_can_push_"
+                       "directional_residual_past_2_00")},
         {"requirement": "the ledger matches the venue's representation",
          "enforced_by": "position_ledger.reconcile on the SIGNED quantity; "
                         "UNREADABLE and DISAGREE are both refusals",
@@ -247,6 +323,7 @@ def manifest() -> Dict[str, Any]:
         "sequence": sequence(),
         "position_reads": position_reads(),
         "reconciliation_chain": reconciliation_chain(),
+        "restart_state_machine": restart_state_machine(),
         "safety": safety(),
         "decision_rule": decision_rule(),
         "models": PL.MODEL_OF,

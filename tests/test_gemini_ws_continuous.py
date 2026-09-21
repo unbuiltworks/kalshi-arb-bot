@@ -501,15 +501,36 @@ def test_unreadable_open_orders_stop(tmp_path):
     assert d.state == WC.DO_NOT_TRADE
 
 
-def test_the_venue_is_authoritative_for_what_is_resting(tmp_path):
+def test_the_venue_is_authoritative_for_what_is_resting():
+    """Asserted at the level that owns the property.
+
+    It used to be asserted through `recover()`, which no longer gets that
+    far: the durable outstanding-order gate now refuses the window outright
+    when the venue lists an order we do not recognise. That is strictly
+    safer, and it is asserted in the test below. The property itself -- our
+    local view never outranks the venue's -- belongs to WorkingOrders.
+    """
+    w = WC.WorkingOrders()
+    w.add("ours", leg="YES", price="0.55", qty="0.01", now=0.0)
+    w.reconcile([{"clientOrderId": "theirs", "outcome": "no",
+                  "price": "0.40", "quantity": "0.01",
+                  "orderId": 145828836250441357}], 1.0)
+    ids = [o["client_order_id"] for o in w.rungs()]
+    assert ids == ["theirs"], "our local view never outranks the venue's"
+
+
+def test_an_unrecognised_active_order_refuses_the_window(tmp_path):
+    """It is on this account and this symbol. Not recognising it is a reason
+    to stop, never a reason to ignore it."""
     d = _driver(tmp_path)
-    d.working.add("ours", leg="YES", price="0.55", qty="0.01", now=0.0)
     d.state = WC.AUTHORIZED
-    d.recover(venue_fills=[], venue_orders=[], venue_open=[
+    out = d.recover(venue_fills=[], venue_orders=[], venue_open=[
         {"clientOrderId": "theirs", "outcome": "no", "price": "0.40",
          "quantity": "0.01", "orderId": 145828836250441357}])
-    ids = [o["client_order_id"] for o in d.working.rungs()]
-    assert ids == ["theirs"], "our local view never outranks the venue's"
+    assert out["recovered"] is False and d.state == WC.DO_NOT_TRADE
+    assert "unrecognised" in (d.why or "")
+    assert out["outstanding"]["foreign"][0][
+        "remaining_committed_usd"] == "0.0040"
 
 
 def test_a_resting_venue_order_we_cannot_address_stops_the_probe(tmp_path):
@@ -525,7 +546,15 @@ def test_a_resting_venue_order_we_cannot_address_stops_the_probe(tmp_path):
          "quantity": "0.01"}])
     assert out["recovered"] is False
     assert d.state in WC.TERMINAL
-    assert "orderId" in (d.why or "")
+    # the outstanding gate now refuses first, and for a broader reason: an
+    # order we do not recognise is active at the venue. The orderId property
+    # is still owned by WorkingOrders and asserted directly below.
+    assert "unrecognised" in (d.why or "")
+    with pytest.raises(WC.ReconcileRequired) as e:
+        WC.WorkingOrders().reconcile(
+            [{"clientOrderId": "theirs", "outcome": "no", "price": "0.40",
+              "quantity": "0.01"}], 1.0)
+    assert "orderId" in str(e.value)
 
 
 # =================================================================== FILLS

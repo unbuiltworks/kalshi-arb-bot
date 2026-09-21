@@ -199,6 +199,93 @@ an outcome to sign its quantity is `UNREADABLE`, not zero.
 
 ---
 
+---
+
+## 5b. The restart state machine (the Grok blocker)
+
+**The defect, as reported:** across `rest → partial fill → second rest → cancel
+ambiguous → process dies → restart`, nothing durable said what might still be
+resting. `WorkingOrders` knew, and `WorkingOrders` lives in memory. So $2.50 and
+$2.00 were bounds *within one process*, not across a restart.
+
+**The rule that generates the fix:** *only an authoritative venue read may
+release committed cash.* Not an ack, not a confirmed cancel receipt, not our own
+belief that an order filled. Gemini's own acks are the reason — measured
+2026-09-18, every cancel in CONTINUOUS-4 returned 200 with an empty result and
+**two of the four "cancelled" orders had already FILLED**.
+
+| state | live? |
+|---|---|
+| `INTENT`, `ACCEPTED`, `PARTIAL`, `FILLED`, `SUBMISSION_UNKNOWN`, `CANCEL_REQUESTED`, `CANCEL_ACKED`, `CANCEL_UNKNOWN` | **potentially live** |
+| `REJECTED` (the venue said it did not create it), `VENUE_ABSENT`, `VENUE_TERMINAL` | terminal |
+
+`FILLED` commits no further cash but is still not *proven gone*, so it blocks a
+new window until a read clears it — and that read is one the restart must do
+anyway. The two questions are kept apart: **`blocks_restart()`** asks "is it
+proven gone?", **`remaining_committed_usd()`** asks "how much cash could still
+leave?". An order of unknown fate commits its **whole** original notional,
+because unknown filled quantity means unknown remaining.
+
+1. **process start** — the append-only ledger replays. A torn final row becomes
+   an order of **unknown fate**, never a skipped one (the write that tore is
+   exactly the one that happened as the process died).
+2. **`recover()`, before anything else** — reconcile against the venue's
+   authoritative active-order read. `None` or malformed → `UNREADABLE` →
+   `DO_NOT_TRADE`, nothing released.
+3. **reconcile** — ours still listed → `BLOCKED`, commitment refreshed from the
+   venue's own `filledQuantity`. Ours not listed → `VENUE_ABSENT`, released. An
+   active order we do **not** recognise → `BLOCKED`, **and its notional counts**.
+4. **after a clean read only** — each released order's dangling mutation attempt
+   is settled by client order id. **The slot is not freed**; consumed budget
+   never re-opens.
+5. **the rest of `recover()`** — inventory, working set, consumed budget; any one
+   unreadable → `DO_NOT_TRADE`.
+6. **`bind()`** — re-asserts nothing is potentially live, then takes the
+   single-market lease.
+7. **`place()`** — filled spend + in-process resting + **durable outstanding**
+   (de-duplicated against the working set) + this rung, against
+   `max_committed_usd`. An unreadable durable total is a refusal, not a zero.
+
+**The exact sequence is a test.** `test_the_reported_sequence_refuses_order_C_after_a_restart`
+drives A rests → A partially fills → B rests → A fills further → cancel A
+ambiguous → cancel B ambiguous → **the `Driver` object is deleted** → a new one
+is built from nothing but the files on disk → the venue reports A and B active →
+order C is attempted. **C does not reach the venue**, and the assertion is on
+`session.sent == []`, not on a state flag. `test_restart_with_an_unreadable_active_order_read_sends_nothing`
+does the same with the read unreadable. `test_only_a_clean_authoritative_read_makes_a_window_eligible`
+shows the window becoming eligible only once A and B are gone.
+
+A partial fill is **both** at once: `test_a_partial_fill_is_inventory_AND_commitment_at_the_same_time`
+shows 0.4 filled at 0.60 → $0.240 of inventory **and** 0.6 remaining → $0.36 of
+commitment, both inside the envelope together.
+
+### The dollar bounds, exhaustively
+
+| bound | combinations | permitted | worst permitted | cap |
+|---|---|---|---|---|
+| committed cash | **13,500** | 5,610 | **$2.50** | $2.50 |
+| directional residual | **720** | 594 | **$2.00** | $2.00 |
+
+The committed assertion is **pure arithmetic on the scenario** — everything
+already spent, plus every resting order filling, plus every durable outstanding
+order filling, plus this rung filling — and does not reuse the envelope's
+internals, so a gate that dropped a term fails here rather than agreeing with
+itself. The residual bound rebuilds the post-fill book independently. Both tests
+also assert the worst permitted value is **strictly above the next-lower round
+number**, so neither passes by being over-tight.
+
+### One defect found while wiring it, and fixed
+
+Cancelling an order recovered from the venue writes a `CANCEL_REQUESTED` row for
+a client order id that has no `INTENT` row — no size, no price. `committed_usd`
+correctly called the whole total unreadable, and every later placement was
+refused *for a reason that is not a risk reason at all*. `cancel_requested` now
+carries the leg, price and qty the caller already holds, never overwriting a
+field already on record. Pinned by
+`test_cancelling_an_order_we_never_placed_stays_computable`.
+
+---
+
 ## 6. What was deliberately not done
 
 - **Not armed.** Installing an authorization is a human editing three constants

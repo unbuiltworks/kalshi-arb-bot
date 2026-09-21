@@ -242,6 +242,7 @@ def residual_usd(inv: Any, env: Envelope = DEFAULT) -> D:
 
 def would_breach(leg: str, price: Any, inv: Any, *, qty: Any,
                  resting: Sequence[Mapping[str, Any]] = (),
+                 extra_committed_usd: Any = None,
                  env: Envelope = DEFAULT) -> Optional[str]:
     """Would resting THIS rung, and having it fill, breach a bound?
 
@@ -296,10 +297,22 @@ def would_breach(leg: str, price: Any, inv: Any, *, qty: Any,
     if rest is None:
         return ("a resting order has an unreadable size or price, so total "
                 "committed cash cannot be established; refused")
-    if spend + rest + cost > env.max_committed_usd:
-        hits.append("filled %s + resting %s + this rung %s = %s committed, "
-                    "past %s" % (spend, rest, cost, spend + rest + cost,
-                                 env.max_committed_usd))
+    # DURABLE COMMITMENT THE IN-PROCESS WORKING SET DOES NOT KNOW ABOUT --
+    # orders that may still be resting from before a restart. The caller
+    # passes it already de-duplicated against `resting`; `None` means "there
+    # is none", and a value that cannot be read is a REFUSAL, not a zero.
+    extra = D("0")
+    if extra_committed_usd is not None:
+        extra = _dec(extra_committed_usd)
+        if extra is None:
+            return ("durable outstanding commitment is unreadable (%r); "
+                    "exposure is not established and nothing may be sent"
+                    % (extra_committed_usd,))
+    if spend + rest + extra + cost > env.max_committed_usd:
+        hits.append("filled %s + resting %s + durable outstanding %s + this "
+                    "rung %s = %s committed, past %s"
+                    % (spend, rest, extra, cost,
+                       spend + rest + extra + cost, env.max_committed_usd))
 
     n_resting = len(list(resting or ()))
     if n_resting + 1 > env.max_working_orders:

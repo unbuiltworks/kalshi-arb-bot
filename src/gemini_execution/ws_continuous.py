@@ -86,6 +86,7 @@ from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
 
 from src.gemini_execution import arming, continuous_probe as CP, spec
 from src.gemini_execution import live_envelope as LE
+from src.gemini_execution import outstanding_ledger as OL
 from src.gemini_execution import executions as EX
 from src.gemini_execution import continuous_preflight as PF
 
@@ -376,6 +377,32 @@ class MutationLedger:
         return [r for r in self.rows
                 if r.get("kind") in (PLACE, CANCEL)
                 and r.get("outcome") in (ATTEMPTED, UNKNOWN)]
+
+    def resolve_by_client_order_id(self, coid: str, outcome: str,
+                                   why: str) -> int:
+        """Settle every dangling attempt naming ONE client order id.
+
+        THE ONLY LEGITIMATE CALLER is an AUTHORITATIVE venue read that has
+        just proven what became of that exact order. The slot is NOT freed --
+        `consumed()` is unchanged and the budget never re-opens -- this only
+        records the outcome the venue has now stated, so that a restart is not
+        blocked forever by an attempt whose answer has since arrived.
+
+        Resolving by anything weaker than an authoritative read would turn the
+        unresolved-attempt gate into a formality, which is why this takes a
+        client order id rather than a slot: a caller cannot use it to wave
+        through attempts it has not actually resolved.
+        """
+        n = 0
+        for row in self.rows:
+            if (row.get("kind") in (PLACE, CANCEL)
+                    and str(row.get("client_order_id") or "") == str(coid)
+                    and row.get("outcome") in (ATTEMPTED, UNKNOWN)):
+                self.resolve(int(row["slot"]), outcome,
+                             {"client_order_id": str(coid), "why": why})
+                row["outcome"] = outcome
+                n += 1
+        return n
 
     def client_order_ids(self) -> List[str]:
         return [str(r.get("client_order_id")) for r in self.rows
@@ -736,6 +763,12 @@ class Driver:
         self.why: Optional[str] = None
         self.ledger = MutationLedger(ledger_path, auth_id=auth_id,
                                      symbol=self._symbol)
+        # WHAT MIGHT STILL BE RESTING, across a restart. MutationLedger says
+        # how many times we touched the venue; this says what is still out
+        # there, which is what the committed-cash cap is a bound on.
+        self.outstanding = OL.OutstandingLedger(
+            ledger_path + ".orders.jsonl", auth_id=auth_id,
+            symbol=self._symbol)
         self.working = WorkingOrders()
         self.inv: Optional[CP.Inventory] = None
         self.guard: Optional[CP.WindowGuard] = None
@@ -827,6 +860,37 @@ class Driver:
         the probe: a restart never assumes flat, never assumes nothing is
         resting, and never assumes the budget is untouched.
         """
+        # ---- STEP ZERO: WHAT MIGHT STILL BE RESTING FROM BEFORE.
+        #
+        # This runs FIRST and fails closed, because every other recovery step
+        # answers a question that is only meaningful once we know nothing is
+        # still live. An unreadable active-order read releases nothing; an
+        # order still active blocks the window outright. A cancel may be
+        # attempted by the operator under the cleanup budget, but only
+        # ANOTHER authoritative read can clear it -- an ack is a receipt.
+        out_rec = self.outstanding.reconcile(venue_open)
+        if out_rec["verdict"] == OL.UNREADABLE:
+            self.stop(DO_NOT_TRADE, out_rec["why"] or
+                      "active orders unreadable; nothing is released")
+            return {"recovered": False, "why": self.why,
+                    "outstanding": out_rec}
+        if out_rec["verdict"] == OL.BLOCKED:
+            self.stop(DO_NOT_TRADE, out_rec["why"] or
+                      "orders may still be resting at the venue")
+            return {"recovered": False, "why": self.why,
+                    "outstanding": out_rec}
+
+        # THE READ THAT PROVED AN ORDER GONE ALSO ANSWERS THE ATTEMPT THAT
+        # CREATED IT. Without this a window is blocked forever by an
+        # ambiguous cancel whose answer has since arrived -- safe, but wrong,
+        # and it would make restart recovery impossible in the ordinary case.
+        # The slot stays spent; only the OUTCOME is recorded.
+        for coid in out_rec.get("released") or ():
+            self.ledger.resolve_by_client_order_id(
+                coid, ACCEPTED,
+                "authoritative active-order read shows this order is no "
+                "longer resting")
+
         inv, why = CP.recover(self._auth_id, self._symbol, venue_fills)
         if inv is None:
             self.stop(DO_NOT_TRADE, why or "inventory unreadable")
@@ -853,7 +917,7 @@ class Driver:
         self.state = RECOVERED
         return {"recovered": True, "inventory": inv.report(),
                 "working": note, "budget_consumed": used,
-                "budget_note": budget_note,
+                "budget_note": budget_note, "outstanding": out_rec,
                 "budget_left": self.budget_left()}
 
     def bind(self) -> Dict[str, Any]:
@@ -861,6 +925,19 @@ class Driver:
             self.stop(DO_NOT_TRADE,
                       "bind() before recovery: the window may not be bound "
                       "until authoritative state is established")
+            return {"bound": False, "why": self.why}
+        # NOTHING MAY STILL BE RESTING. recover() already refuses on this,
+        # and it is re-asserted here because bind() is the last gate before a
+        # window becomes eligible and it must not depend on a caller having
+        # honoured an earlier refusal.
+        still = self.outstanding.blocks_restart()
+        if still:
+            self.stop(DO_NOT_TRADE,
+                      "%d order(s) are not proven terminal at the venue (%s); "
+                      "a new window may not begin until an authoritative "
+                      "active-order read clears them"
+                      % (len(still), ", ".join(sorted(
+                          str(o.get("client_order_id")) for o in still))))
             return {"bound": False, "why": self.why}
         # ONE MARKET AT A TIME, REFUSED RATHER THAN QUEUED. A second symbol
         # bound in this process is how a one-market probe becomes a portfolio.
@@ -956,6 +1033,9 @@ class Driver:
                     "why": ("a fill for an order this window does not hold; "
                             "reported for reconciliation, NOT applied")}
         self.inv.apply_fill(o["leg"], qty, price, source="venue_ws")
+        # the filled part is inventory; the unfilled part is still committed.
+        # Both are durable, and both are inside the envelope together.
+        self.outstanding.fill(str(client_order_id), qty, partial=partial)
         if partial:
             o["qty"] = str(D(str(o["qty"])) - D(str(qty)))
         else:
@@ -996,8 +1076,19 @@ class Driver:
         # the first. It replaces the shadow check here rather than adding to
         # it: at q=1 every rung breaches the 0.01-sized bounds, so ANDing the
         # two would refuse the manifest it is meant to authorise.
+        # DE-DUPLICATED BY CONSTRUCTION: anything in the in-process working
+        # set is already counted by `resting`, so the durable ledger is asked
+        # only for what that set does not know about.
+        durable = self.outstanding.committed_usd(
+            exclude={r["client_order_id"] for r in self.working.rungs()})
+        if not durable["readable"]:
+            self.stop(DO_NOT_TRADE, durable["why"] or
+                      "durable outstanding commitment is unreadable")
+            raise CP.ProbeStop(self.why or "outstanding commitment unreadable")
         breach = LE.would_breach(leg, price, self.inv, qty=qty,
-                                 resting=self.working.rungs(), env=self.env)
+                                 resting=self.working.rungs(),
+                                 extra_committed_usd=durable["usd"],
+                                 env=self.env)
         if breach:
             self.stop(STOPPED, "risk gate refused the rung: %s" % breach)
             raise CP.ProbeStop(self.why or breach)
@@ -1012,6 +1103,9 @@ class Driver:
 
         slot = self.ledger.attempt(PLACE, {
             "client_order_id": coid, "leg": leg, "price": price, "qty": qty})
+        # BEFORE THE FRAME, AND FSYNCED. A crash between here and the ack
+        # leaves an order that must be treated as potentially live.
+        self.outstanding.intent(coid, leg=leg, price=price, qty=qty)
         # BEFORE THE FRAME. An ack that never comes back still leaves an
         # order that may rest and fill, and its leg has to be answerable.
         self._remember_leg(coid, leg)
@@ -1025,6 +1119,8 @@ class Driver:
         except Exception as exc:                               # noqa: BLE001
             self.ledger.resolve(slot, UNKNOWN,
                                 {"error": "%s: %s" % (type(exc).__name__, exc)})
+            self.outstanding.submission_unknown(
+                coid, "place raised %s" % type(exc).__name__)
             self.stop(RECONCILE,
                       "order.place %s did not return a readable ack; it may "
                       "be resting and MUST be resolved against the venue by "
@@ -1034,11 +1130,15 @@ class Driver:
         status = (ack or {}).get("status")
         if status is None:
             self.ledger.resolve(slot, UNKNOWN, {"ack": ack})
+            self.outstanding.submission_unknown(coid, "ack carried no status")
             self.stop(RECONCILE, "ack for %s carried no status" % coid)
             raise ReconcileRequired(self.why or "submission unknown")
         if int(status) != spec.WS_ACK_OK:
             self.ledger.resolve(slot, REJECTED, {"status": status,
                                                  "ack": ack})
+            # THE VENUE SAID IT DID NOT CREATE THE ORDER. That is the venue
+            # speaking, not us inferring, so it releases the commitment.
+            self.outstanding.rejected(coid, "venue status %s" % status)
             return {"placed": False, "rejected": True, "status": status,
                     "client_order_id": coid, "slot": slot,
                     "labels": ("the slot is still spent: the venue was asked. "
@@ -1055,6 +1155,7 @@ class Driver:
                if isinstance(result, dict) else None)
         self.ledger.resolve(slot, ACCEPTED, {"status": status,
                                              spec.ORDER_ID_FIELD: oid})
+        self.outstanding.accepted(coid, oid)
         self._remember_leg(coid, leg, oid)
         self.working.add(coid, leg=leg, price=price, qty=qty,
                          now=self.now_fn(), venue_order_id=oid)
@@ -1087,6 +1188,12 @@ class Driver:
 
         slot = self.ledger.attempt(CANCEL, {"client_order_id": coid,
                                             spec.ORDER_ID_FIELD: oid})
+        # CARRY WHAT WE KNOW. An order recovered from the venue has no
+        # INTENT row of ours, and a record with no size or price would make
+        # total committed cash unreadable and refuse everything after it.
+        self.outstanding.cancel_requested(
+            coid, leg=order.get("leg"), price=order.get("price"),
+            qty=order.get("qty"))
         self.budget_consumed = (self.budget_consumed or 0) + 1
         if self.guard is not None:
             self.guard.actions_taken = self.budget_consumed
@@ -1098,6 +1205,8 @@ class Driver:
         except Exception as exc:                               # noqa: BLE001
             self.ledger.resolve(slot, UNKNOWN,
                                 {"error": "%s: %s" % (type(exc).__name__, exc)})
+            self.outstanding.cancel_unknown(
+                coid, "cancel raised %s" % type(exc).__name__)
             self.stop(RECONCILE,
                       "order.cancel %s is unconfirmed; the order may still be "
                       "resting" % coid)
@@ -1123,6 +1232,11 @@ class Driver:
             self.ledger.resolve(slot, ACCEPTED,
                                 {"status": status,
                                  "cancel_confirmed": confirmed})
+            # A RECEIPT, NOT A RELEASE, even when confirmed. Only an
+            # authoritative active-order read may release the commitment --
+            # two of CONTINUOUS-4's four "cancelled" orders had already
+            # FILLED.
+            self.outstanding.cancel_acked(coid, confirmed=confirmed)
             if confirmed:
                 self.working.drop(coid)
             return {"cancelled": confirmed, "client_order_id": coid,
@@ -1132,6 +1246,7 @@ class Driver:
                             "FILLED rather than cancelled, so it stays in the "
                             "working set for authoritative reconciliation")}
         self.ledger.resolve(slot, UNKNOWN, {"status": status, "ack": ack})
+        self.outstanding.cancel_unknown(coid, "cancel ack not OK")
         self.stop(RECONCILE, "cancel of %s was not acknowledged OK" % coid)
         raise ReconcileRequired(self.why or "cancel unknown")
 
