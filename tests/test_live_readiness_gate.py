@@ -425,18 +425,26 @@ def test_the_granted_cohort_is_expected_and_resolved_as_the_SAME_thing():
 
     assert e.cohort_id == s.budget_cohort
     assert r["cohort_id"] == s.budget_cohort
-    assert e.remaining_budget == 12 and r["remaining_budget"] == 12
+
+    # THE EXPECTATION IS THE WHOLE GRANT; the RESOLVED value is whatever the
+    # ledger has left. This asserted both were 12, which was true only until
+    # the window ran -- a test pinning a MOMENT again. Run 35628347483 spent
+    # 3 slots, so the cohort now reads 9 and the two legitimately differ.
+    # That difference is the "no second window" check doing its job, and it
+    # is asserted as such below rather than papered over here.
+    assert e.remaining_budget == int(s.envelope_obj.max_actions)
+    st = CO.state(s.budget_cohort)
+    assert r["remaining_budget"] == st["remaining"] <= st["budget"]
+    assert r["cohort_budget"] == 12 and st["budget"] == 12, (
+        "the budget itself must never grow; only `remaining` may fall")
 
     # and the two agree THROUGH `compare`, which is where the disagreement
     # actually surfaced. Only the cohort fields are under test here, so the
     # rest of the resolved set is the passing fixture -- mixing a real
     # expectation's git sha and hashes with it would fail on those instead
     # and prove nothing about the cohort.
-    diffs = LR.compare(e, {**_resolved(),
-                           "cohort_id": r["cohort_id"],
-                           "remaining_budget": r["remaining_budget"]})["diffs"]
-    assert [d["field"] for d in diffs if d["field"] in
-            ("cohort_id", "remaining_budget")] == [], diffs
+    diffs = LR.compare(e, {**_resolved(), "cohort_id": r["cohort_id"]})["diffs"]
+    assert [d["field"] for d in diffs if d["field"] == "cohort_id"] == [], diffs
 
 
 def test_a_partly_spent_cohort_fails_the_ONE_window_grant():

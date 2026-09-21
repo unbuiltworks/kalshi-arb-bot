@@ -493,13 +493,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # ARMED for OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1: ONE BTC15m
-          # q=1 window, cohort COHORT-2026-09-21-BTC15M-Q1LIVE-1 (0/12,
-          # chained to COHORT-2026-09-21-Q1LIVE-1 at 12/12 SPENT). This is
-          # the half that is NOT in the code, and the code half refuses
-          # unless AUTHORIZED_SHA equals the running executable_sha -- so any
-          # edit to the driver after this grant disarms it automatically.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1"
+          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1 IS SPENT: run
+          # 35628347483 reached the venue on GEMI-BTC15M2609211715-UP,
+          # consumed 3 of 12 cohort slots, took TWO maker fills (NO 1 @ 0.22,
+          # NO 1 @ 0.17) and withdrew with zero orders live. A spent
+          # authorization never arms again, and the grant required disarming
+          # regardless of outcome.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
@@ -507,7 +507,7 @@ jobs:
           # dispatches refused -- correctly, before the latch, spending
           # nothing. Bounded to a few hours past this authorization, never
           # open-ended.
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T18:00:00Z"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-21T18:00:00Z"  # spent; see above
           SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1' }}
           #: the hash readiness proved. Live refuses before the latch if the
           #: spec it resolves hashes to anything else.

@@ -625,7 +625,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1"
+LIVE_AUTHORIZATION = None
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -720,6 +720,16 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         # and took one fill. Its latch is on disk; spent authorizations never
         # arm again.
         "OWNER-2026-09-21-GEMINI-Q1-LIVE-2",
+        # Owner-granted 2026-09-21 for ONE BTC15m window at q=1, cohort
+        # COHORT-2026-09-21-BTC15M-Q1LIVE-1. IT TRADED: run 35628347483
+        # entered GEMI-BTC15M2609211715-UP at tte 878.1s, placed three q=1
+        # maker-or-cancel orders, took TWO fills (NO 1 @ 0.22, NO 1 @ 0.17),
+        # was stopped by the risk gate at imbalance 2, and withdrew with zero
+        # orders live. Spent; disarmed immediately afterwards. ITS LATCH
+        # OUTLIVES THE DISARM ON PURPOSE -- that is what makes "one
+        # authorization, one window" durable across a fresh runner, so the
+        # registry records GRANTS, not what is currently armed.
+        "OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
