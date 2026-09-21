@@ -58,8 +58,14 @@ BAND_LO, BAND_HI = 0.30, 0.70
 # can never be confused with the [0.30,0.70] transfer cohort.
 DIAG_LO, DIAG_HI = 0.10, 0.25
 
-_CTX = (ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")
-        if os.path.exists("/root/.ccr/ca-bundle.crt") else None)
+# Falls back to the SYSTEM TRUST STORE, never to None and never by raising.
+# Pinning this path without a fallback is how three prospective windows
+# recorded 361 executions with an empty leg list: the path is absent in a
+# deployed image, the context raised, and a bare `except` swallowed it.
+# tests/test_chain_ca_fallback.py exists to stop it recurring.
+_CA = "/root/.ccr/ca-bundle.crt"
+_CTX = (ssl.create_default_context(cafile=_CA) if os.path.exists(_CA)
+        else ssl.create_default_context())
 _LOCK = threading.Lock()
 _FILES: dict = {}
 _COUNTS: dict = collections.defaultdict(int)
@@ -174,8 +180,18 @@ def rank(k) -> tuple:
 
 
 # --------------------------------------------------------------- PMUS books
-def pmus_discover() -> list:
+def pmus_discover() -> tuple:
     """LIVE first, today's NFL PRE control second, then generic pregame.
+
+    Returns `(selection, livemap)`. The liveness map is built from the very
+    events this pass already fetched. It used to be built by a SECOND pass over
+    `/v2/leagues`, which returns 50 leagues against the 266 this pass reaches
+    through `/v2/sports` -- so an event in any of the other 216 was absent from
+    the map, and `pmus_flow_loop` reads absence as not-live. That silently
+    stopped the flow stream for 2h12m overnight on 2026-09-21 while every other
+    thread stayed healthy; see analysis/l5/PMUS_FLOW_INCIDENT_20260921.md.
+    Deriving both from one pass makes the disagreement impossible to express,
+    and deletes a whole network pass rather than adding one.
 
     ?limit is mandatory: without it the endpoint silently returns only ten
     events per league. NFL PRE is explicitly prioritized so the durable
@@ -210,8 +226,9 @@ def pmus_discover() -> list:
         if not leagues:
             raise ValueError("no leagues discovered from /v2/sports")
     except Exception:
-        return []
+        return [], {}
     live, nfl_live_control, nfl_pre, pre, diag = [], [], [], [], []
+    livemap: dict = {}
     for lg in leagues:
         try:
             ev = get(GATEWAY + "/v2/leagues/%s/events?limit=500" % lg)
@@ -220,6 +237,11 @@ def pmus_discover() -> list:
         for e in (ev.get("events") or []):
             st = e.get("eventState") or {}
             is_live = bool(st.get("live")) and not st.get("ended")
+            # Recorded for EVERY event this pass reaches, not only the ones
+            # that survive the market filters below -- the flow selector keys
+            # on the event, so an event dropped for having no two-sided market
+            # must still be answerable as live/not-live rather than missing.
+            livemap[e.get("slug")] = (is_live, st.get("period"), st.get("score"))
             fam = collections.defaultdict(list)
             for m in (e.get("markets") or []):
                 if not m.get("slug"):
@@ -272,7 +294,7 @@ def pmus_discover() -> list:
                 TOTAL_CAP,
                 len(nfl_live_control) + len(live) + len(diag) + len(nfl_pre)):
             break
-    return out
+    return out, livemap
 
 
 def top(L):
@@ -347,6 +369,10 @@ def pmus_flow_loop(state: dict) -> None:
             if livemap.get(r["event"], (False,))[0]
             or (r.get("stratum") == "nfl_pre_control" and sweep % 4 == 0)
         ]
+        # Published so the heartbeat can tell "selected nothing to poll" apart
+        # from "writer stuck". Both freeze rows_written identically, which is
+        # what made the 2026-09-21 flow gap read as a stall for two hours.
+        state["pmus_flow_selected"] = len(sel)
         qq: queue.Queue = queue.Queue()
         for r in sel:
             qq.put(r)
@@ -533,26 +559,65 @@ def intl_flow_loop(state: dict) -> None:
             time.sleep(d)
 
 
+# -------------------------------------------- prospective L5 full-L2 recorder
+# Deployed HERE rather than as its own service because the durable volume, the
+# supervisor and the 24/7 restart policy already exist on this container, and
+# because nothing else it needs is anywhere else. It writes to its own
+# subdirectory of ROOT and shares no file, no token set and no state key with
+# the collector threads.
+#
+# THE ISOLATION PROPERTY OF THIS IMAGE IS UNCHANGED. l5_prospective_recorder
+# imports the standard library ONLY (bisect, concurrent, datetime, json, os,
+# ssl, threading, time, typing, urllib). No executor, session, signer,
+# credential reader or order transport enters the image, because none is
+# copied into it and none is importable from what is.
+PROSPECTIVE_ON = os.getenv("L5_PROSPECTIVE", "1") not in ("0", "false", "")
+PROSPECTIVE_CAD = float(os.getenv("L5_PROSPECTIVE_CAD", "3"))
+
+
+def prospective_loop(state: dict) -> None:
+    from src import l5_prospective_recorder as P
+
+    root = os.path.join(ROOT, "prospective")
+    rec = P.Recorder(root)
+    drv = P.Driver(rec)
+    drv.seed()
+    log("prospective_seeded", root=root,
+        tokens=len(rec.tokens), backlog_marked=rec.counts.get("seeded_backlog"),
+        note="backlog marked seen, not emitted: the first emitted event is the "
+             "first fill we were already polling the book for")
+    state["prospective_counts"] = rec.counts
+    while True:
+        t0 = time.time()
+        for e in drv.step(t0):
+            _COUNTS["prospective_events"] += 1
+            log("prospective_event", slug=e.get("slug"),
+                outcome=e.get("outcome"), action=e.get("action"),
+                price=e.get("price"), size=e.get("size"),
+                maker=(None if e.get("is_taker") is None
+                       else not e["is_taker"]),
+                pre_book=bool(e.get("pre_fill_book")),
+                trail=e.get("queue_trail_snapshots"),
+                ahead_first=e.get("depth_ahead_at_first_look"),
+                ahead_last=e.get("depth_ahead_at_last_look"),
+                vanished=e.get("depth_ahead_disappeared"),
+                gap_s=e.get("unobserved_interval_s"))
+        state["prospective_tokens"] = len(rec.tokens)
+        d = PROSPECTIVE_CAD - (time.time() - t0)
+        if d > 0:
+            time.sleep(d)
+
+
 # ------------------------------------------------------------- discovery
 def discovery_loop(state: dict) -> None:
     while True:
         try:
-            sel = pmus_discover()
+            sel, lm = pmus_discover()
+            # Published together or not at all. Keeping the previous selection
+            # alive against a NEW liveness map (or the reverse) is what let the
+            # two disagree; they are now one observation of the slate.
             if sel:
                 state["pmus"] = sel
-            lm = {}
-            try:
-                for lg in [l["slug"] for l in
-                           get(GATEWAY + "/v2/leagues")["leagues"]]:
-                    ev = get(GATEWAY + "/v2/leagues/%s/events?limit=500" % lg)
-                    for e in (ev.get("events") or []):
-                        st = e.get("eventState") or {}
-                        lm[e.get("slug")] = (
-                            bool(st.get("live")) and not st.get("ended"),
-                            st.get("period"), st.get("score"))
-            except Exception:
-                pass
-            if lm:
                 state["pmus_live"] = lm
             isel, cmap = intl_discover()
             if isel:
@@ -596,6 +661,15 @@ def heartbeat_loop(state: dict, t_start: float) -> None:
             for n in ("pmus_books", "pmus_flow", "intl_books", "intl_flow"):
                 p = os.path.join(ROOT, n + ".jsonl")
                 sizes[n] = os.path.getsize(p) if os.path.exists(p) else 0
+            for n in ("events", "raw_books", "raw_prints", "raw_fills"):
+                p = os.path.join(ROOT, "prospective", n + ".jsonl")
+                sizes["prospective_" + n] = (os.path.getsize(p)
+                                             if os.path.exists(p) else 0)
+            try:
+                st = os.statvfs(ROOT)
+                free_gb = round(st.f_bavail * st.f_frsize / 2 ** 30, 2)
+            except (OSError, AttributeError):
+                free_gb = None
             log("heartbeat",
                 uptime_s=round(time.time() - t_start, 1),
                 root=ROOT,
@@ -605,6 +679,14 @@ def heartbeat_loop(state: dict, t_start: float) -> None:
                 intl_markets=len(state.get("intl") or []),
                 pmus_sweep_s=state.get("pmus_sweep_s"),
                 intl_sweep_s=state.get("intl_sweep_s"),
+                # A frozen rows_written means one of two different things.
+                # These disambiguate them without reading discovery lines.
+                pmus_flow_selected=state.get("pmus_flow_selected"),
+                pmus_live_events=sum(1 for v in (state.get("pmus_live") or {})
+                                     .values() if v[0]),
+                volume_free_gb=free_gb,
+                prospective_tokens=state.get("prospective_tokens"),
+                prospective=dict(state.get("prospective_counts") or {}),
                 labels=("READ-ONLY. Public GETs only. No credentials, no order "
                         "transport, no arming. Nothing here is submitted, "
                         "filled, settled or realized."))
@@ -617,14 +699,42 @@ def main() -> int:
     global _NFL_PRE_BASELINE_SLUGS
     _NFL_PRE_BASELINE_SLUGS = load_nfl_pre_baseline()
     t_start = time.time()
-    for n in ("pmus_books", "pmus_flow", "intl_books", "intl_flow"):
+    for n in ("pmus_books", "pmus_flow", "intl_books", "intl_flow",
+              "prospective"):
         gap(n, "service start / restart", pid=os.getpid())
+    # Every other _COUNTS key is created by the gap() writes above, under the
+    # lock. This one is created by the first event, which could land while the
+    # heartbeat is iterating -- "dictionary changed size during iteration",
+    # swallowed into a heartbeat_error, at the one moment the heartbeat is most
+    # worth reading. Create it up front instead.
+    _COUNTS["prospective_events"] += 0
+    # The 2026-09-21 flow gap is marked IN THE STREAM, not only in a report, so
+    # an analysis that never reads analysis/ still cannot treat that window as
+    # zero flow. Re-written on every start: these are append-only observations
+    # and `incident_id` makes duplicates trivially collapsible.
+    write("pmus_flow", {
+        "_marker": "PRESERVED_INCIDENT",
+        "incident_id": "PMUS_FLOW_LIVEMAP_COVERAGE_20260921",
+        "t": time.time(),
+        "window_start_utc": "2026-09-21T03:55:13Z",
+        "window_end_utc": "2026-09-21T06:07:17Z",
+        "duration_s": 7924,
+        "deployment": "62a54463-b441-4f3a-a723-9545e6f368c9",
+        "rows_written_frozen_at": 1220964,
+        "file_bytes_frozen_at": 516596932,
+        "cause": ("the liveness map was built from /v2/leagues (50 leagues) "
+                  "while discovery sampled /v2/sports (266); the flow selector "
+                  "reads an absent event as not-live, and every live event on "
+                  "the venue was in an uncovered league"),
+        "not_a_writer_freeze": True,
+        "treatment": "CENSORED -- absence of observations, never zero flow",
+        "report": "analysis/l5/PMUS_FLOW_INCIDENT_20260921.md"})
     log("start", root=ROOT, pid=os.getpid(),
         nfl_pre_baseline_slugs=len(_NFL_PRE_BASELINE_SLUGS),
         note="durable replacement for the recycling research container")
     state: dict = {"pmus": [], "pmus_live": {}, "intl": [], "intl_cond": {}}
     try:
-        state["pmus"] = pmus_discover()
+        state["pmus"], state["pmus_live"] = pmus_discover()
         isel, cmap = intl_discover()
         state["intl"], state["intl_cond"] = isel, cmap
     except Exception as e:
@@ -636,6 +746,11 @@ def main() -> int:
         ("intl_books", intl_books_loop, "intl_books"),
         ("intl_flow", intl_flow_loop, "intl_flow"),
     ]
+    if PROSPECTIVE_ON:
+        # Supervised like the rest: a read-only recorder self-recovers and runs
+        # 24/7. It carries its own stream name so a crash of ITS loop cannot
+        # write a gap marker into a collector stream it does not own.
+        threads.append(("prospective", prospective_loop, "prospective"))
     for name, fn, sname in threads:
         threading.Thread(target=supervise, args=(name, fn, state, sname),
                          daemon=True).start()

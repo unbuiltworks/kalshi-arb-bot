@@ -1,0 +1,18 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_live_habitat/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_live_habitat/**",
+      "src/l5_live_habitat_service.py",
+      "src/l5_prospective_recorder.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_live_habitat_service",
+    "restartPolicyType": "ALWAYS"
+  },
+  "_status": "READ-ONLY durable live-habitat collector plus the prospective L5 full-L2 recorder. Public GETs only: no credential reader, no signer, no order transport, no arming flag. The image copies exactly two modules and tests/test_habitat_image_isolation.py fails if either grows a non-stdlib or off-copy-list import, a non-GET request, or an authorization constant. Streams: pmus_books, pmus_flow, intl_books, intl_flow, and prospective/ (events.jsonl never rotates; raw firehoses rotate at 3 GB and shed below a 2 GB free-space floor). Nothing here is submitted, filled, settled or realized.",
+  "_why_this_file_exists": "deploy/l5_live_habitat was the only Dockerfile directory in this repo with no manifest, which tests/test_deploy_fallthrough_guard.py flags as a fall-through risk: a service without an explicit startCommand is how a config-less service once ran the order-capable Kalshi bot. Railway reads its config from the service root, not from here, so this file pins the intent in the repo rather than driving the build."
+}

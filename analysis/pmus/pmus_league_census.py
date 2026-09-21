@@ -1,6 +1,8 @@
 """PMUS full-slate census on the venue's own event.live flag. PUBLIC READ-ONLY."""
-import json,ssl,time,threading,queue,urllib.request
-CTX=ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")
+import json,os,ssl,time,threading,queue,urllib.request
+_CA = "/root/.ccr/ca-bundle.crt"
+CTX = (ssl.create_default_context(cafile=_CA) if os.path.exists(_CA)
+       else ssl.create_default_context())
 def g(u,tries=3):
     for i in range(tries):
         try:

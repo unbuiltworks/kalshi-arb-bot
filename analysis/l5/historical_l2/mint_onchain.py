@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import os
 import ssl
 import time
 import urllib.request
@@ -48,7 +49,11 @@ POSITION_SPLIT = "0x2e6bb91f"      # PositionSplit(address,address,bytes32,bytes
 POSITIONS_MERGE = "0x6f13ca62"     # PositionsMerge(...)
 EXCHANGE_FILL = "0xd543adfd"       # the exchange's per-fill event
 ARCHIVE = "https://polygon.drpc.org"
-CTX = ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")
+# No fallback here meant this module RAISED in any image without the
+# agent-proxy bundle. See tests/test_chain_ca_fallback.py.
+_CA = "/root/.ccr/ca-bundle.crt"
+CTX = (ssl.create_default_context(cafile=_CA) if os.path.exists(_CA)
+       else ssl.create_default_context())
 
 
 def rpc(method: str, params: list, url: str = ARCHIVE, tries: int = 4) -> Any:

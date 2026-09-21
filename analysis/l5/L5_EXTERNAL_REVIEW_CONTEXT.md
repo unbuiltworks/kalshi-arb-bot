@@ -64,12 +64,28 @@
 >   every one ending 11+ hours out). The live window is arithmetic on the slug
 >   epoch.
 >
-> **NEXT FALSIFIABLE HYPOTHESIS — H-QUEUE-IRRELEVANT:** conditional on L5
-> resting at a price, maker-fill probability is **independent of
-> `depth_ahead_of_fill_price`** and is driven instead by complement-buyer
-> arrival. This **supersedes H-FLOW as the primary test**, because H-FLOW
-> assumed the denominator was binding and the first observations put that in
-> doubt. Neither is fitted before 200 maker fills with pre-fill books.
+> **NEXT FALSIFIABLE HYPOTHESIS — H-QUEUE-MISMEASURED:**
+> `depth_ahead_of_fill_price`, as computed from the public CLOB ladder, **does
+> not represent the effective queue** that governed L5's maker fill. Tested by
+> reconciliation: at the last public look before each fill, do publicly observed
+> book mutations plus published trades account for the queue ahead of him
+> disappearing? Six per-fill verdicts, `UNEXPLAINED` being the signature.
+> **H-QUEUE-IRRELEVANT is withdrawn** — it asserted a mechanism (complement
+> arrival drives fills) from n=16 in one market in one hour; the mismeasurement
+> claim is the one the data can adjudicate, and confirming it licenses **no**
+> replacement mechanism. This **supersedes H-FLOW as the primary test**, because
+> H-FLOW assumed the denominator was binding. Nothing is fitted at n=16; results
+> are reported **per market** and are not pooled before 200 scorable fills in a
+> single market.
+>
+> **OBSERVABILITY DEFECT, 2026-09-21:** `pmus_flow` wrote nothing for 2h12m
+> (03:55:13Z–06:07:17Z) on a healthy, never-restarted collector. Cause: the
+> liveness map was built from `/v2/leagues` (50 leagues) while discovery sampled
+> `/v2/sports` (266), and the flow selector reads a missing event as not-live.
+> Every live event on the venue at diagnosis time was invisible to the map
+> (24/24). Fixed by deriving both from one pass. My earlier "writer stall"
+> characterisation is **withdrawn** — see `PMUS_FLOW_INCIDENT_20260921.md`. That
+> interval is **censored** in any flow analysis, never zero flow.
 >
 > **q=1 CONCURRENCY HOLE CLOSED.** Single-writer `flock`; a second live process
 > refuses, a crashed owner does not deadlock its own restart (kernel drops the

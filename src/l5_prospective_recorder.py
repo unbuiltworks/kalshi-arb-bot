@@ -33,6 +33,7 @@ selector is built from it.
 from __future__ import annotations
 
 import bisect
+import collections
 import json
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -111,13 +112,33 @@ class BookRing:
         i = bisect.bisect_right(self.t, ts)
         return self.rows[i] if i < len(self.rows) else None
 
+    def window(self, t0: float, t1: float) -> List[dict]:
+        """Every snapshot in (t0, t1], oldest first.
+
+        A single pre-fill book answers "how much was ahead of him once". It
+        cannot answer whether that depth was TRADED away or CANCELLED, which is
+        the whole question -- so the intermediate snapshots are kept as raw
+        rows, not collapsed into a scalar.
+        """
+        lo = bisect.bisect_right(self.t, t0)
+        hi = bisect.bisect_right(self.t, t1)
+        return self.rows[lo:hi]
+
 
 # ------------------------------------------------------- sequential L5 state
 class MarketState:
     """L5's running per-market state, built only from fills already seen."""
 
     def __init__(self) -> None:
-        self.inv: Dict[int, float] = {0: 0.0, 1: 0.0}
+        # OBSERVED IN PRODUCTION: the venue served a fill with
+        # outcomeIndex=999, and a fixed {0: .., 1: ..} dict raised KeyError
+        # inside the recorder thread. The supervisor restarted it, which reset
+        # the seed and lost the book ring -- so one odd row from the venue cost
+        # minutes of coverage. A recorder must never crash on a value a venue
+        # is free to send.
+        self.inv: Dict[int, float] = collections.defaultdict(float)
+        self.inv[0] = 0.0
+        self.inv[1] = 0.0
         self.prev_outcome: Optional[int] = None
         self.run: int = 0
         self.last_t: Optional[int] = None
@@ -133,8 +154,9 @@ class MarketState:
         """State BEFORE applying this fill."""
         return {"action": self.classify(outcome_index),
                 "run_before": self.run,
-                "inv_0_before": self.inv[0], "inv_1_before": self.inv[1],
-                "residual_before": self.inv[0] - self.inv[1],
+                "inv_0_before": self.inv.get(0, 0.0),
+                "inv_1_before": self.inv.get(1, 0.0),
+                "residual_before": self.inv.get(0, 0.0) - self.inv.get(1, 0.0),
                 "fills_before": self.n,
                 "secs_since_prev_fill": (None if self.last_t is None else ts - self.last_t),
                 "secs_since_prev_opposite":
@@ -149,7 +171,8 @@ class MarketState:
             self.run += 1
         else:
             self.run = 1
-        self.inv[outcome_index] += size if side == "BUY" else -size
+        self.inv[outcome_index] = (self.inv.get(outcome_index, 0.0)
+                                   + (size if side == "BUY" else -size))
         self.prev_outcome = outcome_index
         self.last_t = ts
         self.n += 1
@@ -164,12 +187,58 @@ def provenance(name: str, fetched_at: Optional[float], event_t: float,
             "resolution_s": resolution_s, "note": note}
 
 
+def bid_consuming(p: Mapping[str, Any], outcome_index: int, price: float,
+                  tol: float = 1e-9) -> bool:
+    """Does print `p` consume resting BUY depth at `price` on `outcome_index`?
+
+    TWO CONVENTIONS, ONE BOOK. Selling outcome A at p and buying outcome B at
+    1-p are the same event against the same resting order, and the tape reports
+    whichever leg the taker took. Counting only the first convention silently
+    halves the numerator of the reconciliation, which would manufacture
+    unexplained queue disappearance out of a bookkeeping choice.
+    """
+    try:
+        oi = int(p.get("outcomeIndex", -1))
+        px = float(p.get("price"))
+    except (TypeError, ValueError):
+        return False
+    side = str(p.get("side") or "").upper()
+    if oi == outcome_index and side == "SELL":
+        return px >= price - tol
+    if oi == (1 - outcome_index) and side == "BUY":
+        return (1.0 - px) >= price - tol
+    return False
+
+
+def ahead_trail(rows: Sequence[Mapping[str, Any]], outcome_index: int,
+                price: float) -> List[dict]:
+    """Depth ahead / depth at `price` at each raw snapshot, in order.
+
+    The ladders are the BUY side for `outcome_index`. Under the mirror
+    convention a snapshot of the complement token exposes the same queue as its
+    ask ladder, so rows carrying `_mirror: True` are read that way.
+    """
+    out = []
+    for r in rows:
+        if r.get("_mirror"):
+            lv = [(round(1.0 - p, 6), s) for p, s in ladder(r.get("asks"))]
+            lv.sort()
+        else:
+            lv = ladder(r.get("bids"))
+        out.append({"t": r.get("_t"),
+                    "depth_ahead": depth_ahead(lv, price),
+                    "depth_at": depth_at(lv, price),
+                    "mirror": bool(r.get("_mirror"))})
+    return out
+
+
 def build_event(fill: Mapping[str, Any], *, is_taker: Optional[bool],
                 state: MarketState, pre: Optional[dict], post: Optional[dict],
                 prints: Sequence[Mapping[str, Any]],
                 settle_epoch: Optional[float],
                 chain: Optional[Mapping[str, Any]] = None,
-                label_source: str = "") -> dict:
+                label_source: str = "",
+                trail: Optional[Sequence[Mapping[str, Any]]] = None) -> dict:
     """One immutable observation of an L5 fill in its book context.
 
     `pre` must be strictly BEFORE the fill and `post` strictly after; the caller
@@ -205,6 +274,51 @@ def build_event(fill: Mapping[str, Any], *, is_taker: Optional[bool],
     all_market_qty = sum(float(p.get("size") or 0.0) for p in window)
     ahead = depth_ahead(pb, px) if pre else None
 
+    # ---- queue trail: what the public book did over a LOOKBACK ending at the
+    # pre-fill snapshot.
+    #
+    # THIS WAS WRONG ONCE AND THE SYMPTOM WAS SILENT. The trail was first taken
+    # as the snapshots BETWEEN the pre-book and the fill -- but `pre` is by
+    # definition the NEWEST snapshot before the fill, so that window is empty by
+    # construction. Every event came back with `trail: 0`, and the whole
+    # cancellation/disappearance measurement was degenerate while looking like
+    # a fact about quiet markets. The trail must END at the pre-book and reach
+    # BACKWARDS from it.
+    tr = [dict(r) for r in (trail or [])]
+    tr_scalars = ahead_trail(tr, oi, px) if (pre and tr) else []
+    # `first look` = earliest snapshot in the lookback; `last look` = the
+    # pre-fill book itself, which is also the trail's final element.
+    ahead_first = (tr_scalars[0]["depth_ahead"] if tr_scalars else ahead)
+    first_t = (tr_scalars[0]["t"] if tr_scalars else t0)
+    last_t = t0
+    ahead_last = ahead
+    at_last = (depth_at(pb, px) if pre else None)
+    # Full ladders are kept for the snapshots nearest the fill, where the
+    # accounting is decided. The rest keep their scalars here and their raw
+    # ladder in raw_books.jsonl, joinable on (token, _t).
+    tr_raw = tr[-TRAIL_RAW_SNAPSHOTS:]
+
+    # Publicly observed volume that consumed the queue AT OR AHEAD of his
+    # price, over exactly the interval the trail covers.
+    # The reconciliation window starts at the FIRST look, so the volume that
+    # explains the observed drop is measured over the same interval the drop is.
+    rwin = [p for p in prints
+            if first_t is not None and first_t < float(p.get("t", 0)) <= ts]
+    consumed = [p for p in rwin if bid_consuming(p, oi, px)]
+    consumed_qty = sum(float(p.get("size") or 0.0) for p in consumed)
+    comp = [p for p in rwin if int(p.get("outcomeIndex", -1)) == (1 - oi)]
+    comp_qty = sum(float(p.get("size") or 0.0) for p in comp)
+
+    disappeared = (None if (ahead_first is None or ahead_last is None)
+                   else round(ahead_first - ahead_last, 6))
+    unexplained_drop = (None if disappeared is None
+                        else round(disappeared - consumed_qty, 6))
+
+    # Price movement across the fill, in ticks, from the two raw ladders.
+    def _mv(a, b):
+        return None if (a is None or b is None) else round(b - a, 6)
+    ob_b, ob_bs, ob_a, ob_as = touch(ob, oa)
+
     return {
         "schema": SCHEMA,
         "observed_at": time.time(),
@@ -233,8 +347,91 @@ def build_event(fill: Mapping[str, Any], *, is_taker: Optional[bool],
         "rested_at_touch": (None if (pre is None or bb is None) else abs(px - bb) < 1e-9),
         "ticks_behind_touch": (None if (pre is None or bb is None)
                                else round((bb - px) / 0.01)),
+
+        # ---- H-QUEUE-MISMEASURED instrumentation ------------------------
+        # Every one of these is computed independently from a raw row that is
+        # preserved in the same record, so the derivation can be re-audited
+        # without re-fetching anything.
+
+        # (3) cancellations / depth disappearance before the fill
+        "queue_trail": tr_raw,
+        "queue_trail_raw_kept": len(tr_raw),
+        "queue_trail_raw_note":
+            "full ladders for the snapshots nearest the fill; earlier ones keep "
+            "their scalars here and their raw ladder in raw_books.jsonl, "
+            "joinable on (token, _t)",
+        "queue_trail_scalars": tr_scalars,
+        "queue_trail_snapshots": len(tr),
+        "queue_trail_t0": first_t,
+        "queue_trail_t1": last_t,
+        "queue_trail_lookback_s": TRAIL_LOOKBACK_S,
+        "depth_ahead_at_first_look": ahead_first,
+        "depth_ahead_at_pre": ahead,
+        "depth_ahead_at_last_look": ahead_last,
+        "depth_at_price_at_last_look": at_last,
+        "depth_ahead_disappeared": disappeared,
+        "queue_consuming_volume": (consumed_qty if pre else None),
+        "queue_consuming_prints": len(consumed),
+        "depth_drop_not_explained_by_trades": unexplained_drop,
+        "depth_drop_definition":
+            "pre-snapshot depth ahead minus last-look depth ahead, minus "
+            "publicly observed volume consuming at/ahead of his price over the "
+            "SAME interval. Positive => depth left the book without a public "
+            "trade (cancellation, or a trade the tape had not published).",
+
+        # (5) price movement through the fill
+        "post_touch_bid": ob_b, "post_touch_bid_size": ob_bs,
+        "post_touch_ask": ob_a, "post_touch_ask_size": ob_as,
+        "bid_move_through_fill": _mv(bb, ob_b),
+        "ask_move_through_fill": _mv(ba, ob_a),
+        "mid_move_through_fill": (
+            None if None in (bb, ba, ob_b, ob_a)
+            else round(((ob_b + ob_a) - (bb + ba)) / 2.0, 6)),
+
+        # (6) snapshot age at the fill, and (7) the timing uncertainty that
+        # bounds every one of these quantities
+        "pre_snapshot_age_s": (None if t0 is None else round(float(ts) - float(t0), 3)),
+        "last_look_age_s": (None if last_t is None else round(float(ts) - float(last_t), 3)),
+        "unobserved_interval_s": (None if last_t is None
+                                  else round(float(ts) - float(last_t), 3)),
+        "fill_time_lo": float(ts),
+        "fill_time_hi": float(ts) + TRADE_TS_RESOLUTION_S,
+        "fill_time_uncertainty_s": TRADE_TS_RESOLUTION_S,
+        "fill_time_note":
+            "the venue timestamps trades to whole seconds, so the true fill "
+            "instant lies in [lo, hi). Any depth-ahead residual smaller than "
+            "what the market trades in one second is inside the noise.",
+
+        # (8) complement-side arrivals
+        "complement_arrival_volume": (comp_qty if pre else None),
+        "complement_arrival_prints": len(comp),
+        "complement_outcome_index": 1 - oi,
+
+        # (10) atomic multi-fill: the grouping key. Whether this fill shares a
+        # transaction with others is a cross-event fact, joined offline.
+        "atomic_group_key": fill.get("transactionHash"),
+        "atomic_group_size": None,
+        "atomic_group_reason": "joined across events offline, not at capture",
         # flow
         "recent_prints": [dict(p) for p in arriving][:50],
+        # The WHOLE window, unfiltered and time-stamped. `recent_prints` is a
+        # filtered view for the primary ratio; the reconciliation has to split
+        # the window at the last book look and to see complement-side legs, so
+        # it cannot be built from a pre-filtered list.
+        "window_prints": [dict(p) for p in rwin][:WINDOW_PRINTS_CAP],
+        "window_prints_n_total": len(rwin),
+        # THE RECONCILIATION RE-DERIVES ITS TERMS FROM THIS LIST. If it is
+        # truncated, that re-derivation undercounts the consuming volume and
+        # would report UNEXPLAINED for a busy market purely because we capped a
+        # list. The flag makes the truncation a REFUSAL rather than a finding.
+        "window_prints_truncated": len(rwin) > WINDOW_PRINTS_CAP,
+        "window_prints_t0": first_t,
+        "window_prints_t1": float(ts),
+        "flow_window_t0": t0,
+        "flow_window_note":
+            "window_prints spans the RECONCILIATION window (first look -> "
+            "fill). The H-FLOW numerator uses the narrower flow window "
+            "(pre-snapshot -> fill) and is reported separately.",
         "arriving_volume_since_pre_snapshot": (arriving_qty if pre else None),
         "arriving_volume_definition":
             "same outcome, price <= L5 price: flow that could have reached him",
@@ -284,11 +481,17 @@ import urllib.request                                            # noqa: E402
 GAMMA = "https://gamma-api.polymarket.com"
 CTX = ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt") \
     if os.path.exists("/root/.ccr/ca-bundle.crt") else ssl.create_default_context()
-BOOK_CADENCE_S = 3.0
-FILL_CADENCE_S = 3.0
-PRINTS_CADENCE_S = 10.0   # 24 per-market calls; slower than the book sweep
-DISCOVER_CADENCE_S = 15.0        # ceiling only; rollover is detected exactly
-POST_FILL_GRACE_S = 8.0          # wait this long for a post-fill snapshot
+# Cadences are env-tunable because this now shares a container -- and the
+# venue's rate limits -- with the international book collector. If book_errors
+# climb after deploy, these can be backed off without a code change or a
+# rebuild. The 3 s book sweep is the one that matters: it is what makes the
+# pre-fill snapshot NEAR the fill, and loosening it widens
+# `unobserved_interval_s` on every reconciliation.
+BOOK_CADENCE_S = float(os.getenv("L5_PROSPECTIVE_BOOK_CAD", "3"))
+FILL_CADENCE_S = float(os.getenv("L5_PROSPECTIVE_FILL_CAD", "3"))
+PRINTS_CADENCE_S = float(os.getenv("L5_PROSPECTIVE_PRINTS_CAD", "10"))
+DISCOVER_CADENCE_S = float(os.getenv("L5_PROSPECTIVE_DISCOVER_CAD", "15"))
+POST_FILL_GRACE_S = float(os.getenv("L5_PROSPECTIVE_GRACE_S", "8"))
 
 
 def _get(url: str, timeout: float = 20.0):
@@ -296,6 +499,31 @@ def _get(url: str, timeout: float = 20.0):
                                              "Accept": "application/json"})
     with urllib.request.urlopen(r, timeout=timeout, context=CTX) as h:
         return json.loads(h.read())
+
+
+# How far back the queue trail reaches from the pre-fill book, and how many of
+# its snapshots keep a full raw ladder inside the event.
+TRAIL_LOOKBACK_S = 60.0
+TRAIL_RAW_SNAPSHOTS = 6
+# How many raw prints of the reconciliation window travel inside the event.
+WINDOW_PRINTS_CAP = 1000
+
+RAW_FILL_KEYS_CAP = 200_000
+RAW_PRINT_KEYS_CAP = 400_000
+BOOK_KEEPALIVE_S = 60.0
+
+
+def _remember(seen: set, order, key, cap: int) -> None:
+    """Remember `key`, evicting the oldest once `cap` is reached.
+
+    An evicted key can be re-written once if the venue serves that row again,
+    which duplicates a row rather than losing one. That is the right way round:
+    a duplicate is auditable, a dropped observation is not.
+    """
+    seen.add(key)
+    order.append(key)
+    while len(order) > cap:
+        seen.discard(order.popleft())
 
 
 def fill_key(x: Mapping[str, Any]) -> tuple:
@@ -375,9 +603,87 @@ class Recorder:
         self.counts: Dict[str, int] = {"raw_books": 0, "raw_fills": 0,
                                        "events": 0, "book_errors": 0}
         self._lk = threading.Lock()
+        self._shedding = False
+        self.token_order: List[str] = []
+        # Raw rows already persisted. Bounds `raw_fills`/`raw_prints` to one
+        # write per distinct observation instead of one per poll. FIFO-capped,
+        # because an unbounded set of print keys is its own leak -- at observed
+        # print rates it would reach hundreds of MB of RSS in a day, trading a
+        # disk problem for a memory one.
+        self._raw_seen: set = set()
+        self._raw_order: collections.deque = collections.deque()
+        self._raw_print_seen: set = set()
+        self._raw_print_order: collections.deque = collections.deque()
+        self._book_hash: Dict[str, str] = {}
+        self._book_written: Dict[str, float] = {}
+
+    # `events.jsonl` is the evidence and is NEVER rotated or dropped. The raw
+    # firehoses are bounded, because at a 3 s cadence over ~40 full ladders
+    # raw_books alone grows by order gigabytes per day and a full volume takes
+    # the whole collector down with it -- which has happened here before. Each
+    # event already embeds the specific raw rows its derivations used
+    # (`pre_fill_book`, `queue_trail`, `post_fill_book`, `window_prints`), so a
+    # rotated firehose never costs us the ability to re-audit a finding.
+    # 3 GB x 3 raw streams x 2 generations = 18 GB steady state, against a
+    # 50 GB volume whose COLLECTOR streams are unbounded and already at 2.7 GB.
+    # Measured raw rate after deduplication is ~2.5 GB/day, so this keeps
+    # roughly 2-4 days of firehose -- which exists to reconstruct book states at
+    # times with NO fill (the unfilled controls H-FLOW needs), since every
+    # fill's own ladders are embedded in its event and never rotate.
+    ROTATE_BYTES = float(os.getenv("L5_PROSPECTIVE_ROTATE_BYTES", str(3 * 2 ** 30)))
+    NEVER_ROTATE = ("events", "rotations", "gaps")
+    DISK_FLOOR_BYTES = float(os.getenv("L5_PROSPECTIVE_DISK_FLOOR", str(2 * 2 ** 30)))
+
+    def free_bytes(self) -> Optional[float]:
+        try:
+            st = os.statvfs(self.root)
+            return float(st.f_bavail) * float(st.f_frsize)
+        except (OSError, AttributeError):
+            return None
+
+    def _rotate(self, path: str, name: str) -> None:
+        prev = path + ".1"
+        try:
+            size = os.path.getsize(path)
+            if os.path.exists(prev):
+                os.remove(prev)
+            os.rename(path, prev)
+        except OSError:
+            return
+        # The DROP is itself an observation, recorded where it cannot be
+        # rotated away.
+        self._write("rotations", {"_t": time.time(), "stream": name,
+                                  "dropped_to": os.path.basename(prev),
+                                  "bytes": size,
+                                  "note": "raw firehose rotation; events.jsonl "
+                                          "is never rotated"})
 
     def _write(self, name: str, row: Mapping[str, Any]) -> None:
-        with open(os.path.join(self.root, name + ".jsonl"), "a", encoding="utf-8") as fh:
+        path = os.path.join(self.root, name + ".jsonl")
+        if name not in self.NEVER_ROTATE:
+            try:
+                if os.path.getsize(path) >= self.ROTATE_BYTES:
+                    self._rotate(path, name)
+            except OSError:
+                pass
+            free = self.free_bytes()
+            if free is not None and free < self.DISK_FLOOR_BYTES:
+                # Shed the firehose, keep the evidence. Recorded once per
+                # transition so the shedding is visible, not silent.
+                if not self._shedding:
+                    self._shedding = True
+                    self._write("gaps", {"_t": time.time(), "reason":
+                                         "raw streams shed: free space below "
+                                         "floor", "free_bytes": free,
+                                         "floor": self.DISK_FLOOR_BYTES})
+                self.counts["raw_shed"] = self.counts.get("raw_shed", 0) + 1
+                return
+            if self._shedding:
+                self._shedding = False
+                self._write("gaps", {"_t": time.time(),
+                                     "reason": "raw streams resumed",
+                                     "free_bytes": free})
+        with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(row, default=str) + "\n")
 
     # ---- raw capture
@@ -421,13 +727,30 @@ class Recorder:
                 with self._lk:
                     self.books.setdefault(tok, BookRing()).add(t, row)
                     self.counts["raw_books"] += 1
-                self._write("raw_books", {"_t": t, "token": tok,
-                                          "slug": meta.get("slug"),
-                                          "bids": bk.get("bids"), "asks": bk.get("asks"),
-                                          "tick_size": bk.get("tick_size"),
-                                          "last_trade_price": bk.get("last_trade_price"),
-                                          "hash": bk.get("hash"),
-                                          "source": "clob/book?token_id"})
+                # WRITE ON CHANGE. The venue stamps each book with a `hash`;
+                # an unchanged hash is the same ladder we already persisted, and
+                # at a 3 s cadence over ~40 tokens re-writing it measured
+                # ~2 GB/day. A keepalive row every BOOK_KEEPALIVE_S records that
+                # the book was READ and found unchanged, so a quiet market and
+                # an unpolled one stay distinguishable. The in-memory ring still
+                # receives EVERY poll, so the trail and the pre/post books in
+                # each event are unaffected by this.
+                h = bk.get("hash")
+                changed = (h is None or self._book_hash.get(tok) != h)
+                stale = (t - self._book_written.get(tok, 0.0)) >= BOOK_KEEPALIVE_S
+                if changed or stale:
+                    self._book_hash[tok] = h
+                    self._book_written[tok] = t
+                    self._write("raw_books", {
+                        "_t": t, "token": tok, "slug": meta.get("slug"),
+                        "bids": bk.get("bids"), "asks": bk.get("asks"),
+                        "tick_size": bk.get("tick_size"),
+                        "last_trade_price": bk.get("last_trade_price"),
+                        "hash": h, "source": "clob/book?token_id",
+                        "write_reason": ("changed" if changed else "keepalive")})
+                else:
+                    self.counts["book_unchanged"] = \
+                        self.counts.get("book_unchanged", 0) + 1
 
     def poll_prints(self, keep_s: float = 600.0) -> None:
         """The trade tape for the markets we watch, fetched PER MARKET.
@@ -457,11 +780,25 @@ class Recorder:
         for cond, d in got:
             if d is None:
                 continue
-            # raw prints are PERSISTED, not just counted: a derived feature
-            # whose source rows were thrown away cannot be re-audited.
-            self._write("raw_prints", {"_t": t, "market": cond,
-                                       "source": "data-api/trades?market",
-                                       "payload": d})
+            # Raw prints are PERSISTED, not just counted: a derived feature
+            # whose source rows were thrown away cannot be re-audited. Each
+            # distinct print is written once -- the endpoint re-serves the same
+            # ~100 rows every sweep, so writing the payload verbatim measured
+            # ~6 GB/day of duplicates.
+            newp = []
+            for x in (d or []):
+                k = (cond, x.get("timestamp"), x.get("price"), x.get("size"),
+                     x.get("proxyWallet"), x.get("outcomeIndex"))
+                if k not in self._raw_print_seen:
+                    _remember(self._raw_print_seen, self._raw_print_order, k,
+                              RAW_PRINT_KEYS_CAP)
+                    newp.append(x)
+            prow = {"_t": t, "market": cond,
+                    "source": "data-api/trades?market",
+                    "n_returned": len(d or []), "n_new": len(newp)}
+            if newp:
+                prow["payload"] = newp
+            self._write("raw_prints", prow)
             with self._lk:
                 lst = self.prints.setdefault(cond, [])
                 have = {(q["t"], q["price"], q["size"], q["proxyWallet"]) for q in lst}
@@ -494,9 +831,29 @@ class Recorder:
                     {"user": L5_WALLET, "limit": 500, "offset": 0, "takerOnly": flag})))
             except Exception:
                 continue
-            self._write("raw_fills", {"_t": time.time(), "takerOnly": flag,
-                                      "source": "data-api/trades", "payload": d})
-            self.counts["raw_fills"] += len(d or [])
+            # PERSIST EACH RAW ROW ONCE, NOT ONCE PER POLL. The endpoint serves
+            # L5's newest 500 fills every time, so writing the payload verbatim
+            # at a 3 s cadence re-wrote the same rows ~28,800 times a day --
+            # measured at 30.7 MB in two minutes, on course for ~17 GB/day
+            # against a 50 GB volume shared with the collector streams. That is
+            # not preservation, it is duplication, and it ends with a full disk
+            # taking the whole container down.
+            #
+            # What is preserved is unchanged: every DISTINCT raw row is written
+            # exactly once with the fetch that first served it, and a poll that
+            # returned nothing new still writes a row, so "we did not look" and
+            # "we looked and there was nothing" stay different facts.
+            new = [x for x in (d or []) if fill_key(x) not in self._raw_seen]
+            for x in new:
+                _remember(self._raw_seen, self._raw_order, fill_key(x),
+                          RAW_FILL_KEYS_CAP)
+            rec = {"_t": time.time(), "takerOnly": flag,
+                   "source": "data-api/trades", "n_returned": len(d or []),
+                   "n_new": len(new)}
+            if new:
+                rec["payload"] = new
+            self._write("raw_fills", rec)
+            self.counts["raw_fills"] += len(new)
             for x in d or []:
                 k = fill_key(x)
                 if flag == "true":
@@ -538,12 +895,20 @@ class Recorder:
                 continue
             cond = x.get("conditionId") or ""
             st = self.states.setdefault(cond, MarketState())
+            pre = ring.before(ts) if ring else None
+            # Snapshots over the lookback ENDING AT the pre-fill book. A single
+            # pre-book cannot separate a traded queue from a cancelled one; the
+            # sequence leading up to it can.
+            trail = (ring.window(float(pre["_t"]) - TRAIL_LOOKBACK_S,
+                                 float(pre["_t"]))
+                     if (ring and pre) else [])
             ev = build_event(
                 x, is_taker=p["is_taker"], state=st,
-                pre=(ring.before(ts) if ring else None), post=post,
+                pre=pre, post=post,
                 prints=self.prints.get(cond, []),
                 settle_epoch=self.settle.get(cond),
-                label_source="data-api/trades?takerOnly")
+                label_source="data-api/trades?takerOnly",
+                trail=trail)
             st.apply(int(x["outcomeIndex"]), float(x["size"]), x.get("side"), ts)
             self._write("events", ev)
             self.counts["events"] += 1
@@ -594,27 +959,42 @@ def prune_tokens(rec: "Recorder", keep: int = MAX_TOKENS) -> None:
         rec.books.pop(t, None)
 
 
-def run(root: str, seconds: float = 600.0, verbose: bool = True) -> "Recorder":
-    """Observe for `seconds`. Read-only; no order path exists in this process."""
-    rec = Recorder(root)
-    rec.token_order = []
-    t_end = time.time() + seconds
-    last_book = 0.0
-    # Seed: learn L5's active tokens and mark the backlog seen, emitting
-    # nothing. Book polling starts here, so the first EMITTED event is the
-    # first fill we were actually watching for.
-    rec.poll_fills(emit=False)
-    rec.refresh_habitat_for_settlement()
-    rec.poll_prints()
-    for k in list(rec.tokens):
-        rec.token_order.append(k)
-    rec.refresh_habitat_for_settlement()
-    last_disc = time.time()
-    last_slugs = tuple(active_habitat_slugs(last_disc))
-    last_prints = 0.0
-    n = 0
-    while time.time() < t_end:
-        now = time.time()
+class Driver:
+    """The observation loop, factored out of `run()` so the bounded runner and
+    the durable service thread execute THE SAME code.
+
+    Duplicating the loop would have meant duplicating the rollover detection
+    below, which is the part that was wrong once already and is easy to get
+    wrong again.
+    """
+
+    def __init__(self, rec: "Recorder") -> None:
+        self.rec = rec
+        self.last_book = 0.0
+        self.last_prints = 0.0
+        self.last_disc = 0.0
+        self.last_slugs: tuple = ()
+        self.seeded = False
+
+    def seed(self) -> None:
+        """Learn L5's active tokens and mark the backlog seen, EMITTING
+        NOTHING. Book polling starts here, so the first emitted event is the
+        first fill we were actually watching for."""
+        rec = self.rec
+        rec.poll_fills(emit=False)
+        rec.refresh_habitat_for_settlement()
+        rec.poll_prints()
+        for k in list(rec.tokens):
+            if k not in rec.token_order:
+                rec.token_order.append(k)
+        rec.refresh_habitat_for_settlement()
+        self.last_disc = time.time()
+        self.last_slugs = tuple(active_habitat_slugs(self.last_disc))
+        self.seeded = True
+
+    def step(self, now: Optional[float] = None) -> List[dict]:
+        rec = self.rec
+        now = time.time() if now is None else now
         # ROLLOVER IS ARITHMETIC, SO DETECT IT EXACTLY RATHER THAN POLL FOR IT.
         # A fixed 120 s refresh let a 15 m window roll at :00, L5 fill 34 s in,
         # and our first book snapshot of that market land 88 s AFTER his first
@@ -622,33 +1002,44 @@ def run(root: str, seconds: float = 600.0, verbose: bool = True) -> "Recorder":
         # set is pure arithmetic on the clock, so compute it every loop for
         # free and touch the network only when it actually changes.
         slugs = tuple(active_habitat_slugs(now))
-        if slugs != last_slugs or now - last_disc >= DISCOVER_CADENCE_S:
-            last_slugs = slugs
-            last_disc = now
+        if slugs != self.last_slugs or now - self.last_disc >= DISCOVER_CADENCE_S:
+            self.last_slugs = slugs
+            self.last_disc = now
             rec.refresh_habitat_for_settlement()
-        if now - last_book >= BOOK_CADENCE_S:
-            last_book = now
+        if now - self.last_book >= BOOK_CADENCE_S:
+            self.last_book = now
             prune_tokens(rec)
             rec.poll_books()
-        if now - last_prints >= PRINTS_CADENCE_S:
-            last_prints = now
+        if now - self.last_prints >= PRINTS_CADENCE_S:
+            self.last_prints = now
             rec.poll_prints()
         rec.poll_fills()
         for t in rec.tokens:
             if t not in rec.token_order:
                 rec.token_order.append(t)
-        evs = rec.drain()
-        n += len(evs)
-        if verbose and evs:
-            for e in evs:
-                print("EVENT %s %s %s px=%.3f q=%.2f %s pre_book=%s ahead=%s flow/ahead=%s"
-                      % (e["slug"], e["outcome"], e["action"], e["price"], e["size"],
-                         ("TAKER" if e["is_taker"] else "MAKER"),
-                         "yes" if e["pre_fill_book"] else "NO",
-                         e["depth_ahead_of_fill_price"],
-                         (None if e["arriving_flow_over_depth_ahead"] is None
-                          else round(e["arriving_flow_over_depth_ahead"], 4))),
-                      flush=True)
+        return rec.drain()
+
+
+def describe(e: Mapping[str, Any]) -> str:
+    return ("EVENT %s %s %s px=%.3f q=%.2f %s pre_book=%s ahead=%s flow/ahead=%s"
+            % (e["slug"], e["outcome"], e["action"], e["price"], e["size"],
+               ("TAKER" if e["is_taker"] else "MAKER"),
+               "yes" if e["pre_fill_book"] else "NO",
+               e["depth_ahead_of_fill_price"],
+               (None if e["arriving_flow_over_depth_ahead"] is None
+                else round(e["arriving_flow_over_depth_ahead"], 4))))
+
+
+def run(root: str, seconds: float = 600.0, verbose: bool = True) -> "Recorder":
+    """Observe for `seconds`. Read-only; no order path exists in this process."""
+    rec = Recorder(root)
+    drv = Driver(rec)
+    t_end = time.time() + seconds
+    drv.seed()
+    while time.time() < t_end:
+        for e in drv.step():
+            if verbose:
+                print(describe(e), flush=True)
         time.sleep(FILL_CADENCE_S)
     rec.drain(now=time.time() + 1e6)       # flush anything still waiting
     return rec
@@ -699,7 +1090,17 @@ def backfill_flow(events: Sequence[dict], prints_by_market: Mapping[str, Sequenc
             continue
         oi = int(r.get("outcome_index", -1))
         px = float(r.get("price") or 0)
+        # TWO WINDOWS, AND THEY ARE NOT THE SAME ONE.
+        #   flow window   (t0, ts]      t0 = pre-fill book  -> the H-FLOW ratio
+        #   recon window  (tr0, ts]     tr0 = FIRST look    -> the reconciliation
+        # Recomputing the reconciliation terms over the flow window here (which
+        # is what the first version did) would have made a backfilled event
+        # disagree with the same event at capture time, over the same prints,
+        # for no reason but which variable the loop happened to reuse.
+        tr0 = r.get("queue_trail_t0")
+        tr0 = t0 if tr0 is None else float(tr0)
         window = [q for q in rows if t0 < float(q["t"]) <= ts]
+        recon = [q for q in rows if tr0 < float(q["t"]) <= ts]
         execu = [q for q in window if int(q.get("outcomeIndex", -1)) == oi
                  and float(q.get("price", 1e9)) <= px + 1e-9]
         aq = sum(float(q.get("size") or 0.0) for q in execu)
@@ -707,7 +1108,25 @@ def backfill_flow(events: Sequence[dict], prints_by_market: Mapping[str, Sequenc
         r["arriving_volume_since_pre_snapshot"] = aq
         r["arriving_volume_whole_market"] = sum(float(q.get("size") or 0.0)
                                                 for q in window)
-        r["recent_prints"] = [dict(q) for q in window][:50]
+        r["recent_prints"] = [dict(q) for q in execu][:50]
+        r["window_prints"] = [dict(q) for q in recon][:WINDOW_PRINTS_CAP]
+        r["window_prints_n_total"] = len(recon)
+        r["window_prints_truncated"] = len(recon) > WINDOW_PRINTS_CAP
+        r["window_prints_t0"] = tr0
+        r["window_prints_t1"] = ts
+        r["flow_window_t0"] = t0
+        # The reconciliation terms are re-derived from the backfilled window,
+        # because at capture time the tape had not published these prints and
+        # every consuming-volume figure was structurally zero.
+        cons = [q for q in recon if bid_consuming(q, oi, px)]
+        r["queue_consuming_volume"] = sum(float(q.get("size") or 0.0) for q in cons)
+        r["queue_consuming_prints"] = len(cons)
+        cmp_ = [q for q in recon if int(q.get("outcomeIndex", -1)) == (1 - oi)]
+        r["complement_arrival_volume"] = sum(float(q.get("size") or 0.0) for q in cmp_)
+        r["complement_arrival_prints"] = len(cmp_)
+        dis = r.get("depth_ahead_disappeared")
+        r["depth_drop_not_explained_by_trades"] = (
+            None if dis is None else round(dis - r["queue_consuming_volume"], 6))
         r["arriving_flow_over_depth_ahead"] = (
             None if (ahead is None or ahead <= 0) else aq / ahead)
         r["arriving_flow_over_depth_ahead_reason"] = (
@@ -715,7 +1134,9 @@ def backfill_flow(events: Sequence[dict], prints_by_market: Mapping[str, Sequenc
             else ("no pre-fill book" if ahead is None
                   else "zero depth ahead: ratio undefined, not infinite"))
         r["flow_backfill"] = {"status": "JOINED", "window_s": ts - t0,
+                              "recon_window_s": ts - tr0,
                               "prints_in_window": len(window),
+                              "prints_in_recon_window": len(recon),
                               "executable_in_window": len(execu),
                               "newest_print_t": newest}
         out.append(r)

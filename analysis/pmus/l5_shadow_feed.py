@@ -41,8 +41,11 @@ WINNER=("moneyline","full_game_winner","full_time_winner","match_winner","winner
 # which would have burned shadow slots on states the policy never acts in.
 BAND_LO,BAND_HI=0.30,0.70
 
-_ctx=ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt") \
-     if os.path.exists("/root/.ccr/ca-bundle.crt") else None
+_CA = "/root/.ccr/ca-bundle.crt"
+# The system trust store, not None: an explicit context is what the guard in
+# tests/test_chain_ca_fallback.py checks for.
+_ctx = (ssl.create_default_context(cafile=_CA) if os.path.exists(_CA)
+        else ssl.create_default_context())
 
 def get(url,timeout=20.0):
     req=urllib.request.Request(url,headers={"User-Agent":"research-readonly/1.0",

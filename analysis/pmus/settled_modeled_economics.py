@@ -17,9 +17,11 @@ Accounting keeps the lines apart and never sums them into one "profit":
 Combined is reported as a separate line, clearly labelled, because the owner
 asked for it -- it is not a claim that the two lines are the same kind of thing.
 """
-import json, ssl, urllib.request, collections, statistics as stt, time
+import json, os, ssl, urllib.request, collections, statistics as stt, time
 
-CTX = ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")
+_CA = "/root/.ccr/ca-bundle.crt"
+CTX = (ssl.create_default_context(cafile=_CA) if os.path.exists(_CA)
+       else ssl.create_default_context())
 
 
 def market(slug, tries=3):

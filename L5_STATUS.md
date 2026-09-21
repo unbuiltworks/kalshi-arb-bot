@@ -12,6 +12,82 @@ GET-only.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
+## ⛔ READ FIRST — 2026-09-21: prospective recorder DEPLOYED; pmus_flow gap EXPLAINED
+
+**P0 is prospective execution observability. Nothing is armed. Nothing is
+fitted. No selector exists.** `REQUIRED_AUTH_ID` and `AUTHORIZED_SHA` remain
+`None`; `src/gemini_execution/` has zero diff.
+
+**1. The prospective L5 full-L2 recorder now runs on durable infrastructure.**
+It is a supervised thread inside `l5-live-habitat` (`db9e951c-…`), writing to
+`/state/l5-live/prospective/` on the 50 GB volume — not a new Railway service.
+The image's isolation property (nothing that can sign, submit or read a
+credential is copied in) is now enforced by
+`tests/test_habitat_image_isolation.py`, not by a comment. See
+`analysis/l5/PROSPECTIVE_DEPLOYMENT_20260921.md`.
+
+**2. H-QUEUE-IRRELEVANT is WITHDRAWN. H-QUEUE-MISMEASURED replaces it.**
+The withdrawn claim asserted a *mechanism* — complement arrival drives fills —
+from n=16 in one market in one hour. The replacement is the claim the data can
+adjudicate:
+
+> `depth_ahead_of_fill_price`, as computed from the public CLOB ladder, does
+> not represent the effective queue that governed L5's maker fill.
+
+Tested by reconciliation (`src/l5_queue_reconciliation.py`): at the last public
+look before each maker fill, do publicly observed book mutations plus published
+trades account for the queue ahead of him disappearing? Six verdicts per fill;
+`UNEXPLAINED` is the signature. **Confirming it would license no replacement
+mechanism.** Results are reported **per market**; `pooled()` raises rather than
+returning a number until a market reaches **n=200 scorable** fills. **Do not fit
+at n=16.**
+
+**3. The pmus_flow gap of 03:55:13Z–06:07:17Z was NOT a writer freeze.** My
+earlier "stall"/"observability defect in the writer" reports are **withdrawn**.
+The liveness map was built from `/v2/leagues` (50 leagues) while discovery
+sampled `/v2/sports` (266), and the flow selector reads a missing event as
+not-live; at diagnosis time **24 of 24** live events on the venue were invisible
+to the map. Fixed by deriving both from one pass, which also deletes a whole
+network pass. The `nfl_pre_control` branch wrote nothing because the next NFL
+kickoff (MNF) was ~20 h out, outside its 12 h window — correct behaviour, not a
+second bug. **That interval is CENSORED in any flow analysis, never zero flow.**
+See `analysis/l5/PMUS_FLOW_INCIDENT_20260921.md`.
+
+**4. Two defects the first durable smoke run caught**, both now pinned by
+regressions: the venue served `outcomeIndex=999` and crashed the recorder
+thread through a fixed `{0:..,1:..}` inventory dict; and the queue trail was
+taken as the window *between* the pre-book and the fill, which is empty by
+construction — every event read `trail: 0` while looking like a fact about
+quiet markets.
+
+**4b. An apparent 100% UNEXPLAINED rate at first light was entirely
+instrumentation.** Re-scoring the smoke events gave 4/4 `UNEXPLAINED` — the
+exact shape of H-QUEUE-MISMEASURED confirming itself. Those events had a single
+book look, so the observed span was zero, the market rate was unmeasurable, and
+`INCONCLUSIVE_GAP` could not fire: `UNEXPLAINED` was the only reachable verdict.
+`reconcile_fill` now refuses to call a fill unexplained without a measurable
+rate, and the same four score 0/4. **Neither figure is a result** (n=4, one
+market, below every floor) — it is recorded because the whole difference was our
+own measurement.
+
+**4c. Two pre-existing red tests fixed, one left red for the owner.**
+`deploy/l5_live_habitat/` was the only Dockerfile dir with no `railway.json`
+(the guard against a service falling through to the order-capable startup), and
+seven modules pinned the agent-proxy CA bundle — three with no fallback, which
+would raise in any image lacking it. Both fixed. **`test_r1_source_lineage` and
+`test_lane_a_probe_v0` are left RED**: `analysis/l5/authorization/` drifted from
+its pinned blob (`c2551101…` -> `05daf9e0…`) because
+`RESTING_LEDGER_REPAIR_20260921.md` was added in `319e4935`, the accepted
+checkpoint, without the pin being updated. `forbidden_class` is empty — nothing
+execution-class. **Re-pinning an authorization-lineage hash is an owner
+decision and I have not done it.**
+
+**5. Raw-stream volume is bounded and measured.** First smoke wrote 30.7 MB of
+`raw_fills` in two minutes (~17 GB/day) by re-writing the same 500-fill backlog
+every poll. Each distinct raw row is now written once, books are written on
+`hash` change with a 60 s keepalive, firehoses rotate at 4 GB and shed below a
+2 GB free-space floor while `events.jsonl` is never rotated.
+
 ## Current Live Transfer / Handoff (2026-09-18, for fresh sessions)
 
 Labels are strict: HISTORICAL (source data), SHADOW/MODELED (never realized),

@@ -138,30 +138,56 @@ constants remain `None`; `src/gemini_execution/` still has zero diff.
 
 ## E. The exact next falsifiable hypothesis
 
-> **H-QUEUE-IRRELEVANT: L5's maker fills are not gated by the same-outcome FIFO
-> queue at all. Conditional on him resting at a price, the probability of a
-> maker fill is independent of `depth_ahead_of_fill_price`, and is instead
-> driven by the arrival of a counterparty buying the complement.**
+> ⛔ **H-QUEUE-IRRELEVANT IS WITHDRAWN** and replaced by H-QUEUE-MISMEASURED,
+> below. The withdrawn text is kept struck through so the record shows what was
+> claimed, not a quietly improved version of it.
+
+~~**H-QUEUE-IRRELEVANT: L5's maker fills are not gated by the same-outcome FIFO
+queue at all. Conditional on him resting at a price, the probability of a maker
+fill is independent of `depth_ahead_of_fill_price`, and is instead driven by the
+arrival of a counterparty buying the complement.**~~
+
+**Why it was withdrawn.** It asserted a *mechanism* — "complement arrival drives
+fills" — from 16 observations in one market in one hour. Those same observations
+are equally consistent with our having measured the wrong quantity, and that
+alternative is the one the data can actually adjudicate. Asserting the mechanism
+first would have put us in the position of collecting 200 fills to confirm a
+story we had already told.
+
+> **H-QUEUE-MISMEASURED: `depth_ahead_of_fill_price`, as computed from the
+> public CLOB ladder, does not represent the effective queue that governed L5's
+> maker fill.**
 
 **Why this and not another.** The first 16 joined observations show fills
 occurring with `flow/ahead` of 0.0000–0.0336 — arriving executable same-outcome
 flow three to four orders of magnitude below the resting queue. Either the queue
-is not the binding constraint, or our depth measure is wrong. H-QUEUE-IRRELEVANT
-says the former, and it is the hypothesis that would explain both this and the
-86.5% mint rate on maker fills.
+is not the binding constraint, or our depth measure is wrong. H-QUEUE-MISMEASURED
+tests the second directly and does not presume the first.
 
-**Prediction that can fail:** across ≥200 maker fills with pre-fill books,
-`depth_ahead_of_fill_price` carries **no** discriminating information about
-whether a fill occurs, while complement-side buy arrival does.
+**The decisive observable** is the reconciliation: at the last public look
+before the fill, is the depth still apparently ahead of L5 accounted for by
+publicly observed book mutations plus publicly published trades? Six verdicts,
+per fill, defined in `src/l5_queue_reconciliation.py` and preregistered in
+`PROSPECTIVE_PREREGISTRATION_20260921.md`.
 
-**What falsifies it:** a monotone relationship between depth ahead and fill
-occurrence; or complement-buy arrival showing no relationship; or the whole
-effect vanishing under a within-market shuffle.
+**Prediction that can fail:** across ≥200 **scorable** maker fills **within one
+market**, `UNEXPLAINED` is a substantial and repeatable share of verdicts, and
+does not concentrate in the fills with the longest unobserved intervals.
+
+**What falsifies it:** `UNEXPLAINED` is rare once both trade conventions are
+counted and `INCONCLUSIVE_GAP` is applied; or `UNEXPLAINED` tracks
+`unobserved_interval_s` rather than market state, making it an artefact of our
+own cadence.
+
+**What it does not claim:** a confirmation says our queue variable is wrong. It
+does **not** license any replacement mechanism — not complement arrival, not a
+hidden queue, and not PositionSplit priority. Each needs its own hypothesis.
 
 **This supersedes H-FLOW as the primary test** — H-FLOW assumed the ratio's
 denominator was the binding quantity, and the first observations put that in
-doubt. Both remain preregistered; H-QUEUE-IRRELEVANT is tested first. **No
-selector is built from either, and neither is fitted before the 200-fill floor.**
+doubt. Both remain preregistered; H-QUEUE-MISMEASURED is tested first. **No
+selector is built from either. Nothing is fitted at n=16. Results are reported
+per market and are not pooled until a market reaches n=200.**
 
 ## Not claimed
 
