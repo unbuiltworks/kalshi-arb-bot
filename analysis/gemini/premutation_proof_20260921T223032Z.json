@@ -1,0 +1,378 @@
+{
+  "label": "GEMINI_L5_PREMUTATION_PROBE_V1",
+  "utc": "2026-09-21T22:30:32.304330+00:00",
+  "driver_executable_sha": "38f751801d475e636fa1ed1f79201d7de6b3d2e9768c87172982a47dfd17d306",
+  "driver_envelope_sha": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+  "envelope": {
+    "max_actions": "12",
+    "action_size": "0.01",
+    "max_total_spend_usd": "0.15",
+    "max_residual": "0.04",
+    "max_imbalance": "0.04",
+    "max_yes": "0.10",
+    "max_no": "0.10",
+    "no_new_open_extend_tte_s": "60.0",
+    "withdraw_all_tte_s": "30.0",
+    "cohort_prefixes": "GEMI-BTC05M,GEMI-BTC15M",
+    "default_cohort_prefix": "GEMI-BTC05M",
+    "maker_tif": "MOC",
+    "envelopes": "{\"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_2LVL_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC15M\", \"max_actions\": \"12\", \"max_committed_usd\": \"4.00\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"2\", \"max_no_contracts\": \"2\", \"max_residual_contracts\": \"2\", \"max_residual_usd\": \"2.00\", \"max_same_side_run\": \"2\", \"max_total_spend_usd\": \"4.00\", \"max_working_orders\": \"4\", \"max_yes_contracts\": \"2\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_2LVL_V1\", \"worst_case_loss_usd\": \"4.00\"}, \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC15M\", \"max_actions\": \"12\", \"max_committed_usd\": \"4.00\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"4\", \"max_no_contracts\": \"4\", \"max_residual_contracts\": \"4\", \"max_residual_usd\": \"4.00\", \"max_same_side_run\": \"4\", \"max_total_spend_usd\": \"4.00\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"4\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1\", \"worst_case_loss_usd\": \"4.00\"}, \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC15M\", \"max_actions\": \"12\", \"max_committed_usd\": \"2.50\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"2\", \"max_no_contracts\": \"2\", \"max_residual_contracts\": \"2\", \"max_residual_usd\": \"2.00\", \"max_same_side_run\": \"2\", \"max_total_spend_usd\": \"2.50\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"2\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1\", \"worst_case_loss_usd\": \"2.50\"}, \"GEMINI_L5_LIVE_ENVELOPE_Q1_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC05M\", \"max_actions\": \"12\", \"max_committed_usd\": \"2.50\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"2\", \"max_no_contracts\": \"2\", \"max_residual_contracts\": \"2\", \"max_residual_usd\": \"2.00\", \"max_same_side_run\": \"2\", \"max_total_spend_usd\": \"2.50\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"2\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_V1\", \"worst_case_loss_usd\": \"2.50\"}, \"GEMINI_L5_SHADOW_ENVELOPE_Q001\": {\"action_size\": \"0.01\", \"cohort_prefix\": \"GEMI-BTC05M\", \"max_actions\": \"12\", \"max_committed_usd\": \"0.15\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"0.04\", \"max_no_contracts\": \"0.10\", \"max_residual_contracts\": \"0.04\", \"max_residual_usd\": \"0.04\", \"max_same_side_run\": \"4\", \"max_total_spend_usd\": \"0.15\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"0.10\", \"name\": \"GEMINI_L5_SHADOW_ENVELOPE_Q001\", \"worst_case_loss_usd\": \"0.15\"}}",
+    "envelope_shas": "{\"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_2LVL_V1\": \"7a50d56ee10594327f5cf3e0afb960f6e9269b0294fe31ee246b30fd1d457d28\", \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1\": \"3aed2098fe0290b7ad8a16cdc053eae7cfcc07b02cbae6b8299eae28da3f6c6b\", \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1\": \"0ba19c6dc47c84e650a368402f4fcf76adf7b5ec425be7c0479b533774c98ca3\", \"GEMINI_L5_LIVE_ENVELOPE_Q1_V1\": \"4e2818d53735999cda6c3de439f4a9e87a3cb2a98f9e7c10c2af125e145ed6b5\", \"GEMINI_L5_SHADOW_ENVELOPE_Q001\": \"c5e88347601e24885e8cdb3cfb5b7a803b0b872948cce896c80a60023da51887\"}"
+  },
+  "gates": [
+    {
+      "gate": "symbol_selected",
+      "ok": true,
+      "symbol": "GEMI-BTC05M2609212235-UP"
+    },
+    {
+      "gate": "contract_active_open",
+      "ok": true,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    {
+      "gate": "increments_agree",
+      "ok": true,
+      "quantityMinimum": "0.01",
+      "quantityIncrement": "0.01",
+      "priceMinimum": "0.01",
+      "priceIncrement": "0.01"
+    },
+    {
+      "gate": "terms_awaited_and_accepted",
+      "ok": true,
+      "awaited": true,
+      "accepted": true,
+      "version": 1,
+      "why": null
+    },
+    {
+      "gate": "preflight_agrees",
+      "ok": true,
+      "discrepancies": []
+    },
+    {
+      "gate": "inventory_readable",
+      "ok": true,
+      "n_fills": 0
+    },
+    {
+      "gate": "open_orders_readable",
+      "ok": true,
+      "n_open": 0
+    },
+    {
+      "gate": "ledger_recovery_readable",
+      "ok": true,
+      "why": null,
+      "note": "max(ledger 0, venue 0): a disagreement is always read upward"
+    },
+    {
+      "gate": "budget_reconstructed",
+      "ok": true,
+      "consumed": 0,
+      "left": 12
+    },
+    {
+      "gate": "starting_exposure_within_envelope",
+      "ok": true,
+      "breaches": [],
+      "yes": "0",
+      "no": "0",
+      "residual": "0",
+      "imbalance": "0",
+      "spend": "0"
+    },
+    {
+      "gate": "window_guard_bound",
+      "ok": true,
+      "symbol": "GEMI-BTC05M2609212235-UP",
+      "actions_taken": 0
+    },
+    {
+      "gate": "tte_readable_and_executable",
+      "ok": true,
+      "tte_s": 264.5433180332184,
+      "phase": "WINDOW_OPEN"
+    },
+    {
+      "gate": "controller_produced_a_surface",
+      "ok": true,
+      "n": 2
+    },
+    {
+      "gate": "diff_produced_a_mutation_plan",
+      "ok": true,
+      "mutations": 2,
+      "keep": 0,
+      "place": 2,
+      "cancel": 0
+    },
+    {
+      "gate": "authorization_is_the_sole_blocker",
+      "ok": true,
+      "refused": true,
+      "by": "NotAuthorized",
+      "reached_socket": false,
+      "note": "require_authorization() runs before the session is touched, so the refusal happened with no socket in the picture"
+    },
+    {
+      "gate": "no_mutation_was_recorded",
+      "ok": true,
+      "ledger_rows": 0
+    }
+  ],
+  "frames_sent": 0,
+  "latch_consumed": false,
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609212235-UP",
+      "tte_s": 267.6924183368683,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "band": [
+      90.0,
+      300.0
+    ],
+    "cohort": "BTC5m",
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609212235-UP",
+        "tte_s": 267.6924183368683,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "symbol": "GEMI-BTC05M2609212235-UP",
+  "preflight": {
+    "label": "GEMINI_L5_CONTINUOUS_PREFLIGHT_V1",
+    "symbol": "GEMI-BTC05M2609212235-UP",
+    "t": 1790029832.9031556,
+    "readable": true,
+    "quantityMinimum": "0.01",
+    "quantityIncrement": "0.01",
+    "priceMinimum": "0.01",
+    "priceIncrement": "0.01",
+    "contract_status": "active",
+    "market_state": "open",
+    "expiry": "2026-09-21T22:35:00.000Z",
+    "maker_tif": "MOC",
+    "terms_accepted": true,
+    "terms_version": 1,
+    "book": {
+      "readable": true,
+      "ticker": "BTC05M2609212235",
+      "instrumentSymbol": "GEMI-BTC05M2609212235-UP",
+      "yes": {
+        "bid": "0.57",
+        "ask": "0.76"
+      },
+      "no": {
+        "bid": "0.24",
+        "ask": "0.43"
+      },
+      "passive_pair_cost": "0.81",
+      "crossing_pair_cost": "1.19",
+      "last_trade_price": "0.48",
+      "complement_identity": {
+        "no_bid_vs_1_minus_yes_ask": "0.00",
+        "no_ask_vs_1_minus_yes_bid": "0.00"
+      },
+      "identity_consistent": true,
+      "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+      "labels": "a resting BUY joins the outcome's SELL side, so the passive pair cost is what a maker surface can reach. It is a cost basis, never a realized profit."
+    },
+    "frozen_comparison": {
+      "verdict": "AGREES",
+      "discrepancies": [],
+      "labels": "a preflight that merely SUCCEEDS is not the same claim as one that AGREES; only the second licenses the envelope"
+    }
+  },
+  "authorization": {
+    "authorized": false,
+    "required_auth_id": "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3",
+    "authorized_sha": "38f751801d475e636fa1ed1f79201d7de6b3d2e9768c87172982a47dfd17d306",
+    "executable_sha": "38f751801d475e636fa1ed1f79201d7de6b3d2e9768c87172982a47dfd17d306",
+    "authorized_envelope": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+    "envelope_sha": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+    "arming": {
+      "armed": false,
+      "live_flag": false,
+      "auth_id_present": false,
+      "auth_id_matches": false,
+      "expiry_supplied": false,
+      "expired": null,
+      "expected_auth_id": "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3",
+      "why_not": "GEMINI_CANARY_LIVE is not YES"
+    },
+    "why_not": [
+      "transport arm: GEMINI_CANARY_LIVE is not YES"
+    ],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "authorization_simulated": {
+    "simulated": true,
+    "label": "SIMULATED_AUTHORIZATION_FOR_PROOF_ONLY",
+    "why": "authorization is deliberately absent, so Driver.authorize() would stop the run here and nothing downstream would be exercised. The state is advanced by this probe so the REST of the production path runs. It authorizes nothing: the boundary call below still goes through require_authorization() and still refuses."
+  },
+  "authoritative_reads": {
+    "fills_readable": true,
+    "open_orders_readable": true,
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    },
+    "fills": [],
+    "open_orders": []
+  },
+  "recovery": {
+    "recovered": true,
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "working": "venue authoritative: 0 resting (+none / -none)",
+    "budget_consumed": 0,
+    "budget_note": "max(ledger 0, venue 0): a disagreement is always read upward",
+    "outstanding": {
+      "verdict": "CLEAR",
+      "tradeable": true,
+      "committed_usd": "0",
+      "blocking": [],
+      "foreign": [],
+      "released": [],
+      "why": null,
+      "labels": "only this read releases committed cash. A cancel ack is a receipt, not a release."
+    },
+    "budget_left": 12
+  },
+  "starting_inventory": {
+    "yes_qty": "0",
+    "no_qty": "0",
+    "matched_qty": "0",
+    "directional_residual": "0",
+    "inventory_imbalance": "0",
+    "avg_yes_cost": null,
+    "avg_no_cost": null,
+    "effective_matched_pair_cost": null,
+    "total_spend_usd": "0",
+    "same_side_run": {
+      "leg": null,
+      "len": 0
+    },
+    "n_fills": 0,
+    "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+  },
+  "binding": {
+    "bound": true,
+    "symbol": "GEMI-BTC05M2609212235-UP",
+    "actions_taken": 0
+  },
+  "tte_s": 264.5433180332184,
+  "window_phase": "WINDOW_OPEN",
+  "decision": {
+    "window_phase": "WINDOW_OPEN",
+    "relations": [
+      "OPEN",
+      "OPEN"
+    ],
+    "desired_surface": [
+      {
+        "action": "OPEN",
+        "leg": "YES",
+        "price": "0.57",
+        "qty": "0.01"
+      },
+      {
+        "action": "OPEN",
+        "leg": "NO",
+        "price": "0.24",
+        "qty": "0.01"
+      }
+    ],
+    "holds": [],
+    "budget_left": 12
+  },
+  "plan": {
+    "keep": [],
+    "place": [
+      {
+        "leg": "YES",
+        "price": "0.57",
+        "qty": "0.01"
+      },
+      {
+        "leg": "NO",
+        "price": "0.24",
+        "qty": "0.01"
+      }
+    ],
+    "cancel": [],
+    "mutations": 2
+  },
+  "would_send": [
+    {
+      "id": "<uuid4 hex, per request>",
+      "method": "order.place",
+      "params": {
+        "symbol": "GEMI-BTC05M2609212235-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.57",
+        "quantity": "0.01",
+        "eventOutcome": "YES",
+        "clientOrderId": "l5cp-<auth10>-yes-<uuid8>"
+      }
+    },
+    {
+      "id": "<uuid4 hex, per request>",
+      "method": "order.place",
+      "params": {
+        "symbol": "GEMI-BTC05M2609212235-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.24",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-<auth10>-no-<uuid8>"
+      }
+    }
+  ],
+  "slots_that_would_be_consumed": 2,
+  "slots_remaining_after": 10,
+  "boundary": {
+    "refused": true,
+    "by": "NotAuthorized",
+    "why": "transport arm: GEMINI_CANARY_LIVE is not YES",
+    "reached_socket": false,
+    "note": "require_authorization() runs before the session is touched, so the refusal happened with no socket in the picture"
+  },
+  "ledger_rows": 0,
+  "failed_gates": [],
+  "verdict": "READY_TO_MUTATE_BUT_UNAUTHORIZED"
+}
