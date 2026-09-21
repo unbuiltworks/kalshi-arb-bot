@@ -70,6 +70,29 @@ def _row_outcome(r: Dict[str, Any]) -> str:
     return ""
 
 
+def _is_filled(r: Dict[str, Any]) -> bool:
+    """Did THIS order actually trade? Quantity decides, never status alone.
+
+    MY FIRST VERSION COUNTED `status == "closed"` AS A FILL, and it was wrong
+    in the one direction that matters: it manufactured evidence. On this venue
+    `closed` means CLOSED AT EXPIRY, and such a row routinely carries
+    filledQuantity 0 with remainingQuantity 1 -- an order that never traded.
+
+    It produced two false positives out of twelve, including an ETH contract
+    (GEMI-ETH05M2608290140-UP: yes filled 1, no `closed` with filledQuantity
+    0), and it inflated the both-sides count from the true 10 to 12. The whole
+    question is whether BOTH outcomes TRADED, so a predicate that counts an
+    untraded order is not a detail -- it is the answer being wrong.
+
+    `filledQuantity > 0` is the only test. A status string is a label; the
+    filled quantity is the fact.
+    """
+    try:
+        return float(r.get("filledQuantity") or 0) > 0
+    except (TypeError, ValueError):
+        return False        # unparseable is NOT a fill
+
+
 async def capture(since: str, until: str, statuses: tuple) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "label": LABEL, "utc": datetime.now(timezone.utc).isoformat(),
@@ -120,9 +143,7 @@ async def capture(since: str, until: str, statuses: tuple) -> Dict[str, Any]:
         rs.sort(key=lambda x: str(x.get("createdAt")
                                   or x.get("timestampms") or ""))
         outcomes = {_row_outcome(r) for r in rs if _row_outcome(r)}
-        filled = [r for r in rs
-                  if str(r.get("status", "")).lower() in ("filled", "closed")
-                  or float(r.get("filledQuantity") or 0) > 0]
+        filled = [r for r in rs if _is_filled(r)]
         filled_outcomes = {_row_outcome(r) for r in filled if _row_outcome(r)}
         out["by_contract"][sym] = {
             "n_rows": len(rs),
