@@ -254,3 +254,54 @@ accurately. **This needs an owner call**, not a code change.
 - A confirmed H-QUEUE-MISMEASURED would say our queue variable is wrong. It
   would **not** establish any replacement mechanism.
 - `depth_ahead` remains an **upper** bound: anonymous depth hides arrival order.
+
+---
+
+## Post-deploy verification (2026-09-21T07:32-07:36Z)
+
+Deployment **`6553d6dd-cd9e-43f2-b5b1-1c92d2d5876d`**, commit `85c8a741`,
+status SUCCESS. The previous deployment `62a54463` stayed healthy until cutover
+and was never restarted for the incident.
+
+**The liveness-map fix is confirmed in production, and the effect is large.**
+
+| | old build (`62a54463`) | new build (`6553d6dd`) |
+|---|---|---|
+| `pmus_live_events` on the same slate | **0** | **32** |
+| `pmus_flow_selected` | (not emitted) | **42** |
+| `pmus_flow` rows/min | **7.5** | **315.0** — **42x** |
+
+The 32 live events are the ones the `/v2/leagues` map could not see. The flow
+stream had been observing a few percent of the live slate overnight, every
+night, not only during the 2 h 12 m window that made it visible.
+
+Recorder, first four minutes:
+
+```
+prospective_seeded  tokens 69, backlog_marked 500 (marked seen, not emitted)
+prospective_tokens  21 -> 37
+book_unchanged      101          (hash dedupe working)
+volume_free_gb      44.02        (stable)
+thread restarts     0
+prospective_events  0            (L5 quiet in the watched markets; the seed
+                                  correctly suppressed the 500-fill backlog)
+```
+
+All four collector streams advanced normally throughout; `intl_books` went
+169 -> 316 -> 484 across the same heartbeats, so the added request load did not
+degrade the sibling that shares CLOB.
+
+### One operational note, not a regression
+
+`book_errors` reached 591 and `tokens_retired` 195 in the first ~200 s. This is
+**pre-existing recorder behaviour**, present identically in the bounded smoke
+runs (425 / 128 over 420 s) and not introduced by the deploy. The mechanism is a
+churn loop: a habitat token whose CLOB book 404s is retired after three errors,
+and `refresh_habitat_for_settlement` re-adds it within 15 s, so a just-rolled
+window cycles retire -> re-add -> retire until it ages out of the arithmetic
+slug set.
+
+It is self-limiting, it did not affect the collector, and `prospective_tokens`
+settles at the expected live-habitat count. It is wasteful of request budget and
+it makes `book_errors` useless as a health signal, so it is worth fixing — but
+as its own change, not folded into a deploy that is already healthy.

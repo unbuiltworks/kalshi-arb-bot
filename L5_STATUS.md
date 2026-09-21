@@ -26,6 +26,17 @@ credential is copied in) is now enforced by
 `tests/test_habitat_image_isolation.py`, not by a comment. See
 `analysis/l5/PROSPECTIVE_DEPLOYMENT_20260921.md`.
 
+**1b. DEPLOYED AND VERIFIED.** Deployment
+`6553d6dd-cd9e-43f2-b5b1-1c92d2d5876d` (commit `85c8a741`) is SUCCESS. The
+liveness-map fix is confirmed in production and the effect is large: on the same
+slate the old build reported `pmus_live_events: 0` and wrote **7.5 pmus_flow
+rows/min**; the new build reports **32** live events, `pmus_flow_selected: 42`,
+and **315 rows/min — 42x**. The flow stream had been seeing a few percent of the
+live slate every night, not only during the window that made it visible. The
+recorder seeded 69 tokens, suppressed the 500-fill backlog, and has had zero
+thread restarts; `intl_books` kept advancing, so the added CLOB load did not
+degrade its sibling.
+
 **2. H-QUEUE-IRRELEVANT is WITHDRAWN. H-QUEUE-MISMEASURED replaces it.**
 The withdrawn claim asserted a *mechanism* — complement arrival drives fills —
 from n=16 in one market in one hour. The replacement is the claim the data can
