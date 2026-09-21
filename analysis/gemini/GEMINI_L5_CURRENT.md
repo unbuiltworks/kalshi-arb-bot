@@ -21,7 +21,9 @@
 > the programme closed a BTC5m window holding matched inventory
 > (`windows_ending_matched: 1`), which is the state a signed-scalar venue
 > cannot represent. Nothing was changed in response; the experiment runs
-> unmodified.
+> unmodified. The deciding read-only venue test is BUILT but BLOCKED on
+> credentials and one permission; the metric-by-metric validity matrix is in
+> [`EVIDENCE_PACKET_004_METRIC_VALIDITY.md`](EVIDENCE_PACKET_004_METRIC_VALIDITY.md).
 >
 > **HEADLINE STATUS: the faithful-transfer question is UNRESOLVED.** The
 > experiment has been running since 2026-09-20T19:42Z and no prospective
