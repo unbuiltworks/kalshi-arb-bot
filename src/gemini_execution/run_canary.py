@@ -33,7 +33,20 @@ from src.gemini_execution import arming, canary, latch
 
 #: committed alongside the evidence artifacts, on the working branch
 DURABLE_DIR = "analysis/gemini/canary_latch"
-BRANCH = "claude/l5-execution-instrumentation-io6nzi"
+#: THE LATCH MUST BE PUSHABLE, OR NOTHING TRADES. make_durable() writes the
+#: latch here and refuses the mutation if it cannot reach the remote -- which
+#: is correct, and which makes this constant a live safety dependency rather
+#: than a cosmetic one.
+#:
+#: MOVED 2026-09-21. It still named the instrumentation branch after the
+#: workflow checkout moved to the q=1 branch, so run 35570948794 checked out
+#: one tree and tried to push its latch onto another. The push was rejected,
+#: the rebase onto that unrelated history failed, and the driver refused with
+#: ZERO ORDERS -- correctly, but for an infrastructure reason. Had the rebase
+#: SUCCEEDED it would have been worse: it would have pushed the q=1 tree onto
+#: the instrumentation branch as a side effect of latching, which is the merge
+#: that is explicitly forbidden.
+BRANCH = "claude/gemini-btc-economic-viability-h3u7zl"
 
 
 def _durable_path(auth_id: str) -> pathlib.Path:

@@ -199,15 +199,12 @@ def test_the_envelope_moved_and_the_old_authorization_died_with_it():
     remembering to."""
     assert WC.envelope_sha() != (
         "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17")
-    # INSTALLED 2026-09-21 under the owner's grant, and it names the envelope
-    # ACTUALLY IN FORCE rather than a remembered one -- which is the property
-    # that makes "a changed bound kills the grant" true rather than hoped for.
-    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
-    # and the dual key's live half is still not in the repository
-    assert WC.authorized() is False
+    assert WC.AUTHORIZED_ENVELOPE is None, (
+        "the retired hash must not be re-pointed at the new envelope; that "
+        "would pre-authorise bounds nobody approved")
+    assert not WC.authorized()
     st = WC.authorization_state()
-    assert any("GEMINI_CANARY_LIVE" in r or "transport arm" in r
-               for r in st["why_not"])
+    assert any("AUTHORIZED_ENVELOPE" in r for r in st["why_not"])
 
 
 def test_the_authorization_hash_covers_BOTH_sizes():

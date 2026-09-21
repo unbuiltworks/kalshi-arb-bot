@@ -418,28 +418,33 @@ def test_the_committed_gate_refuses_an_unreadable_durable_total():
 # 9. AUTHORIZATION REMAINS IMPOSSIBLE
 # ============================================================================
 
-def test_the_tree_is_armed_for_exactly_one_named_authorization():
-    """THE TREE IS NOW ARMED, for exactly ONE named authorization.
+def test_the_tree_is_disarmed_and_the_q1_grant_is_spent():
+    """DISARMED AGAIN 2026-09-21, after the q=1 grant was spent without
+    trading.
 
-    This used to assert the disarmed shape. The owner granted
-    OWNER-2026-09-21-GEMINI-Q1-LIVE-1 on 2026-09-21, so asserting
-    "never armed" would now assert that the authorization mechanism may never
-    be used -- which is not a safety property, it is a broken one.
+    OWNER-2026-09-21-GEMINI-Q1-LIVE-1 was granted, armed, and consumed by run
+    35570948794: the latch persisted as INTENT_PERSISTED with venue_order_id
+    null and the driver then refused, because run_canary.BRANCH still named
+    the instrumentation branch and the latch could not be pushed. ZERO ORDERS,
+    cohort 0/12, no cash moved.
 
-    What must hold instead, and is strictly stronger than the old text:
-    the constants name the RUNNING code and the RUNNING envelope, so any edit
-    to either disarms automatically; and the DUAL KEY's live half is an
-    environment variable that is NOT in this repository, so a checkout alone
-    can never mutate anything. That second half is what the old test was
-    really protecting, and it is unchanged.
+    A spent authorization never arms again -- so the constants return to the
+    sentinel rather than the latch being cleared, which is the same rule
+    CONTINUOUS-1 and CONTINUOUS-3 died under. Re-arming requires a NEW
+    owner-granted identifier; it is not something this tree can restore to
+    itself.
     """
-    assert WC.REQUIRED_AUTH_ID == "OWNER-2026-09-21-GEMINI-Q1-LIVE-1"
-    assert WC.AUTHORIZED_SHA == WC.executable_sha()
-    assert WC.AUTHORIZED_ENVELOPE == WC.envelope_sha()
-    # the env half is absent here, so the gate is still shut in this process
+    assert WC.REQUIRED_AUTH_ID is None
+    assert WC.AUTHORIZED_SHA is None
+    assert WC.AUTHORIZED_ENVELOPE is None
     assert WC.authorized() is False
-    assert any("GEMINI_CANARY_LIVE" in r or "transport arm" in r
-               for r in WC.authorization_state()["why_not"])
+    # AND THE REVIEWED TREE IS UNCHANGED UNDERNEATH. The hashes the spent
+    # grant named still describe this code, so a re-grant is two identifier
+    # lines and needs no re-review of the bounds.
+    assert WC.executable_sha() == (
+        "c1ada77a919c9c0cf226b4eb0c56aed6495f7e8fe1ece9261150aa6c26377763")
+    assert WC.envelope_sha() == (
+        "47f257f208017841d633c1bf5e2420eda2ca87b0ab502da34bd9d7e19690cf22")
 
 
 def test_no_risk_bound_was_increased():

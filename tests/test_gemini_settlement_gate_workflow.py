@@ -573,7 +573,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-Q1-LIVE-1"
+LIVE_AUTHORIZATION = None
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -647,6 +647,14 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
         "OWNER-2026-09-18-GEMINI-CONTINUOUS-7",
         "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+        # Owner-granted 2026-09-21 for the one BTC5m window at q=1. SPENT
+        # without trading: run 35570948794 latched it (INTENT_PERSISTED,
+        # venue_order_id null) and then refused, because run_canary.BRANCH
+        # still named the instrumentation branch and the latch could not be
+        # pushed. ZERO ORDERS, cohort 0/12, no cash moved. It appears here
+        # because it WAS granted -- the registry records grants, not
+        # outcomes -- and a spent authorization never arms again.
+        "OWNER-2026-09-21-GEMINI-Q1-LIVE-1",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
@@ -757,6 +765,47 @@ def test_pipefail_actually_propagates_under_the_runner_shell():
         "without pipefail a failing command exits 0 -- this is the defect")
     assert _status("set -o pipefail\n") == 3, (
         "with pipefail the driver's status reaches the step")
+
+
+def test_the_latch_pushes_to_the_branch_the_runner_checked_out():
+    """DEFECT 3, found by run 35570948794 refusing.
+
+    The latch is a LIVE SAFETY DEPENDENCY: make_durable() refuses the mutation
+    if it cannot push. So run_canary.BRANCH and the workflow's checkout ref
+    must name the same branch, or the driver checks out one tree and tries to
+    latch onto another -- which is what happened, and which refused with ZERO
+    ORDERS. The dangerous direction is the one that did NOT happen: a rebase
+    that SUCCEEDED would have pushed the q=1 tree onto the instrumentation
+    branch as a side effect of latching.
+    """
+    from src.gemini_execution import run_canary as RC
+
+    wf = WF.read_text()
+    ref = re.search(r"^\s*ref:\s*(\S+)\s*$", wf, re.M).group(1)
+    assert RC.BRANCH == ref, (
+        "latch branch %r != checkout ref %r; the latch cannot be pushed from "
+        "the tree the runner is running" % (RC.BRANCH, ref))
+    assert RC.BRANCH == Q1_BRANCH
+
+
+def test_the_latch_is_a_safety_dependency_outside_the_bundle():
+    """A fact worth failing on if it silently changes.
+
+    run_canary.py can refuse every mutation, yet it is NOT a bundle member, so
+    editing it does not invalidate an authorization. That is why DEFECT 3 was
+    fixable without re-granting -- and equally why a future edit to the latch
+    would not disarm anything. Recorded so the next person knows the gap is
+    known rather than overlooked.
+    """
+    from src.gemini_execution import bundle as B
+
+    assert "run_canary.py" not in B.MEMBERS
+    # AND THE FIX PROVABLY MOVED NO HASH. The bundle still hashes to the value
+    # the q=1 grant named, so a re-grant needs no re-review of the tree: only
+    # the authorization-identifier lines, which are normalized out of the hash
+    # by design, have to change.
+    assert B.bundle_sha() == (
+        "6b35be2ac54bf0e4e4b2fee8396d52402f1362af4737e28a1e29da0bdc7b3983")
 
 
 def test_the_plumbing_fix_moved_no_bound_and_no_flag():

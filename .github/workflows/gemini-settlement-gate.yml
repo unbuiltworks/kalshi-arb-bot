@@ -419,7 +419,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-Q1-LIVE-1"
+          # DISARMED 2026-09-21 after run 35570948794. The sentinel matches
+          # no EXPECTED_AUTH_ID, so armed_continuous=true is now inert: the
+          # live half may stay YES and still arm nothing.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has not passed, and an ABSENT one is not
           # "never expires". This was still 2026-09-19T00:00:00Z from the
@@ -440,7 +443,7 @@ jobs:
           set -o pipefail
           mkdir -p analysis/gemini
           python -m src.gemini_execution.run_continuous \
-            --auth-id "OWNER-2026-09-21-GEMINI-Q1-LIVE-1" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
             --cohort  "COHORT-2026-09-21-Q1LIVE-1" \
             --envelope live_q1 \
             --entry-tte-band "240:280" \
