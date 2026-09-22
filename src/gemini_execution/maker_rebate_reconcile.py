@@ -27,7 +27,8 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import date as _date
+from datetime import datetime, timedelta as _timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional
 
 from src.gemini_execution import maker_rebate_api as API
@@ -78,32 +79,58 @@ def our_accrual() -> Dict[str, Any]:
     return a
 
 
-def pick_payout(payouts: Mapping[str, Any], day: str) -> Optional[Dict[str, Any]]:
+def payout_date_for(day: str) -> str:
+    """The UTC date the payout for ET day `day` is written on.
+
+    CORRECTED 2026-09-22 AFTER THE FIRST RUN RETURNED NO_PAYOUT_ROW. Payouts
+    are paid daily at 5pm ET, and the venue's own rows land at ~21:03Z. A
+    payout therefore carries the date of the RUN, not of the fills it pays
+    for, and the fills of ET day D that occur after 17:00 ET are settled by the
+    run at 17:00 ET on D+1. Matching the row's date against the fill's ET day
+    finds nothing -- which is what happened, and it is a matching bug, not an
+    absent payout.
+
+    This changes only WHICH ROW IS SELECTED. The accrual it is compared
+    against is untouched.
+    """
+    d = _date.fromisoformat(day) + _timedelta(days=1)
+    return d.isoformat()
+
+
+def pick_payout(payouts: Mapping[str, Any], day: str,
+                payout_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """The payout row covering an ET calendar day.
 
-    Matched on the row's own dates rather than on position in the list, and a
-    row is returned only when its date actually contains `day` -- picking "the
-    most recent row" would silently reconcile against the wrong day.
+    Matched on the row's own dates rather than on position in the list --
+    picking "the most recent row" would silently reconcile against whatever ran
+    last. `payout_date` overrides the default D+1 mapping when a caller knows
+    better; `day` is still recorded so the two can never be confused.
     """
+    want = payout_date or payout_date_for(day)
     rows = payouts.get("rows") or []
     for r in rows:
         for k in ("paid_at", "created_at"):
             v = str(r.get(k) or "")
-            if v.startswith(day):
-                return dict(r, matched_on=k)
+            if v.startswith(want):
+                return dict(r, matched_on=k, matched_date=want,
+                            covers_et_day=day)
     return None
 
 
-async def run(day: str) -> Dict[str, Any]:
+async def run(day: str, payout_date: Optional[str] = None) -> Dict[str, Any]:
     acc = our_accrual()
     venue = await API.read_all(limit=100, date_from=day, date_to=day)
     payouts = venue.get("payouts") or {}
-    row = pick_payout(payouts, day) if payouts.get("readable") else None
+    row = (pick_payout(payouts, day, payout_date)
+           if payouts.get("readable") else None)
     rec = API.reconcile(row, acc)
     return {
         "label": LABEL,
         "utc": datetime.now(timezone.utc).isoformat(),
         "et_day": day,
+        "payout_written_on_utc_date": payout_date or payout_date_for(day),
+        "payout_timing": ("paid daily at 5pm ET; a run carries the date it "
+                          "ran, not the date of the fills it pays for"),
         "accrual": acc,
         "venue_read": venue,
         "payout_row": row,
@@ -117,9 +144,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--day", default="2026-09-21",
                     help="ET calendar day, YYYY-MM-DD")
+    ap.add_argument("--payout-date", default=None,
+                    help="UTC date of the payout row; default is the ET day + 1")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
-    rep = asyncio.run(run(a.day))
+    rep = asyncio.run(run(a.day, a.payout_date))
     text = json.dumps(rep, indent=2, sort_keys=True, default=str)
     if a.out:
         with open(a.out, "w") as fh:

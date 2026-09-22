@@ -24,20 +24,48 @@ def test_the_fill_list_is_the_evidence_packet_and_says_so():
     assert "EVIDENCE_PACKET_016" in R.our_accrual()["provenance"]
 
 
-def test_a_payout_row_is_matched_on_its_own_date_not_its_position():
+def test_a_payout_carries_the_date_it_RAN_not_the_date_it_pays_for():
+    """The first run returned NO_PAYOUT_ROW because it looked for a row dated
+    on the fills' ET day. Payouts run at 5pm ET, so ET day D is settled by the
+    run on D+1 -- the real row for our 2026-09-21 fills is dated 2026-09-22."""
+    assert R.payout_date_for("2026-09-21") == "2026-09-22"
     rows = {"rows": [
-        {"id": "wrong-day", "paid_at": "2026-09-20T21:00:00Z"},
-        {"id": "right-day", "paid_at": "2026-09-21T21:00:00Z"},
+        {"id": "ran-on-the-fill-day", "paid_at": "2026-09-21T21:00:00Z"},
+        {"id": "the-one-that-pays-for-it", "paid_at": "2026-09-22T21:03:06Z"},
     ]}
-    assert R.pick_payout(rows, "2026-09-21")["id"] == "right-day"
-    assert R.pick_payout(rows, "2026-09-19") is None
+    got = R.pick_payout(rows, "2026-09-21")
+    assert got["id"] == "the-one-that-pays-for-it"
+    assert got["covers_et_day"] == "2026-09-21"
+    assert got["matched_date"] == "2026-09-22"
+
+
+def test_the_mapping_can_be_overridden_without_touching_the_accrual():
+    rows = {"rows": [{"id": "x", "paid_at": "2026-09-25T21:00:00Z"}]}
+    assert R.pick_payout(rows, "2026-09-21") is None
+    assert R.pick_payout(rows, "2026-09-21", "2026-09-25")["id"] == "x"
 
 
 def test_created_at_is_accepted_when_a_row_is_not_paid_yet():
-    rows = {"rows": [{"id": "pending", "created_at": "2026-09-21T21:00:00Z",
+    rows = {"rows": [{"id": "pending", "created_at": "2026-09-22T21:00:00Z",
                       "paid_at": None}]}
     got = R.pick_payout(rows, "2026-09-21")
     assert got["id"] == "pending" and got["matched_on"] == "created_at"
+
+
+def test_the_real_2026_09_21_row_disagrees_on_all_three_counts():
+    """The venue's own row 21320, verbatim from the gate artifact. The dollars
+    look close; the composition does not, which is why three deltas are
+    reported and not one."""
+    from src.gemini_execution import maker_rebate_api as API
+    row = {"id": 21320, "status": "PAID",
+           "paid_at": "2026-09-22T21:03:06.090688Z",
+           "total_rebate_usd": "0.05", "total_fill_count": 11,
+           "total_volume_usd": "3.95"}
+    out = API.reconcile(row, R.our_accrual())
+    assert out["verdict"] == "DISAGREES"
+    assert out["credited"] is True
+    assert out["deltas"] == {"rebate_usd": "-0.03", "fill_count": -6,
+                             "volume_usd": "-2.72"}
 
 
 def test_no_payout_row_is_not_the_same_as_a_zero_payout():
