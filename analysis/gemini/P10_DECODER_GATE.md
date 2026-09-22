@@ -90,3 +90,19 @@ The slate families contribute 267 rows and zero decoded, confirming they are
 dormant on this timescale. Three BTC recorders now run on disjoint duration
 families; the constraint is how many BTC contracts are watched, not the poll
 rate per contract.
+
+## Relaunching a recorder — the exact pattern, because the obvious one dies
+
+A recorder started with a plain `nohup … &` from a tool shell is killed when
+that shell exits. Three recorders were lost this way at about 23:40Z and the
+loss was invisible until the next gate score. Use `setsid` and `disown`:
+
+    cd /home/user/kalshi-arb-bot
+    D=analysis/gemini/p10_capture
+    S=$(date -u +%Y%m%dT%H%M%SZ)
+    setsid nohup env P10_RATE=4.5 timeout 10800 python3 analysis/gemini/p10a_capture.py \
+      $D/btc15_$S.jsonl 178 4 Crypto BTC15M < /dev/null > /tmp/p10_btc15.log 2>&1 & disown
+
+Three processes, one per duration family, `BTC15M` / `BTC2609` / `BTC05M`, so
+they cover disjoint contracts and each owns its own rate bucket. Verify with
+`pgrep -af p10a_capture.py` — an empty result is a dead gate, not a quiet one.
