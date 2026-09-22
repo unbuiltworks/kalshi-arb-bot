@@ -204,3 +204,52 @@ def test_the_module_is_offline_and_read_only():
     imported |= {(n.module or "").split(".")[0]
                  for n in ast.walk(src) if isinstance(n, ast.ImportFrom)}
     assert imported <= {"decimal", "fractions", "typing", "__future__"}, imported
+
+
+# ============ the identity must be checked on VALUES, not on their display
+
+def test_a_repeating_pair_cost_still_re_adds_exactly():
+    """COHORT-2's y3/n2 window. Its pair cost is 0.81833... and the first
+    implementation called check_identity on the dict it had just FORMATTED,
+    so the value was quantized to six places and then re-parsed as if it were
+    the value. The check was measuring the rounding it had itself introduced,
+    and reported the split as broken when the split was fine."""
+    r = RA.decompose(yes_qty=3, no_qty=2, yes_spend="0.49", no_spend="1.31",
+                     resolution_side="no")
+    assert r["matched_pair_unit_cost"].startswith("0.81833"), (
+        "COHORT-2's GEMI-BTC15M2609221330-UP: 0.49 over 3 YES repeats")
+    assert r["identity"]["holds"] is True
+    assert r["identity"]["exact"] is True
+    assert r["identity"]["delta"] == "0"
+
+
+def test_the_string_entry_point_says_it_is_not_exact():
+    """`check_identity` is still public and still useful, but it reads
+    display strings, so it must not claim the exactness decompose() has."""
+    r = RA.decompose(yes_qty=3, no_qty=2, yes_spend="0.49", no_spend="1.31",
+                     resolution_side="no")
+    viastr = RA.check_identity(r)
+    assert viastr["exact"] is False
+    assert "DISPLAY strings" in viastr["note"]
+
+
+def test_every_COHORT2_window_re_adds_exactly():
+    """All eleven, against their published resolutions."""
+    res = {"GEMI-BTC15M2609221200-UP": "no", "GEMI-BTC15M2609221215-UP": "no",
+           "GEMI-BTC15M2609221230-UP": "yes", "GEMI-BTC15M2609221245-UP": "no",
+           "GEMI-BTC15M2609221300-UP": "no", "GEMI-BTC15M2609221315-UP": "yes",
+           "GEMI-BTC15M2609221330-UP": "no", "GEMI-BTC15M2609221345-UP": "yes",
+           "GEMI-BTC15M2609221400-UP": "yes", "GEMI-BTC15M2609221415-UP": "yes",
+           "GEMI-BTC15M2609221430-UP": "no"}
+    rows = []
+    for f in sorted(glob.glob("analysis/gemini/cohort_window_*.json")):
+        rep = json.loads(open(f).read())
+        sym = (rep.get("window") or {}).get("symbol")
+        if sym not in res:
+            continue
+        rows.append(RA.from_window(
+            rep, {"status": "settled", "resolutionSide": res[sym]}))
+    if not rows:
+        pytest.skip("COHORT-2 window artifacts are not on this branch")
+    assert len(rows) == 11
+    assert all(r["identity"]["holds"] and r["identity"]["exact"] for r in rows)

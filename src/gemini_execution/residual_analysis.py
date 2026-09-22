@@ -196,8 +196,27 @@ def decompose(*, yes_qty: Any, no_qty: Any,
         "spend_agrees": (None if reported is None else reported == spend),
         "net_usd": _f(net),
     })
-    out["identity"] = check_identity(out)
+    out["identity"] = _identity_exact(matched_pnl, residual_pnl, fees, net)
     return out
+
+
+def _identity_exact(mp: F, rp: F, fees: F, net: F) -> Dict[str, Any]:
+    """The identity, on the EXACT rationals -- never on their display forms.
+
+    THIS IS THE BUG THE CHECK WAS WRITTEN TO CATCH, and it caught it in its
+    own implementation. The first version called `check_identity(out)` on the
+    dict it had just formatted, so a pair cost like 0.81833...  was quantized
+    to six places for display and then re-parsed as if it were the value. The
+    check was measuring the rounding it had itself introduced. Exact values
+    in, exact answer out; the strings are for humans.
+    """
+    lhs, rhs = mp + rp - fees, net
+    return {"checkable": True, "holds": lhs == rhs,
+            "matched_plus_residual_minus_fees": _f(lhs), "net": _f(rhs),
+            "delta": _f(lhs - rhs),
+            "exact": True,
+            "why": ("a decomposition that does not re-add to the number it "
+                    "decomposes is not a decomposition")}
 
 
 def check_identity(row: Mapping[str, Any]) -> Dict[str, Any]:
@@ -212,12 +231,14 @@ def check_identity(row: Mapping[str, Any]) -> Dict[str, Any]:
     if mp is None or rp is None or net is None:
         return {"checkable": False,
                 "why": "an unresolved window has no residual P&L to re-add"}
-    lhs, rhs = mp + rp - fees, net
-    return {"checkable": True, "holds": lhs == rhs,
-            "matched_plus_residual_minus_fees": _f(lhs), "net": _f(rhs),
-            "delta": _f(lhs - rhs),
-            "why": ("a decomposition that does not re-add to the number it "
-                    "decomposes is not a decomposition")}
+    out = _identity_exact(mp, rp, fees, net)
+    # THE PUBLIC ENTRY POINT READS FORMATTED STRINGS, so a repeating value was
+    # already quantized before it got here and a tiny delta is display
+    # rounding, not a broken split. `decompose` never routes through this.
+    out["exact"] = False
+    out["note"] = ("computed from DISPLAY strings; a sub-cent delta here is "
+                   "rounding. decompose() checks the exact rationals.")
+    return out
 
 
 def leg_spend(events: Optional[Sequence[Mapping[str, Any]]]
