@@ -1,5 +1,33 @@
 # P8-A/B/C — the extracted pair rule, WAIT recomputed, and the corrections made canonical
 
+> ## PROVISIONAL — pending P10 decoder validation (2026-09-22)
+>
+> Every result in this document that depends on assigning a trade to a SIDE is
+> **provisional**. P9-D found that a contract's `/v1/trades` feed shows 20-56%
+> exact mirrors among same-second consecutive prints, which a single price
+> series cannot produce, so the mapping "a sell print at p made YES buyable at
+> p; a buy print at b made NO buyable at 1-b" is not established.
+>
+> The venue's own documentation defines `type` as the aggressor side -- "buy
+> means that an ask was removed from the book by an incoming buy order" -- but
+> that is the SPOT trade schema, and the prediction-markets order API carries a
+> second dimension (`outcome`: yes/no) that the trades feed does not report. A
+> contract's YES and NO quotes are exact mirrors of one another
+> (`buy.yes + sell.no = 1`), so a NO-side execution and a YES-side execution
+> are indistinguishable on price alone.
+>
+> Affected: complement availability, pair cost, matched and residual P&L,
+> maker-fill simulations, markout, and every arm table. Unaffected: prints per
+> minute, dollars per minute, contract lifetimes, trading-day counts, quoted
+> spreads, and the settlement outcomes themselves.
+>
+> **No claim here may be treated as conservative, safe, or directional in its
+> bias until P10 establishes the decoder.** An earlier note in this programme
+> argued a decoding error would only flatter a positive result; that argument
+> is withdrawn as unproven.
+
+
+
 **Date:** 2026-09-22 · **Data:** Gemini public tape 2026-09-16..22, corrected
 · **Live orders placed: none. Nothing armed. No rebate term anywhere below.**
 

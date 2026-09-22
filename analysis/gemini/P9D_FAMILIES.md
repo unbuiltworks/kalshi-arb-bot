@@ -1,5 +1,33 @@
 # P9-D — which Gemini family can pay a sequential inventory trader?
 
+> ## PROVISIONAL — pending P10 decoder validation (2026-09-22)
+>
+> Every result in this document that depends on assigning a trade to a SIDE is
+> **provisional**. P9-D found that a contract's `/v1/trades` feed shows 20-56%
+> exact mirrors among same-second consecutive prints, which a single price
+> series cannot produce, so the mapping "a sell print at p made YES buyable at
+> p; a buy print at b made NO buyable at 1-b" is not established.
+>
+> The venue's own documentation defines `type` as the aggressor side -- "buy
+> means that an ask was removed from the book by an incoming buy order" -- but
+> that is the SPOT trade schema, and the prediction-markets order API carries a
+> second dimension (`outcome`: yes/no) that the trades feed does not report. A
+> contract's YES and NO quotes are exact mirrors of one another
+> (`buy.yes + sell.no = 1`), so a NO-side execution and a YES-side execution
+> are indistinguishable on price alone.
+>
+> Affected: complement availability, pair cost, matched and residual P&L,
+> maker-fill simulations, markout, and every arm table. Unaffected: prints per
+> minute, dollars per minute, contract lifetimes, trading-day counts, quoted
+> spreads, and the settlement outcomes themselves.
+>
+> **No claim here may be treated as conservative, safe, or directional in its
+> bias until P10 establishes the decoder.** An earlier note in this programme
+> argued a decoding error would only flatter a positive result; that argument
+> is withdrawn as unproven.
+
+
+
 **Date:** 2026-09-22 · **Controlling audit: `ed4573b`** · **No live orders.
 Nothing armed. No rebate term entered any selection.**
 
@@ -78,12 +106,17 @@ So the eleven ranking criteria split: four are measurable now, seven are not.
 Producing the ranking anyway would be inventing the sides.
 
 **What it means for P8 and P9-A/B/C/F.** Those read the BTC tape as one space,
-where the contamination bound is 20–29% of same-second pairs. A decoding error
-manufactures complements that were never offered and pairs that never existed —
-it biases **toward** finding an edge. Every conclusion in those rounds is
-negative, so they are conservative and survive; but any positive figure inside
-them (DEV +7.62, the matched-P&L column) is unreliable in a direction that
-flatters it.
+where 20–29% of same-second pairs are exact mirrors. **All of it is
+PROVISIONAL.**
+
+An earlier version of this paragraph argued that a decoding error would
+manufacture complements and pairs that never existed, therefore biasing
+*toward* an edge, therefore leaving the negative conclusions conservative.
+**That argument is withdrawn.** It assumed the direction of an error whose
+mechanism is not yet known: mis-assignment can equally destroy real complements
+by putting them on the wrong side, and invent orphans, which biases the other
+way. Until the decoder is validated neither the size nor the direction of the
+bias is established, and P9-F must not be described as proven conservative.
 
 A live cross-check was run and is **inconclusive rather than contradictory**:
 of 132 prints from the last hour compared with their contract's current book,
