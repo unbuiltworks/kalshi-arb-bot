@@ -310,6 +310,36 @@ def improve(desired: Sequence[Mapping[str, Any]], book: Mapping[str, Any], *,
     return out
 
 
+def ladder(desired: Sequence[Mapping[str, Any]], book: Mapping[str, Any], *,
+           rungs: int = 1, spacing: int = 1) -> List[Dict[str, Any]]:
+    """Widen the desired surface to `rungs` levels per leg, deeper only.
+
+    P3-C. An EXECUTION-SURFACE experiment, not a new directional policy: the
+    extra rungs carry the policy's own leg and action and sit BEHIND its
+    price, never in front of it, so nothing here quotes more aggressively
+    than the frozen surface already does. The caps on committed dollars and
+    residual are enforced by the envelope and by `gate_desired`, unchanged --
+    concurrency cannot become exposure by the back door.
+    """
+    if rungs <= 1:
+        return [dict(a) for a in desired]
+    out: List[Dict[str, Any]] = []
+    for a in desired:
+        px = _d(a.get("price"))
+        out.append(dict(a))
+        if px is None:
+            continue
+        for k in range(1, rungs):
+            deeper = px - TICK * spacing * k
+            if deeper <= 0:
+                break
+            b = dict(a)
+            b["price"] = str(deeper)
+            b["rung_index"] = k
+            out.append(b)
+    return out
+
+
 def gate_desired(desired: Sequence[Mapping[str, Any]], inv: CP.Inventory, *,
                  extend_floor: Optional[D] = None,
                  cap: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -351,11 +381,15 @@ def replay(rep: Mapping[str, Any], *,
            cap: Optional[int] = None,
            improve_ticks: int = 0,
            improve_only_action: Optional[str] = None,
+           rungs_per_side: int = 1,
+           rung_spacing: int = 1,
+           max_committed_usd: Optional[D] = D("4.00"),
            tier: str = RT.THROUGH,
            action_budget: int = 12,
            min_rest_s: float = MIN_REST_S,
            quote_band: Any = (60.0, 880.0),
-           action_size: Any = D("1")) -> Dict[str, Any]:
+           action_size: Any = D("1"),
+           max_residual: Optional[Any] = None) -> Dict[str, Any]:
     """Replay one window sequentially under one arm.
 
     Defaults are PRODUCTION: never reprice, no gate, no cap. That arm exists
@@ -366,6 +400,20 @@ def replay(rep: Mapping[str, Any], *,
                          quote_band=(None if quote_band is None
                                      else (float(quote_band[0]),
                                            float(quote_band[1]))))
+    if max_residual is not None:
+        # A RISK PARAMETER, varied only to ANSWER a question. The oscillator
+        # suppresses the widening side by comparing inventory against
+        # max_residual, so it is the cap that actually stops participation.
+        # Raising it here measures what L5-like participation would COST in
+        # exposure; it is not a proposal to raise it.
+        import dataclasses
+        from src.l5_surface import params as _PR
+        pr = dict(sp.params)
+        old = pr["max_residual"]
+        pr["max_residual"] = _PR.Param(
+            "max_residual", _PR.OURS_ADAPTED, value=str(max_residual),
+            prior_evidence="P3 participation experiment; NOT an authorization")
+        sp = dataclasses.replace(sp, params=pr)
     decisions = rep.get("decisions") or []
     tp = RT.tape(rep)
     prints = list(tp["prints"])
@@ -381,6 +429,7 @@ def replay(rep: Mapping[str, Any], *,
     mutations: List[Dict[str, Any]] = []
     unreadable = 0
     budget_blocked = 0
+    committed_blocked = 0
     withdrawn = False
 
     for i, dec in enumerate(decisions):
@@ -404,9 +453,12 @@ def replay(rep: Mapping[str, Any], *,
                                    extend_floor=extend_floor, cap=cap)
             desired = improve(desired, book, ticks=improve_ticks,
                               only_action=improve_only_action)
+            desired = ladder(desired, book, rungs=rungs_per_side,
+                             spacing=rung_spacing)
             plan = reconcile(desired, working, now=t, min_rest_s=min_rest_s,
                              reprice_ticks=reprice_ticks,
                              reprice_only_reducing=reprice_only_reducing,
+                             slots_per_leg=max(2, rungs_per_side),
                              safety=safety)
             for c in plan["cancel"]:
                 if used >= action_budget:
@@ -422,6 +474,18 @@ def replay(rep: Mapping[str, Any], *,
                 if used >= action_budget:
                     budget_blocked += 1
                     continue
+                # CONCURRENCY IS NOT PERMISSION TO COMMIT MORE. The extra
+                # rungs of a wider surface are refused once the working set's
+                # notional would breach the envelope's committed cap, so a
+                # participation experiment cannot silently become a size one.
+                if max_committed_usd is not None:
+                    live = sum((_d(o["price"]) or D(0)) * (_d(o["qty"]) or D(0))
+                               for o in working.values())
+                    want = ((_d(p["rung"]["price"]) or D(0))
+                            * (_d(p["rung"]["qty"]) or D(0)))
+                    if live + want > max_committed_usd:
+                        committed_blocked += 1
+                        continue
                 used += 1
                 seq += 1
                 coid = "replay-%s-%d" % (str(p["rung"]["leg"]).lower(), seq)
@@ -471,6 +535,10 @@ def replay(rep: Mapping[str, Any], *,
                 "reprice_only_reducing": reprice_only_reducing,
                 "extend_floor": _f(extend_floor), "cap": cap,
                 "improve_ticks": improve_ticks,
+                "rungs_per_side": rungs_per_side,
+                "max_committed_usd": _f(max_committed_usd),
+                "max_residual": (None if max_residual is None
+                                 else str(max_residual)),
                 "improve_only_action": improve_only_action,
                 "tier": tier, "action_budget": action_budget,
                 "min_rest_s": min_rest_s},
@@ -482,6 +550,7 @@ def replay(rep: Mapping[str, Any], *,
         "n_fills": len(fills), "fills": fills,
         "mutations_used": used, "mutations": mutations,
         "budget_blocked": budget_blocked,
+        "committed_blocked": committed_blocked,
         "unreadable_cycles": unreadable,
         "orders_left_resting": len(working),
         "withdrawn": withdrawn,

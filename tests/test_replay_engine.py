@@ -102,8 +102,10 @@ def test_the_module_is_offline():
             mods |= {a.name.split(".")[0] for a in n.names}
         elif isinstance(n, ast.ImportFrom):
             mods.add((n.module or "").split(".")[0])
+    # `dataclasses` and the surface params module arrived with the P3
+    # max_residual experiment; both are pure and neither opens a socket.
     assert mods <= {"decimal", "fractions", "typing", "__future__",
-                    "datetime", "src"}, mods
+                    "datetime", "src", "dataclasses"}, mods
 
 
 def test_it_is_not_a_bundle_member():
