@@ -1,5 +1,12 @@
 # P11: is our configuration suppressing L5 on BTC5m/BTC15m?
 
+> **CORRECTED 2026-09-22T23:35Z after challenge. Three claims in the first
+> version of this file were wrong and are struck through below. Read
+> `P11_CORRECTIONS.md` first.** The surviving findings are marked. The
+> headline claim — "the risk envelope is not what is suppressing L5" — is
+> **withdrawn**: the envelope was never *tested*, which is a different
+> statement and a much weaker one.
+
 **READ-ONLY DIAGNOSTIC.** No parameter is changed, no threshold is tuned, no
 order is placed, nothing is armed, and the pre-registered P10 decoder gate is
 untouched and still running. This audit answers "are our settings interfering
