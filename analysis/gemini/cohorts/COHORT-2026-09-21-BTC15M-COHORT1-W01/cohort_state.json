@@ -47,5 +47,18 @@
     "aggregate_loss_carried_forward_usd": "3.77",
     "remaining_loss_budget_usd": "6.23",
     "note": "the twelve slots are reserved so they cannot be spent twice. They reconstruct no trade. The 3.77 is carried forward into the $10.00 aggregate cap rather than reset."
+  },
+  "prior_stop": {
+    "state": "STOPPED_MUTATION_BUDGET",
+    "why": "the cohort's action budget is spent (12/12)",
+    "utc": "2026-09-22T00:54:54Z",
+    "run": "35671834127",
+    "note": "an AUTHORIZED stop, reached because the CLI never wired the ledger chain and both windows drew on one 12-slot budget"
+  },
+  "resumed": {
+    "utc": "2026-09-22T01:35:00Z",
+    "by": "owner instruction, 2026-09-22: resume the remaining 8 windows",
+    "fix_commit": "830908f",
+    "note": "`stopped` is cleared because the OWNER resumed this cohort after the orchestration defect was fixed. The stop itself is preserved above and is not erased."
   }
 }

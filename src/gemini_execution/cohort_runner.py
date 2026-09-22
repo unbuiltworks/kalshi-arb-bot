@@ -835,6 +835,57 @@ async def _consume_cohort_latch(plan: CohortPlan, st: Mapping[str, Any], *,
     }
     if latch_fn is not None:
         return latch_fn(plan.auth_id, intent, plan.state_dir)
+
+    # RESUMING A COHORT IS NOT SPENDING A SECOND ONE.
+    #
+    # The latch means ONE AUTHORIZATION, ONE COHORT. COHORT-1 spent its latch
+    # correctly, ran two of its ten authorized windows, and stopped on an
+    # authorized condition -- and resuming the SAME cohort must not look like
+    # starting a new one, nor be refused as if it were. Spending a second
+    # latch would be a lie about how many cohorts this grant bought.
+    #
+    # WHAT STILL REFUSES, and it is the thing that matters: a FRESH cohort
+    # under a spent grant. Continuation is permitted only when this
+    # authorization's own durable cohort state exists, is not stopped, and has
+    # observed FEWER windows than it was granted. That state is append-only in
+    # the direction that counts -- `windows_observed` only ever rises and
+    # `max_windows` bounds it -- and every ledger in the chain is single-use,
+    # so a continuation can no more exceed the grant than the original run
+    # could. A cohort with no state, or one already at its window count, is
+    # refused exactly as before.
+    if LATCH.consumed(plan.auth_id, plan.state_dir):
+        observed = int(st.get("windows_observed") or 0)
+        remaining = int(plan.max_windows) - observed
+        if st.get("stopped"):
+            return {"ok": False, "consumed": False,
+                    "why": ("authorization %s is spent and its cohort is "
+                            "STOPPED (%s); a stopped cohort is not resumed "
+                            "automatically"
+                            % (plan.auth_id, st.get("stop_why")))}
+        if observed <= 0 or remaining <= 0:
+            return {"ok": False, "consumed": False,
+                    "why": ("authorization %s is already consumed and its "
+                            "cohort has %d of %d windows observed; this is "
+                            "reconciliation work, never a re-run"
+                            % (plan.auth_id, observed, plan.max_windows))}
+        rec = LATCH.read(plan.auth_id, plan.state_dir) or {}
+        if not rec:
+            return {"ok": False, "consumed": False,
+                    "why": ("authorization %s reads as consumed but its latch "
+                            "record cannot be read; a continuation is not "
+                            "built on a record we cannot see" % plan.auth_id)}
+        return {"ok": True, "consumed": False, "resumed": True,
+                "cohort_id": spec.budget_cohort,
+                "intent_id": rec.get("intent_id"),
+                "state": rec.get("state"),
+                "when": "spent once, before this cohort's FIRST mutation",
+                "windows_observed": observed,
+                "windows_remaining": remaining,
+                "why": ("CONTINUING the cohort this latch already bought: %d "
+                        "of %d windows observed, %d remaining. No second "
+                        "latch is spent, because no second cohort is run."
+                        % (observed, plan.max_windows, remaining))}
+
     pushable = can_make_durable()
     if not pushable.get("ok"):
         return {"ok": False, "consumed": False,

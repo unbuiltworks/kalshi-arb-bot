@@ -1133,3 +1133,82 @@ def test_cohort1_resumes_on_W02_with_108_slots_and_623_of_loss_budget():
         s = CO.state(cid)
         assert (s["consumed"], s["remaining"]) == (0, 12), cid
         assert s["predecessor"]["intact"] is True, cid
+
+
+# ============ resuming a cohort is not spending a second one
+
+def _spent_latch(tmp_path, auth="OWNER-TEST"):
+    from src.gemini_execution import latch as LATCH
+    d = tmp_path / "latch"
+    d.mkdir(exist_ok=True)
+    LATCH.consume(auth, {"intent_id": "cohort-x", "symbol": "GEMI-BTC15M"},
+                  str(d), durable_check=lambda a: False)
+    return str(d)
+
+
+def _resume_plan(tmp_path, root, ids, *, state_dir, windows=10):
+    import dataclasses
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880,
+                               live_cohort=ids[0])
+    return CR.CohortPlan(auth_id="OWNER-TEST", spec=spec,
+                         max_windows=windows, max_aggregate_loss_usd="10.00",
+                         cohort_ids=ids, state_dir=state_dir,
+                         out_dir=str(tmp_path / "out"), root=root)
+
+
+def test_a_partly_observed_cohort_continues_under_its_existing_latch(
+        tmp_path):
+    """COHORT-1 spent its latch, ran 2 of 10 authorized windows and stopped.
+    Resuming must neither spend a second latch -- which would be a lie about
+    how many cohorts the grant bought -- nor be refused as a re-run."""
+    root, ids = _chain(tmp_path, 10, prefix="COHORT-RES-W")
+    sd = _spent_latch(tmp_path)
+    plan = _resume_plan(tmp_path, root, ids, state_dir=sd)
+
+    st = CR.load_state(ids[0], root=root, max_windows=10,
+                       max_loss_usd="10.00")
+    st.update(windows_observed=2, windows_traded=2,
+              aggregate_loss_usd="3.77")
+    CR.save_state(st, root=root)
+
+    got = _run(CR._consume_cohort_latch(plan, st))
+    assert got["ok"] is True
+    assert got["consumed"] is False, "no second latch was spent"
+    assert got["resumed"] is True
+    assert got["windows_observed"] == 2 and got["windows_remaining"] == 8
+    assert "No second latch is spent" in got["why"]
+
+
+def test_a_fresh_cohort_under_a_spent_grant_is_still_refused(tmp_path):
+    """The thing the latch exists to stop is unchanged."""
+    root, ids = _chain(tmp_path, 10, prefix="COHORT-FRESH-W")
+    sd = _spent_latch(tmp_path)
+    plan = _resume_plan(tmp_path, root, ids, state_dir=sd)
+    st = CR.load_state(ids[0], root=root, max_windows=10,
+                       max_loss_usd="10.00")     # windows_observed == 0
+    got = _run(CR._consume_cohort_latch(plan, st))
+    assert got["ok"] is False
+    assert "never a re-run" in got["why"]
+
+
+def test_a_stopped_cohort_is_not_resumed_by_the_latch_path(tmp_path):
+    root, ids = _chain(tmp_path, 10, prefix="COHORT-STOP-W")
+    sd = _spent_latch(tmp_path)
+    plan = _resume_plan(tmp_path, root, ids, state_dir=sd)
+    st = CR.load_state(ids[0], root=root, max_windows=10,
+                       max_loss_usd="10.00")
+    st.update(windows_observed=2, stopped=True, stop_why="AGGREGATE_LOSS: x")
+    got = _run(CR._consume_cohort_latch(plan, st))
+    assert got["ok"] is False and "STOPPED" in got["why"]
+
+
+def test_a_cohort_at_its_window_count_cannot_continue(tmp_path):
+    root, ids = _chain(tmp_path, 10, prefix="COHORT-FULL-W")
+    sd = _spent_latch(tmp_path)
+    plan = _resume_plan(tmp_path, root, ids, state_dir=sd, windows=10)
+    st = CR.load_state(ids[0], root=root, max_windows=10,
+                       max_loss_usd="10.00")
+    st.update(windows_observed=10)
+    got = _run(CR._consume_cohort_latch(plan, st))
+    assert got["ok"] is False
+    assert "10 of 10 windows observed" in got["why"]
