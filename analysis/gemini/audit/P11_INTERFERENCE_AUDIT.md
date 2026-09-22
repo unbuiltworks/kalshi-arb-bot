@@ -18,7 +18,15 @@ aggregate gate lands.
 
 ## The headline, before the detail
 
-**The risk envelope is not what is suppressing L5. It has never once bound.**
+**~~The risk envelope is not what is suppressing L5. It has never once bound.~~**
+**WITHDRAWN. Corrected conclusion: the envelope is UNTESTED AT RELEVANT
+INVENTORY DEPTH.** No window in the sample reached four fills, and
+`MAX_IMBALANCE` needs four net same-side fills to fire, so the zero below was
+guaranteed by construction and carries no information. On L5's own history a
+cap of 4 truncates about a third of windows (peak imbalance p50 2.76, p75
+5.21; k=4 coverage 66.9%), and in the P2 replay CAP3 already altered the
+sequence where CAP4 did not. See `POST_DECODER_EVALUATION_PREREG.md` for the
+measurement that would settle it.
 
 Across **151 consecutive live-shadow windows** (2026-09-22 13:59Z–23:19Z,
 policy `FROZEN_L5_NATIVE`, deployment `d6a23b9d`), the per-window
