@@ -4,10 +4,15 @@
   "created_utc": "2026-09-22T01:19:31.864400+00:00",
   "max_windows": 10,
   "max_aggregate_loss_usd": "10.00",
-  "windows_observed": 2,
-  "windows_traded": 2,
-  "aggregate_loss_usd": "3.77",
-  "symbols": [],
+  "windows_observed": 6,
+  "windows_traded": 6,
+  "aggregate_loss_usd": "10.63",
+  "symbols": [
+    "GEMI-BTC15M2609220230-UP",
+    "GEMI-BTC15M2609220245-UP",
+    "GEMI-BTC15M2609220300-UP",
+    "GEMI-BTC15M2609220315-UP"
+  ],
   "windows": [
     {
       "recovered": true,
@@ -32,10 +37,82 @@
         "which of the two windows produced which part of the 3.77"
       ],
       "labels": "RECOVERED FACTS ONLY. 3.77 is the runner's own reconstructed loss -- cash out of the account from confirmed fills, with no settlement credit, no matched-pair offset and no rebate assumed. It is NOT REALIZED: no attributable cash movement has been read back for it. Nothing in `what_is_NOT_known` is reconstructed, estimated or inferred anywhere in this file."
+    },
+    {
+      "symbol": "GEMI-BTC15M2609220230-UP",
+      "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W02",
+      "utc": "2026-09-22T02:25:51.195379+00:00",
+      "state": null,
+      "stop_why": "risk gate refused the rung: a fill would take NO to 5, past 4",
+      "orders_live_after_stop": 0,
+      "economics": {
+        "reconstructed_loss_usd": "2.52",
+        "total_spend_usd": "2.52",
+        "n_fills": 7,
+        "matched_qty": "3",
+        "directional_residual": "-1",
+        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
+        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
+      },
+      "placement_rows": 110
+    },
+    {
+      "symbol": "GEMI-BTC15M2609220245-UP",
+      "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W02",
+      "utc": "2026-09-22T02:32:40.719804+00:00",
+      "state": null,
+      "stop_why": "no mutation slots left to cancel with",
+      "orders_live_after_stop": 0,
+      "economics": {
+        "reconstructed_loss_usd": "0.71",
+        "total_spend_usd": "0.71",
+        "n_fills": 2,
+        "matched_qty": "0",
+        "directional_residual": "2",
+        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
+        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
+      },
+      "placement_rows": 26
+    },
+    {
+      "symbol": "GEMI-BTC15M2609220300-UP",
+      "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W03",
+      "utc": "2026-09-22T02:52:05.155127+00:00",
+      "state": null,
+      "stop_why": "risk gate refused the rung: a fill would take YES to 5, past 4",
+      "orders_live_after_stop": 0,
+      "economics": {
+        "reconstructed_loss_usd": "2.40",
+        "total_spend_usd": "2.40",
+        "n_fills": 6,
+        "matched_qty": "2",
+        "directional_residual": "2",
+        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
+        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
+      },
+      "placement_rows": 86
+    },
+    {
+      "symbol": "GEMI-BTC15M2609220315-UP",
+      "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W03",
+      "utc": "2026-09-22T03:02:05.558651+00:00",
+      "state": null,
+      "stop_why": "no mutation slots left to cancel with",
+      "orders_live_after_stop": 0,
+      "economics": {
+        "reconstructed_loss_usd": "1.23",
+        "total_spend_usd": "1.23",
+        "n_fills": 3,
+        "matched_qty": "1",
+        "directional_residual": "1",
+        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
+        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
+      },
+      "placement_rows": 16
     }
   ],
-  "stopped": false,
-  "stop_why": null,
+  "stopped": true,
+  "stop_why": "AGGREGATE_LOSS: reconstructed aggregate loss 10.63 has reached the cohort cap of 10.00",
   "labels": "windows_observed counts CONTRACTS BOUND. A contract that produced no fill is an observed window and is not a failure: nothing in this runner requires a trade to happen, and no parameter is tuned between windows.",
   "recovery": {
     "label": "COHORT1_RECOVERY_V1",
