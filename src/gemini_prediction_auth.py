@@ -132,18 +132,32 @@ async def private_rest_request(
     api_key: str | None = None,
     api_secret: str | None = None,
     params: dict[str, Any] | None = None,
+    query: dict[str, Any] | None = None,
     timeout: float = 10.0,
 ) -> httpx.Response:
+    """`params` go into the SIGNED PAYLOAD, as Gemini's private API expects.
+
+    `query` is separate and additive, and exists because some prediction-market
+    GET endpoints take their arguments in the URL. Sending those in the payload
+    means the server never sees them: the request goes out with an empty body
+    and no query string, and the endpoint answers as if nothing was asked --
+    which is how a windowed summary silently returned lifetime figures. Callers
+    that pass no `query` are byte-identical to before.
+    """
     key, secret = credentials()
     key = api_key or key
     secret = api_secret or secret
     if not key or not secret:
         raise RuntimeError("Gemini API credentials are not configured")
     headers = rest_auth_headers(key, secret, path, params=params)
+    url = f"{GEMINI_REST}{path}"
+    if query:
+        from urllib.parse import urlencode
+        url = f"{url}?{urlencode({k: v for k, v in query.items() if v is not None})}"
     async with httpx.AsyncClient(timeout=timeout) as client:
         return await client.request(
             method.upper(),
-            f"{GEMINI_REST}{path}",
+            url,
             headers=headers,
             content=b"",
         )
@@ -205,8 +219,18 @@ async def private_rest_json(
     api_key: str | None = None,
     api_secret: str | None = None,
     params: dict[str, Any] | None = None,
+    query: dict[str, Any] | None = None,
     timeout: float = 10.0,
 ) -> httpx.Response:
+    """`params` go into the SIGNED PAYLOAD, as Gemini's private API expects.
+
+    `query` is separate and additive, and exists because some prediction-market
+    GET endpoints take their arguments in the URL. Sending those in the payload
+    means the server never sees them: the request goes out with an empty body
+    and no query string, and the endpoint answers as if nothing was asked --
+    which is how a windowed summary silently returned lifetime figures. Callers
+    that pass no `query` are byte-identical to before.
+    """
     """Signed request that ALSO carries its fields as a real JSON body.
 
     WHY THIS EXISTS, AND WHY IT IS SEPARATE. Gemini's classic private REST

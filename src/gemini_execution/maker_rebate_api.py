@@ -220,10 +220,11 @@ async def read_all(*, limit: int = 100,
         return rep
 
     async def _call(method: str, path: str,
-                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    params: Optional[Dict[str, Any]] = None,
+                    query: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         try:
             resp = await private_rest_request(method, path, timeout=15.0,
-                                              params=params)
+                                              params=params, query=query)
             body = None
             try:
                 body = resp.json()
@@ -241,13 +242,27 @@ async def read_all(*, limit: int = 100,
     # half-supplied window is a request the venue is entitled to refuse.
     sp = ({"dateFrom": date_from, "dateTo": date_to}
           if (date_from and date_to) else None)
-    summary = await _call("GET", SUMMARY_PATH, sp)
+    #: ASKED TWICE, ON PURPOSE. The windowed call previously went out with the
+    #: dates in the signed payload only, so the server never saw them and
+    #: answered with lifetime figures that looked like a window. Both forms are
+    #: recorded so the artifact itself shows whether the window took effect,
+    #: rather than us assuming it did.
+    summary = await _call("GET", SUMMARY_PATH, sp, query=sp)
+    summary_unwindowed = await _call("GET", SUMMARY_PATH)
 
     rep.update({
         "rates": rates,
         "payouts_raw_status": payouts.get("status"),
         "payouts": parse_payouts(payouts.get("body")
                                  if payouts.get("readable") else None),
+        "summary_lifetime": {"status": summary_unwindowed.get("status"),
+                             "body": (summary_unwindowed.get("body")
+                                      if summary_unwindowed.get("readable")
+                                      else None)},
+        "summary_window_took_effect": (
+            None if not (summary.get("readable")
+                         and summary_unwindowed.get("readable"))
+            else summary.get("body") != summary_unwindowed.get("body")),
         "summary": {"status": summary.get("status"),
                     "body": summary.get("body") if summary.get("readable")
                     else None,

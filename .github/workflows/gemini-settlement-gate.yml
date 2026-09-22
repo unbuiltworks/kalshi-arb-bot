@@ -707,6 +707,23 @@ jobs:
             --out analysis/gemini/maker_rebate_reconcile_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/maker_rebate_reconcile.txt
 
+      # DID ANY MAKER FEE LEAVE THE ACCOUNT? The venue reported n=0.0000 on
+      # every EP016 fill, and the published schedule implies $0.18 on the same
+      # eighteen. A field can only say what the venue said at fill time; this
+      # asks the account's own cash records whether money later moved.
+      - name: Maker-fee cash probe (read-only; three enumerated reads)
+        if: ${{ github.event.inputs.rebate_surface_probe == 'true' }}
+        timeout-minutes: 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.maker_fee_cash_probe \
+            --from 2026-09-20 --to 2026-09-23 \
+            --out analysis/gemini/maker_fee_cash_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/maker_fee_cash.txt
+
       # READ THE ACTUAL CREDITS on /v1/transfers, the surface that carries the
       # AdminCredit rows. Kept beside the maker-rebate endpoints above rather
       # than replaced by them: one is the venue's payout ledger and the other
@@ -813,6 +830,7 @@ jobs:
                    analysis/gemini/rebate_surface_probe_*.json \
                    analysis/gemini/rebate_reconciliation_*.json \
                    analysis/gemini/maker_rebate_reconcile_*.json \
+                   analysis/gemini/maker_fee_cash_*.json \
                    analysis/gemini/continuous_shadow_soak_*.json \
                    analysis/gemini/continuous_v1/continuous_v1.jsonl \
                    analysis/gemini/continuous_ledger.jsonl \
@@ -856,7 +874,7 @@ jobs:
           # only one that survives a runner killed between windows -- which
           # is precisely the case where the per-window report never gets
           # written at all.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|maker_fee_cash_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other
