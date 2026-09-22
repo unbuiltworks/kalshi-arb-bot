@@ -122,8 +122,18 @@ contract.** There was no shortage of *time* to complete.
 
 56 fills in time order, with the running imbalance. The pattern is exact:
 
-> **Every single EXTEND filled at a lower price than the previous fill on that
-> leg. Without exception, in all eleven windows.**
+> **29 of the 32 EXTEND fills were at a lower price than the previous fill on
+> that leg.**
+
+> **CORRECTED 2026-09-22 (P2 audit).** This originally read "every single
+> EXTEND ... without exception", and it was wrong twice: the count conflated
+> the 56 total fills with the 32 that are EXTENDs, and the universal
+> quantifier is false. 29 of 32 are strictly lower; one is equal (1245 YES
+> 0.40 == 0.40) and two are HIGHER (1415 NO 0.56 > 0.54 and 0.68 > 0.56). The
+> source is the authoritative record -- `after.orders_seen` joined to
+> `after.trades`, proven COMPLETE on all 11 windows -- not the capped WS
+> stream, so no observation in it is unverifiable. See
+> `P2_REPLAY_OVERLAYS.md` section 0.
 
 ```
 1200   NO 0.58  ->  YES 0.33  0.19  0.11  0.02        (EXTEND x4, falling)
@@ -133,8 +143,9 @@ contract.** There was no shortage of *time* to complete.
 1245  YES 0.54      0.46      0.40  0.40              (EXTEND x3, falling)
 ```
 
-This is mechanically forced, not coincidental. A maker rung resting **below**
-the touch can only fill when the price comes **down** to it. So on this policy:
+This is mechanically forced in the 29, not coincidental. A maker rung resting
+**below** the touch can only fill when the price comes **down** to it. So on
+this policy:
 
 ```
 EXTEND == "this leg is falling" == "this leg is losing"
@@ -314,6 +325,14 @@ forfeited a third to a half of its ledger while holding a residual it had
 decided to complete. The binding constraint is a planner that does not
 re-price a resting order.
 
+> **P2 found the cause.** `ws_continuous.WorkingOrders.reconcile` re-stamps
+> `resting_since` to `now` on every cycle, because it reads that key off a
+> VENUE row that never carries it. The computed age of an order that truly
+> rested 473s was 0.15-0.56s at every cycle, so the 30s rest floor became an
+> INFINITE floor and no resting order could ever be replaced for price
+> movement. One line, in a bundle member, not yet fixed. See
+> `P2_REPLAY_OVERLAYS.md` section 1.
+
 ### Finding 4d — only after 4c is fixed does the budget bind
 
 Once the complement does chase the touch, the touch moves nearly every cycle
@@ -386,8 +405,8 @@ tested here turns these eleven markets positive.
    windows, both assets and both horizons. Below ~$0.50 it is heavily
    negative; above ~$0.65 it is positive.
 2. Applied blind to COHORT-2 it predicts -$6.40 of the observed -$8.00.
-3. The maker-rung EXTEND ladder can only fill on a falling leg, so it lands in
-   the worst bucket by construction.
+3. The maker-rung EXTEND ladder can only fill on a falling leg (29 of 32
+   confirmed EXTENDs), so it lands in the worst bucket by construction.
 4. `pair <= 0.96` completes nothing once a residual exists (11/11 windows).
 5. All eleven windows ended unmatched.
 6. The complement order rested in 430 of 433 post-onset cycles at a median 30
