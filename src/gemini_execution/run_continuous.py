@@ -416,7 +416,16 @@ class DecisionObserver:
     """
 
     def __init__(self, depth_fn: Optional[Callable[[], Any]] = None,
-                 flow_fn: Optional[Callable[[], Any]] = None) -> None:
+                 flow_fn: Optional[Callable[[], Any]] = None,
+                 sink: Optional[Callable[[str, Mapping[str, Any]], None]]
+                 = None) -> None:
+        #: OPTIONAL durable status sink, called AFTER a row is complete and
+        #: wrapped like every other accessor. It cannot sit between a
+        #: decision and its order: the decision has already been made and the
+        #: mutation has already returned by the time it is called. A sink
+        #: that raises is recorded in `errors` and never propagated, because
+        #: a recorder that can stop a live window is worse than no recorder.
+        self.sink = sink
         self.cycles: List[Dict[str, Any]] = []
         self.reads: List[Dict[str, Any]] = []
         self.mutations: List[Dict[str, Any]] = []
@@ -607,6 +616,7 @@ class DecisionObserver:
         except Exception as exc:                               # noqa: BLE001
             row["record_error"] = "%s: %s" % (type(exc).__name__, exc)
         self.cycles.append(row)
+        self._emit("cycle", row)
 
     def _record_mutation(self, kind: str, driver: Any, target: Any,
                          at_call: Dict[str, Any], result: Any,
@@ -634,6 +644,22 @@ class DecisionObserver:
         except Exception as exc:                               # noqa: BLE001
             row["record_error"] = "%s: %s" % (type(exc).__name__, exc)
         self.mutations.append(row)
+        self._emit("mutation", row)
+
+    def _emit(self, kind: str, row: Mapping[str, Any]) -> None:
+        """Hand a COMPLETED row to the durable status sink, if there is one.
+
+        Wrapped: a sink that raises is recorded and swallowed. The row is
+        already in `self.cycles`/`self.mutations` before this runs, so the
+        window report is identical whether a sink is installed or not.
+        """
+        if self.sink is None:
+            return
+        try:
+            self.sink(kind, row)
+        except Exception as exc:                               # noqa: BLE001
+            self.errors.append("sink(%s): %s: %s"
+                               % (kind, type(exc).__name__, exc))
 
     def _at_call(self, driver: Any) -> Dict[str, Any]:
         """THE STATE IN FORCE AT THE MUTATION -- not at the decision.
@@ -1280,6 +1306,7 @@ async def run_one_window(rep: Dict[str, Any], auth_id: str, symbol: str, *,
                          readiness: bool = False,
                          probe_spec: Any = None,
                          latch_held_by: Optional[Mapping[str, Any]] = None,
+                         status_sink: Optional[Callable] = None,
                          ) -> Dict[str, Any]:
     """ONE contract, from preflight to settlement read. The verified body.
 
@@ -1642,7 +1669,13 @@ async def run_one_window(rep: Dict[str, Any], auth_id: str, symbol: str, *,
     # observer cannot be pointed at another contract by accident.
     decisions = DecisionObserver(
         depth_fn=lambda: MD.contract_depth(symbol),
-        flow_fn=lambda: HB.public_flow(symbol))
+        flow_fn=lambda: HB.public_flow(symbol),
+        # OBSERVABILITY ONLY, and only ever downstream of a completed row.
+        # It makes no venue read, so it costs no maker resting time, and a
+        # sink that raises is swallowed by the observer.
+        sink=status_sink)
+    rep["status_sink"] = ("installed" if status_sink is not None
+                          else "none configured")
     rep["decisions"] = decisions.cycles
     rep["authoritative_reads"] = decisions.reads
     rep["mutations_observed"] = decisions.mutations

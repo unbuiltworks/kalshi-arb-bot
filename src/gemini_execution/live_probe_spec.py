@@ -287,6 +287,44 @@ BTC15M_Q1_CAP4_W60_880 = _declare(LiveProbeSpec(
     quote_band=(60.0, 880.0),
 ))
 
+#: COHORT-2: the SAME EXPERIMENT, twenty consecutive contracts.
+#:
+#: BEHAVIOURALLY IDENTICAL TO COHORT-1, and provably so field by field.
+#: Every hashed field below is copied from BTC15M_Q1_CAP4_W60_880 -- family,
+#: symbol_family, envelope, envelope_id, entry_tte_band, quote_band,
+#: action_size, ledger, cohort and the whole bounds dict.
+#:
+#: ITS spec_sha NEVERTHELESS DIFFERS, and saying otherwise would be a lie
+#: worth catching: `spec_id` is deliberately inside `invocation_fingerprint`,
+#: so two DECLARED specs never share an identity even when they would behave
+#: the same. That is the design working. The claim to check is therefore not
+#: "the hash is unchanged" but "every hashed field except the id is", which
+#: `test_cohort2_is_cohort1_with_a_different_ledger_chain` asserts as a dict
+#: comparison rather than by reading these comments.
+#:
+#: `live_cohort` is outside spec_sha for its own reason, unchanged here:
+#: granting a budget is cohort metadata, not a change of experiment.
+#:
+#: NOT CHANGED, and the point of the run is that none of it changes: q=1, the
+#: CAP-4 envelope, $4 committed/residual per market, two working orders, one
+#: desired rung per outcome, maker/post-only, the 30s rest floor, TTE
+#: [60, 880], the frozen L5 controller, pricing, rung count, aggressiveness,
+#: authoritative reconciliation and the bounded UNREADABLE hold.
+BTC15M_Q1_CAP4_W60_880_C2 = _declare(LiveProbeSpec(
+    spec_id="btc15m_q1_cap4_w60_880_c2",
+    family="btc15m",
+    envelope="live_q1_btc15m_cap4",
+    entry_tte_band="840:880",
+    cohort=None,
+    auth_id=SENTINEL_AUTH,
+    action_size="1",
+    #: the HEAD of a TWENTY ledger chain, W01..W20, 12 action attempts each
+    #: and 240 in total. One whole ledger per bound contract; whatever a
+    #: contract does not spend expires with it.
+    live_cohort="COHORT-2026-09-22-BTC15M-COHORT2-W01",
+    quote_band=(60.0, 880.0),
+))
+
 #: the BTC5m probe, declared so the shape is not BTC15m-only
 BTC5M_Q1 = _declare(LiveProbeSpec(
     spec_id="btc5m_q1", family="btc5m", envelope="live_q1",

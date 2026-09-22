@@ -272,7 +272,7 @@ def test_three_consecutive_contracts_run_in_one_process(tmp_path):
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
     async def _window(plan, symbol, *, readiness, latch_held_by,
-                      cohort_id=None):
+                      cohort_id=None, status=None):
         seen.append(symbol)
         return {"state": "STOPPED_FLAT_ORDERS",
                 "window": {"symbol": symbol, "inventory":
@@ -410,7 +410,7 @@ def test_a_refused_rollover_stops_the_cohort_rather_than_skipping(tmp_path):
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
     async def _window(plan, symbol, *, readiness, latch_held_by,
-                      cohort_id=None):
+                      cohort_id=None, status=None):
         seen.append(symbol)
         return {"state": "STOPPED_FLAT_ORDERS",
                 "window": {"inventory": {"total_spend_usd": "0",
@@ -511,7 +511,7 @@ def test_the_aggregate_loss_cap_stops_the_cohort(tmp_path):
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
     async def _window(plan, symbol, *, readiness, latch_held_by,
-                      cohort_id=None):
+                      cohort_id=None, status=None):
         seen.append(symbol)
         # 2.50 out and ONE winning contract back: a settlement-inclusive
         # loss of 1.50, not the 2.50 of turnover the old measure counted.
@@ -691,7 +691,7 @@ def test_the_aggregate_stop_reads_the_settlement_inclusive_number(tmp_path):
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
     async def _window(plan, symbol, *, readiness, latch_held_by,
-                      cohort_id=None):
+                      cohort_id=None, status=None):
         seen.append(symbol)
         # 2.52 out, 3 winning YES back: the OLD measure called this 2.52 of
         # loss and would have stopped the cohort on the second window.
@@ -971,7 +971,7 @@ def test_an_already_spent_window_ledger_is_skipped_not_re_entered(tmp_path):
         return {"found": True, "symbol": BTC15M, "tte_s": 870.0}
 
     async def _window(plan, symbol, *, readiness, latch_held_by,
-                      cohort_id=None):
+                      cohort_id=None, status=None):
         bound.append(cohort_id)
         # A REAL WINDOW SPENDS ITS LEDGER, so the stub does too -- otherwise
         # `first unspent` would correctly hand back the same ledger forever
@@ -1305,7 +1305,23 @@ def test_cohort1_carries_its_observed_facts_without_inventing_details():
     # and the cohort's own counters only ever move FORWARD from that entry
     assert st["windows_observed"] >= 2
     assert st["windows_traded"] >= 2
-    assert D(st["aggregate_loss_usd"]) >= D("3.77")
+
+    # THE 3.77 IS PROVENANCE, NOT LOSS. It was produced by the broken
+    # gross-outflow metric, its settlement was never observed, and its true
+    # economic P&L is UNKNOWN. It is preserved above and excluded below --
+    # carrying it into the cap would be counting turnover as loss twice over.
+    unrec = st["unrecoverable"]
+    assert [u["gross_fill_spend_usd"] for u in unrec] == ["3.77"]
+    assert all(u["economic_loss_usd"] is None for u in unrec)
+    assert all(u["settlement_implied_net_usd"] is None for u in unrec)
+    assert st["economics"]["windows_unrecoverable"] == len(unrec)
+    assert D(st["aggregate_loss_usd"]) == D(
+        st["economics"]["cumulative_economic_loss_usd"])
+    assert D(st["aggregate_loss_usd"]) < D("3.77"), (
+        "the unrecoverable gross outflow is not carried forward as loss")
+    assert st["economics"]["realized_net_usd"] is None
+    assert st["accounting_correction"]["old_aggregate_loss_usd"] == "10.63"
+    assert st["accounting_correction"]["unrecoverable_excluded_usd"] == "3.77"
 
 
 def test_cohort1_never_re_enters_a_spent_ledger_and_cannot_exceed_its_grant():
@@ -1437,7 +1453,7 @@ def test_every_bound_market_records_which_ledger_it_was_given(tmp_path):
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
     async def _window(plan, symbol, *, readiness, latch_held_by,
-                      cohort_id=None):
+                      cohort_id=None, status=None):
         order.append((symbol, cohort_id))
         _spend(root, cohort_id, 4)               # this market used 4 of 12
         return {"state": "STOPPED_FLAT_ORDERS",
@@ -1492,3 +1508,397 @@ def test_cleanup_cancellation_survives_a_fully_spent_strategy_budget():
     assert d.budget_left() == 0, "12/12: the strategy budget is exhausted"
     assert WC.MAX_CLEANUP_MUTATIONS > d.budget_left(), (
         "cleanup must not be drawn from a budget that is already spent")
+
+
+# ============ THROUGH THE PRODUCTION CALL PATH, not helper construction
+
+def _cli_cohort(tmp_path, monkeypatch, *, windows, spend, ledger_rows,
+                resolutions, max_loss="10.00", max_drawdown="0",
+                n_ledgers=None):
+    """Drive main() for real, faking ONLY the venue.
+
+    Everything between the command line and the venue is the production
+    object: main() parses, discover_chain() resolves, CohortPlan is built the
+    way main() builds it, run_cohort() binds ledgers, spends the budget on
+    disk, prices each window through cohort_economics, writes the live status
+    and the report, and returns the exit code the workflow sees.
+
+    WHY THIS SHAPE. Every previous test constructed a CohortPlan itself, and
+    that is precisely why none of them caught the CLI dropping `cohort_ids`.
+    A test that builds the object cannot see a caller that forgets to.
+    """
+    import dataclasses
+    root, ids = _chain(tmp_path, n_ledgers or (windows + 2),
+                       prefix="COHORT-INT-W")
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880, live_cohort=ids[0])
+    monkeypatch.setitem(SPEC.SPECS, spec.spec_id, spec)
+
+    symbols = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    bound = []
+
+    async def _discover(s, exclude=()):
+        left = [x for x in symbols if x not in set(exclude)]
+        if not left:
+            return {"found": False, "why": "no further contract"}
+        return {"found": True, "symbol": left[0], "tte_s": 870.0}
+
+    async def _one_window(rep, auth_id, symbol, *, ledger_path, **k):
+        bound.append((symbol, k.get("cohort_id")))
+        # spend slots on the REAL ledger the runner bound, as the driver does
+        with open(ledger_path, "a", encoding="utf-8") as fh:
+            for i in range(ledger_rows):
+                fh.write(json.dumps({"kind": "PLACE", "slot": i,
+                                     "outcome": "ACKED"}) + "\n")
+        y, n = spend[symbol]["yes"], spend[symbol]["no"]
+        rep.update({"state": "STOPPED_FLAT_ORDERS",
+                    "window": {"symbol": symbol,
+                               "inventory": {
+                                   "total_spend_usd": spend[symbol]["usd"],
+                                   "yes_qty": y, "no_qty": n,
+                                   "n_fills": y + n},
+                               "orders_live_after_stop": 0,
+                               "stop_why": "end of quoting interval"}})
+        return rep
+
+    async def _res(symbol):
+        return resolutions.get(symbol) or {}
+
+    async def _gate(symbol, **k):
+        return {"ok": True, "verdict": "CLEAR"}
+
+    monkeypatch.setattr(CR.RC, "run_one_window", _one_window)
+    monkeypatch.setattr(CR, "await_contract", _discover)
+    monkeypatch.setattr(CR, "rollover_gate", _gate)
+    monkeypatch.setattr(CR, "resolution_for", _res)
+    monkeypatch.setattr(CR, "static_readiness", _READY)
+
+    out = tmp_path / "run.json"
+    code = CR.main(["--auth-id", "OWNER-TEST", "--spec", spec.spec_id,
+                    "--max-windows", str(windows), "--max-loss-usd", max_loss,
+                    "--max-drawdown-usd", max_drawdown,
+                    "--root", root, "--readiness",
+                    "--state-dir", str(tmp_path / "latch"),
+                    "--out-dir", str(tmp_path / "out"), "--out", str(out)])
+    return {"code": code, "root": root, "ids": ids, "bound": bound,
+            "report": json.loads(out.read_text()), "out_dir": tmp_path / "out"}
+
+
+def test_CLI_every_market_gets_its_own_whole_12_slot_ledger(tmp_path,
+                                                            monkeypatch):
+    """THE FIX, THROUGH main(). Each window spends 4 of its 12; the next
+    market must still start at 0/12 rather than inherit the remaining 8."""
+    sy = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    got = _cli_cohort(
+        tmp_path, monkeypatch, windows=3, ledger_rows=4,
+        spend={s: {"usd": "0.80", "yes": 1, "no": 1} for s in sy},
+        resolutions={})
+
+    assert [c for _, c in got["bound"]] == list(got["ids"][:3]), (
+        "three markets, three DIFFERENT fresh ledgers")
+    for cid in got["ids"][:3]:
+        st = CO.state(cid, root=got["root"])
+        assert (st["budget"], st["consumed"]) == (12, 4), cid
+    # the remaining 8 of each are FORFEIT, not available to anyone
+    b = got["report"]["action_budget"]
+    assert b["fresh_ledgers"] == len(got["ids"]) - 2
+    assert b["bindable_slots"] == 12 * b["fresh_ledgers"]
+
+    for w in got["report"]["cohort_state"]["windows"]:
+        lb = w["ledger_binding"]
+        assert (lb["granted"], lb["consumed"], lb["forfeited"]) == (12, 4, 8)
+        assert lb["symbol"] == w["symbol"]
+
+
+@pytest.mark.parametrize("rows", [0, 4, 8, 12])
+def test_CLI_rollover_always_hands_the_next_market_12_of_12(tmp_path,
+                                                            monkeypatch, rows):
+    sy = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    got = _cli_cohort(
+        tmp_path, monkeypatch, windows=2, ledger_rows=rows,
+        spend={s: {"usd": "0.00", "yes": 0, "no": 0} for s in sy},
+        resolutions={})
+
+    first, second = got["bound"][0][1], got["bound"][1][1]
+    if rows == 0:
+        assert first == second, "an UNTOUCHED ledger is not forfeit"
+    else:
+        assert first != second, "%d/12 spent: the rest die with that market" % rows
+        # and what the second market was handed was WHOLE at the moment of
+        # binding: its window record says granted 12, consumed `rows`
+        lb = got["report"]["cohort_state"]["windows"][1]["ledger_binding"]
+        assert lb["granted"] == 12 and lb["consumed"] == rows
+
+
+def test_CLI_a_profitable_cohort_is_not_stopped_by_its_own_turnover(
+        tmp_path, monkeypatch):
+    """EP016, THROUGH main(). The four recorded windows spent 6.86 gross and
+    were paid 8.00. The old measure called that 6.86 of loss and would have
+    stopped at a 3.00 cap; the corrected one is -1.14 of economic loss."""
+    sy = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    obs = {sy[0]: ("2.52", 3, 4, "yes"), sy[1]: ("0.71", 2, 0, "yes"),
+           sy[2]: ("2.40", 4, 2, "no"),  sy[3]: ("1.23", 2, 1, "no")}
+    got = _cli_cohort(
+        tmp_path, monkeypatch, windows=4, ledger_rows=6, max_loss="3.00",
+        spend={s: {"usd": u, "yes": y, "no": n} for s, (u, y, n, _) in obs.items()},
+        resolutions={s: {"status": "settled", "resolutionSide": side}
+                     for s, (_, _, _, side) in obs.items()})
+
+    assert len(got["bound"]) == 4, "a 3.00 cap must not stop a +1.14 cohort"
+    assert got["report"]["state"] == "STOPPED_WINDOWS_EXHAUSTED"
+    assert got["code"] == 0, "an authorized stop exits 0 so evidence commits"
+
+    econ = got["report"]["cohort_state"]["economics"]
+    assert econ["gross_fill_spend_usd"] == "6.86"
+    assert econ["settlement_payout_usd"] == "8"
+    assert econ["settlement_implied_net_usd"] == "1.14"
+    assert econ["cumulative_economic_loss_usd"] == "-1.14"
+    assert econ["realized_net_usd"] is None
+    assert got["report"]["cohort_state"]["aggregate_loss_usd"] == "-1.14"
+
+
+def test_CLI_a_genuinely_losing_cohort_still_stops_on_the_economic_cap(
+        tmp_path, monkeypatch):
+    """The cap must still bite. 2.50 out, 1 winning contract back = 1.50 of
+    real economic loss per window; two of those reach a 3.00 cap."""
+    sy = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    got = _cli_cohort(
+        tmp_path, monkeypatch, windows=4, ledger_rows=6, max_loss="3.00",
+        spend={s: {"usd": "2.50", "yes": 0, "no": 1} for s in sy},
+        resolutions={s: {"status": "settled", "resolutionSide": "no"}
+                     for s in sy})
+    assert len(got["bound"]) == 2
+    assert got["report"]["state"] == "STOPPED_AGGREGATE_LOSS"
+    assert got["code"] == 0
+    assert "gross turnover" in got["report"]["why"]
+    assert got["report"]["cohort_state"]["economics"][
+        "cumulative_economic_loss_usd"] == "3"
+
+
+def test_CLI_an_unresolved_market_never_contributes_to_the_cap(tmp_path,
+                                                               monkeypatch):
+    """Turnover far past the cap, no resolution: the cohort runs its windows.
+    Unresolved risk is bounded by the per-market gates, not by a guess."""
+    sy = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    got = _cli_cohort(
+        tmp_path, monkeypatch, windows=3, ledger_rows=6, max_loss="1.00",
+        spend={s: {"usd": "3.90", "yes": 4, "no": 4} for s in sy},
+        resolutions={s: {"status": "active", "resolutionSide": None}
+                     for s in sy})
+    assert len(got["bound"]) == 3
+    econ = got["report"]["cohort_state"]["economics"]
+    assert econ["gross_fill_spend_usd"] == "11.7"
+    assert econ["windows_pending_settlement"] == 3
+    assert econ["cumulative_economic_loss_usd"] == "0"
+
+
+def test_CLI_the_report_and_live_status_survive_a_runner_that_explodes(
+        tmp_path, monkeypatch):
+    """Evidence preservation is unconditional on EVERY exit path."""
+    import dataclasses
+    root, ids = _chain(tmp_path, 3, prefix="COHORT-BOOM-W")
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880, live_cohort=ids[0])
+    monkeypatch.setitem(SPEC.SPECS, spec.spec_id, spec)
+
+    async def _boom(*a, **k):
+        raise RuntimeError("the runner died mid-cohort")
+
+    monkeypatch.setattr(CR, "run_cohort", _boom)
+    out = tmp_path / "run.json"
+    with pytest.raises(RuntimeError):
+        CR.main(["--auth-id", "OWNER-TEST", "--spec", spec.spec_id,
+                 "--max-windows", "3", "--max-loss-usd", "10.00",
+                 "--root", root, "--readiness", "--out", str(out),
+                 "--out-dir", str(tmp_path / "out")])
+    rep = json.loads(out.read_text())
+    assert rep["state"] == "STOPPED_RUNNER_ERROR"
+    assert "the runner died mid-cohort" in rep["runner_error"]
+    assert rep["plan"]["cohort_ids"] == list(ids)
+
+
+# ============ the second bound: peak-to-trough drawdown
+
+def test_the_drawdown_measure_sees_what_cumulative_loss_cannot():
+    """A cohort that made 2.00 and gave back 2.00 reads ZERO cumulative loss
+    while its recent behaviour is as bad as it has ever been."""
+    def _w(spend, yes, no, side):
+        return CR.window_loss_usd(_win(spend, yes=yes, no=no),
+                                  {"status": "settled",
+                                   "resolutionSide": side})
+    rows = [_w("1.00", 2, 0, "yes"),     # +1.00
+            _w("1.00", 2, 0, "yes"),     # +1.00, equity 2.00 (the peak)
+            _w("1.00", 0, 0, "yes"),     # -1.00, equity 1.00
+            _w("1.00", 0, 0, "yes")]     # -1.00, equity 0.00
+    roll = CE.cohort_economics(rows)
+    assert roll["cumulative_economic_loss_usd"] == "0", "blind to the bleed"
+    assert roll["equity_peak_usd"] == "2"
+    assert roll["max_drawdown_usd"] == "2", "and this is not"
+    assert [c["equity_usd"] for c in roll["equity_curve"]] == \
+        ["1", "2", "1", "0"]
+
+
+def test_drawdown_is_never_negative_and_ignores_unsettled_turnover():
+    rows = [CR.window_loss_usd(_win("0.40", yes=2),
+                               {"status": "settled",
+                                "resolutionSide": "yes"}),
+            CR.window_loss_usd(_win("3.90", yes=4, no=4))]   # PENDING
+    roll = CE.cohort_economics(rows)
+    assert roll["max_drawdown_usd"] == "0", "a cohort at a new high"
+    assert roll["gross_fill_spend_usd"] == "4.3"
+    assert roll["equity_curve"][-1]["equity_usd"] == "1.6"
+    assert len(roll["equity_curve"]) == 1, "SETTLED windows only"
+
+
+def test_CLI_the_drawdown_stop_fires_before_the_cumulative_one(tmp_path,
+                                                               monkeypatch):
+    """Two winners then two losers: cumulative loss never reaches its cap and
+    the drawdown does. Through main(), on the production call path."""
+    sy = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    obs = {sy[0]: ("0.10", 1, 0, "yes"),   # +0.90
+           sy[1]: ("0.10", 1, 0, "yes"),   # +0.90, equity 1.80 (peak)
+           sy[2]: ("1.00", 0, 0, "yes"),   # -1.00, equity 0.80, dd 1.00
+           sy[3]: ("1.00", 0, 0, "yes")}   # never reached
+    got = _cli_cohort(
+        tmp_path, monkeypatch, windows=4, ledger_rows=6, max_loss="99.00",
+        max_drawdown="1.00",
+        spend={s: {"usd": u, "yes": y, "no": n}
+               for s, (u, y, n, _) in obs.items()},
+        resolutions={s: {"status": "settled", "resolutionSide": side}
+                     for s, (_, _, _, side) in obs.items()})
+
+    assert len(got["bound"]) == 3, "stopped BEFORE binding a fourth market"
+    assert got["report"]["state"] == "STOPPED_DRAWDOWN"
+    assert got["code"] == 0, "an authorized stop exits 0 so evidence commits"
+    assert "not a turnover measure" in got["report"]["why"]
+    econ = got["report"]["cohort_state"]["economics"]
+    assert econ["max_drawdown_usd"] == "1"
+    assert econ["equity_peak_usd"] == "1.8"
+    assert D(econ["cumulative_economic_loss_usd"]) < D("99.00")
+
+
+def test_a_zero_drawdown_cap_disables_the_stop_entirely(tmp_path,
+                                                        monkeypatch):
+    """Additive: every cohort so far ran with no drawdown bound at all."""
+    sy = ["GEMI-BTC15M26092223%02d-UP" % (n * 15) for n in range(4)]
+    got = _cli_cohort(
+        tmp_path, monkeypatch, windows=3, ledger_rows=6, max_loss="99.00",
+        spend={s: {"usd": "1.00", "yes": 0, "no": 0} for s in sy},
+        resolutions={s: {"status": "settled", "resolutionSide": "yes"}
+                     for s in sy})
+    assert len(got["bound"]) == 3
+    assert got["report"]["state"] == "STOPPED_WINDOWS_EXHAUSTED"
+    assert got["report"]["plan"]["max_drawdown_usd"] == "0"
+
+
+# ============ COHORT-2: the same experiment, twenty contracts
+
+C2 = "COHORT-2026-09-22-BTC15M-COHORT2-W01"
+
+
+def test_cohort2_is_cohort1_with_a_different_ledger_chain():
+    """The claim is NOT "the hash is unchanged" -- `spec_id` is deliberately
+    inside the fingerprint, so two declared specs never share an identity.
+    The claim is that every OTHER hashed field is identical, which is what
+    makes this the same experiment rather than a new one."""
+    a, b = SPEC.BTC15M_Q1_CAP4_W60_880, SPEC.BTC15M_Q1_CAP4_W60_880_C2
+    fa = {k: v for k, v in a.invocation_fingerprint().items()
+          if k != "spec_id"}
+    fb = {k: v for k, v in b.invocation_fingerprint().items()
+          if k != "spec_id"}
+    assert fa == fb, "COHORT-2 is not the same experiment"
+    assert a.spec_sha() != b.spec_sha(), "distinct ids, distinct identities"
+    assert b.envelope_obj.sha() == a.envelope_obj.sha()
+    assert b.quote_band == (60.0, 880.0)
+    assert str(b.envelope_obj.action_size) == "1"
+    assert b.budget_cohort == C2
+    assert b.live_cohort not in b.invocation_fingerprint().values(), (
+        "granting a budget must not move the experiment's identity")
+
+
+def test_the_frozen_bounds_are_byte_identical_across_the_two_cohorts():
+    a = SPEC.BTC15M_Q1_CAP4_W60_880.envelope_obj
+    b = SPEC.BTC15M_Q1_CAP4_W60_880_C2.envelope_obj
+    assert a is b or a.as_dict() == b.as_dict()
+    assert str(b.action_size) == "1"
+    assert int(b.max_working_orders) == 2
+    assert int(b.max_actions) == 12
+    assert int(b.max_concurrent_markets) == 1
+    assert (D(b.max_committed_usd), D(b.max_residual_usd)) == (D("4"), D("4"))
+    assert (D(b.max_yes), D(b.max_no)) == (D("4"), D("4"))
+    assert int(b.max_same_side_run) == 4
+
+
+def test_the_cohort2_chain_is_twenty_whole_untouched_ledgers():
+    """On the REAL tree, because a chain that exists only in a tmp_path is
+    the exact thing that let COHORT-1 dispatch against one ledger."""
+    spec = SPEC.BTC15M_Q1_CAP4_W60_880_C2
+    ids = CR.discover_chain(spec)
+    assert len(ids) == 20, ids
+    assert ids[0] == C2 and ids[-1].endswith("W20")
+    plan = CR.CohortPlan(auth_id="PROPOSED", spec=spec, max_windows=20,
+                         max_aggregate_loss_usd="8.00",
+                         max_drawdown_usd="5.00", cohort_ids=ids)
+    b = plan.action_budget()
+    assert b["total_budget"] == 240 and b["per_window"] == 12
+    assert b["fresh_ledgers"] == 20 and b["bindable_slots"] == 240
+    assert b["all_readable"] and b["all_intact"]
+    assert plan.ledger_for(0) == C2
+    # and it cannot silently reach past its grant
+    assert 12 * len(ids) == 240
+    assert plan.as_dict()["max_cohort_actions"] == 240
+
+
+def test_the_cohort2_chain_shares_one_pre_cohort_ancestor():
+    """A LINKED list would read window 1 legitimately spending its budget as
+    tampering on window 2 and stop the cohort at its second contract."""
+    ids = CR.discover_chain(SPEC.BTC15M_Q1_CAP4_W60_880_C2)
+    preds = {CO.state(c)["predecessor"]["predecessor_ledger"] for c in ids}
+    assert len(preds) == 1, preds
+    assert C2 not in preds.pop(), "a ledger in this chain is its own ancestor"
+
+
+# ============ maker-vs-taker, verified per fill
+
+def test_every_fill_is_checked_against_the_venues_own_maker_flag():
+    evs = [{"X": "FILLED", "m": True, "c": "a"},
+           {"X": "PARTIALLY_FILLED", "m": True, "c": "b"},
+           {"X": "NEW", "m": False, "c": "c"}]
+    p = CE.fill_provenance(evs)
+    assert (p["fills"], p["maker"], p["taker"], p["unknown"]) == (2, 2, 0, 0)
+    assert p["all_maker"] is True
+    assert p["taker_client_order_ids"] == []
+
+
+def test_a_taker_fill_is_named_rather_than_averaged_away():
+    """A taker fill under a maker-only envelope is a BOUND VIOLATION."""
+    p = CE.fill_provenance([{"X": "FILLED", "m": True, "c": "ok"},
+                            {"X": "FILLED", "m": False, "c": "BAD"}])
+    assert p["all_maker"] is False
+    assert p["taker"] == 1 and p["taker_client_order_ids"] == ["BAD"]
+
+
+def test_a_fill_with_no_maker_flag_is_UNKNOWN_and_never_counted_as_maker():
+    p = CE.fill_provenance([{"X": "FILLED", "c": "a"}])
+    assert (p["maker"], p["taker"], p["unknown"]) == (0, 0, 1)
+    assert p["all_maker"] is False, "absent is unknown, never maker"
+    assert "never counted as maker" in p["note"]
+
+
+def test_no_fills_is_not_all_maker():
+    p = CE.fill_provenance([])
+    assert p["fills"] == 0 and p["all_maker"] is False, (
+        "a vacuous truth here would read as a verified property")
+
+
+def test_the_four_recorded_EP016_windows_were_all_maker():
+    """From the preserved artifacts, on the real tree."""
+    import glob
+    files = sorted(glob.glob("analysis/gemini/cohort_window_*.json"))
+    assert len(files) == 4, files
+    total = 0
+    for f in files:
+        rep = json.loads(open(f).read())
+        p = CE.fill_provenance((rep.get("window") or {}).get("order_events"))
+        assert p["all_maker"], (f, p)
+        assert p["taker"] == 0 and p["unknown"] == 0
+        total += p["fills"]
+    assert total == 18, total

@@ -1149,3 +1149,54 @@ def test_the_cohort_step_writes_its_report_outside_the_pipe():
     step = _step("PERSISTENT BTC15m cohort")
     assert "--out analysis/gemini/cohort_run_" in step
     assert "set -o pipefail" in step
+
+
+# ============ COHORT-2: twenty windows, two settlement-inclusive stops
+
+def test_the_cohort_step_runs_the_declared_cohort2_spec_and_its_hash():
+    from src.gemini_execution import live_probe_spec as SPEC
+    step = _step("PERSISTENT BTC15m cohort")
+    spec = SPEC.BTC15M_Q1_CAP4_W60_880_C2
+    assert "COHORT_SPEC: %s" % spec.spec_id in step
+    assert 'COHORT_SPEC_SHA: "%s"' % spec.spec_sha() in step
+    # the hash is CHECKED, not merely carried: a tree whose spec drifted
+    # from the reviewed one must refuse before the latch
+    assert '--expect-spec-sha   "${COHORT_SPEC_SHA}"' in step
+
+
+def test_the_cohort_step_carries_the_twenty_window_envelope():
+    step = _step("PERSISTENT BTC15m cohort")
+    assert "--max-windows       20" in step
+    assert "--max-loss-usd      8.00" in step
+    assert "--max-drawdown-usd  5.00" in step
+    assert "up to 20 contracts" in step
+
+
+def test_the_cohort_step_declares_no_per_market_bound_of_its_own():
+    """Every money bound lives in the envelope and the driver. A step that
+    passed q, a price or a rung count would be a second source of truth."""
+    step = _step("PERSISTENT BTC15m cohort")
+    for forbidden in ("--action-size", "--q ", "--max-residual", "--tte",
+                      "--band", "--rungs", "--price", "--taker",
+                      "--midpoint", "--improve"):
+        assert forbidden not in step, forbidden
+
+
+def test_the_cohort_step_is_disarmed_until_the_owner_grants_cohort2():
+    step = _step("PERSISTENT BTC15m cohort")
+    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in step
+    assert "COHORT-1" in step, "the spent grant is named, not silently reused"
+
+
+def test_the_live_status_is_in_BOTH_the_add_list_and_the_allow_list():
+    """The artifact that exists WHILE the cohort runs is also the only one
+    that survives a runner killed between windows."""
+    wf = WF.read_text()
+    add = wf[wf.index("for f in analysis/gemini/settlement_gate_"):]
+    add = add[:add.index("do\n")]
+    assert "analysis/gemini/cohort_live_status.json \\" in add
+    assert "analysis/gemini/cohort_live_status.json.jsonl \\" in add
+    allow = re.search(r"grep -qvE '(?P<re>[^']+)'", wf).group("re")
+    for path in ("analysis/gemini/cohort_live_status.json",
+                 "analysis/gemini/cohort_live_status.json.jsonl"):
+        assert re.match(allow, path), path

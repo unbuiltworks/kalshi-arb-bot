@@ -97,6 +97,33 @@ def fee_provenance(events: Optional[Sequence[Mapping[str, Any]]]
                      "COUNTED here: absent is unknown, never zero")}
 
 
+def fill_provenance(events: Optional[Sequence[Mapping[str, Any]]]
+                    ) -> Dict[str, Any]:
+    """MAKER-VS-TAKER, VERIFIED PER FILL from the venue's own `m` flag.
+
+    Not inferred from post-only having been requested: a request is what we
+    sent, and `m` is what the venue says happened. The distinction is the
+    whole bound -- a taker fill under a maker-only envelope is a violation,
+    not a rounding difference -- so an execution whose `m` is ABSENT is
+    counted as UNKNOWN and never quietly folded into the maker count.
+    """
+    fills = [e for e in (events or [])
+             if str(e.get("X") or "").upper() in ("FILLED",
+                                                  "PARTIALLY_FILLED")]
+    maker = [e for e in fills if e.get("m") is True]
+    taker = [e for e in fills if e.get("m") is False]
+    unknown = [e for e in fills if e.get("m") is None]
+    return {
+        "fills": len(fills), "maker": len(maker), "taker": len(taker),
+        "unknown": len(unknown),
+        "all_maker": bool(fills) and len(maker) == len(fills),
+        "taker_client_order_ids": [str(e.get("c")) for e in taker],
+        "source": "the venue's own orderUpdate `m` flag",
+        "note": ("VERIFIED, not assumed from post-only. An execution with no "
+                 "`m` is UNKNOWN and is never counted as maker."),
+    }
+
+
 def window_economics(rep: Mapping[str, Any],
                      resolution: Optional[Mapping[str, Any]] = None,
                      rebates_usd: Any = None,
@@ -138,6 +165,7 @@ def window_economics(rep: Mapping[str, Any],
              ).get("committed_usd"))) if win.get("refreshes") else "0",
         "fees_usd": _fmt(fees),
         "fee_provenance": prov,
+        "fill_provenance": fill_provenance(events),
         "rebates_usd": (None if rebates_usd is None else _fmt(rebates_usd)),
         "rebates_note": ("CREDITED rebates only. None read back means None, "
                          "not zero: an assumed rebate is exactly the kind of "
@@ -194,6 +222,22 @@ def cohort_economics(windows: Sequence[Mapping[str, Any]]
     stop may read, and it sums SETTLED windows only.
     """
     settled = [w for w in windows if w.get("state") == SETTLED]
+    # PEAK-TO-TROUGH, IN SETTLEMENT ORDER. Cumulative loss alone cannot see a
+    # cohort that made 4.00 and then gave back 4.00: it reads zero throughout
+    # while the strategy's recent behaviour is as bad as it has ever been.
+    # The equity curve here is settlement-implied and SETTLED-only, exactly
+    # like the cumulative figure, so neither measure can be moved by turnover
+    # or by an unresolved market.
+    equity, peak, dd = D("0"), D("0"), D("0")
+    curve = []
+    for w in settled:
+        equity += _d(w.get("settlement_implied_net_usd"))
+        peak = max(peak, equity)
+        dd = max(dd, peak - equity)
+        curve.append({"symbol": w.get("symbol"),
+                      "net_usd": _fmt(w.get("settlement_implied_net_usd")),
+                      "equity_usd": _fmt(equity),
+                      "drawdown_usd": _fmt(peak - equity)})
     pending = [w for w in windows if w.get("state") == PENDING]
     unrec = [w for w in windows if w.get("state") == UNRECOVERABLE]
 
@@ -215,10 +259,17 @@ def cohort_economics(windows: Sequence[Mapping[str, Any]]
             (_d(w.get("settlement_implied_net_usd")) for w in settled),
             D("0"))),
         "cumulative_economic_loss_usd": _fmt(loss),
+        # THE SECOND BOUND. Peak-to-trough of the settlement-implied equity
+        # curve, in settlement order. Always >= 0: a cohort at a new high has
+        # no drawdown.
+        "max_drawdown_usd": _fmt(dd),
+        "equity_peak_usd": _fmt(peak),
+        "equity_curve": curve,
         "realized_net_usd": None,
         "labels": (
-            "cumulative_economic_loss_usd is the ONLY field the aggregate "
-            "stop reads, and it sums SETTLED windows only. A profitable "
+            "cumulative_economic_loss_usd and max_drawdown_usd are the "
+            "ONLY two fields the cohort stops read, and both are computed "
+            "over SETTLED windows only. A profitable "
             "window carries a NEGATIVE loss and reduces it. Pending windows "
             "contribute nothing -- their risk lives in the per-market gates. "
             "Unrecoverable windows contribute nothing and are never estimated "

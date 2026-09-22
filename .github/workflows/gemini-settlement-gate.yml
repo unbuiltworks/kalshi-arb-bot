@@ -112,7 +112,12 @@ jobs:
     # nothing so a kill could not strand an order, but it would have thrown
     # away the evidence and looked like a failure. A test now pins
     # job > every step.
-    timeout-minutes: 330
+    #
+    # 630 FOR COHORT-2. Twenty consecutive BTC15m contracts is ~5 hours of
+    # wall clock plus discovery; the step is capped at 600 and the job has to
+    # outlive it, because a hard kill is the one exit where the terminal
+    # withdrawal never runs and an order can be left resting.
+    timeout-minutes: 630
     steps:
       # THE RUNNER MUST EXECUTE THE REVIEWED TREE.
       #
@@ -587,49 +592,63 @@ jobs:
       # ==================================================================
       # THE PERSISTENT BTC15m COHORT. ARMED.
       #
-      # ONE PROCESS, up to ten consecutive contracts, no workflow restart
-      # between them. This is the step the single-window launcher above could
-      # never be: CAP4-LIVE-2 met one crossed tick, withdrew, and the process
-      # ENDED with another contract fifteen minutes later and nothing alive
-      # to take it.
+      # ONE PROCESS, up to TWENTY consecutive contracts, no workflow restart
+      # between them. This is the step the single-window launcher could never
+      # be: CAP4-LIVE-2 met one crossed tick, withdrew, and the process ENDED
+      # with another contract fifteen minutes later and nothing alive to take
+      # it.
       #
-      # THE BOUNDS ARE NOT HERE. Every one of them is enforced inside
-      # ws_continuous.Driver and the ten 12-slot ledgers: q=1, CAP-4, $4.00
-      # per market, 2 working orders, 1 rung per outcome, maker/post-only,
-      # the 30s floor, the bounded UNREADABLE hold. The runner adds the two
-      # the grant adds: at most 10 windows, and a $10.00 aggregate
-      # reconstructed-loss stop checked before every bind.
+      # THE BOUNDS ARE NOT HERE. Every per-market bound is enforced inside
+      # ws_continuous.Driver and the twenty 12-slot ledgers: q=1, CAP-4,
+      # $4.00 committed/residual per market, 2 working orders, 1 rung per
+      # outcome, maker/post-only, the 30s floor, TTE [60, 880] and the
+      # bounded UNREADABLE hold. The runner adds only what a GRANT adds: a
+      # window count, and two cohort-level economic stops.
       #
-      # 300 MINUTES IS A BACKSTOP, NOT A RISK BOUND. Ten BTC15m contracts is
-      # ~2.5 hours of wall clock plus discovery. A killed runner never
+      # BOTH STOPS ARE SETTLEMENT-INCLUSIVE AND NEITHER MEASURES TURNOVER.
+      # COHORT-1 was halted at 4 of its 8 remaining windows by a cap that
+      # summed gross BUY outflow -- a turnover cap wearing a loss cap's name
+      # -- while the four windows it had records for were +$1.14. Economic
+      # loss is now payout + credited rebates - fill spend - confirmed fees,
+      # over SETTLED windows only; an unresolved market contributes nothing
+      # and its risk stays in the per-market gates.
+      #
+      # 600 MINUTES IS A BACKSTOP, NOT A RISK BOUND. Twenty BTC15m contracts
+      # is ~5 hours of wall clock plus discovery. A killed runner never
       # reaches its terminal withdrawal, so the step must outlive the work;
       # the job's own timeout outlives the step.
+      #
+      # WATCH IT WHILE IT RUNS: analysis/gemini/cohort_live_status.json is
+      # rewritten atomically after every decision and every mutation, with
+      # the history beside it in cohort_live_status.json.jsonl.
       # ==================================================================
-      - name: PERSISTENT BTC15m cohort (ARMED, up to 10 contracts)
+      - name: PERSISTENT BTC15m cohort (ARMED, up to 20 contracts)
         if: ${{ github.event.inputs.cohort_run == 'true' }}
-        timeout-minutes: 300
+        timeout-minutes: 600
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1 is
-          # SPENT: run 35677907781 bound four BTC15m contracts, took 18 maker
-          # fills across them, and stopped on the AUTHORIZED aggregate-loss
-          # cap at 6 of 10 windows. 31 of 120 slots consumed. A spent
-          # authorization never arms again.
+          # DISARMED, AWAITING THE OWNER'S GRANT FOR COHORT-2.
+          # OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1 is SPENT: run
+          # 35677907781 bound four BTC15m contracts, took 18 maker fills
+          # across them, and stopped on a cap that measured the wrong
+          # quantity. A spent authorization never arms again, and the
+          # twenty-window envelope is a NEW grant.
           GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-22T08:00:00Z"
-          COHORT_SPEC: btc15m_q1_cap4_w60_880
-          COHORT_SPEC_SHA: "223b81edd6932bce48afbc35b1be88d9898af2849ddd38cf309e2d25e07bd65f"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T08:00:00Z"
+          COHORT_SPEC: btc15m_q1_cap4_w60_880_c2
+          COHORT_SPEC_SHA: "ba64b54c8711166b9515007e6835e8190dc8bfddfbae2a1ba72c4e7798cefcb4"
         run: |
           set -o pipefail
           mkdir -p analysis/gemini
           python -m src.gemini_execution.cohort_runner \
-            --auth-id          "${GEMINI_CANARY_AUTH}" \
-            --spec             "${COHORT_SPEC}" \
-            --expect-spec-sha  "${COHORT_SPEC_SHA}" \
-            --max-windows      10 \
-            --max-loss-usd     10.00 \
+            --auth-id           "${GEMINI_CANARY_AUTH}" \
+            --spec              "${COHORT_SPEC}" \
+            --expect-spec-sha   "${COHORT_SPEC_SHA}" \
+            --max-windows       20 \
+            --max-loss-usd      8.00 \
+            --max-drawdown-usd  5.00 \
             --out analysis/gemini/cohort_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/cohort.txt
 
@@ -765,6 +784,8 @@ jobs:
                    analysis/gemini/cohort_window_*.json \
                    analysis/gemini/cohort_wire_*.json \
                    analysis/gemini/static_readiness_*.json \
+                   analysis/gemini/cohort_live_status.json \
+                   analysis/gemini/cohort_live_status.json.jsonl \
                    analysis/gemini/canary_latch/*.json; do
             if [ -e "$f" ]; then git add -- "$f"; fi
           done
@@ -790,7 +811,13 @@ jobs:
           # NEITHER list, so even a green job would have committed the ledger
           # and thrown the report and the per-window counters away. Both
           # lists now name them, and a test asserts the two agree.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|continuous_ledger\.jsonl)$'; then
+          #
+          # THE LIVE STATUS IS COMMITTED TOO, snapshot and history. It is the
+          # only artifact that exists WHILE a cohort runs, so it is also the
+          # only one that survives a runner killed between windows -- which
+          # is precisely the case where the per-window report never gets
+          # written at all.
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

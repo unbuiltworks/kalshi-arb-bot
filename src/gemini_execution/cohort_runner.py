@@ -62,6 +62,7 @@ from src.gemini_execution import bundle as BUNDLE
 from src.gemini_execution import cohort as CO
 from src.gemini_execution import cohort_economics as CE
 from src.gemini_execution import continuous_probe as CP
+from src.gemini_execution import live_status as LS
 from src.gemini_execution import metadata as MD
 from src.gemini_execution import position_ledger as PL
 from src.gemini_execution import run_continuous as RC
@@ -579,6 +580,13 @@ class CohortPlan:
     spec: Any
     max_windows: int
     max_aggregate_loss_usd: str
+    #: PEAK-TO-TROUGH of the settlement-implied equity curve, SETTLED windows
+    #: only. The second bound, because cumulative loss alone cannot see a
+    #: cohort that made 4.00 and gave it all back: that reads zero throughout
+    #: while the strategy's recent behaviour is as bad as it has ever been.
+    #: "0" means no drawdown stop, which is what every cohort so far has run
+    #: under, so this is additive and changes nothing already authorized.
+    max_drawdown_usd: str = "0"
     #: ordered, one per window. Window i binds cohort_ids[i].
     cohort_ids: Tuple[str, ...] = ()
     state_dir: str = "analysis/gemini/canary_latch"
@@ -663,6 +671,7 @@ class CohortPlan:
                 "max_cohort_actions": 12 * len(self.cohort_ids or ()),
                 "max_windows": self.max_windows,
                 "max_aggregate_loss_usd": self.max_aggregate_loss_usd,
+                "max_drawdown_usd": self.max_drawdown_usd,
                 "quote_band": (None if self.spec.quote_band is None
                                else list(self.spec.quote_band)),
                 "per_market_bounds": self.spec.bounds()}
@@ -676,6 +685,7 @@ async def run_cohort(plan: CohortPlan, *,
                      discover_fn: Optional[Callable] = None,
                      gate_fn: Optional[Callable] = None,
                      resolution_fn: Optional[Callable] = None,
+                     status_writer: Optional["LS.StatusWriter"] = None,
                      now_fn: Callable[[], float] = time.time,
                      ) -> Dict[str, Any]:
     """ONE process, up to `max_windows` consecutive contracts, then STOP.
@@ -742,11 +752,28 @@ async def run_cohort(plan: CohortPlan, *,
     gate = gate_fn or rollover_gate
     resolve = resolution_fn or resolution_for
 
+    # THE DURABLE LIVE STATUS. Written as the cohort runs rather than when the
+    # job ends, because COHORT-1's window 4 could not be described by anything
+    # on disk while it was happening. Observability only: it is fed from rows
+    # the DecisionObserver has already completed, makes no venue read, and
+    # cannot sit between a decision and its order.
+    status = (status_writer if status_writer is not None else LS.StatusWriter(
+        os.path.join(plan.out_dir, "cohort_live_status.json"),
+        cohort={"auth_id": plan.auth_id, "cohort_id": plan.head,
+                "spec_id": spec.spec_id, "spec_sha": spec.spec_sha(),
+                "max_windows": plan.max_windows,
+                "max_aggregate_loss_usd": str(plan.max_aggregate_loss_usd),
+                "max_drawdown_usd": str(plan.max_drawdown_usd),
+                "actions_per_market": 12,
+                "readiness_mode": bool(readiness)}))
+    rep["live_status_path"] = status.path
+
     while True:
         if st["windows_observed"] >= plan.max_windows:
             _stop(rep, st, "WINDOWS_EXHAUSTED",
                   "the authorized %d window(s) have been observed"
-                  % plan.max_windows)
+                  % plan.max_windows,
+                  root=plan.root, status=status)
             break
         # SETTLE WHAT HAS SETTLED, BEFORE DECIDING WHETHER TO BIND AGAIN.
         # The previous contract expires ~20-60s before the next one reaches
@@ -787,14 +814,43 @@ async def run_cohort(plan: CohortPlan, *,
         st["aggregate_loss_usd"] = st["economics"][
             "cumulative_economic_loss_usd"]
         save_state(st, root=plan.root)
+        status.set_cohort(
+            windows_observed=st["windows_observed"],
+            windows_traded=st["windows_traded"],
+            cumulative_economic_loss_usd=st["aggregate_loss_usd"],
+            settlement_implied_net_usd=st["economics"][
+                "settlement_implied_net_usd"],
+            max_drawdown_usd=st["economics"]["max_drawdown_usd"],
+            gross_fill_spend_usd=st["economics"]["gross_fill_spend_usd"],
+            realized_net_usd=None,
+            economics=st["economics"])
 
         # THE ONLY FIELD THE STOP READS, and it sums SETTLED windows only.
+        # THE DRAWDOWN BOUND, CHECKED FIRST because it is the tighter
+        # statement: a cohort can be up on the run and still be bleeding now.
+        # Disabled at "0", which is how every cohort before this one ran.
+        dd_cap = D(str(plan.max_drawdown_usd or "0"))
+        dd = D(str((st.get("economics") or {}).get("max_drawdown_usd") or "0"))
+        if dd_cap > 0 and dd >= dd_cap:
+            _stop(rep, st, "DRAWDOWN",
+                  "peak-to-trough drawdown %s has reached the cohort cap of "
+                  "%s. Settlement-implied equity over SETTLED windows only; "
+                  "peak was %s. This is not a turnover measure."
+                  % (dd, dd_cap,
+                     (st.get("economics") or {}).get("equity_peak_usd")),
+                  root=plan.root, status=status)
+            break
         loss = D(str(st.get("aggregate_loss_usd") or "0"))
         cap = D(str(plan.max_aggregate_loss_usd))
         if loss >= cap:
             _stop(rep, st, "AGGREGATE_LOSS",
-                  "reconstructed aggregate loss %s has reached the cohort "
-                  "cap of %s" % (loss, cap))
+                  "cumulative ECONOMIC loss %s has reached the cohort cap of "
+                  "%s. Settlement-inclusive over SETTLED windows only "
+                  "(spend + confirmed fees - payout - credited rebates); "
+                  "gross turnover is %s and is NOT what this measures"
+                  % (loss, cap,
+                     (st.get("economics") or {}).get("gross_fill_spend_usd")),
+                  root=plan.root, status=status)
             break
         # THE WHOLE CHAIN, RE-READ EVERY WINDOW. Unreadable or tampered is a
         # stop, not a warning: a ledger that cannot be read is not a ledger
@@ -804,7 +860,8 @@ async def run_cohort(plan: CohortPlan, *,
         if not budget["all_readable"] or not budget["all_intact"]:
             _stop(rep, st, "LEDGER_UNREADABLE",
                   "the cohort's ledger chain is not readable and intact: %s"
-                  % json.dumps(budget["ledgers"], default=str)[:400])
+                  % json.dumps(budget["ledgers"], default=str)[:400],
+                  root=plan.root, status=status)
             break
         # BINDABLE, NOT REMAINING. `total_remaining` sums the leftovers of
         # ledgers that markets have already been given, and no market may be
@@ -816,25 +873,32 @@ async def run_cohort(plan: CohortPlan, *,
                   "fresh; %s/%s slots consumed, and a market is never given "
                   "another market's remainder)"
                   % (budget["fresh_ledgers"], len(budget["ledgers"]),
-                     budget["total_consumed"], budget["total_budget"]))
+                     budget["total_consumed"], budget["total_budget"]),
+                  root=plan.root, status=status)
             break
         try:
             window_cohort = plan.ledger_for(st["windows_observed"],
                                             root=plan.root)
         except IndexError as exc:
-            _stop(rep, st, "MUTATION_BUDGET", str(exc))
+            _stop(rep, st, "MUTATION_BUDGET", str(exc),
+                  root=plan.root, status=status)
             break
 
         found = await discover(spec, exclude=st.get("symbols") or ())
         rep["windows"].append({"discovery": found})
         if not found.get("found"):
-            _stop(rep, st, "NO_CONTRACT", found.get("why"))
+            _stop(rep, st, "NO_CONTRACT", found.get("why"),
+                  root=plan.root, status=status)
             break
         symbol = found["symbol"]
 
+        status.begin_window(window_index=st["windows_observed"] + 1,
+                            symbol=symbol, cohort_id=window_cohort,
+                            tte_at_bind_s=found.get("tte_s"),
+                            actions_granted=12)
         wrep = await run_window(plan, symbol, readiness=readiness,
                                 latch_held_by=latch_rec,
-                                cohort_id=window_cohort)
+                                cohort_id=window_cohort, status=status)
         # THE CONTRACT HAS NOT SETTLED YET. A window ends with seconds to
         # spare; resolution lands at expiry. So this reads the resolution
         # anyway -- it will usually be PENDING -- and the settle pass at the
@@ -883,13 +947,30 @@ async def run_cohort(plan: CohortPlan, *,
         st["aggregate_loss_usd"] = st["economics"][
             "cumulative_economic_loss_usd"]
         save_state(st, root=plan.root)
+        status.end_window(
+            stop_reason=((wrep.get("window") or {}).get("stop_why")
+                         or wrep.get("why") or wrep.get("state")),
+            # IMPLIED, and null while the contract is unresolved. It is never
+            # guessed from an unsettled market and it is never REALIZED.
+            settlement_implied_net_usd=econ.get("settlement_implied_net_usd"),
+            economics=econ)
+        status.set_cohort(
+            windows_observed=st["windows_observed"],
+            windows_traded=st["windows_traded"],
+            cumulative_economic_loss_usd=st["aggregate_loss_usd"],
+            settlement_implied_net_usd=st["economics"][
+                "settlement_implied_net_usd"],
+            max_drawdown_usd=st["economics"]["max_drawdown_usd"],
+            gross_fill_spend_usd=st["economics"]["gross_fill_spend_usd"],
+            realized_net_usd=None, economics=st["economics"])
         rep["windows"][-1].update({"report": wrep, "economics": econ,
                                    "spread_placement": placement})
 
         g = await gate(symbol)
         rep["windows"][-1]["rollover_gate"] = g
         if not g.get("ok"):
-            _stop(rep, st, "ROLLOVER_REFUSED", g.get("why"))
+            _stop(rep, st, "ROLLOVER_REFUSED", g.get("why"),
+                  root=plan.root, status=status)
             break
 
     rep["cohort_state"] = st
@@ -898,16 +979,25 @@ async def run_cohort(plan: CohortPlan, *,
 
 
 def _stop(rep: Dict[str, Any], st: Dict[str, Any], code: str,
-          why: Optional[str]) -> None:
+          why: Optional[str], *, root: Optional[str] = None,
+          status: Optional["LS.StatusWriter"] = None) -> None:
     st["stopped"] = True
     st["stop_why"] = "%s: %s" % (code, why)
     rep["stops"].append({"code": code, "why": why})
     rep["state"] = "STOPPED_" + code
     rep["why"] = why
     try:
-        save_state(st)
+        # THE PLAN'S ROOT, not the module default. This defaulted, so a stop
+        # under a test root wrote the cohort state into the REAL tree.
+        save_state(st, root=root) if root else save_state(st)
     except OSError:
         pass
+    if status is not None:
+        try:
+            status.set_cohort(stopped=True, stop_code="STOPPED_" + code,
+                              stop_why=why)
+        except Exception:                                     # noqa: BLE001
+            pass
 
 
 async def _consume_cohort_latch(plan: CohortPlan, st: Mapping[str, Any], *,
@@ -1012,7 +1102,9 @@ async def _consume_cohort_latch(plan: CohortPlan, st: Mapping[str, Any], *,
 
 async def _run_window(plan: CohortPlan, symbol: str, *, readiness: bool,
                       latch_held_by: Optional[Mapping[str, Any]],
-                      cohort_id: Optional[str] = None) -> Dict[str, Any]:
+                      cohort_id: Optional[str] = None,
+                      status: Optional["LS.StatusWriter"] = None
+                      ) -> Dict[str, Any]:
     """ONE contract, through the SAME body a single-window launcher runs."""
     spec = plan.spec
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -1044,7 +1136,8 @@ async def _run_window(plan: CohortPlan, symbol: str, *, readiness: bool,
                                 root=plan.root).ledger_path,
             wire_path=wire, cohort_id=cohort_id or spec.budget_cohort,
             envelope=spec.envelope_obj, readiness=readiness,
-            probe_spec=spec, latch_held_by=latch_held_by)
+            probe_spec=spec, latch_held_by=latch_held_by,
+            status_sink=LS.sink_for(status))
     finally:
         rep.setdefault("finished_utc",
                        datetime.now(timezone.utc).isoformat())
@@ -1064,7 +1157,8 @@ async def _run_window(plan: CohortPlan, symbol: str, *, readiness: bool,
 #: exits nonzero.
 AUTHORIZED_STOPS = (
     "STOPPED_WINDOWS_EXHAUSTED",   # the authorized count was observed
-    "STOPPED_AGGREGATE_LOSS",      # the authorized dollar stop
+    "STOPPED_AGGREGATE_LOSS",      # the authorized cumulative dollar stop
+    "STOPPED_DRAWDOWN",            # the authorized peak-to-trough stop
     "STOPPED_MUTATION_BUDGET",     # the authorized action budget
     "STOPPED_NO_CONTRACT",         # the venue produced no eligible contract
     "STOPPED_ALREADY",             # a stopped cohort is not auto-resumed
@@ -1136,8 +1230,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          "binds no contract.")
     ap.add_argument("--max-windows", type=int, default=0)
     ap.add_argument("--max-loss-usd", default="0",
-                    help="the AGGREGATE reconstructed-loss stop for the whole "
-                         "cohort, in addition to every per-market bound")
+                    help="the AGGREGATE ECONOMIC-loss stop for the whole "
+                         "cohort, in addition to every per-market bound. "
+                         "Settlement-inclusive over SETTLED windows only "
+                         "(spend + confirmed fees - payout - credited "
+                         "rebates); it is NOT a turnover cap and an "
+                         "unresolved market contributes nothing to it")
+    ap.add_argument("--max-drawdown-usd", default="0",
+                    help="peak-to-trough stop on the settlement-implied "
+                         "equity curve, SETTLED windows only. 0 disables it, "
+                         "which is how every cohort before COHORT-2 ran")
     ap.add_argument("--state-dir", default="analysis/gemini/canary_latch")
     ap.add_argument("--out-dir", default="analysis/gemini")
     ap.add_argument("--root", default=CO.COHORT_ROOT)
@@ -1192,6 +1294,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     plan = CohortPlan(auth_id=a.auth_id, spec=spec,
                       max_windows=int(a.max_windows),
                       max_aggregate_loss_usd=str(a.max_loss_usd),
+                      max_drawdown_usd=str(a.max_drawdown_usd),
                       cohort_ids=ids,
                       state_dir=a.state_dir, out_dir=a.out_dir, root=a.root)
     out = a.out or os.path.join(
@@ -1229,9 +1332,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("windows    observed %s / %s, traded %s"
           % (st.get("windows_observed"), plan.max_windows,
              st.get("windows_traded")))
-    print("loss       %s of %s (reconstructed, never REALIZED)"
-          % (st.get("aggregate_loss_usd"), plan.max_aggregate_loss_usd))
+    econ = st.get("economics") or {}
+    print("loss       %s of %s  ECONOMIC, settlement-inclusive, SETTLED "
+          "windows only" % (st.get("aggregate_loss_usd"),
+                            plan.max_aggregate_loss_usd))
+    print("           turnover %s  payout %s  fees %s  rebates %s  "
+          "implied net %s"
+          % (econ.get("gross_fill_spend_usd"),
+             econ.get("settlement_payout_usd"), econ.get("fees_usd"),
+             econ.get("rebates_credited_usd"),
+             econ.get("settlement_implied_net_usd")))
+    print("drawdown   %s of %s  peak-to-trough, settlement-implied equity"
+          % (econ.get("max_drawdown_usd"), plan.max_drawdown_usd))
+    print("           REALIZED %s  (null until an attributable cashflow is "
+          "read back)" % econ.get("realized_net_usd"))
     print("report     %s" % out)
+    print("live       %s" % rep.get("live_status_path"))
     # AN AUTHORIZED STOP IS AN OUTCOME, NOT A FAILURE. Returning 1 for every
     # stop but WINDOWS_EXHAUSTED turned a clean budget stop into a red step,
     # which is what skipped the evidence commit. A mechanical failure still
