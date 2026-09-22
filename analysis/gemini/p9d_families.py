@@ -72,12 +72,14 @@ def get(path, tries=3):
     return {"__error__": "unreachable"}
 
 
-def events(category=None, cap=800):
+def events(category=None, cap=800, status=None):
     out, off = [], 0
     while off < cap:
         q = f"/v1/prediction-markets/events?limit=100&offset={off}"
         if category:
             q += f"&category={category}"
+        if status:
+            q += f"&status={status}"
         d = get(q)
         if not isinstance(d, dict) or "data" not in d:
             break
@@ -106,12 +108,21 @@ def trades(sym):
             for t in d if t.get("price") and t.get("amount")]
 
 
-def collect(out_path):
+def collect(out_path, status=None, cap=800):
+    """`status="settled"` collects RESOLVED events instead of the live slate.
+
+    WHY BOTH ARE NEEDED. The live slate answers "does this family offer both
+    sides", but almost none of it has a `resolutionSide`, so it cannot answer
+    "what would the position have been worth". The settled slate answers the
+    second question for the days still inside the venue's ~7-day trade
+    retention, and returns an empty tape for anything older -- which is
+    reported rather than hidden.
+    """
     cats = sorted({e.get("category") for e in events(cap=200)} - {None})
     print(f"categories: {cats}", file=sys.stderr, flush=True)
     evs, seen = [], set()
     for c in cats:
-        got = events(category=c)
+        got = events(category=c, cap=cap, status=status)
         for e in got:
             if e.get("ticker") in seen:
                 continue
@@ -239,5 +250,8 @@ def measure(path):
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == "report":
         measure(sys.argv[1])
+    elif len(sys.argv) > 2 and sys.argv[2] == "settled":
+        collect(sys.argv[1], status="settled",
+                cap=(int(sys.argv[3]) if len(sys.argv) > 3 else 400))
     else:
         collect(sys.argv[1])
