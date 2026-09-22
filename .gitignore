@@ -55,3 +55,6 @@ analysis/l5/historical_l2/block_times.json
 data/l5_book_context/*.jsonl
 data/gemini_surface_shadow/*.jsonl
 data/l5_window_forensics/*.jsonl
+
+# P10 captures in flight: renamed into place only when complete
+analysis/gemini/p10_capture/*.partial

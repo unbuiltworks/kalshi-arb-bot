@@ -104,6 +104,21 @@ def discover(n_symbols):
 
 
 def capture(out_path, minutes, n_symbols=4, rediscover_s=300):
+    """Records to `<out_path>.partial` and renames on completion.
+
+    WHY THE RENAME. A capture appends for the better part of an hour. If it
+    writes straight into the repository, the working tree is dirty for the
+    whole run and every commit carries a half-finished file. `.partial` is
+    gitignored, so a running capture is invisible to git and the finished file
+    appears once, complete.
+    """
+    part = out_path + ".partial"
+    res = _capture_to(part, minutes, n_symbols, rediscover_s)
+    os.replace(part, out_path)
+    return res
+
+
+def _capture_to(out_path, minutes, n_symbols=4, rediscover_s=300):
     end = time.time() + minutes * 60
     seen = set()
     syms = []
