@@ -127,6 +127,9 @@ def _ep016():
     for f in sorted(glob.glob("analysis/gemini/cohort_window_*.json")):
         rep = json.loads(open(f).read())
         sym = (rep.get("window") or {}).get("symbol")
+        # COHORT-2's windows share this glob; EP016 is the four it names.
+        if sym not in res:
+            continue
         rows.append(RA.from_window(
             rep, {"status": "settled", "resolutionSide": res[sym]}))
     return rows
@@ -253,3 +256,46 @@ def test_every_COHORT2_window_re_adds_exactly():
         pytest.skip("COHORT-2 window artifacts are not on this branch")
     assert len(rows) == 11
     assert all(r["identity"]["holds"] and r["identity"]["exact"] for r in rows)
+
+
+# ============ the recorded event list is a capped SAMPLE, not a fill ledger
+
+def test_an_incomplete_fill_record_is_detected_and_not_silently_trusted():
+    """COHORT-2 recorded 54 fills against an inventory counting 56.
+    `_drain_events` takes at most _MAX_EVENTS_PER_CYCLE frames per cycle, so a
+    busy cycle drops orderUpdate rows from the artifact while the controller's
+    own inventory still counts them. Summing the recorded rows understated
+    spend by $0.34 -- and silently narrowed the set of fills whose maker flag
+    anyone could check."""
+    rep = {"window": {"symbol": "S", "inventory": {
+        "yes_qty": "1", "no_qty": "4", "avg_yes_cost": "0.50",
+        "avg_no_cost": "0.29", "total_spend_usd": "1.66", "n_fills": 5},
+        "order_events": [
+            {"X": "FILLED", "O": "YES", "L": "0.50", "Z": "1", "m": True},
+            {"X": "FILLED", "O": "NO", "L": "0.43", "Z": "1", "m": True},
+            {"X": "FILLED", "O": "NO", "L": "0.31", "Z": "1", "m": True},
+            {"X": "FILLED", "O": "NO", "L": "0.24", "Z": "1", "m": True}]}}
+    r = RA.from_window(rep, {"status": "settled", "resolutionSide": "yes"})
+    fr = r["fill_record"]
+    assert fr["complete"] is False
+    assert fr["controller_n_fills"] == 5 and fr["recorded_n_fills"] == 4
+    assert fr["unverifiable_fills"] == 1
+    assert "CAPPED sample" in fr["why"] and "never maker" in fr["why"]
+    # the cost basis falls back, so spend reconciles to the controller's total
+    assert r["cost_basis"] == "reconstructed as average x quantity"
+    assert r["spend_usd"] == "1.66" and r["spend_agrees"] is True
+
+
+def test_a_complete_fill_record_still_uses_the_exact_fill_sum():
+    rep = {"window": {"symbol": "S", "inventory": {
+        "yes_qty": "2", "no_qty": "1", "avg_yes_cost": "0.45",
+        "avg_no_cost": "0.40", "total_spend_usd": "1.30", "n_fills": 3},
+        "order_events": [
+            {"X": "FILLED", "O": "YES", "L": "0.50", "Z": "1", "m": True},
+            {"X": "FILLED", "O": "YES", "L": "0.40", "Z": "1", "m": True},
+            {"X": "FILLED", "O": "NO", "L": "0.40", "Z": "1", "m": True}]}}
+    r = RA.from_window(rep, {"status": "settled", "resolutionSide": "no"})
+    assert r["fill_record"]["complete"] is True
+    assert r["cost_basis"] == "exact per-leg spend from the fills"
+    assert r["spend_usd"] == "1.3" and r["spend_agrees"] is True
+    assert r["identity"]["holds"] and r["identity"]["exact"]

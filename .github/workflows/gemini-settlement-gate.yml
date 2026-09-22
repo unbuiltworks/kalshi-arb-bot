@@ -638,7 +638,12 @@ jobs:
           # 35677907781 bound four contracts, took 18 maker fills and stopped
           # on a cap that measured turnover. A spent authorization never arms
           # again; the twenty-window envelope is its own grant.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2"
+          # DISARMED 2026-09-22. OWNER-2026-09-22-...-COHORT-2 is SPENT: run
+          # 35721894867 bound eleven BTC15m contracts and stopped on the
+          # AUTHORIZED peak-to-trough drawdown bound (5.29 of a 5.00 cap,
+          # peak +1.47) with 11 of 20 windows observed. A spent
+          # authorization never arms again.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has NOT passed, and an absent one is not
           # "never expires". Twenty BTC15m contracts is ~5h of wall clock;

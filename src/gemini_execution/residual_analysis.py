@@ -278,14 +278,41 @@ def from_window(rep: Mapping[str, Any],
     res = resolution or {}
     settled = str(res.get("status") or "").lower() == "settled"
     legs = leg_spend(win.get("order_events"))
+
+    # THE RECORDED EVENT LIST IS A CAPPED SAMPLE, NOT A FILL LEDGER.
+    # `_drain_events` takes at most _MAX_EVENTS_PER_CYCLE frames per cycle, so
+    # a busy cycle can drop orderUpdate rows from the artifact while the
+    # controller's own inventory still counts them. COHORT-2 recorded 54 fills
+    # against an inventory that counted 56. Summing the recorded rows then
+    # understates spend -- by $0.34 across two windows -- and, worse, silently
+    # narrows the set of fills whose maker flag anyone can check.
+    #
+    # So the fill sum is used ONLY when it is provably complete. Otherwise the
+    # controller's averages are used (they reconcile to its total_spend_usd)
+    # and the gap is REPORTED rather than absorbed.
+    claimed = inv.get("n_fills")
+    complete = (claimed is not None and int(claimed) == legs["n_fills"])
+    use_fills = legs["readable"] and complete
     out = decompose(
         yes_qty=inv.get("yes_qty"), no_qty=inv.get("no_qty"),
         avg_yes=inv.get("avg_yes_cost"), avg_no=inv.get("avg_no_cost"),
-        yes_spend=(legs["yes_spend"] if legs["readable"] else None),
-        no_spend=(legs["no_spend"] if legs["readable"] else None),
+        yes_spend=(legs["yes_spend"] if use_fills else None),
+        no_spend=(legs["no_spend"] if use_fills else None),
         resolution_side=(res.get("resolutionSide") if settled else None),
         spend_usd=inv.get("total_spend_usd"), fees_usd=fees_usd)
     out["fills_by_leg"] = {"yes": legs["n_yes_fills"], "no": legs["n_no_fills"]}
+    out["fill_record"] = {
+        "controller_n_fills": claimed,
+        "recorded_n_fills": legs["n_fills"],
+        "complete": complete,
+        "unverifiable_fills": (None if claimed is None
+                               else int(claimed) - legs["n_fills"]),
+        "why": (None if complete else
+                "the artifact's order_events is a CAPPED sample; fills beyond "
+                "the per-cycle frame bound are absent. Cost basis falls back "
+                "to the controller's averages, and the missing fills' maker "
+                "flags are UNKNOWN -- never maker."),
+    }
     out["symbol"] = win.get("symbol")
     out["n_fills"] = inv.get("n_fills")
     # THE CONTROLLER'S OWN NUMBER, carried for comparison rather than

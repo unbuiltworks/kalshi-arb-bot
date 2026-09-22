@@ -1827,9 +1827,16 @@ def test_the_frozen_bounds_are_byte_identical_across_the_two_cohorts():
     assert int(b.max_same_side_run) == 4
 
 
-def test_the_cohort2_chain_is_twenty_whole_untouched_ledgers():
-    """On the REAL tree, because a chain that exists only in a tmp_path is
-    the exact thing that let COHORT-1 dispatch against one ledger."""
+def test_the_cohort2_chain_is_twenty_whole_ledgers_of_twelve():
+    """INVARIANTS, NOT A SNAPSHOT. This pinned `fresh_ledgers == 20`, which
+    was true for exactly as long as the cohort had not run. COHORT-2 then
+    bound eleven markets and spent eleven ledgers -- the system doing what it
+    was authorized to do -- and the test went red for it.
+
+    What must hold forever: the chain is twenty ledgers of twelve, every one
+    readable and intact, the grant cannot reach past 240 actions, no ledger
+    is ever handed out twice, and a market only ever receives a WHOLE one.
+    """
     spec = SPEC.BTC15M_Q1_CAP4_W60_880_C2
     ids = CR.discover_chain(spec)
     assert len(ids) == 20, ids
@@ -1839,10 +1846,16 @@ def test_the_cohort2_chain_is_twenty_whole_untouched_ledgers():
                          max_drawdown_usd="5.00", cohort_ids=ids)
     b = plan.action_budget()
     assert b["total_budget"] == 240 and b["per_window"] == 12
-    assert b["fresh_ledgers"] == 20 and b["bindable_slots"] == 240
     assert b["all_readable"] and b["all_intact"]
-    assert plan.ledger_for(0) == C2
-    # and it cannot silently reach past its grant
+    # every ledger is 12 slots and none was ever topped up past its grant
+    assert all(r["budget"] == 12 for r in b["ledgers"])
+    assert all(0 <= r["consumed"] <= 12 for r in b["ledgers"])
+    # fresh ledgers FALL as markets are bound; what cannot happen is a
+    # partially spent one being offered to a new market
+    assert b["bindable_slots"] == 12 * b["fresh_ledgers"]
+    if b["fresh_ledgers"]:
+        assert CO.state(plan.ledger_for(0))["consumed"] == 0, (
+            "a market must never be handed another market's remainder")
     assert 12 * len(ids) == 240
     assert plan.as_dict()["max_cohort_actions"] == 240
 
@@ -1889,16 +1902,37 @@ def test_no_fills_is_not_all_maker():
         "a vacuous truth here would read as a verified property")
 
 
+#: EP016's four contracts. Named, because later cohorts share the glob.
+EP016_SYMBOLS = ("GEMI-BTC15M2609220230-UP", "GEMI-BTC15M2609220245-UP",
+                 "GEMI-BTC15M2609220300-UP", "GEMI-BTC15M2609220315-UP")
+
+
+def _ep016_windows():
+    """EP016's artifacts BY SYMBOL. Globbing cohort_window_*.json and
+    asserting a count was fine until COHORT-2 wrote eleven more into the same
+    directory -- a test pinning a moment again."""
+    import glob
+    out = []
+    for f in sorted(glob.glob("analysis/gemini/cohort_window_*.json")):
+        rep = json.loads(open(f).read())
+        if (rep.get("window") or {}).get("symbol") in EP016_SYMBOLS:
+            out.append(rep)
+    return out
+
+
 def test_the_four_recorded_EP016_windows_were_all_maker():
     """From the preserved artifacts, on the real tree."""
-    import glob
-    files = sorted(glob.glob("analysis/gemini/cohort_window_*.json"))
-    assert len(files) == 4, files
+    reps = _ep016_windows()
+    assert len(reps) == 4, [r.get("window", {}).get("symbol") for r in reps]
     total = 0
-    for f in files:
-        rep = json.loads(open(f).read())
-        p = CE.fill_provenance((rep.get("window") or {}).get("order_events"))
-        assert p["all_maker"], (f, p)
+    for rep in reps:
+        w = rep.get("window") or {}
+        p = CE.fill_provenance(w.get("order_events"))
+        assert p["all_maker"], (w.get("symbol"), p)
         assert p["taker"] == 0 and p["unknown"] == 0
+        # and the record is COMPLETE, so "all maker" covers every fill the
+        # controller counted rather than only the ones that got recorded
+        assert p["fills"] == int((w.get("inventory") or {}).get("n_fills")), (
+            "an incomplete event record cannot support an all-maker claim")
         total += p["fills"]
     assert total == 18, total

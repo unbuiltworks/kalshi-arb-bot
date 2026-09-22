@@ -684,7 +684,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the one line that flips every armed/disarmed assertion in this file, so
 #: arming cannot be half-done: the code constants, the workflow env and
 #: this switch must all name the SAME authorization or the suite refuses.
-LIVE_AUTHORIZATION = "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2"
+LIVE_AUTHORIZATION = None
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():

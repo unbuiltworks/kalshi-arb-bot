@@ -134,6 +134,13 @@ def test_our_qualifying_volume_counts_only_eligible_fills():
         "the 0.19 fill's notional must not appear")
 
 
+#: EP016's four contracts, NAMED. This globbed the whole directory and
+#: asserted a count, which held until COHORT-2 wrote eleven more windows into
+#: it -- a test pinning a moment rather than the thing it means.
+EP016_SYMBOLS = ("GEMI-BTC15M2609220230-UP", "GEMI-BTC15M2609220245-UP",
+                 "GEMI-BTC15M2609220300-UP", "GEMI-BTC15M2609220315-UP")
+
+
 def test_the_EP016_accrual_is_stated_for_reconciliation():
     """The numbers the first payout covering 21 Sep ET will be checked
     against. They are an ACCRUAL and are not economics."""
@@ -141,6 +148,8 @@ def test_the_EP016_accrual_is_stated_for_reconciliation():
     fills = []
     for f in sorted(glob.glob("analysis/gemini/cohort_window_*.json")):
         w = (json.loads(open(f).read()).get("window") or {})
+        if w.get("symbol") not in EP016_SYMBOLS:
+            continue
         for e in (w.get("order_events") or []):
             if str(e.get("X") or "").upper() in ("FILLED", "PARTIALLY_FILLED"):
                 assert e.get("m") is True, "every EP016 fill is maker"
