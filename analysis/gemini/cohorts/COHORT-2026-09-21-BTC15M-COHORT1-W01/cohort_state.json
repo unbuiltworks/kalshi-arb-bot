@@ -1,34 +1,101 @@
 {
-  "label": "GEMINI_L5_COHORT_RUNNER_V1",
+  "accounting_correction": {
+    "by": "owner instruction, 2026-09-22: the cohort loss stop must not treat gross confirmed BUY outflow as loss",
+    "label": "COHORT1_ECONOMICS_CORRECTION_V1",
+    "new_aggregate_loss_usd": "-1.14",
+    "new_measure": "settlement-inclusive: fill spend + confirmed fees - settlement payout - confirmed rebates, SETTLED windows only. A profitable window carries a negative loss.",
+    "old_aggregate_loss_usd": "10.63",
+    "old_measure": "sum of total_spend_usd -- gross confirmed BUY outflow, which is TURNOVER and accumulates at about half of turnover whether the cohort wins or loses",
+    "realized": null,
+    "realized_note": "+1.14 is settlement-IMPLIED. No attributable cash movement has been read back from the account.",
+    "unrecoverable_excluded_usd": "3.77",
+    "unrecoverable_note": "gross outflow, recorded because it is known. NOT established loss and NOT carried forward into the cap as though it were.",
+    "utc": "2026-09-22T04:05:17.231300+00:00"
+  },
+  "aggregate_loss_usd": "-1.14",
   "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
   "created_utc": "2026-09-22T01:19:31.864400+00:00",
-  "max_windows": 10,
+  "economics": {
+    "cumulative_economic_loss_usd": "-1.14",
+    "fees_usd": "0",
+    "gross_fill_spend_usd": "10.63",
+    "label": "GEMINI_COHORT_ECONOMICS_V1",
+    "labels": "cumulative_economic_loss_usd is the ONLY field the aggregate stop reads, and it sums SETTLED windows only. A profitable window carries a NEGATIVE loss and reduces it. Pending windows contribute nothing -- their risk lives in the per-market gates. Unrecoverable windows contribute nothing and are never estimated from turnover. REALIZED stays null until attributable cash is read back.",
+    "realized_net_usd": null,
+    "rebates_credited_usd": "0",
+    "settlement_implied_net_usd": "1.14",
+    "settlement_payout_usd": "8",
+    "windows_pending_settlement": 0,
+    "windows_settled": 4,
+    "windows_unrecoverable": 1
+  },
+  "label": "GEMINI_L5_COHORT_RUNNER_V1",
+  "labels": "windows_observed counts CONTRACTS BOUND. A contract that produced no fill is an observed window and is not a failure: nothing in this runner requires a trade to happen, and no parameter is tuned between windows.",
   "max_aggregate_loss_usd": "10.00",
-  "windows_observed": 6,
-  "windows_traded": 6,
-  "aggregate_loss_usd": "10.63",
+  "max_windows": 10,
+  "prior_stop": {
+    "note": "an AUTHORIZED stop, reached because the CLI never wired the ledger chain and both windows drew on one 12-slot budget",
+    "run": "35671834127",
+    "state": "STOPPED_MUTATION_BUDGET",
+    "utc": "2026-09-22T00:54:54Z",
+    "why": "the cohort's action budget is spent (12/12)"
+  },
+  "prior_stop_2": {
+    "note": "an AUTHORIZED stop, fired on the turnover measure corrected above. The stop is preserved, not erased. `stopped` stays TRUE: clearing it is an OWNER decision, not a consequence of fixing the arithmetic.",
+    "run": "35677907781",
+    "state": "STOPPED_AGGREGATE_LOSS",
+    "utc": "2026-09-22T03:02:11Z",
+    "why": "AGGREGATE_LOSS: reconstructed aggregate loss 10.63 has reached the cohort cap of 10.00"
+  },
+  "recovery": {
+    "aggregate_loss_carried_forward_usd": "3.77",
+    "label": "COHORT1_RECOVERY_V1",
+    "note": "the twelve slots are reserved so they cannot be spent twice. They reconstruct no trade. The 3.77 is carried forward into the $10.00 aggregate cap rather than reset.",
+    "remaining_loss_budget_usd": "6.23",
+    "tombstone_kind": "TOMBSTONE_UNRECOVERABLE",
+    "tombstoned_ledger": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
+    "tombstoned_slots": 12,
+    "utc": "2026-09-22T01:20:00Z",
+    "why": "run 35671834127 stopped on an authorized condition, exited 1, and its evidence commit was skipped, so the ledger rows and the report died with the runner"
+  },
+  "resumed": {
+    "by": "owner instruction, 2026-09-22: resume the remaining 8 windows",
+    "fix_commit": "830908f",
+    "note": "`stopped` is cleared because the OWNER resumed this cohort after the orchestration defect was fixed. The stop itself is preserved above and is not erased.",
+    "utc": "2026-09-22T01:35:00Z"
+  },
+  "stop_why": "AGGREGATE_LOSS: reconstructed aggregate loss 10.63 has reached the cohort cap of 10.00",
+  "stopped": true,
   "symbols": [
     "GEMI-BTC15M2609220230-UP",
     "GEMI-BTC15M2609220245-UP",
     "GEMI-BTC15M2609220300-UP",
     "GEMI-BTC15M2609220315-UP"
   ],
+  "unrecoverable": [
+    {
+      "economic_loss_usd": null,
+      "fees_usd": "0",
+      "gross_fill_spend_usd": "3.77",
+      "label": "GEMINI_COHORT_ECONOMICS_V1",
+      "labels": "gross outflow is recorded because it is known. ECONOMIC LOSS IS NOT ESTABLISHED: settlement was never observed, and gross buy outflow is turnover, not loss. It is excluded from the cohort's loss counter rather than carried forward as though it were a loss.",
+      "rebates_usd": null,
+      "settlement_implied_net_usd": null,
+      "settlement_payout_usd": null,
+      "source_run": "35671834127",
+      "state": "UNRECOVERABLE",
+      "symbol": null,
+      "why": "run 35671834127 stopped on an authorized condition, exited 1 and skipped its evidence commit, so the symbols, per-action ledger and window reports of its two windows died with the runner. Their settlement was never observed."
+    }
+  ],
   "windows": [
     {
-      "recovered": true,
-      "source_run": "35671834127",
-      "source_job": "106569794023",
       "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
+      "labels": "RECOVERED FACTS ONLY. 3.77 is the runner's own reconstructed loss -- cash out of the account from confirmed fills, with no settlement credit, no matched-pair offset and no rebate assumed. It is NOT REALIZED: no attributable cash movement has been read back for it. Nothing in `what_is_NOT_known` is reconstructed, estimated or inferred anywhere in this file.",
+      "recovered": true,
+      "source_job": "106569794023",
+      "source_run": "35671834127",
       "utc": "2026-09-22T00:54:54Z",
-      "what_is_known": {
-        "windows_observed": 2,
-        "windows_traded": 2,
-        "aggregate_reconstructed_loss_usd": "3.77",
-        "cohort_stop": "STOPPED_MUTATION_BUDGET",
-        "cohort_stop_why": "the cohort's action budget is spent (12/12)",
-        "ledger_spent": "12 of 12",
-        "source": "the runner's own stdout summary, the only record that survived; the report and per-window artifacts were written to the runner's disk and lost"
-      },
       "what_is_NOT_known": [
         "the two bound symbols and their entry TTEs",
         "the per-cycle decision record and desired surfaces",
@@ -36,106 +103,185 @@
         "per-window inventory, matched inventory and peak imbalance",
         "which of the two windows produced which part of the 3.77"
       ],
-      "labels": "RECOVERED FACTS ONLY. 3.77 is the runner's own reconstructed loss -- cash out of the account from confirmed fills, with no settlement credit, no matched-pair offset and no rebate assumed. It is NOT REALIZED: no attributable cash movement has been read back for it. Nothing in `what_is_NOT_known` is reconstructed, estimated or inferred anywhere in this file."
+      "what_is_known": {
+        "aggregate_reconstructed_loss_usd": "3.77",
+        "cohort_stop": "STOPPED_MUTATION_BUDGET",
+        "cohort_stop_why": "the cohort's action budget is spent (12/12)",
+        "ledger_spent": "12 of 12",
+        "source": "the runner's own stdout summary, the only record that survived; the report and per-window artifacts were written to the runner's disk and lost",
+        "windows_observed": 2,
+        "windows_traded": 2
+      }
     },
     {
-      "symbol": "GEMI-BTC15M2609220230-UP",
       "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W02",
-      "utc": "2026-09-22T02:25:51.195379+00:00",
+      "economics": {
+        "committed_open_usd": "0.27",
+        "directional_residual": "-1",
+        "economic_loss_usd": "-0.48",
+        "fee_provenance": {
+          "fees_missing": 0,
+          "fees_usd": "0",
+          "fills_seen": 7,
+          "note": "an execution with no `n` contributes nothing and is COUNTED here: absent is unknown, never zero",
+          "source": "the venue's own orderUpdate `n` field"
+        },
+        "fees_usd": "0",
+        "gross_fill_spend_usd": "2.52",
+        "label": "GEMINI_COHORT_ECONOMICS_V1",
+        "matched_qty": "3",
+        "n_fills": 7,
+        "no_qty": "4",
+        "realized_net_usd": null,
+        "realized_note": "REALIZED requires an attributable cash movement read back from the account. Nothing here is it.",
+        "rebates_note": "CREDITED rebates only. None read back means None, not zero: an assumed rebate is exactly the kind of number that makes a bad trade look profitable.",
+        "rebates_usd": null,
+        "resolution_side": "yes",
+        "resolution_source": "the venue's own contract object, re-read 2026-09-22 (3 reads, settled)",
+        "settlement_implied_net_usd": "0.48",
+        "settlement_payout_usd": "3",
+        "source_artifact": "cohort_window_20260922T021535Z.json",
+        "state": "SETTLED",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "why": "settlement-inclusive: payout + credited rebates - fill spend - confirmed fees. Settlement-IMPLIED, never REALIZED.",
+        "winning_qty": "3",
+        "yes_qty": "3"
+      },
+      "orders_live_after_stop": 0,
+      "placement_rows": 110,
+      "settled_at_utc": "2026-09-22T02:55:00Z",
       "state": null,
       "stop_why": "risk gate refused the rung: a fill would take NO to 5, past 4",
-      "orders_live_after_stop": 0,
-      "economics": {
-        "reconstructed_loss_usd": "2.52",
-        "total_spend_usd": "2.52",
-        "n_fills": 7,
-        "matched_qty": "3",
-        "directional_residual": "-1",
-        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
-        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
-      },
-      "placement_rows": 110
+      "symbol": "GEMI-BTC15M2609220230-UP",
+      "utc": "2026-09-22T02:25:51.195379+00:00"
     },
     {
-      "symbol": "GEMI-BTC15M2609220245-UP",
       "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W02",
-      "utc": "2026-09-22T02:32:40.719804+00:00",
+      "economics": {
+        "committed_open_usd": "0.77",
+        "directional_residual": "2",
+        "economic_loss_usd": "-1.29",
+        "fee_provenance": {
+          "fees_missing": 0,
+          "fees_usd": "0",
+          "fills_seen": 2,
+          "note": "an execution with no `n` contributes nothing and is COUNTED here: absent is unknown, never zero",
+          "source": "the venue's own orderUpdate `n` field"
+        },
+        "fees_usd": "0",
+        "gross_fill_spend_usd": "0.71",
+        "label": "GEMINI_COHORT_ECONOMICS_V1",
+        "matched_qty": "0",
+        "n_fills": 2,
+        "no_qty": "0",
+        "realized_net_usd": null,
+        "realized_note": "REALIZED requires an attributable cash movement read back from the account. Nothing here is it.",
+        "rebates_note": "CREDITED rebates only. None read back means None, not zero: an assumed rebate is exactly the kind of number that makes a bad trade look profitable.",
+        "rebates_usd": null,
+        "resolution_side": "yes",
+        "resolution_source": "the venue's own contract object, re-read 2026-09-22 (3 reads, settled)",
+        "settlement_implied_net_usd": "1.29",
+        "settlement_payout_usd": "2",
+        "source_artifact": "cohort_window_20260922T023032Z.json",
+        "state": "SETTLED",
+        "symbol": "GEMI-BTC15M2609220245-UP",
+        "why": "settlement-inclusive: payout + credited rebates - fill spend - confirmed fees. Settlement-IMPLIED, never REALIZED.",
+        "winning_qty": "2",
+        "yes_qty": "2"
+      },
+      "orders_live_after_stop": 0,
+      "placement_rows": 26,
+      "settled_at_utc": "2026-09-22T02:55:00Z",
       "state": null,
       "stop_why": "no mutation slots left to cancel with",
-      "orders_live_after_stop": 0,
-      "economics": {
-        "reconstructed_loss_usd": "0.71",
-        "total_spend_usd": "0.71",
-        "n_fills": 2,
-        "matched_qty": "0",
-        "directional_residual": "2",
-        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
-        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
-      },
-      "placement_rows": 26
+      "symbol": "GEMI-BTC15M2609220245-UP",
+      "utc": "2026-09-22T02:32:40.719804+00:00"
     },
     {
-      "symbol": "GEMI-BTC15M2609220300-UP",
       "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W03",
-      "utc": "2026-09-22T02:52:05.155127+00:00",
+      "economics": {
+        "committed_open_usd": "0.33",
+        "directional_residual": "2",
+        "economic_loss_usd": "0.4",
+        "fee_provenance": {
+          "fees_missing": 0,
+          "fees_usd": "0",
+          "fills_seen": 6,
+          "note": "an execution with no `n` contributes nothing and is COUNTED here: absent is unknown, never zero",
+          "source": "the venue's own orderUpdate `n` field"
+        },
+        "fees_usd": "0",
+        "gross_fill_spend_usd": "2.4",
+        "label": "GEMINI_COHORT_ECONOMICS_V1",
+        "matched_qty": "2",
+        "n_fills": 6,
+        "no_qty": "2",
+        "realized_net_usd": null,
+        "realized_note": "REALIZED requires an attributable cash movement read back from the account. Nothing here is it.",
+        "rebates_note": "CREDITED rebates only. None read back means None, not zero: an assumed rebate is exactly the kind of number that makes a bad trade look profitable.",
+        "rebates_usd": null,
+        "resolution_side": "no",
+        "resolution_source": "the venue's own contract object, re-read 2026-09-22 (3 reads, settled)",
+        "settlement_implied_net_usd": "-0.4",
+        "settlement_payout_usd": "2",
+        "source_artifact": "cohort_window_20260922T024529Z.json",
+        "state": "SETTLED",
+        "symbol": "GEMI-BTC15M2609220300-UP",
+        "why": "settlement-inclusive: payout + credited rebates - fill spend - confirmed fees. Settlement-IMPLIED, never REALIZED.",
+        "winning_qty": "2",
+        "yes_qty": "4"
+      },
+      "orders_live_after_stop": 0,
+      "placement_rows": 86,
+      "settled_at_utc": "2026-09-22T02:55:00Z",
       "state": null,
       "stop_why": "risk gate refused the rung: a fill would take YES to 5, past 4",
-      "orders_live_after_stop": 0,
-      "economics": {
-        "reconstructed_loss_usd": "2.40",
-        "total_spend_usd": "2.40",
-        "n_fills": 6,
-        "matched_qty": "2",
-        "directional_residual": "2",
-        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
-        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
-      },
-      "placement_rows": 86
+      "symbol": "GEMI-BTC15M2609220300-UP",
+      "utc": "2026-09-22T02:52:05.155127+00:00"
     },
     {
-      "symbol": "GEMI-BTC15M2609220315-UP",
       "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W03",
-      "utc": "2026-09-22T03:02:05.558651+00:00",
+      "economics": {
+        "committed_open_usd": "0.73",
+        "directional_residual": "1",
+        "economic_loss_usd": "0.23",
+        "fee_provenance": {
+          "fees_missing": 0,
+          "fees_usd": "0",
+          "fills_seen": 3,
+          "note": "an execution with no `n` contributes nothing and is COUNTED here: absent is unknown, never zero",
+          "source": "the venue's own orderUpdate `n` field"
+        },
+        "fees_usd": "0",
+        "gross_fill_spend_usd": "1.23",
+        "label": "GEMINI_COHORT_ECONOMICS_V1",
+        "matched_qty": "1",
+        "n_fills": 3,
+        "no_qty": "1",
+        "realized_net_usd": null,
+        "realized_note": "REALIZED requires an attributable cash movement read back from the account. Nothing here is it.",
+        "rebates_note": "CREDITED rebates only. None read back means None, not zero: an assumed rebate is exactly the kind of number that makes a bad trade look profitable.",
+        "rebates_usd": null,
+        "resolution_side": "no",
+        "resolution_source": "the venue's own contract object, re-read 2026-09-22 (3 reads, settled)",
+        "settlement_implied_net_usd": "-0.23",
+        "settlement_payout_usd": "1",
+        "source_artifact": "cohort_window_20260922T030021Z.json",
+        "state": "SETTLED",
+        "symbol": "GEMI-BTC15M2609220315-UP",
+        "why": "settlement-inclusive: payout + credited rebates - fill spend - confirmed fees. Settlement-IMPLIED, never REALIZED.",
+        "winning_qty": "1",
+        "yes_qty": "2"
+      },
+      "orders_live_after_stop": 0,
+      "placement_rows": 16,
+      "settled_at_utc": "2026-09-22T02:55:00Z",
       "state": null,
       "stop_why": "no mutation slots left to cancel with",
-      "orders_live_after_stop": 0,
-      "economics": {
-        "reconstructed_loss_usd": "1.23",
-        "total_spend_usd": "1.23",
-        "n_fills": 3,
-        "matched_qty": "1",
-        "directional_residual": "1",
-        "basis": "cash OUT of the account from confirmed fills. No settlement credit, no matched-pair offset and no rebate is assumed; each is accounted separately and only when the venue confirms it. This is the number the cohort's aggregate stop uses, and it can only overstate the loss.",
-        "not_realized": "REALIZED P&L requires attributable cash movement and is never this field"
-      },
-      "placement_rows": 16
+      "symbol": "GEMI-BTC15M2609220315-UP",
+      "utc": "2026-09-22T03:02:05.558651+00:00"
     }
   ],
-  "stopped": true,
-  "stop_why": "AGGREGATE_LOSS: reconstructed aggregate loss 10.63 has reached the cohort cap of 10.00",
-  "labels": "windows_observed counts CONTRACTS BOUND. A contract that produced no fill is an observed window and is not a failure: nothing in this runner requires a trade to happen, and no parameter is tuned between windows.",
-  "recovery": {
-    "label": "COHORT1_RECOVERY_V1",
-    "utc": "2026-09-22T01:20:00Z",
-    "why": "run 35671834127 stopped on an authorized condition, exited 1, and its evidence commit was skipped, so the ledger rows and the report died with the runner",
-    "tombstoned_ledger": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
-    "tombstoned_slots": 12,
-    "tombstone_kind": "TOMBSTONE_UNRECOVERABLE",
-    "aggregate_loss_carried_forward_usd": "3.77",
-    "remaining_loss_budget_usd": "6.23",
-    "note": "the twelve slots are reserved so they cannot be spent twice. They reconstruct no trade. The 3.77 is carried forward into the $10.00 aggregate cap rather than reset."
-  },
-  "prior_stop": {
-    "state": "STOPPED_MUTATION_BUDGET",
-    "why": "the cohort's action budget is spent (12/12)",
-    "utc": "2026-09-22T00:54:54Z",
-    "run": "35671834127",
-    "note": "an AUTHORIZED stop, reached because the CLI never wired the ledger chain and both windows drew on one 12-slot budget"
-  },
-  "resumed": {
-    "utc": "2026-09-22T01:35:00Z",
-    "by": "owner instruction, 2026-09-22: resume the remaining 8 windows",
-    "fix_commit": "830908f",
-    "note": "`stopped` is cleared because the OWNER resumed this cohort after the orchestration defect was fixed. The stop itself is preserved above and is not erased."
-  }
+  "windows_observed": 6,
+  "windows_traded": 6
 }

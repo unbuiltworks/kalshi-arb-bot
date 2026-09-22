@@ -19,6 +19,7 @@ from decimal import Decimal as D
 import pytest
 
 from src.gemini_execution import cohort as CO
+from src.gemini_execution import cohort_economics as CE
 from src.gemini_execution import cohort_runner as CR
 from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import live_envelope as LE
@@ -39,6 +40,10 @@ async def _READY(spec, **k):
     """A PASSING static readiness, injected. The readiness check itself has
     its own tests above; these ones are about the orchestration around it."""
     return {"ok": True, "verdict": "PASS", "why_not": [], "injected": True}
+
+
+async def _ok_gate(symbol, **k):
+    return {"ok": True, "verdict": "CLEAR"}
 
 
 def _run(coro):
@@ -508,33 +513,206 @@ def test_the_aggregate_loss_cap_stops_the_cohort(tmp_path):
     async def _window(plan, symbol, *, readiness, latch_held_by,
                       cohort_id=None):
         seen.append(symbol)
+        # 2.50 out and ONE winning contract back: a settlement-inclusive
+        # loss of 1.50, not the 2.50 of turnover the old measure counted.
         return {"state": "STOPPED_FLAT_ORDERS",
-                "window": {"inventory": {"total_spend_usd": "2.00",
+                "window": {"symbol": symbol,
+                           "inventory": {"total_spend_usd": "2.50",
+                                         "yes_qty": 0, "no_qty": 1,
                                          "n_fills": 2},
                            "orders_live_after_stop": 0}}
+
+    async def _res(symbol):
+        return {"status": "settled", "resolutionSide": "no"}
 
     async def _gate(symbol, **k):
         return {"ok": True, "verdict": "CLEAR"}
 
     rep = _run(CR.run_cohort(plan, readiness=True, window_fn=_window,
                              discover_fn=_discover, gate_fn=_gate,
-                             readiness_fn=_READY,
+                             readiness_fn=_READY, resolution_fn=_res,
                              latch_fn=lambda *a, **k: {"ok": True}))
-    assert len(seen) == 2, "2.00 + 2.00 >= 3.00, checked BEFORE binding a 3rd"
+    assert len(seen) == 2, "1.50 + 1.50 >= 3.00, checked BEFORE binding a 3rd"
     assert rep["state"] == "STOPPED_AGGREGATE_LOSS"
     assert rep["cohort_state"]["windows_traded"] == 2
 
 
-def test_the_loss_measure_never_credits_unconfirmed_economics():
-    """Matched inventory is our own bookkeeping until the venue's position
-    representation is resolved; a stop that netted it off would trust exactly
-    what this programme refuses to trust."""
-    econ = CR.window_loss_usd({"window": {"inventory": {
-        "total_spend_usd": "1.47", "n_fills": 3, "matched_qty": "1",
-        "directional_residual": "1"}}})
-    assert econ["reconstructed_loss_usd"] == "1.47"
-    assert "no matched-pair offset" in econ["basis"]
-    assert "attributable cash movement" in econ["not_realized"]
+# ============ the loss measure is SETTLEMENT-INCLUSIVE, not turnover
+
+def _win(spend, yes=0, no=0, fills=1, events=None, symbol="S"):
+    return {"window": {"symbol": symbol,
+                       "inventory": {"total_spend_usd": str(spend),
+                                     "yes_qty": yes, "no_qty": no,
+                                     "n_fills": fills},
+                       "order_events": list(events or [])}}
+
+
+def test_an_unsettled_window_contributes_nothing_to_cohort_loss():
+    """The defect that stopped COHORT-1. Gross BUY outflow is TURNOVER: for a
+    strategy that buys both legs of a binary and is paid on one, it climbs at
+    about half of turnover whether the cohort is winning or losing, so a cap
+    on it is a turnover cap wearing a loss cap's name."""
+    e = CR.window_loss_usd(_win("2.52", yes=3, no=4))
+    assert e["state"] == CE.PENDING
+    assert e["gross_fill_spend_usd"] == "2.52"
+    # the turnover is RECORDED, and it is not the loss
+    assert e["settlement_payout_usd"] is None
+    assert e["economic_loss_usd"] is None
+    roll = CE.cohort_economics([e])
+    assert roll["cumulative_economic_loss_usd"] == "0"
+    assert roll["windows_pending_settlement"] == 1
+
+
+def test_an_unresolved_market_never_has_its_payout_guessed():
+    """Its risk is bounded where it has always been bounded -- the per-market
+    committed/residual/exposure gates -- not by inventing a payout."""
+    for res in (None, {}, {"status": "active", "resolutionSide": None},
+                {"status": "settled", "resolutionSide": None}):
+        e = CR.window_loss_usd(_win("2.52", yes=3), res)
+        assert e["state"] == CE.PENDING, res
+        assert e["settlement_payout_usd"] is None, res
+        assert e["settlement_implied_net_usd"] is None, res
+
+
+def test_a_settled_window_is_priced_from_payout_fees_and_rebates():
+    e = CR.window_loss_usd(
+        _win("2.52", yes=3, no=4),
+        {"status": "settled", "resolutionSide": "yes"})
+    assert e["state"] == CE.SETTLED
+    assert e["settlement_payout_usd"] == "3"      # 3 winning YES at $1
+    assert e["settlement_implied_net_usd"] == "0.48"
+    assert e["economic_loss_usd"] == "-0.48"
+    assert e["realized_net_usd"] is None, "settlement-IMPLIED is not REALIZED"
+
+
+def test_a_profitable_window_reduces_cumulative_economic_loss():
+    win = CR.window_loss_usd(_win("0.71", yes=2),
+                             {"status": "settled", "resolutionSide": "yes"})
+    lose = CR.window_loss_usd(_win("2.40", yes=4, no=2),
+                              {"status": "settled", "resolutionSide": "no"})
+    assert win["economic_loss_usd"] == "-1.29"
+    assert lose["economic_loss_usd"] == "0.4"
+    roll = CE.cohort_economics([win, lose])
+    assert roll["cumulative_economic_loss_usd"] == "-0.89"
+    assert roll["settlement_implied_net_usd"] == "0.89"
+
+
+def test_fees_are_venue_confirmed_and_an_absent_fee_is_not_zero():
+    evs = [{"X": "FILLED", "n": "0.02"}, {"X": "FILLED"},
+           {"X": "CANCELLED", "n": "9.99"}]
+    e = CR.window_loss_usd(_win("1.00", yes=2, events=evs),
+                           {"status": "settled", "resolutionSide": "yes"})
+    assert e["fees_usd"] == "0.02", "the cancelled row is not an execution"
+    p = e["fee_provenance"]
+    assert p["fills_seen"] == 2 and p["fees_missing"] == 1, (
+        "no fees and no fee DATA must never read the same")
+    assert e["settlement_implied_net_usd"] == "0.98"
+
+
+def test_a_settle_pass_carries_the_confirmed_fee_rather_than_re_deriving_it():
+    """Hours later the order events are gone from the state file. Recomputing
+    against an empty list would report a real fee as 0.00."""
+    e = CE.window_economics(_win("1.00", yes=2),
+                            {"status": "settled", "resolutionSide": "yes"},
+                            fees_usd="0.02",
+                            fee_provenance_in={"fills_seen": 2,
+                                               "fees_missing": 1})
+    assert e["fees_usd"] == "0.02"
+    assert e["fee_provenance"]["carried_forward"] is True
+    assert e["settlement_implied_net_usd"] == "0.98"
+
+
+def test_rebates_are_credited_only_and_default_to_unknown():
+    e = CR.window_loss_usd(_win("0.71", yes=2),
+                           {"status": "settled", "resolutionSide": "yes"})
+    assert e["rebates_usd"] is None, "unread is not zero and is never assumed"
+    assert e["settlement_implied_net_usd"] == "1.29"
+    credited = CR.window_loss_usd(
+        _win("0.71", yes=2), {"status": "settled", "resolutionSide": "yes"},
+        rebates_usd="0.03")
+    assert credited["rebates_usd"] == "0.03"
+    assert credited["settlement_implied_net_usd"] == "1.32"
+    assert CE.cohort_economics([e])["rebates_credited_usd"] == "0"
+
+
+def test_an_unrecoverable_window_is_never_costed_from_its_turnover():
+    u = CE.unrecoverable_window(
+        None, gross_spend_usd="3.77",
+        why="the per-action ledger was lost with the failed first dispatch")
+    assert u["gross_fill_spend_usd"] == "3.77"
+    assert u["economic_loss_usd"] is None
+    assert u["settlement_implied_net_usd"] is None
+    roll = CE.cohort_economics([u])
+    assert roll["windows_unrecoverable"] == 1
+    assert roll["cumulative_economic_loss_usd"] == "0", (
+        "3.77 of gross outflow is not established loss and is never carried "
+        "forward as though it were")
+
+
+def test_nothing_in_the_rollup_is_ever_labelled_realized():
+    rows = [CR.window_loss_usd(_win("0.71", yes=2),
+                               {"status": "settled", "resolutionSide": "yes"}),
+            CR.window_loss_usd(_win("2.52", yes=3))]
+    assert all(r["realized_net_usd"] is None for r in rows)
+    assert CE.cohort_economics(rows)["realized_net_usd"] is None
+
+
+def test_EP016_recomputes_to_plus_1_14_rather_than_6_86_of_loss():
+    """COHORT-1's four recoverable settled windows, from their own records."""
+    obs = [("2.52", 3, 4, "yes"), ("0.71", 2, 0, "yes"),
+           ("2.40", 4, 2, "no"), ("1.23", 2, 1, "no")]
+    rows = [CR.window_loss_usd(_win(sp, yes=y, no=n),
+                               {"status": "settled", "resolutionSide": side})
+            for sp, y, n, side in obs]
+    roll = CE.cohort_economics(rows + [CE.unrecoverable_window(
+        None, gross_spend_usd="3.77", why="record lost")])
+
+    assert roll["windows_settled"] == 4
+    assert roll["settlement_payout_usd"] == "8"
+    assert roll["settlement_implied_net_usd"] == "1.14"
+    assert roll["cumulative_economic_loss_usd"] == "-1.14"
+    # what the OLD measure would have called loss, from the same four rows
+    old = sum(D(sp) for sp, _, _, _ in obs)
+    assert str(old) == "6.86"
+    assert D(roll["cumulative_economic_loss_usd"]) < 0 < old
+    # and the lost pair stays out of it entirely
+    assert roll["gross_fill_spend_usd"] == "10.63"
+    assert roll["windows_unrecoverable"] == 1
+
+
+def test_the_aggregate_stop_reads_the_settlement_inclusive_number(tmp_path):
+    """A cohort whose settled windows are PROFITABLE must not be stopped."""
+    root, cid = _cohort(tmp_path)
+    plan = _plan(tmp_path, root, cid, windows=2, loss="3.00")
+    seen = []
+
+    async def _discover(spec, exclude=()):
+        nxt = [s for s in (BTC15M, NEXT15M, THIRD15M) if s not in set(exclude)]
+        return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
+
+    async def _window(plan, symbol, *, readiness, latch_held_by,
+                      cohort_id=None):
+        seen.append(symbol)
+        # 2.52 out, 3 winning YES back: the OLD measure called this 2.52 of
+        # loss and would have stopped the cohort on the second window.
+        return {"state": "STOPPED_FLAT_ORDERS",
+                "window": {"symbol": symbol,
+                           "inventory": {"total_spend_usd": "2.52",
+                                         "yes_qty": 3, "no_qty": 4,
+                                         "n_fills": 7},
+                           "orders_live_after_stop": 0}}
+
+    async def _res(symbol):
+        return {"status": "settled", "resolutionSide": "yes"}
+
+    rep = _run(CR.run_cohort(plan, readiness=True, window_fn=_window,
+                             discover_fn=_discover,
+                             gate_fn=_ok_gate, readiness_fn=_READY,
+                             resolution_fn=_res,
+                             latch_fn=lambda *a, **k: {"ok": True}))
+    assert len(seen) == 2, "profitable windows must not trip the loss cap"
+    assert rep["state"] == "STOPPED_WINDOWS_EXHAUSTED"
+    assert D(rep["cohort_state"]["aggregate_loss_usd"]) < 0
 
 
 # ============================ 8. the bounded primitive is untouched
@@ -1161,3 +1339,156 @@ def test_cohort1_never_re_enters_a_spent_ledger_and_cannot_exceed_its_grant():
     # every ledger that HAS been spent was spent to its bound, never past it
     for row in b["ledgers"]:
         assert 0 <= row["consumed"] <= 12, row
+
+
+# ======== the 12 actions are PER MARKET; the remainder dies with the market
+
+def _spend(root, cid, n, *, kind="PLACE"):
+    """Spend n slots in one cohort's ledger, the way the driver spends them."""
+    path = CO.state(cid, root=root)["ledger_path"]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as fh:
+        for i in range(n):
+            fh.write(json.dumps({"kind": kind, "slot": i,
+                                 "outcome": "ACKED"}) + "\n")
+    return CO.state(cid, root=root)["consumed"]
+
+
+@pytest.mark.parametrize("consumed", [0, 4, 8, 12])
+def test_the_next_market_always_starts_on_a_whole_fresh_ledger(tmp_path,
+                                                               consumed):
+    """THE DEFECT. COHORT-1's window 4 was handed W02's remaining 4 slots
+    after window 3 spent 8 of them, and stopped with "no mutation slots left
+    to cancel with" fourteen cycles in. A market is granted TWELVE actions or
+    it is not granted a ledger at all."""
+    root, ids = _chain(tmp_path, 3)
+    plan = _plan(tmp_path, root, ids[0], windows=3, chain=ids)
+
+    first = plan.ledger_for(0, root=root)
+    assert first == ids[0]
+    assert _spend(root, first, consumed) == consumed
+
+    nxt = plan.ledger_for(1, root=root)
+    if consumed == 0:
+        assert nxt == ids[0], "an UNTOUCHED ledger is not forfeit"
+    else:
+        assert nxt == ids[1], (
+            "%d/12 spent: the remaining %d die with that market"
+            % (consumed, 12 - consumed))
+        st = CO.state(nxt, root=root)
+        assert (st["budget"], st["consumed"], st["remaining"]) == (12, 0, 12)
+
+
+def test_a_partially_spent_ledger_is_never_handed_to_a_second_market(tmp_path):
+    root, ids = _chain(tmp_path, 4)
+    plan = _plan(tmp_path, root, ids[0], windows=4, chain=ids)
+    for i, spent in enumerate((1, 11, 12)):
+        cid = plan.ledger_for(i, root=root)
+        assert cid == ids[i], "each market gets the NEXT untouched ledger"
+        _spend(root, cid, spent)
+    assert plan.ledger_for(3, root=root) == ids[3]
+    for cid, spent in zip(ids, (1, 11, 12)):
+        assert CO.state(cid, root=root)["consumed"] == spent, (
+            "a spent ledger is never re-entered and never topped up")
+
+
+def test_unused_slots_do_not_inflate_what_the_cohort_can_still_bind(tmp_path):
+    root, ids = _chain(tmp_path, 3)
+    plan = _plan(tmp_path, root, ids[0], windows=3, chain=ids)
+    _spend(root, ids[0], 1)          # 11 left, and they are FORFEIT
+
+    b = plan.action_budget(root=root)
+    assert b["total_remaining"] == 35, "11 forfeit + 12 + 12, counted raw"
+    assert b["fresh_ledgers"] == 2
+    assert b["bindable_slots"] == 24, (
+        "what a market can actually be given -- WHOLE ledgers only")
+    assert b["fresh_ledger_ids"] == [ids[1], ids[2]]
+
+
+def test_the_cohort_stops_when_no_WHOLE_ledger_remains(tmp_path):
+    """Not when the slots run out -- when the LEDGERS do."""
+    root, ids = _chain(tmp_path, 2)
+    plan = _plan(tmp_path, root, ids[0], windows=5, chain=ids)
+    _spend(root, ids[0], 1)
+    _spend(root, ids[1], 1)
+    assert plan.action_budget(root=root)["total_remaining"] == 22
+
+    async def _discover(spec, exclude=()):
+        return {"found": True, "symbol": BTC15M, "tte_s": 870.0}
+
+    async def _window(plan, symbol, **k):        # pragma: no cover - must not
+        raise AssertionError("a market must never be bound without a ledger")
+
+    rep = _run(CR.run_cohort(plan, readiness=True, window_fn=_window,
+                             discover_fn=_discover, gate_fn=_ok_gate,
+                             readiness_fn=_READY,
+                             latch_fn=lambda *a, **k: {"ok": True}))
+    assert rep["state"] == "STOPPED_MUTATION_BUDGET"
+    assert "never given another market's remainder" in rep["why"]
+
+
+def test_every_bound_market_records_which_ledger_it_was_given(tmp_path):
+    root, ids = _chain(tmp_path, 3)
+    plan = _plan(tmp_path, root, ids[0], windows=2, chain=ids)
+    order = []
+
+    async def _discover(spec, exclude=()):
+        nxt = [s for s in (BTC15M, NEXT15M, THIRD15M) if s not in set(exclude)]
+        return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
+
+    async def _window(plan, symbol, *, readiness, latch_held_by,
+                      cohort_id=None):
+        order.append((symbol, cohort_id))
+        _spend(root, cohort_id, 4)               # this market used 4 of 12
+        return {"state": "STOPPED_FLAT_ORDERS",
+                "window": {"symbol": symbol,
+                           "inventory": {"total_spend_usd": "0",
+                                         "n_fills": 0},
+                           "orders_live_after_stop": 0}}
+
+    rep = _run(CR.run_cohort(plan, readiness=True, window_fn=_window,
+                             discover_fn=_discover, gate_fn=_ok_gate,
+                             readiness_fn=_READY,
+                             latch_fn=lambda *a, **k: {"ok": True}))
+    assert rep["state"] == "STOPPED_WINDOWS_EXHAUSTED"
+    assert [c for _, c in order] == [ids[0], ids[1]], (
+        "the second market got a FRESH ledger, not the first's remaining 8")
+
+    bindings = [w["ledger_binding"] for w in rep["cohort_state"]["windows"]]
+    assert [b["cohort_id"] for b in bindings] == [ids[0], ids[1]]
+    assert [b["symbol"] for b in bindings] == [s for s, _ in order]
+    for b in bindings:
+        assert (b["granted"], b["consumed"], b["forfeited"]) == (12, 4, 8)
+        assert "never inherited by the next one" in b["note"]
+
+
+def test_cleanup_cancellation_survives_a_fully_spent_strategy_budget():
+    """CONTINUOUS-6 ended with zero strategy slots and an order still resting.
+    A cleanup that borrowed from the strategy budget could never run when it
+    is most needed, so it has its own and can only CANCEL."""
+    import ast
+    assert WC.MAX_CLEANUP_MUTATIONS >= 1
+
+    # THE CLEANUP PATH DOES NOT CONSULT THE STRATEGY BUDGET AT ALL, and it
+    # can only cancel. Read from the code, not from the docstring that says
+    # so: an assertion satisfied by prose is no assertion.
+    tree = ast.parse(open("src/gemini_execution/ws_continuous.py").read())
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.AsyncFunctionDef)
+              and n.name == "withdraw_orders")
+    names = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+    assert "cleanup_consumed" in names
+    assert "budget_left" not in names, (
+        "cleanup must not be drawn from the strategy budget")
+    assert "budget_consumed" not in names
+    called = {n.func.attr for n in ast.walk(fn)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    assert "_cleanup_cancel" in called
+    assert not {"_place", "place", "_send_place"} & called, "cancel only"
+
+    d = object.__new__(WC.Driver)
+    d._max_actions = 12
+    d.budget_consumed = 12
+    assert d.budget_left() == 0, "12/12: the strategy budget is exhausted"
+    assert WC.MAX_CLEANUP_MUTATIONS > d.budget_left(), (
+        "cleanup must not be drawn from a budget that is already spent")

@@ -60,6 +60,7 @@ from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
 
 from src.gemini_execution import bundle as BUNDLE
 from src.gemini_execution import cohort as CO
+from src.gemini_execution import cohort_economics as CE
 from src.gemini_execution import continuous_probe as CP
 from src.gemini_execution import metadata as MD
 from src.gemini_execution import position_ledger as PL
@@ -325,34 +326,31 @@ async def static_readiness(spec: Any, *, auth_id: str,
 
 # ------------------------------------------------------------- economics
 
-def window_loss_usd(rep: Mapping[str, Any]) -> Dict[str, Any]:
-    """The CONSERVATIVE reconstructed loss this window may have cost.
+def window_loss_usd(rep: Mapping[str, Any],
+                    resolution: Optional[Mapping[str, Any]] = None,
+                    rebates_usd: Any = None) -> Dict[str, Any]:
+    """DEPRECATED NAME, CORRECTED MEANING. See `cohort_economics`.
 
-    NOT a P&L and never labelled realized. It is the number the cohort's
-    aggregate stop is measured against, and it is deliberately the
-    pessimistic one: cash out of the account with no credit assumed back.
+    This used to return `total_spend_usd` -- gross confirmed BUY outflow --
+    under the name `reconstructed_loss_usd`, and the cohort's aggregate stop
+    compared that against a dollar LOSS limit. COHORT-1 was halted at 4 of its
+    8 remaining windows on 10.63 of "loss" while the four windows it had
+    records for were +1.14 settlement-implied. Buy outflow is TURNOVER; for a
+    strategy that buys both legs and is paid on one it accumulates at about
+    half of turnover whether the cohort is winning or losing.
 
-    Matched inventory is NOT netted off. The venue position representation is
-    UNRESOLVED (EP003/EP004), so a matched pair is our own bookkeeping, not
-    confirmed venue state, and a stop that credited it would be a stop that
-    trusted the very thing this programme has refused to trust.
+    It now delegates to the economics module, which keeps the seven lines
+    apart and produces an economic loss ONLY for a settled contract.
     """
-    inv = ((rep.get("window") or {}).get("inventory")
-           or rep.get("inventory") or {})
-    spend = D(str(inv.get("total_spend_usd") or "0"))
-    return {"reconstructed_loss_usd": str(spend),
-            "total_spend_usd": str(spend),
-            "n_fills": inv.get("n_fills"),
-            "matched_qty": inv.get("matched_qty"),
-            "directional_residual": inv.get("directional_residual"),
-            "basis": ("cash OUT of the account from confirmed fills. No "
-                      "settlement credit, no matched-pair offset and no "
-                      "rebate is assumed; each is accounted separately and "
-                      "only when the venue confirms it. This is the number "
-                      "the cohort's aggregate stop uses, and it can only "
-                      "overstate the loss."),
-            "not_realized": ("REALIZED P&L requires attributable cash "
-                             "movement and is never this field")}
+    return CE.window_economics(rep, resolution, rebates_usd)
+
+
+async def resolution_for(symbol: str) -> Dict[str, Any]:
+    """The venue's own contract object, or an empty dict. PUBLIC read."""
+    try:
+        return MD.resolution_for(symbol) or {}
+    except Exception:                                         # noqa: BLE001
+        return {}
 
 
 # ------------------------------------------------ spread / placement capture
@@ -607,12 +605,19 @@ class CohortPlan:
         r = root or self.root
         for cid in self.cohort_ids:
             try:
-                if CO.state(cid, root=r)["remaining"] > 0:
+                # UNUSED, not merely "has room". A market gets a WHOLE ledger
+                # or none: COHORT-1's window 4 inherited W02's remaining 4
+                # after window 3 spent 8 and stopped at "no mutation slots
+                # left to cancel with" after 14 cycles, and window 6 got 5.
+                # The grant is twelve actions PER MARKET, so unused slots die
+                # with the market that was given them and are never handed on.
+                if CO.state(cid, root=r)["consumed"] == 0:
                     return cid
             except Exception:                                 # noqa: BLE001
                 continue
         raise IndexError(
-            "every ledger in this cohort is spent; %d granted, none with room"
+            "no UNUSED ledger remains in this cohort; %d were granted and a "
+            "market is never given a partially spent one"
             % len(self.cohort_ids))
 
     def action_budget(self, *, root: Optional[str] = None) -> Dict[str, Any]:
@@ -633,7 +638,14 @@ class CohortPlan:
                          "predecessor_intact":
                              (st.get("predecessor") or {}).get("intact")})
         ok = [r_ for r_ in rows if r_.get("readable")]
+        fresh = [r_ for r_ in ok if r_.get("consumed") == 0]
         return {"per_window": 12, "ledgers": rows,
+                # WHAT A MARKET CAN ACTUALLY BE GIVEN. `total_remaining` sums
+                # partial ledgers no market may be handed, so it overstates
+                # what is bindable. This is the number of whole ledgers left.
+                "fresh_ledgers": len(fresh),
+                "bindable_slots": 12 * len(fresh),
+                "fresh_ledger_ids": [r_["cohort_id"] for r_ in fresh],
                 "total_budget": sum(r_["budget"] for r_ in ok),
                 "total_consumed": sum(r_["consumed"] for r_ in ok),
                 "total_remaining": sum(r_["remaining"] for r_ in ok),
@@ -663,6 +675,7 @@ async def run_cohort(plan: CohortPlan, *,
                      window_fn: Optional[Callable] = None,
                      discover_fn: Optional[Callable] = None,
                      gate_fn: Optional[Callable] = None,
+                     resolution_fn: Optional[Callable] = None,
                      now_fn: Callable[[], float] = time.time,
                      ) -> Dict[str, Any]:
     """ONE process, up to `max_windows` consecutive contracts, then STOP.
@@ -727,6 +740,7 @@ async def run_cohort(plan: CohortPlan, *,
     run_window = window_fn or _run_window
     discover = discover_fn or await_contract
     gate = gate_fn or rollover_gate
+    resolve = resolution_fn or resolution_for
 
     while True:
         if st["windows_observed"] >= plan.max_windows:
@@ -734,6 +748,47 @@ async def run_cohort(plan: CohortPlan, *,
                   "the authorized %d window(s) have been observed"
                   % plan.max_windows)
             break
+        # SETTLE WHAT HAS SETTLED, BEFORE DECIDING WHETHER TO BIND AGAIN.
+        # The previous contract expires ~20-60s before the next one reaches
+        # the entry band, so by the time this runs its resolution is usually
+        # published. Nothing is guessed: a contract still unresolved stays
+        # PENDING and stays out of the loss counter.
+        for w in st.get("windows") or []:
+            e = w.get("economics") or {}
+            if e.get("state") != CE.PENDING or not w.get("symbol"):
+                continue
+            res = await resolve(w["symbol"])
+            if str(res.get("status") or "").lower() != "settled":
+                continue
+            # RE-PRICED FROM THE LINES ALREADY ESTABLISHED, not re-derived.
+            # The order events are long gone from the state file, so the
+            # venue-confirmed fee is CARRIED FORWARD rather than recomputed
+            # against an empty event list -- which would report a real fee
+            # as 0.00 and quietly improve the number.
+            w["economics"] = CE.window_economics(
+                {"window": {"symbol": w["symbol"],
+                            "inventory": {
+                                "yes_qty": e.get("yes_qty"),
+                                "no_qty": e.get("no_qty"),
+                                "total_spend_usd": e.get(
+                                    "gross_fill_spend_usd"),
+                                "n_fills": e.get("n_fills"),
+                                "matched_qty": e.get("matched_qty"),
+                                "directional_residual": e.get(
+                                    "directional_residual")}}},
+                res,
+                rebates_usd=e.get("rebates_usd"),
+                fees_usd=e.get("fees_usd"),
+                fee_provenance_in=e.get("fee_provenance"))
+            w["settled_at_utc"] = datetime.now(timezone.utc).isoformat()
+        st["economics"] = CE.cohort_economics(
+            [w["economics"] for w in (st.get("windows") or [])
+             if w.get("economics")] + list(st.get("unrecoverable") or []))
+        st["aggregate_loss_usd"] = st["economics"][
+            "cumulative_economic_loss_usd"]
+        save_state(st, root=plan.root)
+
+        # THE ONLY FIELD THE STOP READS, and it sums SETTLED windows only.
         loss = D(str(st.get("aggregate_loss_usd") or "0"))
         cap = D(str(plan.max_aggregate_loss_usd))
         if loss >= cap:
@@ -751,10 +806,17 @@ async def run_cohort(plan: CohortPlan, *,
                   "the cohort's ledger chain is not readable and intact: %s"
                   % json.dumps(budget["ledgers"], default=str)[:400])
             break
-        if budget["total_remaining"] <= 0:
+        # BINDABLE, NOT REMAINING. `total_remaining` sums the leftovers of
+        # ledgers that markets have already been given, and no market may be
+        # handed a partial one, so it overstates what can actually be bound.
+        # The question is how many WHOLE ledgers are left.
+        if budget["bindable_slots"] <= 0:
             _stop(rep, st, "MUTATION_BUDGET",
-                  "the cohort's action budget is spent (%s/%s)"
-                  % (budget["total_consumed"], budget["total_budget"]))
+                  "no unused 12-action ledger remains (%s of %s ledgers "
+                  "fresh; %s/%s slots consumed, and a market is never given "
+                  "another market's remainder)"
+                  % (budget["fresh_ledgers"], len(budget["ledgers"]),
+                     budget["total_consumed"], budget["total_budget"]))
             break
         try:
             window_cohort = plan.ledger_for(st["windows_observed"],
@@ -773,17 +835,39 @@ async def run_cohort(plan: CohortPlan, *,
         wrep = await run_window(plan, symbol, readiness=readiness,
                                 latch_held_by=latch_rec,
                                 cohort_id=window_cohort)
-        econ = window_loss_usd(wrep)
+        # THE CONTRACT HAS NOT SETTLED YET. A window ends with seconds to
+        # spare; resolution lands at expiry. So this reads the resolution
+        # anyway -- it will usually be PENDING -- and the settle pass at the
+        # top of the next iteration converts it once the venue publishes. A
+        # pending window contributes NOTHING to the loss counter, and its
+        # risk stays where it has always been: the per-market committed,
+        # residual and exposure gates inside the driver.
+        econ = window_loss_usd(wrep, await resolve(symbol))
         placement = spread_placement(wrep)
         st["windows_observed"] += 1
         st["symbols"] = list(st.get("symbols") or []) + [symbol]
         if (econ.get("n_fills") or 0):
             st["windows_traded"] += 1
-        st["aggregate_loss_usd"] = str(
-            D(str(st.get("aggregate_loss_usd") or "0"))
-            + D(str(econ["reconstructed_loss_usd"])))
+        # THE BINDING, RECORDED WITH WHAT IT COST. A market is granted one
+        # whole ledger; whatever it did not spend is FORFEIT and dies here,
+        # so the record says so explicitly rather than leaving a later reader
+        # to infer it from a remaining count that nothing will ever draw on.
+        try:
+            _lst = CO.state(window_cohort, root=plan.root)
+            binding = {"cohort_id": window_cohort, "symbol": symbol,
+                       "granted": _lst["budget"],
+                       "consumed": _lst["consumed"],
+                       "forfeited": _lst["remaining"],
+                       "note": ("one whole ledger per market; the unspent "
+                                "slots die with this market and are never "
+                                "inherited by the next one")}
+        except Exception as exc:                              # noqa: BLE001
+            binding = {"cohort_id": window_cohort, "symbol": symbol,
+                       "readable": False,
+                       "why": "%s: %s" % (type(exc).__name__, exc)}
         st["windows"] = list(st.get("windows") or []) + [{
             "symbol": symbol, "cohort_id": window_cohort,
+            "ledger_binding": binding,
             "utc": datetime.now(timezone.utc).isoformat(),
             "state": wrep.get("state"),
             "stop_why": (wrep.get("window") or {}).get("stop_why")
@@ -793,6 +877,11 @@ async def run_cohort(plan: CohortPlan, *,
             "economics": econ,
             "placement_rows": len(placement),
         }]
+        st["economics"] = CE.cohort_economics(
+            [w["economics"] for w in st["windows"] if w.get("economics")]
+            + list(st.get("unrecoverable") or []))
+        st["aggregate_loss_usd"] = st["economics"][
+            "cumulative_economic_loss_usd"]
         save_state(st, root=plan.root)
         rep["windows"][-1].update({"report": wrep, "economics": econ,
                                    "spread_placement": placement})

@@ -100,13 +100,94 @@ of the six.
   `held_by_cohort` against the original.
 - **Chain wiring**: 4 windows drew on W02 and W03 rather than all on W01.
 
-## Two decisions for the owner, neither taken here
+## Both decisions were taken by the owner, 2026-09-22
 
-1. Should the aggregate cap measure **settlement-inclusive net** rather than
-   gross cash outflow? As built it stops a profitable cohort.
-2. Should a window get a **full 12 slots** — one ledger per window, remainder
-   discarded — rather than inheriting a partial one?
+Both defects are now fixed, and neither touches strategy behaviour.
+
+### 1. The aggregate cap is settlement-inclusive
+
+`src/gemini_execution/cohort_economics.py` keeps seven lines apart and never
+collapses them into one number:
+
+```
+gross_fill_spend_usd     cash OUT, venue-confirmed BUY fills
+committed_open_usd       cash reserved against orders still live
+settlement_payout_usd    cash IN from resolution, $1 per winning contract
+fees_usd                 venue-confirmed, from the venue's own `n` field
+rebates_usd              venue-CREDITED only; never assumed, never modelled
+settlement_implied_net   payout + rebates - spend - fees, SETTLED only
+realized_net             cash-confirmed. Absent until a cashflow is read.
+```
+
+For a settled contract, economic loss is
+`fill spend + confirmed fees - settlement payout - confirmed rebates`. A
+profitable window carries a **negative** loss and reduces the cumulative
+figure. An unresolved market contributes **nothing**: its payout is not
+guessed, and its risk stays where it has always been — the per-market
+committed, residual and exposure gates inside the driver.
+`cumulative_economic_loss_usd` is the only field the stop may read, and it
+sums SETTLED windows only.
+
+### The corrected EP016 accounting table
+
+Recomputed by `cohort_economics` from the four preserved window artifacts and
+the venue's own contract objects, re-read 2026-09-22T02:5xZ (3 reads each,
+all four `status: settled`):
+
+| contract | side | state | yes | no | gross spend | fees | rebates | payout | settlement-implied net | economic loss |
+|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|
+| …2609220230-UP | yes | SETTLED | 3 | 4 | 2.52 | 0.00 | none read | 3.00 | **+0.48** | −0.48 |
+| …2609220245-UP | yes | SETTLED | 2 | 0 | 0.71 | 0.00 | none read | 2.00 | **+1.29** | −1.29 |
+| …2609220300-UP | no  | SETTLED | 4 | 2 | 2.40 | 0.00 | none read | 2.00 | −0.40 | +0.40 |
+| …2609220315-UP | no  | SETTLED | 2 | 1 | 1.23 | 0.00 | none read | 1.00 | −0.23 | +0.23 |
+| *(first dispatch, 2 windows)* | — | **UNRECOVERABLE** | — | — | 3.77 | — | none read | — | **not established** | **excluded** |
+| **cohort** | | 4 settled, 1 unrecoverable | | | **10.63** | **0.00** | **0.00** | **8.00** | **+1.14** | **−1.14** |
+
+```
+cumulative_economic_loss_usd   -1.14      <- the ONLY field the stop reads
+realized_net_usd                null      <- no attributable cashflow read back
+```
+
+**Fee provenance.** 18 fills across the four windows, `fees_missing: 0` — every
+execution carried the venue's own `n`, and every one of them was `0.0000`. This
+is a confirmed zero, not an absent one. An execution without an `n` contributes
+nothing and is counted separately, so "no fees" and "no fee data" can never
+read the same.
+
+**What changed, and what did not.** The four recoverable settled windows are
+**+1.14 settlement-implied** before any unobserved rebate. The old measure
+called the same four windows **6.86 of "loss"** — that figure was the sum of
+their gross BUY outflow and was never a loss at all. The first dispatch's
+**3.77 is excluded**: settlement for those two windows was never observed, and
+turnover is not loss. It is recorded as gross outflow because it happened, and
+it is **not** carried forward into the cap as though it were established loss.
+
+Nothing above is REALIZED. +1.14 is settlement-implied from venue-confirmed
+fills and publicly published resolutions; no attributable cash movement has
+been read back from the account. Four windows is four windows and says nothing
+about expectancy.
+
+### 2. Action budgets are market-scoped
+
+Every newly bound contract is granted **one whole fresh 12-slot ledger**. It
+may consume 0–12; whatever it does not spend is **forfeit and dies with that
+market**. `ledger_for` now returns the first ledger with `consumed == 0` —
+UNUSED, not merely "has room" — so a market can never be handed another
+market's remainder, which is what left window 4 with 4 slots and window 6 with
+5. The cohort's bind gate reads `bindable_slots` (whole ledgers × 12) rather
+than `total_remaining`, which sums leftovers no market may be given. Each bound
+market records its binding explicitly: `{cohort_id, symbol, granted, consumed,
+forfeited}`.
+
+**Cleanup is unaffected at 12/12.** Safety cancellation draws on
+`MAX_CLEANUP_MUTATIONS`, a budget separate from the strategy budget, and the
+withdrawal path can only cancel — proved from the AST of `withdraw_orders`,
+not from its docstring.
+
+W01 remains permanently tombstoned. W02 and W03 are preserved exactly as
+historical evidence and were not rewritten.
 
 No strategy parameter was changed at any point: q=1, CAP-4, $4.00 per market,
 2 working orders, one rung per outcome, maker/post-only, the 30s floor, the
-frozen controller and TTE [60, 880] are exactly as authorized.
+frozen controller, the unreadable handling, the pricing, the rung count and
+TTE [60, 880] are exactly as authorized.
