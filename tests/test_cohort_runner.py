@@ -795,3 +795,76 @@ def test_an_already_spent_window_ledger_is_skipped_not_re_entered(tmp_path):
                              latch_fn=lambda *a, **k: {"ok": True}))
     assert ids[0] not in bound, "a spent ledger was re-entered"
     assert bound == [ids[1], ids[2]]
+
+
+# ============ the arm is the STEP's property, not the TREE's
+
+def test_static_readiness_asserts_the_tree_and_only_observes_the_arm(
+        tmp_path, monkeypatch):
+    """RUN 35670074043. Every check PASSed -- spec, bundle, family, cohort,
+    terms, positions -- and the single why_not was "transport arm:
+    GEMINI_CANARY_LIVE is not YES". That is the read-only step being
+    read-only, not the tree being unready, and folding it in made this check
+    unable to PASS from anywhere except an armed step."""
+    root, ids = _chain(tmp_path, 2)
+    monkeypatch.setattr(WC, "authorization_state", lambda: {
+        "authorized": False,
+        "required_auth_id": "OWNER-TEST",
+        "arming": {"armed": False,
+                   "why_not": "GEMINI_CANARY_LIVE is not YES"},
+        "why_not": ["transport arm: GEMINI_CANARY_LIVE is not YES"]})
+    monkeypatch.setattr(CR.BUNDLE, "state", lambda: {
+        "authorized": True, "why_not": []})
+
+    async def _terms():
+        return {"hasAcceptedLatest": True}
+    monkeypatch.setattr(CR.MD, "terms_status", _terms)
+
+    async def _pos():
+        return {"ok": True, "rows": [], "status": 200}
+    monkeypatch.setattr(CR.MD, "positions", _pos)
+
+    out = _run(CR.static_readiness(_spec(ids[0]), auth_id="OWNER-TEST",
+                                   root=root, chain=ids))
+    assert out["verdict"] == "PASS", out["why_not"]
+    a = out["checks"]["authorization"]
+    assert a["tree_authorized"] is True
+    assert a["transport_armed"] is False, "and it SAYS the arm is absent"
+    assert "property of the STEP" in a["transport_note"]
+
+
+def test_a_tree_whose_executable_moved_still_fails_static_readiness(
+        tmp_path, monkeypatch):
+    """The half that IS a tree property stays asserted."""
+    root, ids = _chain(tmp_path, 2)
+    monkeypatch.setattr(WC, "authorization_state", lambda: {
+        "authorized": False, "required_auth_id": "OWNER-TEST",
+        "arming": {"armed": True},
+        "why_not": ["AUTHORIZED_SHA names a different executable than the "
+                    "one running; this file changed after it was reviewed."]})
+    monkeypatch.setattr(CR.BUNDLE, "state", lambda: {
+        "authorized": True, "why_not": []})
+
+    async def _terms():
+        return {"hasAcceptedLatest": True}
+    monkeypatch.setattr(CR.MD, "terms_status", _terms)
+
+    async def _pos():
+        return {"ok": True, "rows": [], "status": 200}
+    monkeypatch.setattr(CR.MD, "positions", _pos)
+
+    out = _run(CR.static_readiness(_spec(ids[0]), auth_id="OWNER-TEST",
+                                   root=root, chain=ids))
+    assert out["verdict"] == "FAIL"
+    assert any("changed after it was reviewed" in w for w in out["why_not"])
+
+
+def test_the_driver_still_requires_the_arm_on_every_mutation(tmp_path):
+    """Nothing above loosened the thing that actually stops a send."""
+    import inspect
+    src = inspect.getsource(WC.Driver.place)
+    assert "require_authorization" in src or "authorized()" in src, src[:400]
+    # and the arm is still one of authorization_state's OWN refusals -- the
+    # readiness check merely declines to treat it as a tree property.
+    body = inspect.getsource(WC.authorization_state)
+    assert 'reasons.append("transport arm:' in body

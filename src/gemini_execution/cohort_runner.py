@@ -164,10 +164,39 @@ async def static_readiness(spec: Any, *, auth_id: str,
                   "bounds": spec.bounds(), "ok": True}
 
     # ---- the installed authorization, and whether it covers THIS tree
+    #
+    # THE CODE HALF, NOT THE ENV HALF. `authorization_state()` folds two
+    # different questions into one verdict: whether the TREE is authorized
+    # (REQUIRED_AUTH_ID, AUTHORIZED_SHA, AUTHORIZED_ENVELOPE -- reviewed
+    # constants a human edits in a commit) and whether THIS PROCESS carries
+    # the transport arm (GEMINI_CANARY_LIVE, which lives only in the step
+    # that will actually trade and never in the repository).
+    #
+    # A read-only readiness step deliberately sets no arm, so folding the arm
+    # in here would make this check unable to return PASS from anywhere
+    # except an armed step -- which is exactly what run 35670074043 showed:
+    # spec, bundle, family, cohort, terms and positions all PASS, and the
+    # single why_not was "transport arm: GEMINI_CANARY_LIVE is not YES".
+    # That is the step being read-only, not the tree being unready.
+    #
+    # NOTHING IS LOOSENED. The arm is still required at execution time by
+    # WC.authorized() inside the driver, on every mutation, unchanged. It is
+    # reported here as observation rather than asserted as a tree property.
     auth = WC.authorization_state()
-    ch["authorization"] = {**auth, "ok": bool(auth.get("authorized"))}
-    if not auth.get("authorized"):
-        out["why_not"] += list(auth.get("why_not") or [])
+    arm = auth.get("arming") or {}
+    tree_reasons = [r for r in (auth.get("why_not") or [])
+                    if not str(r).startswith("transport arm:")]
+    ch["authorization"] = {
+        **auth,
+        "tree_authorized": not tree_reasons,
+        "tree_why_not": tree_reasons,
+        "transport_armed": bool(arm.get("armed")),
+        "transport_note": (
+            "the arm is a property of the STEP that trades, not of the tree. "
+            "This check never sets it and never asserts it; the driver "
+            "requires it on every mutation."),
+        "ok": not tree_reasons}
+    out["why_not"] += tree_reasons
     b = BUNDLE.state()
     ch["bundle"] = {**b, "ok": bool(b.get("authorized"))}
     if not b.get("authorized"):
