@@ -237,16 +237,36 @@ def test_the_outstanding_ledger_tracks_several_concurrent_rungs(tmp_path):
 
 
 def test_recovered_orders_have_an_age_so_the_floor_is_evaluable():
-    """A recovered order with no resting_since would be age 0 and retained
-    forever; it must default to NOW, which makes it immediately eligible for
-    ordinary reconciliation once the floor elapses."""
+    """A recovered order must never be retained forever on an age nobody can
+    establish.
+
+    THIS TEST PREVIOUSLY ASSERTED THE MECHANISM THAT CAUSED THE DEFECT. It
+    required an undatable order to default to NOW, reasoning that doing so
+    "makes it immediately eligible for ordinary reconciliation once the floor
+    elapses". That is true of a single recovery and false of the loop:
+    `reconcile` runs EVERY CYCLE, so defaulting to now re-stamped every
+    resting order continuously and the floor never elapsed at all. COHORT-2
+    computed a 473s-old order at 0.15-0.56s on ~60 consecutive cycles.
+
+    The GOAL it was protecting is kept and is asserted below: the order is
+    replaceable at T0+31. The mechanism is corrected -- an age that cannot be
+    established is UNKNOWN, and an unknown age does not protect the order.
+    """
     w = WC.WorkingOrders()
     w.reconcile([{"clientOrderId": "a", "outcome": "yes", "price": "0.69",
                   "quantity": "1", "orderId": "1"}], now=T0)
-    assert w.rungs()[0]["resting_since"] == T0
+    assert w.rungs()[0]["resting_since"] is None
     out = WC.reconcile_surface([_rung("YES", "0.60")], w, now=T0 + 31,
                                cohort_prefix=BTC15M)
     assert len(out["cancel"]) == 1
+    # and re-stamping is what must never happen again
+    w.reconcile([{"clientOrderId": "a", "outcome": "yes", "price": "0.69",
+                  "quantity": "1", "orderId": "1",
+                  "createdAt": "2026-09-22T12:00:00Z"}], now=T0 + 500)
+    first = w.rungs()[0]["resting_since"]
+    w.reconcile([{"clientOrderId": "a", "outcome": "yes", "price": "0.69",
+                  "quantity": "1", "orderId": "1"}], now=T0 + 9000)
+    assert w.rungs()[0]["resting_since"] == first
 
 
 # ================================ 7. the driver actually uses the lifecycle

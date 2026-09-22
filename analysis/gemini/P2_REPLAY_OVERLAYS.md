@@ -405,3 +405,167 @@ L5 that pays.**
 
 Nothing here recommends a live change. P3 (aggressive-maker) is largely
 pre-empted by E.5 and should be re-scoped before it is run.
+
+---
+---
+
+# P2 ADDENDUM — the lifecycle bug fixed, P2-A re-run, and where L5's high-price EXTENDs come from
+
+## 9. The fix
+
+`WorkingOrders.reconcile` now dates an order from three sources, **oldest
+wins**, and an order can never get younger:
+
+```
+our own prior record    carried forward across every reconcile
+the venue's createdAt   authoritative, and survives a restart
+neither                 UNKNOWN -- and UNKNOWN IS NOT ZERO
+```
+
+`reconcile_surface` no longer collapses a missing `resting_since` into `now`:
+an age it cannot evaluate does not protect the order, which is the direction
+it already took when no clock was supplied at all. Two edits, both in
+`ws_continuous.py`. No bound moved: `STALE_ORDER_S` is still 30.0, the
+working-order cap, the envelope and the ledger are untouched.
+
+`bundle_sha 6fe90a9f...`, `executable_sha 89fc560c...`. The tree is DISARMED
+(`REQUIRED_AUTH_ID`, `AUTHORIZED_SHA`, `AUTHORIZED_BUNDLE` all `None`;
+`EXPECTED_AUTH_ID` the sentinel), so **no authorization was invalidated**,
+and none was installed.
+
+12 regression tests in `tests/test_working_order_age.py`, one per property
+the owner named. One existing test asserted the defect and has been corrected
+in place rather than deleted: `test_recovered_orders_have_an_age_so_the_floor
+_is_evaluable` required an undatable order to default to `now`, reasoning it
+would become eligible "once the floor elapses" — true of a single recovery,
+false of a loop that re-stamps every cycle. Its *goal* is kept and still
+asserted.
+
+`continuous_probe.stale_orders` carries the same `or now` pattern. It is
+called nowhere in production (asserted by `live_readiness`), so it is left
+alone under "smallest possible change" and noted here.
+
+## 10. P2-A re-run — and the 30-second floor is the wrong number
+
+**The earlier repricing arms were not contaminated** — `replay_engine` never
+re-stamped `resting_since`, so it modelled the corrected lifecycle from the
+start; the "no reprice" baseline modelled the defect's *effect*. What was
+missing is the arm that matters: **the intended rule itself**, no threshold.
+
+```
+arm                                 matched  residual    net  mQty resid  muts blocked fills  domWon
+DEFECT: as COHORT-2 actually ran       3.32     -7.10  -3.78    15    28    77       0    58    1/11
+INTENDED RULE (both legs)              0.38     -0.71  -0.33     5     8   132      23    18     1/4
+INTENDED RULE, complement only         0.90      1.08   1.98     8    18   132      21    34    5/11
+```
+
+Raising the ledger to 24 or 48 slots/market changes **nothing** (same 18
+fills, same -0.33): at 160 mutations the rule saturates. The budget is not
+the constraint — the rule is.
+
+**Why: our maker fills need minutes, not 30 seconds.** From the 56 confirmed
+orders' `createdAt` -> `updatedAt`:
+
+```
+time resting before the fill   min 2s   MEDIAN 64s   max 737s
+  filled within  30s   17 of 56   (30%)
+  filled within  60s   27 of 56   (48%)
+  filled within 120s   35 of 56   (62%)
+  filled within 240s   46 of 56   (82%)
+  filled within 480s   54 of 56   (96%)
+```
+
+**Enforced as written, the 30s floor cancels 70% of the orders that actually
+filled.** The defect was accidentally supplying the patience the strategy
+needs. Sweeping the floor against that distribution:
+
+```
+floor  both legs                      complement only
+        matched residual    net        matched residual    net  mQty fills domWon
+  30s      0.38    -0.71  -0.33          0.84     1.37   2.21     9    35   5/11
+  60s      0.80    -0.27   0.53          1.25    -0.44   0.81    12    40    3/8
+ 120s      1.20    -2.22  -1.02          1.73    -2.91  -1.18    14    51   2/10
+ 240s      2.10    -5.17  -3.07          2.52    -4.83  -2.30    18    59    1/9
+ 480s      3.01    -7.29  -4.28          3.10    -7.19  -4.09    15    58   1/11
+```
+
+**The same trap as before, and it must be read the same way.** Every arm
+whose net goes positive has `domWon` at 3-5 of 8-11 — the coin landed
+differently — while `matched` collapses. The arms with `domWon` at 1/9-1/11
+are the ones where the directional hit rate is *unchanged*, i.e. where the
+only thing that moved is the mechanism.
+
+One arm is mechanistically clean, and it is the first in this programme:
+
+```
+complement repricing, 240s floor, at the AUTHORIZED 12-slot ledger
+  matched  +2.57   (qty 18, up from 15 -- the most matched inventory of any arm)
+  residual -4.19   (qty 22, down from 28)
+  net      -1.62   (from -3.78)
+  fills        58  (all of them kept)
+  mutations   109  (inside 132)
+  domWon      1/8  (UNCHANGED -- this is not a coin flip)
+```
+
+More completion -> more matched pairs -> less residual, with the adverse
+selection rate untouched. The 240s figure is **not fitted to P&L**: it is
+where 82% of confirmed fills survive, chosen from the fill-time distribution
+before the arms were run, and the replay independently agrees. It still does
+not cross zero, on 11 windows, against a replay baseline already ~$1.2
+optimistic.
+
+**Recommendation on the floor: do not ship `30s`.** It is a parameter
+inherited from a lane whose fills arrive fast, and this market's do not.
+What the evidence supports is a floor derived from measured time-to-fill,
+re-measured per family — not a constant.
+
+## 11. Where L5's high-price EXTENDs come from
+
+The owner's primary question. 37,649 residual-increasing L5 EXTENDs, split
+by the leg's price at the fill:
+
+```
+band          n      addHeavy   TTE   qty   dp>0   gapSame  gapOpp  matchedBefore  |resid|  run
+>=0.65    11,120         95%   368s  20.0    64%      4.0s    9.0s           499       99    2
+.35-.65   10,150         94%   572s  13.1    50%      3.0s   12.0s           240       69    2
+<0.35     16,360         96%   291s  10.0    35%      2.0s   14.0s           879      145    3
+```
+
+**It is not a different placement rule.** Every structural marker is the
+same: he adds to the *heavy* side 94-96% of the time in all three bands, the
+median same-side gap is 2-4 seconds in all three, and the median same-side
+run is 2-3 in all three. Nor is heavy-vs-light the driver — within the high
+band, adding to heavy wins 81% and adding to light wins 82%; within the low
+band, 12% and 15%. **Price is the driver; the side-relative-to-inventory is
+not.**
+
+What does differ is regime: high-price EXTENDs happen **earlier** (368s vs
+291s TTE), at **twice the size** (20 vs 10), on a **smaller existing
+residual** (99 vs 145), and while the leg is **drifting up** (64% dp>0 vs
+35%). 100% of the high band is on a favored leg (>0.50) by construction, and
+89% already sit on matched inventory.
+
+**So L5 does not "go and buy favorites". He is quoting both sides
+continuously, at size, with a median 2-4 seconds between same-side fills, and
+roughly a third of what comes back to him is priced above $0.65.** Our
+controller rests one rung per leg below the touch and waits a median of 64
+seconds; what comes back to us is, by construction, the leg that fell.
+
+**This does not yet license a favored-side placement rule**, and I am not
+proposing one. The evidence says the difference is *fill frequency and
+book participation*, not a second desired-surface. Whether a passive
+placement can be constructed that participates on the rising leg without
+crossing is the open question, and E.5 already falsified the naive version
+(+1/+2 ticks bought identical inventory at worse prices). Item 4 therefore
+remains **open, with a negative result on the obvious approach** rather than
+a proposal.
+
+## 12. Still open
+
+- **Rebate (item 6)** — the 21:15Z reconciliation has not fired
+  (`trig_01YUSyE8mwwzdHAmKb61oKZH`, armed, precondition satisfied). No PAID
+  figure exists, so no rebate enters any number here.
+- **Item 4** — a market-state-dependent desired surface. Not proposed:
+  the source-accounted L5 evidence above says the mechanism is participation
+  rate, not a second placement rule, and that is not something a
+  below-touch rung can be re-parameterised into.

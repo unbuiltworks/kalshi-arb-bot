@@ -74,6 +74,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import datetime as _dt
 import os
 import re
 import tempfile
@@ -594,9 +595,49 @@ class WorkingOrders:
     def rungs(self) -> List[Dict[str, Any]]:
         return list(self.by_id.values())
 
+    @staticmethod
+    def _rested_since(prior: Optional[Mapping[str, Any]],
+                      row: Mapping[str, Any]) -> Optional[float]:
+        """When this order STARTED resting. UNKNOWN rather than now.
+
+        THE DEFECT THIS FIXES. This method used to read `resting_since` off
+        the VENUE ROW -- a key no venue row carries, because it is our own
+        bookkeeping -- so `o.get("resting_since") or now` took the fallback
+        every single time and re-stamped every resting order as brand new.
+        An order that truly rested 473s was computed at 0.15-0.56s old on
+        ~60 consecutive cycles, so `reconcile_surface`'s 30s rest floor
+        retained it forever and a moved quote could never replace it.
+
+        THREE SOURCES, OLDEST WINS, and an order can never get younger:
+
+          our own prior record   the order we already had resting
+          the venue's createdAt  authoritative, and survives a restart
+          neither                UNKNOWN -- and UNKNOWN IS NOT ZERO. An age
+                                 that cannot be established does not protect
+                                 the order: `reconcile_surface` declines to
+                                 retain on an age it cannot evaluate, which
+                                 is the same direction it already took when
+                                 no clock was supplied at all.
+        """
+        cands: List[float] = []
+        if prior is not None and prior.get("resting_since") is not None:
+            cands.append(float(prior["resting_since"]))
+        created = row.get("createdAt") or row.get("created_at")
+        if created is not None:
+            try:
+                cands.append(_dt.datetime.fromisoformat(
+                    str(created).replace("Z", "+00:00")).timestamp())
+            except Exception:                                  # noqa: BLE001
+                pass
+        return min(cands) if cands else None
+
     def reconcile(self, venue_open: Optional[Sequence[Mapping[str, Any]]],
                   now: float) -> str:
-        """Replace our view with the VENUE's. Unreadable is not empty."""
+        """Replace our view with the VENUE's. Unreadable is not empty.
+
+        The venue is authoritative about WHAT is resting. It is not the only
+        source for HOW LONG: see `_rested_since`.
+        """
         if venue_open is None:
             raise ReconcileRequired(
                 "open orders unreadable; the working set cannot be "
@@ -617,7 +658,8 @@ class WorkingOrders:
                                           )).lower() == "yes" else "NO"),
                 "price": str(o.get("price")),
                 "qty": str(o.get("quantity", o.get("qty"))),
-                "resting_since": float(o.get("resting_since") or now),
+                "resting_since": self._rested_since(self.by_id.get(str(coid)),
+                                                     o),
                 # THE FIX. An order the venue says is resting MUST be
                 # addressable, so an unusable id here stops the window
                 # rather than entering the working set.
@@ -801,8 +843,15 @@ def reconcile_surface(desired: Sequence[Mapping[str, Any]],
                                   "itself unsafe, so the rest floor does not "
                                   "protect this order" % safety})
             continue
-        age = (None if now is None
-               else float(now) - float(o.get("resting_since") or now))
+        # AN AGE THAT CANNOT BE ESTABLISHED DOES NOT PROTECT THE ORDER.
+        # `resting_since` is None when neither our own record nor the venue's
+        # createdAt could date it -- after a restart, say. Treating that as
+        # `now` is what made every order permanently young; treating it as
+        # unknown declines to retain on age, exactly as a missing clock
+        # already did.
+        since = o.get("resting_since")
+        age = (None if (now is None or since is None)
+               else float(now) - float(since))
         if age is not None and age < float(min_rest_s):
             occupied[o["leg"]] = occupied.get(o["leg"], 0) + 1
             retain.append({"action": RETAIN, "order": o, "age_s": age,
