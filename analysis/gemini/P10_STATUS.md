@@ -146,3 +146,53 @@ independent agreement, manual inspection, and mirror forensics on captured
 Until they are, the historical Gemini arms have a **bound, not a result**, and
 no family ranking, no forward shadow test and no strategy conclusion follows
 from them.
+
+## Diagnostic: G2/G5 by BTC duration family, 2026-09-22T23:20Z
+
+**Not a gate score.** `p10i_subpop.py`, run because BTC15m's book is about a
+quarter as wide as BTC5m's and the spec predicts that should matter. The
+pre-registered gate is an aggregate and stays one.
+
+| family | obs | decoded | H2 | G2 ambiguous | G5 structural | median width |
+|---|---|---|---|---|---|---|
+| BTC5m | 96 | 55 | 0 | 27.1% | 81.5% | 0.240 |
+| BTC15m | 47 | 25 | **1** | **14.9%** | 78.1% | 0.080 |
+| BTC hourly ladder | 15 | 8 | 0 | 46.7% | 53.3% | 0.070 |
+
+Splitting ambiguity by KIND is what makes this legible, because the two kinds
+have different causes and only one of them is a property of the venue:
+
+| family | AMBIGUOUS_BOTH | AMBIGUOUS_NEITHER | median book age |
+|---|---|---|---|
+| BTC5m | **24** | 2 | 1.49s |
+| BTC15m | 1 | **6** | 1.32s |
+| BTC hourly | 2 | 5 | **3.24s** |
+
+* **BTC5m's ambiguity is structural and irreducible.** 24 of 26 ambiguous rows
+  are `AMBIGUOUS_BOTH`: the 0.240-wide book genuinely contains both `p` and
+  `1 − p`, exactly as `|p − 0.5| ≤ w/2` predicts. No amount of polling fixes
+  this; only a narrower book does.
+* **BTC15m's ambiguity is a freshness problem, not a structural one.** Only 1
+  row is `AMBIGUOUS_BOTH` — the narrow book almost never admits both readings —
+  while 6 are `AMBIGUOUS_NEITHER`, meaning the book moved between the poll and
+  the print. Its 14.9% ambiguity is the best of the three and well inside G2.
+* **So BTC15m IS the reliably decodable subpopulation the narrow spread
+  predicted**, and its lower G5 (78.1%) does not contradict that: G5 scores
+  "predicted decodable == actually decoded", so a `NEITHER` row counts as a
+  structural failure when its real cause is a stale book. G5 conflates the
+  structural limit with the recorder's freshness. **This is an observation
+  about what G5 measures, not an argument for changing it** — the threshold was
+  pre-registered and stands as written.
+* **The hourly ladder is the worst performer and its 3.24s median book age is
+  why.** It is a recorder started at 23:09Z watching 4 symbols, not a venue
+  property.
+
+### The conflict of interest this creates, stated rather than resolved
+
+The hourly-ladder recorder was launched **after** the gate was pre-registered,
+by me, to raise throughput. It is dragging G2 and G5 down. Removing it now
+would raise both toward passing, which is precisely why it stays: dropping a
+BTC recorder after seeing that its rows hurt is discarding inconvenient data.
+Its symbol count is also left alone for the same reason — tuning the capture
+after seeing which family costs the most is not a neutral act, whatever it is
+called. The gate scores every BTC row collected.
