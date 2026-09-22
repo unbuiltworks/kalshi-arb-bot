@@ -66,6 +66,46 @@ def _d(v: Any) -> Optional[D]:
         return None
 
 
+MAKER_RATE = D("0.0175")
+TAKER_RATE = D("0.07")
+
+
+def _ceil_cent(v: D) -> D:
+    from decimal import ROUND_CEILING
+    return v.quantize(D("0.01"), rounding=ROUND_CEILING)
+
+
+def fee_shape(row: Any) -> Optional[Dict[str, Any]]:
+    """Which published formula, if either, produced this row's fee?
+
+    The schedule gives Fee = rate x C x P x (1 - P) rounded UP to the next
+    cent, with rate 0.0175 for a maker and 0.07 for a taker. Both are computed
+    and the row is labelled by which one it matches -- because "fees exist" and
+    "MAKER fees exist" are different claims, and only the second one bears on a
+    maker strategy.
+    """
+    c = _d(row.get("amount"))
+    p = _d(row.get("price"))
+    f = _d(row.get("fee_amount"))
+    if c is None or p is None or f is None or not (0 < p < 1):
+        return None
+    base = c * p * (D(1) - p)
+    mk, tk = _ceil_cent(MAKER_RATE * base), _ceil_cent(TAKER_RATE * base)
+    if f == 0:
+        lab = "ZERO"
+    elif f == mk and f != tk:
+        lab = "MAKER_FORMULA"
+    elif f == tk and f != mk:
+        lab = "TAKER_FORMULA"
+    elif f == mk and f == tk:
+        lab = "EITHER (the two agree here)"
+    else:
+        lab = "NEITHER"
+    return {"label": lab, "fee": str(f), "maker_expected": str(mk),
+            "taker_expected": str(tk), "price": str(p), "amount": str(c),
+            "symbol": row.get("symbol"), "timestampms": row.get("timestampms")}
+
+
 def fee_like(row: Any) -> List[Dict[str, Any]]:
     """Any field whose NAME says fee and whose value is non-zero."""
     out = []
@@ -156,6 +196,23 @@ async def run(date_from: str, date_to: str) -> Dict[str, Any]:
         "note": ("18 fills are expected. Fewer means /v1/mytrades did not "
                  "return them all in this page, which is a coverage fact and "
                  "not a statement about fees."),
+    }
+
+    shapes = [fee_shape(t) for t in rows]
+    shapes = [x for x in shapes if x]
+    tally: Dict[str, int] = {}
+    for x in shapes:
+        tally[x["label"]] = tally.get(x["label"], 0) + 1
+    maker_rows = [x for x in shapes if x["label"] == "MAKER_FORMULA"]
+    rep["fee_formula"] = {
+        "tally": tally,
+        "maker_formula_rows": maker_rows[:20],
+        "n_maker_formula": len(maker_rows),
+        "neither": [x for x in shapes if x["label"] == "NEITHER"][:10],
+        "note": ("published: Fee = rate x C x P x (1-P), rounded UP to the "
+                 "next cent; maker rate 0.0175, taker rate 0.07. 'Fees exist' "
+                 "and 'MAKER fees exist' are different claims and only the "
+                 "second bears on a maker strategy."),
     }
 
     rep["mytrades"] = {
