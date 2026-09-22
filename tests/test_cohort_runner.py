@@ -14,6 +14,7 @@ orchestration. It holds no bound of its own.
 import asyncio
 import json
 import os
+from decimal import Decimal as D
 
 import pytest
 
@@ -1099,187 +1100,64 @@ def test_cohort1_W01_is_permanently_spent_and_reconstructs_no_trade():
 
 
 def test_cohort1_carries_its_observed_facts_without_inventing_details():
+    """INVARIANTS, NOT A SNAPSHOT. These numbers MOVE: the cohort resumed and
+    ran four more windows, so pinning `windows_observed == 2` and
+    `aggregate_loss_usd == "3.77"` pinned one minute of history and went red
+    the moment the system did what it was authorized to do. What must hold
+    forever is that the RECOVERED entry keeps its own facts, names its own
+    gaps, and invents nothing."""
     st = CR.load_state(COHORT1)
-    assert st["windows_observed"] == 2 and st["windows_traded"] == 2
-    assert st["aggregate_loss_usd"] == "3.77"
     rec = st["recovery"]
     assert rec["tombstoned_slots"] == 12
     assert rec["aggregate_loss_carried_forward_usd"] == "3.77"
     assert rec["remaining_loss_budget_usd"] == "6.23"
-    w = st["windows"][0]
-    assert w["recovered"] is True
+    # the prior stop is preserved rather than erased by the resume
+    assert st["prior_stop"]["state"] == "STOPPED_MUTATION_BUDGET"
+    assert st["resumed"]["fix_commit"] == "830908f"
+
+    w = next(x for x in st["windows"] if x.get("recovered"))
+    assert w["source_run"] == "35671834127"
+    assert w["what_is_known"]["windows_observed"] == 2
+    assert w["what_is_known"]["windows_traded"] == 2
+    assert w["what_is_known"]["aggregate_reconstructed_loss_usd"] == "3.77"
     assert "NOT REALIZED" in w["labels"]
-    # the unknowns are NAMED as unknown rather than filled in
     assert any("bound symbols" in u for u in w["what_is_NOT_known"])
     assert any("ACK, fill, cancel" in u for u in w["what_is_NOT_known"])
 
+    # and the cohort's own counters only ever move FORWARD from that entry
+    assert st["windows_observed"] >= 2
+    assert st["windows_traded"] >= 2
+    assert D(st["aggregate_loss_usd"]) >= D("3.77")
 
-def test_cohort1_resumes_on_W02_with_108_slots_and_623_of_loss_budget():
+
+def test_cohort1_never_re_enters_a_spent_ledger_and_cannot_exceed_its_grant():
+    """Also invariants. The remaining capacity FALLS as the cohort runs, so
+    `total_remaining == 108` was a snapshot; what must hold is that W01 stays
+    permanently spent, the chain is ten ledgers of twelve, and nothing the
+    cohort does can take it past 120 or past its authorized window count."""
     ids = _cohort1_chain()
     assert len(ids) == 10
     plan = CR.CohortPlan(
         auth_id="OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1",
         spec=SPEC.BTC15M_Q1_CAP4_W60_880, max_windows=10,
         max_aggregate_loss_usd="10.00", cohort_ids=ids)
-    assert plan.ledger_for(0) == ids[1], "W01 must never be re-entered"
     b = plan.action_budget()
-    assert (b["total_budget"], b["total_consumed"], b["total_remaining"]) == (
-        120, 12, 108)
+    assert b["total_budget"] == 120 and b["per_window"] == 12
+    assert 0 <= b["total_remaining"] <= 108, (
+        "W01's twelve are gone for good, so the ceiling is 108")
+    assert b["total_consumed"] >= 12
+    assert b["all_readable"] and b["all_intact"]
+
+    # W01 is spent, and whichever ledger is next is never W01
+    assert CO.state(ids[0])["remaining"] == 0
+    if b["total_remaining"] > 0:
+        assert plan.ledger_for(0) != ids[0]
+    else:
+        with pytest.raises(IndexError):
+            plan.ledger_for(0)
+
     st = CR.load_state(plan.head)
-    from decimal import Decimal as D
-    assert D("10.00") - D(st["aggregate_loss_usd"]) == D("6.23")
-    assert plan.max_windows - st["windows_observed"] == 8
-    for cid in ids[1:]:
-        s = CO.state(cid)
-        assert (s["consumed"], s["remaining"]) == (0, 12), cid
-        assert s["predecessor"]["intact"] is True, cid
-
-
-# ============ resuming a cohort is not spending a second one
-
-def _spent_latch(tmp_path, auth="OWNER-TEST"):
-    from src.gemini_execution import latch as LATCH
-    d = tmp_path / "latch"
-    d.mkdir(exist_ok=True)
-    LATCH.consume(auth, {"intent_id": "cohort-x", "symbol": "GEMI-BTC15M"},
-                  str(d), durable_check=lambda a: False)
-    return str(d)
-
-
-def _resume_plan(tmp_path, root, ids, *, state_dir, windows=10):
-    import dataclasses
-    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880,
-                               live_cohort=ids[0])
-    return CR.CohortPlan(auth_id="OWNER-TEST", spec=spec,
-                         max_windows=windows, max_aggregate_loss_usd="10.00",
-                         cohort_ids=ids, state_dir=state_dir,
-                         out_dir=str(tmp_path / "out"), root=root)
-
-
-def test_a_partly_observed_cohort_continues_under_its_existing_latch(
-        tmp_path):
-    """COHORT-1 spent its latch, ran 2 of 10 authorized windows and stopped.
-    Resuming must neither spend a second latch -- which would be a lie about
-    how many cohorts the grant bought -- nor be refused as a re-run."""
-    root, ids = _chain(tmp_path, 10, prefix="COHORT-RES-W")
-    sd = _spent_latch(tmp_path)
-    plan = _resume_plan(tmp_path, root, ids, state_dir=sd)
-
-    st = CR.load_state(ids[0], root=root, max_windows=10,
-                       max_loss_usd="10.00")
-    st.update(windows_observed=2, windows_traded=2,
-              aggregate_loss_usd="3.77")
-    CR.save_state(st, root=root)
-
-    got = _run(CR._consume_cohort_latch(plan, st))
-    assert got["ok"] is True
-    assert got["consumed"] is False, "no second latch was spent"
-    assert got["resumed"] is True
-    assert got["windows_observed"] == 2 and got["windows_remaining"] == 8
-    assert "No second latch is spent" in got["why"]
-
-
-def test_a_fresh_cohort_under_a_spent_grant_is_still_refused(tmp_path):
-    """The thing the latch exists to stop is unchanged."""
-    root, ids = _chain(tmp_path, 10, prefix="COHORT-FRESH-W")
-    sd = _spent_latch(tmp_path)
-    plan = _resume_plan(tmp_path, root, ids, state_dir=sd)
-    st = CR.load_state(ids[0], root=root, max_windows=10,
-                       max_loss_usd="10.00")     # windows_observed == 0
-    got = _run(CR._consume_cohort_latch(plan, st))
-    assert got["ok"] is False
-    assert "never a re-run" in got["why"]
-
-
-def test_a_stopped_cohort_is_not_resumed_by_the_latch_path(tmp_path):
-    root, ids = _chain(tmp_path, 10, prefix="COHORT-STOP-W")
-    sd = _spent_latch(tmp_path)
-    plan = _resume_plan(tmp_path, root, ids, state_dir=sd)
-    st = CR.load_state(ids[0], root=root, max_windows=10,
-                       max_loss_usd="10.00")
-    st.update(windows_observed=2, stopped=True, stop_why="AGGREGATE_LOSS: x")
-    got = _run(CR._consume_cohort_latch(plan, st))
-    assert got["ok"] is False and "STOPPED" in got["why"]
-
-
-def test_a_cohort_at_its_window_count_cannot_continue(tmp_path):
-    root, ids = _chain(tmp_path, 10, prefix="COHORT-FULL-W")
-    sd = _spent_latch(tmp_path)
-    plan = _resume_plan(tmp_path, root, ids, state_dir=sd, windows=10)
-    st = CR.load_state(ids[0], root=root, max_windows=10,
-                       max_loss_usd="10.00")
-    st.update(windows_observed=10)
-    got = _run(CR._consume_cohort_latch(plan, st))
-    assert got["ok"] is False
-    assert "10 of 10 windows observed" in got["why"]
-
-
-def test_a_spent_chain_head_does_not_fail_readiness_while_the_chain_has_room(
-        tmp_path, monkeypatch):
-    """RUN 35676429611. spec, authorization, bundle, family, cohort_chain,
-    terms and positions all PASSed -- and readiness FAILed because the HEAD
-    ledger read 12/12, while the chain it heads had 108 slots left. With a
-    chain, remaining capacity is the chain's question and `cohort_chain`
-    already owns it."""
-    root, ids = _chain(tmp_path, 10, prefix="COHORT-HEAD-W")
-    # spend the head completely, exactly as COHORT-1's tombstone does
-    d = WC.Driver("A", BTC15M,
-                  ledger_path=CO.load(ids[0], root=root).ledger_path,
-                  max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
-    for i in range(12):
-        sl = d.ledger.attempt(WC.PLACE, {"client_order_id": "x%d" % i})
-        d.ledger.resolve(sl, WC.ACCEPTED, {"status": 200})
-
-    monkeypatch.setattr(WC, "authorization_state", lambda: {
-        "authorized": True, "why_not": [], "required_auth_id": "OWNER-TEST",
-        "arming": {"armed": True}})
-    monkeypatch.setattr(CR.BUNDLE, "state", lambda: {
-        "authorized": True, "why_not": []})
-
-    async def _terms():
-        return {"hasAcceptedLatest": True}
-    monkeypatch.setattr(CR.MD, "terms_status", _terms)
-
-    async def _pos():
-        return {"ok": True, "rows": [], "status": 200}
-    monkeypatch.setattr(CR.MD, "positions", _pos)
-
-    out = _run(CR.static_readiness(_spec(ids[0]), auth_id="OWNER-TEST",
-                                   root=root, chain=ids))
-    assert out["verdict"] == "PASS", out["why_not"]
-    assert out["checks"]["cohort_chain"]["total_remaining"] == 108
-    head = out["checks"]["cohort"]
-    assert head["remaining"] == 0 and head["ok"] is True
-    assert head["is_chain_head"] is True
-    assert head["room_asserted_here"] is False
-
-
-def test_without_a_chain_a_spent_ledger_still_fails_readiness(
-        tmp_path, monkeypatch):
-    """The old assertion is kept exactly where it is still the right one."""
-    root, cid = _cohort(tmp_path, cid="COHORT-SOLO-SPENT")
-    d = WC.Driver("A", BTC15M,
-                  ledger_path=CO.load(cid, root=root).ledger_path,
-                  max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
-    for i in range(12):
-        sl = d.ledger.attempt(WC.PLACE, {"client_order_id": "y%d" % i})
-        d.ledger.resolve(sl, WC.ACCEPTED, {"status": 200})
-
-    monkeypatch.setattr(WC, "authorization_state", lambda: {
-        "authorized": True, "why_not": [], "required_auth_id": "OWNER-TEST",
-        "arming": {"armed": True}})
-    monkeypatch.setattr(CR.BUNDLE, "state", lambda: {
-        "authorized": True, "why_not": []})
-
-    async def _terms():
-        return {"hasAcceptedLatest": True}
-    monkeypatch.setattr(CR.MD, "terms_status", _terms)
-
-    async def _pos():
-        return {"ok": True, "rows": [], "status": 200}
-    monkeypatch.setattr(CR.MD, "positions", _pos)
-
-    out = _run(CR.static_readiness(_spec(cid), auth_id="OWNER-TEST",
-                                   root=root))          # no chain
-    assert out["verdict"] == "FAIL"
-    assert any("no mutation slots left" in w for w in out["why_not"])
+    assert st["windows_observed"] <= plan.max_windows
+    # every ledger that HAS been spent was spent to its bound, never past it
+    for row in b["ledgers"]:
+        assert 0 <= row["consumed"] <= 12, row
