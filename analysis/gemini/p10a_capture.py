@@ -28,7 +28,12 @@ import time
 import urllib.request
 
 BASE = "https://api.gemini.com"
-RATE = 4.5
+#: requests per second for THIS process. Each recorder owns its own bucket, so
+#: two recorders are two buckets -- which is why a second family runs as its
+#: own low-rate process rather than by widening one polling loop. Widening the
+#: loop trades book freshness for breadth at a fixed rate; a second process
+#: does not.
+RATE = float(os.environ.get("P10_RATE", "4.5"))
 _lock = threading.Lock()
 _next = [0.0]
 
@@ -41,6 +46,13 @@ def _slot():
     d = t - time.time()
     if d > 0:
         time.sleep(d)
+
+
+#: every HTTP response this process reads gets a number, and every row written
+#: from it carries that number. It is what answers "did these two trades arrive
+#: in the SAME /trades response?" -- a question no timestamp can settle, because
+#: two rows can share a millisecond and still come from different reads.
+_POLL = [0]
 
 
 def timed_get(path, tries=2):
@@ -60,8 +72,14 @@ def timed_get(path, tries=2):
 
 CATEGORIES = ("Crypto", "Weather", "Politics", "Economics")
 
+#: NARROW BEATS WIDE. A cycle costs two requests per symbol, so median book age
+#: is roughly n_symbols x 2 / RATE. Eight symbols at 4.5 req/s put the median
+#: book 3.9s behind a trade, which is useless for deciding which of two
+#: readings a price matched. Four symbols in ONE family puts it near 1.8s, and
+#: a second family runs as its own process.
 
-def discover(n_symbols):
+
+def discover(n_symbols, categories=None, prefer=None):
     """The busiest live contract in each category, ROUND ROBIN.
 
     Round robin rather than a ranked list, because the point is to sample the
@@ -73,7 +91,7 @@ def discover(n_symbols):
     empty category cannot repeat that quietly.
     """
     per_cat, counts = [], {}
-    for cat in CATEGORIES:
+    for cat in (categories or CATEGORIES):
         d, _a, _b = timed_get(
             f"/v1/prediction-markets/events?limit=60&category={cat}", tries=3)
         rows = [e for e in ((d or {}).get("data") or [])
@@ -90,6 +108,14 @@ def discover(n_symbols):
                         "subcategory": (e.get("subcategory") or {}).get("name"),
                         "expiry": c.get("expiryDate"),
                         "start": c.get("effectiveDate")})
+        if prefer:
+            #: RANKING BY 24h VOLUME FINDS THE HOURLY STRIKE LADDER, not the
+            #: short-duration contracts. Those ladders are the most TRADED and
+            #: the least useful here: what validates a decoder is many NEW
+            #: trades while we watch, which is what BTC05M/BTC15M produce.
+            hit = [c for c in cand
+                   if any(p in c["symbol"] for p in prefer)]
+            cand = hit or cand
         per_cat.append(cand)
         counts[cat] = len(cand)
     out, i = [], 0
@@ -103,7 +129,8 @@ def discover(n_symbols):
     return out[:n_symbols], counts
 
 
-def capture(out_path, minutes, n_symbols=4, rediscover_s=300):
+def capture(out_path, minutes, n_symbols=4, rediscover_s=120,
+            categories=None, prefer=None):
     """Records to `<out_path>.partial` and renames on completion.
 
     WHY THE RENAME. A capture appends for the better part of an hour. If it
@@ -113,12 +140,14 @@ def capture(out_path, minutes, n_symbols=4, rediscover_s=300):
     appears once, complete.
     """
     part = out_path + ".partial"
-    res = _capture_to(part, minutes, n_symbols, rediscover_s)
+    res = _capture_to(part, minutes, n_symbols, rediscover_s, categories,
+                      prefer)
     os.replace(part, out_path)
     return res
 
 
-def _capture_to(out_path, minutes, n_symbols=4, rediscover_s=300):
+def _capture_to(out_path, minutes, n_symbols=4, rediscover_s=300,
+                categories=None, prefer=None):
     end = time.time() + minutes * 60
     seen = set()
     syms = []
@@ -127,7 +156,7 @@ def _capture_to(out_path, minutes, n_symbols=4, rediscover_s=300):
     with open(out_path, "a") as fh:
         while time.time() < end:
             if time.time() - last_disc > rediscover_s:
-                syms, counts = discover(n_symbols)
+                syms, counts = discover(n_symbols, categories, prefer)
                 last_disc = time.time()
                 fh.write(json.dumps({"kind": "slate", "t": time.time(),
                                      "candidates_per_category": counts,
@@ -137,12 +166,15 @@ def _capture_to(out_path, minutes, n_symbols=4, rediscover_s=300):
                     break
                 ev, t0, t1 = timed_get(
                     f"/v1/prediction-markets/events/{s['ticker']}")
+                _POLL[0] += 1
+                book_poll = _POLL[0]
                 for c in ((ev or {}).get("contracts") or []):
                     if c.get("instrumentSymbol") != s["symbol"]:
                         continue
                     pr = c.get("prices") or {}
                     fh.write(json.dumps({
-                        "kind": "book", "symbol": s["symbol"],
+                        "kind": "book", "poll_id": book_poll,
+                        "symbol": s["symbol"],
                         "category": s["category"], "subcategory": s["subcategory"],
                         "t_sent": t0, "t_recv": t1, "rtt": t1 - t0,
                         "bid": pr.get("bestBid"), "ask": pr.get("bestAsk"),
@@ -156,14 +188,20 @@ def _capture_to(out_path, minutes, n_symbols=4, rediscover_s=300):
                         "resolution": c.get("resolutionSide")}) + "\n")
                     n_book += 1
                 tp, t2, t3 = timed_get(f"/v1/trades/{s['symbol']}?limit_trades=50")
+                _POLL[0] += 1
+                trade_poll = _POLL[0]
                 if isinstance(tp, list):
-                    for t in tp:
+                    for rank, t in enumerate(tp):
                         key = (s["symbol"], t.get("tid"))
                         if key in seen:
                             continue
                         seen.add(key)
                         fh.write(json.dumps({
-                            "kind": "trade", "symbol": s["symbol"],
+                            "kind": "trade", "poll_id": trade_poll,
+                            "rank_in_response": rank,
+                            "n_in_response": len(tp),
+                            "new_in_response": None,
+                            "symbol": s["symbol"],
                             "category": s["category"],
                             "subcategory": s["subcategory"],
                             "tid": t.get("tid"), "t": t.get("timestamp"),
@@ -180,6 +218,8 @@ def _capture_to(out_path, minutes, n_symbols=4, rediscover_s=300):
 if __name__ == "__main__":
     out = sys.argv[1]
     mins = float(sys.argv[2]) if len(sys.argv) > 2 else 30.0
-    n = int(sys.argv[3]) if len(sys.argv) > 3 else 6
-    r = capture(out, mins, n)
+    n = int(sys.argv[3]) if len(sys.argv) > 3 else 4
+    cats = sys.argv[4].split(",") if len(sys.argv) > 4 else None
+    pref = sys.argv[5].split(",") if len(sys.argv) > 5 else None
+    r = capture(out, mins, n, categories=cats, prefer=pref)
     print(json.dumps(r), file=sys.stderr)
