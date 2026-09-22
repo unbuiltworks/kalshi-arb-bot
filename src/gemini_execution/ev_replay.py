@@ -44,8 +44,30 @@ def _f(v: Any) -> Optional[str]:
     return f"{v:.6f}".rstrip("0").rstrip(".") or "0"
 
 
+def _future_complement(prints, idx, need_side):
+    """Complement prices AFTER a decision. DIAGNOSTIC ONLY.
+
+    This function exists to answer, after the fact, whether a third action --
+    WAIT -- would have had value. It is called only when assembling the
+    diagnostic record and its output never reaches a decision. Passing it into
+    the policy would be exactly the future leakage the whole design forbids.
+    """
+    out = []
+    for t, side, px_s, _q in prints[idx + 1:]:
+        offered = YES if side == "sell" else (NO if side == "buy" else None)
+        if offered != need_side:
+            continue
+        px = F(px_s)
+        out.append(px if offered == YES else (F(1) - px))
+    if not out:
+        return None
+    return {"n": len(out), "min": _f(min(out)), "max": _f(max(out)),
+            "last": _f(out[-1]), "first": _f(out[0])}
+
+
 def replay(contract: Mapping[str, Any], *,
            policy: str = "ev",
+           diagnostics: bool = False,
            max_pair_cost: Optional[F] = None,
            max_legs: int = 8,
            max_residual: int = 4,
@@ -71,8 +93,9 @@ def replay(contract: Mapping[str, Any], *,
     if capture < 1:
         take_every = int(1 / float(capture)) if float(capture) > 0 else None
     seen = 0
+    diag: List[Dict[str, Any]] = []
 
-    for t, side, px_s, qty_s in prints:
+    for _i, (t, side, px_s, qty_s) in enumerate(prints):
         px = F(px_s)
         st.observe(int(t), side, px)
         offered = YES if side == "sell" else (NO if side == "buy" else None)
@@ -114,6 +137,17 @@ def replay(contract: Mapping[str, Any], *,
             if d["kind"] == EV.COMPLETE:
                 take = d["action"] == EV.COMPLETE
                 why = "EV: complete beats hold" if take else "EV: hold beats complete"
+                if diagnostics:
+                    leg = avg_y if offered == NO else avg_n
+                    diag.append({
+                        "t": int(t), "held_leg": (YES if offered == NO else NO),
+                        "leg_cost": _f(leg), "complement_offered": _f(unit),
+                        "complete_now": _f(d["complete_value"]),
+                        "hold_expected": _f(d["hold_value"]),
+                        "decision": d["action"],
+                        "future_complement": _future_complement(
+                            prints, _i, offered),
+                    })
             else:
                 take = d.get("ev", F(0)) > min_ev
                 why = "EV: acquisition positive" if take else "EV: acquisition negative"
@@ -158,6 +192,14 @@ def replay(contract: Mapping[str, Any], *,
         "residual_unit": _f(avg_d) if r else None,
         "resolution": res or None, "settled": won is not None,
     }
+    if diagnostics:
+        # POST-HOC ONLY. `hold_actual` needs the outcome and therefore could
+        # never have been known at the decision; it is recorded so that a WAIT
+        # action can be evaluated LATER, never to choose one now.
+        for d in diag:
+            d["hold_actual"] = (None if won is None
+                                else ("1" if d["held_leg"] == won else "0"))
+        out["completion_diagnostics"] = diag
     if won is None:
         out["verdict"] = "UNSETTLED"
         return out
