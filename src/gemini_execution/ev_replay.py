@@ -30,6 +30,7 @@ from fractions import Fraction as F
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src.gemini_execution import ev_policy as EV
+from src.gemini_execution import ev_policy_v2 as EV2
 from src.gemini_execution import pair_policy as PP
 
 LABEL = "GEMINI_EV_REPLAY_V1"
@@ -96,11 +97,16 @@ def replay(contract: Mapping[str, Any], *,
            late_s: Optional[int] = None,
            comp_late: Optional[F] = None,
            min_leg: Optional[F] = None,
+           gate_scores: Optional[Sequence[Optional[float]]] = None,
+           gate_min: Optional[float] = None,
            qhat_side: str = "complement") -> Dict[str, Any]:
     """Walk one contract's tape under one policy and settle it.
 
     `policy`:
-      "ev"      the expected-value comparison in `ev_policy`
+      "ev"      the expected-value comparison in `ev_policy` (V1, which
+                carries the side defect P8-A found; kept for reproducibility)
+      "ev2"     the same comparison with the side orientation corrected,
+                run as a COMPARATOR to V1 rather than as a new tuning round
       "pair"    the extracted pair-cost arithmetic in `pair_policy`, which
                 uses no probability model at all
       "cap"     a flat pair-cost cap, the earlier arm, for contrast
@@ -121,18 +127,20 @@ def replay(contract: Mapping[str, Any], *,
     diag: List[Dict[str, Any]] = []
     skipped_no_qhat = 0
     first_leg: Optional[Dict[str, Any]] = None
-    #: expiry in ms, used only to know when a contract is in its final
+    #: expiry in SECONDS, used only to know when a contract is in its final
     #: stretch. It is the contract's own published end time, known before the
     #: first print, so reading it is not hindsight.
-    exp_ms: Optional[int] = None
+    exp_t: Optional[int] = None
     if late_s is not None:
         import datetime as _dt
         try:
-            exp_ms = int(_dt.datetime.fromisoformat(
-                str(contract.get("expiry")).replace("Z", "+00:00")
-            ).timestamp() * 1000)
+            #: SECONDS, to match the print timestamps -- see
+            #: tape_normalize.PRINT_TIME_UNIT. Mixing the two units here would
+            #: make every contract look permanently "late" or never late.
+            exp_t = int(_dt.datetime.fromisoformat(
+                str(contract.get("expiry")).replace("Z", "+00:00")).timestamp())
         except Exception:                                      # noqa: BLE001
-            exp_ms = None
+            exp_t = None
 
     for _i, (t, side, px_s, qty_s) in enumerate(prints):
         px = F(px_s)
@@ -170,8 +178,8 @@ def replay(contract: Mapping[str, Any], *,
                 why = "flat residual cap"
         elif policy == "pair":
             need = NO if offered == YES else YES
-            late = (exp_ms is not None and late_s is not None
-                    and (exp_ms - int(t)) <= late_s * 1000)
+            late = (exp_t is not None and late_s is not None
+                    and (exp_t - int(t)) <= late_s)
             #: WHICH SIDE'S PRICE HISTORY ESTIMATES THE COMPLEMENT.
             #: "complement" is the economically correct reading of "projected
             #: pair cost": we are about to hold `offered`, so the leg we still
@@ -205,6 +213,17 @@ def replay(contract: Mapping[str, Any], *,
                     "future_complement_prices": [
                         _f(x) for x in _future_prices(prints, _i, offered)],
                 })
+            if d["kind"] == PP.ACQUIRE and take and gate_min is not None:
+                #: THE OPPORTUNITY GATE, and it applies to ACQUISITION ONLY.
+                #: `gate_scores[i]` is a completion-probability estimate built
+                #: from prints[0..i] by a model frozen on development data. It
+                #: is aligned to this same sorted print order. Gating a
+                #: COMPLETE would be nonsense: the complement is already here.
+                sc = (gate_scores[_i] if (gate_scores is not None
+                                          and _i < len(gate_scores)) else None)
+                if sc is None or sc < gate_min:
+                    take = False
+                    why = "opportunity gate: completion looks unlikely here"
             if d["kind"] == PP.ACQUIRE:
                 if d.get("no_qhat"):
                     skipped_no_qhat += 1
@@ -213,11 +232,12 @@ def replay(contract: Mapping[str, Any], *,
                 if take and abs(nyy - nnn) > max_residual:
                     take = False
                     why = "pair projection passes but residual cap binds"
-        else:  # ev
+        else:  # ev / ev2
             inv = {"yes_qty": y, "no_qty": n,
                    "avg_yes": _f(avg_y), "avg_no": _f(avg_n)}
-            d = EV.decide(inventory=inv, offered_side=offered, price=unit,
-                          state=st)
+            mod = EV2 if policy == "ev2" else EV
+            d = mod.decide(inventory=inv, offered_side=offered, price=unit,
+                           state=st)
             if d["kind"] == EV.COMPLETE:
                 take = d["action"] == EV.COMPLETE
                 why = "EV: complete beats hold" if take else "EV: hold beats complete"

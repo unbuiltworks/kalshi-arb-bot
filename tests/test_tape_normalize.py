@@ -159,3 +159,38 @@ def test_a_measured_lifetime_field_is_honoured():
     assert TN.duration_of({"life_min": 60.0}) == "1h"
     assert TN.duration_of({"life_min": 5.0}) == "5m"
     assert TN.duration_of({"life_min": 4320.0}) is None
+
+
+def test_print_timestamps_are_seconds_in_the_stored_corpus():
+    """A silent unit change would shrink every measured duration by 1000x and
+    still produce a plausible table. This checks the corpus against the
+    contracts' OWN declared lifetimes, which is the only independent clock we
+    have."""
+    import datetime as dt
+    import json
+    import os
+    path = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "analysis", "gemini", "p7_bulk_tape.json")
+    if not os.path.exists(path):                    # corpus not in this tree
+        return
+    rows, _ = TN.normalize_all(json.load(open(path)))
+
+    def epoch(v):
+        return dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+
+    assert TN.PRINT_TIME_UNIT == "s"
+    inside = outside = 0
+    for c in rows:
+        if not c["prints"]:
+            continue
+        # generous on the early side: the venue lists a contract before its
+        # measurement window opens, so prints legitimately precede `start`
+        # (median 77s, p99 249s in this corpus). Nothing prints after expiry.
+        lo, hi = epoch(c["start"]) - 3600, epoch(c["expiry"]) + 60
+        for p in c["prints"]:
+            if lo <= p[0] <= hi:
+                inside += 1
+            else:
+                outside += 1
+    assert inside > 20000
+    assert outside == 0, outside

@@ -42,6 +42,17 @@ LABEL = "GEMINI_TAPE_NORMALIZE_V1"
 
 #: Authoritative lifetime bands, in minutes, wide enough to absorb the venue's
 #: own second-level jitter and narrow enough that no two bands can overlap.
+#: THE UNIT OF A PRINT'S TIMESTAMP, and it is not obvious.
+#: `GET /v1/trades` returns both `timestamp` (SECONDS) and `timestampms`; our
+#: collectors store `timestamp`, so every print time in this corpus is a UNIX
+#: SECOND. Reading it as milliseconds silently turns every duration into a
+#: thousandth of itself, which is the kind of error that produces a plausible
+#: table rather than a crash. `tests/test_tape_normalize.py` checks the stored
+#: pull against the contracts' own declared lifetimes so a unit change cannot
+#: pass unnoticed.
+PRINT_TIME_UNIT = "s"
+PRINT_TIMES_PER_SECOND = 1
+
 DURATION_BOUNDS: Tuple[Tuple[str, F, F], ...] = (
     ("5m",  F(3),  F(8)),
     ("15m", F(12), F(20)),
