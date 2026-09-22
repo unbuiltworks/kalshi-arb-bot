@@ -835,6 +835,12 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         # to ten consecutive BTC15m contracts, quote interval TTE [60,880],
         # $4.00 per market and $10.00 aggregate. ONE latch for the cohort.
         "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1",
+        # Owner-granted 2026-09-22 for TWENTY consecutive BTC15m
+        # contracts at q=1 under CAP-4. SPENT: run 35721894867 bound
+        # eleven and stopped on the authorized peak-to-trough drawdown
+        # bound (5.29 against a 5.00 cap, peak +1.47). The registry
+        # records GRANTS, not outcomes.
+        "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
