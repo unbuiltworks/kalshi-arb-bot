@@ -253,9 +253,23 @@ def test_the_armed_step_names_the_exact_authorization():
     # from the 09-18 windows when CONTINUOUS-8 was armed and refused twice on
     # it -- correctly, before the latch, but the refusal cost two dispatches
     # to diagnose and a test would have cost none.
+    #
+    # CHECKED ON THE STEP THAT IS ACTUALLY ARMED, not on the first expiry in
+    # the file. Two steps CAN be armed and only one ever is, so a whole-file
+    # search read the DISARMED launcher's long-lapsed 02:00Z expiry and called
+    # the armed cohort stale. An expiry beside a sentinel arm bounds nothing
+    # and is not a finding; an expiry beside a REAL arm is the second half of
+    # the dual key and must still be in the future.
     if LIVE_AUTHORIZATION is not None:
         import datetime as _dt
-        raw = re.search(r'GEMINI_CANARY_AUTH_EXPIRES: "([^"]+)"', wf).group(1)
+        armed = [m for m in re.finditer(
+            r'GEMINI_CANARY_AUTH: "([^"]+)"\n(?:\s*#.*\n)*'
+            r'\s*GEMINI_CANARY_AUTH_EXPIRES: "([^"]+)"', wf)
+            if m.group(1) == LIVE_AUTHORIZATION]
+        assert len(armed) == 1, (
+            "expected exactly one step armed for %s, found %d"
+            % (LIVE_AUTHORIZATION, len(armed)))
+        raw = armed[0].group(2)
         exp = _dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
         assert exp > _dt.datetime.now(_dt.timezone.utc), (
             "the arm expires at %s, which is already past: an armed tree "
@@ -666,7 +680,11 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = None
+#: the grant IN FORCE on this tree, or None for the disarmed shape. This is
+#: the one line that flips every armed/disarmed assertion in this file, so
+#: arming cannot be half-done: the code constants, the workflow env and
+#: this switch must all name the SAME authorization or the suite refuses.
+LIVE_AUTHORIZATION = "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2"
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -1182,9 +1200,28 @@ def test_the_cohort_step_declares_no_per_market_bound_of_its_own():
         assert forbidden not in step, forbidden
 
 
-def test_the_cohort_step_is_disarmed_until_the_owner_grants_cohort2():
+def test_the_cohort_step_carries_the_grant_the_code_carries():
+    """Armed or disarmed, the STEP and the CODE must name the same thing. A
+    step armed for one authorization while the driver requires another is the
+    state where a `sed` in the wrong place looks like a working arm."""
+    from src.gemini_execution import arming as ARM
+    from src.gemini_execution import ws_continuous as WCX
+
     step = _step("PERSISTENT BTC15m cohort")
-    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in step
+    want = LIVE_AUTHORIZATION or "NO-AUTHORIZATION-IN-FORCE"
+    assert 'GEMINI_CANARY_AUTH: "%s"' % want in step
+    assert ARM.EXPECTED_AUTH_ID == want
+    if LIVE_AUTHORIZATION is None:
+        assert WCX.REQUIRED_AUTH_ID is None
+    else:
+        assert WCX.REQUIRED_AUTH_ID == want
+        # THE ARM HAS ITS OWN CLOCK and an absent expiry is not "never
+        # expires". CONTINUOUS-8's first two dispatches refused on a stale one.
+        m = re.search(r'GEMINI_CANARY_AUTH_EXPIRES: "([^"]+)"', step)
+        assert m, "an armed step must bound its own grant in time"
+        from datetime import datetime, timezone
+        exp = datetime.fromisoformat(m.group(1).replace("Z", "+00:00"))
+        assert exp > datetime.now(timezone.utc), "the arm expiry has passed"
     assert "COHORT-1" in step, "the spent grant is named, not silently reused"
 
 

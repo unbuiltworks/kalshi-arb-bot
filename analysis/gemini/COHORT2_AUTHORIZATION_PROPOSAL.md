@@ -1,8 +1,11 @@
-# COHORT-2 — proposed authorization: 20 consecutive q=1 BTC15m windows
+# COHORT-2 — 20 consecutive q=1 BTC15m windows
 
-**Status: NOT ARMED.** The tree is disarmed on both halves of the dual key.
-This document is the exact envelope proposed, for the owner to accept or
-change. Nothing below has been dispatched.
+**Status: GRANTED AND ARMED, 2026-09-22.**
+`OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2` — the owner approved this
+envelope in full, including both stops. Both halves of the dual key are
+installed: the code constants in `ws_continuous`/`arming`/`bundle`, and the
+`GEMINI_CANARY_LIVE` + `GEMINI_CANARY_AUTH` pair on the cohort workflow step,
+bounded by `GEMINI_CANARY_AUTH_EXPIRES: 2026-09-22T20:00:00Z`.
 
 ## What requires a new grant
 
@@ -96,7 +99,7 @@ taker orders, no q increase. The L5 controller is frozen.
 | `envelope_sha` (CAP-4) | `3aed2098fe0290b7ad8a16cdc053eae7cfcc07b02cbae6b8299eae28da3f6c6b` | **no** |
 | `spec_sha` COHORT-1 | `223b81edd6932bce48afbc35b1be88d9898af2849ddd38cf309e2d25e07bd65f` | — |
 | `spec_sha` COHORT-2 | `ba64b54c8711166b9515007e6835e8190dc8bfddfbae2a1ba72c4e7798cefcb4` | **yes** |
-| `bundle_sha` | `75463e32a2b5634cd2e2ed9c6bc03d81f1fd1072ba0c263fed44d260583c1b8f` | **yes** |
+| `bundle_sha` | `9cf7132a474df098f3647a0d8d2eca3eb16a8429f3710ef2be3406de2a5c833b` | **yes** |
 
 Two hashes moved and both are disclosed rather than explained away:
 
@@ -107,8 +110,11 @@ Two hashes moved and both are disclosed rather than explained away:
   whole bounds dict — is byte-identical to COHORT-1's, asserted as a dict
   comparison in `test_cohort2_is_cohort1_with_a_different_ledger_chain`.
   The claim is not "the hash did not move"; it is "nothing but the id moved".
-- **`bundle_sha`.** One member moved: `run_continuous.py`, from
-  `a5c07ea824fa…` to `5e7bde43294a…`, for the observability sink. The frozen
+- **`bundle_sha`.** Two members moved: `run_continuous.py`, from
+  `a5c07ea824fa…` to `5e7bde43294a…` for the observability sink, and
+  `live_probe_spec.py` for the COHORT-2 spec declaration itself. An earlier
+  draft of this document quoted `75463e32…`, which was the value BEFORE the
+  spec was declared; the correct armed value is `9cf7132a…`. The frozen
   controller `ws_continuous.py` is unchanged at `ecd95b1d16ac…`, which is why
   `executable_sha` did not move. Full diff: an optional `sink` on
   `DecisionObserver`, an `_emit` that runs strictly *after* a row is appended,
@@ -172,3 +178,33 @@ tte_independent    True   mutations_sent 0
 The four FAILs are exactly the two halves of the arm the owner supplies and
 the two reads that need credentials. They clear in the credentialed step once
 the grant exists.
+
+
+## Installed authorization — the exact armed values
+
+```
+REQUIRED_AUTH_ID     OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2   ws_continuous.py
+EXPECTED_AUTH_ID     OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2   arming.py
+GEMINI_CANARY_AUTH   OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2   the cohort step
+GEMINI_CANARY_LIVE   YES                                               the cohort step
+EXPIRES              2026-09-22T20:00:00Z
+AUTHORIZED_SHA       f90b84c91d2e171e6805503e71dd523ecb7380b4d0d6067b0325a76fd73e0903
+AUTHORIZED_ENVELOPE  be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d
+AUTHORIZED_BUNDLE    9cf7132a474df098f3647a0d8d2eca3eb16a8429f3710ef2be3406de2a5c833b
+```
+
+**Installing the grant did not move `executable_sha`.** It is `f90b84c9…`
+before and after, because the bundle's detached signature normalizes the
+authorization *assignment lines* away before hashing. That only holds for a
+single-line assignment: a first attempt wrapped the values across lines with
+explanatory comments and moved the hash to `f1829c18…`, which would have
+invalidated the authorization being installed. The values are therefore
+installed one per line with no added commentary, and the constants' existing
+comments are untouched.
+
+The single-window launcher step stays at `NO-AUTHORIZATION-IN-FORCE`. Exactly
+one step is armed, asserted by
+`test_the_tree_is_armed_for_exactly_one_named_authorization`.
+
+Full suite at the armed SHA: 7839 passed, 27 failed — byte-identical to the
+clean-tree baseline.

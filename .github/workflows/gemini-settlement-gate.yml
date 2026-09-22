@@ -629,14 +629,21 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # DISARMED, AWAITING THE OWNER'S GRANT FOR COHORT-2.
-          # OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1 is SPENT: run
-          # 35677907781 bound four BTC15m contracts, took 18 maker fills
-          # across them, and stopped on a cap that measured the wrong
-          # quantity. A spent authorization never arms again, and the
-          # twenty-window envelope is a NEW grant.
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T08:00:00Z"
+          # ARMED 2026-09-22 under the OWNER'S GRANT FOR COHORT-2: twenty
+          # consecutive BTC15m contracts, q=1, CAP-4, one whole 12-action
+          # ledger per market, an $8.00 cumulative economic-loss stop and a
+          # $5.00 settlement-implied drawdown stop, both SETTLED-only.
+          #
+          # OWNER-2026-09-21-...-COHORT-1 is SPENT and is NOT reused: run
+          # 35677907781 bound four contracts, took 18 maker fills and stopped
+          # on a cap that measured turnover. A spent authorization never arms
+          # again; the twenty-window envelope is its own grant.
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2"
+          # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
+          # requires an expiry that has NOT passed, and an absent one is not
+          # "never expires". Twenty BTC15m contracts is ~5h of wall clock;
+          # this bounds the grant a few hours past that, never open-ended.
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-22T20:00:00Z"
           COHORT_SPEC: btc15m_q1_cap4_w60_880_c2
           COHORT_SPEC_SHA: "ba64b54c8711166b9515007e6835e8190dc8bfddfbae2a1ba72c4e7798cefcb4"
         run: |
