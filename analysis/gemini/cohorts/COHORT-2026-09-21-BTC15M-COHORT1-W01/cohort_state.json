@@ -1,0 +1,51 @@
+{
+  "label": "GEMINI_L5_COHORT_RUNNER_V1",
+  "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
+  "created_utc": "2026-09-22T01:19:31.864400+00:00",
+  "max_windows": 10,
+  "max_aggregate_loss_usd": "10.00",
+  "windows_observed": 2,
+  "windows_traded": 2,
+  "aggregate_loss_usd": "3.77",
+  "symbols": [],
+  "windows": [
+    {
+      "recovered": true,
+      "source_run": "35671834127",
+      "source_job": "106569794023",
+      "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
+      "utc": "2026-09-22T00:54:54Z",
+      "what_is_known": {
+        "windows_observed": 2,
+        "windows_traded": 2,
+        "aggregate_reconstructed_loss_usd": "3.77",
+        "cohort_stop": "STOPPED_MUTATION_BUDGET",
+        "cohort_stop_why": "the cohort's action budget is spent (12/12)",
+        "ledger_spent": "12 of 12",
+        "source": "the runner's own stdout summary, the only record that survived; the report and per-window artifacts were written to the runner's disk and lost"
+      },
+      "what_is_NOT_known": [
+        "the two bound symbols and their entry TTEs",
+        "the per-cycle decision record and desired surfaces",
+        "every placement, ACK, fill, cancel and its price/size/id",
+        "per-window inventory, matched inventory and peak imbalance",
+        "which of the two windows produced which part of the 3.77"
+      ],
+      "labels": "RECOVERED FACTS ONLY. 3.77 is the runner's own reconstructed loss -- cash out of the account from confirmed fills, with no settlement credit, no matched-pair offset and no rebate assumed. It is NOT REALIZED: no attributable cash movement has been read back for it. Nothing in `what_is_NOT_known` is reconstructed, estimated or inferred anywhere in this file."
+    }
+  ],
+  "stopped": false,
+  "stop_why": null,
+  "labels": "windows_observed counts CONTRACTS BOUND. A contract that produced no fill is an observed window and is not a failure: nothing in this runner requires a trade to happen, and no parameter is tuned between windows.",
+  "recovery": {
+    "label": "COHORT1_RECOVERY_V1",
+    "utc": "2026-09-22T01:20:00Z",
+    "why": "run 35671834127 stopped on an authorized condition, exited 1, and its evidence commit was skipped, so the ledger rows and the report died with the runner",
+    "tombstoned_ledger": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
+    "tombstoned_slots": 12,
+    "tombstone_kind": "TOMBSTONE_UNRECOVERABLE",
+    "aggregate_loss_carried_forward_usd": "3.77",
+    "remaining_loss_budget_usd": "6.23",
+    "note": "the twelve slots are reserved so they cannot be spent twice. They reconstruct no trade. The 3.77 is carried forward into the $10.00 aggregate cap rather than reset."
+  }
+}

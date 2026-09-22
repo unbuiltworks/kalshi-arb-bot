@@ -50,6 +50,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -574,15 +575,28 @@ class CohortPlan:
         """Where the cohort's durable counters live: its FIRST ledger."""
         return self.cohort_ids[0] if self.cohort_ids else self.spec.budget_cohort
 
-    def ledger_for(self, window_index: int) -> str:
-        """The ledger window `window_index` (0-based) spends from."""
+    def ledger_for(self, window_index: int,
+                   *, root: Optional[str] = None) -> str:
+        """The ledger the NEXT window spends from: the first unspent one.
+
+        NOT `cohort_ids[window_index]`. A cohort that stopped and resumed has
+        already spent some ledgers, and indexing by window number would either
+        re-enter a spent one or skip a fresh one depending on which way the
+        count drifted. Asking the ledgers themselves which of them still has
+        room cannot drift: a spent ledger is spent, and it is never re-entered.
+        """
         if not self.cohort_ids:
             return self.spec.budget_cohort
-        if window_index >= len(self.cohort_ids):
-            raise IndexError(
-                "window %d has no ledger; this cohort granted %d"
-                % (window_index + 1, len(self.cohort_ids)))
-        return self.cohort_ids[window_index]
+        r = root or self.root
+        for cid in self.cohort_ids:
+            try:
+                if CO.state(cid, root=r)["remaining"] > 0:
+                    return cid
+            except Exception:                                 # noqa: BLE001
+                continue
+        raise IndexError(
+            "every ledger in this cohort is spent; %d granted, none with room"
+            % len(self.cohort_ids))
 
     def action_budget(self, *, root: Optional[str] = None) -> Dict[str, Any]:
         """The whole cohort's mutation budget, summed over its chain."""
@@ -726,20 +740,11 @@ async def run_cohort(plan: CohortPlan, *,
                   % (budget["total_consumed"], budget["total_budget"]))
             break
         try:
-            window_cohort = plan.ledger_for(st["windows_observed"])
+            window_cohort = plan.ledger_for(st["windows_observed"],
+                                            root=plan.root)
         except IndexError as exc:
-            _stop(rep, st, "WINDOWS_EXHAUSTED", str(exc))
+            _stop(rep, st, "MUTATION_BUDGET", str(exc))
             break
-        cst = CO.state(window_cohort, root=plan.root)
-        if cst.get("remaining", 0) <= 0:
-            # THIS WINDOW's ledger is spent before the window began, which
-            # means a previous run already used it. Skip to the next rather
-            # than re-entering a spent ledger: a spent cohort never re-arms.
-            st["windows_observed"] += 1
-            save_state(st, root=plan.root)
-            rep["windows"].append({"skipped": window_cohort,
-                                   "why": "ledger already spent"})
-            continue
 
         found = await discover(spec, exclude=st.get("symbols") or ())
         rep["windows"].append({"discovery": found})
@@ -895,6 +900,59 @@ async def _run_window(plan: CohortPlan, symbol: str, *, readiness: bool,
 
 # ------------------------------------------------------------------- CLI
 
+#: every cohort-level stop the OWNER authorized. Reaching one of these is the
+#: system doing its job, so the process exits 0 and the evidence commit that
+#: follows it in CI is not skipped. Anything else -- an unreadable ledger, a
+#: refused rollover, a runner exception -- is an operational failure and still
+#: exits nonzero.
+AUTHORIZED_STOPS = (
+    "STOPPED_WINDOWS_EXHAUSTED",   # the authorized count was observed
+    "STOPPED_AGGREGATE_LOSS",      # the authorized dollar stop
+    "STOPPED_MUTATION_BUDGET",     # the authorized action budget
+    "STOPPED_NO_CONTRACT",         # the venue produced no eligible contract
+    "STOPPED_ALREADY",             # a stopped cohort is not auto-resumed
+)
+
+
+def _write_report(path: str, rep: Mapping[str, Any]) -> None:
+    """Best effort, and never raises: a failed write must not mask the
+    failure that made the report worth keeping."""
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(dict(rep), fh, indent=2, default=str)
+            fh.flush()
+            os.fsync(fh.fileno())
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+def discover_chain(spec: Any, *, root: str = CO.COHORT_ROOT,
+                   limit: int = 64) -> Tuple[str, ...]:
+    """The ledger chain a spec's head names, in order: HEAD, then its siblings.
+
+    A chain is `<stem>W01 .. <stem>Wnn`, which is how the ledgers are created.
+    Resolved from what EXISTS on disk rather than from a count, so a chain
+    that was granted short is short and one that was granted long is long --
+    and a spec whose head is not part of a chain simply yields that head.
+    """
+    head = spec.budget_cohort
+    if not head:
+        return ()
+    m = re.match(r"^(?P<stem>.*W)(?P<n>\d+)$", str(head))
+    if not m:
+        return (head,) if CO.exists(head, root=root) else ()
+    stem, width = m.group("stem"), len(m.group("n"))
+    out = []
+    for i in range(1, limit + 1):
+        cid = "%s%0*d" % (stem, width, i)
+        if not CO.exists(cid, root=root):
+            break
+        out.append(cid)
+    return tuple(out)
+
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Run ONE cohort in THIS process, until a cohort-level stop.
 
@@ -925,6 +983,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          "cohort, in addition to every per-market bound")
     ap.add_argument("--state-dir", default="analysis/gemini/canary_latch")
     ap.add_argument("--out-dir", default="analysis/gemini")
+    ap.add_argument("--root", default=CO.COHORT_ROOT)
     ap.add_argument("--out", default="")
     ap.add_argument("--readiness", action="store_true")
     a = ap.parse_args(list(argv) if argv is not None else None)
@@ -939,7 +998,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # tree ready" only when a contract happened to be near 840:880, so
         # market timing and software correctness were one check. They are
         # not. This binds nothing and waits for nothing.
-        out = asyncio.run(static_readiness(spec, auth_id=a.auth_id))
+        out = asyncio.run(static_readiness(
+            spec, auth_id=a.auth_id, root=a.root,
+            chain=discover_chain(spec, root=a.root)))
         dest = a.out or os.path.join(
             a.out_dir, "cohort_static_readiness_%s.json"
             % datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
@@ -961,19 +1022,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if int(a.max_windows) < 1:
         print("REFUSED: --max-windows must be at least 1 for a cohort run")
         return 2
+    # THE LEDGER CHAIN, WIRED. This is the defect that cost COHORT-1 its
+    # first dispatch: `cohort_ids` was added to CohortPlan, ten ledgers were
+    # created and five tests covered them, and then the CLI built the plan
+    # WITHOUT the field. It defaulted to (), both `ledger_for` and
+    # `action_budget` fell back to the single `spec.budget_cohort`, and the
+    # cohort ran two windows on ONE 12-slot ledger before stopping at 12/12 --
+    # exactly the failure mode the chain exists to prevent. There is now a
+    # CLI-level test that builds the plan the way main() does and asserts the
+    # chain is on it.
+    ids = discover_chain(spec, root=a.root)
     plan = CohortPlan(auth_id=a.auth_id, spec=spec,
                       max_windows=int(a.max_windows),
                       max_aggregate_loss_usd=str(a.max_loss_usd),
-                      state_dir=a.state_dir, out_dir=a.out_dir)
-    rep = asyncio.run(run_cohort(plan, readiness=bool(a.readiness)))
+                      cohort_ids=ids,
+                      state_dir=a.state_dir, out_dir=a.out_dir, root=a.root)
     out = a.out or os.path.join(
         a.out_dir, "cohort_run_%s.json"
         % datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+
+    # EVIDENCE SURVIVES EVERY EXIT, and that is not a nicety. COHORT-1's
+    # first dispatch stopped on an authorized condition, exited 1, and the
+    # workflow's evidence-commit step -- conditioned on the job succeeding --
+    # was skipped. Twelve mutation slots had really been spent and two windows
+    # had really traded, and the append-only record of both died with the
+    # runner. A report written only on the happy path is a report that is
+    # absent exactly when it matters.
+    rep: Dict[str, Any] = {"label": LABEL, "plan": plan.as_dict(),
+                           "state": "NO_REPORT", "why": "the runner did not "
+                           "return; see `runner_error`"}
     try:
-        with open(out, "w", encoding="utf-8") as fh:
-            json.dump(rep, fh, indent=2, default=str)
-    except OSError:
-        pass
+        rep = asyncio.run(run_cohort(plan, readiness=bool(a.readiness)))
+    except BaseException as exc:                              # noqa: BLE001
+        # BaseException DELIBERATELY: a KeyboardInterrupt or a SystemExit
+        # from a cancelled job must still leave the record behind.
+        rep["runner_error"] = "%s: %s" % (type(exc).__name__, exc)
+        rep["state"] = "STOPPED_RUNNER_ERROR"
+        rep["why"] = rep["runner_error"]
+        _write_report(out, rep)
+        raise
+    finally:
+        _write_report(out, rep)
     st = rep.get("cohort_state") or {}
     print("cohort     %s" % plan.as_dict()["budget_cohort"])
     print("spec       %s  %s" % (spec.spec_id, spec.spec_sha()))
@@ -986,7 +1075,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("loss       %s of %s (reconstructed, never REALIZED)"
           % (st.get("aggregate_loss_usd"), plan.max_aggregate_loss_usd))
     print("report     %s" % out)
-    return 0 if rep.get("state", "").startswith("STOPPED_WINDOWS") else 1
+    # AN AUTHORIZED STOP IS AN OUTCOME, NOT A FAILURE. Returning 1 for every
+    # stop but WINDOWS_EXHAUSTED turned a clean budget stop into a red step,
+    # which is what skipped the evidence commit. A mechanical failure still
+    # exits nonzero; the enumerated authorized stops do not.
+    state = str(rep.get("state") or "")
+    print("outcome    %s" % ("AUTHORIZED STOP" if state in AUTHORIZED_STOPS
+                             else "OPERATIONAL FAILURE"))
+    return 0 if state in AUTHORIZED_STOPS else 1
 
 
 if __name__ == "__main__":                                    # pragma: no cover

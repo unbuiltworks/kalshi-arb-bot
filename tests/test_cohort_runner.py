@@ -685,10 +685,23 @@ def test_the_chain_gives_twelve_per_window_and_the_sum_across_the_cohort(
     assert b["total_remaining"] == 120
     assert b["all_readable"] and b["all_intact"]
     assert plan.as_dict()["max_cohort_actions"] == 120
-    # each window binds its OWN ledger, in order
-    assert [plan.ledger_for(i) for i in range(10)] == list(ids)
-    with pytest.raises(IndexError):
-        plan.ledger_for(10)
+    # THE NEXT WINDOW BINDS THE FIRST UNSPENT LEDGER, not cohort_ids[i]. A
+    # cohort that stopped and resumed has already spent some, and indexing by
+    # window number would re-enter a spent one or skip a fresh one depending
+    # on which way the count drifted.
+    assert plan.ledger_for(0, root=root) == ids[0]
+    assert plan.ledger_for(7, root=root) == ids[0], \
+        "nothing is spent yet, so the first unspent is still W01"
+
+    # spend W01 completely; the next window must move to W02 and no further
+    d = WC.Driver("A", BTC15M,
+                  ledger_path=CO.load(ids[0], root=root).ledger_path,
+                  max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
+    for i in range(12):
+        slot = d.ledger.attempt(WC.PLACE, {"client_order_id": "x%d" % i})
+        d.ledger.resolve(slot, WC.ACCEPTED, {"status": 200})
+    assert plan.ledger_for(0, root=root) == ids[1]
+    assert plan.action_budget(root=root)["total_remaining"] == 108
 
 
 def test_spending_one_window_does_not_reduce_the_next_windows_budget(
@@ -781,6 +794,15 @@ def test_an_already_spent_window_ledger_is_skipped_not_re_entered(tmp_path):
     async def _window(plan, symbol, *, readiness, latch_held_by,
                       cohort_id=None):
         bound.append(cohort_id)
+        # A REAL WINDOW SPENDS ITS LEDGER, so the stub does too -- otherwise
+        # `first unspent` would correctly hand back the same ledger forever
+        # and the test would be asserting against a fiction.
+        dd = WC.Driver("A", symbol,
+                       ledger_path=CO.load(cohort_id, root=root).ledger_path,
+                       max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
+        for j in range(12):
+            sl = dd.ledger.attempt(WC.PLACE, {"client_order_id": "w%d" % j})
+            dd.ledger.resolve(sl, WC.ACCEPTED, {"status": 200})
         return {"state": "STOPPED_FLAT_ORDERS",
                 "window": {"inventory": {"total_spend_usd": "0",
                                          "n_fills": 0},
@@ -794,7 +816,10 @@ def test_an_already_spent_window_ledger_is_skipped_not_re_entered(tmp_path):
                              readiness_fn=_READY,
                              latch_fn=lambda *a, **k: {"ok": True}))
     assert ids[0] not in bound, "a spent ledger was re-entered"
-    assert bound == [ids[1], ids[2]]
+    assert bound == [ids[1], ids[2]], (
+        "and a spent ledger costs no WINDOW: three windows were authorized, "
+        "W01 was already spent, so windows 1..3 bind W02 and W03 and then "
+        "run out of ledgers -- they do not burn a window slot on the skip")
 
 
 # ============ the arm is the STEP's property, not the TREE's
@@ -868,3 +893,243 @@ def test_the_driver_still_requires_the_arm_on_every_mutation(tmp_path):
     # readiness check merely declines to treat it as a tree property.
     body = inspect.getsource(WC.authorization_state)
     assert 'reasons.append("transport arm:' in body
+
+
+# ============ THE DEFECT THAT COST COHORT-1 ITS FIRST DISPATCH
+
+def _cli_plan(monkeypatch, root, spec, **kw):
+    """Build the plan THE WAY main() DOES, by driving main() and catching it.
+
+    The point of going through main() rather than constructing a CohortPlan
+    here is that constructing one here is exactly what every other test did,
+    and that is why none of them caught it: `cohort_ids` was on the dataclass,
+    ten ledgers existed, five tests covered them, and the CLI never passed the
+    field. A test that builds the object itself cannot see a caller that
+    forgets to.
+    """
+    seen = {}
+
+    async def _capture(plan, **k):
+        seen["plan"] = plan
+        return {"state": "STOPPED_WINDOWS_EXHAUSTED", "cohort_state": {}}
+
+    monkeypatch.setattr(CR, "run_cohort", _capture)
+    argv = ["--auth-id", "OWNER-TEST", "--spec", spec.spec_id,
+            "--max-windows", "10", "--max-loss-usd", "10.00",
+            "--root", root, "--out", str(kw.get("out", "/dev/null"))]
+    CR.main(argv)
+    return seen["plan"]
+
+
+def test_the_CLI_built_plan_actually_carries_the_whole_ledger_chain(
+        tmp_path, monkeypatch):
+    """COHORT-1 run 35671834127: `cohort_ids` defaulted to (), both
+    `ledger_for` and `action_budget` fell back to the single head ledger, and
+    two windows ran on ONE 12-slot budget before stopping at 12/12."""
+    import dataclasses
+    root, ids = _chain(tmp_path, 10, prefix="COHORT-CLI-W")
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880,
+                               live_cohort=ids[0])
+    monkeypatch.setitem(SPEC.SPECS, spec.spec_id, spec)
+
+    plan = _cli_plan(monkeypatch, root, spec, out=tmp_path / "r.json")
+
+    assert plan.cohort_ids == ids, "the CLI dropped the chain"
+    assert len(plan.cohort_ids) == 10
+    b = plan.action_budget(root=root)
+    assert b["total_budget"] == 120, "12 here is the COHORT-1 defect"
+    assert b["total_remaining"] == 120
+    assert b["per_window"] == 12
+
+
+def test_discover_chain_resolves_the_head_to_its_whole_chain(tmp_path):
+    root, ids = _chain(tmp_path, 10, prefix="COHORT-DISC-W")
+    import dataclasses
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880,
+                               live_cohort=ids[0])
+    assert CR.discover_chain(spec, root=root) == ids
+    # a short grant yields a short chain, not a padded one
+    (tmp_path / "b").mkdir(exist_ok=True)
+    root2, ids2 = _chain(tmp_path / "b", 3, prefix="COHORT-SHORT-W")
+    spec2 = dataclasses.replace(spec, live_cohort=ids2[0])
+    assert CR.discover_chain(spec2, root=root2) == ids2
+
+
+def test_a_head_that_is_not_part_of_a_chain_yields_just_itself(tmp_path):
+    import dataclasses
+    root, cid = _cohort(tmp_path, cid="COHORT-SOLO")
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880, live_cohort=cid)
+    assert CR.discover_chain(spec, root=root) == (cid,)
+
+
+# ============ evidence survives every exit
+
+def test_an_authorized_stop_is_an_outcome_not_a_job_failure(
+        tmp_path, monkeypatch):
+    """Returning 1 for every stop but WINDOWS_EXHAUSTED turned COHORT-1's
+    clean budget stop into a red step, and the evidence commit -- conditioned
+    on the job succeeding -- was skipped. The record died with the runner."""
+    assert "STOPPED_MUTATION_BUDGET" in CR.AUTHORIZED_STOPS
+    assert "STOPPED_AGGREGATE_LOSS" in CR.AUTHORIZED_STOPS
+    assert "STOPPED_WINDOWS_EXHAUSTED" in CR.AUTHORIZED_STOPS
+    # and a genuine mechanical failure is NOT one
+    for bad in ("STOPPED_ROLLOVER_REFUSED", "STOPPED_LEDGER_UNREADABLE",
+                "STOPPED_NOT_READY", "STOPPED_RUNNER_ERROR"):
+        assert bad not in CR.AUTHORIZED_STOPS, bad
+
+
+@pytest.mark.parametrize("state,rc", [
+    ("STOPPED_MUTATION_BUDGET", 0),
+    ("STOPPED_WINDOWS_EXHAUSTED", 0),
+    ("STOPPED_AGGREGATE_LOSS", 0),
+    ("STOPPED_ROLLOVER_REFUSED", 1),
+    ("STOPPED_LEDGER_UNREADABLE", 1),
+])
+def test_the_exit_code_distinguishes_an_authorized_stop_from_a_failure(
+        tmp_path, monkeypatch, state, rc):
+    import dataclasses
+    root, ids = _chain(tmp_path, 2, prefix="COHORT-RC-W")
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880,
+                               live_cohort=ids[0])
+    monkeypatch.setitem(SPEC.SPECS, spec.spec_id, spec)
+    out = tmp_path / "rc.json"
+
+    async def _stub(plan, **k):
+        return {"state": state, "why": "x", "cohort_state": {}}
+    monkeypatch.setattr(CR, "run_cohort", _stub)
+
+    got = CR.main(["--auth-id", "OWNER-TEST", "--spec", spec.spec_id,
+                   "--max-windows", "2", "--max-loss-usd", "10.00",
+                   "--root", root, "--out", str(out)])
+    assert got == rc
+    assert out.exists(), "the report must be written on EVERY outcome"
+    assert json.loads(out.read_text())["state"] == state
+
+
+def test_the_report_survives_an_exception_inside_the_runner(
+        tmp_path, monkeypatch):
+    """A report written only on the happy path is absent exactly when it
+    matters most."""
+    import dataclasses
+    root, ids = _chain(tmp_path, 2, prefix="COHORT-EXC-W")
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880,
+                               live_cohort=ids[0])
+    monkeypatch.setitem(SPEC.SPECS, spec.spec_id, spec)
+    out = tmp_path / "exc.json"
+
+    async def _boom(plan, **k):
+        raise RuntimeError("the runner died mid-cohort")
+    monkeypatch.setattr(CR, "run_cohort", _boom)
+
+    with pytest.raises(RuntimeError):
+        CR.main(["--auth-id", "OWNER-TEST", "--spec", spec.spec_id,
+                 "--max-windows", "2", "--max-loss-usd", "10.00",
+                 "--root", root, "--out", str(out)])
+    assert out.exists()
+    d = json.loads(out.read_text())
+    assert d["state"] == "STOPPED_RUNNER_ERROR"
+    assert "the runner died mid-cohort" in d["runner_error"]
+    assert d["plan"]["cohort_ids"] == list(ids), \
+        "and it still names the chain it was running"
+
+
+def test_the_report_survives_a_cancellation(tmp_path, monkeypatch):
+    """A cancelled or timed-out job raises BaseException, not Exception."""
+    import dataclasses
+    root, ids = _chain(tmp_path, 2, prefix="COHORT-CAN-W")
+    spec = dataclasses.replace(SPEC.BTC15M_Q1_CAP4_W60_880,
+                               live_cohort=ids[0])
+    monkeypatch.setitem(SPEC.SPECS, spec.spec_id, spec)
+    out = tmp_path / "can.json"
+
+    async def _killed(plan, **k):
+        raise KeyboardInterrupt()
+    monkeypatch.setattr(CR, "run_cohort", _killed)
+
+    with pytest.raises(KeyboardInterrupt):
+        CR.main(["--auth-id", "OWNER-TEST", "--spec", spec.spec_id,
+                 "--max-windows", "2", "--max-loss-usd", "10.00",
+                 "--root", root, "--out", str(out)])
+    assert out.exists()
+    assert json.loads(out.read_text())["state"] == "STOPPED_RUNNER_ERROR"
+
+
+def test_the_cohort_state_file_is_written_before_the_process_can_die(
+        tmp_path):
+    """The per-window counters are fsynced after EVERY window, not at the
+    end: a cohort that dies on window 7 must not read as never having run."""
+    import inspect
+    src = inspect.getsource(CR.run_cohort)
+    i = src.index("st[\"windows_observed\"] += 1")
+    j = src.index("save_state(st, root=plan.root)", i)
+    k = src.index("gate(symbol)", i)
+    assert i < j < k, ("the counters must be saved after the window and "
+                       "BEFORE the rollover gate that can stop the cohort")
+    assert "os.fsync" in inspect.getsource(CR.save_state)
+
+
+# ============ COHORT-1's recovery: the tombstone must hold
+
+COHORT1 = "COHORT-2026-09-21-BTC15M-COHORT1-W01"
+
+
+def _cohort1_chain():
+    return CR.discover_chain(SPEC.BTC15M_Q1_CAP4_W60_880)
+
+
+def test_cohort1_W01_is_permanently_spent_and_reconstructs_no_trade():
+    """Run 35671834127 really spent these twelve slots across two BTC15m
+    windows and the rows died with the runner. They are reserved so the
+    budget cannot be spent twice, and they invent nothing."""
+    st = CO.state(COHORT1)
+    assert (st["consumed"], st["budget"], st["remaining"]) == (12, 12, 0)
+
+    rows = [json.loads(l) for l in
+            open(CO.load(COHORT1).ledger_path) if l.strip()]
+    assert len(rows) == 12
+    for r in rows:
+        assert r["outcome"] == "TOMBSTONE_UNRECOVERABLE"
+        assert r["recovery"] is True
+        assert r["source_run"] == "35671834127"
+        assert r["symbol"] == "UNRECOVERABLE"
+        # NOTHING is reconstructed: no side, price, size or order id
+        for fabricated in ("price", "qty", "quantity", "leg", "side",
+                           "client_order_id", "venue_order_id"):
+            assert fabricated not in r, fabricated
+
+
+def test_cohort1_carries_its_observed_facts_without_inventing_details():
+    st = CR.load_state(COHORT1)
+    assert st["windows_observed"] == 2 and st["windows_traded"] == 2
+    assert st["aggregate_loss_usd"] == "3.77"
+    rec = st["recovery"]
+    assert rec["tombstoned_slots"] == 12
+    assert rec["aggregate_loss_carried_forward_usd"] == "3.77"
+    assert rec["remaining_loss_budget_usd"] == "6.23"
+    w = st["windows"][0]
+    assert w["recovered"] is True
+    assert "NOT REALIZED" in w["labels"]
+    # the unknowns are NAMED as unknown rather than filled in
+    assert any("bound symbols" in u for u in w["what_is_NOT_known"])
+    assert any("ACK, fill, cancel" in u for u in w["what_is_NOT_known"])
+
+
+def test_cohort1_resumes_on_W02_with_108_slots_and_623_of_loss_budget():
+    ids = _cohort1_chain()
+    assert len(ids) == 10
+    plan = CR.CohortPlan(
+        auth_id="OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1",
+        spec=SPEC.BTC15M_Q1_CAP4_W60_880, max_windows=10,
+        max_aggregate_loss_usd="10.00", cohort_ids=ids)
+    assert plan.ledger_for(0) == ids[1], "W01 must never be re-entered"
+    b = plan.action_budget()
+    assert (b["total_budget"], b["total_consumed"], b["total_remaining"]) == (
+        120, 12, 108)
+    st = CR.load_state(plan.head)
+    from decimal import Decimal as D
+    assert D("10.00") - D(st["aggregate_loss_usd"]) == D("6.23")
+    assert plan.max_windows - st["windows_observed"] == 8
+    for cid in ids[1:]:
+        s = CO.state(cid)
+        assert (s["consumed"], s["remaining"]) == (0, 12), cid
+        assert s["predecessor"]["intact"] is True, cid

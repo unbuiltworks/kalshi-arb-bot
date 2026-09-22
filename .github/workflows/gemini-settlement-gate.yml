@@ -716,6 +716,15 @@ jobs:
         run: python3 scripts/gemini_settlement_gate_report.py /tmp/gate.json
 
       - name: Commit ONLY the evidence artifact
+        # ALWAYS. COHORT-1's first dispatch stopped on an AUTHORIZED condition
+        # (the action budget), the runner exited 1, this step was skipped
+        # because the default is `success()`, and twelve really-spent mutation
+        # slots plus two really-traded windows lost their append-only record.
+        # Evidence must never depend on the trading step having succeeded --
+        # a failed run is the run whose evidence matters most. The step is
+        # still analysis/gemini/ ONLY, so a failure cannot widen what it may
+        # write.
+        if: ${{ always() }}
         run: |
           git config user.name  "gemini-settlement-gate[bot]"
           git config user.email "gemini-settlement-gate@users.noreply.github.com"
@@ -746,6 +755,11 @@ jobs:
                    analysis/gemini/continuous_ledger.jsonl \
                    analysis/gemini/cohorts/*/ledger.jsonl \
                    analysis/gemini/cohorts/*/cohort.json \
+                   analysis/gemini/cohorts/*/cohort_state.json \
+                   analysis/gemini/cohort_run_*.json \
+                   analysis/gemini/cohort_window_*.json \
+                   analysis/gemini/cohort_wire_*.json \
+                   analysis/gemini/static_readiness_*.json \
                    analysis/gemini/canary_latch/*.json; do
             if [ -e "$f" ]; then git add -- "$f"; fi
           done
@@ -765,7 +779,13 @@ jobs:
           # thrown the record away -- and the NEXT window would have read a
           # cohort with 0 consumed. That is a budget reset by accident, which
           # is the one thing the cohort mechanism exists to make impossible.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json)|continuous_ledger\.jsonl)$'; then
+          #
+          # THE COHORT RUNNER'S OWN OUTPUTS DRIFTED TOO, and run 35671834127
+          # paid for it: cohort_run_/cohort_window_/cohort_state were in
+          # NEITHER list, so even a green job would have committed the ledger
+          # and thrown the report and the per-window counters away. Both
+          # lists now name them, and a test asserts the two agree.
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

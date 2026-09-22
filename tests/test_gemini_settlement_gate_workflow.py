@@ -37,7 +37,16 @@ def _step(name):
     GEMINI_CANARY_LIVE" was reading the step that does.
     """
     wf = WF.read_text()
-    i = wf.index(name)
+    # ANCHOR ON THE `- name:` LINE, not on the bare text. The workflow's
+    # dispatch INPUTS describe the steps they enable, so a step's words appear
+    # in an input description hundreds of lines before the step itself --
+    # "PERSISTENT BTC15m cohort" first occurs in `cohort_run:`'s description,
+    # and a bare index() returned the inputs block. That is the prose-vs-code
+    # trap again, in its sixth costume in this programme. Fall back to the old
+    # behaviour only when no step carries the name, so existing callers that
+    # pass a fragment still work.
+    m0 = re.search(r"^      - name: .*%s" % re.escape(name), wf, re.M)
+    i = m0.start() if m0 else wf.index(name)
     rest = wf[i:]
     m = re.search(r"\n      - name: ", rest[1:])
     return rest[:m.start() + 1] if m else rest
@@ -1120,3 +1129,23 @@ def test_the_workflow_is_actually_parseable_yaml():
     for s in steps:
         if "run" in s:
             assert str(s["run"]).strip(), s.get("name")
+
+
+def test_the_evidence_commit_runs_on_every_outcome():
+    """COHORT-1 run 35671834127 stopped on an AUTHORIZED condition, exited 1,
+    and this step -- defaulting to success() -- was skipped. Twelve spent
+    mutation slots and two traded windows lost their append-only record. A
+    failed run is the run whose evidence matters most."""
+    step = _step("Commit ONLY the evidence artifact")
+    assert "if: ${{ always() }}" in step
+    # and it is still analysis/gemini ONLY: a failure may not widen its reach
+    assert "analysis/gemini" in step
+    assert "refusing to commit files outside analysis/gemini/" in step
+
+
+def test_the_cohort_step_writes_its_report_outside_the_pipe():
+    """`| tee` cannot be the only record: a killed process writes nothing
+    through a pipe it never reached the end of."""
+    step = _step("PERSISTENT BTC15m cohort")
+    assert "--out analysis/gemini/cohort_run_" in step
+    assert "set -o pipefail" in step

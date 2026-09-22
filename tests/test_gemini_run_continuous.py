@@ -290,9 +290,17 @@ def test_REGRESSION_the_evidence_commit_survives_a_missing_artifact():
     missing pathspec exits 128, which killed the job and discarded the
     evidence it HAD gathered -- the record of a refusal."""
     import pathlib
+    import re as _re
     wf = pathlib.Path(".github/workflows/gemini-settlement-gate.yml").read_text()
+    # THE STEP, NOT A FIXED CHARACTER WINDOW. 2500 characters happened to
+    # reach the guarded `git add` until the step grew a comment explaining
+    # why it now runs on every outcome, and then it silently did not. A
+    # window that is long enough today is a window that fails for a reason
+    # that has nothing to do with what is being asserted.
     i = wf.index("Commit ONLY the evidence artifact")
-    step = wf[i:i + 2500]
+    rest = wf[i:]
+    m = _re.search(r"\n      - name: ", rest[1:])
+    step = rest[:m.start() + 1] if m else rest
     assert 'if [ -e "$f" ]; then git add -- "$f"; fi' in step
     assert "git add -- 'analysis/gemini/continuous_ledger.jsonl'" not in step
 
@@ -345,3 +353,28 @@ def test_the_ready_token_is_not_added_to_the_authorized_executable():
     assert not hasattr(WC2, "READY_BUT_UNAUTHORIZED")
     assert "READY_TO_MUTATE_BUT_UNAUTHORIZED" not in open(
         WC2.__file__, encoding="utf-8").read()
+
+
+def test_the_cohort_runners_own_artifacts_are_in_BOTH_evidence_lists():
+    """RUN 35671834127. The cohort ledger was in both lists; the runner's
+    REPORT, its per-window records and its durable counters were in neither,
+    so even a green job would have committed the ledger and thrown the rest
+    away. The add-list and the allow-list must name the same files."""
+    import pathlib
+    import re as _re
+    wf = pathlib.Path(".github/workflows/gemini-settlement-gate.yml").read_text()
+    i = wf.index("Commit ONLY the evidence artifact")
+    rest = wf[i:]
+    m = _re.search(r"\n      - name: ", rest[1:])
+    step = rest[:m.start() + 1] if m else rest
+
+    for name in ("cohort_run_", "cohort_window_", "cohort_state.json"):
+        assert name in step, "%s is not in the add-list" % name
+
+    allow = _re.search(r"grep -qvE '(?P<re>[^']+)'", step).group("re")
+    for probe in ("analysis/gemini/cohort_run_20260922T002831Z.json",
+                  "analysis/gemini/cohort_window_20260922T003012Z.json",
+                  "analysis/gemini/cohorts/COHORT-X-W01/cohort_state.json",
+                  "analysis/gemini/cohorts/COHORT-X-W01/ledger.jsonl"):
+        assert _re.match(allow, probe), (
+            "%s is gathered but the allow-list would refuse it" % probe)
