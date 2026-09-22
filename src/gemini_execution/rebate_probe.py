@@ -54,6 +54,21 @@ CANDIDATES = (
     ("/v1/incentives/earnings", "credited earnings under incentives"),
     ("/v1/prediction-markets/rewards", "prediction-market rewards"),
     ("/v1/prediction-markets/rebates", "prediction-market rebates"),
+    # THE ONES THE FIRST SURVEY MISSED BY ONE PATH SEGMENT. These are READ
+    # FROM THE PUBLISHED SPEC, not guessed, and they are the real surface:
+    # https://developer.gemini.com/prediction-markets-spec/rewards
+    ("/v1/prediction-markets/maker-rebate/rates", "PUBLISHED: rate schedule"),
+    ("/v1/prediction-markets/maker-rebate/payouts", "PUBLISHED: payout rows"),
+    ("/v1/prediction-markets/maker-rebate/summary/total",
+     "PUBLISHED: lifetime rebate summary"),
+    ("/v1/prediction-markets/liquidity-rewards/config",
+     "PUBLISHED: liquidity rewards config"),
+    ("/v1/prediction-markets/liquidity-rewards/events",
+     "PUBLISHED: liquidity rewards events"),
+    ("/v1/prediction-markets/liquidity-rewards/summary/daily",
+     "PUBLISHED: liquidity rewards daily summary"),
+    ("/v1/prediction-markets/liquidity-rewards/summary/total",
+     "PUBLISHED: liquidity rewards lifetime summary"),
     ("/v1/prediction-markets/liquidity-rewards", "liquidity rewards"),
     ("/v1/prediction-markets/incentives", "incentives under prediction markets"),
     ("/v1/prediction-markets/activities", "activity under prediction markets"),

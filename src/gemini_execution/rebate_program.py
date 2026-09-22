@@ -179,6 +179,13 @@ def daily_accrual(fills: Sequence[Mapping[str, Any]], *,
     return {
         "n_fills": len(rows), "n_eligible": n_el,
         "n_outside_band": len(rows) - n_el,
+        # THE VENUE PUBLISHES A QUALIFYING VOLUME BESIDE ITS DOLLAR FIGURE
+        # (`total_volume_usd` on a payout row), so ours is stated here to be
+        # compared against it. Only ELIGIBLE fills count: an out-of-band fill
+        # earns nothing and is not qualifying volume either.
+        "qualifying_volume_usd": str(sum(
+            (_dec(r.get("notional_usd")) or D("0")) for r in rows
+            if (r.get("eligibility") or {}).get("eligible")) or D("0")),
         "accrued_usd": str(total),
         "would_pay_usd": str(paid),
         "pays_nothing": paid == 0,

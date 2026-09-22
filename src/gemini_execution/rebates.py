@@ -456,9 +456,22 @@ async def read_all(*, since_utc: Optional[str] = None,
                                     until_utc=until_utc),
         "sources": {"credits": "POST %s" % TRANSFERS_PATH,
                     "maker_volume": "POST %s" % TRADEVOLUME_PATH,
-                    "located_by": ("rebate_probe survey 2026-09-19; the "
-                                   "prediction-market rebate/reward paths all "
-                                   "404 and these two are what exists")},
+                    "located_by": ("rebate_probe survey 2026-09-19. NOTE, "
+                                   "CORRECTED 2026-09-22: that survey's "
+                                   "conclusion that every prediction-market "
+                                   "rebate path 404s was WRONG. It probed "
+                                   "/v1/prediction-markets/rebates and missed "
+                                   "/v1/prediction-markets/maker-rebate/... "
+                                   "by one path segment. The venue's own "
+                                   "payout records live there; see "
+                                   "maker_rebate_api. These two surfaces "
+                                   "remain valid, and are no longer the only "
+                                   "ones."),
+                    "superseded_by": ("src/gemini_execution/maker_rebate_api"
+                                      ".py -- the venue's own payout rows, "
+                                      "with qualifying fill count and "
+                                      "qualifying volume beside the dollar "
+                                      "figure")},
     })
     return rep
 
