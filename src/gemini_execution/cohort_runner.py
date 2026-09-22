@@ -253,13 +253,30 @@ async def static_readiness(spec: Any, *, auth_id: str,
         try:
             cst = CO.state(cid, root=root)
             pred = cst.get("predecessor") or {}
-            ok = bool(pred.get("intact")) and cst.get("remaining", 0) > 0
-            ch["cohort"] = {**cst, "ok": ok}
+            # WHO OWNS THE "IS THERE ROOM" QUESTION. With a chain, the answer
+            # is the CHAIN's remaining capacity, and `cohort_chain` above
+            # already asserted it. Asking the HEAD ledger as well is asking
+            # the wrong ledger: a cohort resuming on W02 has a head that is
+            # legitimately spent, and run 35676429611 failed readiness on
+            # exactly that -- 108 slots remaining across the chain, and a
+            # FAIL because W01 was 12/12. Without a chain the head IS the
+            # budget and the old assertion is kept unchanged.
+            has_chain = bool(chain)
+            room = cst.get("remaining", 0) > 0
+            ok = bool(pred.get("intact")) and (has_chain or room)
+            ch["cohort"] = {**cst, "ok": ok, "is_chain_head": has_chain,
+                            "room_asserted_here": not has_chain,
+                            "note": ("the head of a chain may be spent; the "
+                                     "cohort's remaining capacity is the "
+                                     "chain's, asserted by cohort_chain"
+                                     if has_chain else
+                                     "this spec has a single ledger, so the "
+                                     "head IS the budget")}
             if not pred.get("intact"):
                 out["why_not"].append(
                     "cohort %s was created against a ledger that has since "
                     "changed: %s" % (cid, pred.get("why")))
-            if cst.get("remaining", 0) <= 0:
+            if not room and not has_chain:
                 out["why_not"].append(
                     "cohort %s has no mutation slots left (%s/%s)"
                     % (cid, cst.get("consumed"), cst.get("budget")))

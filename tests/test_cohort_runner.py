@@ -1212,3 +1212,74 @@ def test_a_cohort_at_its_window_count_cannot_continue(tmp_path):
     got = _run(CR._consume_cohort_latch(plan, st))
     assert got["ok"] is False
     assert "10 of 10 windows observed" in got["why"]
+
+
+def test_a_spent_chain_head_does_not_fail_readiness_while_the_chain_has_room(
+        tmp_path, monkeypatch):
+    """RUN 35676429611. spec, authorization, bundle, family, cohort_chain,
+    terms and positions all PASSed -- and readiness FAILed because the HEAD
+    ledger read 12/12, while the chain it heads had 108 slots left. With a
+    chain, remaining capacity is the chain's question and `cohort_chain`
+    already owns it."""
+    root, ids = _chain(tmp_path, 10, prefix="COHORT-HEAD-W")
+    # spend the head completely, exactly as COHORT-1's tombstone does
+    d = WC.Driver("A", BTC15M,
+                  ledger_path=CO.load(ids[0], root=root).ledger_path,
+                  max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
+    for i in range(12):
+        sl = d.ledger.attempt(WC.PLACE, {"client_order_id": "x%d" % i})
+        d.ledger.resolve(sl, WC.ACCEPTED, {"status": 200})
+
+    monkeypatch.setattr(WC, "authorization_state", lambda: {
+        "authorized": True, "why_not": [], "required_auth_id": "OWNER-TEST",
+        "arming": {"armed": True}})
+    monkeypatch.setattr(CR.BUNDLE, "state", lambda: {
+        "authorized": True, "why_not": []})
+
+    async def _terms():
+        return {"hasAcceptedLatest": True}
+    monkeypatch.setattr(CR.MD, "terms_status", _terms)
+
+    async def _pos():
+        return {"ok": True, "rows": [], "status": 200}
+    monkeypatch.setattr(CR.MD, "positions", _pos)
+
+    out = _run(CR.static_readiness(_spec(ids[0]), auth_id="OWNER-TEST",
+                                   root=root, chain=ids))
+    assert out["verdict"] == "PASS", out["why_not"]
+    assert out["checks"]["cohort_chain"]["total_remaining"] == 108
+    head = out["checks"]["cohort"]
+    assert head["remaining"] == 0 and head["ok"] is True
+    assert head["is_chain_head"] is True
+    assert head["room_asserted_here"] is False
+
+
+def test_without_a_chain_a_spent_ledger_still_fails_readiness(
+        tmp_path, monkeypatch):
+    """The old assertion is kept exactly where it is still the right one."""
+    root, cid = _cohort(tmp_path, cid="COHORT-SOLO-SPENT")
+    d = WC.Driver("A", BTC15M,
+                  ledger_path=CO.load(cid, root=root).ledger_path,
+                  max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
+    for i in range(12):
+        sl = d.ledger.attempt(WC.PLACE, {"client_order_id": "y%d" % i})
+        d.ledger.resolve(sl, WC.ACCEPTED, {"status": 200})
+
+    monkeypatch.setattr(WC, "authorization_state", lambda: {
+        "authorized": True, "why_not": [], "required_auth_id": "OWNER-TEST",
+        "arming": {"armed": True}})
+    monkeypatch.setattr(CR.BUNDLE, "state", lambda: {
+        "authorized": True, "why_not": []})
+
+    async def _terms():
+        return {"hasAcceptedLatest": True}
+    monkeypatch.setattr(CR.MD, "terms_status", _terms)
+
+    async def _pos():
+        return {"ok": True, "rows": [], "status": 200}
+    monkeypatch.setattr(CR.MD, "positions", _pos)
+
+    out = _run(CR.static_readiness(_spec(cid), auth_id="OWNER-TEST",
+                                   root=root))          # no chain
+    assert out["verdict"] == "FAIL"
+    assert any("no mutation slots left" in w for w in out["why_not"])
