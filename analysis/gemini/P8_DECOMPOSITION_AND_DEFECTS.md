@@ -33,6 +33,13 @@ share the quantity.** Treating them as two independent buyable units
 manufactures a complement out of the data format. Deduplicated by keeping the
 row that continues the contract's own price series (1,291 twins dropped).
 
+> **Precision note added 2026-09-22 (P8-C).** Stated as a share of rows, the
+> 1,291 dropped echoes are **5.2%** of the 24,670 rows on studied contracts;
+> ~10.5% of rows *participate* in a twin pair and half of each pair is the
+> echo. The 11.4% figure above is the participating-row count, not the removed
+> count. The dataset itself is unchanged — the canonical
+> `tape_normalize` module reproduces this correction print for print.
+
 **Notably COHORT-2's per-cycle tape shows 0% of this** — it is specific to the
 bulk endpoint, which is why the earlier 56-fill calibration did not catch it.
 

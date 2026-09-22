@@ -139,7 +139,15 @@ def test_both_modules_are_offline():
                 mods |= {a.name.split(".")[0] for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 mods.add((n.module or "").split(".")[0])
-        assert mods <= {"fractions", "typing", "__future__", "src", "decimal"}, (path, mods)
+        # `datetime` is allowed for ev_replay because it parses the
+        # contract's OWN published expiry, which is known before the first
+        # print. Reading the wall clock would be a different thing entirely,
+        # so that is asserted against separately below.
+        assert mods <= {"fractions", "typing", "__future__", "src", "decimal",
+                        "datetime"}, (path, mods)
+        src = open(path).read()
+        for clock in (".now(", ".utcnow(", ".today(", "time.time("):
+            assert clock not in src, (path, clock)
 
 
 # -- the replay -------------------------------------------------------------

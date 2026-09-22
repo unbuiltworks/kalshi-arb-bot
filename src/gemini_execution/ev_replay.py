@@ -30,6 +30,7 @@ from fractions import Fraction as F
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src.gemini_execution import ev_policy as EV
+from src.gemini_execution import pair_policy as PP
 
 LABEL = "GEMINI_EV_REPLAY_V1"
 YES, NO = EV.YES, EV.NO
@@ -42,6 +43,22 @@ def _f(v: Any) -> Optional[str]:
         from decimal import Decimal as D
         v = D(v.numerator) / D(v.denominator)
     return f"{v:.6f}".rstrip("0").rstrip(".") or "0"
+
+
+def _future_prices(prints, idx, need_side):
+    """Every later price at which `need_side` became buyable, in order.
+
+    POST-HOC. Same standing as `_future_complement`: it exists so a WAIT rule
+    can be SCORED after the fact, never so one can be chosen now.
+    """
+    out = []
+    for _t, side, px_s, _q in prints[idx + 1:]:
+        offered = YES if side == "sell" else (NO if side == "buy" else None)
+        if offered != need_side:
+            continue
+        px = F(px_s)
+        out.append(px if offered == YES else (F(1) - px))
+    return out
 
 
 def _future_complement(prints, idx, need_side):
@@ -73,11 +90,19 @@ def replay(contract: Mapping[str, Any], *,
            max_residual: int = 4,
            capture: F = F(1),
            fee_per_fill: F = F(0),
-           min_ev: F = F(0)) -> Dict[str, Any]:
+           min_ev: F = F(0),
+           acq_max: Optional[F] = None,
+           comp_max: Optional[F] = None,
+           late_s: Optional[int] = None,
+           comp_late: Optional[F] = None,
+           min_leg: Optional[F] = None,
+           qhat_side: str = "complement") -> Dict[str, Any]:
     """Walk one contract's tape under one policy and settle it.
 
     `policy`:
       "ev"      the expected-value comparison in `ev_policy`
+      "pair"    the extracted pair-cost arithmetic in `pair_policy`, which
+                uses no probability model at all
       "cap"     a flat pair-cost cap, the earlier arm, for contrast
       "always"  take every unit, the frozen-controller-like baseline
     """
@@ -94,6 +119,20 @@ def replay(contract: Mapping[str, Any], *,
         take_every = int(1 / float(capture)) if float(capture) > 0 else None
     seen = 0
     diag: List[Dict[str, Any]] = []
+    skipped_no_qhat = 0
+    first_leg: Optional[Dict[str, Any]] = None
+    #: expiry in ms, used only to know when a contract is in its final
+    #: stretch. It is the contract's own published end time, known before the
+    #: first print, so reading it is not hindsight.
+    exp_ms: Optional[int] = None
+    if late_s is not None:
+        import datetime as _dt
+        try:
+            exp_ms = int(_dt.datetime.fromisoformat(
+                str(contract.get("expiry")).replace("Z", "+00:00")
+            ).timestamp() * 1000)
+        except Exception:                                      # noqa: BLE001
+            exp_ms = None
 
     for _i, (t, side, px_s, qty_s) in enumerate(prints):
         px = F(px_s)
@@ -129,6 +168,51 @@ def replay(contract: Mapping[str, Any], *,
                 take = abs((y + (1 if offered == YES else 0))
                            - (n + (1 if offered == NO else 0))) <= max_residual
                 why = "flat residual cap"
+        elif policy == "pair":
+            need = NO if offered == YES else YES
+            late = (exp_ms is not None and late_s is not None
+                    and (exp_ms - int(t)) <= late_s * 1000)
+            #: WHICH SIDE'S PRICE HISTORY ESTIMATES THE COMPLEMENT.
+            #: "complement" is the economically correct reading of "projected
+            #: pair cost": we are about to hold `offered`, so the leg we still
+            #: have to buy is the other one. "same" reproduces what
+            #: `ev_policy.decide` actually does -- it passes `offered_side`
+            #: into a parameter named `need_side` -- and exists only so the
+            #: legacy controller can be compared against on equal terms. See
+            #: the KNOWN DEFECT note in ev_policy.
+            q = st.q_hat(offered if qhat_side == "same" else need)
+            d = PP.decide(yes_qty=y, no_qty=n, avg_yes=avg_y, avg_no=avg_n,
+                          offered_side=offered, price=unit,
+                          q_hat=q,
+                          acq_max=(acq_max if acq_max is not None else F(1)),
+                          comp_max=(comp_max if comp_max is not None else F(2)),
+                          min_leg=min_leg,
+                          late=late, comp_late=comp_late)
+            take = d["action"] != PP.SKIP
+            why = d["why"]
+            if d["kind"] == PP.COMPLETE and diagnostics:
+                # POST-HOC ONLY, and only the FORWARD TAPE is recorded, never
+                # consulted: `_future_complement` is called after the decision
+                # `d` has already been made and its result is not read back.
+                leg = avg_y if offered == NO else avg_n
+                diag.append({
+                    "t": int(t), "held_leg": (YES if offered == NO else NO),
+                    "leg_cost": _f(leg), "complement_offered": _f(unit),
+                    "pair_cost": _f(d.get("pair_cost")),
+                    "decision": d["action"], "residual_qty": abs(y - n),
+                    "future_complement": _future_complement(
+                        prints, _i, offered),
+                    "future_complement_prices": [
+                        _f(x) for x in _future_prices(prints, _i, offered)],
+                })
+            if d["kind"] == PP.ACQUIRE:
+                if d.get("no_qhat"):
+                    skipped_no_qhat += 1
+                nyy = y + (1 if offered == YES else 0)
+                nnn = n + (1 if offered == NO else 0)
+                if take and abs(nyy - nnn) > max_residual:
+                    take = False
+                    why = "pair projection passes but residual cap binds"
         else:  # ev
             inv = {"yes_qty": y, "no_qty": n,
                    "avg_yes": _f(avg_y), "avg_no": _f(avg_n)}
@@ -167,6 +251,8 @@ def replay(contract: Mapping[str, Any], *,
             ns.append(unit)
         fills.append({"t": int(t), "leg": offered, "price": _f(unit),
                       "reduces": reduces, "why": why})
+        if first_leg is None:
+            first_leg = {"leg": offered, "price": _f(unit), "t": int(t)}
 
     m = min(y, n)
     r = abs(y - n)
@@ -186,6 +272,8 @@ def replay(contract: Mapping[str, Any], *,
         "day": contract.get("day"), "hour": contract.get("hour"),
         "event_ticker": contract.get("event_ticker"),
         "fills": len(fills), "skipped": skipped,
+        "skipped_no_qhat": skipped_no_qhat,
+        "first_leg": first_leg,
         "yes_qty": y, "no_qty": n, "matched": m, "residual": r,
         "dominant": dom, "spend": _f(spend), "fees": _f(fees),
         "pair_cost": _f(avg_y + avg_n) if m else None,

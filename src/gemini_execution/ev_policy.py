@@ -63,6 +63,17 @@ NO REBATE TERM EXISTS IN THIS MODULE. Rebates are incremental income and are
 deliberately absent from model selection; they are added, if at all, to a
 frozen candidate afterwards.
 
+KNOWN DEFECT, LEFT IN PLACE DELIBERATELY (found in P8-A, 2026-09-22).
+`decide()` calls `acquire_value(price, state, offered_side)`, so the parameter
+named `need_side` receives the side being OFFERED rather than the complement
+that would have to be bought to pair it. `p_complete` and `q_hat` therefore
+describe the wrong side of the book, and the acquisition test degenerates from
+"price plus expected complement" into roughly "twice this price". It is NOT
+corrected here: every P7/P8 arm was scored with this behaviour and silently
+changing it would make those results unreproducible. `pair_policy` states the
+corrected arithmetic instead, and `ev_replay(..., qhat_side="same")` can
+reproduce this one for comparison.
+
 OFFLINE AND PURE. No socket, no venue read, no clock.
 """
 from __future__ import annotations
