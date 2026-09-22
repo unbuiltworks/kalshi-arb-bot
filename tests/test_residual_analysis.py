@@ -199,14 +199,29 @@ def test_nothing_is_labelled_realized():
 
 
 def test_the_module_is_offline_and_read_only():
+    """It may import its OFFLINE sibling and nothing else. `fill_reconciliation`
+    has the same property and its own test asserting it, so the chain stays
+    offline rather than the claim stopping at one file."""
     import ast
     src = ast.parse(open("src/gemini_execution/residual_analysis.py").read())
-    imported = {a.name.split(".")[0]
-                for n in ast.walk(src) if isinstance(n, ast.Import)
-                for a in n.names}
-    imported |= {(n.module or "").split(".")[0]
-                 for n in ast.walk(src) if isinstance(n, ast.ImportFrom)}
-    assert imported <= {"decimal", "fractions", "typing", "__future__"}, imported
+    mods = set()
+    for n in ast.walk(src):
+        if isinstance(n, ast.Import):
+            mods |= {a.name for a in n.names}
+        elif isinstance(n, ast.ImportFrom):
+            mods.add(n.module or "")
+    allowed = {"decimal", "fractions", "typing", "__future__",
+               "src.gemini_execution"}
+    assert mods <= allowed, mods
+    # and the sibling it reaches for is itself offline
+    sib = ast.parse(open("src/gemini_execution/fill_reconciliation.py").read())
+    smods = set()
+    for n in ast.walk(sib):
+        if isinstance(n, ast.Import):
+            smods |= {a.name.split(".")[0] for a in n.names}
+        elif isinstance(n, ast.ImportFrom):
+            smods.add((n.module or "").split(".")[0])
+    assert smods <= {"decimal", "fractions", "typing", "__future__"}, smods
 
 
 # ============ the identity must be checked on VALUES, not on their display
@@ -296,6 +311,9 @@ def test_a_complete_fill_record_still_uses_the_exact_fill_sum():
             {"X": "FILLED", "O": "NO", "L": "0.40", "Z": "1", "m": True}]}}
     r = RA.from_window(rep, {"status": "settled", "resolutionSide": "no"})
     assert r["fill_record"]["complete"] is True
-    assert r["cost_basis"] == "exact per-leg spend from the fills"
+    # no `after` block here, so there is no authoritative record to prefer
+    # and the WS fills -- which ARE complete for this window -- are used
+    assert r["authoritative_record"] is None
+    assert r["cost_basis"] == "exact per-leg spend from the WS fill events"
     assert r["spend_usd"] == "1.3" and r["spend_agrees"] is True
     assert r["identity"]["holds"] and r["identity"]["exact"]

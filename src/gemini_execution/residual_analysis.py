@@ -277,6 +277,19 @@ def from_window(rep: Mapping[str, Any],
     inv = win.get("inventory") or {}
     res = resolution or {}
     settled = str(res.get("status") or "").lower() == "settled"
+    # THE AUTHORITATIVE RECORD FIRST. `fill_reconciliation` joins the venue's
+    # own filled-order rows to its own trade record and proves the result
+    # complete; the WS stream is a latency signal and settles nothing after
+    # the fact. Only if that record is unavailable do we fall back below.
+    auth = None
+    try:
+        from src.gemini_execution import fill_reconciliation as FRC
+        rec = FRC.reconcile_window(rep)
+        if rec.get("verdict") == FRC.COMPLETE:
+            auth = rec
+    except Exception:                                          # noqa: BLE001
+        auth = None
+
     legs = leg_spend(win.get("order_events"))
 
     # THE RECORDED EVENT LIST IS A CAPPED SAMPLE, NOT A FILL LEDGER.
@@ -293,13 +306,39 @@ def from_window(rep: Mapping[str, Any],
     claimed = inv.get("n_fills")
     complete = (claimed is not None and int(claimed) == legs["n_fills"])
     use_fills = legs["readable"] and complete
+
+    if auth is not None:
+        sy = _fr(auth["spend"]["yes_usd"])
+        sn = _fr(auth["spend"]["no_usd"])
+        basis = "authoritative"
+    elif use_fills:
+        sy, sn, basis = legs["yes_spend"], legs["no_spend"], "ws_fills"
+    else:
+        sy = sn = None
+        basis = "averages"
+
+    if fees_usd is None and auth is not None:
+        fees_usd = auth["fees"]["total_usd"]
+
     out = decompose(
         yes_qty=inv.get("yes_qty"), no_qty=inv.get("no_qty"),
         avg_yes=inv.get("avg_yes_cost"), avg_no=inv.get("avg_no_cost"),
-        yes_spend=(legs["yes_spend"] if use_fills else None),
-        no_spend=(legs["no_spend"] if use_fills else None),
+        yes_spend=sy, no_spend=sn,
         resolution_side=(res.get("resolutionSide") if settled else None),
         spend_usd=inv.get("total_spend_usd"), fees_usd=fees_usd)
+    out["cost_basis"] = {
+        "authoritative": ("the venue's own filled-order rows joined to its "
+                          "trade record, proven complete"),
+        "ws_fills": "exact per-leg spend from the WS fill events",
+        "averages": "reconstructed as average x quantity",
+    }[basis]
+    out["authoritative_record"] = (None if auth is None else {
+        "verdict": auth["verdict"],
+        "n_fills": auth["n_authoritative_fills"],
+        "maker": auth["maker"]["maker"], "taker": auth["maker"]["taker"],
+        "unknown": auth["maker"]["unknown"],
+        "fees_usd": auth["fees"]["total_usd"],
+        "ws_missing": auth["ws_missing"]})
     out["fills_by_leg"] = {"yes": legs["n_yes_fills"], "no": legs["n_no_fills"]}
     out["fill_record"] = {
         "controller_n_fills": claimed,
