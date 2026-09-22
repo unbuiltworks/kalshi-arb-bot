@@ -107,10 +107,21 @@ def test_deduplication_is_idempotent():
 
 
 # ---------------------------------------------------------------- audit
+def test_deduplication_is_off_unless_asked_for():
+    """Suspended by the P8 audit: the twin rule's stated mechanism was
+    falsified, so it must not run by default."""
+    c = _c(prints=[[1000, "sell", "0.40", "5"], [1000, "buy", "0.60", "5"]])
+    assert len(TN.normalize(c)["prints"]) == 2
+    assert TN.normalize(c)["normalization"]["dedupe_applied"] is False
+    assert len(TN.normalize(c, dedupe=True)["prints"]) == 1
+    rows, rep = TN.normalize_all([c])
+    assert rep["twins_dropped"] == 0 and rep["dedupe_applied"] is False
+
+
 def test_normalization_preserves_the_raw_rows_and_is_reversible():
     c = _c(prints=[[1000, "sell", "0.40", "5"], [1000, "buy", "0.60", "5"]],
            start="2026-09-16T10:00:00.000Z", expiry="2026-09-16T10:15:00.000Z")
-    n = TN.normalize(c)
+    n = TN.normalize(c, dedupe=True)
     assert n["duration"] == "15m"
     assert len(n["prints"]) == 1
     assert n["prints_raw"] == [list(r) for r in c["prints"]]
@@ -119,7 +130,7 @@ def test_normalization_preserves_the_raw_rows_and_is_reversible():
 
 def test_every_dropped_row_is_recorded_with_what_replaced_it():
     c = _c(prints=[[1000, "sell", "0.40", "5"], [1000, "buy", "0.60", "5"]])
-    n = TN.normalize(c)
+    n = TN.normalize(c, dedupe=True)
     d = n["normalization"]["twins_dropped"]
     assert len(d) == 1
     assert d[0]["row"] in ([1000, "sell", "0.40", "5"], [1000, "buy", "0.60", "5"])
@@ -132,7 +143,7 @@ def test_the_counts_in_the_report_reconcile():
                prints=[[1000, "sell", "0.40", "5"], [1000, "buy", "0.60", "5"],
                        [1001, "sell", "0.41", "2"]])
             for i in range(3)]
-    out, rep = TN.normalize_all(rows)
+    out, rep = TN.normalize_all(rows, dedupe=True)
     assert rep["contracts_out"] == 3
     assert rep["twins_dropped"] == 3
     assert rep["prints_out"] == 6
@@ -173,7 +184,7 @@ def test_print_timestamps_are_seconds_in_the_stored_corpus():
         os.path.abspath(__file__))), "analysis", "gemini", "p7_bulk_tape.json")
     if not os.path.exists(path):                    # corpus not in this tree
         return
-    rows, _ = TN.normalize_all(json.load(open(path)))
+    rows, _ = TN.normalize_all(json.load(open(path)), dedupe=True)
 
     def epoch(v):
         return dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
@@ -194,3 +205,16 @@ def test_print_timestamps_are_seconds_in_the_stored_corpus():
                 outside += 1
     assert inside > 20000
     assert outside == 0, outside
+
+
+def test_rows_carrying_tid_and_timestampms_are_handled():
+    """Collectors keep six fields since the P8 audit. Nothing that reads a
+    print may assume exactly four, and `tid_of` must find the id."""
+    wide = [1000, "sell", "0.40", "5", 987654321, 1000123]
+    narrow = [1000, "sell", "0.40", "5"]
+    assert TN.tid_of(wide) == 987654321
+    assert TN.tid_of(narrow) is None
+    c = _c(prints=[wide, [1000, "buy", "0.60", "5", 987654322, 1000456]])
+    n = TN.normalize(c, dedupe=True)
+    assert len(n["prints"]) == 1 and len(n["prints"][0]) == 6
+    assert len(TN.normalize(c)["prints"]) == 2

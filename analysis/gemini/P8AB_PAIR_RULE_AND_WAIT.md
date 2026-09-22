@@ -18,6 +18,37 @@ Both read the raw pull committed at `p7_bulk_tape.json` and apply the
 corrections on load, so every number below comes from the rows the venue
 actually returned.
 
+
+> ### Corrections from the P8 audit (2026-09-22), applied after publication
+>
+> `analysis/gemini/P8_AUDIT.md` re-derived this round's inputs independently.
+> Four statements below are corrected and one is withdrawn:
+>
+> 1. **"a quoted spread of 0.01-0.04" is wrong for the BTC lanes.** That figure
+>    came from an all-families snapshot dominated by long-dated markets. The
+>    recorded COHORT-2 book cycles put **BTC5m's own median spread at 0.280**
+>    (p10 0.11, p90 0.33) and BTC15m's at 0.060. So the achieved pair margins
+>    of 0.28-0.36 are *consistent with spread capture* and are **not** evidence
+>    of directional selection. **The inference is withdrawn**; the identity
+>    (pair margin = the price change between the two fills) still holds.
+> 2. **P9-F was only tested up to a 0.20 spread, below the lane's real one.**
+>    Re-run at 0.28/0.33/0.40 it stays negative in every cell (BTC5m DEV
+>    -$0.047/quote at 0.28, VAL -$0.127), so the conclusion survives, but the
+>    gap was real.
+> 3. **"never offered a complement" is the wrong word.** Both sides were quoted
+>    in **217 of 217** readable BTC5m cycles. What 53/115 markets lacked was a
+>    complement *print* -- a maker-fill chance at our price. Completing as a
+>    taker was always possible and, at a 0.28 spread, uneconomic.
+> 4. **Every capture < 1.00 figure is one arbitrary sample.** `capture` is
+>    implemented as "take every Nth print", which is phase-locked. Bernoulli
+>    draws move BTC5m DEV @0.50 from -0.72 to a mean of +4.41. The capture-1.00
+>    column is the only thinning-free comparison.
+> 5. **The mirrored-twin deduplication is suspended** -- 1,474 of 1,476 pairs
+>    are same-side and every re-pulled pair has distinct `tid`s. Base rates move
+>    by at most 2.5pp without it (BTC5m DEV 44.9% -> 42.4%) and P9-F stays
+>    negative, so the structural findings hold; P&L figures computed on the
+>    deduped tape are provisional.
+
 ---
 
 ## Answer first

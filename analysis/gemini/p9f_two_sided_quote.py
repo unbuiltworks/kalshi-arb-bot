@@ -55,7 +55,7 @@ def quote_once(contract, i, s, *, capture=F(1)):
     need = int(1 / float(capture)) if float(capture) > 0 else 1
     seen_b = seen_a = 0
     t_bid = t_ask = None
-    for t, side, px_s, _q in prints[i + 1:]:
+    for t, side, px_s, _q in (r[:4] for r in prints[i + 1:]):
         px = F(px_s)
         if side == "sell" and px <= bid and t_bid is None:
             seen_b += 1

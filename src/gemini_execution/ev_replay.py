@@ -53,7 +53,7 @@ def _future_prices(prints, idx, need_side):
     can be SCORED after the fact, never so one can be chosen now.
     """
     out = []
-    for _t, side, px_s, _q in prints[idx + 1:]:
+    for _t, side, px_s, _q in (r[:4] for r in prints[idx + 1:]):
         offered = YES if side == "sell" else (NO if side == "buy" else None)
         if offered != need_side:
             continue
@@ -71,7 +71,7 @@ def _future_complement(prints, idx, need_side):
     the policy would be exactly the future leakage the whole design forbids.
     """
     out = []
-    for t, side, px_s, _q in prints[idx + 1:]:
+    for t, side, px_s, _q in (r[:4] for r in prints[idx + 1:]):
         offered = YES if side == "sell" else (NO if side == "buy" else None)
         if offered != need_side:
             continue
@@ -142,7 +142,9 @@ def replay(contract: Mapping[str, Any], *,
         except Exception:                                      # noqa: BLE001
             exp_t = None
 
-    for _i, (t, side, px_s, qty_s) in enumerate(prints):
+    #: rows may carry `tid` and `timestampms` after the first four fields
+    #: (added by the P8 audit); take the first four so both shapes work.
+    for _i, (t, side, px_s, qty_s) in enumerate(r[:4] for r in prints):
         px = F(px_s)
         st.observe(int(t), side, px)
         offered = YES if side == "sell" else (NO if side == "buy" else None)

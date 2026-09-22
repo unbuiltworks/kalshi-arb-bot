@@ -89,7 +89,9 @@ def features_at(contract: Mapping[str, Any], prints: Sequence[Sequence[Any]],
     is true of BTC5m/15m/1h: at the moment market k opens, market k-1 is over.
     It is the only cross-market input and it is optional.
     """
-    t, side, px_s, qty_s = prints[i]
+    #: rows carry (t, side, price, qty) and, since the P8 audit, `tid` and
+    #: `timestampms` after them. Unpack the first four so both shapes work.
+    t, side, px_s, qty_s = prints[i][:4]
     t = int(t)
     offered = _side_of(str(side))
     px = F(str(px_s))
@@ -105,7 +107,7 @@ def features_at(contract: Mapping[str, Any], prints: Sequence[Sequence[Any]],
     last_opp_t: Optional[int] = None
     notional = F(0)
     series: List[F] = []
-    for tt, ss, pp, qq in hist:
+    for tt, ss, pp, qq in (r[:4] for r in hist):
         o = _side_of(str(ss))
         if o is None:
             continue
@@ -165,7 +167,7 @@ def labels_after(prints: Sequence[Sequence[Any]], i: int, *,
     firsts: Dict[str, Optional[int]] = {}
     counts: Dict[str, int] = {}
     best: Optional[F] = None
-    for tt, ss, pp, _qq in prints[i + 1:]:
+    for tt, ss, pp, _qq in (r[:4] for r in prints[i + 1:]):
         o = _side_of(str(ss))
         if o != need:
             continue

@@ -94,8 +94,15 @@ def trades(sym):
     d = get(f"/v1/trades/{sym}?limit_trades=500")
     if isinstance(d, dict):
         return None
+    #: FIVE AND SIX ARE NEW (P8 audit, 2026-09-22). `tid` is the venue's own
+    #: trade identifier and `timestampms` its millisecond clock. Storing only
+    #: the first four fields is what made the mirrored-twin question
+    #: unanswerable from our corpus: two rows could be shown to LOOK alike but
+    #: not to BE the same execution. Consumers index positionally, so the new
+    #: fields are appended rather than inserted.
     return [[int(t["timestamp"]), str(t.get("type", "")).lower(),
-             str(t["price"]), str(t["amount"])]
+             str(t["price"]), str(t["amount"]),
+             t.get("tid"), t.get("timestampms")]
             for t in d if t.get("price") and t.get("amount")]
 
 

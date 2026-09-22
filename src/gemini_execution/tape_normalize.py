@@ -14,7 +14,18 @@ lives -- `effectiveDate` to `expiryDate` -- so duration is derived from that
 and from nothing else. A contract whose life falls in no band is QUARANTINED,
 never guessed at: `duration` becomes None and `quarantine` says why.
 
-DEFECT 2 -- MIRRORED TRADE TWINS.
+DEFECT 2 -- MIRRORED TRADE TWINS. **SUSPENDED 2026-09-22 BY THE P8 AUDIT --
+`dedupe` now defaults to False and callers must opt in.** The audit found the
+stated mechanism falsified: 1,474 of 1,476 candidate pairs in the corpus carry
+the SAME aggressor side, and every pair re-pulled from the venue inside its
+retention window carries DISTINCT `tid`s. A mirror would show one buy and one
+sell and, being one execution, one trade id. The survivor rule is circular too:
+it keeps whichever row is nearer the previous price, so it enforces the
+continuity it claims to detect, deleting a mean price excursion of 0.330 --
+preferentially at the mirror of the current price, which is exactly what a
+complement looks like. The code and its tests stay so that published figures
+remain reproducible with `dedupe=True`, and so the rule can be re-derived from
+`tid` once collectors store it. The ORIGINAL REASONING, kept for the record:
 `GET /v1/trades/{symbol}` returns each execution twice on this venue: once at
 p and once at 1-p, same second, same quantity, opposite aggressor. That is one
 economic execution reported from both sides of the one-ladder mirror, not two.
@@ -133,6 +144,17 @@ def _key(row: Sequence[Any]) -> Tuple[int, str, str, str]:
     return (int(row[0]), str(row[1]), str(row[2]), str(row[3]))
 
 
+def tid_of(row: Sequence[Any]) -> Any:
+    """The venue's own trade id, when the collector kept it.
+
+    Rows collected before 2026-09-22 stop at four fields and return None. This
+    is the field that decides whether two rows are one execution, and having
+    dropped it is why the mirrored-twin rule could not be settled from our own
+    corpus.
+    """
+    return row[4] if len(row) > 4 else None
+
+
 def dedupe_prints(prints: Sequence[Sequence[Any]]
                   ) -> Tuple[List[List[Any]], List[Dict[str, Any]]]:
     """Collapse each mirrored pair to one economic execution.
@@ -196,11 +218,21 @@ def dedupe_prints(prints: Sequence[Sequence[Any]]
 # --------------------------------------------------------------------------
 # the one entry point analyses should use
 # --------------------------------------------------------------------------
-def normalize(contract: Mapping[str, Any]) -> Dict[str, Any]:
-    """Return a corrected copy that still carries everything it corrected."""
+def normalize(contract: Mapping[str, Any], *,
+              dedupe: bool = False) -> Dict[str, Any]:
+    """Return a corrected copy that still carries everything it corrected.
+
+    `dedupe` defaults to **False**: see the suspension note at the top of this
+    module. Pass True to reproduce the figures published before 2026-09-22.
+    """
     out = dict(contract)
     raw = [list(r) for r in (contract.get("prints") or [])]
-    kept, dropped = dedupe_prints(raw)
+    if dedupe:
+        kept, dropped = dedupe_prints(raw)
+    else:
+        kept = sorted((list(r) for r in raw),
+                      key=lambda r: (int(r[0]), str(r[1])))
+        dropped = []
     cls = classify(contract)
     out["duration"] = cls["duration"]
     out["prints"] = kept
@@ -210,12 +242,14 @@ def normalize(contract: Mapping[str, Any]) -> Dict[str, Any]:
         "duration": cls,
         "prints_in": len(raw),
         "prints_out": len(kept),
+        "dedupe_applied": bool(dedupe),
         "twins_dropped": dropped,
     }
     return out
 
 
-def normalize_all(contracts: Sequence[Mapping[str, Any]]
+def normalize_all(contracts: Sequence[Mapping[str, Any]], *,
+                  dedupe: bool = False
                   ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Normalize a pull and report what the corrections cost it.
 
@@ -228,7 +262,7 @@ def normalize_all(contracts: Sequence[Mapping[str, Any]]
     twins = 0
     prints_in = prints_out = 0
     for c in contracts:
-        nc = normalize(c)
+        nc = normalize(c, dedupe=dedupe)
         prints_in += nc["normalization"]["prints_in"]
         if nc["duration"] is None:
             quarantined.append({"symbol": c.get("symbol"),
@@ -246,6 +280,7 @@ def normalize_all(contracts: Sequence[Mapping[str, Any]]
         "quarantined_detail": quarantined[:50],
         "prints_in": prints_in,
         "prints_out": prints_out,
+        "dedupe_applied": bool(dedupe),
         "twins_dropped": twins,
     }
     return rows, report

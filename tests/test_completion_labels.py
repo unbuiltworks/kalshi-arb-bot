@@ -128,3 +128,13 @@ def test_the_module_is_offline():
     src = inspect.getsource(CL)
     for clock in (".now(", ".utcnow(", ".today(", "time.time("):
         assert clock not in src, clock
+
+
+def test_six_field_prints_from_the_post_audit_collectors_work():
+    """Rows now carry `tid` and `timestampms` after the first four fields."""
+    c = _c([[T0, "sell", "0.40", "1", 111, T0 * 1000],
+            [T0 + 30, "buy", "0.70", "1", 112, (T0 + 30) * 1000]])
+    rows = CL.label_opens(c)
+    assert len(rows) == 2
+    assert rows[0]["y_best_pair"] == F(70, 100)
+    assert rows[0]["y_latency_any_s"] == 30.0

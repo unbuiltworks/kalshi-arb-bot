@@ -26,24 +26,30 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FORWARD = os.path.join(HERE, "forward")
 
 
-def load(paths: Sequence[str], *, raw: bool = False
+def load(paths: Sequence[str], *, raw: bool = False, dedupe: bool = False
          ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Read one or more raw pulls and return corrected contracts + a report."""
+    """Read one or more raw pulls and return corrected contracts + a report.
+
+    `dedupe` is False since the P8 audit suspended the mirrored-twin rule
+    (see `tape_normalize`). Pass True to reproduce figures published before
+    2026-09-22.
+    """
     rows: List[Dict[str, Any]] = []
     for p in paths:
         with open(p) as fh:
             rows += json.load(fh)
     if raw:
         return rows, {"label": "RAW -- UNCORRECTED", "contracts_in": len(rows)}
-    return TN.normalize_all(rows)
+    return TN.normalize_all(rows, dedupe=dedupe)
 
 
-def load_forward(*, raw: bool = False):
+def load_forward(*, raw: bool = False, dedupe: bool = False):
     """The sealed 09-23-onward set. Development must not read this."""
     if not os.path.isdir(FORWARD):
         return [], {"label": "no forward days collected yet"}
     days = sorted(f for f in os.listdir(FORWARD) if f.endswith(".json"))
-    return load([os.path.join(FORWARD, d) for d in days], raw=raw)
+    return load([os.path.join(FORWARD, d) for d in days], raw=raw,
+                dedupe=dedupe)
 
 
 if __name__ == "__main__":
