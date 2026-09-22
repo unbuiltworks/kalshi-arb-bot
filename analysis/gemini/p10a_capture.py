@@ -58,35 +58,52 @@ def timed_get(path, tries=2):
     return None, 0.0, 0.0
 
 
+CATEGORIES = ("Crypto", "Weather", "Politics", "Economics")
+
+
 def discover(n_symbols):
-    """The densest live contracts: short-duration crypto first, then whatever
-    else is currently trading. Re-run periodically because 5m contracts roll."""
-    out = []
-    for cat in ("Crypto", "Weather", "Economics", "Sports"):
+    """The busiest live contract in each category, ROUND ROBIN.
+
+    Round robin rather than a ranked list, because the point is to sample the
+    venue's different flow regimes. A ranked list fills every slot from
+    whichever category happens to be busiest -- which is exactly what the first
+    two captures of 2026-09-22 did, giving four crypto symbols and no coverage
+    of the families whose tapes show the strongest mirror signature. The
+    per-category candidate counts are recorded with the slate so a silently
+    empty category cannot repeat that quietly.
+    """
+    per_cat, counts = [], {}
+    for cat in CATEGORIES:
         d, _a, _b = timed_get(
-            f"/v1/prediction-markets/events?limit=60&category={cat}")
-        rows = (d or {}).get("data") or []
+            f"/v1/prediction-markets/events?limit=60&category={cat}", tries=3)
+        rows = [e for e in ((d or {}).get("data") or [])
+                if str(e.get("status")) == "active"]
         rows.sort(key=lambda e: -float(e.get("volume24h") or 0))
+        cand = []
         for e in rows:
-            if str(e.get("status")) != "active":
-                continue
             for c in (e.get("contracts") or []):
                 if c.get("instrumentSymbol") and c.get("status") == "active":
-                    out.append({
+                    cand.append({
                         "ticker": e.get("ticker"),
                         "symbol": c["instrumentSymbol"],
                         "category": e.get("category"),
                         "subcategory": (e.get("subcategory") or {}).get("name"),
                         "expiry": c.get("expiryDate"),
                         "start": c.get("effectiveDate")})
+        per_cat.append(cand)
+        counts[cat] = len(cand)
+    out, i = [], 0
+    while len(out) < n_symbols and any(len(c) > i for c in per_cat):
+        for cand in per_cat:
+            if i < len(cand):
+                out.append(cand[i])
             if len(out) >= n_symbols:
                 break
-        if len(out) >= n_symbols:
-            break
-    return out[:n_symbols]
+        i += 1
+    return out[:n_symbols], counts
 
 
-def capture(out_path, minutes, n_symbols=6, rediscover_s=120):
+def capture(out_path, minutes, n_symbols=4, rediscover_s=300):
     end = time.time() + minutes * 60
     seen = set()
     syms = []
@@ -95,9 +112,10 @@ def capture(out_path, minutes, n_symbols=6, rediscover_s=120):
     with open(out_path, "a") as fh:
         while time.time() < end:
             if time.time() - last_disc > rediscover_s:
-                syms = discover(n_symbols)
+                syms, counts = discover(n_symbols)
                 last_disc = time.time()
                 fh.write(json.dumps({"kind": "slate", "t": time.time(),
+                                     "candidates_per_category": counts,
                                      "symbols": [s["symbol"] for s in syms]}) + "\n")
             for s in syms:
                 if time.time() >= end:
