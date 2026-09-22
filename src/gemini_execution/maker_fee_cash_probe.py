@@ -49,6 +49,13 @@ SETTLED = "/v1/prediction-markets/positions/settled?withCashOuts=true"
 
 #: what the published schedule implies for the eighteen EP016 fills
 IMPLIED_USD = D("0.18")
+
+#: the four EP016 contracts, so their own rows can be pulled out by name
+#: rather than by a time filter that could drift with a timezone
+EP016_SYMBOLS = (
+    "GEMI-BTC15M2609220230-UP", "GEMI-BTC15M2609220245-UP",
+    "GEMI-BTC15M2609220300-UP", "GEMI-BTC15M2609220315-UP",
+)
 FEE_WORDS = ("fee", "commission", "charge")
 
 
@@ -120,6 +127,37 @@ async def run(date_from: str, date_to: str) -> Dict[str, Any]:
                                 "fee_currency": t.get("fee_currency"),
                                 "price": t.get("price"),
                                 "amount": t.get("amount")})
+    #: THE ROWS THAT MATTER, pulled out by symbol. Every EP016 fill reported
+    #: the WebSocket `n` as 0.0000; whether the account's own execution record
+    #: agrees is the whole question, and it is answered per row rather than in
+    #: aggregate.
+    ep = [t for t in rows if str(t.get("symbol")) in EP016_SYMBOLS]
+    ep_fee = D("0")
+    ep_rows = []
+    for t in ep:
+        f = _d(t.get("fee_amount"))
+        if f is not None:
+            ep_fee += f
+        ep_rows.append({"tid": t.get("tid"), "symbol": t.get("symbol"),
+                        "timestampms": t.get("timestampms"),
+                        "price": t.get("price"), "amount": t.get("amount"),
+                        "fee_amount": t.get("fee_amount"),
+                        "fee_currency": t.get("fee_currency"),
+                        "type": t.get("type"),
+                        "aggressor": t.get("aggressor"),
+                        "maker_side": t.get("maker_side")})
+    rep["ep016"] = {
+        "symbols": list(EP016_SYMBOLS),
+        "rows_found": len(ep),
+        "fee_amount_total": str(ep_fee),
+        "implied_by_schedule_usd": str(IMPLIED_USD),
+        "delta_vs_schedule": str(ep_fee - IMPLIED_USD),
+        "rows": ep_rows,
+        "note": ("18 fills are expected. Fewer means /v1/mytrades did not "
+                 "return them all in this page, which is a coverage fact and "
+                 "not a statement about fees."),
+    }
+
     rep["mytrades"] = {
         "status": mt.get("status"), "readable": mt.get("readable"),
         "n_rows": len(rows), "fee_amount_total": str(fees),
