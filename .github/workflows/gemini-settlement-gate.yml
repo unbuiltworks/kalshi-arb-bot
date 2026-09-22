@@ -40,6 +40,10 @@ on:
         description: "Set to true to survey which authenticated endpoint exposes Maker Rebate Reward credits (read-only)."
         required: false
         default: "false"
+      rebate_et_day:
+        description: "EASTERN calendar day (YYYY-MM-DD) whose maker-rebate payout row to reconcile. Payouts are per ET day, so a UTC date is the wrong question."
+        required: false
+        default: "2026-09-21"
       continuous_shadow_soak:
         description: "Set to true to run the CONTINUOUS V1 SHADOW soak (read-only, no order path). Default false."
         required: false
@@ -681,10 +685,32 @@ jobs:
             --out analysis/gemini/rebate_surface_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/rebate_probe.txt
 
-      # READ THE ACTUAL CREDITS. Located by the survey above: the credits
-      # are on POST /v1/transfers and the maker-notional denominator is on
-      # POST /v1/tradevolume. Every prediction-market rebate/reward path
-      # 404s, so those two are what exists and no scraper is written.
+      # THE VENUE'S OWN PAYOUT RECORDS. The 2026-09-19 survey concluded that
+      # every prediction-market rebate path 404s; it had probed
+      # /v1/prediction-markets/rebates and missed
+      # /v1/prediction-markets/maker-rebate/... by one path segment. This step
+      # reads the real surface and reconciles ONE Eastern calendar day's payout
+      # row against the accrual committed in advance at d28f289 -- three deltas
+      # (dollars, fill count, qualifying volume), not one. A rebate becomes
+      # economics only on status PAID; an accrual matching a PENDING row is
+      # still an accrual, and nothing here may enter model selection.
+      - name: Maker-rebate payout reconciliation (read-only; three deltas)
+        if: ${{ github.event.inputs.rebate_surface_probe == 'true' }}
+        timeout-minutes: 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.maker_rebate_reconcile \
+            --day "${{ github.event.inputs.rebate_et_day || '2026-09-21' }}" \
+            --out analysis/gemini/maker_rebate_reconcile_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/maker_rebate_reconcile.txt
+
+      # READ THE ACTUAL CREDITS on /v1/transfers, the surface that carries the
+      # AdminCredit rows. Kept beside the maker-rebate endpoints above rather
+      # than replaced by them: one is the venue's payout ledger and the other
+      # is the cash movement, and a credit is only established when both agree.
       - name: Rebate reconciliation (read-only; confirmed credits only)
         if: ${{ github.event.inputs.rebate_surface_probe == 'true' }}
         timeout-minutes: 10
@@ -786,6 +812,7 @@ jobs:
                    analysis/gemini/fill_forensics_*.json \
                    analysis/gemini/rebate_surface_probe_*.json \
                    analysis/gemini/rebate_reconciliation_*.json \
+                   analysis/gemini/maker_rebate_reconcile_*.json \
                    analysis/gemini/continuous_shadow_soak_*.json \
                    analysis/gemini/continuous_v1/continuous_v1.jsonl \
                    analysis/gemini/continuous_ledger.jsonl \
@@ -829,7 +856,7 @@ jobs:
           # only one that survives a runner killed between windows -- which
           # is precisely the case where the per-window report never gets
           # written at all.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other
