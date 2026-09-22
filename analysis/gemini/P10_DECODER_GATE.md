@@ -44,3 +44,49 @@ independent pre-rebate tests.
 * **BTC5m median book spread 0.280; BTC15m 0.060**
 * the slate families are dormant — their newest prints predate our first book
   poll by 1.5 to 10.5 hours — so they cannot validate anything on this timescale
+
+## Derived consequence, recorded 2026-09-22T23:15Z — G1's 150 assumed zero H2
+
+G1 and G4 are the same statement, and G1's threshold of **150** is the n at
+which **zero** H2 rows clear G4. One H2 row has since been observed, so the n
+that clears G4 is larger. The thresholds are unchanged; this is their
+arithmetic, computed by `p10h_gate.binom_upper`:
+
+| H2 observed | n needed for the 95% upper bound to reach 2.0% |
+|---|---|
+| 0 | 149 |
+| **1** | **236** |
+| 2 | 313 |
+| 3 | 386 |
+| 4 | 456 |
+
+**The binding target is therefore n ≥ 236 while the H2 count stays at 1.** Each
+further H2 row moves the target by roughly 75–80, which is about an hour of
+capture — so a rising H2 count fails the gate on the stopping rule rather than
+on the bound, exactly as intended.
+
+## Scoring is one command
+
+    python3 analysis/gemini/p10h_gate.py BTC      # exit 0 = passed
+
+It reads every capture in `p10_capture/`, `.partial` files included, counts
+rows unique by `(symbol, tid)`, and where two recorders saw the same print it
+keeps the better-observed classification. It does not get to argue with the
+thresholds above.
+
+## Measured yield, 2026-09-22T23:15Z
+
+76 decoded BTC rows from ~2h of capture. By contract family, decoded / rows:
+
+| family | rows | decoded | median book width |
+|---|---|---|---|
+| BTC05M | 104 | 48 (46%) | 0.250 |
+| BTC15M | 64 | 24 (38%) | 0.090 |
+| BTC hourly ladder | 23 | 5 (22%) | 0.070 |
+| ETH / SOL / XRP | 15 | 2 | — |
+| slate (HORMUZ, DEMNOM, WXHIGH) | 267 | **0** | no book overlap |
+
+The slate families contribute 267 rows and zero decoded, confirming they are
+dormant on this timescale. Three BTC recorders now run on disjoint duration
+families; the constraint is how many BTC contracts are watched, not the poll
+rate per contract.
