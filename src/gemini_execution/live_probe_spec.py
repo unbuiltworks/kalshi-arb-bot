@@ -278,7 +278,12 @@ BTC15M_Q1_CAP4_W60_880 = _declare(LiveProbeSpec(
     cohort=None,
     auth_id=SENTINEL_AUTH,
     action_size="1",
-    live_cohort=None,                  # no budget granted for it yet
+    #: GRANTED 2026-09-21 under
+    #: OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1: the HEAD of a ten
+    #: ledger chain, W01..W10, 12 action attempts each and 120 in total.
+    #: Carried here rather than in `cohort` so that granting a budget does
+    #: not move spec_sha away from the reviewed 223b81ed...
+    live_cohort="COHORT-2026-09-21-BTC15M-COHORT1-W01",
     quote_band=(60.0, 880.0),
 ))
 

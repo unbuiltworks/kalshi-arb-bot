@@ -60,12 +60,38 @@ def _spec(cid, *, quote_band=None):
                                quote_band=quote_band)
 
 
-def _plan(tmp_path, root, cid, *, windows=3, loss="10.00", quote_band=None):
-    return CR.CohortPlan(auth_id="OWNER-TEST", spec=_spec(cid,
-                                                          quote_band=quote_band),
+def _plan(tmp_path, root, cid, *, windows=3, loss="10.00", quote_band=None,
+          chain=None):
+    ids = tuple(chain) if chain is not None else (cid,) * windows
+    return CR.CohortPlan(auth_id="OWNER-TEST",
+                         spec=_spec(cid, quote_band=quote_band),
                          max_windows=windows, max_aggregate_loss_usd=loss,
+                         cohort_ids=ids,
                          state_dir=str(tmp_path / "latch"),
                          out_dir=str(tmp_path / "out"), root=root)
+
+
+def _chain(tmp_path, n, prefix="COHORT-TEST-W"):
+    """n 12-slot ledgers over ONE common ancestor, as the real cohort is built.
+
+    WHY A COMMON ANCESTOR RATHER THAN A LINKED LIST. `verify_predecessor`
+    means "the ledger I recorded has not changed since I was created". If
+    window 2 hashed window 1's ledger, then window 1 SPENDING ITS BUDGET --
+    the entirely normal thing -- would flip window 2's provenance to
+    tampered and stop the cohort. Every ledger therefore records the state of
+    the world BEFORE the cohort began, which is a claim that stays true for
+    the whole run and still detects a rewritten history.
+    """
+    root = str(tmp_path / "cohorts")
+    pred = tmp_path / "pred.jsonl"
+    pred.write_text("", encoding="utf-8")
+    ids = []
+    for i in range(1, n + 1):
+        cid = "%s%02d" % (prefix, i)
+        CO.create(cid, 12, root=root, predecessor_ledger=str(pred),
+                  note="test")
+        ids.append(cid)
+    return root, tuple(ids)
 
 
 @pytest.fixture(autouse=True)
@@ -239,7 +265,8 @@ def test_three_consecutive_contracts_run_in_one_process(tmp_path):
                if s not in set(exclude)]
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
-    async def _window(plan, symbol, *, readiness, latch_held_by):
+    async def _window(plan, symbol, *, readiness, latch_held_by,
+                      cohort_id=None):
         seen.append(symbol)
         return {"state": "STOPPED_FLAT_ORDERS",
                 "window": {"symbol": symbol, "inventory":
@@ -376,7 +403,8 @@ def test_a_refused_rollover_stops_the_cohort_rather_than_skipping(tmp_path):
                if s not in set(exclude)]
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
-    async def _window(plan, symbol, *, readiness, latch_held_by):
+    async def _window(plan, symbol, *, readiness, latch_held_by,
+                      cohort_id=None):
         seen.append(symbol)
         return {"state": "STOPPED_FLAT_ORDERS",
                 "window": {"inventory": {"total_spend_usd": "0",
@@ -476,7 +504,8 @@ def test_the_aggregate_loss_cap_stops_the_cohort(tmp_path):
                if s not in set(exclude)]
         return {"found": True, "symbol": nxt[0], "tte_s": 870.0}
 
-    async def _window(plan, symbol, *, readiness, latch_held_by):
+    async def _window(plan, symbol, *, readiness, latch_held_by,
+                      cohort_id=None):
         seen.append(symbol)
         return {"state": "STOPPED_FLAT_ORDERS",
                 "window": {"inventory": {"total_spend_usd": "2.00",
@@ -639,3 +668,130 @@ def test_the_runner_adds_no_midpoint_or_bid_improvement(tmp_path):
         assert forbidden not in code, forbidden
     # and it never constructs a price at all
     assert "price=" not in code.replace('"price": None', "")
+
+
+# ================== the 12-per-window / 120-per-cohort budget chain
+
+def test_the_chain_gives_twelve_per_window_and_the_sum_across_the_cohort(
+        tmp_path):
+    """ONE shared ledger could not express this grant. The Driver's budget is
+    `max_actions - consumed(ledger)`, so on one ledger window 2 would start
+    with whatever window 1 left and the per-window 12 would decay away."""
+    root, ids = _chain(tmp_path, 10)
+    plan = _plan(tmp_path, root, ids[0], windows=10, chain=ids)
+    b = plan.action_budget(root=root)
+    assert b["per_window"] == 12
+    assert b["total_budget"] == 120
+    assert b["total_remaining"] == 120
+    assert b["all_readable"] and b["all_intact"]
+    assert plan.as_dict()["max_cohort_actions"] == 120
+    # each window binds its OWN ledger, in order
+    assert [plan.ledger_for(i) for i in range(10)] == list(ids)
+    with pytest.raises(IndexError):
+        plan.ledger_for(10)
+
+
+def test_spending_one_window_does_not_reduce_the_next_windows_budget(
+        tmp_path):
+    root, ids = _chain(tmp_path, 3)
+    plan = _plan(tmp_path, root, ids[0], windows=3, chain=ids)
+    led = CO.load(ids[0], root=root).ledger_path
+    d = WC.Driver("A", BTC15M, ledger_path=led, max_actions=12,
+                  envelope=LE.LIVE_Q1_BTC15M_CAP4)
+    for i in range(5):
+        slot = d.ledger.attempt(WC.PLACE, {"client_order_id": "x%d" % i})
+        d.ledger.resolve(slot, WC.ACCEPTED, {"status": 200})
+
+    assert CO.state(ids[0], root=root)["remaining"] == 7
+    assert CO.state(ids[1], root=root)["remaining"] == 12, \
+        "window 2 still has its own full 12"
+    assert plan.action_budget(root=root)["total_remaining"] == 31
+
+    d2 = WC.Driver("A", NEXT15M,
+                   ledger_path=CO.load(ids[1], root=root).ledger_path,
+                   max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
+    assert d2.ledger.consumed() == 0
+    assert d2.budget_left() == 12
+
+
+def test_every_ledger_hashes_the_state_the_cohort_began_from(tmp_path):
+    """Provenance that survives the cohort doing its job.
+
+    A linked list would be wrong here: window 1 spending its budget is the
+    normal case, and under a linked list it would flip window 2's provenance
+    to tampered and stop a cohort the owner authorized.
+    """
+    root, ids = _chain(tmp_path, 3)
+    for cid in ids:
+        assert CO.state(cid, root=root)["predecessor"]["intact"] is True
+
+    # SPENDING window 1 must not disturb anybody's provenance
+    d = WC.Driver("A", BTC15M,
+                  ledger_path=CO.load(ids[0], root=root).ledger_path,
+                  max_actions=12, envelope=LE.LIVE_Q1_BTC15M_CAP4)
+    slot = d.ledger.attempt(WC.PLACE, {"client_order_id": "x"})
+    d.ledger.resolve(slot, WC.ACCEPTED, {"status": 200})
+    for cid in ids:
+        assert CO.state(cid, root=root)["predecessor"]["intact"] is True, cid
+
+    # REWRITING THE PRE-COHORT HISTORY must be caught by all of them
+    with open(tmp_path / "pred.jsonl", "a", encoding="utf-8") as fh:
+        fh.write('{"kind":"FORGED"}\n')
+    for cid in ids:
+        assert CO.state(cid, root=root)["predecessor"]["intact"] is False, cid
+
+
+def test_a_tampered_chain_stops_the_cohort_before_any_window(tmp_path):
+    root, ids = _chain(tmp_path, 3)
+    plan = _plan(tmp_path, root, ids[0], windows=3, chain=ids)
+    with open(tmp_path / "pred.jsonl", "a", encoding="utf-8") as fh:
+        fh.write('{"kind":"FORGED"}\n')
+
+    async def _boom(*a, **k):
+        raise AssertionError("no window may run on a tampered chain")
+
+    async def _discover(spec, exclude=()):
+        return {"found": True, "symbol": BTC15M, "tte_s": 870.0}
+
+    rep = _run(CR.run_cohort(plan, readiness=True, window_fn=_boom,
+                             discover_fn=_discover, gate_fn=_boom,
+                             readiness_fn=_READY,
+                             latch_fn=lambda *a, **k: {"ok": True}))
+    assert rep["state"] == "STOPPED_LEDGER_UNREADABLE"
+
+
+def test_an_already_spent_window_ledger_is_skipped_not_re_entered(tmp_path):
+    """Restart safety: a cohort that died mid-run must not re-spend a ledger
+    a previous process already used."""
+    root, ids = _chain(tmp_path, 3)
+    plan = _plan(tmp_path, root, ids[0], windows=3, chain=ids)
+    led = CO.load(ids[0], root=root).ledger_path
+    d = WC.Driver("A", BTC15M, ledger_path=led, max_actions=12,
+                  envelope=LE.LIVE_Q1_BTC15M_CAP4)
+    for i in range(12):
+        slot = d.ledger.attempt(WC.PLACE, {"client_order_id": "x%d" % i})
+        d.ledger.resolve(slot, WC.ACCEPTED, {"status": 200})
+    assert CO.state(ids[0], root=root)["remaining"] == 0
+
+    bound = []
+
+    async def _discover(spec, exclude=()):
+        return {"found": True, "symbol": BTC15M, "tte_s": 870.0}
+
+    async def _window(plan, symbol, *, readiness, latch_held_by,
+                      cohort_id=None):
+        bound.append(cohort_id)
+        return {"state": "STOPPED_FLAT_ORDERS",
+                "window": {"inventory": {"total_spend_usd": "0",
+                                         "n_fills": 0},
+                           "orders_live_after_stop": 0}}
+
+    async def _gate(symbol, **k):
+        return {"ok": True, "verdict": "CLEAR"}
+
+    rep = _run(CR.run_cohort(plan, readiness=True, window_fn=_window,
+                             discover_fn=_discover, gate_fn=_gate,
+                             readiness_fn=_READY,
+                             latch_fn=lambda *a, **k: {"ok": True}))
+    assert ids[0] not in bound, "a spent ledger was re-entered"
+    assert bound == [ids[1], ids[2]]

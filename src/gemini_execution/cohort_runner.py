@@ -54,7 +54,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal as D
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
+                    Tuple)
 
 from src.gemini_execution import bundle as BUNDLE
 from src.gemini_execution import cohort as CO
@@ -131,6 +132,7 @@ def save_state(st: Mapping[str, Any], *, root: str = CO.COHORT_ROOT) -> str:
 
 async def static_readiness(spec: Any, *, auth_id: str,
                            root: str = CO.COHORT_ROOT,
+                           chain: Sequence[str] = (),
                            now: Optional[float] = None) -> Dict[str, Any]:
     """Is the TREE ready? Asked without reference to any contract's clock.
 
@@ -187,7 +189,33 @@ async def static_readiness(spec: Any, *, auth_id: str,
             % (spec.envelope_obj.name, want, got))
 
     # ---- the budget ledger: exists, intact, and has room
-    cid = spec.budget_cohort
+    cid = (chain[0] if chain else spec.budget_cohort)
+    if chain:
+        rows = []
+        for c in chain:
+            try:
+                cs = CO.state(c, root=root)
+                rows.append({"cohort_id": c, "budget": cs["budget"],
+                             "consumed": cs["consumed"],
+                             "remaining": cs["remaining"],
+                             "predecessor_intact":
+                                 (cs.get("predecessor") or {}).get("intact")})
+            except Exception as exc:                          # noqa: BLE001
+                rows.append({"cohort_id": c, "readable": False,
+                             "why": "%s: %s" % (type(exc).__name__, exc)})
+        ok = (len(rows) == len(chain)
+              and all(r.get("predecessor_intact") for r in rows)
+              and sum(r.get("remaining", 0) for r in rows) > 0)
+        ch["cohort_chain"] = {
+            "ledgers": rows, "n": len(chain),
+            "actions_per_window": 12,
+            "total_budget": sum(r.get("budget", 0) for r in rows),
+            "total_remaining": sum(r.get("remaining", 0) for r in rows),
+            "ok": ok}
+        if not ok:
+            out["why_not"].append(
+                "the cohort's ledger chain is not readable, intact and "
+                "unspent: %s" % json.dumps(rows, default=str)[:400])
     if not cid:
         ch["cohort"] = {"ok": False, "why": "the spec names no budget ledger"}
         out["why_not"].append("no budget ledger is granted for this spec")
@@ -491,21 +519,76 @@ async def await_contract(spec: Any, *,
 
 @dataclass(frozen=True)
 class CohortPlan:
-    """The whole authorization, in one immutable object."""
+    """The whole authorization, in one immutable object.
+
+    WHY `cohort_ids` IS A CHAIN AND NOT ONE LEDGER. The grant is 12 actions
+    PER WINDOW and 120 across the cohort. A single shared ledger cannot
+    express that: the Driver's budget is `max_actions - consumed(ledger)`, so
+    on one ledger window 2 would start with whatever window 1 left behind and
+    the per-window 12 would decay to nothing. Ten 12-slot cohorts, each
+    chained to the last and each hashing its predecessor, gives exactly 12 per
+    window, exactly 120 in total, and the provenance chain `cohort.py` was
+    built for. Nothing is reset: a spent cohort is never re-entered.
+    """
     auth_id: str
     spec: Any
     max_windows: int
     max_aggregate_loss_usd: str
+    #: ordered, one per window. Window i binds cohort_ids[i].
+    cohort_ids: Tuple[str, ...] = ()
     state_dir: str = "analysis/gemini/canary_latch"
     out_dir: str = "analysis/gemini"
     root: str = CO.COHORT_ROOT
+
+    @property
+    def head(self) -> Optional[str]:
+        """Where the cohort's durable counters live: its FIRST ledger."""
+        return self.cohort_ids[0] if self.cohort_ids else self.spec.budget_cohort
+
+    def ledger_for(self, window_index: int) -> str:
+        """The ledger window `window_index` (0-based) spends from."""
+        if not self.cohort_ids:
+            return self.spec.budget_cohort
+        if window_index >= len(self.cohort_ids):
+            raise IndexError(
+                "window %d has no ledger; this cohort granted %d"
+                % (window_index + 1, len(self.cohort_ids)))
+        return self.cohort_ids[window_index]
+
+    def action_budget(self, *, root: Optional[str] = None) -> Dict[str, Any]:
+        """The whole cohort's mutation budget, summed over its chain."""
+        r = root or self.root
+        rows = []
+        for cid in (self.cohort_ids or ([self.spec.budget_cohort]
+                                        if self.spec.budget_cohort else [])):
+            try:
+                st = CO.state(cid, root=r)
+            except Exception as exc:                          # noqa: BLE001
+                rows.append({"cohort_id": cid, "readable": False,
+                             "why": "%s: %s" % (type(exc).__name__, exc)})
+                continue
+            rows.append({"cohort_id": cid, "readable": True,
+                         "budget": st["budget"], "consumed": st["consumed"],
+                         "remaining": st["remaining"],
+                         "predecessor_intact":
+                             (st.get("predecessor") or {}).get("intact")})
+        ok = [r_ for r_ in rows if r_.get("readable")]
+        return {"per_window": 12, "ledgers": rows,
+                "total_budget": sum(r_["budget"] for r_ in ok),
+                "total_consumed": sum(r_["consumed"] for r_ in ok),
+                "total_remaining": sum(r_["remaining"] for r_ in ok),
+                "all_readable": len(ok) == len(rows) and bool(rows),
+                "all_intact": all(r_.get("predecessor_intact") for r_ in ok)}
 
     def as_dict(self) -> Dict[str, Any]:
         return {"label": "GEMINI_COHORT_PLAN_V1", "auth_id": self.auth_id,
                 "spec_id": self.spec.spec_id, "spec_sha": self.spec.spec_sha(),
                 "envelope_id": self.spec.envelope_obj.name,
                 "envelope_sha": self.spec.envelope_obj.sha(),
-                "budget_cohort": self.spec.budget_cohort,
+                "budget_cohort": self.head,
+                "cohort_ids": list(self.cohort_ids),
+                "actions_per_window": 12,
+                "max_cohort_actions": 12 * len(self.cohort_ids or ()),
                 "max_windows": self.max_windows,
                 "max_aggregate_loss_usd": self.max_aggregate_loss_usd,
                 "quote_band": (None if self.spec.quote_band is None
@@ -547,7 +630,8 @@ async def run_cohort(plan: CohortPlan, *,
     }
 
     ready = await (readiness_fn or static_readiness)(
-        spec, auth_id=plan.auth_id, root=plan.root)
+        spec, auth_id=plan.auth_id, root=plan.root,
+        chain=plan.cohort_ids)
     rep["static_readiness"] = ready
     if not ready.get("ok"):
         rep["state"] = "STOPPED_NOT_READY"
@@ -555,7 +639,7 @@ async def run_cohort(plan: CohortPlan, *,
         rep["finished_utc"] = datetime.now(timezone.utc).isoformat()
         return rep
 
-    st = load_state(spec.budget_cohort, root=plan.root,
+    st = load_state(plan.head, root=plan.root,
                     max_windows=plan.max_windows,
                     max_loss_usd=plan.max_aggregate_loss_usd)
     if st.get("stopped"):
@@ -597,17 +681,36 @@ async def run_cohort(plan: CohortPlan, *,
                   "reconstructed aggregate loss %s has reached the cohort "
                   "cap of %s" % (loss, cap))
             break
-        try:
-            cst = CO.state(spec.budget_cohort, root=plan.root)
-        except Exception as exc:                              # noqa: BLE001
+        # THE WHOLE CHAIN, RE-READ EVERY WINDOW. Unreadable or tampered is a
+        # stop, not a warning: a ledger that cannot be read is not a ledger
+        # with room.
+        budget = plan.action_budget()
+        rep["action_budget"] = budget
+        if not budget["all_readable"] or not budget["all_intact"]:
             _stop(rep, st, "LEDGER_UNREADABLE",
-                  "%s: %s" % (type(exc).__name__, exc))
+                  "the cohort's ledger chain is not readable and intact: %s"
+                  % json.dumps(budget["ledgers"], default=str)[:400])
             break
-        if cst.get("remaining", 0) <= 0:
+        if budget["total_remaining"] <= 0:
             _stop(rep, st, "MUTATION_BUDGET",
-                  "the cohort ledger is spent (%s/%s)"
-                  % (cst.get("consumed"), cst.get("budget")))
+                  "the cohort's action budget is spent (%s/%s)"
+                  % (budget["total_consumed"], budget["total_budget"]))
             break
+        try:
+            window_cohort = plan.ledger_for(st["windows_observed"])
+        except IndexError as exc:
+            _stop(rep, st, "WINDOWS_EXHAUSTED", str(exc))
+            break
+        cst = CO.state(window_cohort, root=plan.root)
+        if cst.get("remaining", 0) <= 0:
+            # THIS WINDOW's ledger is spent before the window began, which
+            # means a previous run already used it. Skip to the next rather
+            # than re-entering a spent ledger: a spent cohort never re-arms.
+            st["windows_observed"] += 1
+            save_state(st, root=plan.root)
+            rep["windows"].append({"skipped": window_cohort,
+                                   "why": "ledger already spent"})
+            continue
 
         found = await discover(spec, exclude=st.get("symbols") or ())
         rep["windows"].append({"discovery": found})
@@ -617,7 +720,8 @@ async def run_cohort(plan: CohortPlan, *,
         symbol = found["symbol"]
 
         wrep = await run_window(plan, symbol, readiness=readiness,
-                                latch_held_by=latch_rec)
+                                latch_held_by=latch_rec,
+                                cohort_id=window_cohort)
         econ = window_loss_usd(wrep)
         placement = spread_placement(wrep)
         st["windows_observed"] += 1
@@ -628,7 +732,8 @@ async def run_cohort(plan: CohortPlan, *,
             D(str(st.get("aggregate_loss_usd") or "0"))
             + D(str(econ["reconstructed_loss_usd"])))
         st["windows"] = list(st.get("windows") or []) + [{
-            "symbol": symbol, "utc": datetime.now(timezone.utc).isoformat(),
+            "symbol": symbol, "cohort_id": window_cohort,
+            "utc": datetime.now(timezone.utc).isoformat(),
             "state": wrep.get("state"),
             "stop_why": (wrep.get("window") or {}).get("stop_why")
                         or wrep.get("why"),
@@ -715,8 +820,8 @@ async def _consume_cohort_latch(plan: CohortPlan, st: Mapping[str, Any], *,
 
 
 async def _run_window(plan: CohortPlan, symbol: str, *, readiness: bool,
-                      latch_held_by: Optional[Mapping[str, Any]]
-                      ) -> Dict[str, Any]:
+                      latch_held_by: Optional[Mapping[str, Any]],
+                      cohort_id: Optional[str] = None) -> Dict[str, Any]:
     """ONE contract, through the SAME body a single-window launcher runs."""
     spec = plan.spec
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -735,17 +840,18 @@ async def _run_window(plan: CohortPlan, symbol: str, *, readiness: bool,
         "readiness_mode": bool(readiness),
         "mutation_boundary": ("BLOCKED (readiness)" if readiness
                               else "ENABLED"),
-        "cohort_runner": {"cohort_id": spec.budget_cohort,
-                          "symbol": symbol},
+        "cohort_runner": {"cohort_id": cohort_id or spec.budget_cohort,
+                          "symbol": symbol,
+                          "actions_this_window": 12},
     }
     out = os.path.join(plan.out_dir, "cohort_window_%s.json" % stamp)
     wire = os.path.join(plan.out_dir, "cohort_wire_%s.json" % stamp)
     try:
         return await RC.run_one_window(
             rep, plan.auth_id, symbol, state_dir=plan.state_dir,
-            ledger_path=CO.load(spec.budget_cohort,
+            ledger_path=CO.load(cohort_id or spec.budget_cohort,
                                 root=plan.root).ledger_path,
-            wire_path=wire, cohort_id=spec.budget_cohort,
+            wire_path=wire, cohort_id=cohort_id or spec.budget_cohort,
             envelope=spec.envelope_obj, readiness=readiness,
             probe_spec=spec, latch_held_by=latch_held_by)
     finally:

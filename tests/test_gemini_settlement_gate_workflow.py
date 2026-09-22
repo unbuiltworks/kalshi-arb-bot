@@ -292,10 +292,33 @@ def test_the_spent_canary_step_is_gone_and_stays_gone():
     assert "OWNER-2026-09-17-GEMINI-CANARY-1" not in wf
 
 
+#: the ONLY steps that may carry a transport arm at all. Anything else
+#: setting GEMINI_CANARY_LIVE is a read-only step that has stopped being one.
+ARMABLE_STEPS = ("ONE authorized Gemini continuous window",
+                 "PERSISTENT BTC15m cohort")
+
+
 def test_no_other_step_arms_execution():
-    """Every read-only step must run with the arm absent."""
+    """Every read-only step must run with the arm absent.
+
+    Counting `GEMINI_CANARY_LIVE: "YES"` once was the right rule while there
+    was one armable step. There are now two -- the single-window launcher and
+    the persistent cohort runner -- and exactly one of them is ever armed for
+    a real authorization. So the rule is stated as what it protects: an arm
+    may appear ONLY in an enumerated step, and every other step must be
+    without one.
+    """
+    import re
     wf = WF.read_text()
-    assert wf.count('GEMINI_CANARY_LIVE: "YES"') == 1
+    steps = re.split(r"^      - name: ", wf, flags=re.M)[1:]
+    armed = [st.split("\n", 1)[0] for st in steps
+             if re.search(r'^\s*GEMINI_CANARY_LIVE:\s*\S+', st, re.M)]
+    assert armed, "no step carries an arm at all; the workflow cannot execute"
+    for name in armed:
+        assert any(name.startswith(a) for a in ARMABLE_STEPS), (
+            "%r sets the transport arm and is not an enumerated armable step"
+            % name)
+    assert len(armed) == len(set(armed)) <= len(ARMABLE_STEPS), armed
 
 
 def test_the_latch_path_may_be_committed():
@@ -322,11 +345,20 @@ def test_the_arm_is_SET_exactly_once_in_the_whole_workflow():
     import re
     wf = WF.read_text()
     assigns = re.findall(r'^\s*GEMINI_CANARY_LIVE:\s*\S+', wf, re.M)
-    assert len(assigns) == 1, assigns
-    i = wf.index(assigns[0])
-    assert "ONE authorized Gemini continuous window" in wf[:i]
-    # and that one assignment sits under the armed-only conditional
-    assert "github.event.inputs.armed_continuous == 'true'" in wf[:i]
+    assert 1 <= len(assigns) <= len(ARMABLE_STEPS), assigns
+    # EVERY assignment sits inside an enumerated armable step, and every one
+    # of those steps is behind its own explicit dispatch conditional. A step
+    # that could arm without the dispatcher asking for it is the failure this
+    # guards, and the count alone never said that.
+    steps = re.split(r"^      - name: ", wf, flags=re.M)[1:]
+    for st in steps:
+        if not re.search(r'^\s*GEMINI_CANARY_LIVE:\s*\S+', st, re.M):
+            continue
+        head = st.split("\n", 1)[0]
+        assert any(head.startswith(a) for a in ARMABLE_STEPS), head
+        assert re.search(r"if: \$\{\{ github\.event\.inputs\."
+                         r"(armed_continuous|cohort_run) == 'true' \}\}",
+                         st), head
 
 
 def test_the_dry_run_retries_into_the_next_btc5m_window():
@@ -625,7 +657,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the ONE authorization the tree may be armed for right now. When C7 is
 #: spent this becomes None again and the assertions below flip back to the
 #: disarmed shape without any other edit.
-LIVE_AUTHORIZATION = None
+LIVE_AUTHORIZATION = "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1"
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -638,7 +670,20 @@ def test_the_tree_is_armed_for_exactly_one_named_authorization():
     from src.gemini_execution import ws_continuous as WCX
 
     wf = WF.read_text()
-    assert len(re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)) == 1
+    # EXACTLY ONE STEP MAY BE ARMED, and the count alone no longer says so:
+    # the single-window launcher and the persistent cohort runner are two
+    # steps that CAN be armed, and only one of them ever is. So the rule is
+    # stated as what it means -- every GEMINI_CANARY_LIVE must sit beside a
+    # GEMINI_CANARY_AUTH, and at most one of those may name a real
+    # authorization. A second step cannot be armed by editing one line.
+    arms = re.findall(r"^\s*GEMINI_CANARY_LIVE:.*?\n\s*(?:#.*\n\s*)*"
+                      r"GEMINI_CANARY_AUTH: \"([^\"]+)\"", wf, re.M)
+    assert len(arms) == len(re.findall(r"^\s*GEMINI_CANARY_LIVE:", wf, re.M)), (
+        "every transport arm must be followed by the auth id it arms: %s"
+        % arms)
+    live = [a for a in arms if a != "NO-AUTHORIZATION-IN-FORCE"]
+    assert len(live) <= 1, ("more than one step is armed for a real "
+                            "authorization: %s" % live)
 
     sentinel = "NO-AUTHORIZATION-IN-FORCE"
     want = LIVE_AUTHORIZATION or sentinel
@@ -759,6 +804,10 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         # the corrected EP012 accounting under real fills, and a bounded
         # HOLD if the venue produces one. Nothing is induced.
         "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3",
+        # Owner-granted 2026-09-21: the PERSISTENT cohort -- one process, up
+        # to ten consecutive BTC15m contracts, quote interval TTE [60,880],
+        # $4.00 per market and $10.00 aggregate. ONE latch for the cohort.
+        "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}

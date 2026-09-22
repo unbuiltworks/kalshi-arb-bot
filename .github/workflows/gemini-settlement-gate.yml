@@ -60,6 +60,10 @@ on:
         description: "Set to true to run LIVE_READINESS_GATE on the credentialed runner (read-only; mutation boundary blocked)."
         required: false
         default: "false"
+      cohort_run:
+        description: "Set to true to run the PERSISTENT BTC15m cohort: one process, up to 10 consecutive contracts. ARMED."
+        required: false
+        default: "false"
       static_readiness:
         description: "Set to true to run the TTE-INDEPENDENT readiness check (read-only; binds no contract, waits for no entry band)."
         required: false
@@ -108,7 +112,7 @@ jobs:
     # nothing so a kill could not strand an order, but it would have thrown
     # away the evidence and looked like a failure. A test now pins
     # job > every step.
-    timeout-minutes: 60
+    timeout-minutes: 330
     steps:
       # THE RUNNER MUST EXECUTE THE REVIEWED TREE.
       #
@@ -579,6 +583,50 @@ jobs:
             --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
             --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/continuous.txt
+
+      # ==================================================================
+      # THE PERSISTENT BTC15m COHORT. ARMED.
+      #
+      # ONE PROCESS, up to ten consecutive contracts, no workflow restart
+      # between them. This is the step the single-window launcher above could
+      # never be: CAP4-LIVE-2 met one crossed tick, withdrew, and the process
+      # ENDED with another contract fifteen minutes later and nothing alive
+      # to take it.
+      #
+      # THE BOUNDS ARE NOT HERE. Every one of them is enforced inside
+      # ws_continuous.Driver and the ten 12-slot ledgers: q=1, CAP-4, $4.00
+      # per market, 2 working orders, 1 rung per outcome, maker/post-only,
+      # the 30s floor, the bounded UNREADABLE hold. The runner adds the two
+      # the grant adds: at most 10 windows, and a $10.00 aggregate
+      # reconstructed-loss stop checked before every bind.
+      #
+      # 300 MINUTES IS A BACKSTOP, NOT A RISK BOUND. Ten BTC15m contracts is
+      # ~2.5 hours of wall clock plus discovery. A killed runner never
+      # reaches its terminal withdrawal, so the step must outlive the work;
+      # the job's own timeout outlives the step.
+      # ==================================================================
+      - name: PERSISTENT BTC15m cohort (ARMED, up to 10 contracts)
+        if: ${{ github.event.inputs.cohort_run == 'true' }}
+        timeout-minutes: 300
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-22T08:00:00Z"
+          COHORT_SPEC: btc15m_q1_cap4_w60_880
+          COHORT_SPEC_SHA: "223b81edd6932bce48afbc35b1be88d9898af2849ddd38cf309e2d25e07bd65f"
+        run: |
+          set -o pipefail
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.cohort_runner \
+            --auth-id          "${GEMINI_CANARY_AUTH}" \
+            --spec             "${COHORT_SPEC}" \
+            --expect-spec-sha  "${COHORT_SPEC_SHA}" \
+            --max-windows      10 \
+            --max-loss-usd     10.00 \
+            --out analysis/gemini/cohort_run_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/cohort.txt
 
       # WHERE DO THE REBATE CREDITS LIVE? A read-only SURVEY of candidate
       # authenticated surfaces, run before any reader is written, because
