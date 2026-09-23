@@ -545,10 +545,65 @@ def raw_observation_on_start() -> Optional[Any]:
     return t
 
 
+#: Optional DISARMED end-to-end probe dry run, once per BTC15m window.
+#:
+#: It fires shortly BEFORE each window closes so the line covers that whole
+#: window rather than a partial one, which is what the authorization gate
+#: needs. Daemon thread and fully guarded: this measures the path, it must
+#: never be able to disturb the capture it measures. Off unless
+#: L5_PROBE_DRYRUN_ON=1.
+PROBE_DRYRUN_ENV = "L5_PROBE_DRYRUN_ON"
+PROBE_PERIOD_ENV = "L5_PROBE_DRYRUN_PERIOD_S"
+PROBE_LEAD_ENV = "L5_PROBE_DRYRUN_LEAD_S"
+
+
+def probe_dryrun_loop() -> Optional[Any]:
+    if not str(os.getenv(PROBE_DRYRUN_ENV, "")).strip():
+        return None
+    import threading
+    import time as _t
+
+    def period() -> float:
+        try:
+            return float(os.getenv(PROBE_PERIOD_ENV, "900") or "900")
+        except ValueError:
+            return 900.0
+
+    def lead() -> float:
+        try:
+            return float(os.getenv(PROBE_LEAD_ENV, "60") or "60")
+        except ValueError:
+            return 60.0
+
+    def run() -> None:
+        while True:
+            try:
+                p, ld = period(), lead()
+                now = _t.time()
+                fire = (int(now // p) + 1) * p - ld
+                if fire <= now:
+                    fire += p
+                _t.sleep(max(1.0, fire - now))
+                from scripts import l5_pmus_probe_dryrun as dry
+                dry.main([])
+            except BaseException as exc:                       # noqa: BLE001
+                print("L5_PROBE_DRYRUN {\"error\":\"%s\"}"
+                      % type(exc).__name__, flush=True)
+                try:
+                    _t.sleep(60.0)
+                except BaseException:                          # noqa: BLE001
+                    return
+
+    t = threading.Thread(target=run, name="l5-probe-dryrun", daemon=True)
+    t.start()
+    return t
+
+
 def main() -> int:
     install()
     preflight_on_start()
     raw_observation_on_start()
+    probe_dryrun_loop()
     return base.main()
 
 

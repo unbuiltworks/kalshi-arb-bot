@@ -60,6 +60,20 @@ COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/pmus_fees.py src/pmus_fees.py
 COPY scripts/l5_raw_tape_observation.py scripts/l5_raw_tape_observation.py
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
+# The DISARMED end-to-end probe dry run. It runs WHERE THE CREDENTIALS LIVE
+# because that is the only place the authenticated book and the account are
+# both reachable. pmus_q1_executor is still NOT copied here: the transport
+# no longer imports it, and the probe needs one bounded order rather than a
+# campaign engine.
+COPY scripts/l5_pmus_probe_dryrun.py scripts/l5_pmus_probe_dryrun.py
+COPY src/l5_pmus_live_wiring.py src/l5_pmus_live_wiring.py
+COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
+COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
+COPY src/l5_execution_translations.py src/l5_execution_translations.py
+COPY src/l5_live_execution.py src/l5_live_execution.py
+COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
+COPY src/pmus_interaction_classifier.py src/pmus_interaction_classifier.py
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=ws-recorder \
