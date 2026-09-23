@@ -754,9 +754,33 @@ class Observer:
         }
 
 
+SERVICE_ROLE = "l5-pmus-observer"
+ROLE_ENV = "PMUS_SERVICE_ROLE"
+STATE_DIR_ENV = "L5_PMUS_OBS_ROOT"
+DEFAULT_STATE_DIR = "data/l5_pmus_realtime"
+
+
+def assert_role() -> None:
+    """Refuse to run as the wrong worker.
+
+    The Railway services in this environment build from the same branch, so a
+    lost Dockerfile pin has previously cross-built one worker into another's
+    service. A baked role turns that into a loud crash at boot instead of a
+    worker that runs silently under the wrong name and writes its evidence
+    into the wrong volume. An UNSET role is deliberately allowed, because that
+    is how this module runs locally and under test.
+    """
+    got = os.getenv(ROLE_ENV)
+    if got and got != SERVICE_ROLE:
+        print("SERVICE_ROLE_MISMATCH expected=%s got=%s" % (SERVICE_ROLE, got),
+              flush=True)
+        raise SystemExit(2)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--state-dir", default="data/l5_pmus_realtime")
+    ap.add_argument("--state-dir",
+                    default=os.getenv(STATE_DIR_ENV) or DEFAULT_STATE_DIR)
     ap.add_argument("--interval", type=float, default=10.0)
     ap.add_argument("--minutes", type=float, default=0.0,
                     help="0 = run forever")
@@ -764,6 +788,8 @@ def main(argv=None) -> int:
     ap.add_argument("--once", action="store_true")
     a = ap.parse_args(argv)
 
+    assert_role()
+    os.makedirs(a.state_dir, exist_ok=True)
     obs = Observer(a.state_dir)
     print("L5_PMUS_OBS %s" % json.dumps({
         "kind": "boot", "state_dir": a.state_dir, "tape": obs.tape,
@@ -774,14 +800,47 @@ def main(argv=None) -> int:
 
     end = time.time() + a.minutes * 60.0 if a.minutes else None
     last_sum = 0.0
+    boot = time.time()
+    poll_exceptions = 0
     while True:
-        r = obs.poll()
+        # A 24/7 collector must not lose a BTC15m window to one malformed row.
+        # The tape is append-only and the dedupe index is rebuilt at boot, so
+        # a crash is already recoverable -- but a crash LOOP silently costs
+        # windows, which is the failure this service exists to stop having.
+        # `--once` keeps raising, because a test must not swallow a defect.
+        try:
+            r = obs.poll()
+        except Exception as exc:               # noqa: BLE001 -- continuity
+            if a.once:
+                raise
+            poll_exceptions += 1
+            r = {"kind": "poll", "ok": False, "why": "poll raised",
+                 "error_class": type(exc).__name__, "error": str(exc)[:400],
+                 "poll_exceptions": poll_exceptions}
         print("L5_PMUS_OBS %s" % json.dumps(r), flush=True)
         now = time.time()
         if now - last_sum >= a.summary_every or a.once:
             s = obs.summary()
             obs._emit(s)
             print("L5_PMUS_SUMMARY %s" % json.dumps(s), flush=True)
+            # Separate from the frozen summary on purpose: this line is
+            # service liveness, not experiment output, and proving the
+            # service survived a turn or a window rollover must never
+            # require reinterpreting the experiment's own fields.
+            print("L5_PMUS_HB %s" % json.dumps({
+                "kind": "observer_health", "role": SERVICE_ROLE,
+                "uptime_s": round(now - boot, 1),
+                "state_dir": a.state_dir,
+                "polls": obs.stats.get("polls") or 0,
+                "feed_errors": obs.stats.get("feed_errors") or 0,
+                "poll_exceptions": poll_exceptions,
+                "actions_observed": obs.stats.get("actions") or 0,
+                "actions_realtime": obs.stats.get("realtime") or 0,
+                "actions_backlog": obs.stats.get("backlog") or 0,
+                "hydrated_at_boot": obs.stats.get("hydrated") or 0,
+                "windows": len(s.get("per_window") or []),
+                "mutations_sent": 0, "order_path": False,
+                "labels": LABELS}), flush=True)
             last_sum = now
         if a.once or (end and now >= end):
             break
