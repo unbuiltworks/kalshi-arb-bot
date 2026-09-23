@@ -350,3 +350,49 @@ def test_the_frozen_modules_are_imported_not_copied():
     src = open(m.__file__).read()
     assert "def pmus_translate" not in src and "def l5_native" not in src
     assert m.FT.__name__ == "src.l5_faithful_translation"
+
+
+# ------------------------------------------ metadata when the catalogue 404s
+
+def ws_book_with_state(state):
+    b, clock = live_book()
+    b.ingest({"marketData": {"marketSlug": SLUG, "state": state}}, clock["t"])
+    return b
+
+
+def no_catalogue_http():
+    http = FakeHTTP()
+    http.data.pop("/v1/market/slug/%s" % SLUG)       # "Market not found"
+    return http
+
+
+def test_catalogue_miss_uses_authenticated_state_and_published_spec(creds):
+    b = ws_book_with_state("MARKET_STATE_OPEN")
+    t = T.PmusTransport(market_slug=SLUG, http=no_catalogue_http(), now_fn=NOW,
+                        book_source=b.snapshot)
+    rep = t.preflight()
+    by = {c["check"]: c for c in rep["checks"]}
+    assert by["market_catalogue_record"]["passed"] is False
+    assert by["market_catalogue_record"]["blocking"] is False
+    assert "state=MARKET_STATE_OPEN" in by["market_readable"]["detail"]
+    assert "crypto-schema" in by["market_readable"]["detail"]
+    assert t.market_meta["orderPriceMinTickSize"] == "0.01"
+    assert t.market_meta["minimumTradeQty"] == "0.01"
+
+
+def test_catalogue_miss_on_an_expired_market_is_not_tradable(creds):
+    b = ws_book_with_state("MARKET_STATE_EXPIRED")
+    t = T.PmusTransport(market_slug=SLUG, http=no_catalogue_http(), now_fn=NOW,
+                        book_source=b.snapshot)
+    with pytest.raises(T.PreflightFailed) as e:
+        t.preflight()
+    assert "market_open_tradable" in json.loads(str(e.value))["blocking_failures"]
+
+
+def test_catalogue_miss_without_stream_state_fails_closed(creds):
+    b, _ = live_book()                                  # book, but no state
+    t = T.PmusTransport(market_slug=SLUG, http=no_catalogue_http(), now_fn=NOW,
+                        book_source=b.snapshot)
+    with pytest.raises(T.PreflightFailed) as e:
+        t.preflight()
+    assert "market_readable" in json.loads(str(e.value))["blocking_failures"]

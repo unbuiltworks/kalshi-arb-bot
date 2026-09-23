@@ -93,11 +93,37 @@ class AuthBook:
         self._stop = False
 
     # ------------------------------------------------------------ fold
+    @staticmethod
+    def market_states(msg: Any, out: Optional[Dict[str, str]] = None
+                      ) -> Dict[str, str]:
+        """{slug: MARKET_STATE_*} wherever a frame carries one. The recorder's
+        parser folds prices and depth only; the venue's own trading state is
+        read here from the same frames (docs: marketData.state)."""
+        out = {} if out is None else out
+        if isinstance(msg, list):
+            for m in msg:
+                AuthBook.market_states(m, out)
+        elif isinstance(msg, dict):
+            slug = msg.get("marketSlug") or msg.get("market_slug")
+            st = msg.get("state")
+            if slug and isinstance(st, str) and st.startswith("MARKET_STATE_"):
+                out[str(slug)] = st
+            for v in msg.values():
+                if isinstance(v, (dict, list)):
+                    AuthBook.market_states(v, out)
+        return out
+
     def ingest(self, msg: Any, now: float) -> None:
         """Fold one frame. Pure bookkeeping, separated for tests."""
         with self.lock:
             self.last_frame_t = now
             R.apply_events(self.state, msg, now)
+            for slug, st in self.market_states(msg).items():
+                self.state.setdefault(slug, {"bid": None, "bid_qty": None,
+                                             "ask": None, "ask_qty": None,
+                                             "both_sides_served": False,
+                                             "trades": [], "book_updates": 0})
+                self.state[slug]["market_state"] = st
             for slug, s in self.state.items():
                 if (slug not in self.first_book and s.get("bid") is not None
                         and s.get("ask") is not None):
@@ -129,6 +155,7 @@ class AuthBook:
                     "stream_age_s": (round(now - self.last_frame_t, 3)
                                      if self.last_frame_t else None),
                     "book_updates": s.get("book_updates"),
+                    "market_state": s.get("market_state"),
                     "source": "authenticated_ws"}
 
     def window_report(self, slug: str) -> Dict[str, Any]:

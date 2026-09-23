@@ -44,6 +44,27 @@ OPEN_ORDERS_PATH = "/v1/orders/open"
 MARKET_PATH = "/v1/market/slug/%s"
 BOOK_PATH = "/v1/markets/%s/book"
 
+#: The venue's PUBLISHED contract terms for every crypto price family (cpc),
+#: docs.polymarket.us/trader-guide/crypto-schema, Section 2: "tick size 0.01,
+#: valid prices 0.01 to 0.99, minimum order 0.01 contract, payout $1.00", and
+#: its worked 15-minute example: "the long side (Yes, 'Up') paid".
+#:
+#: WHY IT IS NEEDED. The public market catalogue does not carry the automated
+#: BTC15m markets at all: GET /v1/market/slug/{slug} answers "Market not
+#: found" for every window, live or settled (probed 23:32Z on 2130z..2330z),
+#: and the metadata route exists only on the public host. So for this series
+#: the market record is assembled from the venue's own sources: the published
+#: contract terms below, and the market's live state from the AUTHENTICATED
+#: stream (marketData.state). Each gate names which source it came from.
+CRYPTO_CONTRACT_SPEC = {
+    TICK_FIELD: "0.01", "minimumTradeQty": "0.01",
+    "marketSides": [{"description": "Up", "long": True},
+                    {"description": "Down", "long": False}],
+    "_spec_source": "docs.polymarket.us/trader-guide/crypto-schema",
+}
+OPEN_STATE = "MARKET_STATE_OPEN"
+CLOSED_STATES = ("MARKET_STATE_EXPIRED", "MARKET_STATE_TERMINATED")
+
 #: the probe's committed cap; the worst case is computed against it
 MAX_COMMITTED_USD = D("5")
 
@@ -281,15 +302,45 @@ def run(get: Callable[[str], Any], slug: str, *,
 
     ok &= gate("slug_is_btc15m_series", bool(BTC15M_SLUG_RE.match(slug or "")),
                slug)
-    raw, got = read("market_readable", lambda: get(MARKET_PATH % slug) or {})
-    ok &= got
     mk: Dict[str, Any] = {}
-    if got:
+    try:
+        raw = get(MARKET_PATH % slug) or {}
         m = raw.get("market") if isinstance(raw, Mapping) else None
         mk = dict(m) if isinstance(m, Mapping) else dict(raw or {})
-        gate("market_readable", True, "signed " + MARKET_PATH % slug)
+        catalogue = None
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:                               # noqa: BLE001
+        catalogue = "%s: %s" % (type(exc).__name__, redact(exc))
+    if catalogue is None and mk:
+        reads.append("market_readable")
+        gate("market_readable", True, "catalogue " + MARKET_PATH % slug)
         ok &= gate("market_resolves", str(mk.get("slug") or "") == slug,
                    mk.get("slug"))
+    else:
+        # the catalogue does not list this series; say so, never hide it
+        checks.append({"check": "market_catalogue_record", "passed": False,
+                       "blocking": False, "detail": catalogue})
+        snap = None
+        if book_source is not None and BTC15M_SLUG_RE.match(slug or ""):
+            try:
+                snap = book_source(slug)
+            except Exception:                                  # noqa: BLE001
+                snap = None
+        st = (snap or {}).get("market_state")
+        if st:
+            mk = dict(CRYPTO_CONTRACT_SPEC, slug=slug, status=st,
+                      active=(st == OPEN_STATE),
+                      closed=(st in CLOSED_STATES),
+                      _source="authenticated_ws_state+venue_published_spec")
+        ok &= gate("market_readable", bool(st),
+                   "authenticated markets stream state=%s; contract terms "
+                   "from %s" % (st, CRYPTO_CONTRACT_SPEC["_spec_source"])
+                   if st else "no catalogue record and no authenticated "
+                              "stream state for this market")
+        if st:
+            ok &= gate("market_resolves", True,
+                       "authenticated stream serves %s" % slug)
 
     state = str(mk.get("status") or mk.get("state") or "")
     ok &= gate("market_open_tradable",
