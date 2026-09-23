@@ -22,6 +22,10 @@ Environment (names only; never commit values):
                         first 32 bytes used as the Ed25519 seed (exactly
                         the scheme in the official auth docs)
   PMUS_WS_ROOT          state root (default /state/pmus-ws)
+  PMUS_WS_SERIES        optional comma list of RECURRING SERIES slugs
+                        (e.g. btc-updown-15m). Each rediscovery re-resolves
+                        the window that is trading now, because a 15-minute
+                        market expires faster than any static list
   PMUS_WS_MARKETS       optional comma list of market slugs; when empty,
                         targets are discovered from the public gateway
                         (live league markets + active-incentive markets,
@@ -73,6 +77,7 @@ SECRET_ENV = "PMUS_API_SECRET_KEY"
 ROOT_ENV = "PMUS_WS_ROOT"
 DEFAULT_ROOT = "/state/pmus-ws"
 MARKETS_ENV = "PMUS_WS_MARKETS"
+SERIES_ENV = "PMUS_WS_SERIES"        # recurring series slugs, rolled per window
 LEAGUES_ENV = "PMUS_WS_LEAGUES"
 MAX_MARKETS_ENV = "PMUS_WS_MAX_MARKETS"
 DISCOVERY_ENV = "PMUS_WS_DISCOVERY_SECONDS"
@@ -1229,6 +1234,23 @@ def discover_universe() -> list[dict]:
         return [{"slug": s, "league": None, "why": "explicit_env",
                  "event_state": None, "prop": False, "market_meta": {}}
                 for s in explicit]
+    # RECURRING SERIES (e.g. btc-updown-15m). A static PMUS_WS_MARKETS list
+    # goes stale every fifteen minutes, because each window is its own market
+    # and the previous one has expired. The slug source is the SAME function
+    # the public book tape uses, so there is one definition of "which window
+    # is trading now" and rediscovery (PMUS_WS_DISCOVERY_SECONDS) rolls it.
+    series = [s.strip() for s in os.getenv(SERIES_ENV, "").split(",")
+              if s.strip()]
+    if series:
+        from src.pmus_book_tape import series_slugs
+        out = []
+        for name in series:
+            for slug in series_slugs(name):
+                out.append({"slug": slug, "league": None,
+                            "why": "series:%s" % name,
+                            "event_state": None, "prop": False,
+                            "market_meta": {"series": name}})
+        return out
     from src import pmus_sports_collector as col
     leagues = [x.strip() for x in
                os.getenv(LEAGUES_ENV, "mlb").split(",") if x.strip()]

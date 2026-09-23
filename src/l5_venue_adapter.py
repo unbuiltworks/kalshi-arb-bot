@@ -27,7 +27,8 @@ Shared pieces:
 Adapters:
 
 * `PMUSAdapter`      -- Polymarket US sports (live venue): tick 0.005,
-                        band 0.20..0.80, taker 0.06*p*(1-p), maker rebate
+                        band 0.20..0.80, taker fee and maker rebate
+                        from `src.pmus_fees` (effective-dated; 0.0695 /
                         0.0125*p*(1-p) NEVER counted toward edge,
                         complement bound from `pmus_q1_executor`.
 * `GeminiAdapter`    -- Gemini BTC-5m prediction pairs, vendored
@@ -296,8 +297,30 @@ class VenueAdapter(Protocol):
     def provenance(self) -> dict: ...
 
 
+#: PMUS products this adapter can describe. The venue is one venue, but its
+#: SETTLEMENT SEMANTICS are not one thing: a sports market resolves when a
+#: game ends, with no fixed expiry, while `btc-updown-15m` expires on a hard
+#: clock against a named index. Reporting the sports string over a crypto row
+#: would mislabel every piece of provenance the lane produces.
+PMUS_PRODUCT_SPORTS = "sports"
+PMUS_PRODUCT_CRYPTO_UPDOWN = "crypto_updown"
+PMUS_PRODUCTS = (PMUS_PRODUCT_SPORTS, PMUS_PRODUCT_CRYPTO_UPDOWN)
+
+
 class PMUSAdapter:
     venue = "PMUS"
+
+    def __init__(self, product: str = PMUS_PRODUCT_SPORTS) -> None:
+        """`product` selects SETTLEMENT/PROVENANCE description only.
+
+        It deliberately changes no price, size, bound or action. The sports
+        default preserves every existing construction site.
+        """
+        if product not in PMUS_PRODUCTS:
+            raise ValueError(
+                "unknown PMUS product %r; declared: %s"
+                % (product, ", ".join(PMUS_PRODUCTS)))
+        self.product = product
 
     def normalize(self, raw: Mapping[str, Any], now: float,
                   settlement_t: Optional[float] = None) -> Optional[NormalizedBook]:
@@ -340,15 +363,52 @@ class PMUSAdapter:
         return _q1().entry_ok(D(str(px)))
 
     def settlement(self) -> dict:
+        if self.product == PMUS_PRODUCT_CRYPTO_UPDOWN:
+            return {
+                "authority": "venue POSITION_RESOLUTION activity / "
+                             "afterPosition.realized",
+                "clock": ("LITERAL. The market serves startTime and endDate "
+                          "exactly 15 minutes apart, so seconds-to-expiry is "
+                          "a fact and the sports event-progress translation "
+                          "must NOT be applied"),
+                "index": "CF Benchmarks BRTI",
+                "rule": ("settles Up iff the BRTI value at T_end is greater "
+                         "than or equal to the value at T_start; each value "
+                         "is the simple average of the 60 BRTI prices in the "
+                         "last minute before that time, rounded to 2 dp"),
+                "payout": "1.00 to the winning outcome",
+                "source": "market description served by "
+                          "GET /v1/events?series_id=375",
+            }
         return {"authority": "venue POSITION_RESOLUTION activity / "
                              "afterPosition.realized", "clock": "game end "
                              "(no fixed expiry; TTE bucket coarsest)",
                 "payout": "1.00 to the winning outcome"}
 
     def provenance(self) -> dict:
-        return {"book": "/v1/markets/{slug}/bbo (YES bid/ask)",
-                "prints": "sharesTraded delta + recorder WS tape",
-                "fees": "taker 0.06*p*(1-p); maker rebate 0.0125*p*(1-p) not counted"}
+        import datetime as _dt
+        from src import pmus_fees as _f
+        th = _f.provenance()
+        out = {"book": "/v1/markets/{slug}/bbo (YES bid/ask)",
+               "prints": "sharesTraded delta + recorder WS tape",
+               "fees": ("taker %s*C*p*(1-p); maker rebate %s*C*p*(1-p) "
+                        "credited at the point of trade and NOT counted "
+                        "toward edge (%s)"
+                        % (th["taker_theta"], th["maker_rebate_theta"],
+                           th["source"]))}
+        if self.product == PMUS_PRODUCT_CRYPTO_UPDOWN:
+            out["book"] = ("/v1/markets/{slug}/bbo and /book -- PUBLIC BOOK IS "
+                           "~30s CACHED (9 distinct ladder states across 88 "
+                           "polls); a fresher book requires the authenticated "
+                           "WS")
+            out["prints"] = ("sharesTraded delta only -- /trades is 404 on the "
+                             "public gateway, so trade COUNT is not observable "
+                             "and bursts are a LOWER BOUND, never a count")
+            out["incentive"] = ("liquidity program crypto_up_down_20260922, "
+                                "pool $30 per daily_event shared across the "
+                                "program's markets; counted at $0 until "
+                                "eligibility and allocation are established")
+        return out
 
 
 class GeminiAdapter:

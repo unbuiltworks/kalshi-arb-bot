@@ -54,6 +54,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal as D
 from pathlib import Path
 from typing import Any, Mapping, Optional
+from src import pmus_fees as _fees
 
 API = "https://api.polymarket.us"
 GATEWAY = "https://gateway.polymarket.us"
@@ -85,11 +86,23 @@ MIN_BUYING_POWER = D("2.00")
 
 
 def taker_fee(p: D) -> D:
-    return (D("0.06") * p * (ONE - p)).quantize(D("0.0001"))
+    """The coefficient in force NOW, from the one authoritative schedule.
+
+    This was a local `D("0.06")`. PMUS republished the taker coefficient at
+    0.0695 effective 12 AM ET 2026-09-17 and the local copy never moved, so
+    every fee-safe bound derived from it -- `complement_bound` below, and the
+    all-in check in `pair_ok` -- was computed against a taker cost 15.8% too
+    small. Understating a cost LOOSENS a risk bound, which is the direction
+    that matters. The schedule now lives in `src/pmus_fees.py` with its
+    provenance and is effective-dated, so pre-17 analyses stay correct.
+    """
+    return _fees.taker_fee(p)
 
 
 def maker_rebate(p: D) -> D:
-    return (D("0.0125") * p * (ONE - p)).quantize(D("0.0001"))
+    """What the venue CREDITS a maker at the point of trade. Positive, and
+    never netted against a cost here -- it is reported on its own line."""
+    return _fees.maker_rebate(p)
 
 
 def armed() -> bool:

@@ -84,6 +84,7 @@ COPY src/pmus_micro_executor.py src/pmus_micro_executor.py
 COPY src/pmus_fill_ledger.py src/pmus_fill_ledger.py
 COPY src/pmus_q1_executor_v4.py src/pmus_q1_executor_v4.py
 COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
+COPY src/pmus_fees.py src/pmus_fees.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
 # OWNER 5553674206: SHADOW fields (seeded draw, L5 target size and
 # aggressiveness) from the offline fidelity pass; read-only lookups

@@ -15,6 +15,7 @@ COPY src/gemini_l5_regime_study.py src/gemini_l5_regime_study.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
 COPY src/pmus_l5_fidelity_live.py src/pmus_l5_fidelity_live.py
 COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
+COPY src/pmus_fees.py src/pmus_fees.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py

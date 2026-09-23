@@ -61,7 +61,16 @@ def test_the_scope_is_the_image_copy_set_not_the_branch():
     """The branch carries thousands of unrelated lines; only what the image
     COPIes can affect the probe."""
     srcs = L.copy_sources()
-    assert len(srcs) == 38
+    # 39, not 38: `src/pmus_fees.py` was added on 2026-09-23. The image
+    # already COPIes `src/pmus_q1_executor.py`, and that module's taker fee
+    # now reads the one authoritative schedule instead of a local `0.06` that
+    # PMUS had superseded. A copied module whose import cannot resolve is a
+    # crash waiting for the first thing that imports it, so the file travels
+    # with it. The new file is a pure fee table with no venue client, no
+    # credential and no order path; the pin is bumped deliberately and the
+    # change is disclosed rather than absorbed.
+    assert len(srcs) == 39
+    assert "src/pmus_fees.py" in srcs
     assert all(not s.startswith("tests/") for s in srcs)
 
 
