@@ -47,7 +47,7 @@ no technical indicators, no persistence change.
 | spec_id | `btc5m_q1_improve` |
 | **spec_sha** | `bfe7ba23199c544d30f25cd1c730d92e62d0bea534274b1c00feff961242a650` |
 | **executable_sha** (`ws_continuous.py` bounds) | `13cd59840138c3b2d98dabab98809ff3f628328b9d835686cb9021bf04e0a83a` |
-| **bundle_sha** (15 files, ordering included) | `9b20b37a31f48d957844b7fc6698252cab9f6707c8a48a805a4047569929f930` |
+| **bundle_sha** (15 files, ordering included) | `7c747900d2562c61407792ae6517a3a35af4a17d16e4af6be4015cc2900b19a0` |
 | **driver envelope_sha** (all declared envelopes + live order-path bounds) | `be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d` |
 | active envelope sha (`GEMINI_L5_LIVE_ENVELOPE_Q1_V1` alone) | `4e2818d53735999cda6c3de439f4a9e87a3cb2a98f9e7c10c2af125e145ed6b5` |
 | symbol family | `GEMI-BTC05M` |
@@ -120,6 +120,31 @@ The run halts, places nothing further, and writes its artifact when **any** of:
 There is **no automatic relaunch** after completion or crash. A second run needs
 a second authorization.
 
+## 5b. One further repair, found by the proof itself
+
+Running the end-to-end proof (`analysis/gemini/audit/p23_chain_proof.py`)
+surfaced a second route to Probe B's exact outcome, which the P0 delivery fix
+could never have caught.
+
+`ws_continuous` branches on `self._placement == "maker_improve"`. Every other
+string — including a typo of that one — falls through to the default. A spec
+declaring `"maker_improvee"` would hash differently, be reviewed and authorized
+under its own identity, be delivered faithfully to the driver, **pass the
+post-construction delivery check** (the driver received exactly what the spec
+declared), and run the frozen control while reporting the experiment.
+
+The existing `PLACEMENTS` guard lived only in `_declare()`, which sees the
+module's own specs and nothing built directly. It is now enforced in
+`__post_init__`, on the type, so an unimplemented mode is a construction error
+before any hash exists to approve. `tests/test_placement_modes_closed.py` pins
+both halves, including an AST anti-drift check that the declared set equals the
+modes `ws_continuous` actually compares against.
+
+**This did not move `spec_sha`** (`bfe7ba23…` is unchanged — the experiment is
+identical), nor `executable_sha`, nor the driver `envelope_sha`. It moved
+`bundle_sha` only, because `live_probe_spec.py` is a bundle member. The value in
+§3 is the post-repair one.
+
 ## 6. The one question B2 answers
 
 > Does `maker_only_improve` — posting at `bid + 1 tick` instead of at the bid,
@@ -162,7 +187,7 @@ Three constants and two environment values, none of which this session can
 create:
 
 1. `arming.EXPECTED_AUTH_ID = "OWNER-2026-09-23-GEMINI-Q1-B2-1"`
-2. `bundle.AUTHORIZED_BUNDLE = "9b20b37a…9929f930"`
+2. `bundle.AUTHORIZED_BUNDLE = "7c747900…900b19a0"`
 3. `ws_continuous.REQUIRED_AUTH_ID` / `AUTHORIZED_SHA` / `AUTHORIZED_ENVELOPE`
 4. `GEMINI_CANARY_LIVE=YES`, `GEMINI_CANARY_AUTH=<the id>`,
    `GEMINI_CANARY_AUTH_EXPIRES=<a fresh UTC instant>`

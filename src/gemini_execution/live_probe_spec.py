@@ -150,6 +150,29 @@ class LiveProbeSpec:
                 "authoritative value or no spec."
                 % (self.spec_id, declared, self.envelope, effective))
 
+        # AND ONE PLACEMENT THAT EXECUTION ACTUALLY IMPLEMENTS.
+        #
+        # `ws_continuous` reads placement as `if self._placement ==
+        # "maker_improve"`, so EVERY other string -- including a typo of that
+        # one -- means "run the default". A misspelled mode would therefore
+        # hash differently, be reviewed and authorized under its own identity,
+        # pass the post-construction delivery check (the driver did receive
+        # exactly what the spec declared), and still run the frozen control.
+        #
+        # That is Probe B's defect reached by a second route, and the
+        # delivery check cannot catch it: delivery was never the problem.
+        # Only a closed set of names can, so an unimplemented mode is a
+        # construction error here, before any hash exists to approve.
+        # `_declare` already refuses an unknown mode, but it only ever sees
+        # the module's OWN specs. A spec built directly -- `dataclasses.
+        # replace`, a test, a future caller passing `probe_spec=` -- bypasses
+        # it entirely, so the guard belongs on the type, not on the registry.
+        if self.placement not in PLACEMENTS:
+            raise ValueError(
+                "spec %r declares placement %r, which execution does not "
+                "implement. The declared set is %s." 
+                % (self.spec_id, self.placement, PLACEMENTS))
+
     @property
     def effective_action_size(self) -> str:
         """The size execution will actually use. Equal to `action_size` by
