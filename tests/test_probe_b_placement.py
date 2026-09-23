@@ -155,9 +155,26 @@ def test_probe_a_btc15m_hashes_are_unchanged_by_all_of_this():
 
 
 def test_the_placement_rule_is_inside_the_reviewed_bundle():
+    """Membership is the point: the rule that decides whether an order is a
+    maker order at all cannot be edited without invalidating the approval."""
     assert "ab_arms.py" in bundle.MEMBERS
     assert "fill_quality.py" in bundle.MEMBERS
-    assert bundle.AUTHORIZED_BUNDLE is None      # still disarmed
+
+
+def test_an_authorized_bundle_still_hashes_to_what_was_reviewed():
+    """Whether or not an authorization is installed, the invariant is the
+    same: if one IS installed it must equal the bundle actually running.
+
+    This replaces an earlier assertion that AUTHORIZED_BUNDLE is None, which
+    was only true before the owner's GO and would have failed the suite for
+    the entirely expected reason that the probe was authorized.
+    """
+    if bundle.AUTHORIZED_BUNDLE is None:
+        assert not bundle.authorized()
+    else:
+        assert bundle.AUTHORIZED_BUNDLE == bundle.bundle_sha()
+        assert bundle.authorized()
+        assert bundle.state()["why_not"] == []
 
 
 def test_the_two_probes_use_different_envelopes_and_prefixes():
