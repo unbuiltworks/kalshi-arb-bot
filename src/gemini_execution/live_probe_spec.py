@@ -124,6 +124,38 @@ class LiveProbeSpec:
         one. One accessor, so no caller has to know which field is set."""
         return self.live_cohort or self.cohort
 
+    def __post_init__(self) -> None:
+        """ONE AUTHORITATIVE SIZE, or no spec at all.
+
+        THE SPLIT BRAIN. `action_size` is declared here AND on the envelope,
+        it is folded into `spec_sha`, and execution reads the ENVELOPE's --
+        `CP.probe_params(action_size=envelope.action_size)` and
+        `resolve_action_size(self.env.action_size)`. So a spec could declare
+        one size, hash that declaration, be authorized against it, and then
+        trade a different one while reporting its own. It never happened only
+        because every spec so far agreed with its envelope, which is luck.
+
+        This is the same class of defect as the dropped `placement`, and it
+        is closed the same way: refuse rather than reconcile. A frozen
+        dataclass cannot be repaired after the fact, so the disagreement is a
+        construction error.
+        """
+        declared = str(self.action_size)
+        effective = str(self.envelope_obj.action_size)
+        if declared != effective:
+            raise ValueError(
+                "spec %r declares action_size %s but its envelope %r executes "
+                "at %s; execution reads the ENVELOPE, so the declared value "
+                "would be hashed, authorized and then ignored. One "
+                "authoritative value or no spec."
+                % (self.spec_id, declared, self.envelope, effective))
+
+    @property
+    def effective_action_size(self) -> str:
+        """The size execution will actually use. Equal to `action_size` by
+        construction -- `__post_init__` refuses any spec where it is not."""
+        return str(self.envelope_obj.action_size)
+
     @property
     def symbol_family(self) -> str:
         return "GEMI-" + str(self.family_obj.prefix)
@@ -158,6 +190,45 @@ class LiveProbeSpec:
         if readiness:
             argv += ["--readiness"]
         return tuple(argv)
+
+    #: FIELDS INSIDE spec_sha THAT canonical_argv CANNOT EXPRESS.
+    #:
+    #: The CLI has no --placement, --quote-band or --action-size flag, so an
+    #: invocation built from argv alone would silently run the frozen
+    #: control. That is exactly what happened to Probe B by a different
+    #: route. These three therefore reach execution ONLY via `probe_spec=`,
+    #: and `run_continuous` verifies placement off the driver after
+    #: construction rather than trusting that it arrived.
+    #:
+    #: `canonical_argv` is consequently DISPLAY-ONLY and is documented as
+    #: such: `live_readiness` renders it with "<out>"/"<wire>" placeholders.
+    #: A test asserts both halves -- that these fields are absent from argv,
+    #: and that the only caller is a renderer.
+    ARGV_CANNOT_CARRY = ("placement", "quote_band", "action_size")
+
+    def executable_field_map(self) -> Dict[str, str]:
+        """Every hashed field, classified by HOW it reaches execution.
+
+        EXECUTABLE     reaches the running code and changes behaviour
+        METADATA       identity/provenance only; cannot change behaviour
+        """
+        return {
+            "spec_id": "METADATA",
+            "auth_id": ("METADATA -- deliberately outside spec_sha; readiness "
+                        "runs the sentinel and live the grant"),
+            "live_cohort": ("METADATA -- the GRANTED ledger, outside spec_sha "
+                            "so a grant does not move the experiment's hash"),
+            "family": "EXECUTABLE via argv --family",
+            "envelope": "EXECUTABLE via argv --envelope",
+            "entry_tte_band": "EXECUTABLE via argv --entry-tte-band",
+            "cohort": "EXECUTABLE via argv --cohort (through budget_cohort)",
+            "ledger": "EXECUTABLE via argv --ledger",
+            "action_size": ("METADATA -- execution reads envelope.action_size;"
+                            " __post_init__ refuses any disagreement"),
+            "quote_band": "EXECUTABLE via probe_spec= ONLY (not argv)",
+            "placement": ("EXECUTABLE via probe_spec= ONLY (not argv), and "
+                          "VERIFIED off the driver after construction"),
+        }
 
     def invocation_fingerprint(self) -> Dict[str, Any]:
         """What spec_sha is computed over: the EXPERIMENT, not the run.

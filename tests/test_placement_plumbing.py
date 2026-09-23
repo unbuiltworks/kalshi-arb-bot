@@ -92,3 +92,56 @@ def test_canonical_argv_cannot_express_three_hashed_fields():
     assert s.placement is not None, (
         "this spec declares a placement that canonical_argv cannot carry; "
         "execution must therefore go through probe_spec=, never argv")
+
+
+# ============ P0: the whole chain, declared -> hash -> invocation -> driver
+
+def test_action_size_cannot_split_between_spec_and_envelope():
+    """A hashed declaration that execution ignores is authorization theatre."""
+    import dataclasses
+    s = SPEC.get("btc5m_q1_improve")
+    assert s.action_size == s.effective_action_size
+    with pytest.raises(ValueError, match="executes at"):
+        dataclasses.replace(s, action_size="2")
+
+
+def test_every_hashed_field_is_classified_executable_or_metadata():
+    """No hashed field may be unclassified: that is how `placement` hid."""
+    s = SPEC.get("btc5m_q1_improve")
+    fp = s.invocation_fingerprint()
+    m = s.executable_field_map()
+    hashed = {k for k in fp if k not in ("label", "envelope_id",
+                                         "symbol_family", "bounds")}
+    unclassified = hashed - set(m)
+    assert not unclassified, (
+        "hashed but unclassified: %s -- every field inside spec_sha must "
+        "either reach execution or be named non-executable metadata"
+        % sorted(unclassified))
+    for k, v in m.items():
+        assert v.startswith(("EXECUTABLE", "METADATA")), (k, v)
+
+
+def test_fields_argv_cannot_carry_are_named_and_absent():
+    s = SPEC.get("btc5m_q1_improve")
+    argv = " ".join(s.canonical_argv(out="/o", wire="/w"))
+    for f in s.ARGV_CANNOT_CARRY:
+        assert "--%s" % f.replace("_", "-") not in argv
+    assert set(s.ARGV_CANNOT_CARRY) == {"placement", "quote_band",
+                                        "action_size"}
+
+
+def test_canonical_argv_has_no_executing_caller():
+    """It is display-only. If that ever changes, three hashed fields vanish."""
+    import pathlib
+    import re
+    hits = []
+    for p in pathlib.Path("src").rglob("*.py"):
+        for i, line in enumerate(p.read_text().splitlines(), 1):
+            code = line.split("#", 1)[0]
+            if "canonical_argv" in code and "def canonical_argv" not in code:
+                hits.append("%s:%d %s" % (p, i, line.strip()))
+    for h in hits:
+        assert "<out>" in h or "<wire>" in h or "live_readiness" in h, (
+            "canonical_argv gained a non-rendering caller: %s -- it cannot "
+            "carry placement/quote_band/action_size, so executing from it "
+            "silently runs the frozen control" % h)

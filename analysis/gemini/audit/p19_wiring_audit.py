@@ -18,6 +18,16 @@ from __future__ import annotations
 import ast
 import json
 import os
+import sys
+
+# RUN FROM ANYWHERE. sys.path[0] is this directory when the module is run as a
+# script, so `src` would not import and the classification would come back
+# empty -- which an earlier version SWALLOWED, reporting every field
+# UNCLASSIFIED and looking like a finding. Silently degraded evidence is the
+# defect this whole module exists to catch.
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 from typing import Any, Dict, List
 
 SPEC_MODULE = "src/gemini_execution/live_probe_spec.py"
@@ -63,16 +73,70 @@ def _reads(path: str, field: str) -> List[str]:
     return hits
 
 
+def _argv_carried() -> List[str]:
+    """Fields canonical_argv puts on the command line, read from its source."""
+    src = open(SPEC_MODULE, encoding="utf-8").read()
+    tree = ast.parse(src)
+    for n in ast.walk(tree):
+        if isinstance(n, ast.FunctionDef) and n.name == "canonical_argv":
+            seg = ast.get_source_segment(src, n) or ""
+            return [f for f in declared_fields()
+                    if ("self.%s" % f) in seg]
+    return []
+
+
+def _property_mediated(field: str) -> List[str]:
+    """Properties whose body reads `field` -- e.g. budget_cohort -> cohort."""
+    src = open(SPEC_MODULE, encoding="utf-8").read()
+    tree = ast.parse(src)
+    out = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.FunctionDef) and n.name != field:
+            seg = ast.get_source_segment(src, n) or ""
+            if ("self.%s" % field) in seg:
+                out.append(n.name)
+    return out
+
+
 def audit() -> Dict[str, Any]:
-    out: Dict[str, Any] = {"label": "P19_SPEC_WIRING_AUDIT_V1", "fields": {}}
+    """Every declared field, with HOW it reaches execution -- not just whether
+    some file names it.
+
+    THE FIRST VERSION LIED. A direct-attribute AST match reported cohort,
+    auth_id, ledger and live_cohort as NO READER when all four reach execution
+    through `budget_cohort` and `canonical_argv`. An audit that cries wolf on
+    four healthy fields is an audit nobody will read the fifth time -- which
+    is how `placement` survived. So mediation is resolved, not guessed at.
+    """
+    out: Dict[str, Any] = {"label": "P19_SPEC_WIRING_AUDIT_V2", "fields": {}}
+    argv = _argv_carried()
+    # NOT wrapped in a bare except: a classification that cannot be loaded is
+    # an error, not an empty dict that reads as eleven findings.
+    from src.gemini_execution import live_probe_spec as SP
+    declared_map = SP.get("btc5m_q1_improve").executable_field_map()
     for f in declared_fields():
         rows: List[str] = []
         for c in CONSUMERS:
             if os.path.exists(c):
                 rows += _reads(c, f)
-        out["fields"][f] = {"read_sites": rows, "n": len(rows),
-                            "verdict": "CONSUMED" if rows else "NO READER"}
-    out["no_reader"] = [f for f, v in out["fields"].items() if not v["n"]]
+        via = []
+        if rows:
+            via.append("direct read")
+        if f in argv:
+            via.append("canonical_argv")
+        props = _property_mediated(f)
+        if props:
+            via.append("property: %s" % ",".join(props))
+        out["fields"][f] = {
+            "read_sites": rows, "n": len(rows),
+            "reaches_execution_via": via,
+            "declared_class": declared_map.get(f, "UNCLASSIFIED"),
+            "verdict": ("CONSUMED" if via else "NO PATH TO EXECUTION"),
+        }
+    out["no_path"] = [f for f, v in out["fields"].items()
+                      if not v["reaches_execution_via"]]
+    out["unclassified"] = [f for f, v in out["fields"].items()
+                           if v["declared_class"] == "UNCLASSIFIED"]
     return out
 
 
@@ -80,9 +144,11 @@ if __name__ == "__main__":
     a = audit()
     print("DECLARED SPEC FIELDS AND WHERE THE EXECUTABLE READS THEM\n")
     for f, v in a["fields"].items():
-        print("%-22s %-10s %d site(s)" % (f, v["verdict"], v["n"]))
-        for r in v["read_sites"][:4]:
-            print("      %s" % r)
-    print("\nFIELDS WITH NO READER IN ANY CONSUMER: %s" % (a["no_reader"] or "none"))
+        print("%-16s %-22s %-34s via %s"
+              % (f, v["verdict"], v["declared_class"][:34],
+                 "; ".join(v["reaches_execution_via"]) or "-"))
+
+    print("\nFIELDS WITH NO PATH TO EXECUTION: %s" % (a["no_path"] or "none"))
+    print("HASHED BUT UNCLASSIFIED:          %s" % (a["unclassified"] or "none"))
     json.dump(a, open("analysis/gemini/audit/p19_wiring_audit.json", "w"),
               indent=2)
