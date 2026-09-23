@@ -1,0 +1,1150 @@
+{
+  "label": "GEMINI_SETTLEMENT_PROBE_V1",
+  "ok": true,
+  "account_reads": [
+    {
+      "path": "/v1/balances",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "list",
+        "rows": 1,
+        "row_keys": [
+          "_timestamp",
+          "amount",
+          "available",
+          "availableForWithdrawal",
+          "currency",
+          "type"
+        ]
+      }
+    },
+    {
+      "path": "/v1/transfers",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "list",
+        "rows": 10,
+        "row_keys": [
+          "advanceEid",
+          "amount",
+          "currency",
+          "eid",
+          "method",
+          "purpose",
+          "status",
+          "timestampms",
+          "type"
+        ]
+      }
+    },
+    {
+      "path": "/v1/notionalvolume",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "api_maker_fee_bps",
+          "api_taker_fee_bps",
+          "block_maker_fee_bps",
+          "block_taker_fee_bps",
+          "date",
+          "fix_maker_fee_bps",
+          "fix_taker_fee_bps",
+          "last_updated_ms",
+          "notional_1d_volume",
+          "notional_30d_volume",
+          "web_maker_fee_bps",
+          "web_taker_fee_bps"
+        ],
+        "lists": {
+          "notional_1d_volume": {
+            "kind": "list",
+            "rows": 0,
+            "row_keys": []
+          }
+        }
+      }
+    }
+  ],
+  "settlement_candidates": [
+    {
+      "path": "/v1/prediction-markets/settlements",
+      "status": 404,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "message",
+          "reason",
+          "result"
+        ],
+        "lists": {}
+      }
+    },
+    {
+      "path": "/v1/prediction-markets/positions",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "positions",
+          "total"
+        ],
+        "lists": {
+          "positions": {
+            "kind": "list",
+            "rows": 0,
+            "row_keys": []
+          }
+        }
+      }
+    },
+    {
+      "path": "/v1/settlements",
+      "status": 404,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "message",
+          "reason",
+          "result"
+        ],
+        "lists": {}
+      }
+    }
+  ],
+  "settlement_endpoint_found": [
+    "/v1/prediction-markets/positions"
+  ],
+  "settlement_endpoint_exists": true,
+  "per_symbol": [
+    {
+      "symbol": "GEMI-BTC05M2609231205-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "mytrades_row_keys": [],
+      "resolution": {
+        "verdict": "SETTLED",
+        "resolutionSide": "no",
+        "resolvedAt": "2026-09-23T12:05:06.677Z",
+        "settlementValue": "85485.17550000001",
+        "marketState": "closed",
+        "status": "settled",
+        "expired": true,
+        "is_terminal": true,
+        "flapped": false,
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "no",
+          "implied_by_strike": "no",
+          "settlementValue": "85485.17550000001",
+          "strike": "85636.89",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)"
+      },
+      "resolution_applied": {
+        "applied": true,
+        "resolution_side": "no",
+        "resolved_at": "2026-09-23T12:05:06.677Z",
+        "settlement_value_yes_side": "0",
+        "underlying_settlement_price": "85485.17550000001",
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "no",
+          "implied_by_strike": "no",
+          "settlementValue": "85485.17550000001",
+          "strike": "85636.89",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "labels": "settlement_value is the 1/0 PAYOUT for the YES side, derived from resolutionSide. underlying_settlement_price is the index print and is never a payout."
+      },
+      "outcome_join": {
+        "attempted": true,
+        "readable": true,
+        "orders_with_outcome": 0,
+        "legs": 0,
+        "legs_labelled": 0,
+        "source": "/v1/orders/history joined on orderId",
+        "why": "mytrades carries no outcome field; the side comes from the venue's order history, not from our clientOrderId"
+      },
+      "leg_outcomes": [],
+      "payout": "0",
+      "reconstructed": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609231205-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609231205-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-23T12:05:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": true,
+            "value": "0",
+            "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": "0",
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "position",
+        "missing_links": [
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609231200-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "mytrades_row_keys": [],
+      "resolution": {
+        "verdict": "SETTLED",
+        "resolutionSide": "yes",
+        "resolvedAt": "2026-09-23T12:00:08.157Z",
+        "settlementValue": "85637.10499999998",
+        "marketState": "closed",
+        "status": "settled",
+        "expired": true,
+        "is_terminal": true,
+        "flapped": false,
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85637.10499999998",
+          "strike": "85627.78",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)"
+      },
+      "resolution_applied": {
+        "applied": true,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T12:00:08.157Z",
+        "settlement_value_yes_side": "1",
+        "underlying_settlement_price": "85637.10499999998",
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85637.10499999998",
+          "strike": "85627.78",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "labels": "settlement_value is the 1/0 PAYOUT for the YES side, derived from resolutionSide. underlying_settlement_price is the index print and is never a payout."
+      },
+      "outcome_join": {
+        "attempted": true,
+        "readable": true,
+        "orders_with_outcome": 0,
+        "legs": 0,
+        "legs_labelled": 0,
+        "source": "/v1/orders/history joined on orderId",
+        "why": "mytrades carries no outcome field; the side comes from the venue's order history, not from our clientOrderId"
+      },
+      "leg_outcomes": [],
+      "payout": "0",
+      "reconstructed": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609231200-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609231200-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-23T12:00:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": true,
+            "value": "1",
+            "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": "0",
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "position",
+        "missing_links": [
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609231155-UP",
+      "mytrades_status": 200,
+      "rows": 3,
+      "legs_parsed": 3,
+      "unparseable": false,
+      "position": "3",
+      "mytrades_row_keys": [
+        "aggressor",
+        "amount",
+        "client_order_id",
+        "exchange",
+        "fee_amount",
+        "fee_currency",
+        "is_auction_fill",
+        "is_clearing_fill",
+        "order_id",
+        "price",
+        "symbol",
+        "tid",
+        "timestamp",
+        "timestampms",
+        "type"
+      ],
+      "resolution": {
+        "verdict": "SETTLED",
+        "resolutionSide": "yes",
+        "resolvedAt": "2026-09-23T11:55:07.203Z",
+        "settlementValue": "85628.61078947368",
+        "marketState": "closed",
+        "status": "settled",
+        "expired": true,
+        "is_terminal": true,
+        "flapped": false,
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85628.61078947368",
+          "strike": "85625.91",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)"
+      },
+      "resolution_applied": {
+        "applied": true,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T11:55:07.203Z",
+        "settlement_value_yes_side": "1",
+        "underlying_settlement_price": "85628.61078947368",
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85628.61078947368",
+          "strike": "85625.91",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "labels": "settlement_value is the 1/0 PAYOUT for the YES side, derived from resolutionSide. underlying_settlement_price is the index print and is never a payout."
+      },
+      "outcome_join": {
+        "attempted": true,
+        "readable": true,
+        "orders_with_outcome": 6,
+        "legs": 3,
+        "legs_labelled": 3,
+        "source": "/v1/orders/history joined on orderId",
+        "why": "mytrades carries no outcome field; the side comes from the venue's order history, not from our clientOrderId"
+      },
+      "leg_outcomes": [
+        "no",
+        "no",
+        "yes"
+      ],
+      "payout": "1",
+      "reconstructed": "0.23",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609231155-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609231155-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-23T11:55:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": true,
+            "value": "1",
+            "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": true,
+            "value": "3",
+            "source": "/v1/mytrades",
+            "why": null
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": true,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": "0.23",
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "settlement_cashflow",
+        "missing_links": [
+          "settlement_cashflow",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609231150-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "mytrades_row_keys": [],
+      "resolution": {
+        "verdict": "SETTLED",
+        "resolutionSide": "yes",
+        "resolvedAt": "2026-09-23T11:50:07.288Z",
+        "settlementValue": "85626.5308888889",
+        "marketState": "closed",
+        "status": "settled",
+        "expired": true,
+        "is_terminal": true,
+        "flapped": false,
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85626.5308888889",
+          "strike": "85484.8",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)"
+      },
+      "resolution_applied": {
+        "applied": true,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T11:50:07.288Z",
+        "settlement_value_yes_side": "1",
+        "underlying_settlement_price": "85626.5308888889",
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85626.5308888889",
+          "strike": "85484.8",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "labels": "settlement_value is the 1/0 PAYOUT for the YES side, derived from resolutionSide. underlying_settlement_price is the index print and is never a payout."
+      },
+      "outcome_join": {
+        "attempted": true,
+        "readable": true,
+        "orders_with_outcome": 0,
+        "legs": 0,
+        "legs_labelled": 0,
+        "source": "/v1/orders/history joined on orderId",
+        "why": "mytrades carries no outcome field; the side comes from the venue's order history, not from our clientOrderId"
+      },
+      "leg_outcomes": [],
+      "payout": "0",
+      "reconstructed": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609231150-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609231150-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-23T11:50:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": true,
+            "value": "1",
+            "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": "0",
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "position",
+        "missing_links": [
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609231145-UP",
+      "mytrades_status": 200,
+      "rows": 1,
+      "legs_parsed": 1,
+      "unparseable": false,
+      "position": "1",
+      "mytrades_row_keys": [
+        "aggressor",
+        "amount",
+        "client_order_id",
+        "exchange",
+        "fee_amount",
+        "fee_currency",
+        "is_auction_fill",
+        "is_clearing_fill",
+        "order_id",
+        "price",
+        "symbol",
+        "tid",
+        "timestamp",
+        "timestampms",
+        "type"
+      ],
+      "resolution": {
+        "verdict": "SETTLED",
+        "resolutionSide": "yes",
+        "resolvedAt": "2026-09-23T11:45:07.026Z",
+        "settlementValue": "85485.56219512192",
+        "marketState": "closed",
+        "status": "settled",
+        "expired": true,
+        "is_terminal": true,
+        "flapped": false,
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85485.56219512192",
+          "strike": "85459.96",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)"
+      },
+      "resolution_applied": {
+        "applied": true,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T11:45:07.026Z",
+        "settlement_value_yes_side": "1",
+        "underlying_settlement_price": "85485.56219512192",
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "yes",
+          "implied_by_strike": "yes",
+          "settlementValue": "85485.56219512192",
+          "strike": "85459.96",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "labels": "settlement_value is the 1/0 PAYOUT for the YES side, derived from resolutionSide. underlying_settlement_price is the index print and is never a payout."
+      },
+      "outcome_join": {
+        "attempted": true,
+        "readable": true,
+        "orders_with_outcome": 4,
+        "legs": 1,
+        "legs_labelled": 1,
+        "source": "/v1/orders/history joined on orderId",
+        "why": "mytrades carries no outcome field; the side comes from the venue's order history, not from our clientOrderId"
+      },
+      "leg_outcomes": [
+        "no"
+      ],
+      "payout": "0",
+      "reconstructed": "-0.21",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609231145-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609231145-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-23T11:45:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": true,
+            "value": "1",
+            "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": true,
+            "value": "1",
+            "source": "/v1/mytrades",
+            "why": null
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": true,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": "-0.21",
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "settlement_cashflow",
+        "missing_links": [
+          "settlement_cashflow",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609231140-UP",
+      "mytrades_status": 200,
+      "rows": 2,
+      "legs_parsed": 2,
+      "unparseable": false,
+      "position": "2",
+      "mytrades_row_keys": [
+        "aggressor",
+        "amount",
+        "client_order_id",
+        "exchange",
+        "fee_amount",
+        "fee_currency",
+        "is_auction_fill",
+        "is_clearing_fill",
+        "order_id",
+        "price",
+        "symbol",
+        "tid",
+        "timestamp",
+        "timestampms",
+        "type"
+      ],
+      "resolution": {
+        "verdict": "SETTLED",
+        "resolutionSide": "no",
+        "resolvedAt": "2026-09-23T11:40:07.234Z",
+        "settlementValue": "85460.3030769231",
+        "marketState": "closed",
+        "status": "settled",
+        "expired": true,
+        "is_terminal": true,
+        "flapped": false,
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "no",
+          "implied_by_strike": "no",
+          "settlementValue": "85460.3030769231",
+          "strike": "85509.08",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)"
+      },
+      "resolution_applied": {
+        "applied": true,
+        "resolution_side": "no",
+        "resolved_at": "2026-09-23T11:40:07.234Z",
+        "settlement_value_yes_side": "0",
+        "underlying_settlement_price": "85460.3030769231",
+        "strike_check": {
+          "available": true,
+          "agrees": true,
+          "published_resolutionSide": "no",
+          "implied_by_strike": "no",
+          "settlementValue": "85460.3030769231",
+          "strike": "85509.08",
+          "rule": "UP resolves yes when settlementValue >= strike.value"
+        },
+        "labels": "settlement_value is the 1/0 PAYOUT for the YES side, derived from resolutionSide. underlying_settlement_price is the index print and is never a payout."
+      },
+      "outcome_join": {
+        "attempted": true,
+        "readable": true,
+        "orders_with_outcome": 7,
+        "legs": 2,
+        "legs_labelled": 2,
+        "source": "/v1/orders/history joined on orderId",
+        "why": "mytrades carries no outcome field; the side comes from the venue's order history, not from our clientOrderId"
+      },
+      "leg_outcomes": [
+        "yes",
+        "yes"
+      ],
+      "payout": "0",
+      "reconstructed": "-0.35",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609231140-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609231140-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-23T11:40:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": true,
+            "value": "0",
+            "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": true,
+            "value": "2",
+            "source": "/v1/mytrades",
+            "why": null
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": true,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": "-0.35",
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "settlement_cashflow",
+        "missing_links": [
+          "settlement_cashflow",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    }
+  ],
+  "gate": {
+    "label": "GEMINI_SETTLEMENT_GATE_V1",
+    "gate": "BLOCKED",
+    "n": 6,
+    "n_blocked": 6,
+    "missing_union": [
+      "AUTHORITATIVE_FILLS",
+      "CASH_CONFIRMED",
+      "FEES_ACCOUNTED",
+      "POSITION_AT_EXPIRY"
+    ],
+    "public_surface": "PUBLIC_SURFACE_CANNOT_ESTABLISH_SETTLEMENT",
+    "instruments": [
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609231205-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": "0",
+        "settlement_source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+        "inferred_settlement_value": null,
+        "resolution_side": "no",
+        "resolved_at": "2026-09-23T12:05:06.677Z",
+        "underlying_settlement_price": "85485.17550000001",
+        "payout": "0",
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": true,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": "0",
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609231200-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": "1",
+        "settlement_source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+        "inferred_settlement_value": null,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T12:00:08.157Z",
+        "underlying_settlement_price": "85637.10499999998",
+        "payout": "0",
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": true,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": "0",
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609231155-UP",
+        "n_legs": 3,
+        "position_at_expiry": "3",
+        "fills_cash": "-0.77",
+        "fees": "0",
+        "settlement_value": "1",
+        "settlement_source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+        "inferred_settlement_value": null,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T11:55:07.203Z",
+        "underlying_settlement_price": "85628.61078947368",
+        "payout": "1",
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": true,
+          "POSITION_AT_EXPIRY": true,
+          "SETTLEMENT_VALUE": true,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": true
+        },
+        "missing": [
+          "CASH_CONFIRMED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": "0.23",
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609231150-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": "1",
+        "settlement_source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+        "inferred_settlement_value": null,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T11:50:07.288Z",
+        "underlying_settlement_price": "85626.5308888889",
+        "payout": "0",
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": true,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": "0",
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609231145-UP",
+        "n_legs": 1,
+        "position_at_expiry": "1",
+        "fills_cash": "-0.21",
+        "fees": "0",
+        "settlement_value": "1",
+        "settlement_source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+        "inferred_settlement_value": null,
+        "resolution_side": "yes",
+        "resolved_at": "2026-09-23T11:45:07.026Z",
+        "underlying_settlement_price": "85485.56219512192",
+        "payout": "0",
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": true,
+          "POSITION_AT_EXPIRY": true,
+          "SETTLEMENT_VALUE": true,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": true
+        },
+        "missing": [
+          "CASH_CONFIRMED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": "-0.21",
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609231140-UP",
+        "n_legs": 2,
+        "position_at_expiry": "2",
+        "fills_cash": "-0.35",
+        "fees": "0",
+        "settlement_value": "0",
+        "settlement_source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+        "inferred_settlement_value": null,
+        "resolution_side": "no",
+        "resolved_at": "2026-09-23T11:40:07.234Z",
+        "underlying_settlement_price": "85460.3030769231",
+        "payout": "0",
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": true,
+          "POSITION_AT_EXPIRY": true,
+          "SETTLEMENT_VALUE": true,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": true
+        },
+        "missing": [
+          "CASH_CONFIRMED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": "-0.35",
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      }
+    ],
+    "authorizes": "nothing on its own. An OPEN gate means settlement accounting CAN close, not that a probe is approved. Live authorization remains a separate human decision."
+  },
+  "labels": [
+    "READ ONLY. No order transport is imported or reachable here.",
+    "a 404 on a settlement candidate is a RESULT: it says the credit does not live there, which is what nobody had established.",
+    "no credential value is read, printed, logged or returned by this module; it only reports whether one was present."
+  ]
+}
