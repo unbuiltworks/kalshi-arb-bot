@@ -229,9 +229,13 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
             # bounded TIME-ALIGNED snapshot history: slot replay must use
             # the book that actually existed at each slot, never the
             # current BBO (issue #167 comment 5517600205)
+            # ask_qty is stamped HERE, alongside bid_qty, for the same reason
+            # the prices are: the faithful translation caps a crossing at the
+            # depth that existed AT THE ACTION, and reading the live snapshot
+            # later would staple present depth onto a past state.
             s.setdefault("bbo_history", []).append({
                 "t": now, "bid": s["bid"], "ask": s["ask"],
-                "bid_qty": s["bid_qty"],
+                "bid_qty": s["bid_qty"], "ask_qty": s["ask_qty"],
                 "ask_book_missing": not s["both_sides_served"]})
             del s["bbo_history"][:-2000]
         else:
@@ -1046,6 +1050,134 @@ def emit_new_trades(state: Mapping[str, Any]) -> Optional[dict]:
     return doc
 
 
+#: Bounded INCREMENTAL emission of AUTHENTICATED BOOK state to the log.
+#:
+#: WHY THIS EXISTS. The L5 observer reads the PUBLIC gateway, which exposes a
+#: BTC15m market only PARTWAY INTO its own window: probed at 21:36Z the LIVE
+#: 21:30 window returned HTTP 404 while 21:15 had shown a deep book at 21:28Z,
+#: thirteen minutes into itself. The authenticated stream sees the same market
+#: trading from +6.8s. So the observer was STRUCTURALLY blind exactly while L5
+#: opens his sequence, and NO_BOOK was being recorded as venue illiquidity
+#: when it was our own blindness.
+#:
+#: This process already holds the authenticated book. It formats what it holds
+#: and writes it to stdout -- no socket, no route, no credential, no new
+#: access surface, and no order path. OFF by default; the value is the cap of
+#: snapshots per market per emission.
+#:
+#: NOTHING IS FABRICATED. Each row is a book state the venue actually sent,
+#: stamped with OUR receipt time. No BBO is derived from trades, no price is
+#: interpolated and no gap is backfilled. A market with no usable book emits
+#: its STATUS, not a guessed price.
+BOOK_LOG_ENV = "PMUS_WS_BOOK_LOG"
+_BOOK_LOG_SEEN: dict = {}
+
+#: a snapshot older than this at emission is reported STALE rather than fresh
+BOOK_STALE_S = 15.0
+
+
+def book_log_cap() -> int:
+    """0 (off) unless set to a positive integer."""
+    try:
+        v = int(str(os.getenv(BOOK_LOG_ENV, "")).strip() or "0")
+    except ValueError:
+        return 0
+    return max(0, min(v, 400))
+
+
+def book_status(snap: Mapping[str, Any], now: float,
+                connected: bool = True) -> str:
+    """Explicit state. Absence is always named, never implied by a null."""
+    if not connected:
+        return "DISCONNECTED"
+    bid, ask = snap.get("bid"), snap.get("ask")
+    if bid is None and ask is None:
+        return "NO_BOOK"
+    if bid is None or ask is None:
+        return "ONE_SIDED"
+    t = snap.get("t")
+    if t is not None and (now - float(t)) > BOOK_STALE_S:
+        return "STALE"
+    return "OK"
+
+
+def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
+                   now: Optional[float] = None) -> Optional[dict]:
+    """Print authenticated book snapshots first seen since the last emission.
+
+    INCREMENTAL, so the log is a TAPE and not a repeated snapshot: each
+    emission carries only history entries not already emitted, keyed on their
+    own receipt timestamp, so a consumer can concatenate emissions without
+    deduplicating and without holes. Never raises: an evidence convenience
+    must not be able to stop the capture it observes.
+    """
+    cap = book_log_cap()
+    if not cap:
+        return None
+    now = time.time() if now is None else now
+    out: dict = {}
+    total = 0
+    try:
+        for slug, s in (state or {}).items():
+            hist = list((s or {}).get("bbo_history") or [])
+            if not hist:
+                continue
+            seen = _BOOK_LOG_SEEN.setdefault(slug, set())
+            fresh = []
+            for h in hist:
+                k = str(h.get("t"))
+                if k in seen:
+                    continue
+                seen.add(k)
+                fresh.append({
+                    # every field comes from THIS history entry. Reading depth
+                    # from the live snapshot `s` would backdate present depth
+                    # onto a past book state. A state captured before the
+                    # ask_qty field existed reports null depth, which the
+                    # faithful rule refuses as NO_DEPTH -- it never guesses.
+                    "t": h.get("t"),
+                    "bid": h.get("bid"), "ask": h.get("ask"),
+                    "bid_qty": h.get("bid_qty"), "ask_qty": h.get("ask_qty"),
+                    "ask_book_missing": h.get("ask_book_missing"),
+                    "status": book_status(
+                        {"bid": h.get("bid"), "ask": h.get("ask"),
+                         "t": h.get("t")}, now, connected),
+                })
+            if len(seen) > 4000:
+                _BOOK_LOG_SEEN[slug] = set(list(seen)[-2000:])
+            if fresh:
+                out[slug] = fresh[-cap:]
+                total += len(out[slug])
+        if not out:
+            return None
+        doc = {
+            "t": datetime.now(timezone.utc).isoformat(),
+            "kind": "authenticated_book_rows",
+            "markets": out, "rows": total, "cap_per_market": cap,
+            "connected": connected,
+            "identity": {slug: {"marketSlug": slug,
+                                "book_updates": (state.get(slug) or {}).get(
+                                    "book_updates"),
+                                "ws_trades": len((state.get(slug) or {}).get(
+                                    "trades") or [])}
+                         for slug in out},
+            "schema": ("t=OUR receipt epoch for that book state; bid/ask="
+                       "AUTHENTICATED top of book as the venue sent it; "
+                       "bid_qty/ask_qty=displayed depth AT THAT STATE, null "
+                       "when the venue had not served that side; status=OK|"
+                       "STALE|ONE_SIDED|NO_BOOK|DISCONNECTED"),
+            "labels": ("AUTHENTICATED read-only book tape. Nothing is "
+                       "derived from trades, interpolated or backfilled. "
+                       "The same marketSlug keys the trade tape, so book and "
+                       "trades resolve to ONE market identity."),
+        }
+        print("PMUS_BOOK_ROWS " + json.dumps(
+            doc, separators=(",", ":"), default=str), flush=True)
+        return doc
+    except Exception:                                    # noqa: BLE001
+        return None
+
+
 def live_trades_bytes() -> Optional[bytes]:
     """Newest published trade tail, or None when unset/disabled."""
     if not trades_http_enabled():
@@ -1665,6 +1797,7 @@ async def run(minutes: Optional[float]) -> int:
                 write_status_doc(root, st)
                 publish_live_trades(snap, time.time())
                 emit_new_trades(snap)
+                emit_new_books(snap, connected=connected)
                 try:
                     from src import pmus_sports_collector as col
                     xs = gateway_xcheck(

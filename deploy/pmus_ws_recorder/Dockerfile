@@ -49,6 +49,15 @@ COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
 COPY scripts/priority_vs_rotation_eval.py scripts/priority_vs_rotation_eval.py
 COPY scripts/spring_candidate_tape_read.py scripts/spring_candidate_tape_read.py
 COPY scripts/pmus_candidate_tape_readonly.py scripts/pmus_candidate_tape_readonly.py
+# Authenticated identity/market preflight. It runs WHERE THE CREDENTIALS
+# ALREADY LIVE so they are never copied to another service, and it keeps
+# this image's promise that no order endpoint exists in it: it imports
+# src/pmus_auth.py, which carries the Ed25519 signing and NOTHING that can
+# place, amend or cancel an order. pmus_q1_executor is deliberately NOT
+# copied here -- it holds place_limit_buy/cancel_all_deadman/run_campaign.
+COPY scripts/pmus_auth_preflight_readonly.py scripts/pmus_auth_preflight_readonly.py
+COPY src/pmus_auth.py src/pmus_auth.py
+COPY src/pmus_fees.py src/pmus_fees.py
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=ws-recorder \
