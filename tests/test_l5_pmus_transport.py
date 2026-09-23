@@ -216,3 +216,40 @@ def test_only_get_is_issued_during_preflight(creds):
     t = tp()
     t.preflight()
     assert all(m == "GET" for m, _ in t.http.calls)
+
+
+# ------------------------------- disarmed holds no POST-capable object
+
+def test_a_disarmed_transport_cannot_even_construct_a_mutation(creds):
+    t = T.PmusTransport(market_slug=SLUG, now_fn=NOW)     # no http injected
+    from src import pmus_auth
+    assert isinstance(t.http, pmus_auth.ReadOnlyTransport)
+    with pytest.raises(PermissionError):
+        t.http.request("POST", "/v1/orders", {"qty": 1})
+
+
+def test_arming_is_what_installs_the_post_capable_transport(creds, monkeypatch):
+    t = T.PmusTransport(market_slug=SLUG, http=FakeHTTP(), now_fn=NOW)
+    t.preflight()
+    owner_arm(monkeypatch)
+    t.arm()
+    # an injected transport is left alone so tests stay deterministic
+    assert isinstance(t.http, FakeHTTP)
+
+
+def test_the_executor_order_stack_is_not_imported_here():
+    import inspect
+    src = inspect.getsource(T)
+    # the module may NAME it in prose; it must not import it
+    assert "import pmus_q1_executor" not in src
+    for fn in ("run_campaign", "cancel_all_deadman", "place_limit_buy"):
+        assert not hasattr(T, fn)
+
+
+def test_cancel_uses_the_venue_route_and_the_venue_order_id(creds, monkeypatch):
+    t = tp()
+    t.preflight()
+    owner_arm(monkeypatch)
+    t.arm()
+    t.cancel("venue-order-7")
+    assert ("POST", "/v1/order/venue-order-7/cancel") in t.http.calls

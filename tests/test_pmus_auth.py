@@ -106,8 +106,11 @@ def test_the_transport_refuses_every_mutating_method(creds):
 
 
 def test_the_module_exposes_no_order_function():
+    # `armed` is deliberately NOT banned: it is a boolean read of three
+    # environment names and cannot mutate anything. What must not exist here
+    # is any function that can reach the venue's order endpoints.
     banned = ("place_limit_buy", "cancel_exact", "cancel_all_deadman",
-              "run_campaign", "wait_for_fill", "persist_intent", "armed")
+              "run_campaign", "wait_for_fill", "persist_intent")
     for name in banned:
         assert not hasattr(A, name), "%s must not exist here" % name
 
@@ -135,6 +138,29 @@ def test_no_order_endpoint_appears_in_executable_code():
         assert "/v1/order" not in s, "order endpoint in executable code: %r" % s
         assert s.upper() not in ("POST", "DELETE", "PUT", "PATCH"), \
             "mutating method literal in a read-only module: %r" % s
+
+
+def test_armed_is_a_pure_env_read_and_touches_no_network(monkeypatch):
+    import socket
+
+    def boom(*a, **k):
+        raise AssertionError("armed() must not open a socket")
+
+    monkeypatch.setattr(socket, "socket", boom)
+    monkeypatch.delenv(A.LIVE_ENV, raising=False)
+    assert A.armed() is False
+    monkeypatch.setenv(A.LIVE_ENV, "YES")
+    monkeypatch.setenv(A.SID_ENV, "s1")
+    monkeypatch.setenv(A.ARM_ENV, "s1")
+    assert A.armed() is True
+    monkeypatch.setenv(A.ARM_ENV, "DIFFERENT")
+    assert A.armed() is False          # token must match the session id
+
+
+def test_the_arm_contract_matches_the_executors_exactly():
+    # one way to arm this account, not two
+    assert (A.LIVE_ENV, A.SID_ENV, A.ARM_ENV) == \
+        (Q1.LIVE_ENV, Q1.SID_ENV, Q1.ARM_ENV)
 
 
 def test_signing_needs_no_network_and_leaks_nothing_into_the_path(creds,

@@ -36,6 +36,20 @@ SECRET_ENV = "PMUS_API_SECRET_KEY"
 #: the venue's own name for the tick constraint, read from the market
 TICK_FIELD = "orderPriceMinTickSize"
 
+#: the owner arm contract, reusing the existing executor's environment names
+#: so there is ONE way to arm this account and not two. Reading them places
+#: no order and opens no socket; arming is still a separate act elsewhere.
+LIVE_ENV = "PMUS_Q1_LIVE"
+SID_ENV = "PMUS_Q1_SESSION_ID"
+ARM_ENV = "PMUS_Q1_ARM"
+
+
+def armed() -> bool:
+    """True only when the owner has set all three, and the token matches."""
+    sid = os.getenv(SID_ENV, "").strip()
+    return (os.getenv(LIVE_ENV, "").strip().upper() == "YES" and bool(sid)
+            and os.getenv(ARM_ENV, "").strip() == sid)
+
 
 def has_credentials() -> bool:
     return bool(os.getenv(KEY_ENV, "").strip()) and \

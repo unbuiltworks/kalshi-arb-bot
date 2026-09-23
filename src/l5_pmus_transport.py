@@ -37,7 +37,7 @@ import re
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from src import pmus_q1_executor as Q1
+from src import pmus_auth as Q1
 from src.l5_live_execution import NotArmed
 
 #: the series the faithful probe is scoped to. A different series fails.
@@ -70,6 +70,34 @@ class PreflightFailed(RuntimeError):
     pass
 
 
+class _SignedHTTP:
+    """Signed GET and POST. Constructed ONLY by arm().
+
+    While DISARMED this transport's http is `pmus_auth.ReadOnlyTransport`,
+    which raises on any method but GET -- so a disarmed process does not
+    merely decline to send an order, it holds no object able to send one.
+    Arming installs this. That is why `pmus_q1_executor` is not imported
+    here: it carries place_limit_buy, cancel_all_deadman and run_campaign,
+    and the probe needs exactly one bounded order, not a campaign engine.
+    """
+
+    def request(self, method: str, path: str,
+                body: Optional[Mapping[str, Any]] = None,
+                base: str = Q1.API) -> Any:
+        import json as _json
+        import ssl
+        import urllib.request
+        m = str(method).upper()
+        data = _json.dumps(body).encode() if body is not None else None
+        headers = (Q1.signed_headers(m, path) if base == Q1.API
+                   else {"User-Agent": "pmus-l5-probe"})
+        req = urllib.request.Request(base + path, data=data, headers=headers,
+                                     method=m)
+        with urllib.request.urlopen(
+                req, context=ssl.create_default_context(), timeout=15) as r:
+            return _json.loads(r.read() or b"{}")
+
+
 class PmusTransport:
     """GET-only until armed. Mutations exist but are gated behind preflight."""
 
@@ -78,7 +106,8 @@ class PmusTransport:
     def __init__(self, *, market_slug: str, http: Optional[Any] = None,
                  now_fn=None) -> None:
         self.market_slug = market_slug
-        self.http = http or Q1.Transport()
+        self._injected = http is not None
+        self.http = http or Q1.ReadOnlyTransport()
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
         self.armed = False
         self.preflight_report: Optional[Dict[str, Any]] = None
@@ -297,6 +326,9 @@ class PmusTransport:
             raise NotArmed("owner arm token absent or does not match the "
                            "session id (%s / %s / %s)"
                            % (LIVE_ENV, SID_ENV, ARM_ENV))
+        if not self._injected:
+            # only now does an object capable of POST exist in this process
+            self.http = _SignedHTTP()
         self.armed = True
         return {"armed": True, "market": self.market_slug,
                 "preflight": pf,
