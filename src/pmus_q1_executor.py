@@ -161,14 +161,52 @@ class Transport:
 
 # ------------------------- pure economics -------------------------
 
-def complement_bound(first_cost: D, min_edge: D = MIN_EDGE) -> Optional[D]:
+def complement_bound(first_cost: D, min_edge: D = MIN_EDGE,
+                     tick: Optional[D] = None) -> Optional[D]:
     """Max complement price locking >= min_edge pre-rebate: cost1 + cost2
-    <= 1 - min_edge, on the 0.005 grid, inside the fee-safe band."""
+    <= 1 - min_edge, ON THE VENUE'S GRID, inside the fee-safe band.
+
+    THE GRID IS A PROPERTY OF THE MARKET, NOT OF THIS MODULE. `TICK` was
+    applied unconditionally, so on a market whose `orderPriceMinTickSize` is
+    0.01 this returned prices like 0.475 -- arithmetically inside the bound
+    and NOT A PRICE THE VENUE ACCEPTS. PMUS BTC15m is exactly such a market.
+
+    `tick` is therefore a parameter. Omitting it keeps `TICK` and every
+    existing caller byte-identical, which is why the sports path is unchanged;
+    a caller that knows its market's grid passes it and gets a quotable price.
+    Rounding is still DOWN, so a coarser grid can only make the bound more
+    conservative, never looser.
+    """
+    grid = TICK if tick is None else D(str(tick))
+    if grid <= 0 or grid >= ONE:
+        return None
     px = (ONE - D(str(first_cost)) - min_edge)
-    px = (px / TICK).to_integral_value(rounding=ROUND_DOWN) * TICK
+    px = (px / grid).to_integral_value(rounding=ROUND_DOWN) * grid
     if px < MIN_PRICE or px > MAX_PRICE:
         return None
     return px
+
+
+#: the venue's own per-market grid field
+TICK_FIELD = "orderPriceMinTickSize"
+
+
+def tick_for_market(market: Any) -> Optional[D]:
+    """The venue's authoritative grid for one market, or None.
+
+    `market_micro_spec` already treats this field as authoritative and
+    records why: PMUS serves `orderPriceMinTickSize = 0.01`, and a hardcoded
+    equality against `TICK` once refused every sports market outright. This
+    is the same read, exposed so a bound can be computed on the same grid the
+    order will have to sit on.
+    """
+    if not isinstance(market, Mapping):
+        return None
+    try:
+        v = D(str(market.get(TICK_FIELD)))
+    except (TypeError, ValueError, ArithmeticError):
+        return None
+    return v if 0 < v < ONE else None
 
 
 def taker_completion_ok(first_cost: D, ask_cost: D,

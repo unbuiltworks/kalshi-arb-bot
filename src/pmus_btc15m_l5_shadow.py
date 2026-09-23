@@ -52,6 +52,7 @@ from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional
 
 from src import pmus_fees as fees
+from src import pmus_interaction_classifier as clf
 from src import pmus_l5_persistence_v2 as pv2
 from src.l5_venue_adapter import PMUS_PRODUCT_CRYPTO_UPDOWN, PMUSAdapter
 from src.polymarket_l5.action_model import state_key
@@ -179,9 +180,22 @@ def _book(row: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+#: the inherited sports eligibility band, and the ONLY value that is ever
+#: applied by default. A counterfactual band is a MEASUREMENT device: it
+#: exists to quantify how much authentic L5 behaviour the inherited band
+#: suppresses, and it never reaches `pmus_q1_executor`, which is untouched.
+SPORTS_BAND = (D("0.20"), D("0.80"))
+
+
 def replay_window(slug: str, rows: List[dict], model: Mapping[str, Any],
-                  *, assume_fills: bool) -> dict:
-    """One window, chronological, no hindsight."""
+                  *, assume_fills: bool,
+                  band: Optional[tuple] = None) -> dict:
+    """One window, chronological, no hindsight.
+
+    `band` is measurement only. None means the inherited sports band, exactly
+    as the executor enforces it. A wider band answers "what would L5 have done
+    here", and answering that question is not the same as authorizing it.
+    """
     adapter = PMUSAdapter(PMUS_PRODUCT_CRYPTO_UPDOWN)
     close_t = window_close_epoch(slug)
     out: Dict[str, Any] = {
@@ -307,16 +321,24 @@ def replay_window(slug: str, rows: List[dict], model: Mapping[str, Any],
             out["decisions"].append(rec)
             t += DECISION_INTERVAL_S
             continue
-        if not adapter.entry_ok(px):
+        lo, hi = band if band is not None else SPORTS_BAND
+        eligible = lo <= px <= hi
+        rec["eligibility"] = {"band": [str(lo), str(hi)],
+                              "is_inherited_sports_band":
+                                  (lo, hi) == SPORTS_BAND,
+                              "eligible": eligible,
+                              "price": str(px)}
+        if not eligible:
             rec.update({
                 "action": "HOLD", "relation": rel,
                 "side": "UP" if side_up else "DOWN",
                 "desired_price": str(px),
                 "reason": "entry_band",
-                "detail": ("the PMUS executor's band is 0.20-0.80 and this "
-                           "price is outside it. THE BAND IS A SPORTS "
-                           "PARAMETER and is NOT widened here; it is recorded "
-                           "as binding and left for a separate review.")})
+                "detail": ("price outside the eligibility band %s-%s. The "
+                           "0.20-0.80 default is a SPORTS PARAMETER and is "
+                           "never widened in the executor; a wider band here "
+                           "is a measurement of what it suppresses."
+                           % (lo, hi))})
             out["decisions"].append(rec)
             t += DECISION_INTERVAL_S
             continue
@@ -358,6 +380,11 @@ def replay_window(slug: str, rows: List[dict], model: Mapping[str, Any],
                                         if after else None),
                 "grew": grew,
             }
+            # AND THE CLASSIFICATION, which is what the assumption is being
+            # replaced by. `prints=None` because the public gateway has no
+            # trade tape; with the authenticated feed the same call reaches
+            # the three richer classes without any change here.
+            rec["interaction"] = clf.classify(rec, None, grew)
             if grew:
                 inv.record(side_up, px)
                 filled = True
@@ -376,6 +403,7 @@ def replay_window(slug: str, rows: List[dict], model: Mapping[str, Any],
 
 def summarize(decisions: List[dict], inv: Inventory) -> dict:
     quotes = [d for d in decisions if d.get("action") == "QUOTE"]
+    inter = [d["interaction"] for d in quotes if d.get("interaction")]
     holds = [d for d in decisions if d.get("action") == "HOLD"]
     rels: Dict[str, int] = {}
     for q in quotes:
@@ -392,6 +420,7 @@ def summarize(decisions: List[dict], inv: Inventory) -> dict:
                                "matched": inv.matched},
         "terminal_pair_cost": (str(inv.pair_cost())
                                if inv.pair_cost() is not None else None),
+        "interaction": clf.summarize(inter) if inter else None,
         "realized_pnl": None,
         "labels": "every count above is SHADOW; no order existed",
     }
@@ -404,10 +433,18 @@ def main(argv=None) -> int:
     ap.add_argument("--assume-fills", action="store_true",
                     help="Track B: advance inventory under the named "
                          "volume-at-touch assumption")
+    ap.add_argument("--band", default=None,
+                    help="MEASUREMENT ONLY, e.g. 0.01:0.99. Omit for the "
+                         "inherited sports band. Never reaches the executor.")
     a = ap.parse_args(argv)
+    band = None
+    if a.band:
+        lo, hi = a.band.split(":")
+        band = (D(lo), D(hi))
     model = pv2.load_v2()
     by = load_tape(a.tape)
-    rows = [replay_window(slug, rs, model, assume_fills=a.assume_fills)
+    rows = [replay_window(slug, rs, model, assume_fills=a.assume_fills,
+                          band=band)
             for slug, rs in sorted(by.items())]
     if a.out:
         with open(a.out, "w") as fh:

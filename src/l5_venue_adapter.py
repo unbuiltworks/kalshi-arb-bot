@@ -346,7 +346,12 @@ class PMUSAdapter:
 
     def complement_price(self, surplus_avg: D, opp_ask: D,
                          tick: D) -> tuple[Optional[D], dict]:
-        hard = _q1().complement_bound(surplus_avg)
+        # THE CALLER ALREADY KNOWS THE GRID AND IT WAS BEING DISCARDED. This
+        # rounded the chosen price onto `tick` but computed the fee-safe bound
+        # on q1.TICK, so on a 0.01 market the bound could name a price the
+        # venue does not accept. Sports callers pass 0.005 and get exactly the
+        # number they got before.
+        hard = _q1().complement_bound(surplus_avg, tick=tick)
         spring = PAIR_TARGET - D(str(surplus_avg))
         info = {"hard_bound_px": str(hard) if hard is not None else None,
                 "pair_target_px": str(spring)}

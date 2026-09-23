@@ -141,3 +141,63 @@ def test_an_undeclared_product_is_refused():
 def test_the_adapter_quotes_the_live_coefficient_not_a_frozen_string():
     from src.l5_venue_adapter import PMUSAdapter
     assert "0.0695" in PMUSAdapter().provenance()["fees"]
+
+
+# --------------------------------------------------------------------------
+# The complement grid is a property of the MARKET, not of the module.
+
+def test_the_default_grid_is_unchanged_so_the_sports_path_is_byte_identical():
+    from src import pmus_q1_executor as q1
+    for cost in ("0.20", "0.33", "0.48", "0.61", "0.755"):
+        assert q1.complement_bound(D(cost)) == q1.complement_bound(
+            D(cost), tick=q1.TICK)
+
+
+def test_a_bound_on_a_one_cent_market_lands_on_the_one_cent_grid():
+    """0.475 is arithmetically inside the bound and is NOT a price PMUS
+    BTC15m accepts."""
+    from src import pmus_q1_executor as q1
+    for cost in ("0.20", "0.33", "0.48", "0.505", "0.61", "0.755"):
+        px = q1.complement_bound(D(cost), tick=D("0.01"))
+        if px is None:
+            continue
+        assert (px / D("0.01")) % 1 == 0, (cost, px)
+
+
+def test_a_coarser_grid_is_never_looser_than_a_finer_one():
+    """Rounding stays DOWN, so a coarser grid can only be more conservative."""
+    from src import pmus_q1_executor as q1
+    for cost in ("0.20", "0.33", "0.48", "0.61", "0.755"):
+        fine = q1.complement_bound(D(cost), tick=D("0.005"))
+        coarse = q1.complement_bound(D(cost), tick=D("0.01"))
+        if fine is None or coarse is None:
+            continue
+        assert coarse <= fine, (cost, fine, coarse)
+
+
+def test_an_implausible_grid_refuses_rather_than_dividing_by_it():
+    from src import pmus_q1_executor as q1
+    assert q1.complement_bound(D("0.48"), tick=D("0")) is None
+    assert q1.complement_bound(D("0.48"), tick=D("1")) is None
+
+
+def test_the_venue_grid_is_read_from_the_market_and_validated():
+    from src import pmus_q1_executor as q1
+    assert q1.tick_for_market({"orderPriceMinTickSize": 0.01}) == D("0.01")
+    assert q1.tick_for_market({"orderPriceMinTickSize": 0.005}) == D("0.005")
+    assert q1.tick_for_market({}) is None
+    assert q1.tick_for_market({"orderPriceMinTickSize": 0}) is None
+    assert q1.tick_for_market({"orderPriceMinTickSize": "nonsense"}) is None
+    assert q1.tick_for_market(None) is None
+
+
+def test_the_adapter_no_longer_discards_the_grid_it_was_handed():
+    """The chosen price was rounded onto the caller's tick while the BOUND was
+    computed on the module constant."""
+    from decimal import Decimal
+    from src import l5_venue_adapter as va
+    px, econ = va.PMUSAdapter().complement_price(
+        Decimal("0.48"), Decimal("0.55"), Decimal("0.01"))
+    assert px is not None and (px / Decimal("0.01")) % 1 == 0
+    assert econ["hard_bound_px"] is not None
+    assert (Decimal(econ["hard_bound_px"]) / Decimal("0.01")) % 1 == 0
