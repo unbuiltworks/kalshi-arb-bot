@@ -24,13 +24,30 @@ import ssl
 import sys
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 GATEWAY = "https://gateway.polymarket.us"
 LIVE_EVENTS = ("/v1/events?live=true&active=true&closed=false"
                "&categories=sports&limit=500")
+
+#: THE ONE SPORTS ASSUMPTION IN THIS FILE, AND ITS ESCAPE HATCH.
+#:
+#: `LIVE_EVENTS` pins `categories=sports`, so the tape could only ever see the
+#: sports slate. PMUS launched recurring BTC up/down series on 2026-09-22
+#: (`btc-updown-15m`, `btc-updown-1h`) with the same book endpoints, and those
+#: markets are invisible to sports discovery. They are also SHORT: a 15-minute
+#: market's whole life is shorter than this collector's 300 s re-slate, so a
+#: series universe additionally has to roll on its own clock.
+#:
+#: Nothing else in the file is sports-specific -- `snapshot()` is already
+#: venue-generic -- so the admission is a second slug source, not a second
+#: collector.
+SERIES_RESLATE_S = 45.0
+
+#: how far ahead of its start a window is worth polling
+LEAD_S = 60.0
 UA = "pmus-book-tape (read-only research collector)"
 
 
@@ -58,6 +75,101 @@ def live_slugs(cap: int = 60) -> list:
         if len(out) >= cap:
             break
     return out[:cap]
+
+
+def series_slugs(series_slug: str, *, get=None, now=None) -> list:
+    """Every market of a recurring series that is open or about to open.
+
+    A 15-minute window is created well in advance and expires on a hard clock,
+    so "the one trading right now" is a property of the wall clock, not of a
+    `live=true` flag the venue only sets for sports. Markets that have already
+    closed are excluded; the current window and the next two are kept, so a
+    rollover is never missed between re-slates.
+    """
+    get = _get if get is None else get
+    now = datetime.now(timezone.utc) if now is None else now
+    try:
+        sid = None
+        off = 0
+        while off < 2000 and sid is None:
+            d = get("/v1/series?limit=100&offset=%d" % off) or {}
+            rows = d.get("series") or []
+            if not rows:
+                break
+            for r in rows:
+                if str(r.get("slug")) == series_slug:
+                    sid = str(r.get("id"))
+                    break
+            off += len(rows)
+        if sid is None:
+            return []
+        evs, off = [], 0
+        while off < 4000:
+            d = get("/v1/events?series_id=%s&limit=100&offset=%d" % (sid, off)) or {}
+            rows = d.get("events") or []
+            if not rows:
+                break
+            evs += rows
+            off += len(rows)
+            if len(rows) < 100:
+                break
+    except Exception:                                    # noqa: BLE001
+        return []
+    live = []
+    for e in evs:
+        if e.get("closed"):
+            continue
+        try:
+            start = datetime.fromisoformat(
+                str(e.get("startTime")).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        live.append((start, e))
+    live.sort(key=lambda r: r[0])
+    # ONLY WHAT IS ACTUALLY TRADING. The venue pre-creates windows hours
+    # ahead, and their book/bbo endpoints 404 until the window opens. Polling
+    # them spends two thirds of the call budget on 404s and fills the tape
+    # with errors that are not errors, so the universe is bounded to the
+    # window in progress plus the one about to start.
+    out = []
+    for start, e in live:
+        if start > now + timedelta(seconds=LEAD_S):
+            break
+        for m in (e.get("markets") or []):
+            if m.get("slug"):
+                out.append(str(m["slug"]))
+    return out
+
+
+def book_snapshot(slug: str) -> Optional[dict]:
+    """The full ladder, for depth. Separate from `snapshot` because the BBO
+    endpoint answers the liveness question on its own and costs one call; a
+    depth question is worth a second call only when it is actually asked."""
+    try:
+        bk = (_get("/v1/markets/%s/book" % slug) or {}).get("marketData") or {}
+    except Exception as exc:                             # noqa: BLE001
+        return {"t": datetime.now(timezone.utc).isoformat(), "slug": slug,
+                "kind": "book_error", "error": "%s:%s" % (
+                    type(exc).__name__, str(exc)[:80])}
+
+    def side(rows):
+        out = []
+        for r in rows or []:
+            try:
+                out.append([str(r["px"]["value"]), str(r["qty"])])
+            except (KeyError, TypeError):
+                continue
+        return out
+
+    return {
+        "t": datetime.now(timezone.utc).isoformat(),
+        "slug": slug, "kind": "book",
+        "bids": side(bk.get("bids")),
+        "offers": side(bk.get("offers")),
+        "state": bk.get("state"),
+        "transact_time": bk.get("transactTime"),
+        "labels": "BOOK STATE ONLY -- never a fill, never realized",
+    }
 
 
 def snapshot(slug: str) -> Optional[dict]:
@@ -89,23 +201,38 @@ def snapshot(slug: str) -> Optional[dict]:
 
 
 def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
-        cap: int = 60) -> int:
+        cap: int = 60, series: Optional[str] = None,
+        with_book: bool = False) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    path = out_dir / ("pmus_book_%s.jsonl" % stamp)
+    tag = ("pmus_%s_" % series.replace("-", "")) if series else "pmus_book_"
+    path = out_dir / ("%s%s.jsonl" % (tag, stamp))
     end = time.time() + minutes * 60.0
-    slugs, refreshed, rows, cycles = live_slugs(cap), time.time(), 0, 0
+
+    def universe():
+        return series_slugs(series) if series else live_slugs(cap)
+
+    reslate = SERIES_RESLATE_S if series else 300.0
+    slugs, refreshed, rows, cycles = universe(), time.time(), 0, 0
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({
             "t": datetime.now(timezone.utc).isoformat(), "kind": "tape_start",
             "gateway": GATEWAY, "interval_s": interval_s, "cap": cap,
-            "slugs": len(slugs), "minutes": minutes,
+            "series": series, "with_book": with_book,
+            "reslate_s": reslate,
+            "slugs": len(slugs), "slug_list": list(slugs),
+            "minutes": minutes,
             "provenance": "public PMUS gateway, read-only, no credentials",
         }) + "\n")
         while time.time() < end:
-            if time.time() - refreshed > 300:            # re-slate every 5 min
-                fresh = live_slugs(cap)
+            if time.time() - refreshed > reslate:
+                fresh = universe()
                 if fresh:
+                    if series and set(fresh) != set(slugs):
+                        fh.write(json.dumps({
+                            "t": datetime.now(timezone.utc).isoformat(),
+                            "kind": "reslate", "series": series,
+                            "was": list(slugs), "now": list(fresh)}) + "\n")
                     slugs = fresh
                 refreshed = time.time()
             for s in slugs:
@@ -113,6 +240,11 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
                 if row:
                     fh.write(json.dumps(row) + "\n")
                     rows += 1
+                if with_book:
+                    brow = book_snapshot(s)
+                    if brow:
+                        fh.write(json.dumps(brow) + "\n")
+                        rows += 1
             fh.flush()
             cycles += 1
             print("PMUS_BOOK_TAPE %s" % json.dumps(
@@ -130,8 +262,14 @@ def main() -> int:
     ap.add_argument("--interval", type=float, default=5.0)
     ap.add_argument("--cap", type=int, default=60)
     ap.add_argument("--out-dir", default="data/pmus_book_tape")
+    ap.add_argument("--series", default=None,
+                    help="recurring series slug (e.g. btc-updown-15m). "
+                         "Default None keeps the sports live slate.")
+    ap.add_argument("--with-book", action="store_true",
+                    help="also record the full ladder, for depth")
     a = ap.parse_args()
-    return run(Path(a.out_dir), a.minutes, a.interval, a.cap)
+    return run(Path(a.out_dir), a.minutes, a.interval, a.cap,
+               series=a.series, with_book=a.with_book)
 
 
 if __name__ == "__main__":
