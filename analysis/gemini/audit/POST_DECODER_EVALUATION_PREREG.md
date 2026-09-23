@@ -91,7 +91,10 @@ shadow windows:
 1. **On L5's own history the cap bites.** Measured over 2,216 windows and
    35,576 same-side actions, q-normalized (source: the `LIVE_Q1_BTC15M_CAP4`
    note in `live_envelope.py`): peak imbalance per window **p50 2.76, p75
-   5.21**; cap coverage **k=2 → 38.2%, k=4 → 66.9%**. So **CAP4 truncates about
+   5.21**; cap coverage **k=2 → 38.2%, k=4 → 66.9%**. **These come from the
+   CANONICAL TAPE (2,216 windows, BTC+ETH, 5m+15m) — a different population
+   from the BTC15m trajectory targets above, and P12 independently reproduces
+   them to within a few percent (p50 2.63, p75 5.04, k=4 68.2%).** So **CAP4 truncates about
    a third of L5-like windows**, and L5 extends while already holding ≥2 units
    in **82.1%** of same-side actions.
 2. **On our own replay corpus the cap's bite has a located edge.** In the P2
@@ -123,15 +126,23 @@ evidence of replication and will not be reported as such.** The evaluation
 reports the following distributions for every arm, beside the economics, and
 compares them to L5's source behaviour.
 
-Source: `RESIDUAL_EXIT_FORENSICS_V1` — BTC15m, 5,546 windows, 693,916 fills,
-zero sells, 38,180 reconstructed residual episodes, chronological TRAIN/OOS.
+**CORRECTED 2026-09-23 by P12.** Targets must be DURATION-MATCHED. The table
+below is `RESIDUAL_EXIT_FORENSICS_V1` — **BTC15m only**, 5,546 windows, 693,916
+fills, zero sells, 38,180 episodes — and it is the comparator for the **BTC15m**
+arm ONLY. The **BTC5m** arm is scored against L5's own 5-minute behaviour,
+where he ends flat about **2%** of the time (19 of 957 BTC 5-minute windows in
+the canonical tape) rather than 1 in 5,546. Scoring a BTC5m clone against the
+BTC15m flat rate would mark a faithful clone as divergent. The CAP coverage
+figures further down come from a THIRD population (the canonical tape, 2,216
+windows, mixed BTC/ETH and 5m/15m) and are labelled there.
+See `P12_L5_STATS_RECONCILIATION.md`.
 
 | trajectory statistic | L5 source value | how ours is scored |
 |---|---|---|
 | fills per window | (dense; ours is 0.29 BTC5m / 0.05 BTC15m today) | full distribution, not mean |
 | same-side run length | P(EXTEND) = **0.66** unconditional → expected run **≈2.9**; run 4+ → **0.733** OOS | distribution + P(EXTEND \| run=k) for k=1..5+ |
 | EXTEND→COMPLETE transitions | P(opposite next \| holding k) **flat**: .479 .481 .503 .487 .490 for k=1..5+ | same table; flatness is the test |
-| imbalance episode termination | **84.3% FLIPPED** (overshoot through zero), **1.2% COMPLETED_FLAT**, **1 of 5,546** windows ended flat | share flipped / flat / carried |
+| imbalance episode termination | **84.3% FLIPPED**, **1.2% COMPLETED_FLAT**, **1 of 5,546** windows flat — **BTC15m ONLY**; the BTC5m comparator is **~2% of windows flat** | share flipped / flat / carried |
 | peak inventory depth per window | **p50 2.76, p75 5.21** (q-normalized) | same quantiles |
 | carried residual | median **141.8 shares = 7.7%** of window volume, p90 462 | same, as share of window volume |
 
