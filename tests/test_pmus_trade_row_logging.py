@@ -20,8 +20,10 @@ def _state(rows):
     return {"cpc-btc-updown-15m-x": {"trades": list(rows)}}
 
 
-ROWS = [{"t": 1.0, "px": "0.22", "qty": 5, "trade_time": "T1", "dir": "buy"},
-        {"t": 2.0, "px": "0.23", "qty": 7, "trade_time": "T2", "dir": "sell"}]
+ROWS = [{"t": 1.0, "px": "0.22", "qty": 5, "trade_time": "T1", "dir": "buy",
+         "bid_at_trade": "0.21", "ask_at_trade": "0.23"},
+        {"t": 2.0, "px": "0.23", "qty": 7, "trade_time": "T2", "dir": "sell",
+         "bid_at_trade": "0.22", "ask_at_trade": "0.24"}]
 
 
 def test_off_by_default(monkeypatch):
@@ -59,8 +61,24 @@ def test_the_row_carries_the_fields_the_classifier_needs(monkeypatch):
     R._TRADES_LOG_SEEN.clear()
     doc = R.emit_new_trades(_state(ROWS))
     row = doc["markets"]["cpc-btc-updown-15m-x"][0]
-    assert set(row) == {"t", "px", "qty", "trade_time", "dir"}
+    assert set(row) == {"t", "px", "qty", "trade_time", "dir",
+                        "bid_at_trade", "ask_at_trade"}
     assert "dir=taker direction" in doc["schema"]
+    assert "AUTHENTICATED top of book at the instant" in doc["schema"]
+
+
+def test_the_book_at_the_trade_travels_with_the_row():
+    """Without it `dir` is uninterpretable: the only other book a reader can
+    reach is the public gateway's ~30s cache, which is not the book these
+    trades executed into."""
+    import os
+    os.environ[R.TRADES_LOG_ENV] = "50"
+    R._TRADES_LOG_SEEN.clear()
+    doc = R.emit_new_trades({"m": {"trades": [
+        {"t": 1.0, "px": "0.22", "qty": 5, "trade_time": "T1", "dir": "buy",
+         "bid_at_trade": "0.21", "ask_at_trade": "0.23"}]}})
+    row = doc["markets"]["m"][0]
+    assert row["bid_at_trade"] == "0.21" and row["ask_at_trade"] == "0.23"
 
 
 def test_it_never_claims_a_fill(monkeypatch):

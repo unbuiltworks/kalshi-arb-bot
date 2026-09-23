@@ -244,10 +244,28 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
             except Exception:
                 s["bad_trade_rows"] = s.get("bad_trade_rows", 0) + 1
                 continue
+            # THE BOOK AT THE INSTANT OF THE TRADE, stamped onto the row.
+            #
+            # Without it, `dir` cannot be interpreted. Proving what "buy" and
+            # "sell" mean requires comparing the print against the book it
+            # executed into, and the only book a reader can otherwise reach is
+            # the PUBLIC gateway's ~30-second cache -- which is not that book.
+            # Measured over 184 resolvable rows: the forward reading
+            # (buy lifts the ask) held 46.2% of the time and the inverted one
+            # 35.3%, with 18.5% of prints strictly inside the quoted spread
+            # where neither reading can even apply. That is not a close call
+            # between two hypotheses, it is the wrong book.
+            #
+            # `s["bid"]`/`s["ask"]` are the authenticated top of book this
+            # same handler maintains, and `_trade_direction` already consults
+            # them, so recording them costs nothing and makes the direction
+            # field checkable instead of a matter of belief.
             s["trades"].append({
                 "t": now, "px": str(px),
                 "qty": ev.get("qty"),
                 "trade_time": ev.get("trade_time"),
+                "bid_at_trade": s.get("bid"),
+                "ask_at_trade": s.get("ask"),
                 "dir": _trade_direction({**ev, "price": str(px)}, s)})
             del s["trades"][:-500]
 
@@ -1000,6 +1018,8 @@ def emit_new_trades(state: Mapping[str, Any]) -> Optional[dict]:
             fresh.append({"t": t.get("t"), "px": t.get("px"),
                           "qty": t.get("qty"),
                           "trade_time": t.get("trade_time"),
+                          "bid_at_trade": t.get("bid_at_trade"),
+                          "ask_at_trade": t.get("ask_at_trade"),
                           "dir": t.get("dir")})
         if len(seen) > 4000:                      # bounded memory
             _TRADES_LOG_SEEN[slug] = set(list(seen)[-2000:])
@@ -1012,8 +1032,10 @@ def emit_new_trades(state: Mapping[str, Any]) -> Optional[dict]:
            "kind": "authenticated_trade_rows",
            "markets": out, "rows": total, "cap_per_market": cap,
            "schema": "t=receipt epoch, px=trade price, qty=size, "
-                     "trade_time=venue time, dir=taker direction from "
-                     "_trade_direction (buy|sell|unknown)",
+                     "trade_time=venue time, bid_at_trade/ask_at_trade="
+                     "AUTHENTICATED top of book at the instant of the trade, "
+                     "dir=taker direction from _trade_direction "
+                     "(buy|sell|unknown)",
            "labels": "AUTHENTICATED read-only trade tape. Not a fill of ours; "
                      "queue position is not implied."}
     try:
