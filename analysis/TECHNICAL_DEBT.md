@@ -63,3 +63,53 @@ Removing it would shrink the reviewed copy set, but the copy set is *pinned*
 and the R1 lineage gate is already failing on this branch for unrelated
 reasons, so nothing should move until that gate is green and someone owns the
 re-review.
+
+---
+
+## TD-3 · The session container cannot host continuous collection
+
+**Found** 2026-09-23, after the local L5→PMUS observer and PMUS book tape died
+twice without leaving an error.
+
+**What is actually happening.** Neither process crashed. Both times the logs
+stop mid-stream, with no traceback and no non-zero exit, and both times every
+descendant died simultaneously — including a `setsid`/`disown` supervisor shell
+whose only job was to restart them. `/proc/uptime` read **50.5 seconds** while
+the observer's own tape showed hours of prior work, and the session process is
+launched with `--session-mode resume`. The microVM is suspended between turns
+and resumed fresh: PID 1 is new, so nothing started in a previous turn exists.
+
+Measured interruptions: 16:57:46Z–17:29:40Z (~32 min) and 17:43:xx–17:45:30Z.
+
+**Why no local fix works.** `nohup`, `setsid`, `disown` and a restart-loop
+supervisor all defend against signals and parent exit. None of them survives
+the destruction of the whole VM. There is no local process that can be made
+durable, so this is not worth further engineering.
+
+**What it does NOT damage.** The observer persists its action tape to disk and
+re-hydrates from it on boot (824 actions at the 17:45 restart, 631 at 17:29),
+and re-ingested actions are marked `backlog` rather than `realtime`. So:
+
+- no L5 action is lost;
+- realtime latency and copyability statistics are **not** contaminated by the
+  gap — the re-read actions land as `BACKLOG_WINDOW_CLOSED`, which is exactly
+  what that separation was built for.
+
+**What it does damage.** A window whose L5 actions arrive during a suspension
+can never be a *realtime* window, because the PMUS state at receipt was never
+observed. Windows **17:00** and **17:15** are backlog-only for this reason and
+cannot count toward the five-active-window sample, despite the authenticated
+trade tape for them existing on Railway.
+
+**Consequence for the programme.** Continuous collection belongs on Railway,
+where `pmus-ws-evidence-recorder` and `l5-live-habitat` already run 24/7 and
+were unaffected by both suspensions. The local observer should be treated as an
+*interactive analysis tool over the durable tape*, not as a collector. The
+piece that has no Railway equivalent today is the observer's alignment of an L5
+action to the PMUS book **at receipt time** plus its copyability class; until
+that moves, the realtime sample accrues only while a turn is active.
+
+**Before touching it.** Moving the observer to Railway is a deployment change,
+not a strategy change: the band, controller, persistence and interaction
+classifier stay frozen. It needs owner sign-off because it adds a service, and
+it must stay read-only and mutation-incapable like the recorders it joins.
