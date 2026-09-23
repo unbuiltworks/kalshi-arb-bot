@@ -66,6 +66,7 @@ def orders_from_observer(path: str = OBS) -> List[dict]:
             "copyable": cop.get("klass") == "MAKER_COPYABLE",
             "l5_relation": (r.get("l5") or {}).get("relation_actual"),
             "window": r["window_start_utc"][11:16],
+            "action_key": r.get("action_key"),
         })
     return out
 

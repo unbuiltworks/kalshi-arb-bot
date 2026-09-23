@@ -225,6 +225,14 @@ def scan(orders: Sequence[Mapping[str, Any]],
                                   else "intent_changed"),
                 "prints_considered": len(window),
                 "copyable_at_receipt": o.get("copyable"),
+                # IDENTITY PASS-THROUGH, no classification semantics.
+                # (market, side, price, actionable_from) is NOT unique: the
+                # observer snapshots PMUS once per poll, so a burst of L5
+                # actions shares one receipt timestamp. Joining on that tuple
+                # silently collapsed 218 of 676 orders onto 458 keys and
+                # mis-attributed roughly a third of them. Carrying the row's
+                # own key removes the join entirely.
+                "action_key": o.get("action_key"),
                 "price": o["price"], "side": o["side"],
                 "l5_relation": o.get("l5_relation"),
                 "is_fill": False,

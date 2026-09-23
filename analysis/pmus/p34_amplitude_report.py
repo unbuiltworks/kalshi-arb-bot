@@ -52,7 +52,14 @@ def observer_rows(path: str = OBS) -> List[dict]:
 
 
 def authenticated_map(rows: List[dict]) -> Dict[str, dict]:
-    """action_key -> the classified order's authenticated interaction class."""
+    """action_key -> the classified order's authenticated interaction class.
+
+    Keyed on the row's OWN action_key, carried through the frozen scan. It was
+    previously joined on (market, side, price, actionable_from), which is NOT
+    unique -- the observer snapshots PMUS once per poll, so a burst of L5
+    actions shares one receipt timestamp. That collapsed 218 of 676 orders
+    onto 458 keys and mis-attributed about a third of them.
+    """
     trades = H.load_rows()
     onrow = {s: [r for r in v if r.get("bid_at_trade") is not None]
              for s, v in trades.items()}
@@ -60,22 +67,9 @@ def authenticated_map(rows: List[dict]) -> Dict[str, dict]:
     norm = H.proven_normalizer(proof)
     orders = [o for o in P.orders_from_observer() if o["market"] in trades]
     classified = M.scan(orders, trades, normalize=norm)
-
-    by_key = {}
-    for c in classified:
-        by_key[_key(c["market"], c["side"], c["price"],
-                    c["actionable_from"])] = c
-    out: Dict[str, dict] = {}
-    for r in rows:
-        market = (r.get("pmus") or {}).get("slug")
-        side = (r.get("l5") or {}).get("pmus_side")
-        cop = r.get("copyability") or {}
-        px = cop.get("l5_price") or (r.get("l5") or {}).get("l5_price")
-        t = P._ep(r["receipt_utc"])
-        c = by_key.get(_key(market, side, px, t))
-        if c is not None and r.get("action_key") is not None:
-            out[r["action_key"]] = {"klass": c.get("klass")}
-    return out
+    return {c["action_key"]: {"klass": c.get("klass"),
+                              "copyable_at_receipt": c.get("copyable_at_receipt")}
+            for c in classified if c.get("action_key")}
 
 
 def main(argv=None) -> int:
