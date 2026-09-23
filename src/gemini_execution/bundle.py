@@ -65,6 +65,12 @@ MEMBERS = (
     # reports the economics a probe is judged on must not be editable without
     # invalidating the approval that judged them.
     "fill_quality.py",         # post-fill economics and the CAP counterfactual
+    # ADDED WITH PROBE B. ab_arms.maker_only_improve now runs ON THE LIVE
+    # PATH when a spec declares placement="maker_improve". It is the rule that
+    # decides whether an order is a maker order at all, so an approval that
+    # did not cover it would let the non-crossing guarantee be edited after
+    # the fact.
+    "ab_arms.py",             # the placement rule, and its maker-only refusal
     "bundle.py",               # this file, so the member list cannot be edited
 )
 
@@ -95,6 +101,7 @@ EXPECTED_AUTH_LINES = {
     "position_ledger.py": 0,
     "live_probe_spec.py": 0,
     "fill_quality.py": 0,
+    "ab_arms.py": 0,
     "bundle.py": 1,
 }
 

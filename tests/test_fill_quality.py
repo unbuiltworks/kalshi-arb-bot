@@ -138,3 +138,35 @@ def test_module_places_no_order_and_reads_no_credential():
     for bad in ("place_order", "order.place", "urlopen", "api_key",
                 "GEMINI_CANARY", "arming"):
         assert bad not in src, bad
+
+
+# ---- the settlement-aware result, beside the stop ------------------------
+
+def test_the_ep016_cohort_reconciles_to_its_recorded_plus_1_14():
+    r = FQ.settlement_economics(buy_spend="6.86", settlement_payout="8.00",
+                                fees_actual="0", rebates_paid="0",
+                                cash_out_stop_measure="10.63")
+    assert r["net_pre_rebate_usd"] == "1.14"
+    assert r["cash_out_stop_measure_usd"] == "10.63"
+
+
+def test_rebate_never_enters_the_selection_basis():
+    r = FQ.settlement_economics(buy_spend="1.00", settlement_payout="0.90",
+                                rebates_paid="0.50")
+    assert r["net_pre_rebate_usd"] == "-0.10"      # the configuration loses
+    assert r["net_with_rebate_usd"] == "0.40"      # the rebate would mask it
+    assert r["selection_basis"] == "net_pre_rebate_usd"
+
+
+def test_fees_reduce_the_result_and_are_not_assumed_zero():
+    a = FQ.settlement_economics(buy_spend="1.00", settlement_payout="1.20")
+    b = FQ.settlement_economics(buy_spend="1.00", settlement_payout="1.20",
+                                fees_actual="0.07")
+    assert a["net_pre_rebate_usd"] == "0.20"
+    assert b["net_pre_rebate_usd"] == "0.13"
+
+
+def test_sell_proceeds_are_carried_even_though_this_venue_shows_none():
+    r = FQ.settlement_economics(buy_spend="1.00", settlement_payout="0.00",
+                                sell_proceeds="0.95")
+    assert r["net_pre_rebate_usd"] == "-0.05"

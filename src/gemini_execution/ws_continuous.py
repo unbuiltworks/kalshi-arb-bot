@@ -1069,6 +1069,7 @@ class Driver:
                  now_fn: Callable[[], float] = time.time,
                  max_actions: Optional[int] = None,
                  quote_band: Optional[Sequence[float]] = None,
+                 placement: Optional[str] = None,
                  envelope: "LE.Envelope" = LE.DEFAULT) -> None:
         want_prefix = str(getattr(envelope, "cohort_prefix", "")
                           or CP.COHORT_PREFIX)
@@ -1092,6 +1093,15 @@ class Driver:
         # the surface the controller sees cannot differ between cycles.
         self._quote_band = (None if quote_band is None
                             else (float(quote_band[0]), float(quote_band[1])))
+        #: HOW THE DECIDED PRICE IS PLACED. None is the frozen behaviour.
+        #: Refused here rather than defaulted: an unrecognised placement must
+        #: not quietly become "no placement", because that is indistinguishable
+        #: after the fact from a spec whose field never arrived.
+        if placement not in (None, "maker_improve"):
+            raise CP.ProbeStop(
+                "placement %r is not declared; a placement arrives from a "
+                "declared spec or not at all" % (placement,))
+        self._placement = placement
         self._sp = (None if self._quote_band is None
                     else CP.probe_params(action_size=envelope.action_size,
                                          quote_band=self._quote_band))
@@ -1466,6 +1476,34 @@ class Driver:
                                 "surface's phase is WINDOW_WITHDRAWN. One "
                                 "contract only, no continuation into the "
                                 "next." % float(tte_s)))}
+
+        # PLACEMENT. Model A has already chosen side, size, price and
+        # classification; this changes only what order carries that price, and
+        # only when a declared spec asked for it.
+        #
+        # `maker_only_improve` returns None -- leaving the price UNCHANGED --
+        # whenever one tick better would reach the ask, so it cannot cross and
+        # cannot touch the ask. That is its contract, and it is tested. It is
+        # nevertheless RE-CHECKED below against the same book, because a
+        # crossing order is the one mistake this probe cannot make: it would
+        # be a taker order wearing a maker's label, and it would spend the
+        # spread the exercise exists to earn. A violation STOPS the window
+        # rather than sending.
+        acts = turn.get("actions") or []
+        if self._placement == "maker_improve" and acts:
+            from src.gemini_execution import ab_arms as AB
+            book = _improve_book(st)
+            acts = AB.apply_A(acts, book)
+            bad = _crossing(acts, book)
+            if bad is not None:
+                self.stop(DO_NOT_TRADE,
+                          "placement produced %s on %s against ask %s; a "
+                          "price at or through the ask is a taker order and "
+                          "is refused rather than sent"
+                          % (bad["price"], bad["leg"], bad["ask"]))
+                return {"state": self.state, "turn": turn, "plan": None,
+                        "market_state": st, "why": self.why}
+            turn = {**turn, "actions": acts}
 
         # THE PRODUCTION LIFECYCLE. Ordinary desired-price movement may no
         # longer cancel a valid resting maker order younger than the frozen
@@ -2374,3 +2412,42 @@ def _plan_summary(plan: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]
             "place": len(plan.get("place") or []),
             "cancel": len(plan.get("cancel") or []),
             "mutations": plan.get("mutations")}
+
+
+def _improve_book(st: Mapping[str, Any]) -> Dict[str, Any]:
+    """The YES/NO touches a placement rule needs, from the market state.
+
+    The engine's outcome scope is Up/Down and `ab_arms` speaks yes/no, so the
+    mapping is written out rather than assumed -- handing the engine YES/NO
+    once produced a surface with zero rungs.
+    """
+    outs = (st or {}).get("outcomes") or {}
+    up, dn = outs.get("Up") or {}, outs.get("Down") or {}
+    return {"yes": {"bid": up.get("bid"), "ask": up.get("ask")},
+            "no": {"bid": dn.get("bid"), "ask": dn.get("ask")}}
+
+
+def _crossing(actions: Sequence[Mapping[str, Any]],
+              book: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """The first action priced at or through its own ask, or None.
+
+    Independent of `maker_only_improve`: it re-reads the book and compares,
+    so a defect in the improvement rule cannot also disable the check on it.
+    An action whose ask is unreadable is NOT waved through -- it is reported,
+    because "we could not tell" and "it is safe" are different answers.
+    """
+    for a in actions or []:
+        leg = str(a.get("leg") or "").upper()
+        side = "yes" if leg == "YES" else "no"
+        ask = (book or {}).get(side, {}).get("ask")
+        px = a.get("price")
+        if px is None:
+            continue
+        if ask is None:
+            return {"leg": leg, "price": str(px), "ask": "UNREADABLE"}
+        try:
+            if D(str(px)) >= D(str(ask)):
+                return {"leg": leg, "price": str(px), "ask": str(ask)}
+        except Exception:                                      # noqa: BLE001
+            return {"leg": leg, "price": str(px), "ask": str(ask)}
+    return None

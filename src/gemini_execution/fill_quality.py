@@ -182,3 +182,59 @@ def cap_counterfactual(inv: "CP.Inventory", offered_leg: str, price: Any, *,
                    "'CAP4 never binds' can one day be replaced by a measured "
                    "statement instead of an unreachable zero."),
     }
+
+
+def settlement_economics(*, buy_spend: Any, settlement_payout: Any,
+                         sell_proceeds: Any = 0, fees_actual: Any = 0,
+                         rebates_paid: Any = 0,
+                         cash_out_stop_measure: Any = None) -> Dict[str, Any]:
+    """The economic result, beside the stop measure -- never replacing it.
+
+    THE STOP AND THE RESULT ARE DIFFERENT QUESTIONS, and conflating them cost
+    an authorized cohort four of its remaining windows. `window_loss_usd`
+    counts cash OUT from confirmed fills with no settlement credit; for a
+    strategy that buys both legs and is paid on one, that accumulates roughly
+    half of turnover as "loss" whether the cohort is making money or losing
+    it. It stopped COHORT-1 at 10.63 of a 10.00 cap while the four recorded
+    windows settled net +1.14.
+
+    So this computes the economic answer SEPARATELY. It does not feed the
+    stop, cannot relax it, and the stop keeps firing on its own conservative
+    measure.
+
+    TWO TOTALS, AND THE PRE-REBATE ONE IS THE ONE THAT SELECTS. A rebate
+    cannot make an unprofitable configuration selectable, so
+    `net_pre_rebate_usd` is what a probe is judged on and `rebates_paid_usd`
+    is reported on its own line. Only rebates the venue has marked PAID
+    belong here; an accrued or estimated rebate is not one.
+    """
+    spend = D(str(buy_spend or 0))
+    payout = D(str(settlement_payout or 0))
+    sells = D(str(sell_proceeds or 0))
+    fees = D(str(fees_actual or 0))
+    reb = D(str(rebates_paid or 0))
+    pre = payout + sells - spend - fees
+    return {
+        "label": LABEL,
+        "buy_spend_usd": str(spend),
+        "settlement_payout_usd": str(payout),
+        "sell_proceeds_usd": str(sells),
+        "fees_actual_usd": str(fees),
+        "net_pre_rebate_usd": str(pre),
+        "rebates_paid_usd": str(reb),
+        "net_with_rebate_usd": str(pre + reb),
+        "cash_out_stop_measure_usd": (None if cash_out_stop_measure is None
+                                      else str(cash_out_stop_measure)),
+        "stop_measure_vs_economics_usd": (
+            None if cash_out_stop_measure is None
+            else str(D(str(cash_out_stop_measure)) + pre)),
+        "selection_basis": "net_pre_rebate_usd",
+        "labels": (
+            "net_pre_rebate_usd is what the configuration is judged on; "
+            "rebates_paid_usd is an independently reported bonus and is "
+            "PAID-only, never accrued or estimated. fees_actual_usd is the "
+            "venue's own fee_amount from /v1/mytrades, never the published "
+            "formula. Nothing here is REALIZED until an attributable cash "
+            "movement is read back; settlement_payout is settlement-implied "
+            "until then."),
+    }

@@ -91,6 +91,22 @@ class LiveProbeSpec:
     #: this field is inside `invocation_fingerprint`: the interval cannot
     #: move without spec_sha moving, and readiness compares spec_sha.
     quote_band: Optional[Tuple[float, float]] = None
+    #: HOW THE DECIDED PRICE IS PLACED. Model A chooses side, size and price;
+    #: this decides only what order carries that price.
+    #:
+    #:   None              the frozen behaviour -- the decided price, placed.
+    #:   "maker_improve"   one tick better where that stays maker, via
+    #:                     ab_arms.maker_only_improve, which returns None (so
+    #:                     the price is UNCHANGED) whenever the improvement
+    #:                     would reach the ask. It can never cross and never
+    #:                     touch the ask.
+    #:
+    #: There is NO module default and NO environment variable: placement
+    #: arrives from a declared spec or not at all, and it is inside
+    #: `invocation_fingerprint`, so it cannot move without spec_sha moving and
+    #: readiness comparing a different hash. That is the same treatment
+    #: `quote_band` gets, for the same reason: this is a behavioural change.
+    placement: Optional[str] = None
 
     # ---- resolution -----------------------------------------------------
 
@@ -157,7 +173,8 @@ class LiveProbeSpec:
                 "entry_tte_band": self.entry_tte_band,
                 "cohort": self.cohort, "action_size": self.action_size,
                 "ledger": self.ledger, "bounds": self.bounds(),
-                **self._quote_band_fingerprint()}
+                **self._quote_band_fingerprint(),
+                **self._placement_fingerprint()}
 
     def _quote_band_fingerprint(self) -> Dict[str, Any]:
         """The quoting interval's contribution to spec_sha, and its absence.
@@ -176,6 +193,19 @@ class LiveProbeSpec:
             return {}
         return {"quote_band": [float(self.quote_band[0]),
                                float(self.quote_band[1])]}
+
+    def _placement_fingerprint(self) -> Dict[str, Any]:
+        """Placement's contribution to spec_sha, and its absence.
+
+        Absent when None, for exactly the reason `quote_band` is: including an
+        explicit null would move the hash of every reviewed spec that never
+        had a placement -- among them 223b81ed..., the identity the BTC15m
+        probe is approved against -- for a refactor that changed none of their
+        behaviour.
+        """
+        if self.placement is None:
+            return {}
+        return {"placement": str(self.placement)}
 
     def spec_sha(self) -> str:
         return hashlib.sha256(json.dumps(
@@ -201,10 +231,18 @@ class LiveProbeSpec:
 
 
 #: EVERY declared probe. A spec id that is not here is refused.
+#: the only placements that exist. A spec naming anything else is refused at
+#: import, not at order time.
+PLACEMENTS = (None, "maker_improve")
+
 SPECS: Dict[str, LiveProbeSpec] = {}
 
 
 def _declare(spec: LiveProbeSpec) -> LiveProbeSpec:
+    if spec.placement not in PLACEMENTS:
+        raise ValueError(
+            "spec %s names placement %r, which is not declared; the set is %s"
+            % (spec.spec_id, spec.placement, PLACEMENTS))
     SPECS[spec.spec_id] = spec
     return spec
 
@@ -330,6 +368,34 @@ BTC5M_Q1 = _declare(LiveProbeSpec(
     spec_id="btc5m_q1", family="btc5m", envelope="live_q1",
     entry_tte_band="240:280", cohort=None, auth_id=SENTINEL_AUTH,
     action_size="1"))
+
+#: PROBE B. PROPOSED, NOT AUTHORIZED. Identical to BTC5M_Q1 in family,
+#: envelope, entry band, q, cohort prefix, rung count and every risk bound.
+#: The ONLY difference is `placement`, and the different spec_sha is the
+#: point: this is a different experiment and the hash says so before anyone
+#: runs it.
+#:
+#: WHY. The BTC5m control rests AT the bid in a book whose median width is
+#: 0.280, and is not reached: 25 hypothetical OPEN fills in 113 shadow
+#: windows. The exposure-matched EXEC_A_PLUS_B arm -- same band, same cycles,
+#: 18 against 19 rested rung-cycles in the sampled window -- carried 155 first
+#: fills against the control's 47 and 52 completions against 6, with the
+#: mechanism visible in its own counter: 39 of 40 fills rest on a rung with
+#: nothing in front of it. That is queue position, not aggression.
+#:
+#: WHAT IT COSTS, stated because a fill count is not a result: one tick better
+#: is one tick of basis given up on every improved rung, so the pair cost
+#: rises even as the fill rate does. Whether that trade is worth making is
+#: exactly what this probe measures, on the same fill_quality instrumentation
+#: as Probe A, and it is NOT decided by the fill count.
+#:
+#: NOT CHANGED: side, size, timing, classification, the CAP-2 LIVE_Q1
+#: envelope, $2.50 committed / $2.00 residual, two working orders, one market,
+#: 12 actions, the 30s rest floor, both settlement guards, maker/post-only.
+BTC5M_Q1_IMPROVE = _declare(LiveProbeSpec(
+    spec_id="btc5m_q1_improve", family="btc5m", envelope="live_q1",
+    entry_tte_band="240:280", cohort=None, auth_id=SENTINEL_AUTH,
+    action_size="1", placement="maker_improve"))
 
 
 def get(spec_id: str) -> LiveProbeSpec:
