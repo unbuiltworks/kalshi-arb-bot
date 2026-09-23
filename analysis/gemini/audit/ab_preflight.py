@@ -152,9 +152,20 @@ def checks():
        str(b.placement))
     ck("A placement is the frozen one", a.placement is None, str(a.placement))
 
-    # arming state
-    ck("AUTHORIZED_BUNDLE is None (not armed)",
-       bundle.AUTHORIZED_BUNDLE is None, str(bundle.AUTHORIZED_BUNDLE))
+    # arming state. Before the owner's GO this asserted AUTHORIZED_BUNDLE was
+    # None; after it, the meaningful check is that the installed value is the
+    # EXACT hash approved and that it still equals the bundle actually running
+    # -- which is what `authorized()` compares. A file edited after review
+    # breaks the equality and the run refuses at preflight.
+    APPROVED = ("48ec77ac64fc412a18a311f3c18bb4aeeb464452ec8573d70b"
+                "4e4bdd8f3cb279")
+    ck("AUTHORIZED_BUNDLE == the approved hash",
+       bundle.AUTHORIZED_BUNDLE == APPROVED, str(bundle.AUTHORIZED_BUNDLE))
+    ck("running bundle == authorized bundle", bundle.authorized(),
+       "; ".join(bundle.state()["why_not"]) or "match")
+    from src.gemini_execution import arming as _AR
+    ck("EXPECTED_AUTH_ID == the approved identifier",
+       _AR.EXPECTED_AUTH_ID == AUTH_ID, _AR.EXPECTED_AUTH_ID)
     ck("bundle normalizes, 15 members", len(bundle.MEMBERS) == 15,
        bundle.bundle_sha())
     return out
