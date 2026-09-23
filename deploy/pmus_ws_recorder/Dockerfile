@@ -58,6 +58,8 @@ COPY scripts/pmus_candidate_tape_readonly.py scripts/pmus_candidate_tape_readonl
 COPY scripts/pmus_auth_preflight_readonly.py scripts/pmus_auth_preflight_readonly.py
 COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/pmus_fees.py src/pmus_fees.py
+COPY scripts/l5_raw_tape_observation.py scripts/l5_raw_tape_observation.py
+COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=ws-recorder \

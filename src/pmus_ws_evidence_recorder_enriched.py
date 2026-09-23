@@ -516,9 +516,39 @@ def preflight_on_start() -> Optional[Any]:
     return t
 
 
+#: Optional one-shot BLINDNESS MEASUREMENT over the raw tape on this volume.
+#: Read-only: it opens the tape, builds its own state dict and shares nothing
+#: with the running recorder. Daemon thread, so replaying a large tape can
+#: never delay authenticated capture. Off unless L5_RAW_OBS_ON_START is set.
+RAW_OBS_ENV = "L5_RAW_OBS_ON_START"
+
+
+def raw_observation_on_start() -> Optional[Any]:
+    if not str(os.getenv(RAW_OBS_ENV, "")).strip():
+        return None
+    import threading
+
+    def run() -> None:
+        try:
+            from scripts import l5_raw_tape_observation as obs
+            argv = ["--max-age-s", os.getenv("L5_RAW_OBS_MAX_AGE_S", "10800")]
+            since = os.getenv("L5_RAW_OBS_SINCE", "").strip()
+            if since:
+                argv += ["--since", since]
+            obs.main(argv)
+        except BaseException as exc:                           # noqa: BLE001
+            print("L5_AUTH_OBSERVATION {\"error\":\"%s\"}"
+                  % type(exc).__name__, flush=True)
+
+    t = threading.Thread(target=run, name="l5-raw-obs", daemon=True)
+    t.start()
+    return t
+
+
 def main() -> int:
     install()
     preflight_on_start()
+    raw_observation_on_start()
     return base.main()
 
 
