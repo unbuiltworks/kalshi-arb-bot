@@ -100,15 +100,22 @@ def prove_dir_semantics(by_market: Dict[str, List[dict]],
     checked = 0
     for slug, rows in by_market.items():
         snaps = sorted(books.get(slug) or [], key=lambda b: b["t"])
-        if not snaps:
-            continue
         for r in rows:
             t = float(r.get("t") or 0)
-            prior = [b for b in snaps if b["t"] <= t]
-            if not prior:
-                continue
-            b = prior[-1]
-            bid, ask = b.get("bid"), b.get("ask")
+            # THE BOOK ON THE ROW WINS. From 2026-09-23 the recorder stamps
+            # the authenticated top of book onto each trade at the instant it
+            # arrives. That is the book the print executed into; the external
+            # snapshot is a ~30s cache of a different object and testing
+            # against it produced 46.2% forward / 35.3% inverted with 18.5%
+            # of prints inside the spread -- noise, not a verdict.
+            if r.get("bid_at_trade") and r.get("ask_at_trade"):
+                bid, ask = r["bid_at_trade"], r["ask_at_trade"]
+            else:
+                prior = [b for b in snaps if b["t"] <= t]
+                if not prior:
+                    continue
+                b = prior[-1]
+                bid, ask = b.get("bid"), b.get("ask")
             if bid is None or ask is None:
                 continue
             try:
