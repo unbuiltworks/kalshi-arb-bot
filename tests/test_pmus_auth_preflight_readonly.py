@@ -30,8 +30,8 @@ class FakeHTTP:
     def __init__(self, **over):
         self.calls = []
         self.data = {
-            "/v1/account": {"id": "acct-123"},
-            "/v1/markets/%s" % SLUG: {"market": {
+            "/v1/account/balances": {"accountId": "acct-123"},
+            "/v1/markets/%s/bbo" % SLUG: {"marketData": {
                 "slug": SLUG, "seriesSlug": "btc-updown-15m",
                 "state": "MARKET_STATE_OPEN",
                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
@@ -39,8 +39,8 @@ class FakeHTTP:
             "/v1/markets/%s/book" % SLUG: {"marketData": {
                 "bid": "0.40", "ask": "0.60",
                 "bid_shares": "100", "ask_shares": "100"}},
-            "/v1/positions": {"positions": []},
-            "/v1/orders": {"orders": []},
+            "/v1/portfolio/positions": {"positions": []},
+            "/v1/orders/open": {"orders": []},
         }
         self.data.update(over)
 
@@ -85,8 +85,8 @@ def test_the_script_exposes_no_submit_or_cancel_path():
 
 def test_a_body_is_never_forwarded_even_on_a_get():
     inner = FakeHTTP()
-    P.GetOnly(inner).request("GET", "/v1/account", {"qty": "99"})
-    assert inner.calls == [("GET", "/v1/account")]
+    P.GetOnly(inner).request("GET", "/v1/account/balances", {"qty": "99"})
+    assert inner.calls == [("GET", "/v1/account/balances")]
 
 
 def test_only_gets_are_issued_during_a_full_preflight(creds):
@@ -117,29 +117,29 @@ def test_missing_credentials_fail_closed(monkeypatch):
 
 
 @pytest.mark.parametrize("path,bad,check", [
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+    ("/v1/markets/%s/bbo" % SLUG,
+     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "state": "MARKET_STATE_EXPIRED",
                  "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
                  "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
      "market_open_tradable"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+    ("/v1/markets/%s/bbo" % SLUG,
+     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "state": "MARKET_STATE_OPEN",
                  "outcomes": [{"outcome": "YES"}, {"outcome": "NO"}],
                  "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
      "outcome_mapping_is_up_down"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+    ("/v1/markets/%s/bbo" % SLUG,
+     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "state": "MARKET_STATE_OPEN",
                  "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
                  "orderMinQuantity": "1"}},
      "tick_constraint_known"),
     ("/v1/markets/%s/book" % SLUG, {"marketData": {"bid": None, "ask": "0.6"}},
      "book_two_sided"),
-    ("/v1/orders", {"orders": [{"id": "stale-1"}]},
+    ("/v1/orders/open", {"orders": [{"id": "stale-1"}]},
      "no_unexpected_open_orders"),
-    ("/v1/positions", {"positions": [{"market": SLUG, "side": "UP"}]},
+    ("/v1/portfolio/positions", {"positions": [{"market": SLUG, "side": "UP"}]},
      "positions_reconciled"),
 ])
 def test_each_gate_fails_closed(creds, path, bad, check):
@@ -150,7 +150,7 @@ def test_each_gate_fails_closed(creds, path, bad, check):
 
 def test_an_unreachable_endpoint_fails_its_gate_rather_than_skipping_it(creds):
     http = FakeHTTP()
-    http.data.pop("/v1/account")                 # raises
+    http.data.pop("/v1/account/balances")                 # raises
     rep = P.preflight(SLUG, P.GetOnly(http), now=NOW)
     assert rep["preflight"] == "FAILED"
     assert "account_readable" in failed(rep)

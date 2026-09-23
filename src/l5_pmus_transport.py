@@ -89,23 +89,33 @@ class PmusTransport:
         return self.http.request("GET", path, None, base)
 
     def account(self) -> Dict[str, Any]:
-        return self._get("/v1/account") or {}
+        """/v1/account/balances is the route this venue serves.
+
+        An earlier version read /v1/account, /v1/positions and /v1/orders and
+        got 404, 404 and 501. The 501 is the tell: a collection that exists
+        but does not answer GET. Those are the paths pmus_q1_executor has
+        always used for live campaigns; these now match it.
+        """
+        return self._get("/v1/account/balances") or {}
 
     def market(self, slug: str) -> Dict[str, Any]:
-        r = self._get("/v1/markets/%s" % slug, base=Q1.GATEWAY) or {}
-        return r.get("market") or r.get("marketData") or r
+        r = self._get("/v1/markets/%s/bbo" % slug, base=Q1.GATEWAY) or {}
+        return r.get("marketData") or r.get("market") or r
 
     def book(self, slug: str) -> Dict[str, Any]:
         r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}
         return r.get("marketData") or r
 
     def positions(self) -> List[dict]:
-        r = self._get("/v1/positions") or {}
-        return r.get("positions") if isinstance(r, Mapping) else (r or [])
+        r = self._get("/v1/portfolio/positions") or {}
+        return (r.get("positions") or []) if isinstance(r, Mapping) \
+            else (r or [])
 
     def open_orders(self) -> List[dict]:
-        r = self._get("/v1/orders") or {}
-        return r.get("orders") if isinstance(r, Mapping) else (r or [])
+        r = self._get("/v1/orders/open") or {}
+        if isinstance(r, Mapping):
+            return r.get("orders") or r.get("openOrders") or []
+        return r or []
 
     # ------------------------------------------------------------ preflight
 
@@ -133,8 +143,15 @@ class PmusTransport:
                 acct = self.account()
             except Exception as exc:                           # noqa: BLE001
                 return self._fail(checks, gate, "account_readable", exc)
-            ident = (acct.get("id") or acct.get("accountId")
+            ident = (acct.get("accountId") or acct.get("id")
                      or acct.get("userId") or acct.get("email"))
+            if ident is None:
+                for e in (acct.get("balances") or []):
+                    if isinstance(e, Mapping):
+                        ident = (e.get("accountId") or e.get("account")
+                                 or e.get("userId"))
+                        if ident:
+                            break
             ok &= gate("account_identity_resolved", bool(ident), ident)
             if expect_account is not None:
                 ok &= gate("account_matches_expected",
@@ -294,7 +311,13 @@ class PmusTransport:
                 "type": "LIMIT" if intent.get("mode") == "MAKER" else "MARKET"}
         return self.http.request("POST", "/v1/orders", body, Q1.API) or {}
 
-    def cancel(self, client_order_id: str) -> Dict[str, Any]:
+    def cancel(self, order_id: str) -> Dict[str, Any]:
+        """Cancel by the VENUE order id, via the route the venue serves.
+
+        POST /v1/order/{id}/cancel, not DELETE /v1/orders/{id}. The argument
+        is the venue's own order id returned by submit, not our deterministic
+        client order id -- passing the latter would silently cancel nothing.
+        """
         self._require_armed()
         return self.http.request(
-            "DELETE", "/v1/orders/%s" % client_order_id, None, Q1.API) or {}
+            "POST", "/v1/order/%s/cancel" % order_id, {}, Q1.API) or {}

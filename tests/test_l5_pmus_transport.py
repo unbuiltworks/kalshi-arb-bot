@@ -26,8 +26,8 @@ class FakeHTTP:
     def __init__(self, **over):
         self.calls = []
         self.data = {
-            "/v1/account": {"id": "acct-123"},
-            "/v1/markets/%s" % SLUG: {"market": {
+            "/v1/account/balances": {"accountId": "acct-123"},
+            "/v1/markets/%s/bbo" % SLUG: {"marketData": {
                 "slug": SLUG, "seriesSlug": "btc-updown-15m",
                 "state": "MARKET_STATE_OPEN",
                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
@@ -35,8 +35,8 @@ class FakeHTTP:
             "/v1/markets/%s/book" % SLUG: {"marketData": {
                 "bid": "0.40", "ask": "0.60",
                 "bid_shares": "100", "ask_shares": "100"}},
-            "/v1/positions": {"positions": []},
-            "/v1/orders": {"orders": []},
+            "/v1/portfolio/positions": {"positions": []},
+            "/v1/orders/open": {"orders": []},
         }
         self.data.update(over)
 
@@ -110,20 +110,20 @@ def test_owner_token_must_match_the_session_id(creds, monkeypatch):
 # ------------------------------------------------------------ gates fail shut
 
 @pytest.mark.parametrize("path,bad,check", [
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+    ("/v1/markets/%s/bbo" % SLUG,
+     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "state": "MARKET_STATE_EXPIRED",
                  "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
                  "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
      "market_open_tradable"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+    ("/v1/markets/%s/bbo" % SLUG,
+     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "state": "MARKET_STATE_OPEN",
                  "outcomes": [{"outcome": "YES"}, {"outcome": "NO"}],
                  "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
      "outcome_mapping_is_up_down"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+    ("/v1/markets/%s/bbo" % SLUG,
+     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "state": "MARKET_STATE_OPEN",
                  "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
                  "orderMinQuantity": "1"}},
@@ -131,7 +131,7 @@ def test_owner_token_must_match_the_session_id(creds, monkeypatch):
     ("/v1/markets/%s/book" % SLUG,
      {"marketData": {"bid": None, "ask": "0.60"}},
      "book_two_sided"),
-    ("/v1/orders", {"orders": [{"id": "stale-1"}]},
+    ("/v1/orders/open", {"orders": [{"id": "stale-1"}]},
      "no_unexpected_open_orders"),
 ])
 def test_each_gate_fails_closed(creds, path, bad, check):
@@ -153,9 +153,9 @@ def test_missing_credentials_fail_closed(monkeypatch):
 
 
 def test_an_unreadable_endpoint_is_a_failure_not_a_pass(creds):
-    t = T.PmusTransport(market_slug=SLUG, http=FakeHTTP(**{"/v1/account": None}),
+    t = T.PmusTransport(market_slug=SLUG, http=FakeHTTP(**{"/v1/account/balances": None}),
                         now_fn=NOW)
-    t.http.data.pop("/v1/account")           # raises on read
+    t.http.data.pop("/v1/account/balances")           # raises on read
     with pytest.raises(T.PreflightFailed) as e:
         t.preflight()
     assert "account_readable" in str(e.value)
