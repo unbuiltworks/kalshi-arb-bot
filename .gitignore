@@ -61,3 +61,16 @@ analysis/gemini/p10_capture/*.partial
 data/pmus_btc15m/
 data/l5_pmus_realtime/
 data/pmus_auth_trades/
+
+# Local working copies of collected tapes. The evidence that matters is
+# committed under analysis/pmus/evidence/ -- these are the scratch paths the
+# harvest scripts write to and are byte-identical duplicates of it, so
+# committing them would double ~16MB for nothing. The container is ephemeral;
+# anything worth keeping goes to analysis/pmus/evidence/ and is committed.
+data/l5_pmus_realtime/
+data/pmus_auth_trades/
+data/pmus_btc15m/
+
+# P10 decoder capture. That workstream is closed and GATE FAILED; its capture
+# is not revived, merged or modified.
+analysis/gemini/p10_capture/
