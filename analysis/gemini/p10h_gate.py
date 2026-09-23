@@ -66,7 +66,48 @@ def captures():
                   glob.glob(os.path.join(CAPDIR, "*.jsonl.partial")))
 
 
-def score(family="BTC", max_stale_s=5.0):
+#: HOW MANY BOOKS A TRADE IS COMPARED AGAINST.
+#:
+#:   PREV_NEXT  only the bracketing pair -- what p10b_decode.classify_one has
+#:              always done, and what the RUNNING pre-registered gate is
+#:              scored with. Left as the default so the gate does not move.
+#:   SPEC       every book within max_stale_s, which is what
+#:              P10_DECODER_SPEC.md 3 actually says ("exists a book ...
+#:              within max_stale_s, before or after").
+#:
+#: They differ, and the difference was found by the independent verifier:
+#: examining fewer books finds fewer H2-compatible readings, so PREV_NEXT
+#: reports MORE decoded rows and LESS ambiguity than the specification does.
+#: SPEC is therefore the STRICTER reading and is harder to pass, which is why
+#: exposing it is not a weakening of the gate.
+PREV_NEXT, SPEC = "PREV_NEXT", "SPEC"
+
+
+def _classify_spec(tr, books, max_stale_s):
+    """Spec-conformant classification: ANY book inside the staleness window."""
+    rows = books.get(tr["symbol"]) or []
+    t = (tr.get("tms") or 0) / 1000.0
+    if not rows:
+        #: NOT stale. This capture never polled this symbol, so the trade is
+        #: outside its coverage rather than observed-and-unresolvable, and it
+        #: must not enter the `observed` denominator. Collapsing the two
+        #: inflated STALE by 14 rows and was caught by the independent
+        #: verifier disagreeing on the ambiguous rate.
+        return {"label": "NO_BOOK", "price": tr.get("price")}
+    if t < rows[0]["t_recv"]:
+        return {"label": "PRE_CAPTURE", "price": tr.get("price")}
+    near = [r for r in rows if abs(r["t_recv"] - t) <= max_stale_s]
+    if not near:
+        return {"label": "STALE", "price": tr.get("price")}
+    p = F(str(tr["price"]))
+    h1 = any(B.inside(p, r) for r in near)
+    h2 = any(B.inside(F(1) - p, r) for r in near)
+    lab = ("H1" if (h1 and not h2) else "H2" if (h2 and not h1)
+           else "AMBIGUOUS_BOTH" if (h1 and h2) else "AMBIGUOUS_NEITHER")
+    return {"label": lab, "price": tr.get("price")}
+
+
+def score(family="BTC", max_stale_s=5.0, bracket=PREV_NEXT):
     """Returns the scorecard as a dict. Nothing is printed here."""
     #: primary decoder (p10b) and independent decoder (p10e), each run over
     #: every capture, then merged on (symbol, tid).
@@ -81,7 +122,9 @@ def score(family="BTC", max_stale_s=5.0):
             key = (tr["symbol"], tr.get("tid"))
             if key[1] is None or not tr["symbol"].split("-")[-2:]:
                 continue
-            r = B.classify_one(tr, books, max_stale_s)
+            r = (B.classify_one(tr, books, max_stale_s)
+                 if bracket == PREV_NEXT
+                 else _classify_spec(tr, books, max_stale_s))
             #: a row decoded in ONE capture stays decoded. Overlapping
             #: recorders see the same print with different book freshness, and
             #: the freshest observation is the informative one.
