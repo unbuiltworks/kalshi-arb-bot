@@ -153,9 +153,11 @@ def report(rows: List[dict]) -> Dict[str, Any]:
             "pct_same_pmus_side_available": pct(side_ok, n),
             "pct_still_maker_copyable": pct(cop.get("MAKER_COPYABLE", 0), n),
             "pct_requiring_crossing": pct(cop.get("REQUIRES_CROSSING", 0), n),
-            "pct_economically_inadmissible": pct(
-                cop.get("BAND_INADMISSIBLE", 0) + cop.get("NO_BOOK", 0)
-                + cop.get("PRICE_MOVED_AWAY", 0), n),
+            # VENUE facts only. The entry band is OUR control and is
+            # reported on its own axis below; folding it in here would let a
+            # profitability heuristic decide what PMUS was capable of.
+            "pct_venue_unreproducible": pct(
+                cop.get("NO_BOOK", 0) + cop.get("PRICE_MOVED_AWAY", 0), n),
             "source_to_pmus_price_delta": {
                 "n": len(deltas),
                 "p10": q(deltas, 0.1), "p50": q(deltas, 0.5),
@@ -164,6 +166,19 @@ def report(rows: List[dict]) -> Dict[str, Any]:
                 "note": "L5's price minus our own touch, in dollars; "
                         "positive means his price is above our bid",
             },
+        },
+        "safety_overlay": {
+            "control": "entry_band 0.20-0.80",
+            "would_block": sum(
+                1 for r in rt
+                if (r.get("safety_overlay") or {}).get("would_block")),
+            "pct_blocked": pct(sum(
+                1 for r in rt
+                if (r.get("safety_overlay") or {}).get("would_block")), n),
+            "note": ("SEPARATE AXIS. These are actions our own controls would "
+                     "refuse in a live probe. The venue would have taken them "
+                     "and L5 did take them, so they are NOT evidence that "
+                     "PMUS cannot reproduce L5."),
         },
         "l5_actual_behaviour": {
             "relations": dict(rels),

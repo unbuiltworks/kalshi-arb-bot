@@ -69,7 +69,20 @@ L5_SERIES = "btc-updown-15m"
 PMUS_SERIES = "btc-updown-15m"
 WINDOW_S = 900
 
-#: the frozen sports eligibility band. NOT widened here; recorded when it binds.
+#: THE BAND IS A SAFETY OVERLAY, NOT A DEFINITION OF AN L5 ACTION.
+#:
+#: It was previously a copyability CLASS -- an L5 trade at 0.05 came back
+#: "BAND_INADMISSIBLE", which quietly asserted that PMUS could not reproduce
+#: it. PMUS can: the venue quotes 0.01-0.99 and would have taken the order.
+#: What the band does is stop US from executing it in a bounded live probe,
+#: which is a fact about our risk appetite and not about the venue or about
+#: what L5 did.
+#:
+#: So it is recorded on its own axis. `copyability` answers "could PMUS have
+#: reproduced this action"; `safety_overlay` answers "would our own controls
+#: have let us". Conflating them contaminates the replication measurement
+#: with a profitability heuristic, which is the failure this separation
+#: exists to prevent.
 BAND_LO, BAND_HI = D("0.20"), D("0.80")
 TICK = D("0.01")
 
@@ -234,7 +247,6 @@ def copyability(action: Mapping[str, Any],
       REQUIRES_CROSSING    reaching L5's price means taking, which pays the
                            taker fee and gives up the spread the whole exercise
                            exists to earn
-      BAND_INADMISSIBLE    the price is outside the frozen 0.20-0.80 band
       PRICE_MOVED_AWAY     the side exists but L5's price is no longer
                            reachable at all on the current book
     """
@@ -276,11 +288,6 @@ def copyability(action: Mapping[str, Any],
                 "l5_price": str(l5_price),
                 "price_delta_vs_our_touch": str(l5_price - our_bid)})
 
-    if not (BAND_LO <= l5_price <= BAND_HI):
-        out["klass"] = "BAND_INADMISSIBLE"
-        out["why"] = ("L5's price is outside the frozen band; the band is NOT "
-                      "widened here, it is recorded as binding")
-        return out
     if l5_price >= our_ask:
         out["klass"] = "REQUIRES_CROSSING"
         out["why"] = ("L5's price is at or through our ask, so copying it "
@@ -296,6 +303,30 @@ def copyability(action: Mapping[str, Any],
 
 
 # ------------------------------------------------------------------ inventory
+
+def safety_overlay(action: Mapping[str, Any]) -> Dict[str, Any]:
+    """Would OUR controls have permitted this action in a live probe?
+
+    Separate from copyability on purpose. This may block execution; it may
+    never be read as "L5 would not have done it" or "PMUS could not have
+    reproduced it".
+    """
+    lp = action.get("l5_price")
+    if lp is None:
+        return {"in_band": None, "would_block": None,
+                "band": [str(BAND_LO), str(BAND_HI)],
+                "why": "no price"}
+    px = D(lp)
+    inb = BAND_LO <= px <= BAND_HI
+    return {
+        "band": [str(BAND_LO), str(BAND_HI)],
+        "in_band": inb,
+        "would_block": not inb,
+        "control": "entry_band",
+        "note": ("a live probe would refuse this price. The venue would not, "
+                 "and L5 took it." if not inb else "within our bounds"),
+    }
+
 
 class Book:
     """q=1 behavioural inventory. One per TRACK; never merged."""
@@ -573,6 +604,7 @@ class Observer:
         bbo, age = self.pmus_now(slug)
         act = l5_to_pmus_action(r)
         cop = copyability(act, bbo)
+        overlay = safety_overlay(act)
 
         w = self.windows.setdefault(ws, {
             "window_start": ws, "pmus_slug": slug,
@@ -599,6 +631,10 @@ class Observer:
         w["l5_relations"][l5_rel] += 1
 
         # MIRROR_RAW: only advances where the action was actually copyable
+        # MIRROR_RAW follows L5 where PMUS PERMITS IT, and the safety
+        # overlay is reported beside it rather than applied here. Applying it
+        # would delete L5 actions from the replication measurement, which is
+        # the thing being measured.
         mirror_rel = None
         if (not backlog and cop["klass"] == "MAKER_COPYABLE"
                 and not act["is_sell"]):
@@ -638,6 +674,10 @@ class Observer:
                          "shares_traded": bbo.get("sharesTraded"),
                          "state": bbo.get("state")}},
             "copyability": cop,
+            "safety_overlay": overlay,
+            "axes_note": ("copyability is a fact about PMUS; safety_overlay "
+                          "is a fact about OUR controls. Neither may rewrite "
+                          "the L5_NATIVE decision above."),
             "mirror_relation": mirror_rel,
             "interaction": clf.classify(
                 {"desired_price": act.get("l5_price"),
