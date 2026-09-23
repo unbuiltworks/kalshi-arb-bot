@@ -1,0 +1,847 @@
+{
+ "label": "L5_FAITHFUL_FIDELITY_V1",
+ "phase": "PHASE_1_SHADOW_ONLY",
+ "lambda_ref": "0.04429678848283498857628502997",
+ "translation_rule": "parameter-free: reproduce every L5 action by the closest executable means at our receipt instant and MEASURE the cost. No threshold, band, ceiling or discretionary branch exists in it, so nothing in it can be tuned to these windows.",
+ "windows": {
+  "16:15": {
+   "venue_only": {
+    "action_reproduction": {
+     "l5_actions": 49,
+     "reproduced": 12,
+     "rate_pct": 24.5
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "DOWN",
+     "first_side_agrees": false,
+     "native_longest_run": 14,
+     "track_longest_run": 9,
+     "native_up_share_pct": 75.5,
+     "track_up_share_pct": 75.0
+    },
+    "inventory_path_agreement": {
+     "path_correlation": 0.6337,
+     "native_final_imbalance": 21.471,
+     "track_final_imbalance": 3.042,
+     "native_max_abs_imbalance": 21.471,
+     "track_max_abs_imbalance": 6.645,
+     "amplitude_ratio": 0.309
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": true,
+     "crossing_agrees": true,
+     "native_overshoot": 2.87,
+     "track_overshoot": 3.563,
+     "direction": "MATCH"
+    },
+    "matched_vs_residual": {
+     "track_matched": 7.165656965669988,
+     "track_residual": 3.042289568106312,
+     "track_residual_direction": "UP",
+     "native_matched_actions": 12,
+     "native_final_imbalance": 21.471
+    },
+    "maker_taker_mix": {
+     "TAKER": 12
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -0.63,
+     "slippage_per_reproduced_action": -0.0525,
+     "committed_usd": 6.7375,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.2674,
+     "maker_rebate_accrual_usd": 0.0,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 0.8142,
+     "pair_cost_max": 0.95,
+     "pair_cost_min": 0.7968,
+     "matched_pair_pnl_usd": 1.3311,
+     "residual_pnl_usd": -0.9029,
+     "total_settlement_implied_shadow_usd": 0.1608,
+     "settlement_yes_value": "0.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 37
+     },
+     "detail": {
+      "PMUS_TRANSLATION:QUEUE_AMBIGUOUS": 3,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 28,
+      "PMUS_TRANSLATION:NO_BOOK": 6
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "with_safety_overlay": {
+    "action_reproduction": {
+     "l5_actions": 49,
+     "reproduced": 11,
+     "rate_pct": 22.4
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "DOWN",
+     "first_side_agrees": false,
+     "native_longest_run": 14,
+     "track_longest_run": 8,
+     "native_up_share_pct": 75.5,
+     "track_up_share_pct": 72.7
+    },
+    "inventory_path_agreement": {
+     "path_correlation": 0.683,
+     "native_final_imbalance": 21.471,
+     "track_final_imbalance": 2.478,
+     "native_max_abs_imbalance": 21.471,
+     "track_max_abs_imbalance": 6.645,
+     "amplitude_ratio": 0.309
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": true,
+     "crossing_agrees": true,
+     "native_overshoot": 2.87,
+     "track_overshoot": 2.999,
+     "direction": "MATCH"
+    },
+    "matched_vs_residual": {
+     "track_matched": 7.165656965669988,
+     "track_residual": 2.4779158803986707,
+     "track_residual_direction": "UP",
+     "native_matched_actions": 12,
+     "native_final_imbalance": 21.471
+    },
+    "maker_taker_mix": {
+     "TAKER": 11
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -0.63,
+     "slippage_per_reproduced_action": -0.05728,
+     "committed_usd": 6.6303,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.2614,
+     "maker_rebate_accrual_usd": 0.0,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 0.8205,
+     "pair_cost_max": 0.95,
+     "pair_cost_min": 0.803,
+     "matched_pair_pnl_usd": 1.2863,
+     "residual_pnl_usd": -0.7509,
+     "total_settlement_implied_shadow_usd": 0.274,
+     "settlement_yes_value": "0.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 37,
+      "SAFETY_OVERLAY": 1
+     },
+     "detail": {
+      "PMUS_TRANSLATION:QUEUE_AMBIGUOUS": 3,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 28,
+      "SAFETY_OVERLAY:BAND": 1,
+      "PMUS_TRANSLATION:NO_BOOK": 6
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "settlement_yes_value": "0.0000"
+  },
+  "16:30": {
+   "venue_only": {
+    "action_reproduction": {
+     "l5_actions": 91,
+     "reproduced": 49,
+     "rate_pct": 53.8
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "UP",
+     "first_side_agrees": true,
+     "native_longest_run": 35,
+     "track_longest_run": 35,
+     "native_up_share_pct": 78.0,
+     "track_up_share_pct": 85.7
+    },
+    "inventory_path_agreement": {
+     "path_correlation": 0.8414,
+     "native_final_imbalance": 42.017,
+     "track_final_imbalance": 26.914,
+     "native_max_abs_imbalance": 56.68,
+     "track_max_abs_imbalance": 26.958,
+     "amplitude_ratio": 0.476
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": false,
+     "track_crossed": true,
+     "crossing_agrees": false,
+     "native_overshoot": 0.0,
+     "track_overshoot": 7.493,
+     "direction": "TRACK_OVER_REPRODUCES"
+    },
+    "matched_vs_residual": {
+     "track_matched": 14.593249435215945,
+     "track_residual": 26.91372163898117,
+     "track_residual_direction": "UP",
+     "native_matched_actions": 20,
+     "native_final_imbalance": 42.017
+    },
+    "maker_taker_mix": {
+     "TAKER": 45,
+     "MAKER": 4
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -1.2199,
+     "slippage_per_reproduced_action": -0.0249,
+     "committed_usd": 17.2541,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.6052,
+     "maker_rebate_accrual_usd": 0.0024,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 0.7859,
+     "pair_cost_max": 1.2099,
+     "pair_cost_min": 0.7846,
+     "matched_pair_pnl_usd": 3.1241,
+     "residual_pnl_usd": -5.785,
+     "total_settlement_implied_shadow_usd": -3.2637,
+     "settlement_yes_value": "0.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 42
+     },
+     "detail": {
+      "PMUS_TRANSLATION:NO_BOOK": 17,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 25
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "with_safety_overlay": {
+    "action_reproduction": {
+     "l5_actions": 91,
+     "reproduced": 18,
+     "rate_pct": 19.8
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "UP",
+     "first_side_agrees": true,
+     "native_longest_run": 35,
+     "track_longest_run": 7,
+     "native_up_share_pct": 78.0,
+     "track_up_share_pct": 66.7
+    },
+    "inventory_path_agreement": {
+     "path_correlation": -0.7291,
+     "native_final_imbalance": 42.017,
+     "track_final_imbalance": -3.064,
+     "native_max_abs_imbalance": 56.68,
+     "track_max_abs_imbalance": 7.493,
+     "amplitude_ratio": 0.132
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": false,
+     "track_crossed": true,
+     "crossing_agrees": false,
+     "native_overshoot": 0.0,
+     "track_overshoot": 7.493,
+     "direction": "TRACK_OVER_REPRODUCES"
+    },
+    "matched_vs_residual": {
+     "track_matched": 11.484210099667772,
+     "track_residual": -3.064299579180509,
+     "track_residual_direction": "DOWN",
+     "native_matched_actions": 20,
+     "native_final_imbalance": 42.017
+    },
+    "maker_taker_mix": {
+     "TAKER": 14,
+     "MAKER": 4
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -0.2194,
+     "slippage_per_reproduced_action": -0.01219,
+     "committed_usd": 13.8679,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.4015,
+     "maker_rebate_accrual_usd": 0.0024,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 1.0556,
+     "pair_cost_max": 1.2099,
+     "pair_cost_min": 1.0556,
+     "matched_pair_pnl_usd": -0.638,
+     "residual_pnl_usd": 1.3186,
+     "total_settlement_implied_shadow_usd": 0.2815,
+     "settlement_yes_value": "0.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 42,
+      "SAFETY_OVERLAY": 31
+     },
+     "detail": {
+      "PMUS_TRANSLATION:NO_BOOK": 17,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 25,
+      "SAFETY_OVERLAY:BAND": 31
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "settlement_yes_value": "0.0000"
+  },
+  "16:45": {
+   "venue_only": {
+    "action_reproduction": {
+     "l5_actions": 49,
+     "reproduced": 26,
+     "rate_pct": 53.1
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "UP",
+     "first_side_agrees": true,
+     "native_longest_run": 12,
+     "track_longest_run": 7,
+     "native_up_share_pct": 63.3,
+     "track_up_share_pct": 84.6
+    },
+    "inventory_path_agreement": {
+     "path_correlation": 0.4916,
+     "native_final_imbalance": 0.068,
+     "track_final_imbalance": 25.27,
+     "native_max_abs_imbalance": 14.435,
+     "track_max_abs_imbalance": 28.318,
+     "amplitude_ratio": 1.962
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": true,
+     "crossing_agrees": true,
+     "native_overshoot": 2.581,
+     "track_overshoot": 0.0,
+     "direction": "MATCH"
+    },
+    "matched_vs_residual": {
+     "track_matched": 8.618826135105204,
+     "track_residual": 25.26989510520487,
+     "track_residual_direction": "UP",
+     "native_matched_actions": 18,
+     "native_final_imbalance": 0.068
+    },
+    "maker_taker_mix": {
+     "TAKER": 23,
+     "MAKER": 3
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -0.4097,
+     "slippage_per_reproduced_action": -0.01576,
+     "committed_usd": 10.7438,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.2418,
+     "maker_rebate_accrual_usd": 0.0044,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 0.9555,
+     "pair_cost_max": 1.03,
+     "pair_cost_min": 0.9042,
+     "matched_pair_pnl_usd": 0.3833,
+     "residual_pnl_usd": -2.5083,
+     "total_settlement_implied_shadow_usd": -2.3624,
+     "settlement_yes_value": "0.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 23
+     },
+     "detail": {
+      "PMUS_TRANSLATION:NO_BOOK": 4,
+      "PMUS_TRANSLATION:QUEUE_AMBIGUOUS": 10,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "with_safety_overlay": {
+    "action_reproduction": {
+     "l5_actions": 49,
+     "reproduced": 7,
+     "rate_pct": 14.3
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "UP",
+     "first_side_agrees": true,
+     "native_longest_run": 12,
+     "track_longest_run": 6,
+     "native_up_share_pct": 63.3,
+     "track_up_share_pct": 85.7
+    },
+    "inventory_path_agreement": {
+     "path_correlation": 0.1067,
+     "native_final_imbalance": 0.068,
+     "track_final_imbalance": -0.0,
+     "native_max_abs_imbalance": 14.435,
+     "track_max_abs_imbalance": 4.43,
+     "amplitude_ratio": 0.307
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": true,
+     "crossing_agrees": true,
+     "native_overshoot": 2.581,
+     "track_overshoot": 0.0,
+     "direction": "MATCH"
+    },
+    "matched_vs_residual": {
+     "track_matched": 4.429629634551494,
+     "track_residual": -4.921373200442967e-05,
+     "track_residual_direction": "DOWN",
+     "native_matched_actions": 18,
+     "native_final_imbalance": 0.068
+    },
+    "maker_taker_mix": {
+     "TAKER": 7
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -0.1329,
+     "slippage_per_reproduced_action": -0.01898,
+     "committed_usd": 4.5626,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.1104,
+     "maker_rebate_accrual_usd": 0.0,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 1.03,
+     "pair_cost_max": 1.03,
+     "pair_cost_min": 1.03,
+     "matched_pair_pnl_usd": -0.1329,
+     "residual_pnl_usd": 0.0,
+     "total_settlement_implied_shadow_usd": -0.2433,
+     "settlement_yes_value": "0.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 23,
+      "SAFETY_OVERLAY": 19
+     },
+     "detail": {
+      "PMUS_TRANSLATION:NO_BOOK": 4,
+      "PMUS_TRANSLATION:QUEUE_AMBIGUOUS": 10,
+      "SAFETY_OVERLAY:BAND": 19,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "settlement_yes_value": "0.0000"
+  },
+  "17:30": {
+   "venue_only": {
+    "action_reproduction": {
+     "l5_actions": 68,
+     "reproduced": 29,
+     "rate_pct": 42.6
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "UP",
+     "first_side_agrees": true,
+     "native_longest_run": 21,
+     "track_longest_run": 11,
+     "native_up_share_pct": 61.8,
+     "track_up_share_pct": 51.7
+    },
+    "inventory_path_agreement": {
+     "path_correlation": 0.7952,
+     "native_final_imbalance": -5.674,
+     "track_final_imbalance": -4.136,
+     "native_max_abs_imbalance": 18.023,
+     "track_max_abs_imbalance": 12.695,
+     "amplitude_ratio": 0.704
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": true,
+     "crossing_agrees": true,
+     "native_overshoot": 12.983,
+     "track_overshoot": 8.566,
+     "direction": "MATCH"
+    },
+    "matched_vs_residual": {
+     "track_matched": 21.798408283499445,
+     "track_residual": -4.136124606866002,
+     "track_residual_direction": "DOWN",
+     "native_matched_actions": 26,
+     "native_final_imbalance": -5.674
+    },
+    "maker_taker_mix": {
+     "TAKER": 25,
+     "MAKER": 4
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -1.4547,
+     "slippage_per_reproduced_action": -0.05016,
+     "committed_usd": 17.7304,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.2949,
+     "maker_rebate_accrual_usd": 0.0146,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 0.7984,
+     "pair_cost_max": 1.0528,
+     "pair_cost_min": 0.7319,
+     "matched_pair_pnl_usd": 4.3946,
+     "residual_pnl_usd": -0.3266,
+     "total_settlement_implied_shadow_usd": 3.7877,
+     "settlement_yes_value": "1.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 39
+     },
+     "detail": {
+      "PMUS_TRANSLATION:NO_BOOK": 5,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 27,
+      "PMUS_TRANSLATION:QUEUE_AMBIGUOUS": 7
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "with_safety_overlay": {
+    "action_reproduction": {
+     "l5_actions": 68,
+     "reproduced": 15,
+     "rate_pct": 22.1
+    },
+    "sequence_agreement": {
+     "native_first_side": "UP",
+     "track_first_side": "UP",
+     "first_side_agrees": true,
+     "native_longest_run": 21,
+     "track_longest_run": 8,
+     "native_up_share_pct": 61.8,
+     "track_up_share_pct": 93.3
+    },
+    "inventory_path_agreement": {
+     "path_correlation": -0.4881,
+     "native_final_imbalance": -5.674,
+     "track_final_imbalance": 17.124,
+     "native_max_abs_imbalance": 18.023,
+     "track_max_abs_imbalance": 17.124,
+     "amplitude_ratio": 0.95
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": false,
+     "crossing_agrees": false,
+     "native_overshoot": 12.983,
+     "track_overshoot": 0.0,
+     "direction": "TRACK_UNDER_REPRODUCES"
+    },
+    "matched_vs_residual": {
+     "track_matched": 0.24451827242524915,
+     "track_residual": 17.124211162790694,
+     "track_residual_direction": "UP",
+     "native_matched_actions": 26,
+     "native_final_imbalance": -5.674
+    },
+    "maker_taker_mix": {
+     "TAKER": 15
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -0.5759,
+     "slippage_per_reproduced_action": -0.03839,
+     "committed_usd": 11.4492,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.2496,
+     "maker_rebate_accrual_usd": 0.0,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 1.093,
+     "pair_cost_max": 1.093,
+     "pair_cost_min": 1.0517,
+     "matched_pair_pnl_usd": -0.0227,
+     "residual_pnl_usd": 5.9423,
+     "total_settlement_implied_shadow_usd": 5.67,
+     "settlement_yes_value": "1.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 39,
+      "SAFETY_OVERLAY": 14
+     },
+     "detail": {
+      "PMUS_TRANSLATION:NO_BOOK": 5,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 27,
+      "SAFETY_OVERLAY:BAND": 14,
+      "PMUS_TRANSLATION:QUEUE_AMBIGUOUS": 7
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "settlement_yes_value": "1.0000"
+  },
+  "19:30": {
+   "venue_only": {
+    "action_reproduction": {
+     "l5_actions": 27,
+     "reproduced": 15,
+     "rate_pct": 55.6
+    },
+    "sequence_agreement": {
+     "native_first_side": "DOWN",
+     "track_first_side": "DOWN",
+     "first_side_agrees": true,
+     "native_longest_run": 11,
+     "track_longest_run": 12,
+     "native_up_share_pct": 48.1,
+     "track_up_share_pct": 20.0
+    },
+    "inventory_path_agreement": {
+     "path_correlation": 0.1846,
+     "native_final_imbalance": -0.268,
+     "track_final_imbalance": -22.548,
+     "native_max_abs_imbalance": 22.548,
+     "track_max_abs_imbalance": 26.978,
+     "amplitude_ratio": 1.196
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": true,
+     "agrees": true
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": false,
+     "crossing_agrees": false,
+     "native_overshoot": 4.162,
+     "track_overshoot": 0.0,
+     "direction": "TRACK_UNDER_REPRODUCES"
+    },
+    "matched_vs_residual": {
+     "track_matched": 4.429678848283499,
+     "track_residual": -22.54806365448505,
+     "track_residual_direction": "DOWN",
+     "native_matched_actions": 13,
+     "native_final_imbalance": -0.268
+    },
+    "maker_taker_mix": {
+     "TAKER": 15
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -1.161,
+     "slippage_per_reproduced_action": -0.0774,
+     "committed_usd": 5.4568,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.1792,
+     "maker_rebate_accrual_usd": 0.0,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": 0.8542,
+     "pair_cost_max": 0.8542,
+     "pair_cost_min": 0.8542,
+     "matched_pair_pnl_usd": 0.6459,
+     "residual_pnl_usd": -1.673,
+     "total_settlement_implied_shadow_usd": -1.2064,
+     "settlement_yes_value": "1.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "PMUS_TRANSLATION": 12
+     },
+     "detail": {
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 9,
+      "PMUS_TRANSLATION:NO_BOOK": 3
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "with_safety_overlay": {
+    "action_reproduction": {
+     "l5_actions": 27,
+     "reproduced": 3,
+     "rate_pct": 11.1
+    },
+    "sequence_agreement": {
+     "native_first_side": "DOWN",
+     "track_first_side": "UP",
+     "first_side_agrees": false,
+     "native_longest_run": 11,
+     "track_longest_run": 3,
+     "native_up_share_pct": 48.1,
+     "track_up_share_pct": 100.0
+    },
+    "inventory_path_agreement": {
+     "path_correlation": -0.296,
+     "native_final_imbalance": -0.268,
+     "track_final_imbalance": 4.43,
+     "native_max_abs_imbalance": 22.548,
+     "track_max_abs_imbalance": 4.43,
+     "amplitude_ratio": 0.196
+    },
+    "opposite_acquisition": {
+     "native": true,
+     "track": false,
+     "agrees": false
+    },
+    "zero_cross_overshoot": {
+     "native_crossed": true,
+     "track_crossed": false,
+     "crossing_agrees": false,
+     "native_overshoot": 4.162,
+     "track_overshoot": 0.0,
+     "direction": "TRACK_UNDER_REPRODUCES"
+    },
+    "matched_vs_residual": {
+     "track_matched": 0.0,
+     "track_residual": 4.429678848283499,
+     "track_residual_direction": "UP",
+     "native_matched_actions": 13,
+     "native_final_imbalance": -0.268
+    },
+    "maker_taker_mix": {
+     "TAKER": 3
+    },
+    "incremental_translation_cost": {
+     "slippage_usd_vs_l5": -0.443,
+     "slippage_per_reproduced_action": -0.14766,
+     "committed_usd": 3.4551,
+     "note": "cost of reaching the closest executable price rather than L5's own; MEASURED, never capped"
+    },
+    "fees_and_rebates": {
+     "taker_fees_usd": 0.0529,
+     "maker_rebate_accrual_usd": 0.0,
+     "kept_separate_from_trading_pnl": true
+    },
+    "complete_window_economics": {
+     "pair_cost_final": null,
+     "pair_cost_max": null,
+     "pair_cost_min": null,
+     "matched_pair_pnl_usd": 0.0,
+     "residual_pnl_usd": 0.9745,
+     "total_settlement_implied_shadow_usd": 0.9216,
+     "settlement_yes_value": "1.0000"
+    },
+    "irreducible_failures": {
+     "by_layer": {
+      "SAFETY_OVERLAY": 12,
+      "PMUS_TRANSLATION": 12
+     },
+     "detail": {
+      "SAFETY_OVERLAY:BAND": 12,
+      "PMUS_TRANSLATION:NO_SUBSEQUENT_INTERACTION": 9,
+      "PMUS_TRANSLATION:NO_BOOK": 3
+     },
+     "note": "PMUS_TRANSLATION refusals are venue/habitat facts no change to our execution removes. SAFETY_OVERLAY refusals are OUR controls and are never evidence about L5 or about PMUS."
+    },
+    "labels": "SHADOW. No order exists. Nothing here is submitted, filled, settled or realized."
+   },
+   "settlement_yes_value": "1.0000"
+  }
+ },
+ "aggregate": {
+  "venue_only": {
+   "reproduced": 131,
+   "actions": 284,
+   "rate_pct": 46.1,
+   "by_layer": {
+    "PMUS_TRANSLATION": 153
+   },
+   "maker": 11,
+   "taker": 120,
+   "slippage_usd": -4.8753,
+   "total_settlement_implied_shadow_usd": -2.884
+  },
+  "with_safety_overlay": {
+   "reproduced": 54,
+   "actions": 284,
+   "rate_pct": 19.0,
+   "by_layer": {
+    "PMUS_TRANSLATION": 153,
+    "SAFETY_OVERLAY": 77
+   },
+   "total_settlement_implied_shadow_usd": 6.9038
+  }
+ }
+}
