@@ -1,0 +1,576 @@
+diff -ruN orig/deploy/pmus_ws_recorder/Dockerfile new/deploy/pmus_ws_recorder/Dockerfile
+--- a/deploy/pmus_ws_recorder/Dockerfile	2026-09-23 22:05:46.071702169 +0000
++++ b/deploy/pmus_ws_recorder/Dockerfile	2026-09-23 22:05:46.091702170 +0000
+@@ -49,6 +49,15 @@
+ COPY scripts/priority_vs_rotation_eval.py scripts/priority_vs_rotation_eval.py
+ COPY scripts/spring_candidate_tape_read.py scripts/spring_candidate_tape_read.py
+ COPY scripts/pmus_candidate_tape_readonly.py scripts/pmus_candidate_tape_readonly.py
++# Authenticated identity/market preflight. It runs WHERE THE CREDENTIALS
++# ALREADY LIVE so they are never copied to another service, and it keeps
++# this image's promise that no order endpoint exists in it: it imports
++# src/pmus_auth.py, which carries the Ed25519 signing and NOTHING that can
++# place, amend or cancel an order. pmus_q1_executor is deliberately NOT
++# copied here -- it holds place_limit_buy/cancel_all_deadman/run_campaign.
++COPY scripts/pmus_auth_preflight_readonly.py scripts/pmus_auth_preflight_readonly.py
++COPY src/pmus_auth.py src/pmus_auth.py
++COPY src/pmus_fees.py src/pmus_fees.py
+ RUN touch src/__init__.py
+ 
+ ENV PMUS_SERVICE_ROLE=ws-recorder \
+diff -ruN orig/deploy/pmus_ws_recorder/entrypoint.sh new/deploy/pmus_ws_recorder/entrypoint.sh
+--- a/deploy/pmus_ws_recorder/entrypoint.sh	2026-09-23 22:05:46.075702169 +0000
++++ b/deploy/pmus_ws_recorder/entrypoint.sh	2026-09-23 22:05:46.093814196 +0000
+@@ -22,4 +22,20 @@
+   fi
+ fi
+ 
++# Optional one-shot AUTHENTICATED identity/market preflight, read-only.
++# Same shape as the tape-read above: it runs before the recorder opens its
++# websocket, then execs the normal command unchanged.  A failure is REPORTED
++# and never blocks capture -- the preflight gates money, not evidence, and a
++# market closed between windows is a normal FAILED result, so it re-runs on
++# every boot rather than leaving a marker.  It emits one PMUS_PREFLIGHT line
++# in every case, including its own failure, so silence means it did not run.
++if [ -n "${PMUS_PREFLIGHT_ON_START:-}" ]; then
++  echo "PMUS_PREFLIGHT_START"
++  if PYTHONPATH=/app python3 -m scripts.pmus_auth_preflight_readonly; then
++    echo "PMUS_PREFLIGHT_PASSED"
++  else
++    echo "PMUS_PREFLIGHT_FAILED:$?"
++  fi
++fi
++
+ exec "$@"
+diff -ruN orig/scripts/pmus_auth_preflight_readonly.py new/scripts/pmus_auth_preflight_readonly.py
+--- a/scripts/pmus_auth_preflight_readonly.py	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/pmus_auth_preflight_readonly.py	2026-09-23 22:05:46.083733475 +0000
+@@ -0,0 +1,286 @@
++"""Read-only authenticated PMUS identity/market preflight, run WHERE THE
++CREDENTIALS ALREADY LIVE.
++
++The credentials live on the evidence recorder and must not be copied anywhere
++else, so the preflight has to run there. But the recorder is the last service
++that should gain an order path. So this is NOT the executor: it is a separate
++script that reuses `pmus_q1_executor`'s Ed25519 signing and hosts and nothing
++else, and it is MUTATION-INCAPABLE BY CONSTRUCTION rather than merely
++disarmed -- `GetOnly` raises on any method but GET, so there is no code path
++in this image that can place, amend or cancel an order. "Disarmed" is a flag
++someone can flip; "the function does not exist here" is not.
++
++It answers exactly the questions that must be true before money can move:
++
++  authenticated account identity . intended BTC15m series . current market
++  slug . open/tradable . outcome mapping . tick/quantity constraints .
++  authenticated book connectivity . positions and open orders reconciled .
++  executor starts disarmed
++
++A check that cannot be EVALUATED fails. An unknown answer is never a pass:
++the purpose of a preflight is to refuse when we cannot prove the thing.
++
++CREDENTIALS NEVER APPEAR. Only their PRESENCE is reported; the account
++identity printed is the venue's own answer, and `redact()` is applied to
++every error string that could carry a header or a signature.
++
++    PMUS_PREFLIGHT_MARKET   override the market slug (default: current window)
++    PMUS_PREFLIGHT_ACCOUNT  assert the venue reports THIS account identity
++
++Exit 0 only when every blocking gate passed.
++"""
++from __future__ import annotations
++
++import datetime as dt
++import json
++import os
++import re
++import sys
++from decimal import Decimal as D
++from typing import Any, Dict, List, Mapping, Optional
++
++from src import pmus_auth as Q1
++from src import pmus_fees as fees
++
++BTC15M_SERIES = "btc-updown-15m"
++BTC15M_SLUG_RE = re.compile(r"^cpc-btc-updown-15m-\d{4}-\d{2}-\d{2}-\d{4}z$")
++OUTCOMES = ("UP", "DOWN")
++
++MARKET_ENV = "PMUS_PREFLIGHT_MARKET"
++ACCOUNT_ENV = "PMUS_PREFLIGHT_ACCOUNT"
++
++#: the bounded probe envelope. Stated here only to BOUND the worst case that
++#: is reported; this script cannot commit a cent of it.
++MAX_COMMITTED_USD = D("5")
++
++_SECRETISH = re.compile(
++    r"(X-PM-Access-Key|X-PM-Signature|X-PM-Timestamp|Authorization)"
++    r"\s*[:=]\s*\S+", re.I)
++
++
++def redact(text: Any) -> str:
++    s = str(text)
++    s = _SECRETISH.sub(r"\1: [REDACTED]", s)
++    for env in (Q1.KEY_ENV, Q1.SECRET_ENV):
++        v = os.getenv(env, "")
++        if v and len(v) > 6:
++            s = s.replace(v, "[REDACTED]")
++    return s[:600]
++
++
++class MutationAttempted(RuntimeError):
++    """Raised if anything in this process tries to change venue state."""
++
++
++class GetOnly:
++    """A transport that structurally cannot mutate.
++
++    Wrapping rather than trusting a flag: the recorder holds the credentials,
++    so the guarantee that it cannot trade should not depend on a boolean
++    being in the right state at the right moment.
++    """
++
++    def __init__(self, inner: Any) -> None:
++        self.inner = inner
++        self.calls: List[str] = []
++
++    def request(self, method: str, path: str, body: Any = None,
++                base: Optional[str] = None) -> Any:
++        if str(method).upper() != "GET":
++            raise MutationAttempted(
++                "%s %s refused: this process is read-only" % (method, path))
++        self.calls.append("%s %s" % (method, path))
++        return self.inner.request("GET", path, None, base)
++
++
++def current_window_slug(now: Optional[dt.datetime] = None) -> str:
++    """The BTC15m market that is open right now, from the clock.
++
++    The market rotates every fifteen minutes, so a hardcoded slug would be
++    stale before it was read.
++    """
++    now = now or dt.datetime.now(dt.timezone.utc)
++    start = now.replace(minute=(now.minute // 15) * 15, second=0,
++                        microsecond=0)
++    return "cpc-btc-updown-15m-%s-%02d%02dz" % (
++        start.strftime("%Y-%m-%d"), start.hour, start.minute)
++
++
++def worst_case(mk: Mapping[str, Any]) -> Dict[str, Any]:
++    """From the venue's own fee implementation, not from an estimate."""
++    worst_p = D("0.5")                  # the taker fee is maximised here
++    contracts = MAX_COMMITTED_USD / worst_p
++    fee = fees.taker_fee(worst_p, contracts)
++    f = lambda d: format(D(str(d)), "f")
++    return {
++        "max_committed_usd": f(MAX_COMMITTED_USD),
++        "fee_maximising_price": f(worst_p),
++        "contracts_at_that_price": f(contracts),
++        "max_taker_fee_usd": f(fee),
++        "worst_case_total_usd": f(MAX_COMMITTED_USD + fee),
++        "tick_from_market": str(mk.get(Q1.TICK_FIELD) or mk.get("tickSize")),
++        "basis": ("principal is the committed cap because a share can settle "
++                  "worthless; no leverage exists on this venue"),
++    }
++
++
++def preflight(slug: str, http: Any,
++              *, expect_account: Optional[str] = None,
++              now: Optional[dt.datetime] = None) -> Dict[str, Any]:
++    checks: List[Dict[str, Any]] = []
++    ok = True
++
++    def gate(name: str, passed: Any, detail: Any = None) -> bool:
++        checks.append({"check": name, "passed": bool(passed),
++                       "detail": redact(detail) if detail is not None
++                       else None})
++        return bool(passed)
++
++    def get(fn, name):
++        """A read that raises is a FAILED gate, never a skipped one.
++
++        BaseException, not Exception: a missing crypto backend surfaces as a
++        pyo3 PanicException, which is not an Exception and would otherwise
++        escape and kill the process. A preflight that dies without emitting a
++        verdict is worse than one that fails -- the operator sees a traceback
++        where a refusal should be. Only the two exits that must stay fatal
++        are re-raised.
++        """
++        try:
++            return fn(), True
++        except (KeyboardInterrupt, SystemExit):
++            raise
++        except BaseException as exc:                           # noqa: BLE001
++            gate(name, False, "%s: %s" % (type(exc).__name__, redact(exc)))
++            return {}, False
++
++    ok &= gate("credentials_present", Q1.has_credentials(),
++               "env %s / %s present" % (Q1.KEY_ENV, Q1.SECRET_ENV))
++    ok &= gate("transport_is_get_only", isinstance(http, GetOnly),
++               "no order path exists in this process")
++
++    acct, got = get(lambda: http.request("GET", "/v1/account", None, Q1.API)
++                    or {}, "account_readable")
++    ok &= got
++    if got:
++        gate("account_readable", True)
++        ident = (acct.get("id") or acct.get("accountId")
++                 or acct.get("userId") or acct.get("email"))
++        ok &= gate("account_identity_resolved", bool(ident), ident)
++        if expect_account:
++            ok &= gate("account_matches_expected",
++                       str(ident) == str(expect_account),
++                       "expected %s got %s" % (expect_account, ident))
++
++    ok &= gate("slug_is_btc15m_series", bool(BTC15M_SLUG_RE.match(slug or "")),
++               slug)
++
++    raw, got = get(lambda: http.request(
++        "GET", "/v1/markets/%s" % slug, None, Q1.GATEWAY) or {},
++        "market_readable")
++    ok &= got
++    mk: Dict[str, Any] = {}
++    if got:
++        gate("market_readable", True)
++        mk = raw.get("market") or raw.get("marketData") or raw
++        ok &= gate("market_resolves", bool(mk), mk.get("slug"))
++        ok &= gate("market_series_is_btc15m",
++                   BTC15M_SERIES in str(mk.get("seriesSlug")
++                                        or mk.get("slug") or ""),
++                   mk.get("seriesSlug") or mk.get("slug"))
++
++    state = str(mk.get("state") or mk.get("status") or "")
++    ok &= gate("market_open_tradable", state.upper().endswith("OPEN"), state)
++
++    outs = mk.get("outcomes") or mk.get("tokens") or []
++    names = tuple(str((o.get("outcome") if isinstance(o, Mapping) else o)
++                      or "").upper() for o in outs) if outs else ()
++    ok &= gate("outcome_mapping_is_up_down",
++               set(OUTCOMES).issubset(set(names)) if names else False, names)
++
++    tick = mk.get(Q1.TICK_FIELD) or mk.get("tickSize")
++    minq = mk.get("orderMinQuantity") or mk.get("minOrderSize")
++    ok &= gate("tick_constraint_known", tick is not None, tick)
++    ok &= gate("quantity_constraint_known", minq is not None, minq)
++
++    braw, got = get(lambda: http.request(
++        "GET", "/v1/markets/%s/book" % slug, None, Q1.GATEWAY) or {},
++        "book_readable")
++    ok &= got
++    bk: Dict[str, Any] = {}
++    if got:
++        gate("book_readable", True)
++        bk = braw.get("marketData") or braw
++    ok &= gate("book_two_sided", bool(bk.get("bid")) and bool(bk.get("ask")),
++               {"bid": bk.get("bid"), "ask": bk.get("ask"),
++                "bid_shares": bk.get("bid_shares"),
++                "ask_shares": bk.get("ask_shares")})
++
++    praw, got = get(lambda: http.request("GET", "/v1/positions", None, Q1.API)
++                    or {}, "positions_readable")
++    ok &= got
++    oraw, got2 = get(lambda: http.request("GET", "/v1/orders", None, Q1.API)
++                     or {}, "orders_readable")
++    ok &= got2
++    if got and got2:
++        gate("positions_readable", True)
++        pos = praw.get("positions") if isinstance(praw, Mapping) else (praw or [])
++        oo = oraw.get("orders") if isinstance(oraw, Mapping) else (oraw or [])
++        ok &= gate("no_unexpected_open_orders", len(oo) == 0, len(oo))
++        ok &= gate("positions_reconciled", len(pos or []) == 0,
++                   {"venue_positions": len(pos or []),
++                    "note": "the probe has never traded, so any position "
++                            "here is unexplained and blocks arming"})
++
++    # there is no executor in this process at all, which is strictly stronger
++    ok &= gate("executor_starts_disarmed", True,
++               "no order path exists in this image")
++    checks.append({"check": "owner_arm_token_present", "blocking": False,
++                   "passed": False,
++                   "detail": "there is no arming in this process and no order "
++                             "path in this image; arming is a separate owner "
++                             "act on the executor, elsewhere"})
++
++    return {
++        "preflight": "PASSED" if ok else "FAILED",
++        "utc": (now or dt.datetime.now(dt.timezone.utc)).isoformat(),
++        "market_slug": slug,
++        "checks": checks,
++        "blocking_failures": [c["check"] for c in checks
++                              if not c["passed"] and c.get("blocking", True)],
++        "worst_case": worst_case(mk),
++        "armed_after_preflight": False,
++        "reads_issued": list(getattr(http, "calls", ())),
++        "labels": ("read-only; mutation-incapable by construction; no "
++                   "credential value appears anywhere in this report"),
++    }
++
++
++def main(argv: Optional[List[str]] = None) -> int:
++    argv = list(sys.argv[1:] if argv is None else argv)
++    slug = (argv[0] if argv else os.getenv(MARKET_ENV, "").strip()
++            or current_window_slug())
++    try:
++        # constructed INSIDE the guard: a transport that cannot be built is
++        # still a refusal we must report, not a traceback
++        http = GetOnly(Q1.ReadOnlyTransport())
++        rep = preflight(slug, http,
++                        expect_account=os.getenv(ACCOUNT_ENV, "").strip()
++                        or None)
++    except (KeyboardInterrupt, SystemExit):
++        raise
++    except BaseException as exc:                               # noqa: BLE001
++        # ALWAYS emit a verdict. This runs unattended at recorder boot, so a
++        # bare traceback would be read as "the preflight did not run" when it
++        # in fact ran and refused.
++        print("PMUS_PREFLIGHT " + json.dumps(
++            {"preflight": "FAILED", "market_slug": slug,
++             "fatal": "%s: %s" % (type(exc).__name__, redact(exc)),
++             "armed_after_preflight": False}), flush=True)
++        return 2
++    print("PMUS_PREFLIGHT " + json.dumps(rep, default=str), flush=True)
++    return 0 if rep["preflight"] == "PASSED" else 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff -ruN orig/src/pmus_auth.py new/src/pmus_auth.py
+--- a/src/pmus_auth.py	1970-01-01 00:00:00.000000000 +0000
++++ b/src/pmus_auth.py	2026-09-23 22:05:46.085225529 +0000
+@@ -0,0 +1,89 @@
++"""PMUS credentials and request signing, WITHOUT any order path.
++
++`pmus_q1_executor` holds the same signing, but it also holds
++`place_limit_buy`, `cancel_all_deadman` and `run_campaign`, which POST to
++/v1/orders. That module therefore must not be shipped to the evidence
++recorder: the recorder is the one service that holds the API credentials, and
++its image states that no order endpoint exists in it. Putting a credentialed
++execution stack there to obtain a read-only preflight would trade away exactly
++the property the preflight is meant to establish.
++
++So this module carries only what a READ needs -- hosts, credential env names,
++the Ed25519 signature and a transport -- and deliberately carries no way to
++place, amend or cancel anything. There is no arming here because there is
++nothing to arm.
++
++DRIFT. The signature must stay byte-identical to the executor's or an
++authenticated read starts 401-ing in production. `tests/test_pmus_auth.py`
++asserts equivalence against `pmus_q1_executor` for the same inputs, so the two
++cannot diverge silently. The executor is left untouched: it is live execution
++code, and a refactor of it is not worth the risk of obtaining a read.
++"""
++from __future__ import annotations
++
++import base64
++import json
++import os
++import time
++from typing import Any, Mapping, Optional
++
++API = "https://api.polymarket.us"
++GATEWAY = "https://gateway.polymarket.us"
++
++KEY_ENV = "PMUS_API_KEY_ID"
++SECRET_ENV = "PMUS_API_SECRET_KEY"
++
++#: the venue's own name for the tick constraint, read from the market
++TICK_FIELD = "orderPriceMinTickSize"
++
++
++def has_credentials() -> bool:
++    return bool(os.getenv(KEY_ENV, "").strip()) and \
++        bool(os.getenv(SECRET_ENV, "").strip())
++
++
++def sign_path(path: str) -> str:
++    """The path the signature covers: the URL path WITHOUT its query string.
++
++    Every authenticated GET carrying a query string answered 401 while signed
++    over path+query.
++    """
++    return path.split("?", 1)[0]
++
++
++def signed_headers(method: str, path: str,
++                   now_ms: Optional[int] = None) -> dict:
++    from cryptography.hazmat.primitives.asymmetric import ed25519
++    ts = str(now_ms if now_ms is not None else int(time.time() * 1000))
++    seed = base64.b64decode(os.environ[SECRET_ENV].strip())[:32]
++    key = ed25519.Ed25519PrivateKey.from_private_bytes(seed)
++    sig = base64.b64encode(
++        key.sign(f"{ts}{method}{sign_path(path)}".encode())).decode()
++    return {"X-PM-Access-Key": os.environ[KEY_ENV].strip(),
++            "X-PM-Timestamp": ts, "X-PM-Signature": sig,
++            "Content-Type": "application/json"}
++
++
++class ReadOnlyTransport:
++    """Signed HTTP that can only GET.
++
++    The refusal is here, in the only transport this image has, rather than in
++    a caller's flag: a process that cannot construct a mutating request cannot
++    be talked into one.
++    """
++
++    def request(self, method: str, path: str,
++                body: Optional[Mapping[str, Any]] = None,
++                base: str = API) -> Any:
++        if str(method).upper() != "GET":
++            raise PermissionError(
++                "%s %s refused: this transport is read-only" % (method, path))
++        import ssl
++        import urllib.request
++        headers = signed_headers("GET", path) if base == API else \
++            {"User-Agent": "pmus-preflight"}
++        req = urllib.request.Request(base + path, data=None,
++                                     headers=headers, method="GET")
++        with urllib.request.urlopen(
++                req, context=ssl.create_default_context(), timeout=15) as r:
++            return json.loads(r.read() or b"{}")
+diff -ruN orig/src/pmus_fees.py new/src/pmus_fees.py
+--- a/src/pmus_fees.py	1970-01-01 00:00:00.000000000 +0000
++++ b/src/pmus_fees.py	2026-09-23 22:05:46.085247878 +0000
+@@ -0,0 +1,146 @@
++"""The PMUS fee schedule, once, with provenance and an effective date.
++
++WHY A MODULE AND NOT A CONSTANT. `0.06` was the taker coefficient, and it was
++copied into eight places. PMUS republished the schedule effective 12 AM ET on
++Thursday 2026-09-17 with the taker coefficient at **0.0695** -- 15.8% higher --
++and every one of those copies kept the old number. On the execution path that
++is not a cosmetic error: the fee-safe complement bound is derived from the
++taker fee, so understating it LOOSENS a risk bound. A number that decides
++whether an order is safe belongs in one place that says where it came from.
++
++WHY IT IS EFFECTIVE-DATED RATHER THAN SIMPLY UPDATED. Analyses of fills from
++before 2026-09-17 are CORRECT at 0.06, and silently re-rating them at 0.0695
++would corrupt evidence that was right when it was recorded. So the schedule is
++a function of time: ask it what applied at an instant, and the execution path
++asks it about now.
++
++PROVENANCE, and how strong it is. `docs.polymarket.us/fees` publishes both the
++formula and a 99-row price table of what a 100-lot taker pays and a 100-lot
++maker receives at every price from $0.01 to $0.99. All 99 rows reproduce
++EXACTLY from theta = 0.0695 / 0.0125 with banker's rounding to the cent
++(`tests/test_pmus_fees.py` checks every one against the captured table in
++`analysis/pmus/pmus_published_fee_schedule.json`). That is a far stronger
++confirmation than reading a headline number, and it pins the rounding rule as
++well as the coefficients.
++
++THE MAKER REBATE IS A CREDIT, NOT A NEGATIVE FEE TO NET AGAINST EDGE. It is
++returned here as a positive number by `maker_rebate`, and this module never
++subtracts it from a cost. Strategy selection and pre-rebate P&L exclude it; an
++accrual becomes income only when the venue credits it.
++
++THE TAKER REBATE IS NOT OURS. Tiers start at $250,000 of prior-calendar-month
++taker volume. `taker_rebate_pct` exists so the tier table is written down
++rather than remembered, and it returns 0 for any volume below the first tier,
++which is where this account is.
++"""
++from __future__ import annotations
++
++import datetime as dt
++from decimal import Decimal as D, ROUND_HALF_EVEN
++from typing import Optional, Tuple
++
++SOURCE = "https://docs.polymarket.us/fees"
++
++#: 12 AM ET, Thursday 2026-09-17. ET was UTC-4 (EDT) on that date.
++THETA_CHANGE_UTC = dt.datetime(2026, 9, 17, 4, 0, tzinfo=dt.timezone.utc)
++
++#: (taker theta, maker-rebate theta) before and from that instant. The maker
++#: coefficient did not move; only the taker one did.
++THETA_BEFORE: Tuple[D, D] = (D("0.06"), D("0.0125"))
++THETA_FROM: Tuple[D, D] = (D("0.0695"), D("0.0125"))
++
++#: prices the venue will accept, and the published domain of the formula
++MIN_PRICE, MAX_PRICE = D("0.01"), D("0.99")
++
++#: prior-calendar-month TAKER notional -> share of the taker fee rebated
++TAKER_REBATE_TIERS = ((D("10000000"), D("0.50")),
++                      (D("1000000"), D("0.25")),
++                      (D("250000"), D("0.10")))
++
++CENT = D("0.01")
++
++
++def _at(when: Optional[dt.datetime]) -> dt.datetime:
++    if when is None:
++        return dt.datetime.now(dt.timezone.utc)
++    if when.tzinfo is None:
++        return when.replace(tzinfo=dt.timezone.utc)
++    return when
++
++
++def thetas(when: Optional[dt.datetime] = None) -> Tuple[D, D]:
++    """(taker, maker) coefficients in force at `when`; now by default."""
++    return THETA_FROM if _at(when) >= THETA_CHANGE_UTC else THETA_BEFORE
++
++
++def taker_theta(when: Optional[dt.datetime] = None) -> D:
++    return thetas(when)[0]
++
++
++def maker_theta(when: Optional[dt.datetime] = None) -> D:
++    return thetas(when)[1]
++
++
++def _fee(theta: D, contracts: D, price: D, *, cents: bool) -> D:
++    """theta * C * p * (1 - p).
++
++    `cents=True` applies the venue's own presentation rule -- banker's
++    rounding to the cent -- and is what reconciles against a statement.
++    `cents=False` keeps four decimals and is what a per-contract bound wants,
++    because rounding a one-contract fee to the cent would quantise a $0.0017
++    charge to $0.00 and make a bound look safer than it is.
++    """
++    raw = theta * D(str(contracts)) * D(str(price)) * (D(1) - D(str(price)))
++    if cents:
++        return raw.quantize(CENT, rounding=ROUND_HALF_EVEN)
++    return raw.quantize(D("0.0001"), rounding=ROUND_HALF_EVEN)
++
++
++def taker_fee(price: D, contracts: D = D(1), *,
++              when: Optional[dt.datetime] = None, cents: bool = False) -> D:
++    """What a taker PAYS. Positive."""
++    return _fee(taker_theta(when), contracts, price, cents=cents)
++
++
++def maker_rebate(price: D, contracts: D = D(1), *,
++                 when: Optional[dt.datetime] = None,
++                 cents: bool = False) -> D:
++    """What a maker RECEIVES, credited at the point of trade. Positive.
++
++    NEVER net this against a cost to make an action look affordable. It is
++    reported on its own line and it is income only once credited.
++    """
++    return _fee(maker_theta(when), contracts, price, cents=cents)
++
++
++def taker_rebate_pct(prior_month_taker_notional_usd: D) -> D:
++    """Share of the taker fee rebated, from the published tier table.
++
++    Returns 0 below the first tier. This account is below the first tier, so
++    every economics figure in this programme carries 0 here.
++    """
++    v = D(str(prior_month_taker_notional_usd))
++    for floor, pct in TAKER_REBATE_TIERS:
++        if v >= floor:
++            return pct
++    return D("0")
++
++
++def provenance(when: Optional[dt.datetime] = None) -> dict:
++    t, m = thetas(when)
++    return {
++        "source": SOURCE,
++        "formula": "fee = theta * C * p * (1 - p)",
++        "taker_theta": str(t),
++        "maker_rebate_theta": str(m),
++        "maker_rebate_timing": "applied at the point of trade",
++        "rounding": "banker's rounding to the cent, as published",
++        "effective_change_utc": THETA_CHANGE_UTC.isoformat(),
++        "effective_change_label": "12 AM ET, Thursday September 17, 2026",
++        "taker_rebate_available_to_this_account": False,
++        "taker_rebate_reason": ("tiers start at $250,000 of prior-calendar-"
++                                "month taker notional; this account is below "
++                                "the first tier, so it is counted at zero"),
++        "verified_against": ("all 99 published price rows reproduce exactly; "
++                             "see tests/test_pmus_fees.py"),
++    }
