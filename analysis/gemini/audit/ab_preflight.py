@@ -125,8 +125,21 @@ def checks():
                 str(d["expires"]).replace("Z", "+00:00"))
             now = dt.datetime.now(dt.timezone.utc)
             hrs = (exp - now).total_seconds() / 3600.0
-            ck("%s expiry is future and bounded (<24h)" % arm,
-               0 < hrs < 24, "%s (%.1fh away)" % (d["expires"], hrs))
+            # ONLY AN ARM THAT NAMES A REAL AUTHORIZATION NEEDS A LIVE CLOCK.
+            # A step disarmed to the sentinel cannot arm whatever its expiry
+            # says -- armed() requires the id to match EXPECTED_AUTH_ID, and
+            # the sentinel matches nothing. Probe A is spent and disarmed, so
+            # asserting a future expiry on it turned a correctly-disarmed arm
+            # into a standing red check, which is how a preflight stops being
+            # read. A disarmed arm must still PARSE its expiry; it need not
+            # still be in the future.
+            if d["auth_id"] == SENTINEL:
+                ck("%s expiry parses (disarmed, clock not required)" % arm,
+                   True, "%s (%.1fh away; arm is %s)"
+                   % (d["expires"], hrs, SENTINEL))
+            else:
+                ck("%s expiry is future and bounded (<24h)" % arm,
+                   0 < hrs < 24, "%s (%.1fh away)" % (d["expires"], hrs))
         except Exception as exc:                               # noqa: BLE001
             ck("%s expiry parses" % arm, False, "%s: %s" % (d["expires"], exc))
         ck("%s spec drives the invocation" % arm, d["uses_spec_flag"],
