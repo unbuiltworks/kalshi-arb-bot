@@ -50,7 +50,9 @@ def test_a_malformed_cap_is_off_not_unbounded(monkeypatch):
 
 def test_the_cap_is_clamped(monkeypatch):
     monkeypatch.setenv(obs.ROWS_LOG_ENV, "99999")
-    assert obs.rows_log_cap() == 200
+    # raised 200 -> 400 when emission moved from per-poll to per-summary: a
+    # batch now covers a whole interval, so the clamp has to fit one.
+    assert obs.rows_log_cap() == 400
     monkeypatch.setenv(obs.ROWS_LOG_ENV, "7")
     assert obs.rows_log_cap() == 7
 

@@ -828,7 +828,7 @@ def rows_log_cap() -> int:
         v = int(str(os.getenv(ROWS_LOG_ENV, "")).strip() or "0")
     except ValueError:
         return 0
-    return max(0, min(v, 200))
+    return max(0, min(v, 400))
 
 
 SERVICE_ROLE = "l5-pmus-observer"
@@ -895,12 +895,21 @@ def main(argv=None) -> int:
                  "error_class": type(exc).__name__, "error": str(exc)[:400],
                  "poll_exceptions": poll_exceptions}
         print("L5_PMUS_OBS %s" % json.dumps(r), flush=True)
-        obs.emit_new_rows()
         now = time.time()
         if now - last_sum >= a.summary_every or a.once:
             s = obs.summary()
             obs._emit(s)
             print("L5_PMUS_SUMMARY %s" % json.dumps(s), flush=True)
+            # Emit rows on the SUMMARY interval, not every poll. Emitting
+            # every 10s produced ~3 rows per document, so the ~20 documents a
+            # single log fetch can carry spanned about three minutes of wall
+            # clock -- an hourly harvest then read roughly 5% of what was
+            # emitted. Nothing was lost (the tape is on the volume), but the
+            # read channel could not keep up with collection. Batching at the
+            # summary interval with a larger cap covers ~100 minutes in the
+            # same 20 documents. This changes the READ CHANNEL only: the tape
+            # write, the dedupe index and every recorded field are untouched.
+            obs.emit_new_rows()
             # Separate from the frozen summary on purpose: this line is
             # service liveness, not experiment output, and proving the
             # service survived a turn or a window rollover must never
