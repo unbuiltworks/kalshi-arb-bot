@@ -1,140 +1,98 @@
 {
   "label": "GEMINI_LIVE_STATUS_V1",
-  "utc": "2026-09-22T14:26:07.363490+00:00",
-  "updates": 875,
+  "utc": "2026-09-23T11:53:51.994753+00:00",
+  "updates": 81,
   "cohort": {
-    "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2",
-    "cohort_id": "COHORT-2026-09-22-BTC15M-COHORT2-W01",
-    "spec_id": "btc15m_q1_cap4_w60_880_c2",
-    "spec_sha": "ba64b54c8711166b9515007e6835e8190dc8bfddfbae2a1ba72c4e7798cefcb4",
-    "max_windows": 20,
-    "max_aggregate_loss_usd": "8.00",
-    "max_drawdown_usd": "5.29",
+    "auth_id": "OWNER-2026-09-23-GEMINI-Q1-AB-2",
+    "cohort_id": "COHORT-2026-09-23-BTC5M-AB-B-W01",
+    "spec_id": "btc5m_q1_improve",
+    "spec_sha": "bfe7ba23199c544d30f25cd1c730d92e62d0bea534274b1c00feff961242a650",
+    "max_windows": 4,
+    "max_aggregate_loss_usd": "10.00",
+    "max_drawdown_usd": "0.56",
     "actions_per_market": 12,
     "readiness_mode": false,
-    "windows_observed": 11,
-    "windows_traded": 11,
-    "cumulative_economic_loss_usd": "3.82",
-    "settlement_implied_net_usd": "-3.82",
-    "gross_fill_spend_usd": "19.96",
+    "windows_observed": 4,
+    "windows_traded": 3,
+    "cumulative_economic_loss_usd": "0.56",
+    "settlement_implied_net_usd": "-0.56",
+    "gross_fill_spend_usd": "1.33",
     "realized_net_usd": null,
     "economics": {
       "label": "GEMINI_COHORT_ECONOMICS_V1",
-      "windows_settled": 10,
+      "windows_settled": 3,
       "windows_pending_settlement": 1,
       "windows_unrecoverable": 0,
-      "gross_fill_spend_usd": "19.96",
-      "settlement_payout_usd": "15",
+      "gross_fill_spend_usd": "1.33",
+      "settlement_payout_usd": "0",
       "fees_usd": "0",
       "rebates_credited_usd": "0",
-      "settlement_implied_net_usd": "-3.82",
-      "cumulative_economic_loss_usd": "3.82",
-      "max_drawdown_usd": "5.29",
-      "equity_peak_usd": "1.47",
+      "settlement_implied_net_usd": "-0.56",
+      "cumulative_economic_loss_usd": "0.56",
+      "max_drawdown_usd": "0.56",
+      "equity_peak_usd": "0",
       "equity_curve": [
         {
-          "symbol": "GEMI-BTC15M2609221200-UP",
-          "net_usd": "-0.23",
-          "equity_usd": "-0.23",
-          "drawdown_usd": "0.23"
+          "symbol": "GEMI-BTC05M2609231140-UP",
+          "net_usd": "-0.35",
+          "equity_usd": "-0.35",
+          "drawdown_usd": "0.35"
         },
         {
-          "symbol": "GEMI-BTC15M2609221215-UP",
-          "net_usd": "1.7",
-          "equity_usd": "1.47",
-          "drawdown_usd": "0"
+          "symbol": "GEMI-BTC05M2609231145-UP",
+          "net_usd": "-0.21",
+          "equity_usd": "-0.56",
+          "drawdown_usd": "0.56"
         },
         {
-          "symbol": "GEMI-BTC15M2609221230-UP",
-          "net_usd": "-0.53",
-          "equity_usd": "0.94",
-          "drawdown_usd": "0.53"
-        },
-        {
-          "symbol": "GEMI-BTC15M2609221245-UP",
-          "net_usd": "-1.8",
-          "equity_usd": "-0.86",
-          "drawdown_usd": "2.33"
-        },
-        {
-          "symbol": "GEMI-BTC15M2609221300-UP",
-          "net_usd": "-0.11",
-          "equity_usd": "-0.97",
-          "drawdown_usd": "2.44"
-        },
-        {
-          "symbol": "GEMI-BTC15M2609221315-UP",
-          "net_usd": "-1.01",
-          "equity_usd": "-1.98",
-          "drawdown_usd": "3.45"
-        },
-        {
-          "symbol": "GEMI-BTC15M2609221330-UP",
-          "net_usd": "0.2",
-          "equity_usd": "-1.78",
-          "drawdown_usd": "3.25"
-        },
-        {
-          "symbol": "GEMI-BTC15M2609221345-UP",
-          "net_usd": "-0.66",
-          "equity_usd": "-2.44",
-          "drawdown_usd": "3.91"
-        },
-        {
-          "symbol": "GEMI-BTC15M2609221400-UP",
-          "net_usd": "-0.65",
-          "equity_usd": "-3.09",
-          "drawdown_usd": "4.56"
-        },
-        {
-          "symbol": "GEMI-BTC15M2609221415-UP",
-          "net_usd": "-0.73",
-          "equity_usd": "-3.82",
-          "drawdown_usd": "5.29"
+          "symbol": "GEMI-BTC05M2609231150-UP",
+          "net_usd": "0",
+          "equity_usd": "-0.56",
+          "drawdown_usd": "0.56"
         }
       ],
       "realized_net_usd": null,
       "labels": "cumulative_economic_loss_usd and max_drawdown_usd are the ONLY two fields the cohort stops read, and both are computed over SETTLED windows only. A profitable window carries a NEGATIVE loss and reduces it. Pending windows contribute nothing -- their risk lives in the per-market gates. Unrecoverable windows contribute nothing and are never estimated from turnover. REALIZED stays null until attributable cash is read back."
     },
     "stopped": true,
-    "stop_code": "STOPPED_DRAWDOWN",
-    "stop_why": "peak-to-trough drawdown 5.29 has reached the cohort cap of 5.00. Settlement-implied equity over SETTLED windows only; peak was 1.47. This is not a turnover measure."
+    "stop_code": "STOPPED_WINDOWS_EXHAUSTED",
+    "stop_why": "the authorized 4 window(s) have been observed"
   },
   "window": {
-    "window_index": 11,
-    "symbol": "GEMI-BTC15M2609221430-UP",
-    "cohort_id": "COHORT-2026-09-22-BTC15M-COHORT2-W11",
-    "started_utc": "2026-09-22T14:15:22.762801+00:00",
-    "cycles_seen": 66,
-    "mutations_seen": 6,
-    "stop_reason": "authoritative state unreadable for 6 consecutive cycle(s) over 41.4s, past the bound of 5 cycle(s) / 60.0s: CROSSED book: a bid at or above its own ask. No unreadable run longer than 5 cycles has ever recovered, so this is withdrawn rather than waited out.",
+    "window_index": 4,
+    "symbol": "GEMI-BTC05M2609231155-UP",
+    "cohort_id": "COHORT-2026-09-23-BTC5M-AB-B-W03",
+    "started_utc": "2026-09-23T11:50:49.349160+00:00",
+    "cycles_seen": 11,
+    "mutations_seen": 9,
+    "stop_reason": "risk gate refused the rung: a fill would take NO to 3, past 2",
     "settlement_implied_net_usd": null,
-    "tte_at_bind_s": 878.2535672187805,
+    "tte_at_bind_s": 251.420836687088,
     "actions_granted": 12,
     "last_mutation": {
-      "seq": 6,
-      "kind": "CANCEL",
-      "cycle": 66,
-      "utc": "2026-09-22T14:25:57.703075+00:00",
-      "error": null
+      "seq": 9,
+      "kind": "PLACE",
+      "cycle": 11,
+      "utc": "2026-09-23T11:53:43.085949+00:00",
+      "error": "ProbeStop: risk gate refused the rung: a fill would take NO to 3, past 2"
     },
-    "finished_utc": "2026-09-22T14:26:03.436864+00:00",
+    "finished_utc": "2026-09-23T11:53:48.066892+00:00",
     "economics": {
       "label": "GEMINI_COHORT_ECONOMICS_V1",
-      "symbol": "GEMI-BTC15M2609221430-UP",
-      "gross_fill_spend_usd": "1.14",
-      "committed_open_usd": "0.52",
+      "symbol": "GEMI-BTC05M2609231155-UP",
+      "gross_fill_spend_usd": "0.77",
+      "committed_open_usd": "0",
       "fees_usd": "0",
       "fee_provenance": {
-        "fills_seen": 4,
+        "fills_seen": 2,
         "fees_missing": 0,
         "fees_usd": "0",
         "source": "the venue's own orderUpdate `n` field",
         "note": "an execution with no `n` contributes nothing and is COUNTED here: absent is unknown, never zero"
       },
       "fill_provenance": {
-        "fills": 4,
-        "maker": 4,
+        "fills": 2,
+        "maker": 2,
         "taker": 0,
         "unknown": 0,
         "all_maker": true,
@@ -144,11 +102,11 @@
       },
       "rebates_usd": null,
       "rebates_note": "CREDITED rebates only. None read back means None, not zero: an assumed rebate is exactly the kind of number that makes a bad trade look profitable.",
-      "yes_qty": "4",
-      "no_qty": "0",
-      "n_fills": 4,
-      "matched_qty": "0",
-      "directional_residual": "4",
+      "yes_qty": "1",
+      "no_qty": "2",
+      "n_fills": 3,
+      "matched_qty": "1",
+      "directional_residual": "-1",
       "realized_net_usd": null,
       "realized_note": "REALIZED requires an attributable cash movement read back from the account. Nothing here is it.",
       "state": "PENDING_SETTLEMENT",
@@ -160,52 +118,66 @@
     }
   },
   "cycle": {
-    "cycle": 66,
-    "utc": "2026-09-22T14:25:56.878514+00:00",
-    "tte_s": 243.121488571167,
-    "state": "WITHDRAWING",
-    "window_phase": null,
-    "book_readable": false,
-    "book_why": "CROSSED book: a bid at or above its own ask",
+    "cycle": 11,
+    "utc": "2026-09-23T11:53:39.004954+00:00",
+    "tte_s": 80.99504852294922,
+    "state": "RUNNING",
+    "window_phase": "WINDOW_OPEN",
+    "book_readable": true,
+    "book_why": null,
     "yes": {
-      "bid": "0.15",
-      "ask": "0.07",
-      "spread": null
+      "bid": "0.78",
+      "ask": "0.97",
+      "spread": "0.19"
     },
     "no": {
-      "bid": "0.93",
-      "ask": "0.85",
-      "spread": null
+      "bid": "0.03",
+      "ask": "0.22",
+      "spread": "0.19"
     },
-    "passive_pair_cost": null,
-    "desired": [],
-    "actions": [],
+    "passive_pair_cost": "0.81",
+    "desired": [
+      {
+        "outcome": "Up",
+        "price": "0.78",
+        "qty": "1"
+      },
+      {
+        "outcome": "Down",
+        "price": "0.03",
+        "qty": "1"
+      }
+    ],
+    "actions": [
+      "COMPLETE",
+      "EXTEND"
+    ],
     "held_by": [],
-    "unreadable_hold": "BOUND_EXCEEDED",
+    "unreadable_hold": null,
     "resting": [
       {
         "outcome": null,
-        "price": "0.52",
+        "price": "0.69",
         "qty": "1"
       }
     ],
     "n_resting": 1,
     "inventory": {
-      "yes_qty": "4",
-      "no_qty": "0",
-      "n_fills": 4,
-      "matched_qty": "0",
-      "effective_matched_pair_cost": null,
-      "directional_residual": "4",
-      "inventory_imbalance": "4",
+      "yes_qty": "1",
+      "no_qty": "2",
+      "n_fills": 3,
+      "matched_qty": "1",
+      "effective_matched_pair_cost": "0.62",
+      "directional_residual": "-1",
+      "inventory_imbalance": "1",
       "same_side_run": {
-        "leg": "YES",
-        "len": 4
+        "leg": "NO",
+        "len": 2
       },
-      "gross_fill_spend_usd": "1.14",
+      "gross_fill_spend_usd": "0.77",
       "labels": "gross_fill_spend_usd is cash OUT from confirmed fills. It is TURNOVER, never a loss."
     },
-    "actions_used": 5,
+    "actions_used": 6,
     "actions_of": 12
   },
   "write_errors": [],
