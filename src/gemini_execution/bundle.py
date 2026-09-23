@@ -57,6 +57,14 @@ MEMBERS = (
     # band moved, without invalidating the approval: exactly the property the
     # spec exists to make unforgeable.
     "live_probe_spec.py",      # the one declaration both invocations consume
+    # ADDED WITH THE TRADE-QUALITY PROBE. fill_quality.py runs ON THE LIVE
+    # PATH after every fill: it computes the executable complement cost, the
+    # projected pair cost and the residual dollars actually at risk, and it
+    # records every instance where the envelope WOULD have changed the
+    # controller's desired action. It decides nothing -- but a module that
+    # reports the economics a probe is judged on must not be editable without
+    # invalidating the approval that judged them.
+    "fill_quality.py",         # post-fill economics and the CAP counterfactual
     "bundle.py",               # this file, so the member list cannot be edited
 )
 
@@ -86,6 +94,7 @@ EXPECTED_AUTH_LINES = {
     "outstanding_ledger.py": 0,
     "position_ledger.py": 0,
     "live_probe_spec.py": 0,
+    "fill_quality.py": 0,
     "bundle.py": 1,
 }
 
