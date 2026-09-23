@@ -1547,9 +1547,78 @@ async def multi_async(a) -> int:
     names = [n.strip() for n in a.cohorts.split(",") if n.strip()]
     print("DUAL_COHORT_SHADOW cohorts=%s policy=%s state_root=%s" % (
         names, a.policy, a.state_root), flush=True)
-    await asyncio.gather(*[cohort_loop(a, n) for n in names],
-                         return_exceptions=True)
+    tasks = [cohort_loop(a, n) for n in names]
+    # ---- THE P10 RECORDER RIDES ALONG, ADDITIVELY.
+    #
+    # It writes ONLY to <state_root>/p10/ and shares nothing with a cohort:
+    # not an evidence path, not a runner, not a rate bucket. A test asserts
+    # the paths cannot collide. It exists here rather than as its own service
+    # because the capture it replaces was dying with the session that started
+    # it, silently, and the volume this process already owns is the only
+    # persistence available without new infrastructure.
+    #
+    # It is wrapped so that it CANNOT affect the cohorts: its own task, its
+    # own try/except, and `return_exceptions=True` on the gather below. The
+    # switch is here rather than in the module so turning it off needs no
+    # code change.
+    if P10_RECORDER_ENABLED:
+        tasks.append(p10_recorder_loop(a))
+    await asyncio.gather(*tasks, return_exceptions=True)
     return 0
+
+
+#: off by setting GEMINI_P10_RECORDER=0. Read ONCE, here, so the recorder
+#: module itself reads no environment at all and a test can assert that.
+P10_RECORDER_ENABLED = os.environ.get("GEMINI_P10_RECORDER", "1") not in (
+    "0", "false", "no")
+
+#: seconds between full passes of a cohort's symbol set
+P10_CYCLE_SLEEP_S = float(os.environ.get("GEMINI_P10_SLEEP_S", "1.0"))
+P10_REDISCOVER_S = 180.0
+P10_HEARTBEAT_EVERY = 30
+
+
+async def p10_recorder_loop(a) -> None:
+    """Paired book+trade capture for the frozen decoder. Never raises out.
+
+    BTC15m is served before BTC5m every pass, deliberately: its book is about
+    a quarter as wide, so the same cycle buys far more decodable prints there.
+    """
+    from src.gemini_execution import p10_recorder as P10
+    state = {}
+    for cohort, prefix, n in P10.COHORTS:
+        state[cohort] = {"bucket": P10._Bucket(P10.DEFAULT_RATE),
+                         "seen": P10.load_seen(a.state_root, cohort),
+                         "poll": [0], "syms": None, "disc": 0.0, "i": 0}
+    print("P10_RECORDER start root=%s/p10 cohorts=%s resumed_keys=%s"
+          % (a.state_root, [c[0] for c in P10.COHORTS],
+             {k: len(v["seen"]) for k, v in state.items()}), flush=True)
+    while True:
+        for cohort, prefix, n in P10.COHORTS:
+            st = state[cohort]
+            try:
+                now = time.time()
+                if st["syms"] is None or now - st["disc"] > P10_REDISCOVER_S:
+                    st["syms"] = await asyncio.to_thread(
+                        P10.discover, prefix, n, st["bucket"])
+                    st["disc"] = now
+                h = await asyncio.to_thread(
+                    P10.run_cohort_cycle, cohort, prefix, n,
+                    state_root=a.state_root, bucket=st["bucket"],
+                    seen=st["seen"], poll=st["poll"], syms=st["syms"])
+                st["i"] += 1
+                if st["i"] % P10_HEARTBEAT_EVERY == 1:
+                    print("P10_HB %s" % json.dumps(h, default=str),
+                          flush=True)
+            except Exception as exc:                            # noqa: BLE001
+                # A research recorder must never be able to stop the 24/7
+                # collector it rides on, and "never" has to be a property of
+                # this function rather than of an intention.
+                print("P10_ERR %s %s: %s" % (cohort, type(exc).__name__, exc),
+                      flush=True)
+                st["syms"] = None
+                await asyncio.sleep(10.0)
+        await asyncio.sleep(P10_CYCLE_SLEEP_S)
 
 
 async def main_async(a) -> int:

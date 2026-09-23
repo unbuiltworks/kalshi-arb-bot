@@ -106,3 +106,20 @@ loss was invisible until the next gate score. Use `setsid` and `disown`:
 Three processes, one per duration family, `BTC15M` / `BTC2609` / `BTC05M`, so
 they cover disjoint contracts and each owns its own rate bucket. Verify with
 `pgrep -af p10a_capture.py` — an empty result is a dead gate, not a quiet one.
+
+## Persistent collection, from 2026-09-23
+
+The session-background recorders were the wrong substrate: they are reaped when
+a turn ends, which cost the gate two multi-hour stretches on 2026-09-22 with no
+error anywhere. Capture now also runs inside the 24/7 collector
+(`src/gemini_execution/p10_recorder.py`, wired additively into
+`shadow_soak.multi_async`), writing one append-only stream per cohort under
+`<state_root>/p10/<cohort>/`.
+
+**The pre-registered gate is NOT re-based on it.** Today's 144 decoded rows
+keep their own provenance and their FAIL-CLOSED status. Persistent
+observations extend the pre-registered gate only if they meet the identical
+frozen collection and decoder requirements — same row schema, same
+`max_stale_s`, same classification rule — and are otherwise held as a separate
+validation population. The row schema is byte-identical to `p10a_capture.py`
+precisely so that this comparison is possible rather than assumed.
