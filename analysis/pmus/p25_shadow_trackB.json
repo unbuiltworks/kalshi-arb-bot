@@ -1748,6 +1748,64 @@
     "realized_pnl": null,
     "labels": "every count above is SHADOW; no order existed"
    }
+  },
+  {
+   "market": "cpc-btc-updown-15m-2026-09-23-1415z",
+   "venue": "PMUS",
+   "product": "btc-updown-15m",
+   "model_sha": "bbb55bf90638d2bd",
+   "track": "B_ASSUMED_FILL",
+   "fill_assumption": "ASSUMPTION_VOLUME_AT_TOUCH: a quote at the touch is assumed filled for one unit when sharesTraded strictly increased while it was live. AN ASSUMPTION, NOT EVIDENCE.",
+   "settlement": {
+    "authority": "venue POSITION_RESOLUTION activity / afterPosition.realized",
+    "clock": "LITERAL. The market serves startTime and endDate exactly 15 minutes apart, so seconds-to-expiry is a fact and the sports event-progress translation must NOT be applied",
+    "index": "CF Benchmarks BRTI",
+    "rule": "settles Up iff the BRTI value at T_end is greater than or equal to the value at T_start; each value is the simple average of the 60 BRTI prices in the last minute before that time, rounded to 2 dp",
+    "payout": "1.00 to the winning outcome",
+    "source": "market description served by GET /v1/events?series_id=375"
+   },
+   "provenance": {
+    "book": "/v1/markets/{slug}/bbo and /book -- PUBLIC BOOK IS ~30s CACHED (9 distinct ladder states across 88 polls); a fresher book requires the authenticated WS",
+    "prints": "sharesTraded delta only -- /trades is 404 on the public gateway, so trade COUNT is not observable and bursts are a LOWER BOUND, never a count",
+    "fees": "taker 0.0695*C*p*(1-p); maker rebate 0.0125*C*p*(1-p) credited at the point of trade and NOT counted toward edge (https://docs.polymarket.us/fees)",
+    "incentive": "liquidity program crypto_up_down_20260922, pool $30 per daily_event shared across the program's markets; counted at $0 until eligibility and allocation are established"
+   },
+   "fee_schedule": {
+    "source": "https://docs.polymarket.us/fees",
+    "formula": "fee = theta * C * p * (1 - p)",
+    "taker_theta": "0.0695",
+    "maker_rebate_theta": "0.0125",
+    "maker_rebate_timing": "applied at the point of trade",
+    "rounding": "banker's rounding to the cent, as published",
+    "effective_change_utc": "2026-09-17T04:00:00+00:00",
+    "effective_change_label": "12 AM ET, Thursday September 17, 2026",
+    "taker_rebate_available_to_this_account": false,
+    "taker_rebate_reason": "tiers start at $250,000 of prior-calendar-month taker notional; this account is below the first tier, so it is counted at zero",
+    "verified_against": "all 99 published price rows reproduce exactly; see tests/test_pmus_fees.py"
+   },
+   "close_utc_epoch": 1790173800.0,
+   "decisions": [],
+   "blockers": [],
+   "shadow_only": true,
+   "order_entry": false,
+   "realized_pnl": null,
+   "labels": "SHADOW/THEORETICAL frozen-L5 observer over the PMUS public book tape. No print, queue position or taker side is observable here, so nothing is FILLED and nothing is REALIZED. order_entry=False structurally.",
+   "summary": {
+    "decision_points": 0,
+    "quotes": 0,
+    "holds": 0,
+    "relations": {},
+    "hold_reasons": {},
+    "terminal_inventory": {
+     "up": 0,
+     "dn": 0,
+     "residual": 0,
+     "matched": 0
+    },
+    "terminal_pair_cost": null,
+    "realized_pnl": null,
+    "labels": "every count above is SHADOW; no order existed"
+   }
   }
  ]
 }

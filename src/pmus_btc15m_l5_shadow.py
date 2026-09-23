@@ -218,7 +218,12 @@ def replay_window(slug: str, rows: List[dict], model: Mapping[str, Any],
     inv = Inventory()
     last_rel = ""
     t = books[0]["t"]
-    stop_t = close_t - SETTLEMENT_CUTOFF_S
+    # THE REPLAY ENDS WHERE THE TAPE ENDS. Walking past the last snapshot
+    # produces a decision at every step whose "latest prior book" is the same
+    # ageing one, so a window still in progress reports a wall of stale_book
+    # holds that say nothing about the venue and everything about the clock.
+    # A decision cannot be made on data that does not exist yet.
+    stop_t = min(close_t - SETTLEMENT_CUTOFF_S, books[-1]["t"])
     n_actions = 0
     while t <= stop_t and n_actions < MAX_ACTIONS_PER_WINDOW:
         prior = [b for b in books if b["t"] < t]

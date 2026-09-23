@@ -1,7 +1,7 @@
 {
  "label": "PMUS_BTC15M_COMPAT_AND_ECONOMICS_V1",
  "compatibility": {
-  "windows_replayed": 3,
+  "windows_replayed": 4,
   "windows_with_any_quote": 2,
   "decision_points": 41,
   "quotes": 12,
