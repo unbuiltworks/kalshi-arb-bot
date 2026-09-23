@@ -721,7 +721,11 @@ jobs:
           # NOT YET AUTHORIZED at the time of writing: static readiness now
           # evaluates the latch counterfactual, so this is PROVEN unconsumed
           # rather than assumed.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-23-GEMINI-Q1-AB-2"
+          # SPENT 2026-09-23. Probe B consumed AB-2 at 11:35Z and ran all
+          # four authorized windows. The latch keys on the id alone, so
+          # this step could now only return STOPPED_NO_LATCH. Disarmed to
+          # the sentinel; the latch stays on disk as the record.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # FRESH BOUND, not an extension of the 08:00Z grant A ran under: a
           # spent authorization's clock is not reused. Four BTC5m contracts
           # plus entry waits is well under an hour; this leaves room for the

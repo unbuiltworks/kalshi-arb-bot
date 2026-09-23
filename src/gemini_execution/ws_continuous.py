@@ -101,13 +101,13 @@ LABEL = "GEMINI_L5_WS_CONTINUOUS_V1"
 #: default to be overridden at runtime: nothing reads an environment variable
 #: to fill it in. A human edits it in a reviewed commit, or the driver cannot
 #: mutate anything, ever.
-REQUIRED_AUTH_ID: Optional[str] = "OWNER-2026-09-23-GEMINI-Q1-AB-2"
+REQUIRED_AUTH_ID: Optional[str] = None
 
 #: The sha256 of THIS FILE as reviewed under that authorization. An
 #: authorization names the exact executable it was granted against, so editing
 #: the driver afterwards invalidates it automatically rather than silently
 #: carrying it forward onto code nobody reviewed.
-AUTHORIZED_SHA: Optional[str] = "31ec46a6a2d03b6f7d26cbcdf34304f3c524382b15d7ceb43852e687fa914c62"  # noqa: E501
+AUTHORIZED_SHA: Optional[str] = None
 
 #: The sha256 of the frozen risk envelope the authorization was granted
 #: against. Changing any bound changes this, and the authorization stops
@@ -119,7 +119,7 @@ AUTHORIZED_SHA: Optional[str] = "31ec46a6a2d03b6f7d26cbcdf34304f3c524382b15d7ceb
 # would be PRE-AUTHORIZING an envelope nobody has approved, which is the exact
 # thing this constant exists to prevent. Installing one is a human editing
 # this line in a reviewed commit.
-AUTHORIZED_ENVELOPE: Optional[str] = "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d"  # noqa: E501
+AUTHORIZED_ENVELOPE: Optional[str] = None
 
 
 class NotAuthorized(RuntimeError):
@@ -1133,6 +1133,12 @@ class Driver:
         #: SAFETY mutations, bounded separately from the strategy
         #: budget so cleanup can still run when strategy slots are 0.
         self.cleanup_consumed = 0
+        #: POST-PLACEMENT EVIDENCE. Probe B could not say whether
+        #: maker_improve transformed a price or no-oped, because the decision
+        #: capture is taken BEFORE apply_A and `native_price`/`improved` were
+        #: dropped on the floor. This records the transformation itself.
+        #: OBSERVATION ONLY: nothing reads it back and no decision consults it.
+        self._placement_log: List[Dict[str, Any]] = []
         #: client/venue order id -> "YES"/"NO", from OUR OWN placements.
         #: /v1/mytrades states no outcome, so this is what sides a
         #: trades-only execution before filled-history catches up.
@@ -1493,7 +1499,9 @@ class Driver:
         if self._placement == "maker_improve" and acts:
             from src.gemini_execution import ab_arms as AB
             book = _improve_book(st)
+            native = [dict(a) for a in acts]
             acts = AB.apply_A(acts, book)
+            self._record_placement(native, acts, book, st)
             bad = _crossing(acts, book)
             if bad is not None:
                 self.stop(DO_NOT_TRADE,
@@ -2039,6 +2047,66 @@ class Driver:
 
     # ------------------------------------------------------------- the window
 
+    def _record_placement(self, native: Sequence[Mapping[str, Any]],
+                          placed: Sequence[Mapping[str, Any]],
+                          book: Mapping[str, Any],
+                          st: Mapping[str, Any]) -> None:
+        """What the placement rule did to each action. OBSERVATION ONLY.
+
+        WHY THIS EXISTS. Probe B submitted every order at exactly the book
+        bid and could not say whether that was the controller's own price with
+        the placement rule doing nothing, or the controller's price one tick
+        behind the touch with the rule moving it TO the touch. `apply_A`
+        stamps `native_price` and `improved` and the decision capture, taken
+        BEFORE it runs, never saw them. An experiment that cannot say what its
+        orders were priced at cannot answer a placement question.
+
+        It decides nothing, it is read by nothing, and it changes no price:
+        it copies what already happened.
+        """
+        inv = (st or {}).get("inventory") or {}
+        for a, b in zip(native, placed):
+            leg = str(b.get("leg") or "").upper()
+            side = "yes" if leg == "YES" else "no"
+            q = (book or {}).get(side) or {}
+            bid, ask = q.get("bid"), q.get("ask")
+            px = b.get("price")
+            def _d(v):
+                try:
+                    return D(str(v))
+                except Exception:                             # noqa: BLE001
+                    return None
+            dpx, dbid, dask = _d(px), _d(bid), _d(ask)
+            self._placement_log.append({
+                "utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                "leg": leg,
+                "action": b.get("action"),
+                "native_price": str(a.get("price")),
+                "submitted_price": str(px),
+                "improved": bool(b.get("improved")),
+                "placement": self._placement,
+                "bid": None if bid is None else str(bid),
+                "ask": None if ask is None else str(ask),
+                "from_bid": (None if dpx is None or dbid is None
+                             else str(dpx - dbid)),
+                "from_ask": (None if dpx is None or dask is None
+                             else str(dpx - dask)),
+                "qty": str(b.get("qty")),
+                "inventory": {"yes_qty": inv.get("yes_qty"),
+                              "no_qty": inv.get("no_qty"),
+                              "matched_qty": inv.get("matched_qty"),
+                              "directional_residual": inv.get(
+                                  "directional_residual")},
+                "budget_consumed_before": self.budget_consumed,
+                "budget_left_before": self.budget_left(),
+                "labels": ("OBSERVED post-placement. `native_price` is what "
+                           "the frozen controller asked for; "
+                           "`submitted_price` is what the placement rule "
+                           "produced. improved=False with equal prices means "
+                           "the rule declined -- it is NOT the same as the "
+                           "rule never running."),
+            })
+
     def _drain_events(self, session: Any, report: Dict[str, Any]) -> None:
         """Record raw orderUpdate frames. OBSERVATION ONLY.
 
@@ -2049,6 +2117,14 @@ class Driver:
         are recorded so the shape becomes evidence, while inventory comes from
         an authoritative re-read whose shape IS observed.
         """
+        # FLUSHED FIRST, BEFORE ANY EARLY RETURN. Placement rows are not
+        # order events and must not be lost because the session happens to
+        # expose no event queue -- which is exactly the shape a shadow or
+        # dry-run path presents.
+        if self._placement_log:
+            report.setdefault("placement_capture", []).extend(
+                self._placement_log)
+            self._placement_log = []
         q = getattr(session, "events", None)
         if q is None or not hasattr(q, "get_nowait"):
             return

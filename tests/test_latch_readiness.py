@@ -83,14 +83,17 @@ def test_readiness_fails_closed_when_the_latch_would_refuse(tmp_path,
     assert any(w.startswith("latch:") for w in out["why_not"]), out["why_not"]
 
 
-def test_the_real_ab2_latch_is_fresh_and_ab1_is_spent():
-    """The live tree, not a fixture: AB-1 spent by Probe A, AB-2 unused."""
+def test_both_ab_authorizations_are_now_spent_and_refuse():
+    """The live tree, not a fixture. AB-1 was spent by Probe A and AB-2 by
+    Probe B; both latches stay on disk as the record, and neither can reach
+    the mutation boundary again. A third probe needs a third identifier."""
     head = "COHORT-2026-09-23-BTC5M-AB-B-W01"
     ab2 = CR.latch_counterfactual("OWNER-2026-09-23-GEMINI-Q1-AB-2",
                                   state_dir=CR.DEFAULT_STATE_DIR,
                                   head=head, max_windows=4)
-    assert ab2["latch_path_exists"] is False
-    assert ab2["reaches_mutation_boundary"] is True
+    assert ab2["latch_path_exists"] is True, (
+        "Probe B consumed AB-2; its latch is the record and is never cleared")
+    assert ab2["reaches_mutation_boundary"] is False
 
     ab1 = CR.latch_counterfactual("OWNER-2026-09-23-GEMINI-Q1-AB-1",
                                   state_dir=CR.DEFAULT_STATE_DIR,
