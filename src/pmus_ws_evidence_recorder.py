@@ -95,6 +95,66 @@ EXPAND_PAGES_ENV = "PMUS_WS_EXPAND_PAGES"  # 0 disables global enumeration
 # load would be the wrong thing to change in the same step. `plan(protected=...)`
 # is implemented and tested; automatic wiring from live positions is NOT done.
 PROTECTED_ENV = "PMUS_WS_PROTECTED_SLUGS"
+
+#: Resubscribe the instant a fixed-period window rolls over, instead of
+#: waiting out the rediscovery timer.
+#:
+#: WHY. The websocket session runs for PMUS_WS_DISCOVERY_SECONDS (default
+#: 300) before reconnecting with fresh targets, so a BTC15m window that opens
+#: at :45:00 can wait up to five minutes to be subscribed at all. Measured on
+#: the raw tape: the authenticated two-sided book first appeared 429.4s and
+#: 513.5s into two consecutive 900s windows, while the venue traded 73 times
+#: in one of them. That is not the venue being quiet and it is not the public
+#: gateway -- it is us arriving late to a market we are entitled to watch
+#: from its first second.
+#:
+#: Set to the window period in seconds (900 for BTC15m). 0 or unset is off,
+#: and the recorder behaves exactly as before.
+ROLLOVER_ENV = "PMUS_WS_ROLLOVER_SECONDS"
+
+#: the series whose live window must always keep its subscription seat
+ROLLOVER_SLUG_ENV = "PMUS_WS_ROLLOVER_SLUG_PREFIX"
+
+
+def rollover_period_s() -> float:
+    try:
+        v = float(str(os.getenv(ROLLOVER_ENV, "")).strip() or "0")
+    except ValueError:
+        return 0.0
+    return v if v > 0 else 0.0
+
+
+def next_window_boundary(now: Optional[float] = None,
+                         period_s: Optional[float] = None) -> Optional[float]:
+    """The next wall-clock instant a window opens, or None when off."""
+    period = rollover_period_s() if period_s is None else period_s
+    if not period:
+        return None
+    now = time.time() if now is None else now
+    return (int(now // period) + 1) * period
+
+
+def rolling_window_slugs(now: Optional[float] = None,
+                         period_s: Optional[float] = None,
+                         ahead: int = 1) -> list:
+    """The window trading NOW plus the next `ahead`, as market slugs.
+
+    A static PMUS_WS_PROTECTED_SLUGS cannot express "the window trading now"
+    for a product that rotates every fifteen minutes, so the live window is
+    computed from the clock and protected alongside the static list.
+    """
+    prefix = str(os.getenv(ROLLOVER_SLUG_ENV, "") or "").strip()
+    period = rollover_period_s() if period_s is None else period_s
+    if not prefix or not period:
+        return []
+    now = time.time() if now is None else now
+    start = int(now // period) * period
+    out = []
+    for i in range(0, max(1, ahead + 1)):
+        t = datetime.fromtimestamp(start + i * period, timezone.utc)
+        out.append("%s%s-%02d%02dz" % (prefix, t.strftime("%Y-%m-%d"),
+                                       t.hour, t.minute))
+    return out
 PLANNER_ENV = "PMUS_WS_PLANNER"            # "priority" (default) | "rotation"
 
 # last discovery diagnostics (issue #167 comment 5520693117): merged into
@@ -1934,6 +1994,10 @@ async def run(minutes: Optional[float]) -> int:
         targets = discover_universe()
         protected_now = [x.strip() for x in
                          os.getenv(PROTECTED_ENV, "").split(",") if x.strip()]
+        # the live window and the one about to open never lose their seat
+        for _slug in rolling_window_slugs():
+            if _slug not in protected_now:
+                protected_now.append(_slug)
         if os.getenv(PLANNER_ENV, "priority").strip() == "rotation":
             plan = subscription_plan(targets, mstate, cap, cycle)
             slugs = plan["subscribe"]
@@ -1994,9 +2058,15 @@ async def run(minutes: Optional[float]) -> int:
                      "subscribe_frames": len(frames), "chunk": chunk,
                      "starved_reconnects": starved_reconnects},
                     separators=(",", ":")), flush=True)
+                rollover_at = next_window_boundary()
                 while deadline is None or time.monotonic() < deadline:
                     if time.monotonic() - session_start > rediscover_s:
                         break                     # reconnect w/ fresh targets
+                    if rollover_at is not None and time.time() >= rollover_at:
+                        # a new window just opened: resubscribe NOW rather
+                        # than arriving minutes into a market that is already
+                        # trading. O(1) per frame, exact at the boundary.
+                        break
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=15)
                     except asyncio.TimeoutError:
