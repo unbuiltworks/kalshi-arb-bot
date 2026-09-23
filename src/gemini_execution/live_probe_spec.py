@@ -488,7 +488,12 @@ BTC5M_Q1_IMPROVE = _declare(LiveProbeSpec(
     #: cannot be bound whatever a window flag says. Outside spec_sha, so
     #: bfe7ba23... is unchanged and the placement behaviour is provably the
     #: frozen one.
-    live_cohort="COHORT-2026-09-23-BTC5M-AB-B-W01"))
+    # REPOINTED FOR B2. Probe B spent W01 12/12, W02 7/12 and W03 8/12, so
+    # only one ledger of the AB-B chain is fresh and a four-window grant
+    # cannot be built from it. B2 gets its own chain. live_cohort is
+    # METADATA and sits outside spec_sha by design, so this does NOT move
+    # bfe7ba23 -- the experiment is identical, only its budget is new.
+    live_cohort="COHORT-2026-09-23-BTC5M-B2-W01"))
 
 
 def get(spec_id: str) -> LiveProbeSpec:
