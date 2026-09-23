@@ -482,8 +482,43 @@ def install() -> None:
     pq.plan = plan
 
 
+#: Optional one-shot AUTHENTICATED identity/market preflight, read-only.
+#:
+#: It is hooked HERE and not in deploy/pmus_ws_recorder/entrypoint.sh because
+#: that script never runs: the image declares no ENTRYPOINT, and the service
+#: sets an explicit startCommand which overrides CMD in any case. A hook in
+#: the entrypoint would have been silently dead.
+#:
+#: It runs on a DAEMON THREAD so a slow or hanging venue read can never delay
+#: authenticated capture -- the preflight gates money, and evidence must not
+#: wait on it. It prints exactly one PMUS_PREFLIGHT line in every case,
+#: including its own internal failure, so silence means it did not run.
+PREFLIGHT_ENV = "PMUS_PREFLIGHT_ON_START"
+
+
+def preflight_on_start() -> Optional[Any]:
+    """Start the read-only preflight, or return None when it is off."""
+    if not str(os.getenv(PREFLIGHT_ENV, "")).strip():
+        return None
+    import threading
+
+    def run() -> None:
+        try:
+            from scripts import pmus_auth_preflight_readonly as pf
+            pf.main([])
+        except BaseException as exc:                           # noqa: BLE001
+            # never propagate: this thread must not be able to affect capture
+            print("PMUS_PREFLIGHT {\"preflight\":\"FAILED\",\"fatal\":\"%s\"}"
+                  % type(exc).__name__, flush=True)
+
+    t = threading.Thread(target=run, name="pmus-preflight", daemon=True)
+    t.start()
+    return t
+
+
 def main() -> int:
     install()
+    preflight_on_start()
     return base.main()
 
 

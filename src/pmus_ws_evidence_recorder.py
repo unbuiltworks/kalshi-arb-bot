@@ -22,10 +22,6 @@ Environment (names only; never commit values):
                         first 32 bytes used as the Ed25519 seed (exactly
                         the scheme in the official auth docs)
   PMUS_WS_ROOT          state root (default /state/pmus-ws)
-  PMUS_WS_SERIES        optional comma list of RECURRING SERIES slugs
-                        (e.g. btc-updown-15m). Each rediscovery re-resolves
-                        the window that is trading now, because a 15-minute
-                        market expires faster than any static list
   PMUS_WS_MARKETS       optional comma list of market slugs; when empty,
                         targets are discovered from the public gateway
                         (live league markets + active-incentive markets,
@@ -77,7 +73,8 @@ SECRET_ENV = "PMUS_API_SECRET_KEY"
 ROOT_ENV = "PMUS_WS_ROOT"
 DEFAULT_ROOT = "/state/pmus-ws"
 MARKETS_ENV = "PMUS_WS_MARKETS"
-SERIES_ENV = "PMUS_WS_SERIES"        # recurring series slugs, rolled per window
+SERIES_ENV = "PMUS_WS_SERIES"        # recurring series, rolled per window
+SERIES_LEAD_S = 60.0                 # admit the next window this early
 LEAGUES_ENV = "PMUS_WS_LEAGUES"
 MAX_MARKETS_ENV = "PMUS_WS_MAX_MARKETS"
 DISCOVERY_ENV = "PMUS_WS_DISCOVERY_SECONDS"
@@ -232,9 +229,13 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
             # bounded TIME-ALIGNED snapshot history: slot replay must use
             # the book that actually existed at each slot, never the
             # current BBO (issue #167 comment 5517600205)
+            # ask_qty is stamped HERE, alongside bid_qty, for the same reason
+            # the prices are: the faithful translation caps a crossing at the
+            # depth that existed AT THE ACTION, and reading the live snapshot
+            # later would staple present depth onto a past state.
             s.setdefault("bbo_history", []).append({
                 "t": now, "bid": s["bid"], "ask": s["ask"],
-                "bid_qty": s["bid_qty"],
+                "bid_qty": s["bid_qty"], "ask_qty": s["ask_qty"],
                 "ask_book_missing": not s["both_sides_served"]})
             del s["bbo_history"][:-2000]
         else:
@@ -247,10 +248,28 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
             except Exception:
                 s["bad_trade_rows"] = s.get("bad_trade_rows", 0) + 1
                 continue
+            # THE BOOK AT THE INSTANT OF THE TRADE, stamped onto the row.
+            #
+            # Without it, `dir` cannot be interpreted. Proving what "buy" and
+            # "sell" mean requires comparing the print against the book it
+            # executed into, and the only book a reader can otherwise reach is
+            # the PUBLIC gateway's ~30-second cache -- which is not that book.
+            # Measured over 184 resolvable rows: the forward reading
+            # (buy lifts the ask) held 46.2% of the time and the inverted one
+            # 35.3%, with 18.5% of prints strictly inside the quoted spread
+            # where neither reading can even apply. That is not a close call
+            # between two hypotheses, it is the wrong book.
+            #
+            # `s["bid"]`/`s["ask"]` are the authenticated top of book this
+            # same handler maintains, and `_trade_direction` already consults
+            # them, so recording them costs nothing and makes the direction
+            # field checkable instead of a matter of belief.
             s["trades"].append({
                 "t": now, "px": str(px),
                 "qty": ev.get("qty"),
                 "trade_time": ev.get("trade_time"),
+                "bid_at_trade": s.get("bid"),
+                "ask_at_trade": s.get("ask"),
                 "dir": _trade_direction({**ev, "price": str(px)}, s)})
             del s["trades"][:-500]
 
@@ -878,64 +897,6 @@ def status_doc_path(root: Path) -> Path:
     return root / "status" / STATUS_DOC_NAME
 
 
-# ---------------------------------------------------------------------------
-# LIVE STATUS HANDOFF (infrastructure only; OFF unless explicitly enabled)
-#
-# THE MEASURED PROBLEM. The executor's own instrumentation says the book it
-# prices against is a median 6.35 s old at receipt (p90 11.14, p95 14.40,
-# max 20.16) while the recorder's WS state is only 0.20 s old. The gap is not
-# network, not serialisation and not ingestion: `/status` serves a FILE that
-# the main loop rewrites on a timer, so a reader gets a document up to one
-# whole interval stale. Measured from the probe's own rows, the modal gap
-# between consecutive status snapshots is EXACTLY 10 s (59 of 153 observed
-# gaps fall in 9-11 s, minimum 7.44 s), which reproduces the transport
-# distribution almost exactly as Uniform(0, 10) plus serving time. On the
-# median, TWO orders are priced from one identical snapshot, and up to six.
-#
-# THE FIX, AND WHY IT IS THE SMALL ONE. Keep the file exactly as it is -- it
-# is the durable tail and the fallback -- and additionally hold the newest
-# status line in memory, published by the SAME code path that writes the file.
-# `/status` then serves the in-memory line when it is present. Same
-# authenticated source, same payload bytes, same provenance; only the
-# staleness goes. It adds no disk I/O, where lowering the timer would have
-# multiplied a read-and-rewrite of the whole tail file by ten.
-#
-# SAFETY. The publisher only ever REBINDS a name to an already-serialised
-# immutable `bytes`; the HTTP thread only ever reads that name. There is no
-# shared mutable structure and no lock, so a reader can never block the WS
-# loop -- which is the same rule the file path already follows ("a handoff
-# failure must not cost the connection or the tape").
-LIVE_STATUS_ENV = "PMUS_WS_STATUS_LIVE"
-_LIVE_STATUS: dict[str, Any] = {"line": None, "utc": None, "n": 0}
-
-
-def live_status_enabled() -> bool:
-    """OFF unless explicitly turned on, so merging this changes nothing."""
-    return str(os.getenv(LIVE_STATUS_ENV, "")).strip().lower() in (
-        "1", "true", "yes", "on")
-
-
-def publish_live_status(status: Mapping[str, Any]) -> None:
-    """Publish the newest status for the HTTP handler. Never raises."""
-    if not live_status_enabled():
-        return
-    try:
-        line = json.dumps(status, separators=(",", ":"), default=str)
-        _LIVE_STATUS["line"] = (line + "\n").encode("utf-8")
-        _LIVE_STATUS["utc"] = datetime.now(timezone.utc).isoformat()
-        _LIVE_STATUS["n"] = int(_LIVE_STATUS.get("n") or 0) + 1
-    except Exception:                                     # noqa: BLE001
-        pass
-
-
-def live_status_bytes() -> Optional[bytes]:
-    """The newest published status line, or None when unset/disabled."""
-    if not live_status_enabled():
-        return None
-    v = _LIVE_STATUS.get("line")
-    return v if isinstance(v, (bytes, bytearray)) else None
-
-
 def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
     """Persist the newest status atomically, keeping a short tail.
 
@@ -955,42 +916,14 @@ def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
         tmp.replace(path)       # readers never see a half-written document
     except Exception:
         pass
-    # published from the SAME payload the file receives, so the two can never
-    # disagree about what the recorder saw
-    publish_live_status(status)
 
 
 # ---------------------------------------------------------------------------
-# PROPOSED, OFF BY DEFAULT, NOT DEPLOYED: the per-market trade tail.
-#
-# WHY IT IS NEEDED AT ALL. A separate read-only consumer (the PMUS passive
-# surface) must reach TRADE_FLOW, which means volume traded THROUGH a PRICE.
-# Nothing already exported supplies that:
-#
-#   the volume       Railway attaches a volume to ONE service ("Each service
-#                    can only have a single volume"; files are reachable only
-#                    "through a service the volume is attached to"), so a
-#                    second consumer cannot mount /state/pmus-ws. This module
-#                    already says as much: the probe and the recorder "sit on
-#                    different volumes, so the status document cannot be
-#                    shared as a file".
-#   /status          carries the authenticated BOOK per market, which is
-#                    enough for RESTABLE and BOOK_REACHED, and carries trades
-#                    only as AGGREGATES -- trades_1h (a count),
-#                    two_sided_trades (a bool), slot counts. A count cannot
-#                    say a trade happened at OUR price.
-#   /l5_shadow       a compacted report, not a tape.
-#
-# THE MINIMUM. One more GET path on the HTTP server that already exists, fed
-# from the SAME snapshot the status build already takes. No new service, no
-# new port, no new credential, no new thread, and no order capability: the
-# handler stays GET-only over an already-serialised immutable bytes object,
-# exactly like the live-status publisher beside it.
-#
-# OFF BY DEFAULT, so merging this changes nothing until it is turned on.
+# Per-market authenticated trade tail for the PMUS passive L5 surface.
+# OFF by default; GET-only; same recorder process/port; no order capability.
 TRADES_HTTP_PATH = "/trades"
 TRADES_ENV = "PMUS_WS_TRADES_HTTP"
-TRADES_PER_MARKET = 200        # newest N; the in-memory ring holds 500
+TRADES_PER_MARKET = 200
 _LIVE_TRADES: dict[str, Any] = {"line": None, "utc": None, "n": 0}
 
 
@@ -1001,13 +934,7 @@ def trades_http_enabled() -> bool:
 
 
 def trades_payload(state: Mapping[str, Any], now: float) -> dict:
-    """Per-market trade tail: {t, px, qty, dir}, newest last.
-
-    `ring_full` travels WITH the data because a consumer cannot otherwise
-    know that older trades in its interval may have been dropped -- and a
-    wrapped ring is exactly where an empty result stops meaning "nobody
-    traded". Without it, silence would be mistaken for evidence.
-    """
+    """Per-market trade tail: {t, px, qty, dir}, newest last."""
     markets: dict = {}
     for slug, s in (state or {}).items():
         raw = list((s or {}).get("trades") or [])
@@ -1035,12 +962,267 @@ def publish_live_trades(state: Mapping[str, Any], now: float) -> None:
         _LIVE_TRADES["line"] = (line + "\n").encode("utf-8")
         _LIVE_TRADES["utc"] = datetime.now(timezone.utc).isoformat()
         _LIVE_TRADES["n"] = int(_LIVE_TRADES.get("n") or 0) + 1
-    except Exception:                                     # noqa: BLE001
+    except Exception:
         pass
 
 
+#: Bounded INCREMENTAL emission of authenticated trade rows to the existing
+#: log stream. OFF by default; the value is the per-market cap per emission.
+#:
+#: WHY THE LOG AND NOT THE /trades ENDPOINT. The rows are already held in this
+#: process and the analysis only needs to READ them. Serving them over HTTP
+#: means a port, a route and -- to be reachable from outside Railway's private
+#: network -- a public domain, which is a new access-control surface for data
+#: that the existing log stream can carry with no surface at all. The narrowest
+#: safe method is the one that adds nothing.
+#:
+#: INCREMENTAL, so the log is a TAPE and not a repeated snapshot. Each emission
+#: carries only rows not already emitted, keyed on the row's own identity, so a
+#: consumer can concatenate emissions without deduplicating and without holes.
+TRADES_LOG_ENV = "PMUS_WS_TRADES_LOG"
+_TRADES_LOG_SEEN: dict = {}
+
+
+def trades_log_cap() -> int:
+    """0 (off) unless set to a positive integer."""
+    try:
+        v = int(str(os.getenv(TRADES_LOG_ENV, "")).strip() or "0")
+    except ValueError:
+        return 0
+    return max(0, min(v, 200))
+
+
+def _trade_row_key(slug: str, t: Mapping[str, Any]) -> str:
+    return "|".join((slug, str(t.get("t")), str(t.get("px")),
+                     str(t.get("qty")), str(t.get("trade_time")),
+                     str(t.get("dir"))))
+
+
+def emit_new_trades(state: Mapping[str, Any]) -> Optional[dict]:
+    """Print rows first seen since the last emission. Never raises.
+
+    Read-only by construction: it formats data this process already holds and
+    sends it to stdout. It opens no socket, serves no request and cannot reach
+    an order path.
+    """
+    cap = trades_log_cap()
+    if not cap:
+        return None
+    out = {}
+    total = 0
+    for slug, s in (state or {}).items():
+        rows = list((s or {}).get("trades") or [])
+        fresh = []
+        seen = _TRADES_LOG_SEEN.setdefault(slug, set())
+        for t in rows:
+            k = _trade_row_key(slug, t)
+            if k in seen:
+                continue
+            seen.add(k)
+            fresh.append({"t": t.get("t"), "px": t.get("px"),
+                          "qty": t.get("qty"),
+                          "trade_time": t.get("trade_time"),
+                          "bid_at_trade": t.get("bid_at_trade"),
+                          "ask_at_trade": t.get("ask_at_trade"),
+                          "dir": t.get("dir")})
+        if len(seen) > 4000:                      # bounded memory
+            _TRADES_LOG_SEEN[slug] = set(list(seen)[-2000:])
+        if fresh:
+            out[slug] = fresh[-cap:]
+            total += len(out[slug])
+    if not out:
+        return None
+    doc = {"t": datetime.now(timezone.utc).isoformat(),
+           "kind": "authenticated_trade_rows",
+           "markets": out, "rows": total, "cap_per_market": cap,
+           "schema": "t=receipt epoch, px=trade price, qty=size, "
+                     "trade_time=venue time, bid_at_trade/ask_at_trade="
+                     "AUTHENTICATED top of book at the instant of the trade, "
+                     "dir=taker direction from _trade_direction "
+                     "(buy|sell|unknown)",
+           "labels": "AUTHENTICATED read-only trade tape. Not a fill of ours; "
+                     "queue position is not implied."}
+    try:
+        print("PMUS_TRADE_ROWS " + json.dumps(
+            doc, separators=(",", ":"), default=str), flush=True)
+    except Exception:                                    # noqa: BLE001
+        return None
+    return doc
+
+
+#: Bounded INCREMENTAL emission of AUTHENTICATED BOOK state to the log.
+#:
+#: WHY THIS EXISTS. The L5 observer reads the PUBLIC gateway, which exposes a
+#: BTC15m market only PARTWAY INTO its own window: probed at 21:36Z the LIVE
+#: 21:30 window returned HTTP 404 while 21:15 had shown a deep book at 21:28Z,
+#: thirteen minutes into itself. The authenticated stream sees the same market
+#: trading from +6.8s. So the observer was STRUCTURALLY blind exactly while L5
+#: opens his sequence, and NO_BOOK was being recorded as venue illiquidity
+#: when it was our own blindness.
+#:
+#: This process already holds the authenticated book. It formats what it holds
+#: and writes it to stdout -- no socket, no route, no credential, no new
+#: access surface, and no order path. OFF by default; the value is the cap of
+#: snapshots per market per emission.
+#:
+#: NOTHING IS FABRICATED. Each row is a book state the venue actually sent,
+#: stamped with OUR receipt time. No BBO is derived from trades, no price is
+#: interpolated and no gap is backfilled. A market with no usable book emits
+#: its STATUS, not a guessed price.
+BOOK_LOG_ENV = "PMUS_WS_BOOK_LOG"
+
+#: comma-separated substrings; a market is emitted only if its slug contains
+#: one of them. Empty means every watched market, which is what the first
+#: deployment did -- and the platform TRUNCATED the result at 81920 bytes,
+#: splitting one document across several log entries and leaving every
+#: fragment unparseable. A tape that cannot be parsed is not evidence, so the
+#: study names the series it wants and the sports slate stays out of it.
+BOOK_LOG_MARKETS_ENV = "PMUS_WS_BOOK_LOG_MARKETS"
+
+#: hard ceiling on markets per PRINTED document, so no single log line can
+#: approach the platform's limit again even with no filter set. Emissions are
+#: split across several documents, each self-contained and independently
+#: parseable, rather than one oversized line.
+BOOK_LOG_MARKETS_PER_DOC = 8
+
+_BOOK_LOG_SEEN: dict = {}
+
+#: a snapshot older than this at emission is reported STALE rather than fresh
+BOOK_STALE_S = 15.0
+
+
+def book_log_cap() -> int:
+    """0 (off) unless set to a positive integer."""
+    try:
+        v = int(str(os.getenv(BOOK_LOG_ENV, "")).strip() or "0")
+    except ValueError:
+        return 0
+    return max(0, min(v, 400))
+
+
+def book_log_markets() -> list:
+    """Substrings a market slug must contain to be emitted; [] means all."""
+    raw = str(os.getenv(BOOK_LOG_MARKETS_ENV, "") or "")
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def book_log_wanted(slug: str, wanted: list) -> bool:
+    return (not wanted) or any(w in str(slug) for w in wanted)
+
+
+def book_status(snap: Mapping[str, Any], now: float,
+                connected: bool = True) -> str:
+    """Explicit state. Absence is always named, never implied by a null."""
+    if not connected:
+        return "DISCONNECTED"
+    bid, ask = snap.get("bid"), snap.get("ask")
+    if bid is None and ask is None:
+        return "NO_BOOK"
+    if bid is None or ask is None:
+        return "ONE_SIDED"
+    t = snap.get("t")
+    if t is not None and (now - float(t)) > BOOK_STALE_S:
+        return "STALE"
+    return "OK"
+
+
+def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
+                   now: Optional[float] = None) -> Optional[dict]:
+    """Print authenticated book snapshots first seen since the last emission.
+
+    INCREMENTAL, so the log is a TAPE and not a repeated snapshot: each
+    emission carries only history entries not already emitted, keyed on their
+    own receipt timestamp, so a consumer can concatenate emissions without
+    deduplicating and without holes. Never raises: an evidence convenience
+    must not be able to stop the capture it observes.
+    """
+    cap = book_log_cap()
+    if not cap:
+        return None
+    now = time.time() if now is None else now
+    out: dict = {}
+    total = 0
+    wanted = book_log_markets()
+    try:
+        for slug, s in (state or {}).items():
+            if not book_log_wanted(slug, wanted):
+                continue
+            hist = list((s or {}).get("bbo_history") or [])
+            if not hist:
+                continue
+            seen = _BOOK_LOG_SEEN.setdefault(slug, set())
+            fresh = []
+            for h in hist:
+                k = str(h.get("t"))
+                if k in seen:
+                    continue
+                seen.add(k)
+                fresh.append({
+                    # every field comes from THIS history entry. Reading depth
+                    # from the live snapshot `s` would backdate present depth
+                    # onto a past book state. A state captured before the
+                    # ask_qty field existed reports null depth, which the
+                    # faithful rule refuses as NO_DEPTH -- it never guesses.
+                    "t": h.get("t"),
+                    "bid": h.get("bid"), "ask": h.get("ask"),
+                    "bid_qty": h.get("bid_qty"), "ask_qty": h.get("ask_qty"),
+                    "ask_book_missing": h.get("ask_book_missing"),
+                    "status": book_status(
+                        {"bid": h.get("bid"), "ask": h.get("ask"),
+                         "t": h.get("t")}, now, connected),
+                })
+            if len(seen) > 4000:
+                _BOOK_LOG_SEEN[slug] = set(list(seen)[-2000:])
+            if fresh:
+                out[slug] = fresh[-cap:]
+                total += len(out[slug])
+        if not out:
+            return None
+
+        def document(markets: dict) -> dict:
+            return {
+                "t": datetime.now(timezone.utc).isoformat(),
+                "kind": "authenticated_book_rows",
+                "markets": markets,
+                "rows": sum(len(v) for v in markets.values()),
+                "cap_per_market": cap,
+                "connected": connected,
+                "identity": {slug: {"marketSlug": slug,
+                                    "book_updates": (state.get(slug) or {}).get(
+                                        "book_updates"),
+                                    "ws_trades": len((state.get(slug) or {}).get(
+                                        "trades") or [])}
+                             for slug in markets},
+                "schema": ("t=OUR receipt epoch for that book state; bid/ask="
+                           "AUTHENTICATED top of book as the venue sent it; "
+                           "bid_qty/ask_qty=displayed depth AT THAT STATE, "
+                           "null when the venue had not served that side; "
+                           "status=OK|STALE|ONE_SIDED|NO_BOOK|DISCONNECTED"),
+                "labels": ("AUTHENTICATED read-only book tape. Nothing is "
+                           "derived from trades, interpolated or backfilled. "
+                           "The same marketSlug keys the trade tape, so book "
+                           "and trades resolve to ONE market identity."),
+            }
+
+        # SPLIT across several self-contained documents. One oversized line is
+        # truncated by the log platform and every fragment of it is
+        # unparseable, which loses the whole emission; several smaller lines
+        # lose nothing.
+        slugs = list(out)
+        for i in range(0, len(slugs), BOOK_LOG_MARKETS_PER_DOC):
+            chunk = {s: out[s] for s in slugs[i:i + BOOK_LOG_MARKETS_PER_DOC]}
+            print("PMUS_BOOK_ROWS " + json.dumps(
+                document(chunk), separators=(",", ":"), default=str),
+                flush=True)
+        doc = document(out)
+        doc["rows"] = total
+        return doc
+    except Exception:                                    # noqa: BLE001
+        return None
+
+
 def live_trades_bytes() -> Optional[bytes]:
-    """The newest published trade tail, or None when unset/disabled."""
+    """Newest published trade tail, or None when unset/disabled."""
     if not trades_http_enabled():
         return None
     v = _LIVE_TRADES.get("line")
@@ -1137,11 +1319,6 @@ def serve_status_doc(root: Path, port: int):
         def do_GET(self) -> None:                     # noqa: N802
             path = self.path.split("?", 1)[0]
             if path == TRADES_HTTP_PATH:
-                # PROPOSED, OFF BY DEFAULT: the per-market trade tail, which
-                # is the only thing here that can carry volume traded THROUGH
-                # a price. Served from memory only; there is no file for it,
-                # so a disabled flag is a 404 rather than an empty tape that
-                # would read as "nobody traded".
                 blob = live_trades_bytes()
                 if blob is None:
                     self.send_response(404)
@@ -1163,18 +1340,12 @@ def serve_status_doc(root: Path, port: int):
                 self.send_response(404)
                 self.end_headers()
                 return
-            body = None
-            if path in STATUS_HTTP_PATHS:
-                # newest-first: the in-memory line when published, else the
-                # file. The shadow report path is unaffected.
-                body = live_status_bytes()
-            if body is None:
-                try:
-                    body = src_path.read_bytes()
-                except OSError:
-                    self.send_response(503)
-                    self.end_headers()
-                    return
+            try:
+                body = src_path.read_bytes()
+            except OSError:
+                self.send_response(503)
+                self.end_headers()
+                return
             self.send_response(200)
             self.send_header("Content-Type", "application/x-ndjson")
             self.send_header("Content-Length", str(len(body)))
@@ -1222,6 +1393,75 @@ def heartbeat_file(root: Path, **fields: Any) -> None:
     os.replace(tmp, root / "heartbeat.json")
 
 
+def series_slugs(series_slug: str) -> list:
+    """The window of a recurring series that is trading NOW, plus the next.
+
+    A recurring 15-minute series creates every window hours ahead and expires
+    each one on a hard clock, so "which market is this series right now" is a
+    wall-clock question, not a `live=true` flag the venue only sets for
+    sports. A static PMUS_WS_MARKETS list cannot express it: each window is
+    its own market, so the list goes dead within fifteen minutes -- and
+    because explicit discovery returns EARLY, it would take the sports slate
+    down with it while it lived.
+
+    Closed windows are excluded. A window whose start is within
+    SERIES_LEAD_S is admitted so its first seconds are not lost at rollover.
+
+    Inlined rather than imported: `src/pmus_book_tape.py` is not in this
+    image's COPY set, and this needs no dependency the recorder lacks.
+    """
+    from datetime import datetime, timedelta, timezone
+    from src import pmus_sports_collector as col
+    now = datetime.now(timezone.utc)
+    try:
+        sid = None
+        off = 0
+        while off < 2000 and sid is None:
+            d = col.http_get_json("/v1/series?limit=100&offset=%d" % off) or {}
+            rows = d.get("series") or []
+            if not rows:
+                break
+            for r in rows:
+                if str(r.get("slug")) == series_slug:
+                    sid = str(r.get("id"))
+                    break
+            off += len(rows)
+        if sid is None:
+            return []
+        evs, off = [], 0
+        while off < 4000:
+            d = col.http_get_json(
+                "/v1/events?series_id=%s&limit=100&offset=%d" % (sid, off)) or {}
+            rows = d.get("events") or []
+            if not rows:
+                break
+            evs += rows
+            off += len(rows)
+            if len(rows) < 100:
+                break
+    except Exception:                                    # noqa: BLE001
+        return []
+    live = []
+    for e in evs:
+        if e.get("closed"):
+            continue
+        try:
+            start = datetime.fromisoformat(
+                str(e.get("startTime")).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        live.append((start, e))
+    live.sort(key=lambda r: r[0])
+    out = []
+    for start, e in live:
+        if start > now + timedelta(seconds=SERIES_LEAD_S):
+            break
+        for m in (e.get("markets") or []):
+            if m.get("slug"):
+                out.append(str(m["slug"]))
+    return out
+
+
 def discover_universe() -> list[dict]:
     """Public-gateway discovery of the FULL live sports universe — props
     included. No hardcoded market-type/prefix assumption is applied
@@ -1234,15 +1474,9 @@ def discover_universe() -> list[dict]:
         return [{"slug": s, "league": None, "why": "explicit_env",
                  "event_state": None, "prop": False, "market_meta": {}}
                 for s in explicit]
-    # RECURRING SERIES (e.g. btc-updown-15m). A static PMUS_WS_MARKETS list
-    # goes stale every fifteen minutes, because each window is its own market
-    # and the previous one has expired. The slug source is the SAME function
-    # the public book tape uses, so there is one definition of "which window
-    # is trading now" and rediscovery (PMUS_WS_DISCOVERY_SECONDS) rolls it.
     series = [s.strip() for s in os.getenv(SERIES_ENV, "").split(",")
               if s.strip()]
     if series:
-        from src.pmus_book_tape import series_slugs
         out = []
         for name in series:
             for slug in series_slugs(name):
@@ -1604,9 +1838,9 @@ async def run(minutes: Optional[float]) -> int:
                 print("PMUS_WS_STATUS " + json.dumps(
                     st, separators=(",", ":"), default=str), flush=True)
                 write_status_doc(root, st)
-                # the trade tail, from the SAME snapshot, so the book and the
-                # trades a consumer sees can never be from different moments
                 publish_live_trades(snap, time.time())
+                emit_new_trades(snap)
+                emit_new_books(snap, connected=connected)
                 try:
                     from src import pmus_sports_collector as col
                     xs = gateway_xcheck(
