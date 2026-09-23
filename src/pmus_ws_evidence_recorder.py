@@ -944,6 +944,86 @@ def publish_live_trades(state: Mapping[str, Any], now: float) -> None:
         pass
 
 
+#: Bounded INCREMENTAL emission of authenticated trade rows to the existing
+#: log stream. OFF by default; the value is the per-market cap per emission.
+#:
+#: WHY THE LOG AND NOT THE /trades ENDPOINT. The rows are already held in this
+#: process and the analysis only needs to READ them. Serving them over HTTP
+#: means a port, a route and -- to be reachable from outside Railway's private
+#: network -- a public domain, which is a new access-control surface for data
+#: that the existing log stream can carry with no surface at all. The narrowest
+#: safe method is the one that adds nothing.
+#:
+#: INCREMENTAL, so the log is a TAPE and not a repeated snapshot. Each emission
+#: carries only rows not already emitted, keyed on the row's own identity, so a
+#: consumer can concatenate emissions without deduplicating and without holes.
+TRADES_LOG_ENV = "PMUS_WS_TRADES_LOG"
+_TRADES_LOG_SEEN: dict = {}
+
+
+def trades_log_cap() -> int:
+    """0 (off) unless set to a positive integer."""
+    try:
+        v = int(str(os.getenv(TRADES_LOG_ENV, "")).strip() or "0")
+    except ValueError:
+        return 0
+    return max(0, min(v, 200))
+
+
+def _trade_row_key(slug: str, t: Mapping[str, Any]) -> str:
+    return "|".join((slug, str(t.get("t")), str(t.get("px")),
+                     str(t.get("qty")), str(t.get("trade_time")),
+                     str(t.get("dir"))))
+
+
+def emit_new_trades(state: Mapping[str, Any]) -> Optional[dict]:
+    """Print rows first seen since the last emission. Never raises.
+
+    Read-only by construction: it formats data this process already holds and
+    sends it to stdout. It opens no socket, serves no request and cannot reach
+    an order path.
+    """
+    cap = trades_log_cap()
+    if not cap:
+        return None
+    out = {}
+    total = 0
+    for slug, s in (state or {}).items():
+        rows = list((s or {}).get("trades") or [])
+        fresh = []
+        seen = _TRADES_LOG_SEEN.setdefault(slug, set())
+        for t in rows:
+            k = _trade_row_key(slug, t)
+            if k in seen:
+                continue
+            seen.add(k)
+            fresh.append({"t": t.get("t"), "px": t.get("px"),
+                          "qty": t.get("qty"),
+                          "trade_time": t.get("trade_time"),
+                          "dir": t.get("dir")})
+        if len(seen) > 4000:                      # bounded memory
+            _TRADES_LOG_SEEN[slug] = set(list(seen)[-2000:])
+        if fresh:
+            out[slug] = fresh[-cap:]
+            total += len(out[slug])
+    if not out:
+        return None
+    doc = {"t": datetime.now(timezone.utc).isoformat(),
+           "kind": "authenticated_trade_rows",
+           "markets": out, "rows": total, "cap_per_market": cap,
+           "schema": "t=receipt epoch, px=trade price, qty=size, "
+                     "trade_time=venue time, dir=taker direction from "
+                     "_trade_direction (buy|sell|unknown)",
+           "labels": "AUTHENTICATED read-only trade tape. Not a fill of ours; "
+                     "queue position is not implied."}
+    try:
+        print("PMUS_TRADE_ROWS " + json.dumps(
+            doc, separators=(",", ":"), default=str), flush=True)
+    except Exception:                                    # noqa: BLE001
+        return None
+    return doc
+
+
 def live_trades_bytes() -> Optional[bytes]:
     """Newest published trade tail, or None when unset/disabled."""
     if not trades_http_enabled():
@@ -1562,6 +1642,7 @@ async def run(minutes: Optional[float]) -> int:
                     st, separators=(",", ":"), default=str), flush=True)
                 write_status_doc(root, st)
                 publish_live_trades(snap, time.time())
+                emit_new_trades(snap)
                 try:
                     from src import pmus_sports_collector as col
                     xs = gateway_xcheck(
