@@ -65,7 +65,11 @@ on:
         required: false
         default: "false"
       cohort_run:
-        description: "Set to true to run the PERSISTENT BTC15m cohort: one process, up to 10 consecutive contracts. ARMED."
+        description: "PROBE A. Set to true to run the BTC15m cohort: exactly 2 contracts, CAP-4, $4/market. ARMED."
+        required: false
+        default: "false"
+      cohort_run_b:
+        description: "PROBE B. Set to true to run the BTC5m maker_improve cohort: exactly 4 contracts, CAP-2, $2.50/market. ARMED. Run AFTER A, never beside it."
         required: false
         default: "false"
       static_readiness:
@@ -626,7 +630,7 @@ jobs:
       # rewritten atomically after every decision and every mutation, with
       # the history beside it in cohort_live_status.json.jsonl.
       # ==================================================================
-      - name: PERSISTENT BTC15m cohort (ARMED, up to 20 contracts)
+      - name: PROBE A - BTC15m cohort (ARMED, exactly 2 contracts)
         if: ${{ github.event.inputs.cohort_run == 'true' }}
         timeout-minutes: 600
         env:
@@ -647,12 +651,15 @@ jobs:
           # AUTHORIZED peak-to-trough drawdown bound (5.29 of a 5.00 cap,
           # peak +1.47) with 11 of 20 windows observed. A spent
           # authorization never arms again.
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          # PROBE A of the A+B experiment, 2026-09-23. NOT YET AUTHORIZED at
+          # run time: the identifier below is the one the owner will approve,
+          # and armed() still needs GEMINI_CANARY_LIVE and a live expiry.
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-23-GEMINI-Q1-AB-1"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has NOT passed, and an absent one is not
-          # "never expires". Twenty BTC15m contracts is ~5h of wall clock;
-          # this bounds the grant a few hours past that, never open-ended.
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-22T20:00:00Z"
+          # "never expires". Two BTC15m contracts plus entry waits is well
+          # under an hour; this bounds the grant to tonight and no further.
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T06:00:00Z"
           COHORT_SPEC: btc15m_q1_cap4_w60_880_c2
           COHORT_SPEC_SHA: "ba64b54c8711166b9515007e6835e8190dc8bfddfbae2a1ba72c4e7798cefcb4"
         run: |
@@ -662,11 +669,54 @@ jobs:
             --auth-id           "${GEMINI_CANARY_AUTH}" \
             --spec              "${COHORT_SPEC}" \
             --expect-spec-sha   "${COHORT_SPEC_SHA}" \
-            --max-windows       20 \
-            --max-loss-usd      8.00 \
+            --max-windows       2 \
+            --max-loss-usd      10.00 \
             --max-drawdown-usd  5.00 \
-            --out analysis/gemini/cohort_run_$(date -u +%Y%m%dT%H%M%SZ).json \
-            2>&1 | tee /tmp/cohort.txt
+            --out analysis/gemini/cohort_run_A_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/cohort_a.txt
+
+      # ==================================================================
+      # PROBE B. BTC5m, maker_improve placement. ARMED.
+      #
+      # THE PATH THAT DID NOT EXIST. Until now the only armed cohort step
+      # hardcoded the BTC15m spec, so Probe B had no way to run except four
+      # separate single-window dispatches -- a hand-built sequence, which is
+      # the class of drift the LiveProbeSpec exists to prevent. This step
+      # selects the frozen BTC5m spec DIRECTLY.
+      #
+      # EXACTLY FOUR LEDGERS ARE GRANTED. The chain is four markets because
+      # four ledgers exist; a fifth cannot be bound whatever --max-windows
+      # says, because ledger_for raises rather than handing back a spent or
+      # partially spent ledger. --max-windows 4 agrees with the grant and is
+      # the belt, not the braces.
+      #
+      # 4 x $2.50 committed = $10.00 structural gross-cash-out ceiling for
+      # this arm. Its stops, ledgers and results are its own: nothing is
+      # shared with Probe A.
+      # ==================================================================
+      - name: PROBE B - BTC5m maker_improve cohort (ARMED, exactly 4 contracts)
+        if: ${{ github.event.inputs.cohort_run_b == 'true' }}
+        timeout-minutes: 90
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-23-GEMINI-Q1-AB-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T06:00:00Z"
+          COHORT_SPEC: btc5m_q1_improve
+          COHORT_SPEC_SHA: "bfe7ba23199c544d30f25cd1c730d92e62d0bea534274b1c00feff961242a650"
+        run: |
+          set -o pipefail
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.cohort_runner \
+            --auth-id           "${GEMINI_CANARY_AUTH}" \
+            --spec              "${COHORT_SPEC}" \
+            --expect-spec-sha   "${COHORT_SPEC_SHA}" \
+            --max-windows       4 \
+            --max-loss-usd      10.00 \
+            --max-drawdown-usd  5.00 \
+            --out analysis/gemini/cohort_run_B_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/cohort_b.txt
 
       # WHERE DO THE REBATE CREDITS LIVE? A read-only SURVEY of candidate
       # authenticated surfaces, run before any reader is written, because

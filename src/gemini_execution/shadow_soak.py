@@ -1575,6 +1575,13 @@ P10_RECORDER_ENABLED = os.environ.get("GEMINI_P10_RECORDER", "1") not in (
 #: seconds between full passes of a cohort's symbol set
 P10_CYCLE_SLEEP_S = float(os.environ.get("GEMINI_P10_SLEEP_S", "1.0"))
 P10_REDISCOVER_S = 180.0
+
+#: mirror raw P10 rows to stdout so they can be read back off the volume.
+#: Bounded by being off unless asked for: turned on for a collection window,
+#: pulled, turned off. Read ONCE here, so the recorder module itself still
+#: reads no environment at all.
+P10_LOG_ROWS = os.environ.get("GEMINI_P10_LOG_ROWS", "0") not in (
+    "0", "false", "no", "")
 P10_HEARTBEAT_EVERY = 30
 
 
@@ -1605,7 +1612,8 @@ async def p10_recorder_loop(a) -> None:
                 h = await asyncio.to_thread(
                     P10.run_cohort_cycle, cohort, prefix, n,
                     state_root=a.state_root, bucket=st["bucket"],
-                    seen=st["seen"], poll=st["poll"], syms=st["syms"])
+                    seen=st["seen"], poll=st["poll"], syms=st["syms"],
+                    log_rows=P10_LOG_ROWS)
                 st["i"] += 1
                 if st["i"] % P10_HEARTBEAT_EVERY == 1:
                     print("P10_HB %s" % json.dumps(h, default=str),

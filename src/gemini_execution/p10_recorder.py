@@ -196,9 +196,21 @@ def _poll_once(sym: Dict[str, Any], bucket: _Bucket, seen: set,
     return rows, (t1 - t0)
 
 
+#: MIRRORING RAW ROWS TO STDOUT, so the artifact on the volume can be read
+#: back without new infrastructure. The volume is reachable only by this
+#: container, and the logs are the one read-only channel out of it.
+#:
+#: OFF BY DEFAULT and bounded when on: it is switched on for a collection
+#: window, the rows are pulled, and it is switched off again. Each row is its
+#: own line and is independently valid JSON, so there is no reassembly to get
+#: wrong and a truncated or dropped line costs exactly one row rather than a
+#: chunk. The caller passes the flag; this module still reads no environment.
+ROW_PREFIX = "P10_ROW "
+
+
 def run_cohort_cycle(cohort: str, prefix: str, n_symbols: int, *,
                      state_root: str, bucket: _Bucket, seen: set,
-                     poll: List[int],
+                     poll: List[int], log_rows: bool = False,
                      syms: Optional[Sequence[dict]] = None) -> Dict[str, Any]:
     """ONE pass over one cohort's symbols. Returns a health record.
 
@@ -216,7 +228,10 @@ def run_cohort_cycle(cohort: str, prefix: str, n_symbols: int, *,
             rows, rtt = _poll_once(s, bucket, seen, poll)
             rtts.append(rtt)
             for r in rows:
-                fh.write(json.dumps(r) + "\n")
+                line = json.dumps(r)
+                fh.write(line + "\n")
+                if log_rows:
+                    print(ROW_PREFIX + line, flush=True)
                 n_book += (r["kind"] == "book")
                 n_trade += (r["kind"] == "trade")
         elapsed = time.time() - started
@@ -233,7 +248,7 @@ def run_cohort_cycle(cohort: str, prefix: str, n_symbols: int, *,
             "rtt_p50": (sorted(rtts)[len(rtts) // 2] if rtts else None),
             "rtt_max": (max(rtts) if rtts else None),
             "book_rows": n_book, "trade_rows": n_trade,
-            "seen_keys": len(seen),
+            "seen_keys": len(seen), "log_rows": bool(log_rows),
             "degraded": (est_age is not None
                          and est_age > MAX_USEFUL_BOOK_AGE_S),
             "mutations_sent": 0,

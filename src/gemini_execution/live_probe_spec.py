@@ -359,7 +359,22 @@ BTC15M_Q1_CAP4_W60_880_C2 = _declare(LiveProbeSpec(
     #: the HEAD of a TWENTY ledger chain, W01..W20, 12 action attempts each
     #: and 240 in total. One whole ledger per bound contract; whatever a
     #: contract does not spend expires with it.
-    live_cohort="COHORT-2026-09-22-BTC15M-COHORT2-W01",
+    #: REPOINTED 2026-09-23 for the A+B probe under
+    #: OWNER-2026-09-23-GEMINI-Q1-AB-1. The COHORT-2 chain is SPENT -- run
+    #: 35721894867 bound eleven contracts and stopped on the peak-to-trough
+    #: drawdown bound -- and a spent authorization never arms again, so the
+    #: head moves rather than the chain being re-entered.
+    #:
+    #: EXACTLY TWO LEDGERS ARE GRANTED, and that is the window bound.
+    #: `discover_chain` walks W01, W02, ... and stops at the first that does
+    #: not exist, so this chain IS two markets. When both are consumed the arm
+    #: cannot obtain a third whatever `--max-windows` says: `ledger_for` raises
+    #: IndexError rather than handing back a spent or partial ledger.
+    #:
+    #: `live_cohort` is outside `invocation_fingerprint`, so spec_sha is
+    #: UNCHANGED at ba64b54c... -- which is the proof that the BEHAVIOUR is
+    #: the frozen one and only the budget moved.
+    live_cohort="COHORT-2026-09-23-BTC15M-AB-A-W01",
     quote_band=(60.0, 880.0),
 ))
 
@@ -395,7 +410,14 @@ BTC5M_Q1 = _declare(LiveProbeSpec(
 BTC5M_Q1_IMPROVE = _declare(LiveProbeSpec(
     spec_id="btc5m_q1_improve", family="btc5m", envelope="live_q1",
     entry_tte_band="240:280", cohort=None, auth_id=SENTINEL_AUTH,
-    action_size="1", placement="maker_improve"))
+    action_size="1", placement="maker_improve",
+    #: EXACTLY FOUR LEDGERS, granted 2026-09-23 under
+    #: OWNER-2026-09-23-GEMINI-Q1-AB-1. Same structural property as A: the
+    #: chain is four markets because four ledgers exist, and a fifth market
+    #: cannot be bound whatever a window flag says. Outside spec_sha, so
+    #: bfe7ba23... is unchanged and the placement behaviour is provably the
+    #: frozen one.
+    live_cohort="COHORT-2026-09-23-BTC5M-AB-B-W01"))
 
 
 def get(spec_id: str) -> LiveProbeSpec:
