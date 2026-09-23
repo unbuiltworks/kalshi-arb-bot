@@ -6,16 +6,16 @@
   "pmus_snapshot_age_s_p90": 0.0
  },
  "sample": {
-  "actions_total": 283,
-  "actions_realtime": 107,
+  "actions_total": 304,
+  "actions_realtime": 128,
   "actions_backlog": 176,
-  "windows_seen": 5,
-  "actions_per_window": 56.6
+  "windows_seen": 6,
+  "actions_per_window": 50.7
  },
  "observation_latency_s": {
-  "n": 107,
-  "p50": 21.52,
-  "p90": 44.41,
+  "n": 128,
+  "p50": 22.8,
+  "p90": 42.41,
   "p99": 182.41,
   "max": 183.41,
   "note": "realtime rows only; backlog excluded"
@@ -24,33 +24,33 @@
   "counts": {
    "MAKER_COPYABLE": 35,
    "REQUIRES_CROSSING": 34,
-   "BAND_INADMISSIBLE": 16,
-   "NO_BOOK": 22
+   "BAND_INADMISSIBLE": 34,
+   "NO_BOOK": 25
   },
-  "pct_same_pmus_side_available": 79.4,
-  "pct_still_maker_copyable": 32.7,
-  "pct_requiring_crossing": 31.8,
-  "pct_economically_inadmissible": 35.5,
+  "pct_same_pmus_side_available": 80.5,
+  "pct_still_maker_copyable": 27.3,
+  "pct_requiring_crossing": 26.6,
+  "pct_economically_inadmissible": 46.1,
   "source_to_pmus_price_delta": {
-   "n": 85,
+   "n": 103,
    "p10": -0.05,
    "p50": 0.02,
    "p90": 0.1,
-   "mean": 0.0266,
+   "mean": 0.0234,
    "note": "L5's price minus our own touch, in dollars; positive means his price is above our bid"
   }
  },
  "l5_actual_behaviour": {
   "relations": {
-   "open": 24,
-   "extend": 145,
-   "complete": 114
+   "open": 25,
+   "extend": 156,
+   "complete": 123
   },
-  "p_extend": 0.512,
+  "p_extend": 0.513,
   "p_extend_l5_historical_btc15m": 0.66,
   "sides": {
-   "DOWN": 162,
-   "UP": 121
+   "DOWN": 171,
+   "UP": 133
   },
   "sells": 0,
   "sells_note": "L5's BTC15m corpus contains ZERO sells; a nonzero count here is news, not a translation artefact"
