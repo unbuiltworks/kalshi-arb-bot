@@ -159,13 +159,26 @@ def preflight(slug: str, http: Any,
     ok &= gate("transport_is_get_only", isinstance(http, GetOnly),
                "no order path exists in this process")
 
-    acct, got = get(lambda: http.request("GET", "/v1/account", None, Q1.API)
-                    or {}, "account_readable")
+    # /v1/account/balances, /v1/portfolio/positions and /v1/orders/open are
+    # the routes this venue actually serves -- the ones pmus_q1_executor used
+    # for live campaigns. An earlier version of this preflight invented
+    # /v1/account, /v1/positions and /v1/orders and got 404, 404 and 501: the
+    # 501 is the give-away, a collection that exists but does not answer GET.
+    # That was read as a venue outage for a while; it was wrong paths.
+    acct, got = get(lambda: http.request(
+        "GET", "/v1/account/balances", None, Q1.API) or {}, "account_readable")
     ok &= got
     if got:
         gate("account_readable", True)
-        ident = (acct.get("id") or acct.get("accountId")
+        ident = (acct.get("accountId") or acct.get("id")
                  or acct.get("userId") or acct.get("email"))
+        if ident is None:
+            for e in (acct.get("balances") or []):
+                if isinstance(e, Mapping):
+                    ident = (e.get("accountId") or e.get("account")
+                             or e.get("userId"))
+                    if ident:
+                        break
         ok &= gate("account_identity_resolved", bool(ident), ident)
         if expect_account:
             ok &= gate("account_matches_expected",
@@ -176,13 +189,13 @@ def preflight(slug: str, http: Any,
                slug)
 
     raw, got = get(lambda: http.request(
-        "GET", "/v1/markets/%s" % slug, None, Q1.GATEWAY) or {},
+        "GET", "/v1/markets/%s/bbo" % slug, None, Q1.GATEWAY) or {},
         "market_readable")
     ok &= got
     mk: Dict[str, Any] = {}
     if got:
         gate("market_readable", True)
-        mk = raw.get("market") or raw.get("marketData") or raw
+        mk = raw.get("marketData") or raw.get("market") or raw
         ok &= gate("market_resolves", bool(mk), mk.get("slug"))
         ok &= gate("market_series_is_btc15m",
                    BTC15M_SERIES in str(mk.get("seriesSlug")
@@ -216,16 +229,18 @@ def preflight(slug: str, http: Any,
                 "bid_shares": bk.get("bid_shares"),
                 "ask_shares": bk.get("ask_shares")})
 
-    praw, got = get(lambda: http.request("GET", "/v1/positions", None, Q1.API)
-                    or {}, "positions_readable")
+    praw, got = get(lambda: http.request(
+        "GET", "/v1/portfolio/positions", None, Q1.API) or {},
+        "positions_readable")
     ok &= got
-    oraw, got2 = get(lambda: http.request("GET", "/v1/orders", None, Q1.API)
-                     or {}, "orders_readable")
+    oraw, got2 = get(lambda: http.request(
+        "GET", "/v1/orders/open", None, Q1.API) or {}, "orders_readable")
     ok &= got2
     if got and got2:
         gate("positions_readable", True)
         pos = praw.get("positions") if isinstance(praw, Mapping) else (praw or [])
-        oo = oraw.get("orders") if isinstance(oraw, Mapping) else (oraw or [])
+        oo = ((oraw.get("orders") or oraw.get("openOrders") or [])
+              if isinstance(oraw, Mapping) else (oraw or []))
         ok &= gate("no_unexpected_open_orders", len(oo) == 0, len(oo))
         ok &= gate("positions_reconciled", len(pos or []) == 0,
                    {"venue_positions": len(pos or []),
