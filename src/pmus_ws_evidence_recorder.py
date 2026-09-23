@@ -1070,6 +1070,21 @@ def emit_new_trades(state: Mapping[str, Any]) -> Optional[dict]:
 #: interpolated and no gap is backfilled. A market with no usable book emits
 #: its STATUS, not a guessed price.
 BOOK_LOG_ENV = "PMUS_WS_BOOK_LOG"
+
+#: comma-separated substrings; a market is emitted only if its slug contains
+#: one of them. Empty means every watched market, which is what the first
+#: deployment did -- and the platform TRUNCATED the result at 81920 bytes,
+#: splitting one document across several log entries and leaving every
+#: fragment unparseable. A tape that cannot be parsed is not evidence, so the
+#: study names the series it wants and the sports slate stays out of it.
+BOOK_LOG_MARKETS_ENV = "PMUS_WS_BOOK_LOG_MARKETS"
+
+#: hard ceiling on markets per PRINTED document, so no single log line can
+#: approach the platform's limit again even with no filter set. Emissions are
+#: split across several documents, each self-contained and independently
+#: parseable, rather than one oversized line.
+BOOK_LOG_MARKETS_PER_DOC = 8
+
 _BOOK_LOG_SEEN: dict = {}
 
 #: a snapshot older than this at emission is reported STALE rather than fresh
@@ -1083,6 +1098,16 @@ def book_log_cap() -> int:
     except ValueError:
         return 0
     return max(0, min(v, 400))
+
+
+def book_log_markets() -> list:
+    """Substrings a market slug must contain to be emitted; [] means all."""
+    raw = str(os.getenv(BOOK_LOG_MARKETS_ENV, "") or "")
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def book_log_wanted(slug: str, wanted: list) -> bool:
+    return (not wanted) or any(w in str(slug) for w in wanted)
 
 
 def book_status(snap: Mapping[str, Any], now: float,
@@ -1117,8 +1142,11 @@ def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
     now = time.time() if now is None else now
     out: dict = {}
     total = 0
+    wanted = book_log_markets()
     try:
         for slug, s in (state or {}).items():
+            if not book_log_wanted(slug, wanted):
+                continue
             hist = list((s or {}).get("bbo_history") or [])
             if not hist:
                 continue
@@ -1150,29 +1178,44 @@ def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
                 total += len(out[slug])
         if not out:
             return None
-        doc = {
-            "t": datetime.now(timezone.utc).isoformat(),
-            "kind": "authenticated_book_rows",
-            "markets": out, "rows": total, "cap_per_market": cap,
-            "connected": connected,
-            "identity": {slug: {"marketSlug": slug,
-                                "book_updates": (state.get(slug) or {}).get(
-                                    "book_updates"),
-                                "ws_trades": len((state.get(slug) or {}).get(
-                                    "trades") or [])}
-                         for slug in out},
-            "schema": ("t=OUR receipt epoch for that book state; bid/ask="
-                       "AUTHENTICATED top of book as the venue sent it; "
-                       "bid_qty/ask_qty=displayed depth AT THAT STATE, null "
-                       "when the venue had not served that side; status=OK|"
-                       "STALE|ONE_SIDED|NO_BOOK|DISCONNECTED"),
-            "labels": ("AUTHENTICATED read-only book tape. Nothing is "
-                       "derived from trades, interpolated or backfilled. "
-                       "The same marketSlug keys the trade tape, so book and "
-                       "trades resolve to ONE market identity."),
-        }
-        print("PMUS_BOOK_ROWS " + json.dumps(
-            doc, separators=(",", ":"), default=str), flush=True)
+
+        def document(markets: dict) -> dict:
+            return {
+                "t": datetime.now(timezone.utc).isoformat(),
+                "kind": "authenticated_book_rows",
+                "markets": markets,
+                "rows": sum(len(v) for v in markets.values()),
+                "cap_per_market": cap,
+                "connected": connected,
+                "identity": {slug: {"marketSlug": slug,
+                                    "book_updates": (state.get(slug) or {}).get(
+                                        "book_updates"),
+                                    "ws_trades": len((state.get(slug) or {}).get(
+                                        "trades") or [])}
+                             for slug in markets},
+                "schema": ("t=OUR receipt epoch for that book state; bid/ask="
+                           "AUTHENTICATED top of book as the venue sent it; "
+                           "bid_qty/ask_qty=displayed depth AT THAT STATE, "
+                           "null when the venue had not served that side; "
+                           "status=OK|STALE|ONE_SIDED|NO_BOOK|DISCONNECTED"),
+                "labels": ("AUTHENTICATED read-only book tape. Nothing is "
+                           "derived from trades, interpolated or backfilled. "
+                           "The same marketSlug keys the trade tape, so book "
+                           "and trades resolve to ONE market identity."),
+            }
+
+        # SPLIT across several self-contained documents. One oversized line is
+        # truncated by the log platform and every fragment of it is
+        # unparseable, which loses the whole emission; several smaller lines
+        # lose nothing.
+        slugs = list(out)
+        for i in range(0, len(slugs), BOOK_LOG_MARKETS_PER_DOC):
+            chunk = {s: out[s] for s in slugs[i:i + BOOK_LOG_MARKETS_PER_DOC]}
+            print("PMUS_BOOK_ROWS " + json.dumps(
+                document(chunk), separators=(",", ":"), default=str),
+                flush=True)
+        doc = document(out)
+        doc["rows"] = total
         return doc
     except Exception:                                    # noqa: BLE001
         return None
