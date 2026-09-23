@@ -73,6 +73,8 @@ SECRET_ENV = "PMUS_API_SECRET_KEY"
 ROOT_ENV = "PMUS_WS_ROOT"
 DEFAULT_ROOT = "/state/pmus-ws"
 MARKETS_ENV = "PMUS_WS_MARKETS"
+SERIES_ENV = "PMUS_WS_SERIES"        # recurring series, rolled per window
+SERIES_LEAD_S = 60.0                 # admit the next window this early
 LEAGUES_ENV = "PMUS_WS_LEAGUES"
 MAX_MARKETS_ENV = "PMUS_WS_MAX_MARKETS"
 DISCOVERY_ENV = "PMUS_WS_DISCOVERY_SECONDS"
@@ -1114,6 +1116,75 @@ def heartbeat_file(root: Path, **fields: Any) -> None:
     os.replace(tmp, root / "heartbeat.json")
 
 
+def series_slugs(series_slug: str) -> list:
+    """The window of a recurring series that is trading NOW, plus the next.
+
+    A recurring 15-minute series creates every window hours ahead and expires
+    each one on a hard clock, so "which market is this series right now" is a
+    wall-clock question, not a `live=true` flag the venue only sets for
+    sports. A static PMUS_WS_MARKETS list cannot express it: each window is
+    its own market, so the list goes dead within fifteen minutes -- and
+    because explicit discovery returns EARLY, it would take the sports slate
+    down with it while it lived.
+
+    Closed windows are excluded. A window whose start is within
+    SERIES_LEAD_S is admitted so its first seconds are not lost at rollover.
+
+    Inlined rather than imported: `src/pmus_book_tape.py` is not in this
+    image's COPY set, and this needs no dependency the recorder lacks.
+    """
+    from datetime import datetime, timedelta, timezone
+    from src import pmus_sports_collector as col
+    now = datetime.now(timezone.utc)
+    try:
+        sid = None
+        off = 0
+        while off < 2000 and sid is None:
+            d = col.http_get_json("/v1/series?limit=100&offset=%d" % off) or {}
+            rows = d.get("series") or []
+            if not rows:
+                break
+            for r in rows:
+                if str(r.get("slug")) == series_slug:
+                    sid = str(r.get("id"))
+                    break
+            off += len(rows)
+        if sid is None:
+            return []
+        evs, off = [], 0
+        while off < 4000:
+            d = col.http_get_json(
+                "/v1/events?series_id=%s&limit=100&offset=%d" % (sid, off)) or {}
+            rows = d.get("events") or []
+            if not rows:
+                break
+            evs += rows
+            off += len(rows)
+            if len(rows) < 100:
+                break
+    except Exception:                                    # noqa: BLE001
+        return []
+    live = []
+    for e in evs:
+        if e.get("closed"):
+            continue
+        try:
+            start = datetime.fromisoformat(
+                str(e.get("startTime")).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        live.append((start, e))
+    live.sort(key=lambda r: r[0])
+    out = []
+    for start, e in live:
+        if start > now + timedelta(seconds=SERIES_LEAD_S):
+            break
+        for m in (e.get("markets") or []):
+            if m.get("slug"):
+                out.append(str(m["slug"]))
+    return out
+
+
 def discover_universe() -> list[dict]:
     """Public-gateway discovery of the FULL live sports universe — props
     included. No hardcoded market-type/prefix assumption is applied
@@ -1126,6 +1197,17 @@ def discover_universe() -> list[dict]:
         return [{"slug": s, "league": None, "why": "explicit_env",
                  "event_state": None, "prop": False, "market_meta": {}}
                 for s in explicit]
+    series = [s.strip() for s in os.getenv(SERIES_ENV, "").split(",")
+              if s.strip()]
+    if series:
+        out = []
+        for name in series:
+            for slug in series_slugs(name):
+                out.append({"slug": slug, "league": None,
+                            "why": "series:%s" % name,
+                            "event_state": None, "prop": False,
+                            "market_meta": {"series": name}})
+        return out
     from src import pmus_sports_collector as col
     leagues = [x.strip() for x in
                os.getenv(LEAGUES_ENV, "mlb").split(",") if x.strip()]
