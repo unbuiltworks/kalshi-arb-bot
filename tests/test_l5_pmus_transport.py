@@ -20,31 +20,45 @@ SLUG = "cpc-btc-updown-15m-2026-09-23-2100z"
 NOW = lambda: dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.timezone.utc)
 
 
+MARKET = {
+    "slug": SLUG, "active": True, "closed": False,
+    "status": "MARKET_STATUS_OPEN",
+    "marketSides": [{"description": "Up", "long": True},
+                    {"description": "Down", "long": False}],
+    "outcomes": "[\"Up\",\"Down\"]",
+    "orderPriceMinTickSize": 0.01, "minimumTradeQty": 0.01}
+
+
 class FakeHTTP:
-    """Serves canned venue responses; records what was asked for."""
+    """Serves canned venue responses at the LIVE-PROVEN paths; records what
+    was asked for."""
 
     def __init__(self, **over):
         self.calls = []
+        self.posts = []
         self.data = {
-            "/v1/account": {"id": "acct-123"},
-            "/v1/markets/%s" % SLUG: {"market": {
-                "slug": SLUG, "seriesSlug": "btc-updown-15m",
-                "state": "MARKET_STATE_OPEN",
-                "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+            "/v1/account/balances": {"balances": [
+                {"accountId": "acct-123", "buyingPower": {"value": "20.00"}}]},
+            "/v1/market/slug/%s" % SLUG: {"market": dict(MARKET)},
             "/v1/markets/%s/book" % SLUG: {"marketData": {
-                "bid": "0.40", "ask": "0.60",
-                "bid_shares": "100", "ask_shares": "100"}},
-            "/v1/positions": {"positions": []},
-            "/v1/orders": {"orders": []},
+                "bids": [{"px": {"value": "0.40"}, "qty": "100"}],
+                "offers": [{"px": {"value": "0.60"}, "qty": "100"}]}},
+            "/v1/portfolio/positions": {"positions": {}},
+            "/v1/orders/open": {"orders": []},
+            "/v1/order/V1": {"order": {"state": "ORDER_STATE_FILLED",
+                                       "cumQuantity": "1",
+                                       "avgPx": {"value": "0.60"}}},
         }
         self.data.update(over)
 
     def request(self, method, path, body=None, base=None):
         self.calls.append((method, path))
         if method != "GET":
-            return {"order_id": "v1", "filled_qty": "0"}
-        if path not in self.data:
+            self.posts.append((path, body))
+            if path == "/v1/order/preview":
+                return {"order": dict(body["request"])}
+            return {"id": "V1"}
+        if path not in self.data or self.data[path] is None:
             raise RuntimeError("404 %s" % path)
         return self.data[path]
 
@@ -109,30 +123,38 @@ def test_owner_token_must_match_the_session_id(creds, monkeypatch):
 
 # ------------------------------------------------------------ gates fail shut
 
+def _mk(**kw):
+    m = dict(MARKET)
+    m.update(kw)
+    return {"market": m}
+
+
 @pytest.mark.parametrize("path,bad,check", [
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_EXPIRED",
-                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                 "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
-     "market_open_tradable"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_OPEN",
-                 "outcomes": [{"outcome": "YES"}, {"outcome": "NO"}],
-                 "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+    ("/v1/market/slug/%s" % SLUG, _mk(status="MARKET_STATUS_RESOLVED",
+                                      closed=True), "market_open_tradable"),
+    ("/v1/market/slug/%s" % SLUG,
+     _mk(marketSides=[{"description": "Down", "long": True},
+                      {"description": "Up", "long": False}], outcomes=None),
      "outcome_mapping_is_up_down"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_OPEN",
-                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                 "orderMinQuantity": "1"}},
+    ("/v1/market/slug/%s" % SLUG,
+     _mk(marketSides=[{"description": "Yes", "long": True},
+                      {"description": "No", "long": False}], outcomes=None),
+     "outcome_mapping_is_up_down"),
+    ("/v1/market/slug/%s" % SLUG, _mk(orderPriceMinTickSize=None),
      "tick_constraint_known"),
+    ("/v1/market/slug/%s" % SLUG, _mk(minimumTradeQty=None),
+     "quantity_constraint_known"),
+    ("/v1/market/slug/%s" % SLUG, _mk(slug="cpc-btc-updown-15m-2026-09-23-2045z"),
+     "market_resolves"),
     ("/v1/markets/%s/book" % SLUG,
-     {"marketData": {"bid": None, "ask": "0.60"}},
+     {"marketData": {"bids": [], "offers": [{"px": {"value": "0.60"}, "qty": "1"}]}},
      "book_two_sided"),
-    ("/v1/orders", {"orders": [{"id": "stale-1"}]},
+    ("/v1/orders/open", {"orders": [{"id": "stale-1"}]},
      "no_unexpected_open_orders"),
+    ("/v1/portfolio/positions", {"positions": {SLUG: {"netPosition": "3"}}},
+     "no_position_in_target_market"),
+    ("/v1/account/balances", {"balances": [{"buyingPower": {"value": "1.00"}}]},
+     "buying_power_covers_worst_case"),
 ])
 def test_each_gate_fails_closed(creds, path, bad, check):
     t = tp(**{path: bad})
@@ -153,9 +175,9 @@ def test_missing_credentials_fail_closed(monkeypatch):
 
 
 def test_an_unreadable_endpoint_is_a_failure_not_a_pass(creds):
-    t = T.PmusTransport(market_slug=SLUG, http=FakeHTTP(**{"/v1/account": None}),
+    t = T.PmusTransport(market_slug=SLUG,
+                        http=FakeHTTP(**{"/v1/account/balances": None}),
                         now_fn=NOW)
-    t.http.data.pop("/v1/account")           # raises on read
     with pytest.raises(T.PreflightFailed) as e:
         t.preflight()
     assert "account_readable" in str(e.value)
@@ -179,7 +201,7 @@ def test_account_mismatch_is_refused(creds):
 
 def test_position_drift_blocks_arming(creds):
     with pytest.raises(T.PreflightFailed) as e:
-        tp().preflight(known_positions={"m|UP": "3"})
+        tp().preflight(known_positions={SLUG: "3"})
     assert "positions_reconciled" in str(e.value)
 
 

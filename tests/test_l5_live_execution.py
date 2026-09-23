@@ -126,15 +126,31 @@ def test_a_replayed_action_does_not_double_the_position(tmp_path):
 
 
 def test_a_crash_between_submit_and_save_still_cannot_double(tmp_path):
-    # the id is derived from the action, so even a store that lost the record
-    # produces the same id and the VENUE rejects the duplicate
+    # The intent is persisted BEFORE the mutation, so a replay over the same
+    # store is suppressed without asking the venue anything.
+    t = FakeTransport()
+    ex = E.FaithfulExecutor(store(tmp_path), limits(), transport=t, now_fn=NOW)
+    ex.handle(row(), {}, market="m", window="16:15")
+    again = E.FaithfulExecutor(store(tmp_path), limits(), transport=t,
+                               now_fn=NOW)
+    rec = again.handle(row(), {}, market="m", window="16:15")
+    assert rec["ORDER"]["reason"] == "DUPLICATE_SUPPRESSED"
+
+
+def test_an_ambiguous_transport_error_is_recorded_never_replayed(tmp_path):
+    # The live PMUS order body carries no client order id, so the venue cannot
+    # be relied on to reject a duplicate. An error that may or may not have
+    # reached the venue is recorded as UNKNOWN, reserved against exposure, and
+    # never retried.
     t = FakeTransport()
     ex = E.FaithfulExecutor(store(tmp_path), limits(), transport=t, now_fn=NOW)
     ex.handle(row(), {}, market="m", window="16:15")
     fresh = E.FaithfulExecutor(E.InventoryStore(str(tmp_path / "lost.json")),
                                limits(), transport=t, now_fn=NOW)
-    with pytest.raises(RuntimeError, match="DUPLICATE"):
-        fresh.handle(row(), {}, market="m", window="16:15")
+    rec = fresh.handle(row(), {}, market="m", window="16:15")
+    assert rec["ORDER"]["submitted"] == "UNKNOWN"
+    assert rec["ORDER"]["reason"] == "TRANSPORT_ERROR"
+    assert fresh.store.committed()["m"] > 0
 
 
 # ------------------------------------------------------------------- staleness

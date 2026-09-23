@@ -235,6 +235,16 @@ class InventoryStore:
         }
         self.save()
 
+    def reserve(self, market: str, usd: D) -> None:
+        self.state["committed"][market] = str(
+            D(str(self.state["committed"].get(market, 0))) + usd)
+        self.save()
+
+    def forget_submit(self, coid: str) -> None:
+        """Only for a refusal that provably transmitted nothing."""
+        (self.state.get("submitted") or {}).pop(coid, None)
+        self.save()
+
     def apply_fill(self, market: str, side: str, qty: D, price: D) -> None:
         k = "%s|%s" % (market, side)
         self.state["positions"][k] = str(
@@ -337,17 +347,35 @@ class FaithfulExecutor:
         intent = {"client_order_id": coid, "market": market,
                   "side": dec["side"], "price": tr["price"], "qty": tr["qty"],
                   "mode": tr["mode"], "action_key": key}
+        # AT MOST ONCE. The intent is on disk BEFORE the mutation, so a crash
+        # between the send and the save replays as DUPLICATE_SUPPRESSED rather
+        # than as a second order. Only a refusal that provably sent nothing
+        # (NotArmed) removes it again.
+        self.store.record_submit(coid, intent)
         try:
             ack = self.transport.submit(intent)
         except NotArmed as exc:
+            self.store.forget_submit(coid)
             prov.stage("ORDER", {"client_order_id": coid, "submitted": False,
                                  "reason": "NOT_ARMED", "detail": str(exc)[:200],
                                  "intent": {k: str(v) for k, v in intent.items()}})
             return prov.rec
+        except Exception as exc:                               # noqa: BLE001
+            # ambiguous: it may or may not have reached the venue. Never
+            # replayed, and its full notional is RESERVED against the caps as
+            # if it filled, so an unknown can only make us more conservative.
+            self.store.reserve(market, tr["price"] * tr["qty"])
+            prov.stage("ORDER", {"client_order_id": coid,
+                                 "submitted": "UNKNOWN",
+                                 "reason": "TRANSPORT_ERROR",
+                                 "detail": "%s: %s" % (type(exc).__name__,
+                                                       str(exc)[:200])})
+            return prov.rec
 
-        self.store.record_submit(coid, intent)
         prov.stage("ORDER", {"client_order_id": coid, "submitted": True,
                              "venue_order_id": ack.get("order_id"),
+                             "state": ack.get("state"),
+                             "error": ack.get("error"),
                              "transport": getattr(self.transport, "name", "?")})
         filled = D(str(ack.get("filled_qty") or 0))
         if filled <= 0:
@@ -424,6 +452,14 @@ def deadman(store: InventoryStore, transport: Any, *,
             reason: str) -> Dict[str, Any]:
     """Cancel everything we believe is live. Safe when nothing is armed."""
     out = {"reason": reason, "cancelled": [], "errors": []}
+    if getattr(transport, "armed", False) and hasattr(transport, "cancel_all"):
+        # market-wide cancel first: it does not depend on our record of
+        # which orders are live, which is exactly what a deadman cannot trust
+        try:
+            transport.cancel_all()
+            out["cancel_all"] = True
+        except Exception as exc:                               # noqa: BLE001
+            out["errors"].append({"cancel_all": type(exc).__name__})
     for coid in list((store.state.get("submitted") or {}).keys()):
         try:
             transport.cancel(coid)

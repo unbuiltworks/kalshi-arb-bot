@@ -26,21 +26,28 @@ SLUG = "cpc-btc-updown-15m-2026-09-23-2115z"
 NOW = dt.datetime(2026, 9, 23, 21, 20, tzinfo=dt.timezone.utc)
 
 
+MARKET = {
+    "slug": SLUG, "active": True, "closed": False,
+    "status": "MARKET_STATUS_OPEN",
+    "marketSides": [{"description": "Up", "long": True},
+                    {"description": "Down", "long": False}],
+    "orderPriceMinTickSize": 0.01, "minimumTradeQty": 0.01}
+
+
 class FakeHTTP:
+    """Canned venue answers at the LIVE-PROVEN paths."""
+
     def __init__(self, **over):
         self.calls = []
         self.data = {
-            "/v1/account": {"id": "acct-123"},
-            "/v1/markets/%s" % SLUG: {"market": {
-                "slug": SLUG, "seriesSlug": "btc-updown-15m",
-                "state": "MARKET_STATE_OPEN",
-                "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+            "/v1/account/balances": {"balances": [
+                {"accountId": "acct-123", "buyingPower": {"value": "20.00"}}]},
+            "/v1/market/slug/%s" % SLUG: {"market": dict(MARKET)},
             "/v1/markets/%s/book" % SLUG: {"marketData": {
-                "bid": "0.40", "ask": "0.60",
-                "bid_shares": "100", "ask_shares": "100"}},
-            "/v1/positions": {"positions": []},
-            "/v1/orders": {"orders": []},
+                "bids": [{"px": {"value": "0.40"}, "qty": "100"}],
+                "offers": [{"px": {"value": "0.60"}, "qty": "100"}]}},
+            "/v1/portfolio/positions": {"positions": {}},
+            "/v1/orders/open": {"orders": []},
         }
         self.data.update(over)
 
@@ -85,8 +92,8 @@ def test_the_script_exposes_no_submit_or_cancel_path():
 
 def test_a_body_is_never_forwarded_even_on_a_get():
     inner = FakeHTTP()
-    P.GetOnly(inner).request("GET", "/v1/account", {"qty": "99"})
-    assert inner.calls == [("GET", "/v1/account")]
+    P.GetOnly(inner).request("GET", "/v1/account/balances", {"qty": "99"})
+    assert inner.calls == [("GET", "/v1/account/balances")]
 
 
 def test_only_gets_are_issued_during_a_full_preflight(creds):
@@ -116,31 +123,29 @@ def test_missing_credentials_fail_closed(monkeypatch):
     assert "credentials_present" in failed(run())
 
 
+def _mk(**kw):
+    m = dict(MARKET)
+    m.update(kw)
+    return {"market": m}
+
+
+MK = "/v1/market/slug/%s" % SLUG
+
+
 @pytest.mark.parametrize("path,bad,check", [
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_EXPIRED",
-                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                 "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+    (MK, _mk(status="MARKET_STATUS_RESOLVED", closed=True),
      "market_open_tradable"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_OPEN",
-                 "outcomes": [{"outcome": "YES"}, {"outcome": "NO"}],
-                 "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+    (MK, _mk(marketSides=[{"description": "Yes", "long": True},
+                          {"description": "No", "long": False}]),
      "outcome_mapping_is_up_down"),
-    ("/v1/markets/%s" % SLUG,
-     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_OPEN",
-                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                 "orderMinQuantity": "1"}},
-     "tick_constraint_known"),
-    ("/v1/markets/%s/book" % SLUG, {"marketData": {"bid": None, "ask": "0.6"}},
+    (MK, _mk(orderPriceMinTickSize=None), "tick_constraint_known"),
+    ("/v1/markets/%s/book" % SLUG,
+     {"marketData": {"bids": [], "offers": [{"px": {"value": "0.6"}, "qty": "1"}]}},
      "book_two_sided"),
-    ("/v1/orders", {"orders": [{"id": "stale-1"}]},
+    ("/v1/orders/open", {"orders": [{"id": "stale-1"}]},
      "no_unexpected_open_orders"),
-    ("/v1/positions", {"positions": [{"market": SLUG, "side": "UP"}]},
-     "positions_reconciled"),
+    ("/v1/portfolio/positions", {"positions": {SLUG: {"netPosition": "2"}}},
+     "no_position_in_target_market"),
 ])
 def test_each_gate_fails_closed(creds, path, bad, check):
     rep = run(**{path: bad})
@@ -150,7 +155,7 @@ def test_each_gate_fails_closed(creds, path, bad, check):
 
 def test_an_unreachable_endpoint_fails_its_gate_rather_than_skipping_it(creds):
     http = FakeHTTP()
-    http.data.pop("/v1/account")                 # raises
+    http.data.pop("/v1/account/balances")        # raises
     rep = P.preflight(SLUG, P.GetOnly(http), now=NOW)
     assert rep["preflight"] == "FAILED"
     assert "account_readable" in failed(rep)
