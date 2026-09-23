@@ -22,5 +22,32 @@
   },
   "venue_serving_other_series": true
  },
- "reading": "PMUS is serving (NFL events resolve) but no btc-updown series is listed and current BTC15m slugs 404. An expired slug from today still answers /bbo as MARKET_STATE_EXPIRED, so the data is not gone -- new windows are simply not being listed."
+ "reading": "CORRECTED. My first reading -- that the series had been delisted -- was WRONG and is retracted. Re-probing showed cpc-btc-updown-15m-2026-09-23-2115z resolving as MARKET_STATE_OPEN with bid=None and ask=None: the market EXISTS and is OPEN, it simply has NO BOOK on either side. 2130z 404s because that window has not been created yet, not because it is gone. The empty /v1/events?series_id=375 listing is a separate endpoint quirk and does not mean the series is absent, since its market slugs resolve.",
+ "quantified_no_book_rate_by_window": {
+  "note": "share of L5 actions whose PMUS book was unreadable at our receipt",
+  "100_percent_windows": [
+   "14:30",
+   "14:45",
+   "15:00",
+   "17:00",
+   "17:15",
+   "18:00",
+   "19:45"
+  ],
+  "partial_windows": {
+   "15:30": "36.1%",
+   "16:00": "33.0%",
+   "16:30": "18.7%",
+   "17:30": "18.2%",
+   "17:45": "19.2%",
+   "19:30": "11.1%",
+   "20:45": "79.5%",
+   "21:00": "38.9%"
+  },
+  "best_window": {
+   "15:15": "0.0%"
+  },
+  "reading": "the PMUS BTC15m book comes and goes through the day. This is a habitat/liquidity fact and is preserved as evidence, not fixed."
+ },
+ "consequence_for_the_probe": "With no bid and no ask there is nothing to cross into and nothing to rest against, so every L5 action becomes NO_BOOK and the faithful engine reproduces none of them. Book availability at probe time is therefore a GO/NO-GO input in its own right, and the preflight's book_two_sided gate already refuses on exactly this condition."
 }
