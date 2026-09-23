@@ -32,7 +32,18 @@ from src.gemini_execution import live_probe_spec as S          # noqa: E402
 from src.gemini_execution.cohort_runner import discover_chain  # noqa: E402
 
 WF = os.path.join(ROOT, ".github", "workflows", "gemini-settlement-gate.yml")
-AUTH_ID = "OWNER-2026-09-23-GEMINI-Q1-AB-1"
+# ONE AUTHORIZATION PER ARM, because the latch allows nothing else. It keys
+# on the authorization id ALONE -- not the cohort, spec or family -- so two
+# arms sharing an id means the second can only reach STOPPED_NO_LATCH. A and
+# B shared AB-1 and B was therefore unreachable, through two full credentialed
+# readiness runs, because readiness never exercised the latch path.
+#
+# A IS SPENT AND DISARMED: it consumed AB-1 at 04:17:08Z and ran both windows.
+# Its latch stays on disk as the record that the grant was spent.
+SENTINEL = "NO-AUTHORIZATION-IN-FORCE"
+AUTH_ID_BY_ARM = {"A": SENTINEL, "B": "OWNER-2026-09-23-GEMINI-Q1-AB-2"}
+#: the identifier the TREE is armed for: the one live arm, which is B's.
+AUTH_ID = AUTH_ID_BY_ARM["B"]
 ARMS = {"A": "PROBE A - BTC15m", "B": "PROBE B - BTC5m"}
 
 
@@ -105,7 +116,8 @@ def checks():
            str(d["max_loss"]))
         ck("%s --max-drawdown-usd == 5.00" % arm,
            d["max_drawdown"] == "5.00", str(d["max_drawdown"]))
-        ck("%s auth id" % arm, d["auth_id"] == AUTH_ID, str(d["auth_id"]))
+        ck("%s auth id" % arm, d["auth_id"] == AUTH_ID_BY_ARM[arm],
+           "%s (want %s)" % (d["auth_id"], AUTH_ID_BY_ARM[arm]))
         #: a future, bounded expiry -- absent is refused by armed() and an
         #: open-ended one is not a one-probe authorization
         try:

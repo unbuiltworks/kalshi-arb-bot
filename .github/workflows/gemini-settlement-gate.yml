@@ -651,10 +651,22 @@ jobs:
           # AUTHORIZED peak-to-trough drawdown bound (5.29 of a 5.00 cap,
           # peak +1.47) with 11 of 20 windows observed. A spent
           # authorization never arms again.
-          # PROBE A of the A+B experiment, 2026-09-23. NOT YET AUTHORIZED at
-          # run time: the identifier below is the one the owner will approve,
-          # and armed() still needs GEMINI_CANARY_LIVE and a live expiry.
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-23-GEMINI-Q1-AB-1"
+          # PROBE A RAN AND IS SPENT. DISARMED 2026-09-23.
+          # OWNER-2026-09-23-GEMINI-Q1-AB-1 was consumed at 04:17:08Z
+          # (analysis/gemini/canary_latch/latch_OWNER-2026-09-23-GEMINI-Q1-AB-1
+          # .json, committed at c4c10fc) and both authorized windows ran:
+          # 16 orders, 5 fills, STOPPED_WINDOWS_EXHAUSTED.
+          #
+          # THE LATCH KEYS ON THE ID ALONE, so re-dispatching this step could
+          # only return STOPPED_NO_LATCH. It is disarmed to the sentinel
+          # rather than left naming a spent grant -- and the latch file is NOT
+          # cleared, because that file IS the record that the grant was spent.
+          #
+          # ONE ARMED STEP AT A TIME. test_the_tree_is_armed_for_exactly_one
+          # _named_authorization asserts at most one step may name a real
+          # authorization, and it was FAILING while A and B both named AB-1 --
+          # which is precisely the collision that made B unreachable.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
           # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
           # requires an expiry that has NOT passed, and an absent one is not
           # "never expires". Two BTC15m contracts plus entry waits is well
@@ -701,8 +713,20 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-09-23-GEMINI-Q1-AB-1"
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T08:00:00Z"
+          # PROBE B's OWN AUTHORIZATION, distinct from A's by necessity and
+          # not by preference. The latch is ONE AUTHORIZATION, ONE COHORT and
+          # keys on the id alone, so B -- a different cohort, different spec,
+          # different chain -- can never run under the id A spent. Sharing
+          # AB-1 is what made B unreachable; AB-2 is what makes it reachable.
+          # NOT YET AUTHORIZED at the time of writing: static readiness now
+          # evaluates the latch counterfactual, so this is PROVEN unconsumed
+          # rather than assumed.
+          GEMINI_CANARY_AUTH: "OWNER-2026-09-23-GEMINI-Q1-AB-2"
+          # FRESH BOUND, not an extension of the 08:00Z grant A ran under: a
+          # spent authorization's clock is not reused. Four BTC5m contracts
+          # plus entry waits is well under an hour; this leaves room for the
+          # owner to authorize without the bound expiring underneath them.
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T14:00:00Z"
           COHORT_SPEC: btc5m_q1_improve
           COHORT_SPEC_SHA: "bfe7ba23199c544d30f25cd1c730d92e62d0bea534274b1c00feff961242a650"
         run: |
@@ -913,6 +937,15 @@ jobs:
           # cohort with 0 consumed. That is a budget reset by accident, which
           # is the one thing the cohort mechanism exists to make impossible.
           #
+          # AND THEY DRIFTED A THIRD TIME, which cost Probe A its artifact.
+          # The add-list globs cohort_run_*.json, but the allowlist demanded
+          # cohort_run_<timestamp>.json -- so cohort_run_A_20260923T041705Z
+          # .json staged fine and then failed the filter, the WHOLE commit was
+          # refused, and the runner was reclaimed carrying the only copy of
+          # the per-order report, the ledger and the live status. The optional
+          # arm tag below is what the two lists disagreed about; the test
+          # pins the exact A and B filename shapes so it cannot recur.
+          #
           # THE COHORT RUNNER'S OWN OUTPUTS DRIFTED TOO, and run 35671834127
           # paid for it: cohort_run_/cohort_window_/cohort_state were in
           # NEITHER list, so even a green job would have committed the ledger
@@ -924,7 +957,7 @@ jobs:
           # only one that survives a runner killed between windows -- which
           # is precisely the case where the per-window report never gets
           # written at all.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|maker_fee_cash_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|maker_fee_cash_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_([A-Za-z0-9]+_)?[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other

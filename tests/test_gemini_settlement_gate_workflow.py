@@ -212,7 +212,25 @@ def _commit_filter():
     ("analysis/gemini/execution_readiness_20260918T004500Z.json", True),
     ("analysis/gemini/ws_dry_run_20260918T004500Z.json", True),
     ("analysis/gemini/canary_latch/latch_OWNER-2026-09-17-X.json", True),
+    # THE EXACT FILENAMES THE ARMED STEPS WRITE. Probe A staged
+    # cohort_run_A_20260923T041705Z.json, failed this filter, and the WHOLE
+    # commit was refused -- so the runner was reclaimed carrying the only copy
+    # of the per-order report, the ledger and the live status. These four are
+    # pinned by their exact shape because a glob in the add-list and a
+    # timestamp-only regex here is precisely how the two lists drift apart.
+    ("analysis/gemini/cohort_run_A_20260923T041705Z.json", True),
+    ("analysis/gemini/cohort_run_B_20260923T080000Z.json", True),
+    ("analysis/gemini/cohort_run_20260923T041705Z.json", True),
+    ("analysis/gemini/cohort_window_A_20260923T041705Z.json", True),
+    ("analysis/gemini/cohorts/COHORT-2026-09-23-BTC5M-AB-B-W01/ledger.jsonl",
+     True),
+    ("analysis/gemini/cohorts/COHORT-2026-09-23-BTC5M-AB-B-W01/"
+     "cohort_state.json", True),
+    ("analysis/gemini/cohort_live_status.json", True),
+    ("analysis/gemini/cohort_live_status.json.jsonl", True),
     # everything else stays out, whatever the job happens to leave behind
+    ("analysis/gemini/cohort_run_A_20260923T041705Z.json.bak", False),
+    ("analysis/gemini/cohort_run_A_.json", False),
     ("src/gemini_execution/transport.py", False),
     ("analysis/gemini/notes.json", False),
     ("analysis/gemini/execution_readiness_20260918T004500Z.json.bak", False),
@@ -317,8 +335,20 @@ def test_the_spent_canary_step_is_gone_and_stays_gone():
 
 #: the ONLY steps that may carry a transport arm at all. Anything else
 #: setting GEMINI_CANARY_LIVE is a read-only step that has stopped being one.
+# EVERY STEP THAT MAY CARRY THE TRANSPORT ARM, named exactly.
+#
+# THIS REGISTRY WENT STALE AND TOOK THE INVARIANT WITH IT. The A+B rework
+# renamed "PERSISTENT BTC15m cohort" to "PROBE A - BTC15m cohort" and added
+# "PROBE B", and this tuple was never updated -- so every test that looks a
+# step up by name raised ValueError, and the checks that enforce "only an
+# enumerated step may arm" and "at most one step names a real authorization"
+# were failing for a BOOKKEEPING reason. A red suite nobody could read is a
+# suite that cannot warn you, and this one was in fact trying to: A and B
+# both naming OWNER-2026-09-23-GEMINI-Q1-AB-1 is exactly the latch collision
+# that made Probe B unreachable, and the failure was sitting here first.
 ARMABLE_STEPS = ("ONE authorized Gemini continuous window",
-                 "PERSISTENT BTC15m cohort")
+                 "PROBE A - BTC15m cohort",
+                 "PROBE B - BTC5m maker_improve cohort")
 
 
 def test_no_other_step_arms_execution():
@@ -380,7 +410,8 @@ def test_the_arm_is_SET_exactly_once_in_the_whole_workflow():
         head = st.split("\n", 1)[0]
         assert any(head.startswith(a) for a in ARMABLE_STEPS), head
         assert re.search(r"if: \$\{\{ github\.event\.inputs\."
-                         r"(armed_continuous|cohort_run) == 'true' \}\}",
+                         r"(armed_continuous|cohort_run|cohort_run_b)"
+                         r" == 'true' \}\}",
                          st), head
 
 
@@ -684,7 +715,7 @@ def test_the_job_outlives_EVERY_step_not_just_the_armed_one():
 #: the one line that flips every armed/disarmed assertion in this file, so
 #: arming cannot be half-done: the code constants, the workflow env and
 #: this switch must all name the SAME authorization or the suite refuses.
-LIVE_AUTHORIZATION = None
+LIVE_AUTHORIZATION = "OWNER-2026-09-23-GEMINI-Q1-AB-2"
 
 
 def test_the_tree_is_armed_for_exactly_one_named_authorization():
@@ -841,6 +872,15 @@ def test_one_latch_per_authorization_and_no_latch_without_one():
         # bound (5.29 against a 5.00 cap, peak +1.47). The registry
         # records GRANTS, not outcomes.
         "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2",
+        # Owner-granted 2026-09-23 for PROBE A of the A+B experiment: two
+        # BTC15m contracts, q=1, CAP-4, $4.00 per market. SPENT at 04:17:08Z.
+        # Both windows ran: 16 orders, 5 fills, all five on the NO side,
+        # STOPPED_WINDOWS_EXHAUSTED. Its latch stays on disk as the record.
+        "OWNER-2026-09-23-GEMINI-Q1-AB-1",
+        # Owner-granted 2026-09-23 for PROBE B, and DISTINCT BY NECESSITY.
+        # The latch is one authorization, one cohort, keyed on the id alone,
+        # so B could not have run under AB-1 whatever its spec or chain said.
+        "OWNER-2026-09-23-GEMINI-Q1-AB-2",
     }
     d = pathlib.Path("analysis/gemini/canary_latch")
     on_disk = {p.name[len("latch_"):-len(".json")] for p in d.glob("latch_*.json")}
@@ -1167,20 +1207,36 @@ def test_the_evidence_commit_runs_on_every_outcome():
     assert "refusing to commit files outside analysis/gemini/" in step
 
 
-def test_the_cohort_step_writes_its_report_outside_the_pipe():
+def test_both_armed_steps_write_their_report_outside_the_pipe():
     """`| tee` cannot be the only record: a killed process writes nothing
-    through a pipe it never reached the end of."""
-    step = _step("PERSISTENT BTC15m cohort")
-    assert "--out analysis/gemini/cohort_run_" in step
-    assert "set -o pipefail" in step
+    through a pipe it never reached the end of.
+
+    AND THE PIPE WAS NOT THE FAILURE MODE THAT BIT. Probe A wrote its report
+    to --out correctly and still lost it, because the evidence-commit
+    allowlist rejected the filename and the runner was then reclaimed. Both
+    halves have to hold: written outside the pipe AND committable.
+    """
+    import re as _re
+    filt = _commit_filter()
+    for name in ("PROBE A - BTC15m cohort", "PROBE B - BTC5m maker_improve"):
+        step = _step(name)
+        m = _re.search(r"--out (analysis/gemini/cohort_run_.*?\.json)", step)
+        assert m, name
+        assert "set -o pipefail" in step, name
+        realistic = m.group(1).replace(
+            "$(date -u +%Y%m%dT%H%M%SZ)", "20260923T041705Z")
+        assert filt.match(realistic), (
+            "%s writes %r, which the evidence-commit allowlist rejects -- "
+            "this is exactly how Probe A's artifact was lost"
+            % (name, realistic))
 
 
-# ============ COHORT-2: twenty windows, two settlement-inclusive stops
+# ================== PROBE B: four windows, its own authorization
 
-def test_the_cohort_step_runs_the_declared_cohort2_spec_and_its_hash():
+def test_probe_b_runs_the_declared_spec_and_its_hash():
     from src.gemini_execution import live_probe_spec as SPEC
-    step = _step("PERSISTENT BTC15m cohort")
-    spec = SPEC.BTC15M_Q1_CAP4_W60_880_C2
+    step = _step("PROBE B - BTC5m maker_improve cohort")
+    spec = SPEC.get("btc5m_q1_improve")
     assert "COHORT_SPEC: %s" % spec.spec_id in step
     assert 'COHORT_SPEC_SHA: "%s"' % spec.spec_sha() in step
     # the hash is CHECKED, not merely carried: a tree whose spec drifted
@@ -1188,32 +1244,32 @@ def test_the_cohort_step_runs_the_declared_cohort2_spec_and_its_hash():
     assert '--expect-spec-sha   "${COHORT_SPEC_SHA}"' in step
 
 
-def test_the_cohort_step_carries_the_twenty_window_envelope():
-    step = _step("PERSISTENT BTC15m cohort")
-    assert "--max-windows       20" in step
-    assert "--max-loss-usd      8.00" in step
+def test_probe_b_carries_the_four_window_envelope():
+    step = _step("PROBE B - BTC5m maker_improve cohort")
+    assert "--max-windows       4" in step
+    assert "--max-loss-usd      10.00" in step
     assert "--max-drawdown-usd  5.00" in step
-    assert "up to 20 contracts" in step
 
 
-def test_the_cohort_step_declares_no_per_market_bound_of_its_own():
+def test_neither_armed_step_declares_a_per_market_bound_of_its_own():
     """Every money bound lives in the envelope and the driver. A step that
     passed q, a price or a rung count would be a second source of truth."""
-    step = _step("PERSISTENT BTC15m cohort")
-    for forbidden in ("--action-size", "--q ", "--max-residual", "--tte",
-                      "--band", "--rungs", "--price", "--taker",
-                      "--midpoint", "--improve"):
-        assert forbidden not in step, forbidden
+    for name in ("PROBE A - BTC15m cohort", "PROBE B - BTC5m maker_improve"):
+        step = _step(name)
+        for forbidden in ("--action-size", "--q ", "--max-residual", "--tte",
+                          "--band", "--rungs", "--price", "--taker",
+                          "--midpoint", "--improve"):
+            assert forbidden not in step, (name, forbidden)
 
 
-def test_the_cohort_step_carries_the_grant_the_code_carries():
+def test_the_armed_step_carries_the_grant_the_code_carries():
     """Armed or disarmed, the STEP and the CODE must name the same thing. A
     step armed for one authorization while the driver requires another is the
     state where a `sed` in the wrong place looks like a working arm."""
     from src.gemini_execution import arming as ARM
     from src.gemini_execution import ws_continuous as WCX
 
-    step = _step("PERSISTENT BTC15m cohort")
+    step = _step("PROBE B - BTC5m maker_improve cohort")
     want = LIVE_AUTHORIZATION or "NO-AUTHORIZATION-IN-FORCE"
     assert 'GEMINI_CANARY_AUTH: "%s"' % want in step
     assert ARM.EXPECTED_AUTH_ID == want
@@ -1228,7 +1284,34 @@ def test_the_cohort_step_carries_the_grant_the_code_carries():
         from datetime import datetime, timezone
         exp = datetime.fromisoformat(m.group(1).replace("Z", "+00:00"))
         assert exp > datetime.now(timezone.utc), "the arm expiry has passed"
-    assert "COHORT-1" in step, "the spent grant is named, not silently reused"
+
+
+def test_probe_a_is_disarmed_and_its_spent_grant_is_not_reused():
+    """A SPENT AUTHORIZATION NEVER ARMS AGAIN, and the latch keys on the id
+    alone -- so a step still naming AB-1 could only return STOPPED_NO_LATCH.
+    Probe A is disarmed to the sentinel and says why."""
+    step = _step("PROBE A - BTC15m cohort")
+    assert 'GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"' in step
+    assert "OWNER-2026-09-23-GEMINI-Q1-AB-1" in step, (
+        "the spent grant is named, not silently dropped")
+    assert 'GEMINI_CANARY_AUTH: "OWNER-2026-09-23-GEMINI-Q1-AB-1"' not in step
+
+
+def test_the_two_probes_never_share_an_authorization():
+    """THE DEFECT THAT MADE PROBE B UNREACHABLE, asserted directly.
+
+    The latch is ONE AUTHORIZATION, ONE COHORT and keys on the id alone. A
+    and B are different cohorts, so sharing an id means the second can only
+    stop at STOPPED_NO_LATCH before its first mutation. They passed two full
+    credentialed readiness runs sharing AB-1, because readiness never
+    exercised the latch path.
+    """
+    wf = WF.read_text()
+    ids = re.findall(r'^\s*GEMINI_CANARY_AUTH: "([^"]+)"', wf, re.M)
+    real = [i for i in ids if i != "NO-AUTHORIZATION-IN-FORCE"]
+    assert len(real) == len(set(real)), (
+        "two steps share an authorization id; the second cannot reach its "
+        "first mutation: %s" % real)
 
 
 def test_the_live_status_is_in_BOTH_the_add_list_and_the_allow_list():
@@ -1243,3 +1326,48 @@ def test_the_live_status_is_in_BOTH_the_add_list_and_the_allow_list():
     for path in ("analysis/gemini/cohort_live_status.json",
                  "analysis/gemini/cohort_live_status.json.jsonl"):
         assert re.match(allow, path), path
+
+
+def test_the_add_list_and_the_allowlist_admit_the_same_cohort_outputs():
+    """THE DRIFT ITSELF, asserted rather than commented about.
+
+    The add-list stages by glob and the allowlist filters by regex. Probe A
+    was lost because `cohort_run_*.json` staged a file that
+    `cohort_run_<timestamp>.json` then rejected, and a single rejected path
+    fails the WHOLE commit. So for every cohort glob the job stages, a
+    realistic filename produced by that glob must also pass the filter.
+    """
+    import fnmatch
+    import re
+    wf = WF.read_text()
+    globs = re.findall(r"analysis/gemini/(cohort_[a-z_]*\*\.json)", wf)
+    assert globs, "the add-list no longer stages any cohort artifact"
+    filt = _commit_filter()
+    realistic = ["cohort_run_A_20260923T041705Z.json",
+                 "cohort_run_B_20260923T080000Z.json",
+                 "cohort_run_20260923T041705Z.json",
+                 "cohort_window_A_20260923T041705Z.json",
+                 "cohort_wire_20260923T041705Z.json"]
+    for g in set(globs):
+        for name in realistic:
+            if not fnmatch.fnmatch(name, g):
+                continue
+            assert filt.match("analysis/gemini/" + name), (
+                "the add-list stages %r via %r but the allowlist rejects it; "
+                "one rejected path fails the entire evidence commit" % (name, g))
+
+
+def test_the_latch_and_ledger_survive_the_same_commit():
+    """The four artifacts that must outlive a reclaimed runner."""
+    filt = _commit_filter()
+    for name in (
+            "analysis/gemini/cohort_run_B_20260923T080000Z.json",
+            "analysis/gemini/cohort_live_status.json",
+            "analysis/gemini/cohort_live_status.json.jsonl",
+            "analysis/gemini/canary_latch/"
+            "latch_OWNER-2026-09-23-GEMINI-Q1-AB-2.json",
+            "analysis/gemini/cohorts/COHORT-2026-09-23-BTC5M-AB-B-W01/"
+            "ledger.jsonl",
+            "analysis/gemini/cohorts/COHORT-2026-09-23-BTC5M-AB-B-W01/"
+            "cohort_state.json"):
+        assert filt.match(name), name

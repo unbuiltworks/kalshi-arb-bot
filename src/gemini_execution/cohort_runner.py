@@ -70,6 +70,9 @@ from src.gemini_execution import ws_continuous as WC
 
 LABEL = "GEMINI_L5_COHORT_RUNNER_V1"
 
+#: where the durable one-authorization-one-cohort latch lives.
+DEFAULT_STATE_DIR = "analysis/gemini/canary_latch"
+
 #: how long the runner may sit between discovery polls. Read-only, sends
 #: nothing, spends nothing.
 DISCOVERY_POLL_S = 10.0
@@ -133,9 +136,78 @@ def save_state(st: Mapping[str, Any], *, root: str = CO.COHORT_ROOT) -> str:
 
 # --------------------------------------------------------- static readiness
 
+def latch_counterfactual(auth_id: str, *, state_dir: str,
+                         head: Optional[str] = None,
+                         root: str = CO.COHORT_ROOT,
+                         max_windows: int = 0) -> Dict[str, Any]:
+    """Would the latch let this authorization reach the mutation boundary?
+
+    READ-ONLY. It consumes nothing, writes nothing and creates no latch: it
+    mirrors the decision `_consume_cohort_latch` will make and reports it.
+
+    WHY THIS EXISTS. The latch means ONE AUTHORIZATION, ONE COHORT, and
+    `latch.consumed()` keys on the authorization id ALONE -- not on the
+    cohort, the spec or the family. Probe B was declared ready twice against
+    OWNER-2026-09-23-GEMINI-Q1-AB-1 and could never have placed an order,
+    because Probe A had already spent that latch: B is a different cohort
+    under the same id, so it would have returned STOPPED_NO_LATCH before its
+    first mutation. Neither readiness run could see it, because readiness
+    passes readiness=True and the latch path runs only under `if not
+    readiness:`. So readiness proved everything about the tree EXCEPT the one
+    thing that decided the outcome. It now proves that too.
+    """
+    from src.gemini_execution import latch as LATCH
+    out: Dict[str, Any] = {
+        "auth_id": auth_id, "state_dir": state_dir,
+        "latch_path_exists": LATCH.consumed(auth_id, state_dir),
+        "consumes_nothing": True,
+        "labels": ("the COUNTERFACTUAL of _consume_cohort_latch, evaluated "
+                   "read-only. `reaches_mutation_boundary` false means the "
+                   "armed run would stop at STOPPED_NO_LATCH having placed "
+                   "nothing."),
+    }
+    if not out["latch_path_exists"]:
+        out.update(reaches_mutation_boundary=True, would="CONSUME_FRESH",
+                   why=("no latch exists for this authorization, so the "
+                        "armed run would spend it and proceed"), ok=True)
+        return out
+
+    # A latch exists. The only path that still reaches the boundary is a
+    # CONTINUATION of the very cohort that latch already bought.
+    st: Mapping[str, Any] = {}
+    try:
+        if head:
+            st = load_state(head, root=root, max_windows=max_windows)
+    except Exception as exc:                                  # noqa: BLE001
+        out["state_why"] = "%s: %s" % (type(exc).__name__, exc)
+    observed = int((st or {}).get("windows_observed") or 0)
+    remaining = int(max_windows) - observed
+    out.update(windows_observed=observed, windows_remaining=remaining,
+               cohort_stopped=bool((st or {}).get("stopped")))
+    if (st or {}).get("stopped"):
+        out.update(reaches_mutation_boundary=False, would="REFUSE_STOPPED",
+                   why=("authorization %s is spent and its cohort is STOPPED "
+                        "(%s); a stopped cohort is not resumed automatically"
+                        % (auth_id, (st or {}).get("stop_why"))), ok=False)
+    elif observed <= 0 or remaining <= 0:
+        out.update(reaches_mutation_boundary=False, would="REFUSE_SPENT",
+                   why=("authorization %s is already consumed and this cohort "
+                        "has %d of %d windows observed; this is "
+                        "reconciliation work, never a re-run"
+                        % (auth_id, observed, max_windows)), ok=False)
+    else:
+        out.update(reaches_mutation_boundary=True, would="RESUME",
+                   why=("continuing the cohort this latch already bought: "
+                        "%d of %d observed, %d remaining"
+                        % (observed, max_windows, remaining)), ok=True)
+    return out
+
+
 async def static_readiness(spec: Any, *, auth_id: str,
                            root: str = CO.COHORT_ROOT,
                            chain: Sequence[str] = (),
+                           state_dir: str = DEFAULT_STATE_DIR,
+                           max_windows: int = 0,
                            now: Optional[float] = None) -> Dict[str, Any]:
     """Is the TREE ready? Asked without reference to any contract's clock.
 
@@ -319,6 +391,17 @@ async def static_readiness(spec: Any, *, auth_id: str,
         out["why_not"].append(
             "the venue's position list is not readable; an unread account is "
             "never a flat one")
+
+    # ---- THE LATCH, WHICH READINESS USED NOT TO ASK ABOUT AT ALL.
+    # Everything above is a property of the tree and the account. This is the
+    # property of the AUTHORIZATION, and it is the one that decided Probe B.
+    ch["latch"] = latch_counterfactual(
+        auth_id, state_dir=state_dir,
+        head=(chain[0] if chain else (getattr(spec, "budget_cohort", None))),
+        root=root, max_windows=max_windows or len(chain or ()))
+    if not ch["latch"].get("ok"):
+        out["why_not"].append(
+            "latch: %s" % (ch["latch"].get("why") or "would refuse"))
 
     out["verdict"] = "PASS" if not out["why_not"] else "FAIL"
     out["ok"] = out["verdict"] == "PASS"
@@ -677,6 +760,91 @@ class CohortPlan:
                 "per_market_bounds": self.spec.bounds()}
 
 
+async def settle_pending_windows(st: Dict[str, Any], resolve: Callable) -> int:
+    """Convert every PENDING window the venue now reports as settled.
+
+    READ-ONLY. It resolves contracts and re-prices lines already established;
+    it binds nothing, places nothing and touches no ledger.
+
+    WHY THIS IS A FUNCTION RATHER THAN A BLOCK IN THE LOOP. It used to be a
+    block at the TOP of the loop, which meant the terminal `break` skipped it
+    -- so the LAST window of every cohort was never settled, whatever the
+    venue said. Probe A stopped on WINDOWS_EXHAUSTED holding five NO fills
+    across two contracts that both resolved `yes`, and reported
+    `implied net 0` because both windows were still PENDING. The $10
+    settlement-aware loss stop reads `cumulative_economic_loss_usd`, which
+    sums SETTLED windows only, so a loss that settles at or after the final
+    window was structurally invisible to it.
+
+    Returns the number of windows converted.
+    """
+    converted = 0
+    for w in st.get("windows") or []:
+        e = w.get("economics") or {}
+        if e.get("state") != CE.PENDING or not w.get("symbol"):
+            continue
+        res = await resolve(w["symbol"])
+        if str(res.get("status") or "").lower() != "settled":
+            continue
+        # RE-PRICED FROM THE LINES ALREADY ESTABLISHED, not re-derived.
+        # The order events are long gone from the state file, so the
+        # venue-confirmed fee is CARRIED FORWARD rather than recomputed
+        # against an empty event list -- which would report a real fee
+        # as 0.00 and quietly improve the number.
+        w["economics"] = CE.window_economics(
+            {"window": {"symbol": w["symbol"],
+                        "inventory": {
+                            "yes_qty": e.get("yes_qty"),
+                            "no_qty": e.get("no_qty"),
+                            "total_spend_usd": e.get("gross_fill_spend_usd"),
+                            "n_fills": e.get("n_fills"),
+                            "matched_qty": e.get("matched_qty"),
+                            "directional_residual": e.get(
+                                "directional_residual")}}},
+            res,
+            rebates_usd=e.get("rebates_usd"),
+            fees_usd=e.get("fees_usd"),
+            fee_provenance_in=e.get("fee_provenance"))
+        w["settled_at_utc"] = datetime.now(timezone.utc).isoformat()
+        converted += 1
+    return converted
+
+
+def recompute_cohort_economics(st: Dict[str, Any]) -> Dict[str, Any]:
+    """Re-derive the cohort lines from the windows as they now stand."""
+    st["economics"] = CE.cohort_economics(
+        [w["economics"] for w in (st.get("windows") or [])
+         if w.get("economics")] + list(st.get("unrecoverable") or []))
+    st["aggregate_loss_usd"] = st["economics"]["cumulative_economic_loss_usd"]
+    return st["economics"]
+
+
+def unsettled_at_exit(st: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    """Windows still PENDING when the process ends, with what they risk.
+
+    A window that never settled is NOT a zero. Reporting it as one is how a
+    real loss reads as `implied net 0`, so each is named here with the
+    spend that is still exposed to a settlement nobody has read.
+    """
+    out: List[Dict[str, Any]] = []
+    for w in st.get("windows") or []:
+        e = w.get("economics") or {}
+        if e.get("state") != CE.PENDING:
+            continue
+        out.append({
+            "symbol": w.get("symbol"),
+            "cohort_id": w.get("cohort_id"),
+            "gross_fill_spend_usd": e.get("gross_fill_spend_usd"),
+            "n_fills": e.get("n_fills"),
+            "yes_qty": e.get("yes_qty"), "no_qty": e.get("no_qty"),
+            "why": ("still PENDING when the process ended. Its payout is "
+                    "UNKNOWN, it contributes NOTHING to "
+                    "cumulative_economic_loss_usd, and the gross spend above "
+                    "is the amount whose settlement has not been read. This "
+                    "is the absence of evidence, never a zero.")})
+    return out
+
+
 async def run_cohort(plan: CohortPlan, *,
                      readiness: bool = False,
                      latch_fn: Optional[Callable] = None,
@@ -780,39 +948,8 @@ async def run_cohort(plan: CohortPlan, *,
         # the entry band, so by the time this runs its resolution is usually
         # published. Nothing is guessed: a contract still unresolved stays
         # PENDING and stays out of the loss counter.
-        for w in st.get("windows") or []:
-            e = w.get("economics") or {}
-            if e.get("state") != CE.PENDING or not w.get("symbol"):
-                continue
-            res = await resolve(w["symbol"])
-            if str(res.get("status") or "").lower() != "settled":
-                continue
-            # RE-PRICED FROM THE LINES ALREADY ESTABLISHED, not re-derived.
-            # The order events are long gone from the state file, so the
-            # venue-confirmed fee is CARRIED FORWARD rather than recomputed
-            # against an empty event list -- which would report a real fee
-            # as 0.00 and quietly improve the number.
-            w["economics"] = CE.window_economics(
-                {"window": {"symbol": w["symbol"],
-                            "inventory": {
-                                "yes_qty": e.get("yes_qty"),
-                                "no_qty": e.get("no_qty"),
-                                "total_spend_usd": e.get(
-                                    "gross_fill_spend_usd"),
-                                "n_fills": e.get("n_fills"),
-                                "matched_qty": e.get("matched_qty"),
-                                "directional_residual": e.get(
-                                    "directional_residual")}}},
-                res,
-                rebates_usd=e.get("rebates_usd"),
-                fees_usd=e.get("fees_usd"),
-                fee_provenance_in=e.get("fee_provenance"))
-            w["settled_at_utc"] = datetime.now(timezone.utc).isoformat()
-        st["economics"] = CE.cohort_economics(
-            [w["economics"] for w in (st.get("windows") or [])
-             if w.get("economics")] + list(st.get("unrecoverable") or []))
-        st["aggregate_loss_usd"] = st["economics"][
-            "cumulative_economic_loss_usd"]
+        await settle_pending_windows(st, resolve)
+        recompute_cohort_economics(st)
         save_state(st, root=plan.root)
         status.set_cohort(
             windows_observed=st["windows_observed"],
@@ -973,6 +1110,80 @@ async def run_cohort(plan: CohortPlan, *,
                   root=plan.root, status=status)
             break
 
+    # ==================================================================
+    # THE TERMINAL SETTLEMENT SWEEP. Every exit from the loop above is a
+    # `break`, and the settle pass sits at the TOP of the loop -- so before
+    # this existed, the LAST window of every cohort ended PENDING no matter
+    # what the venue said, and a loss that settled at or after it could not
+    # reach `cumulative_economic_loss_usd`, which is the only field the
+    # $10 stop reads. That is not a reporting nicety: it is the stop being
+    # unable to see the loss it exists to bound.
+    #
+    # READ-ONLY, AND IT REVERSES NOTHING. The cohort has already stopped and
+    # this does not rewrite why: `rep["state"]` and the stop record stand as
+    # they were. What it does is finish the accounting, persist it, and say
+    # plainly whether the settled total would have breached the cap -- so a
+    # resume refuses, and so a human is never handed `implied net 0` for a
+    # cohort that lost money.
+    # ==================================================================
+    terminal: Dict[str, Any] = {"ran": False}
+    try:
+        converted = await settle_pending_windows(st, resolve)
+        econ = recompute_cohort_economics(st)
+        loss = D(str(st.get("aggregate_loss_usd") or "0"))
+        cap = D(str(plan.max_aggregate_loss_usd))
+        dd = D(str(econ.get("max_drawdown_usd") or "0"))
+        dd_cap = D(str(plan.max_drawdown_usd or "0"))
+        pending = unsettled_at_exit(st)
+        terminal = {
+            "ran": True,
+            "windows_settled_by_this_sweep": converted,
+            "cumulative_economic_loss_usd": str(loss),
+            "max_aggregate_loss_usd": str(cap),
+            "loss_cap_breached_after_settlement": bool(loss >= cap),
+            "max_drawdown_usd": str(dd),
+            "max_drawdown_cap_usd": str(dd_cap),
+            "drawdown_cap_breached_after_settlement": bool(dd_cap > 0
+                                                           and dd >= dd_cap),
+            "settlement_complete": not pending,
+            "unsettled_at_exit": pending,
+            # THE BLIND SPOT, SIZED RATHER THAN ARGUED ABOUT. A process that
+            # has ended cannot observe a settlement that has not happened,
+            # so the honest statement is not "the stop sees everything" but
+            # "here is the most the stop could still be understating". It
+            # assumes every unsettled contract pays nothing, which is the
+            # worst case, and it GATES NOTHING: no stop reads it.
+            "worst_case_loss_if_unsettled_lose_usd": str(
+                loss + sum((D(str(w.get("gross_fill_spend_usd") or "0"))
+                            for w in pending), D("0"))),
+            "labels": ("settlement-IMPLIED over SETTLED windows only, never "
+                       "REALIZED: a realized figure still requires an "
+                       "attributable cash movement read back from the "
+                       "account. A non-empty unsettled_at_exit means the "
+                       "figures above are INCOMPLETE, not that the rest was "
+                       "zero."),
+        }
+        save_state(st, root=plan.root)
+        if status is not None:
+            try:
+                status.set_cohort(
+                    cumulative_economic_loss_usd=st["aggregate_loss_usd"],
+                    settlement_implied_net_usd=econ[
+                        "settlement_implied_net_usd"],
+                    max_drawdown_usd=econ["max_drawdown_usd"],
+                    gross_fill_spend_usd=econ["gross_fill_spend_usd"],
+                    realized_net_usd=None, economics=econ)
+            except Exception:                                 # noqa: BLE001
+                pass
+    except Exception as exc:                                  # noqa: BLE001
+        # A FAILED SWEEP IS REPORTED, NEVER SWALLOWED. The cohort has already
+        # stopped and placed its last order, so this cannot endanger anything
+        # live -- but "the accounting did not finish" must not look like
+        # "the accounting finished at zero".
+        terminal = {"ran": False,
+                    "why": "%s: %s" % (type(exc).__name__, exc),
+                    "settlement_complete": False}
+    rep["terminal_settlement"] = terminal
     rep["cohort_state"] = st
     rep["finished_utc"] = datetime.now(timezone.utc).isoformat()
     return rep
@@ -1240,7 +1451,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="peak-to-trough stop on the settlement-implied "
                          "equity curve, SETTLED windows only. 0 disables it, "
                          "which is how every cohort before COHORT-2 ran")
-    ap.add_argument("--state-dir", default="analysis/gemini/canary_latch")
+    ap.add_argument("--state-dir", default=DEFAULT_STATE_DIR)
     ap.add_argument("--out-dir", default="analysis/gemini")
     ap.add_argument("--root", default=CO.COHORT_ROOT)
     ap.add_argument("--out", default="")
@@ -1257,9 +1468,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # tree ready" only when a contract happened to be near 840:880, so
         # market timing and software correctness were one check. They are
         # not. This binds nothing and waits for nothing.
+        _chain = discover_chain(spec, root=a.root)
         out = asyncio.run(static_readiness(
-            spec, auth_id=a.auth_id, root=a.root,
-            chain=discover_chain(spec, root=a.root)))
+            spec, auth_id=a.auth_id, root=a.root, chain=_chain,
+            state_dir=a.state_dir, max_windows=a.max_windows or len(_chain)))
         dest = a.out or os.path.join(
             a.out_dir, "cohort_static_readiness_%s.json"
             % datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
