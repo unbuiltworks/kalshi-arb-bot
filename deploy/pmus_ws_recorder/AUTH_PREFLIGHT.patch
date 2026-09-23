@@ -1,7 +1,8 @@
-diff -ruN orig/deploy/pmus_ws_recorder/Dockerfile new/deploy/pmus_ws_recorder/Dockerfile
---- a/deploy/pmus_ws_recorder/Dockerfile	2026-09-23 22:05:46.071702169 +0000
-+++ b/deploy/pmus_ws_recorder/Dockerfile	2026-09-23 22:05:46.091702170 +0000
-@@ -49,6 +49,15 @@
+diff --git a/deploy/pmus_ws_recorder/Dockerfile b/deploy/pmus_ws_recorder/Dockerfile
+index 2b15af3..69ff4a0 100644
+--- a/deploy/pmus_ws_recorder/Dockerfile
++++ b/deploy/pmus_ws_recorder/Dockerfile
+@@ -49,6 +49,15 @@ COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
  COPY scripts/priority_vs_rotation_eval.py scripts/priority_vs_rotation_eval.py
  COPY scripts/spring_candidate_tape_read.py scripts/spring_candidate_tape_read.py
  COPY scripts/pmus_candidate_tape_readonly.py scripts/pmus_candidate_tape_readonly.py
@@ -17,33 +18,11 @@ diff -ruN orig/deploy/pmus_ws_recorder/Dockerfile new/deploy/pmus_ws_recorder/Do
  RUN touch src/__init__.py
  
  ENV PMUS_SERVICE_ROLE=ws-recorder \
-diff -ruN orig/deploy/pmus_ws_recorder/entrypoint.sh new/deploy/pmus_ws_recorder/entrypoint.sh
---- a/deploy/pmus_ws_recorder/entrypoint.sh	2026-09-23 22:05:46.075702169 +0000
-+++ b/deploy/pmus_ws_recorder/entrypoint.sh	2026-09-23 22:05:46.093814196 +0000
-@@ -22,4 +22,20 @@
-   fi
- fi
- 
-+# Optional one-shot AUTHENTICATED identity/market preflight, read-only.
-+# Same shape as the tape-read above: it runs before the recorder opens its
-+# websocket, then execs the normal command unchanged.  A failure is REPORTED
-+# and never blocks capture -- the preflight gates money, not evidence, and a
-+# market closed between windows is a normal FAILED result, so it re-runs on
-+# every boot rather than leaving a marker.  It emits one PMUS_PREFLIGHT line
-+# in every case, including its own failure, so silence means it did not run.
-+if [ -n "${PMUS_PREFLIGHT_ON_START:-}" ]; then
-+  echo "PMUS_PREFLIGHT_START"
-+  if PYTHONPATH=/app python3 -m scripts.pmus_auth_preflight_readonly; then
-+    echo "PMUS_PREFLIGHT_PASSED"
-+  else
-+    echo "PMUS_PREFLIGHT_FAILED:$?"
-+  fi
-+fi
-+
- exec "$@"
-diff -ruN orig/scripts/pmus_auth_preflight_readonly.py new/scripts/pmus_auth_preflight_readonly.py
---- a/scripts/pmus_auth_preflight_readonly.py	1970-01-01 00:00:00.000000000 +0000
-+++ b/scripts/pmus_auth_preflight_readonly.py	2026-09-23 22:05:46.083733475 +0000
+diff --git a/scripts/pmus_auth_preflight_readonly.py b/scripts/pmus_auth_preflight_readonly.py
+new file mode 100644
+index 0000000..8d5fcd0
+--- /dev/null
++++ b/scripts/pmus_auth_preflight_readonly.py
 @@ -0,0 +1,286 @@
 +"""Read-only authenticated PMUS identity/market preflight, run WHERE THE
 +CREDENTIALS ALREADY LIVE.
@@ -331,9 +310,11 @@ diff -ruN orig/scripts/pmus_auth_preflight_readonly.py new/scripts/pmus_auth_pre
 +
 +if __name__ == "__main__":
 +    raise SystemExit(main())
-diff -ruN orig/src/pmus_auth.py new/src/pmus_auth.py
---- a/src/pmus_auth.py	1970-01-01 00:00:00.000000000 +0000
-+++ b/src/pmus_auth.py	2026-09-23 22:05:46.085225529 +0000
+diff --git a/src/pmus_auth.py b/src/pmus_auth.py
+new file mode 100644
+index 0000000..04ec03d
+--- /dev/null
++++ b/src/pmus_auth.py
 @@ -0,0 +1,89 @@
 +"""PMUS credentials and request signing, WITHOUT any order path.
 +
@@ -424,9 +405,11 @@ diff -ruN orig/src/pmus_auth.py new/src/pmus_auth.py
 +        with urllib.request.urlopen(
 +                req, context=ssl.create_default_context(), timeout=15) as r:
 +            return json.loads(r.read() or b"{}")
-diff -ruN orig/src/pmus_fees.py new/src/pmus_fees.py
---- a/src/pmus_fees.py	1970-01-01 00:00:00.000000000 +0000
-+++ b/src/pmus_fees.py	2026-09-23 22:05:46.085247878 +0000
+diff --git a/src/pmus_fees.py b/src/pmus_fees.py
+new file mode 100644
+index 0000000..de25f91
+--- /dev/null
++++ b/src/pmus_fees.py
 @@ -0,0 +1,146 @@
 +"""The PMUS fee schedule, once, with provenance and an effective date.
 +
@@ -574,3 +557,51 @@ diff -ruN orig/src/pmus_fees.py new/src/pmus_fees.py
 +        "verified_against": ("all 99 published price rows reproduce exactly; "
 +                             "see tests/test_pmus_fees.py"),
 +    }
+diff --git a/src/pmus_ws_evidence_recorder_enriched.py b/src/pmus_ws_evidence_recorder_enriched.py
+index ddac818..a6bdb37 100644
+--- a/src/pmus_ws_evidence_recorder_enriched.py
++++ b/src/pmus_ws_evidence_recorder_enriched.py
+@@ -482,8 +482,43 @@ def install() -> None:
+     pq.plan = plan
+ 
+ 
++#: Optional one-shot AUTHENTICATED identity/market preflight, read-only.
++#:
++#: It is hooked HERE and not in deploy/pmus_ws_recorder/entrypoint.sh because
++#: that script never runs: the image declares no ENTRYPOINT, and the service
++#: sets an explicit startCommand which overrides CMD in any case. A hook in
++#: the entrypoint would have been silently dead.
++#:
++#: It runs on a DAEMON THREAD so a slow or hanging venue read can never delay
++#: authenticated capture -- the preflight gates money, and evidence must not
++#: wait on it. It prints exactly one PMUS_PREFLIGHT line in every case,
++#: including its own internal failure, so silence means it did not run.
++PREFLIGHT_ENV = "PMUS_PREFLIGHT_ON_START"
++
++
++def preflight_on_start() -> Optional[Any]:
++    """Start the read-only preflight, or return None when it is off."""
++    if not str(os.getenv(PREFLIGHT_ENV, "")).strip():
++        return None
++    import threading
++
++    def run() -> None:
++        try:
++            from scripts import pmus_auth_preflight_readonly as pf
++            pf.main([])
++        except BaseException as exc:                           # noqa: BLE001
++            # never propagate: this thread must not be able to affect capture
++            print("PMUS_PREFLIGHT {\"preflight\":\"FAILED\",\"fatal\":\"%s\"}"
++                  % type(exc).__name__, flush=True)
++
++    t = threading.Thread(target=run, name="pmus-preflight", daemon=True)
++    t.start()
++    return t
++
++
+ def main() -> int:
+     install()
++    preflight_on_start()
+     return base.main()
+ 
+ 
