@@ -118,12 +118,71 @@ def l5_activity(limit: int = 200) -> Optional[List[dict]]:
     return rows if isinstance(rows, list) else None
 
 
-def pmus_bbo(slug: str) -> Optional[dict]:
-    try:
-        return (_get("%s/v1/markets/%s/bbo" % (PMUS_GATEWAY, slug))
-                or {}).get("marketData")
-    except Exception:                                          # noqa: BLE001
+def _top_from_levels(md: Mapping[str, Any]) -> Optional[dict]:
+    """Best bid/ask from the ACTUAL book levels of /book.
+
+    This is not a fabricated BBO. It is the same venue book read through a
+    different endpoint, because /bbo intermittently answers 200 with its
+    bestBid/bestAsk fields empty for a market that is quoting and trading.
+    Nothing is derived from trades and no price is invented.
+    """
+    bids = md.get("bids") or []
+    offers = md.get("offers") or []
+    if not bids or not offers:
         return None
+    def px(lvl):
+        v = lvl.get("px")
+        return (v or {}).get("value") if isinstance(v, Mapping) else v
+    def qty(lvls):
+        try:
+            return str(sum(D(str(l.get("qty") or 0)) for l in lvls))
+        except Exception:                                      # noqa: BLE001
+            return None
+    return {"marketSlug": md.get("marketSlug"),
+            "bestBid": {"value": px(bids[0])},
+            "bestAsk": {"value": px(offers[0])},
+            "bidShares": qty(bids), "askShares": qty(offers),
+            "state": md.get("state"), "_source": "book_levels"}
+
+
+def pmus_bbo(slug: str) -> Optional[dict]:
+    """Top of book, with /book as a fallback when /bbo comes back empty.
+
+    THE DEFECT THIS FIXES. /bbo returns HTTP 200 with marketData present but
+    bestBid/bestAsk EMPTY a large fraction of the time on a market that is
+    demonstrably quoting -- measured at 16 of 30 consecutive samples on one
+    live window, against /book on the same market showing 8 bid and 5 ask
+    levels. Treating that as an absent book attributed OUR blindness to the
+    venue and produced a NO_BOOK classification that the authenticated trade
+    tape contradicts. The fetch outcome is recorded so a failure can never
+    again be silently read as illiquidity.
+    """
+    src = None
+    try:
+        md = (_get("%s/v1/markets/%s/bbo" % (PMUS_GATEWAY, slug))
+              or {}).get("marketData")
+        if md:
+            bb = (md.get("bestBid") or {}).get("value") \
+                if isinstance(md.get("bestBid"), Mapping) else md.get("bestBid")
+            ba = (md.get("bestAsk") or {}).get("value") \
+                if isinstance(md.get("bestAsk"), Mapping) else md.get("bestAsk")
+            if bb is not None and ba is not None:
+                md["_source"] = "bbo"
+                return md
+            src = "bbo_empty"
+    except Exception:                                          # noqa: BLE001
+        src = "bbo_error"
+    try:
+        md2 = (_get("%s/v1/markets/%s/book" % (PMUS_GATEWAY, slug))
+               or {}).get("marketData")
+        top = _top_from_levels(md2 or {})
+        if top:
+            top["_fallback_from"] = src
+            return top
+        return {"_source": "empty_both", "_fallback_from": src,
+                "state": (md2 or {}).get("state")}
+    except Exception:                                          # noqa: BLE001
+        return {"_source": "fetch_failed", "_fallback_from": src}
 
 
 def pmus_book(slug: str) -> Optional[dict]:
