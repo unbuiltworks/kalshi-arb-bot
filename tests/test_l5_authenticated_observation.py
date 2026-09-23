@@ -255,3 +255,38 @@ def test_the_book_in_force_is_never_one_observed_after_the_action():
 def test_a_book_older_than_the_attach_window_is_not_in_force():
     assert A.book_at([book(0.0)], WS + 100.0) is None
     assert A.book_at([], WS + 1.0) is None
+
+
+# ------------------------------------------- windows met after they settled
+
+def test_a_window_only_seen_after_it_settled_is_not_scored_as_blind():
+    """Series discovery resubscribes long-expired windows. A settled market
+    reports NO_BOOK because it is over, which is not our blindness."""
+    late = WS + 10_000.0          # hours after this window closed
+    r = A.evaluate(SLUG, {SLUG: [{"t": late, "bid": None, "ask": None,
+                                  "status": "NO_BOOK"}]}, {SLUG: []}, [])
+    assert r["verdict"] == A.NOT_LIVE
+    assert r["first_book_latency_s"] is None
+
+
+def test_such_windows_cannot_drag_the_gate_down():
+    live = ev([book(5.0)], trades=[WS + 9.0], actions=[action(5.0)])
+    stale = A.evaluate(OTHER, {OTHER: [{"t": WS + 10_000.0, "bid": None,
+                                        "ask": None, "status": "NO_BOOK"}]},
+                       {OTHER: []}, [])
+    s = A.summarize([live] + [stale] * 40)
+    assert s["windows"] == 1
+    assert s["windows_not_observed_live"] == 40
+    assert s["gate"] == "PASS"
+
+
+def test_an_observation_inside_the_window_still_counts_as_live():
+    # a trade inside the window but no book at all: genuinely blind
+    r = A.evaluate(SLUG, {SLUG: []}, {SLUG: [WS + 30.0]}, [])
+    assert r["verdict"] == A.BLIND
+
+
+def test_a_book_state_inside_the_window_makes_it_live_even_with_no_trades():
+    r = A.evaluate(SLUG, {SLUG: [book(5.0)]}, {SLUG: []}, [])
+    assert r["verdict"] != A.NOT_LIVE
+    assert r["first_book_latency_s"] == 5.0

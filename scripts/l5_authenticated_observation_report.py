@@ -35,6 +35,13 @@ TRADE_PREFIX = "PMUS_TRADE_ROWS "
 #: only the series under study; the recorder watches hundreds of markets
 BTC15M = "cpc-btc-updown-15m-"
 
+#: When the authenticated book tape went live on the recorder. Windows that
+#: opened BEFORE this were observed over the defective public path -- they
+#: have trades and no book, so they score BLIND_AT_OPEN for a reason that no
+#: longer applies. They are preserved as SUPERSEDED evidence and never pooled
+#: into the prospective aggregate; the gate is computed on the new path only.
+AUTH_BOOK_LIVE_FROM = "2026-09-23T22:30:00+00:00"
+
 
 def _docs(lines: Iterable[str], prefix: str) -> List[dict]:
     out = []
@@ -53,7 +60,8 @@ def _btc_only(by_market: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in by_market.items() if k.startswith(BTC15M)}
 
 
-def build(lines: List[str], actions: List[dict]) -> Dict[str, Any]:
+def build(lines: List[str], actions: List[dict] = (),
+          since: str = AUTH_BOOK_LIVE_FROM) -> Dict[str, Any]:
     books = _btc_only(O.book_states(_docs(lines, BOOK_PREFIX)))
     trades = _btc_only(O.trade_times(_docs(lines, TRADE_PREFIX)))
 
@@ -63,12 +71,29 @@ def build(lines: List[str], actions: List[dict]) -> Dict[str, Any]:
         if slug:
             by_market[slug].append(a)
 
+    cut = O._epoch(since) if since else None
     windows = sorted(set(books) | set(trades))
-    per = [O.evaluate(w, books, trades, by_market.get(w, [])) for w in windows]
-    return {"per_window": per, "summary": O.summarize(per),
+    prospective, superseded = [], []
+    for w in windows:
+        row = O.evaluate(w, books, trades, by_market.get(w, []))
+        ws = O.window_start_epoch(w)
+        if cut is not None and (ws is None or ws < cut):
+            row = dict(row, observation_path="PUBLIC_DEFECTIVE_SUPERSEDED")
+            superseded.append(row)
+        else:
+            prospective.append(dict(row, observation_path="AUTHENTICATED"))
+
+    return {"authenticated_from": since,
+            "per_window": prospective,
+            "summary": O.summarize(prospective),
+            "superseded_per_window": superseded,
+            "superseded_summary": O.summarize(superseded),
             "markets_seen": len(windows),
             "labels": ("authenticated tape only; no BBO derived from a trade, "
-                       "interpolated or backfilled")}
+                       "interpolated or backfilled. Windows opening before "
+                       "authenticated_from were seen over the defective "
+                       "public path and are preserved separately, never "
+                       "pooled into the gate.")}
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -76,6 +101,8 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("logs", nargs="+")
     ap.add_argument("--actions", help="observer rows JSONL, optional")
     ap.add_argument("--json", dest="out")
+    ap.add_argument("--from", dest="since", default=AUTH_BOOK_LIVE_FROM,
+                    help="window-start cutoff for the prospective set")
     a = ap.parse_args(argv)
 
     lines: List[str] = []
@@ -92,16 +119,22 @@ def main(argv: List[str] | None = None) -> int:
                 except ValueError:
                     continue
 
-    rep = build(lines, actions)
+    rep = build(lines, actions, since=a.since)
     if a.out:
         with open(a.out, "w") as fh:
             json.dump(rep, fh, indent=1, default=str)
     s = rep["summary"]
+    sup = rep["superseded_summary"]
+    print("authenticated path live from: %s" % rep["authenticated_from"])
+    print("SUPERSEDED (defective public path, never pooled): %d windows, "
+          "%d blind at open" % (sup["windows"], sup["windows_blind_at_open"]))
     print("BTC15m windows on the authenticated path: %d" % s["windows"])
     print("  median first-BOOK  latency from window open: %s s"
           % s["median_first_book_latency_s"])
     print("  median first-TRADE latency from window open: %s s"
           % s["median_first_trade_latency_s"])
+    print("  not observed live (settled when seen): %d"
+          % s["windows_not_observed_live"])
     print("  blind at open: %d    clean: %d    gate: %s"
           % (s["windows_blind_at_open"], s["clean"], s["gate"]))
     for w in rep["per_window"]:

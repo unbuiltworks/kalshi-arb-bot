@@ -46,6 +46,14 @@ BLIND = "BLIND_AT_OPEN"
 OK = "OK"
 PARTIAL = "PARTIAL"
 
+#: A window we only ever saw AFTER it settled. Series discovery resubscribes
+#: long-expired BTC15m windows, and a settled market correctly reports
+#: NO_BOOK -- it has no book because it is over, not because we were blind.
+#: Scoring those as BLIND_AT_OPEN would bury the live windows under dozens of
+#: meaningless failures and the gate could never pass. A window counts only
+#: when we hold an observation inside its OWN fifteen minutes.
+NOT_LIVE = "NOT_OBSERVED_LIVE"
+
 
 def _epoch(v: Any) -> Optional[float]:
     if v is None:
@@ -185,6 +193,32 @@ def evaluate(slug: str,
     trades = list(trades_by_market.get(slug) or ())
     usable = [b for b in books if b.get("status") == USABLE]
 
+    # Did we observe this window WHILE IT WAS OPEN? Anything else is a market
+    # we met after it had already settled, and its emptiness says nothing
+    # about our blindness.
+    in_window = (lambda t: ws is not None and ws <= t <= ws + WINDOW_S)
+    observed_live = (any(in_window(b["t"]) for b in books)
+                     or any(in_window(t) for t in trades))
+    if ws is None or not observed_live:
+        return {
+            "market": slug,
+            "window_start_utc": (dt.datetime.fromtimestamp(
+                ws, dt.timezone.utc).isoformat() if ws is not None else None),
+            "first_book_latency_s": None,
+            "first_trade_latency_s": None,
+            "book_observed_before_first_trade": None,
+            "usable_book_states": len(usable),
+            "book_states_total": len(books),
+            "authenticated_trades": len(trades),
+            "coverage_pct_of_window": None,
+            "l5_actions": len(l5_actions),
+            "verdict": NOT_LIVE,
+            "labels": ("only seen outside its own fifteen minutes; a settled "
+                       "market has no book because it is over, so this is "
+                       "NOT evidence either way and is excluded from the "
+                       "gate"),
+        }
+
     first_book = (usable[0]["t"] - ws) if (usable and ws is not None) else None
     first_trade = (trades[0] - ws) if (trades and ws is not None) else None
     cov = _coverage(usable, ws) if (usable and ws is not None) else {}
@@ -249,6 +283,9 @@ def evaluate(slug: str,
 
 
 def summarize(per_window: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    # windows only ever seen after they settled are not evidence either way
+    skipped = [w for w in per_window if w["verdict"] == NOT_LIVE]
+    per_window = [w for w in per_window if w["verdict"] != NOT_LIVE]
     ok = [w for w in per_window if w["verdict"] == OK]
     fb = [w["first_book_latency_s"] for w in per_window
           if w["first_book_latency_s"] is not None]
@@ -261,6 +298,7 @@ def summarize(per_window: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     blind = sum(1 for w in per_window if w["verdict"] == BLIND)
     return {
         "windows": len(per_window),
+        "windows_not_observed_live": len(skipped),
         "clean": len(ok),
         "clean_windows": [w["market"] for w in ok],
         "median_first_book_latency_s": med(fb),
