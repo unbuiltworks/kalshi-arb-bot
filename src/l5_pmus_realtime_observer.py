@@ -410,6 +410,8 @@ class Observer:
         self.model = pv2.load_v2()
         self.clone_last_rel = ""
         self.clone_ticks = collections.Counter()
+        self._pending_log: List[Mapping[str, Any]] = []
+        self._rows_logged: set = set()
         self._hydrate()
 
     # -- restart safety ---------------------------------------------------
@@ -446,6 +448,64 @@ class Observer:
     def _emit(self, row: Mapping[str, Any]) -> None:
         with open(self.tape, "a") as fh:
             fh.write(json.dumps(row, default=str) + "\n")
+        self._pending_log.append(row)
+
+    def emit_new_rows(self) -> Optional[dict]:
+        """Print tape rows first written since the last emission.
+
+        WHY THIS EXISTS. Once this observer runs on Railway its tape lives on a
+        volume the analysis process cannot open. `polls` and `actions_observed`
+        prove rows exist and say nothing about any particular one, so a window
+        recorded there could never be scored. This is the same narrowest-safe
+        method already used for the authenticated trade rows: it formats data
+        this process already holds and writes it to stdout. It opens no socket,
+        serves no request, adds no access-control surface, and cannot reach an
+        order path.
+
+        INCREMENTAL, so the log is a TAPE and not a repeated snapshot: each
+        emission carries only rows not already emitted, keyed on the row's own
+        action_key, so a consumer can concatenate emissions without
+        deduplicating and without holes. OFF unless the cap is set to a
+        positive integer; a non-numeric value is OFF rather than unbounded.
+        Never raises -- an evidence convenience must not be able to stop
+        collection.
+        """
+        cap = rows_log_cap()
+        if not cap:
+            self._pending_log.clear()
+            return None
+        fresh: List[Mapping[str, Any]] = []
+        try:
+            for row in self._pending_log:
+                k = row.get("action_key")
+                if k is None or k in self._rows_logged:
+                    continue
+                self._rows_logged.add(k)
+                fresh.append(row)
+                if len(fresh) >= cap:
+                    break
+            self._pending_log.clear()
+            if len(self._rows_logged) > 4000:              # bounded memory
+                self._rows_logged = set(list(self._rows_logged)[-2000:])
+            if not fresh:
+                return None
+            doc = {
+                "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "kind": "observer_rows", "rows": len(fresh),
+                "cap_per_emission": cap, "tape": self.tape,
+                "schema": ("verbatim observer tape rows: three clocks "
+                           "(l5_event_utc, receipt_utc, pmus_snapshot_age_s), "
+                           "the PMUS state snapshotted AT RECEIPT, the "
+                           "copyability class, safety_overlay on its own axis, "
+                           "and no_backdating_ok"),
+                "labels": LABELS,
+                "data": [json.loads(json.dumps(r, default=str)) for r in fresh],
+            }
+            print("L5_PMUS_ROWS %s" % json.dumps(doc), flush=True)
+            return doc
+        except Exception:                                  # noqa: BLE001
+            self._pending_log.clear()
+            return None
 
     # -- PMUS state, snapshotted AT RECEIPT --------------------------------
     def pmus_now(self, slug: str, max_age_s: float = 2.0) -> Tuple[Optional[dict], float]:
@@ -754,6 +814,23 @@ class Observer:
         }
 
 
+#: Bounded INCREMENTAL emission of observer tape rows to the log stream, so a
+#: reader outside this process can see rows written to a Railway volume it
+#: cannot open. OFF by default; the value is the cap per emission. Same
+#: narrowest-safe method as the authenticated trade rows: it adds no socket,
+#: no route and no access-control surface.
+ROWS_LOG_ENV = "L5_PMUS_OBS_ROWS_LOG"
+
+
+def rows_log_cap() -> int:
+    """0 (off) unless set to a positive integer."""
+    try:
+        v = int(str(os.getenv(ROWS_LOG_ENV, "")).strip() or "0")
+    except ValueError:
+        return 0
+    return max(0, min(v, 200))
+
+
 SERVICE_ROLE = "l5-pmus-observer"
 ROLE_ENV = "PMUS_SERVICE_ROLE"
 STATE_DIR_ENV = "L5_PMUS_OBS_ROOT"
@@ -818,6 +895,7 @@ def main(argv=None) -> int:
                  "error_class": type(exc).__name__, "error": str(exc)[:400],
                  "poll_exceptions": poll_exceptions}
         print("L5_PMUS_OBS %s" % json.dumps(r), flush=True)
+        obs.emit_new_rows()
         now = time.time()
         if now - last_sum >= a.summary_every or a.once:
             s = obs.summary()
