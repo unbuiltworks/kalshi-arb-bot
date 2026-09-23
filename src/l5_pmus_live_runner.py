@@ -159,6 +159,7 @@ class Runner:
             market_slug=slug, http=self.http, book_source=self.book.snapshot)
         self.executor = LX.FaithfulExecutor(
             self.store, self.limits, transport=self.transport, lam=self.lam,
+            live=True,
             now_fn=lambda: dt.datetime.fromtimestamp(self.now_t,
                                                      dt.timezone.utc))
         self.preflight_status = "NOT_RUN"
@@ -190,6 +191,9 @@ class Runner:
             emit("L5_LIVE_PREFLIGHT", rep)
         self.last_blockers = blockers
         if self.preflight_status == "PASSED":
+            tick = T._num(t.market_meta.get("orderPriceMinTickSize"))
+            if tick and self.executor is not None:
+                self.executor.tick = tick
             self.try_arm()
 
     def try_arm(self) -> None:
@@ -221,6 +225,9 @@ class Runner:
             fb = obs.get("first_book_offset_s")
             out["book_before_first_l5_action"] = (
                 fb is not None and fb <= out["first_l5_action_offset_s"])
+        if self.executor is not None and self.store.resting():
+            out["resting_ended"] = self.executor.end_resting("WINDOW_END")
+            self.lifecycle(out["resting_ended"])
         if t is not None and t.armed:
             out["deadman"] = LX.deadman(self.store, t, reason="window_end")
             try:
@@ -281,6 +288,20 @@ class Runner:
             else:
                 if self.first_action_t is None:
                     self.first_action_t = float(r.get("timestamp") or recv)
+                # faithful order life: L5's next action that changes the
+                # translated intent (side or price) ends every resting order
+                # that it no longer matches
+                if self.store.resting():
+                    try:
+                        npx = LX.to_grid(D(str(act.get("l5_price"))),
+                                         ex.tick)
+                    except Exception:                          # noqa: BLE001
+                        npx = None
+                    side = act.get("pmus_side")
+                    self.lifecycle(ex.end_resting(
+                        "L5_INTENT_CHANGED",
+                        keep=lambda o: (o["side"] == side and npx is not None
+                                        and D(o["price"]) == npx)))
                 rec = ex.handle(row, {}, market=slug, window=str(ws),
                                 open_markets=self.open_markets())
         layer = rec.get("refused_by_layer")
@@ -308,6 +329,13 @@ class Runner:
             "intent": order.get("intent"),
             "armed": bool(t and t.armed)})
 
+    def lifecycle(self, events: List[Dict[str, Any]]) -> None:
+        for e in events:
+            self.stats["LIFECYCLE:%s" % e.get("event", "ERROR")] += 1
+            self.win["LIFECYCLE:%s" % e.get("event", "ERROR")] += 1
+            emit("L5_LIVE_LIFECYCLE", dict(e, market=(
+                self.transport.market_slug if self.transport else None)))
+
     def open_markets(self) -> List[str]:
         return [m for m, v in self.store.committed().items() if v > 0]
 
@@ -333,6 +361,8 @@ class Runner:
                                             reason="operator_halt"))
             self.transport.disarm("operator_halt")
         self.maybe_preflight(now)
+        if self.executor is not None and self.store.resting():
+            self.lifecycle(self.executor.poll_resting())
         self.poll(now)
 
 

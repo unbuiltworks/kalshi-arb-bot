@@ -240,6 +240,35 @@ class InventoryStore:
             D(str(self.state["committed"].get(market, 0))) + usd)
         self.save()
 
+    # ---- resting maker orders (live lifecycle; the venue decides fills) ----
+    def resting(self) -> Dict[str, Dict[str, Any]]:
+        return self.state.setdefault("resting", {})
+
+    def add_resting(self, coid: str, order: Mapping[str, Any]) -> None:
+        """A resting order's full notional is RESERVED against the caps the
+        moment it rests, because it can fill in full at any instant."""
+        self.resting()[coid] = {k: str(v) if isinstance(v, D) else v
+                                for k, v in order.items()}
+        self.reserve(order["market"], D(str(order["price"]))
+                     * D(str(order["qty"])))
+
+    def apply_position(self, market: str, side: str, qty: D) -> None:
+        """Position only: the notional was reserved when the order rested."""
+        k = "%s|%s" % (market, side)
+        self.state["positions"][k] = str(
+            D(str(self.state["positions"].get(k, 0))) + qty)
+        self.save()
+
+    def close_resting(self, coid: str) -> Optional[Dict[str, Any]]:
+        """The order's life is over: release the unfilled reservation."""
+        r = self.resting().pop(coid, None)
+        if r is not None:
+            unfilled = D(r["qty"]) - D(r.get("filled") or "0")
+            if unfilled > 0:
+                self.reserve(r["market"], -(D(r["price"]) * unfilled))
+            self.save()
+        return r
+
     def forget_submit(self, coid: str) -> None:
         """Only for a refusal that provably transmitted nothing."""
         (self.state.get("submitted") or {}).pop(coid, None)
@@ -282,11 +311,17 @@ class FaithfulExecutor:
 
     def __init__(self, store: InventoryStore, limits: SafetyLimits, *,
                  transport: Optional[Any] = None,
-                 lam: D = D("1"), now_fn=None) -> None:
+                 lam: D = D("1"), now_fn=None, live: bool = False,
+                 tick: D = D("0.01")) -> None:
         self.store = store
         self.limits = limits
         self.transport = transport or NullTransport()
         self.lam = lam
+        #: LIVE execution: a restable action RESTS and the venue decides
+        #: whether it fills. Replay/shadow callers leave this False and keep
+        #: the frozen rule's STRICT evidence standard for crediting fills.
+        self.live = live
+        self.tick = tick
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
 
     def _age_s(self, row: Mapping[str, Any]) -> Optional[float]:
@@ -313,11 +348,35 @@ class FaithfulExecutor:
 
         want = dec["l5_size"] * self.lam
         tr = FT.pmus_translate(dec, row, authenticated, want)
+        frozen = {"ok": bool(tr.get("ok")), "mode": tr.get("mode"),
+                  "reason": tr.get("reason")}
+        live_rest = False
+        if (self.live and not tr.get("ok") and tr.get("mode") == FT.MAKER
+                and tr.get("reason") == FT.T_UNEVALUABLE):
+            # THE FROZEN RULE CHOSE MAKER. Its docstring: "the closest
+            # executable means is a MAKER order AT L5'S OWN PRICE ... It
+            # acquires only on authenticated STRICT evidence ... that is an
+            # evidence standard, not a behavioural rule." STRICT decides
+            # whether REPLAY may credit a hypothetical resting order as
+            # filled. Live, the order really rests and the venue's own fill
+            # is the evidence, so the replay standard is not applied as a
+            # refusal here. Price, size and side are the rule's; only the
+            # venue grid is applied (buy side: never rounded UP).
+            px = to_grid(dec["price"], self.tick)
+            tr = {"ok": True, "mode": FT.MAKER, "price": px, "qty": want,
+                  "slippage": px - dec["price"], "depth": None,
+                  "fee": D(0), "rebate": fees.maker_rebate(px, want)}
+            live_rest = True
         prov.stage("PMUS_TRANSLATION", {
             "ok": bool(tr.get("ok")), "mode": tr.get("mode"),
             "price": str(tr.get("price")), "qty": str(tr.get("qty")),
             "slippage_vs_l5": str(tr.get("slippage")),
-            "depth": str(tr.get("depth")), "reason": tr.get("reason")})
+            "depth": str(tr.get("depth")), "reason": tr.get("reason"),
+            "frozen_rule_output": frozen,
+            "live_execution": ("REST_AT_L5_PRICE: post-only GTC; life ends at "
+                               "L5's next side/price change, window end, or "
+                               "fill; fill authority VENUE"
+                               if live_rest else None)})
         if not tr.get("ok"):
             return prov.refuse("PMUS_TRANSLATION", tr["reason"])
 
@@ -376,7 +435,19 @@ class FaithfulExecutor:
                              "venue_order_id": ack.get("order_id"),
                              "state": ack.get("state"),
                              "error": ack.get("error"),
+                             "resting": tr["mode"] == FT.MAKER,
                              "transport": getattr(self.transport, "name", "?")})
+        if tr["mode"] == FT.MAKER and ack.get("order_id"):
+            self.store.add_resting(coid, {
+                "venue_order_id": ack["order_id"], "market": market,
+                "side": dec["side"], "price": tr["price"], "qty": tr["qty"],
+                "filled": "0", "action_key": key,
+                "rested_utc": self._now().isoformat()})
+            prov.stage("FILL", {"filled": False, "filled_qty": "0",
+                                "resting": True,
+                                "note": "fills are read from the venue by "
+                                        "the lifecycle, never assumed"})
+            return prov.rec
         filled = D(str(ack.get("filled_qty") or 0))
         if filled <= 0:
             prov.stage("FILL", {"filled": False, "filled_qty": "0"})
@@ -399,6 +470,75 @@ class FaithfulExecutor:
             "residual": str(self.store.residual(market)),
             "committed_usd": str(self.store.committed().get(market, D(0)))})
         return prov.rec
+
+    # ------------------------------------------------ resting-order lifecycle
+    def poll_resting(self) -> List[Dict[str, Any]]:
+        """Read each resting order from the VENUE; apply new fills; close
+        orders the venue reports terminal. Nothing is inferred."""
+        events: List[Dict[str, Any]] = []
+        for coid, r in list(self.store.resting().items()):
+            try:
+                st = self.transport.order_status(r["venue_order_id"])
+            except Exception as exc:                           # noqa: BLE001
+                events.append({"client_order_id": coid,
+                               "status_error": type(exc).__name__})
+                continue
+            f = D(str(st.get("filled_qty") or 0))
+            delta = f - D(r.get("filled") or "0")
+            if delta > 0:
+                self.store.apply_position(r["market"], r["side"], delta)
+                r["filled"] = str(f)
+                self.store.save()
+                events.append({"client_order_id": coid, "event": "FILL",
+                               "filled_delta": str(delta),
+                               "filled_total": str(f),
+                               "fill_price": st.get("fill_price"),
+                               "maker_rebate_usd": str(fees.maker_rebate(
+                                   D(r["price"]), delta)),
+                               "action_key": r.get("action_key")})
+            if st.get("terminal"):
+                self.store.close_resting(coid)
+                events.append({"client_order_id": coid, "event": "CLOSED",
+                               "state": st.get("state"),
+                               "filled_total": str(f)})
+        return events
+
+    def end_resting(self, reason: str, *, keep=None) -> List[Dict[str, Any]]:
+        """End resting orders' lives (cancel), except those `keep` accepts.
+
+        Faithful lifecycle (pmus_mirror_lifecycle.order_life): an order lives
+        until L5's next action changes the translated intent (side or price)
+        or the window ends. It is cancelled then, never repriced: L5's next
+        action is its own order.
+        """
+        events: List[Dict[str, Any]] = []
+        for coid, r in list(self.store.resting().items()):
+            if keep is not None and keep(r):
+                continue
+            try:
+                if hasattr(self.transport, "cancel_venue"):
+                    self.transport.cancel_venue(r["venue_order_id"])
+                else:
+                    self.transport.cancel(coid)
+                events.append({"client_order_id": coid, "event": "CANCEL",
+                               "reason": reason})
+            except Exception as exc:                           # noqa: BLE001
+                events.append({"client_order_id": coid, "event": "CANCEL",
+                               "reason": reason,
+                               "error": type(exc).__name__})
+        # read back what the venue says, fills that raced the cancel included
+        return events + self.poll_resting()
+
+
+def to_grid(px: D, tick: D) -> D:
+    """L5's price on the venue grid. Float noise (0.9400000005) snaps to the
+    nearest tick; anything genuinely between ticks is floored, so a BUY is
+    never priced above what L5 paid."""
+    q = px / tick
+    near = q.to_integral_value()
+    if abs(q - near) < D("0.0001"):
+        return near * tick
+    return q.to_integral_value(rounding="ROUND_FLOOR") * tick
 
 
 def settle(records: Sequence[Mapping[str, Any]], *, market: str,

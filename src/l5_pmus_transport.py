@@ -273,6 +273,30 @@ class PmusTransport:
                 out["error"] = "AMBIGUOUS_FILL_PRICE"
         return out
 
+    def order_status(self, venue_order_id: str) -> Dict[str, Any]:
+        """The venue's own record of one order (GET). Fill quantity and price
+        come from here and nowhere else."""
+        order = Q1._order_status(self.http, venue_order_id, sleep=self._sleep)
+        st = Q1.order_state_str(order)
+        filled = Q1._filled_qty(order)
+        px = None
+        for k in ("avgPx", "avgPrice", "averagePrice", "avgExecutionPrice"):
+            px = _num(order.get(k))
+            if px is not None and px > 0:
+                break
+        no = str(order.get("outcomeSide") or "").upper().endswith("NO")
+        return {"state": st, "filled_qty": str(filled),
+                "fill_price": (str((D(1) - px) if no else px)
+                               if px is not None and px > 0 else None),
+                "terminal": any(k in st for k in
+                                ("FILLED", "CANCEL", "REJECT", "EXPIRED"))
+                and "PARTIALLY" not in st}
+
+    def cancel_venue(self, venue_order_id: str) -> Dict[str, Any]:
+        self._require_armed()
+        return self.http.request("POST", "/v1/order/%s/cancel" % venue_order_id,
+                                 {"marketSlug": self.market_slug}, Q1.API) or {}
+
     def cancel(self, client_order_id: str) -> Dict[str, Any]:
         self._require_armed()
         oid = self.venue_ids.get(str(client_order_id))

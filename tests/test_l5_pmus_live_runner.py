@@ -334,15 +334,113 @@ def test_window_summary_reports_observability(creds, tmp_path, capsys):
     assert doc["book_before_first_l5_action"] is True
 
 
-def test_a_restable_action_is_refused_by_the_frozen_rule_live(creds, tmp_path):
-    # L5 at 0.58 against our ask of 0.60 can rest. The frozen rule acquires a
-    # maker leg only on STRICT evidence, which cannot exist at decision time,
-    # so it refuses. That is the frozen rule's behaviour and is NOT adjusted.
+RESTING = {"order": {"state": "ORDER_STATE_NEW", "cumQuantity": "0"}}
+
+
+def test_restable_action_translates_to_maker_at_l5_price_disarmed(creds,
+                                                                  tmp_path):
+    # L5 at 0.58 against our ask of 0.60 can rest. The frozen rule says MAKER
+    # at L5's price; STRICT is its REPLAY crediting standard, so live it is
+    # not a refusal. Disarmed: the intent reaches the transport, refused.
     r, feed, _ = make_runner(tmp_path, [])
     r.tick(WS + 5)
     feed["rows"] = [l5_fill(WS + 6, price="0.58")]
     r.tick(WS + 7)
-    assert r.stats["PMUS_TRANSLATION:STRICT_NOT_EVALUABLE"] == 1
+    rec = json.loads(open(tmp_path / "decisions.jsonl").readline())["record"]
+    tr = rec["PMUS_TRANSLATION"]
+    assert tr["mode"] == "MAKER" and tr["price"] == "0.58"
+    assert tr["frozen_rule_output"]["reason"] == "STRICT_NOT_EVALUABLE"
+    assert tr["live_execution"].startswith("REST_AT_L5_PRICE")
+    assert rec["ORDER"]["reason"] == "NOT_ARMED"
+    assert r.store.resting() == {}
+
+
+def test_replay_still_applies_the_strict_standard(tmp_path):
+    # the frozen rule itself is untouched: a non-live executor still refuses
+    from src import l5_faithful_translation as FT
+    row = RN.engine_row(l5_fill(WS + 6, price="0.58"),
+                        {"bid": "0.40", "ask": "0.60", "bid_shares": "5",
+                         "ask_shares": "5", "stream_age_s": 0.0}, WS + 7)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "s.json")),
+                             LX.SafetyLimits(), now_fn=lambda:
+                             dt.datetime.fromtimestamp(WS + 7, dt.timezone.utc))
+    rec = ex.handle(row, {}, market=SLUG, window="w")
+    assert rec["refused_reason"] == FT.T_UNEVALUABLE
+
+
+def armed_maker_runner(tmp_path, monkeypatch):
+    owner_arm(monkeypatch)
+    http = FakeHTTP(**{"/v1/order/V1": RESTING})
+    r, feed, clock = make_runner(tmp_path, [], http=http)
+    r.tick(WS + 5)
+    feed["rows"] = [l5_fill(WS + 6, price="0.58")]
+    r.tick(WS + 7)
+    return r, feed, http
+
+
+def test_armed_restable_action_rests_post_only_at_l5_price(creds, tmp_path,
+                                                           monkeypatch):
+    r, feed, http = armed_maker_runner(tmp_path, monkeypatch)
+    body = [b for p, b in http.posts if p == "/v1/orders"][0]
+    assert body["participateDontInitiate"] is True
+    assert body["tif"] == "TIME_IN_FORCE_GOOD_TILL_CANCEL"
+    assert body["price"]["value"] == "0.58"
+    rest = list(r.store.resting().values())[0]
+    assert rest["venue_order_id"] == "V1"
+    # the full notional is reserved while it rests
+    assert r.store.committed()[SLUG] == D(rest["price"]) * D(rest["qty"])
+    assert r.store.position(SLUG, "UP") == 0          # no fill assumed
+
+
+def test_a_venue_fill_is_applied_from_the_venue_record(creds, tmp_path,
+                                                       monkeypatch):
+    r, feed, http = armed_maker_runner(tmp_path, monkeypatch)
+    qty = list(r.store.resting().values())[0]["qty"]
+    http.data["/v1/order/V1"] = {"order": {
+        "state": "ORDER_STATE_FILLED", "cumQuantity": qty,
+        "avgPx": {"value": "0.58"}}}
+    r.tick(WS + 8)
+    assert r.store.position(SLUG, "UP") == D(qty)
+    assert r.store.resting() == {}
+    assert r.stats["LIFECYCLE:FILL"] == 1
+
+
+def test_l5_changing_intent_cancels_the_resting_order(creds, tmp_path,
+                                                      monkeypatch):
+    r, feed, http = armed_maker_runner(tmp_path, monkeypatch)
+    first = list(r.store.resting())[0]
+    feed["rows"].append(l5_fill(WS + 9, outcome="Down", price="0.30",
+                                tx="0xb"))
+    r.tick(WS + 10)
+    assert "/v1/order/V1/cancel" in [p for p, _ in http.posts]
+    assert r.stats["LIFECYCLE:CANCEL"] >= 1
+    # the reservation is released only once the VENUE reports it terminal
+    assert first in r.store.resting()
+    http.data["/v1/order/V1"] = {"order": {"state": "ORDER_STATE_CANCELED",
+                                           "cumQuantity": "0"}}
+    r.tick(WS + 11)
+    assert first not in r.store.resting()
+
+
+def test_same_intent_keeps_the_order_resting(creds, tmp_path, monkeypatch):
+    r, feed, http = armed_maker_runner(tmp_path, monkeypatch)
+    feed["rows"].append(l5_fill(WS + 9, price="0.58", tx="0xc"))
+    r.tick(WS + 10)
+    assert "/v1/order/V1/cancel" not in [p for p, _ in http.posts]
+
+
+def test_window_end_cancels_resting_orders(creds, tmp_path, monkeypatch):
+    r, feed, http = armed_maker_runner(tmp_path, monkeypatch)
+    http.data["/v1/order/V1"] = {"order": {"state": "ORDER_STATE_CANCELED",
+                                           "cumQuantity": "0"}}
+    r.tick(WS + 905)
+    assert "/v1/order/V1/cancel" in [p for p, _ in http.posts]
+    assert r.store.resting() == {}
+
+
+def test_to_grid_snaps_float_noise_and_never_rounds_a_buy_up():
+    assert LX.to_grid(D("0.9400000005"), D("0.01")) == D("0.94")
+    assert LX.to_grid(D("0.585"), D("0.01")) == D("0.58")
 
 
 def test_the_frozen_modules_are_imported_not_copied():
