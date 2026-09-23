@@ -1,0 +1,89 @@
+{
+  "label": "P19_SPEC_WIRING_AUDIT_V1",
+  "fields": {
+    "spec_id": {
+      "read_sites": [
+        "cohort_runner.py:231 ch[\"spec\"] = {\"spec_id\": spec.spec_id, \"spec_sha\": spec.spec_sha(),",
+        "cohort_runner.py:1540 print(\"spec       %s  %s\" % (spec.spec_id, spec.spec_sha()))",
+        "cohort_runner.py:931 \"spec_id\": spec.spec_id, \"spec_sha\": spec.spec_sha(),",
+        "cohort_runner.py:1464 % (spec.spec_id, spec.spec_sha(), a.expect_spec_sha))"
+      ],
+      "n": 4,
+      "verdict": "CONSUMED"
+    },
+    "family": {
+      "read_sites": [
+        "run_continuous.py:1865 a.family = spec.family",
+        "cohort_runner.py:232 \"family\": spec.family, \"envelope\": spec.envelope,"
+      ],
+      "n": 2,
+      "verdict": "CONSUMED"
+    },
+    "envelope": {
+      "read_sites": [
+        "run_continuous.py:1866 a.envelope = spec.envelope",
+        "cohort_runner.py:232 \"family\": spec.family, \"envelope\": spec.envelope,"
+      ],
+      "n": 2,
+      "verdict": "CONSUMED"
+    },
+    "entry_tte_band": {
+      "read_sites": [
+        "run_continuous.py:1867 a.entry_tte_band = spec.entry_tte_band",
+        "cohort_runner.py:235 \"entry_tte_band\": spec.entry_tte_band,",
+        "cohort_runner.py:615 band = RC.parse_entry_band(spec.entry_tte_band)"
+      ],
+      "n": 3,
+      "verdict": "CONSUMED"
+    },
+    "cohort": {
+      "read_sites": [],
+      "n": 0,
+      "verdict": "NO READER"
+    },
+    "auth_id": {
+      "read_sites": [],
+      "n": 0,
+      "verdict": "NO READER"
+    },
+    "action_size": {
+      "read_sites": [
+        "cohort_runner.py:236 \"action_size\": spec.action_size,"
+      ],
+      "n": 1,
+      "verdict": "CONSUMED"
+    },
+    "ledger": {
+      "read_sites": [],
+      "n": 0,
+      "verdict": "NO READER"
+    },
+    "live_cohort": {
+      "read_sites": [],
+      "n": 0,
+      "verdict": "NO READER"
+    },
+    "quote_band": {
+      "read_sites": [
+        "run_continuous.py:1335 quote_band = getattr(probe_spec, \"quote_band\", None)",
+        "cohort_runner.py:237 \"quote_band\": (None if spec.quote_band is None",
+        "cohort_runner.py:238 else list(spec.quote_band)),"
+      ],
+      "n": 3,
+      "verdict": "CONSUMED"
+    },
+    "placement": {
+      "read_sites": [
+        "run_continuous.py:1343 placement = getattr(probe_spec, \"placement\", None)"
+      ],
+      "n": 1,
+      "verdict": "CONSUMED"
+    }
+  },
+  "no_reader": [
+    "cohort",
+    "auth_id",
+    "ledger",
+    "live_cohort"
+  ]
+}

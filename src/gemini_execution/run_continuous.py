@@ -1333,6 +1333,21 @@ async def run_one_window(rep: Dict[str, Any], auth_id: str, symbol: str, *,
     # armed run whose band differs from the one readiness proved refuses at
     # the hash check above, before the latch.
     quote_band = getattr(probe_spec, "quote_band", None)
+    # THE PLACEMENT RULE, FROM THE SPEC AND FROM NOWHERE ELSE -- and this one
+    # was declared and then DROPPED. Probe B ran under btc5m_q1_improve, whose
+    # `placement` sits inside spec_sha bfe7ba23, and submitted every order at
+    # exactly the book bid: neither Driver construction below passed it, so
+    # `_placement` defaulted to None and `apply_A` never ran. The probe did
+    # not test the hypothesis it was authorized for, and nothing failed --
+    # which is the whole problem. A dropped field must not be survivable.
+    placement = getattr(probe_spec, "placement", None)
+    rep["placement"] = placement
+    rep["placement_note"] = (
+        "null means the frozen controller's own price is sent unmodified. A "
+        "placement is a declared, hashed experiment parameter: it reaches the "
+        "driver from the spec or the run refuses. `placement_reached_driver` "
+        "below is read back OFF THE DRIVER, not from this line, so the "
+        "assertion cannot pass by restating its own input.")
     rep["quote_band"] = (None if quote_band is None
                          else [float(quote_band[0]), float(quote_band[1])])
     rep["quote_band_note"] = (
@@ -1446,7 +1461,19 @@ async def run_one_window(rep: Dict[str, Any], auth_id: str, symbol: str, *,
     # this one exists solely to refuse before the latch.
     probe = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
                       max_actions=cohort_budget, envelope=envelope,
-                      quote_band=quote_band)
+                      quote_band=quote_band,
+                      placement=placement)
+    # SAME CHECK ON THE READINESS PATH. Readiness and live must be
+    # byte-identical up to the mutation boundary; a readiness run that
+    # silently dropped the placement would prove the wrong executable.
+    _got = getattr(probe, "_placement", None)
+    rep["placement_reached_driver"] = _got
+    if _got != placement:
+        rep["state"] = "REFUSED_PLACEMENT_NOT_DELIVERED"
+        rep["why"] = (
+            "the spec declares placement %r but the driver received %r"
+            % (placement, _got))
+        return rep
     pre = probe.recover(venue_fills=st.get("fills"),
                         venue_open=st.get("open_orders"),
                         venue_orders=st.get("orders_seen"))
@@ -1645,7 +1672,24 @@ async def run_one_window(rep: Dict[str, Any], auth_id: str, symbol: str, *,
 
     driver = WC.Driver(auth_id, symbol, ledger_path=ledger_path,
                        max_actions=cohort_budget, envelope=envelope,
-                       quote_band=quote_band)
+                       quote_band=quote_band,
+                       placement=placement)
+    # DECLARED IS NOT DELIVERED. Read the value back OFF THE DRIVER and
+    # refuse if it is not the one the spec declared. A spec field that is
+    # silently dropped produced an authorized probe that tested nothing and
+    # reported success, so "it was in the spec" is not evidence that it
+    # arrived. This compares the driver's own attribute, not the local.
+    got = getattr(driver, "_placement", None)
+    rep["placement_reached_driver"] = got
+    if got != placement:
+        rep["state"] = "REFUSED_PLACEMENT_NOT_DELIVERED"
+        rep["why"] = (
+            "the spec declares placement %r but the driver received %r; a "
+            "declared, hashed experiment parameter that does not reach the "
+            "executable is refused rather than run, because a probe that "
+            "silently tests the control is worse than one that fails"
+            % (placement, got))
+        return rep
     # the observer wraps the real session; the arm gate and every bound
     # still run inside the objects it delegates to.
     session = RecordingSession(GeminiMakerSession(id_prefix="l5cp"))
