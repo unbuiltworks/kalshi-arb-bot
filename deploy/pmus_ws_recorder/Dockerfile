@@ -66,6 +66,7 @@ COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 # no longer imports it, and the probe needs one bounded order rather than a
 # campaign engine.
 COPY scripts/l5_pmus_probe_dryrun.py scripts/l5_pmus_probe_dryrun.py
+COPY scripts/l5_pmus_realtime_probe.py scripts/l5_pmus_realtime_probe.py
 COPY src/l5_pmus_live_wiring.py src/l5_pmus_live_wiring.py
 COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py

@@ -1301,6 +1301,9 @@ STATUS_HTTP_PATHS = ("/status", "/status/pmus_ws_status.jsonl")
 # read-only multi-market L5 shadow over EVERY subscribed market and serves
 # its report beside the status document. "0" disables the shadow.
 SHADOW_HTTP_PATH = "/l5_shadow"
+#: set once the recorder is running; None before that
+LIVE_MSTATE: Optional[dict] = None
+
 SHADOW_ENV = "PMUS_L5_MULTI_SHADOW"
 SHADOW_TICK_S = 1.0
 SHADOW_MARKET_STATE_OF = None     # enrichment may install a cache reader
@@ -1875,6 +1878,12 @@ async def run(minutes: Optional[float]) -> int:
     fast_realloc_count = 0
     serve_status_doc(root, status_port())
     shadow = start_multi_shadow(root)
+    # P0.1: a reference (not a copy) to the live per-market state, so an
+    # in-process reader can take a consistent snapshot whenever it needs one
+    # instead of replaying the whole tape minutes later. Reading it never
+    # mutates it; writers are unaffected.
+    global LIVE_MSTATE
+    LIVE_MSTATE = mstate
     last_shadow_tick = 0.0
     health = StreamHealth(time.time())
     starved_reconnects = 0
@@ -2016,6 +2025,22 @@ async def run(minutes: Optional[float]) -> int:
                           "t": datetime.now(timezone.utc).isoformat(),
                           "diagnostics": p["diagnostics"],
                           "per_market": p["per_market"]})
+        # P0.2: the BTC15m cadence is DETERMINISTIC, so the live window and the
+        # one about to open are subscribed BY NAME rather than waited for.
+        # Generic discovery resolves this series through the public gateway,
+        # which does not expose a window until minutes into it -- so discovery
+        # cannot name the market at T=0 even when the venue is already
+        # trading it. Measured: first authenticated two-sided book at +545.6s
+        # into a 900s window. Computing the slug removes that dependency
+        # entirely; it costs one subscription seat and no lookup.
+        _forced = [x for x in rolling_window_slugs() if x not in slugs]
+        if _forced:
+            slugs = list(slugs) + _forced
+            print("PMUS_WS_STATUS " + json.dumps(
+                {"forced_window_subscribe": _forced,
+                 "reason": "deterministic slug; discovery cannot name a "
+                           "BTC15m window at its open"},
+                separators=(",", ":")), flush=True)
         cycle += 1
         # Bound memory the same way and at the same cadence as disk. Runs AFTER
         # the plan so the newly-chosen seats are protected from their own sweep.

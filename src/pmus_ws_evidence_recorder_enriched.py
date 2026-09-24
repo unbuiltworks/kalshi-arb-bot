@@ -578,14 +578,12 @@ def probe_dryrun_loop() -> Optional[Any]:
     def run() -> None:
         while True:
             try:
-                p, ld = period(), lead()
-                now = _t.time()
-                fire = (int(now // p) + 1) * p - ld
-                if fire <= now:
-                    fire += p
-                _t.sleep(max(1.0, fire - now))
-                from scripts import l5_pmus_probe_dryrun as dry
-                dry.main([])
+                # REALTIME, not a close-of-window replay. The batch run made
+                # every L5 action minutes old before the executor saw it and
+                # all four were refused STALE_ACTION. This runs continuously
+                # and never returns.
+                from scripts import l5_pmus_realtime_probe as rt
+                rt.main([])
             except BaseException as exc:                       # noqa: BLE001
                 print("L5_PROBE_DRYRUN {\"error\":\"%s\"}"
                       % type(exc).__name__, flush=True)
@@ -594,7 +592,7 @@ def probe_dryrun_loop() -> Optional[Any]:
                 except BaseException:                          # noqa: BLE001
                     return
 
-    t = threading.Thread(target=run, name="l5-probe-dryrun", daemon=True)
+    t = threading.Thread(target=run, name="l5-realtime-probe", daemon=True)
     t.start()
     return t
 

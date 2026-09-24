@@ -111,6 +111,7 @@ class PmusTransport:
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
         self.armed = False
         self.preflight_report: Optional[Dict[str, Any]] = None
+        self.identity_probe: Dict[str, Any] = {}
 
     # ------------------------------------------------------------ read only
 
@@ -134,6 +135,72 @@ class PmusTransport:
     def book(self, slug: str) -> Dict[str, Any]:
         r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}
         return r.get("marketData") or r
+
+    #: endpoints that could carry a stable account identifier. Probed
+    #: read-only and in order; the FIRST that yields one wins. This list is
+    #: not a guess at what exists -- an unreachable path simply contributes
+    #: nothing and is reported, so the gate stays failed until the venue
+    #: actually hands us an identifier.
+    IDENTITY_PATHS = ("/v1/account", "/v1/account/profile", "/v1/me",
+                      "/v1/user", "/v1/account/info")
+
+    #: keys that count as an account identifier wherever they appear
+    IDENTITY_KEYS = ("accountId", "account_id", "userId", "user_id",
+                     "id", "email", "walletAddress", "proxyWallet")
+
+    @staticmethod
+    def _find_identity(doc: Any, depth: int = 0) -> Optional[str]:
+        """The first identifier-shaped field, anywhere in the document."""
+        if depth > 4 or not isinstance(doc, (Mapping, list)):
+            return None
+        if isinstance(doc, list):
+            for item in doc:
+                got = PmusTransport._find_identity(item, depth + 1)
+                if got:
+                    return got
+            return None
+        for k in PmusTransport.IDENTITY_KEYS:
+            v = doc.get(k)
+            if isinstance(v, (str, int)) and str(v).strip():
+                return str(v)
+        for v in doc.values():
+            got = PmusTransport._find_identity(v, depth + 1)
+            if got:
+                return got
+        return None
+
+    def account_identity(self, balances: Mapping[str, Any]) -> Optional[str]:
+        """An identifier the VENUE gave us, or None -- never one we made up.
+
+        `/v1/account/balances` is proven readable but carried no identifier in
+        its top level or its balances entries, so the gate failed with a null
+        detail and no way to tell whether the field was missing or merely
+        somewhere else. This searches the whole balances document first, then
+        probes the candidate account endpoints read-only. `identity_probe`
+        records exactly what each one answered, so the next run binds to a
+        real field instead of another guess.
+        """
+        self.identity_probe = {"balances_keys": sorted(
+            [str(k) for k in balances.keys()])[:20] if isinstance(
+                balances, Mapping) else None}
+        got = self._find_identity(balances)
+        if got:
+            self.identity_probe["source"] = "/v1/account/balances"
+            return got
+        for path in self.IDENTITY_PATHS:
+            try:
+                doc = self._get(path) or {}
+            except Exception as exc:                           # noqa: BLE001
+                self.identity_probe[path] = "%s" % type(exc).__name__
+                continue
+            keys = sorted([str(k) for k in doc.keys()])[:20] \
+                if isinstance(doc, Mapping) else "non-mapping"
+            self.identity_probe[path] = {"ok": True, "keys": keys}
+            got = self._find_identity(doc)
+            if got:
+                self.identity_probe["source"] = path
+                return got
+        return None
 
     def positions(self) -> List[dict]:
         r = self._get("/v1/portfolio/positions") or {}
@@ -172,15 +239,7 @@ class PmusTransport:
                 acct = self.account()
             except Exception as exc:                           # noqa: BLE001
                 return self._fail(checks, gate, "account_readable", exc)
-            ident = (acct.get("accountId") or acct.get("id")
-                     or acct.get("userId") or acct.get("email"))
-            if ident is None:
-                for e in (acct.get("balances") or []):
-                    if isinstance(e, Mapping):
-                        ident = (e.get("accountId") or e.get("account")
-                                 or e.get("userId"))
-                        if ident:
-                            break
+            ident = self.account_identity(acct)
             ok &= gate("account_identity_resolved", bool(ident), ident)
             if expect_account is not None:
                 ok &= gate("account_matches_expected",
@@ -262,6 +321,7 @@ class PmusTransport:
             "market_slug": self.market_slug,
             "checks": checks,
             "worst_case": self.worst_case_from_venue(mk),
+            "identity_probe": self.identity_probe,
             "armed_after_preflight": False,
             "labels": ("read-only; no credential value appears anywhere in "
                        "this report"),
