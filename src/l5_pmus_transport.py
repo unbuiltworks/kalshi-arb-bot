@@ -98,6 +98,71 @@ class _SignedHTTP:
             return _json.loads(r.read() or b"{}")
 
 
+#: how many listing pages the catalogue walk will read. Bounded so a
+#: preflight can never turn into an unbounded crawl; the listing answered in
+#: full at 2,499 markets across five pages when this was measured.
+CATALOGUE_PAGE = 500
+CATALOGUE_MAX_PAGES = 8
+
+
+def resolve_market(http: Any, slug: str,
+                   base: str = Q1.GATEWAY) -> Dict[str, Any]:
+    """The market's authoritative metadata row, verified to BE that market.
+
+    Two resources, and which one answers depends on the market:
+
+    `/v1/market/slug/{slug}` (singular) serves SPORTS. It was adopted here
+    because this recorder's enriched module reads it -- for sports -- and it
+    404s "Market not found" for a BTC15m window even when that window has
+    traded and settled. Probed side by side on
+    cpc-btc-updown-15m-2026-09-24-0945z, which traded 49,678 shares: the
+    singular resource 404s while `/v1/markets/{slug}/bbo` answers 200 for
+    the same slug. That mismatch failed `market_readable` on 35 consecutive
+    windows, and because the gate aborts the preflight, every metadata gate
+    after it went unevaluated rather than passing.
+
+    `/v1/markets?limit=&offset=` is the catalogue, and its rows carry
+    exactly what the gates read: outcomes, orderPriceMinTickSize,
+    minimumTradeQty, active/closed/archived, status, slug.
+
+    The match is made HERE, on the exact slug, never by a query parameter.
+    The gateway silently IGNORES filters it does not know -- `?slug=`,
+    `?seriesId=` and `?seriesSlug=` all answer 200 with the unfiltered
+    default page -- so trusting one would hand preflight some unrelated NFL
+    market's tick and outcomes while looking like a successful read.
+
+    Raises LookupError when no page contains the slug, so `market_readable`
+    fails closed rather than proceeding on a market the venue is not
+    serving. Metadata and the executable book stay separate concerns: the
+    contemporaneous book still comes from the authenticated WS feed.
+    """
+    def _get(path: str) -> Any:
+        return http.request("GET", path, None, base)
+
+    try:
+        r = _get("/v1/market/slug/%s" % slug) or {}
+        mk = r.get("market") or r
+        if isinstance(mk, Mapping) and mk.get("slug") == slug:
+            return dict(mk)
+    except Exception:                                          # noqa: BLE001
+        pass                        # the catalogue below is the real answer
+
+    for page in range(CATALOGUE_MAX_PAGES):
+        r = _get("/v1/markets?limit=%d&offset=%d"
+                 % (CATALOGUE_PAGE, page * CATALOGUE_PAGE)) or {}
+        rows = r.get("markets") or []
+        for mk in rows:
+            if isinstance(mk, Mapping) and mk.get("slug") == slug:
+                return dict(mk)
+        if len(rows) < CATALOGUE_PAGE:
+            break                                       # last page reached
+
+    raise LookupError(
+        "market metadata not served for %s: the singular resource 404s for "
+        "this series and the market is absent from the catalogue listing"
+        % slug)
+
+
 class PmusTransport:
     """GET-only until armed. Mutations exist but are gated behind preflight."""
 
@@ -128,21 +193,17 @@ class PmusTransport:
         """
         return self._get("/v1/account/balances") or {}
 
+    CATALOGUE_PAGE = CATALOGUE_PAGE
+    CATALOGUE_MAX_PAGES = CATALOGUE_MAX_PAGES
+
     def market(self, slug: str) -> Dict[str, Any]:
         """Authoritative market METADATA, which /bbo does not carry.
 
-        /v1/markets/{slug} (plural) 404s and /v1/markets/{slug}/bbo returns
-        QUOTE data, so series identity, outcomes, tick, minimum quantity and
-        tradability had nothing to read from and five gates failed for want
-        of a field rather than for a real reason. /v1/market/slug/{slug}
-        (singular) is the resource that carries them -- it is what this
-        recorder's own enriched module already reads for market state.
-
-        Metadata and the executable book stay separate concerns: the
-        contemporaneous book still comes from the authenticated WS feed.
+        Resolution lives in `resolve_market` so that the preflight running
+        on the credential-holding recorder reads the same way; see there for
+        which resource answers and why.
         """
-        r = self._get("/v1/market/slug/%s" % slug, base=Q1.GATEWAY) or {}
-        return r.get("market") or r
+        return resolve_market(self.http, slug)
 
     def book(self, slug: str) -> Dict[str, Any]:
         r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}

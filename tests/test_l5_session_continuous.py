@@ -72,12 +72,67 @@ def test_lost_credentials_halt():
     {"records": []},                                   # no L5 actions
     {"records": [{"market": MK, "refused_reason": "NO_BOOK"}]},
     {"last_book_t": None},                             # nothing yet
+    # subscribed a moment ago and the first book has not landed: ordinary
+    {"last_book_t": None, "subscribed_at": time.time() - 3.0},
 ])
 def test_ordinary_quiet_does_NOT_halt(case):
     kw = {"window_market": MK, "last_book_t": time.time(),
           "submitted_live": 0}
     kw.update(case)
     assert IG.check(**kw)["ok"] is True
+
+
+# ------------------------------------------- a feed that never starts at all
+
+def test_a_feed_that_never_produced_a_first_book_halts():
+    """The hole this closes.
+
+    Staleness measures now - last_book_t, so with last_book_t still None it
+    could not run, and a market that never produced a single book looked
+    exactly like one not yet checked. On 2026-09-24 the authenticated book
+    stopped at 09:59Z and four consecutive windows completed with zero book
+    states -- 67 minutes -- without a halt. Never-arrived is the total
+    outage, so it must be the stricter path, not the unreachable one.
+    """
+    with pytest.raises(IG.Halt) as e:
+        IG.check(window_market=MK, last_book_t=None, submitted_live=0,
+                 subscribed_at=time.time() - IG.FEED_START_GRACE_S - 1.0)
+    assert e.value.reason == "AUTH_FEED_NEVER_STARTED"
+    assert e.value.detail["waited_s"] > IG.FEED_START_GRACE_S
+    assert e.value.detail["usable_book_states"] == 0
+
+
+def test_the_grace_is_bounded_not_indefinite():
+    """Whatever the bound is, it must expire. A grace that never ends is
+    the hole wearing a different name."""
+    assert 0 < IG.FEED_START_GRACE_S < IG.FEED_STALE_S
+
+
+def test_a_feed_that_started_then_died_still_halts_as_STALE_not_NEVER():
+    """The two conditions must stay distinguishable: one says the
+    subscription never established, the other that it established and then
+    went away. Reporting the wrong one sends the next diagnosis astray."""
+    with pytest.raises(IG.Halt) as e:
+        IG.check(window_market=MK, last_book_t=time.time() - 3600,
+                 submitted_live=0, subscribed_at=time.time() - 7200)
+    assert e.value.reason == "AUTH_FEED_STALE"
+
+
+def test_a_started_feed_is_never_charged_the_startup_grace():
+    """A book arrived within the window; the startup path must not fire
+    however long ago the subscription was made."""
+    out = IG.check(window_market=MK, last_book_t=time.time() - 1.0,
+                   submitted_live=0, subscribed_at=time.time() - 86400)
+    assert out["ok"] is True and out["feed_started"] is True
+
+
+def test_an_order_out_while_disarmed_outranks_a_dead_feed():
+    """Both conditions hold at once; the mutation is the one that must be
+    reported, because it is the one that means money moved."""
+    with pytest.raises(IG.Halt) as e:
+        IG.check(window_market=MK, last_book_t=None, submitted_live=1,
+                 subscribed_at=time.time() - 9999)
+    assert e.value.reason == "UNEXPECTED_MUTATION"
 
 
 # ----------------------------------------------------------------- journal

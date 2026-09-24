@@ -295,3 +295,32 @@ def test_main_always_prints_a_verdict_and_exits_nonzero(monkeypatch, capsys):
     rep = json.loads(out.split(" ", 1)[1])
     assert rep["preflight"] == "FAILED"
     assert rep["armed_after_preflight"] is False
+
+
+# ------------------------------- the credential-side read resolves BTC15m too
+
+class CatalogueHTTP(FakeHTTP):
+    """The gateway for a BTC15m window: the singular resource 404s and the
+    catalogue listing is what carries the metadata."""
+
+    def __init__(self, **over):
+        super().__init__(**over)
+        row = self.data.pop("/v1/market/slug/%s" % SLUG)["market"]
+        self.data["/v1/markets?limit=500&offset=0"] = {
+            "markets": [{"slug": "aec-nfl-lac-ten-2025-11-02"}, row]}
+
+
+def test_the_credential_side_preflight_resolves_a_btc15m_market(creds):
+    """It runs where the keys are, so it must not be the one still reading
+    the resource that 404s for this series."""
+    rep = P.preflight(SLUG, P.GetOnly(CatalogueHTTP()), now=NOW)
+    assert rep["preflight"] == "PASSED"
+    assert failed(rep) == []
+
+
+def test_an_unserved_market_still_fails_market_readable_here(creds):
+    http = FakeHTTP()
+    http.data.pop("/v1/market/slug/%s" % SLUG)          # and no catalogue
+    rep = P.preflight(SLUG, P.GetOnly(http), now=NOW)
+    assert rep["preflight"] == "FAILED"
+    assert "market_readable" in failed(rep)

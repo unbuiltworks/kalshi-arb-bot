@@ -363,3 +363,113 @@ def test_the_minimum_quantity_field_of_this_resource_is_read(creds):
     rep = tp().preflight()
     checks = {c["check"]: c["passed"] for c in rep["checks"]}
     assert checks["quantity_constraint_known"] is True
+
+
+# ------------------------------------------------- market metadata resolution
+
+class CatalogueHTTP:
+    """The gateway as it actually behaved when probed on 2026-09-24.
+
+    Two facts drive every test below. The singular resource 404s for a
+    BTC15m window even when that window has traded and settled; and the
+    listing silently IGNORES filter parameters it does not know, answering
+    200 with the unfiltered default page.
+    """
+
+    def __init__(self, rows, *, singular=None):
+        self.rows = rows
+        self.singular = singular
+        self.calls = []
+
+    def request(self, method, path, body=None, base=None):
+        self.calls.append((method, path))
+        if path == "/v1/account/balances":
+            return {"balances": [{"buyingPower": "42.50"}]}
+        if path.startswith("/v1/market/slug/"):
+            if self.singular is None:
+                raise RuntimeError("404 Market not found")
+            return {"market": self.singular}
+        if path.startswith("/v1/markets?"):
+            q = dict(p.split("=", 1) for p in path.split("?", 1)[1].split("&")
+                     if "=" in p)
+            # unknown filters are ignored by the venue, so they are ignored
+            # here too -- that is the trap being guarded against
+            lim, off = int(q.get("limit", 500)), int(q.get("offset", 0))
+            return {"markets": self.rows[off:off + lim]}
+        raise RuntimeError("404 %s" % path)
+
+
+def row(slug, **over):
+    d = {"slug": slug, "outcomes": '["Up", "Down"]', "active": True,
+         "closed": False, "archived": False, "status": "OPEN",
+         "orderPriceMinTickSize": "0.01", "minimumTradeQty": "1"}
+    d.update(over)
+    return d
+
+
+def tx(http):
+    return T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+
+
+def test_the_catalogue_answers_when_the_singular_resource_404s():
+    """The regression that failed market_readable on 35 consecutive windows:
+    /v1/market/slug/{slug} serves sports, not cpc-* crypto windows."""
+    mk = tx(CatalogueHTTP([row("aec-nfl-lac-ten-2025-11-02"), row(SLUG)])
+            ).market(SLUG)
+    assert mk["slug"] == SLUG
+    assert mk["orderPriceMinTickSize"] == "0.01"
+
+
+def test_an_ignored_filter_can_never_pass_off_another_market():
+    """The listing returns 200 with an unrelated page when it does not know
+    a filter. Trusting that would hand preflight some NFL market's tick and
+    outcomes while looking like a clean read."""
+    http = CatalogueHTTP([row("aec-nfl-lac-ten-2025-11-02"),
+                          row("atc-uecl-ggk-zil-2026-07-30-ggk")])
+    with pytest.raises(LookupError):
+        tx(http).market(SLUG)
+
+
+def test_a_singular_hit_for_the_WRONG_slug_is_not_accepted():
+    http = CatalogueHTTP([row(SLUG)], singular=row("some-other-market"))
+    assert tx(http).market(SLUG)["slug"] == SLUG
+
+
+def test_the_singular_resource_is_still_used_when_it_does_answer():
+    """Sports still resolve in one request; the catalogue is the fallback,
+    not a replacement."""
+    http = CatalogueHTTP([], singular=row(SLUG, seriesSlug="btc-updown-15m"))
+    assert tx(http).market(SLUG)["seriesSlug"] == "btc-updown-15m"
+    assert not any("limit=" in p for _, p in http.calls)
+
+
+def test_a_market_absent_from_the_venue_fails_closed():
+    """No metadata must never become invented metadata: preflight has to
+    fail rather than proceed on a market the venue is not serving."""
+    with pytest.raises(LookupError):
+        tx(CatalogueHTTP([])).market(SLUG)
+
+
+def test_the_catalogue_walk_is_bounded():
+    """A preflight must not turn into an unbounded crawl."""
+    http = CatalogueHTTP([row("filler-%d" % i) for i in range(100_000)])
+    with pytest.raises(LookupError):
+        tx(http).market(SLUG)
+    pages = [p for _, p in http.calls if "limit=" in p]
+    assert len(pages) <= T.PmusTransport.CATALOGUE_MAX_PAGES
+
+
+def test_a_later_page_still_resolves():
+    rows = [row("filler-%d" % i) for i in range(700)] + [row(SLUG)]
+    assert tx(CatalogueHTTP(rows)).market(SLUG)["slug"] == SLUG
+
+
+def test_market_readable_fails_closed_when_metadata_is_unavailable(creds):
+    """The gate stays failed rather than being skipped or weakened."""
+    t = tx(CatalogueHTTP([]))
+    with pytest.raises(T.PreflightFailed) as e:
+        t.preflight()
+    rep = json.loads(str(e.value))
+    assert rep["preflight"] == "FAILED"
+    assert "market_readable" in [c["check"] for c in rep["checks"]
+                                 if not c["passed"]]

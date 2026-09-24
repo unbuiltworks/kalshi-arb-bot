@@ -139,6 +139,11 @@ class Window:
     def __init__(self, slug: str) -> None:
         self.slug = slug
         self.start = OBS.window_start_epoch(slug) or time.time()
+        #: when THIS PROCESS began observing this market, which is what the
+        #: feed-start grace is measured from. On a normal window it is the
+        #: window open; on a deploy that lands mid-window it is now, so the
+        #: grace is not spent before the subscription exists.
+        self.observing_since = time.time()
         self.records: List[dict] = []
         self.latencies: List[float] = []
         self.preflight: Optional[dict] = None
@@ -155,6 +160,13 @@ class Window:
         # subscription. These are accumulated as the window runs instead.
         self.spans: List[List[float]] = []          # merged [t, t+ATTACH]
         self.first_book_t: Optional[float] = None
+        #: the LATEST book timestamp this window has ever seen. The integrity
+        #: check reads this rather than the current poll's tail: the
+        #: recorder's live state is a ring buffer, so a market whose entries
+        #: have rolled out of it reads back as no book at all, and feeding
+        #: that to the check would report a feed that started as one that
+        #: never did -- halting a healthy session.
+        self.last_book_t: Optional[float] = None
         self.first_trade_t: Optional[float] = None
         self.book_states_seen = 0
         self.trades_seen = 0
@@ -178,6 +190,8 @@ class Window:
             self.book_states_seen += 1
             if self.first_book_t is None or t < self.first_book_t:
                 self.first_book_t = t
+            if self.last_book_t is None or t > self.last_book_t:
+                self.last_book_t = t
             self._merge(t, t + self.ATTACH_S)
         if len(self._book_seen) > 60000:            # bounded, never unbounded
             self._book_seen = set(sorted(self._book_seen)[-30000:])
@@ -434,13 +448,13 @@ def run_forever(state_path: str, journal_path: str,
                     })
                 win.records.extend(out["records"])
 
-            books_now = live_books(slug)
-            last_t = (OBS._epoch(books_now[-1]["t"]) if books_now else None)
-            IG.check(window_market=slug, last_book_t=last_t,
+            win.observe(live_books(slug), ())
+            IG.check(window_market=slug, last_book_t=win.last_book_t,
                      submitted_live=W.summarize(win.records)["submitted_live"],
                      records=win.records,
                      has_credentials=_creds_present(),
-                     store_readable=True, now=now)
+                     store_readable=True,
+                     subscribed_at=win.observing_since, now=now)
 
         except IG.Halt as h:
             journal.write("halt", {"reason": h.reason, "detail": h.detail})
