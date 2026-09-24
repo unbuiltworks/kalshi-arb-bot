@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "ONE-SHOT LIVE PROBE. The only image in this repository that can send a real order. One BTC15m market, one authorization, spent on use. Runs once and exits; never restarts.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_live_probe/Dockerfile",
+    "watchPatterns": ["deploy/l5_live_probe/ENABLE_RUN_BY_OWNER_ONLY/**"]
+  },
+  "deploy": {
+    "startCommand": "python3 -m scripts.l5_pmus_live_oneshot",
+    "restartPolicyType": "NEVER"
+  }
+}

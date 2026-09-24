@@ -291,6 +291,18 @@ class InventoryStore:
         self.state["orders_uncertain"] = str(why)
         self.save()
 
+    def attach_venue_id(self, coid: str, venue_order_id: Any) -> None:
+        """Record the id the VENUE gave this order.
+
+        Without it a cancel has nothing to name: the venue cancels by its own
+        order id, not by our deterministic client order id, and passing the
+        latter would silently cancel nothing.
+        """
+        live = self.state.setdefault("live_orders", {})
+        if coid in live and venue_order_id:
+            live[coid]["venue_order_id"] = str(venue_order_id)
+            self.save()
+
     def terminate_order(self, coid: str, *, reason: str) -> None:
         """A venue-authoritative terminal state releases the envelope."""
         live = self.state.setdefault("live_orders", {})
@@ -513,6 +525,8 @@ class FaithfulExecutor:
                                           "otherwise")})
             return prov.refuse("SAFETY_OVERLAY", "SUBMIT_OUTCOME_UNKNOWN")
 
+        self.store.attach_venue_id(coid, ack.get("order_id")
+                                   or ack.get("orderId") or ack.get("id"))
         prov.stage("ORDER", {"client_order_id": coid, "submitted": True,
                              "venue_order_id": ack.get("order_id"),
                              "transport": getattr(self.transport, "name", "?")})
