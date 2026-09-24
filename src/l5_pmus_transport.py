@@ -633,7 +633,7 @@ class PmusTransport:
         """
         self._require_armed()
         from src import l5_order_body as OB
-        body = OB.build(intent, intent.get("market") or self.market_slug)
+        body = OB.from_intent(intent, self.market_slug)
         return self.http.request("POST", "/v1/orders", body, Q1.API) or {}
 
     def cancel(self, order_id: str) -> Dict[str, Any]:

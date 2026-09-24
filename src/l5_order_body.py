@@ -1,105 +1,110 @@
-"""The single place an order body is serialized.
+"""THE order serializer. One implementation, shared by everything.
 
-Preview and submit must send the same bytes, or a green preview proves
-nothing about the order that follows it. So neither builds a body of its
-own: both call `build()`, and a test asserts submit has no other path to a
-request body.
+This is the body that has actually traded on Polymarket US. It was proven in
+`pmus_micro_executor._body`, which now delegates here rather than keeping a
+copy, so there is exactly one implementation and not a family of them.
 
-Two representations exist ON PURPOSE, and only while the question is open.
+Why it lives in its own module
+------------------------------
+`l5_pmus_transport` is COPY'd into the 24/7 observer image; `pmus_q1_executor`
+and `pmus_micro_executor` deliberately are NOT, because they can place, amend
+and cancel orders. So the transport could not import the proven builder, and
+wrote its own body instead -- which is how it came to send `outcome`/`side`/
+`LIMIT` and a bare-string price, none of which the venue accepts.
 
-`LEGACY` is what `PmusTransport.submit()` has always sent:
+This module carries the serialization ONLY. It has no credentials, no
+transport, no endpoint and no import of any executor, so sharing it adds no
+order path to the observer image.
 
-    {"clientOrderId":…, "marketSlug":…, "outcome":"UP", "side":"BUY",
-     "price":"0.47", "quantity":"1.00", "type":"LIMIT"}
-
-`DOCUMENTED` is what the venue's published OrdersService schema
-(https://docs.polymarket.us/api-reference/oapi-schemas/orders-schema.json,
-CreateOrderRequest) says the field names and types are:
-
-    {"marketSlug":…, "type":"ORDER_TYPE_LIMIT",
-     "price":{"value":"0.47","currency":"USD"}, "quantity":1.0,
-     "outcomeSide":"OUTCOME_SIDE_YES", "action":"ORDER_ACTION_BUY",
-     "tif":…, "participateDontInitiate":…}
-
-They disagree on every field that matters: the outcome axis (`outcome`
-UP/DOWN vs `outcomeSide` YES/NO), the buy/sell field (`side` vs `action`),
-the enum spellings, and whether price is a scalar or an Amount. The schema
-also does not carry `clientOrderId` at all.
-
-Which one the venue actually accepts is an EMPIRICAL question, and it is
-answered by previewing both rather than by reading the documentation and
-assuming. Until that evidence exists, `DEFAULT_SCHEMA` stays LEGACY so this
-module changes no execution behaviour.
+The two hard-won conventions it encodes
+---------------------------------------
+1. `price.value` is ALWAYS the long (YES) side's price, whatever the outcome
+   side. To buy NO at X the wire value is 1.00 - X. Live on 2026-09-05/06,
+   24 of 24 NO-side post-only orders priced in NO terms were rejected,
+   because the venue read them as NO at 1-X, which crosses. Internally every
+   price stays in its own outcome's terms; only the wire value maps.
+2. `quantity` is a JSON number, not a string -- the venue documents
+   number<double> and it is what fractional quantity depends on.
 """
 from __future__ import annotations
 
 from decimal import Decimal as D
 from typing import Any, Dict, Mapping
 
-LEGACY = "LEGACY"
-DOCUMENTED = "DOCUMENTED"
+ONE = D("1")
 
-#: what submit() sends today. Changed only once a preview has shown which
-#: representation the venue accepts.
-DEFAULT_SCHEMA = LEGACY
+#: fields a preview request carries that a submit body does not, and vice
+#: versa. Empty: preview and submit send the SAME body, and the preview
+#: endpoint merely wraps it (see `preview_envelope`). Kept so the drift
+#: assertion has something to name if that ever stops being true.
+PREVIEW_ONLY_FIELDS: tuple = ()
 
-#: fields that exist only because a request is a preview, and so are
-#: expected to differ between a preview body and the submit body.
-PREVIEW_ONLY_FIELDS = ("clientOrderId",)
+#: UP/DOWN is the engine's vocabulary; YES/NO is the venue's.
+#: Provenance for the mapping is in l5_preview_session.STATIC_CONTRACT.
+#: Accepts the engine's vocabulary AND the venue's own enum unchanged, so
+#: the proven executor -- which already speaks OUTCOME_SIDE_* -- can pass its
+#: value straight through without a lossy round trip.
+_SIDE = {"UP": "OUTCOME_SIDE_YES", "DOWN": "OUTCOME_SIDE_NO",
+         "YES": "OUTCOME_SIDE_YES", "NO": "OUTCOME_SIDE_NO",
+         "OUTCOME_SIDE_YES": "OUTCOME_SIDE_YES",
+         "OUTCOME_SIDE_NO": "OUTCOME_SIDE_NO"}
 
 
-def build(intent: Mapping[str, Any], market_slug: str,
-          schema: str = None) -> Dict[str, Any]:
-    """The request body for one order, in the named representation.
+def outcome_side(side: str) -> str:
+    try:
+        return _SIDE[str(side).upper()]
+    except KeyError:
+        raise ValueError("no venue outcome side for %r" % (side,)) from None
 
-    `intent` is the executor's proposal and is never reinterpreted here:
-    side, price, quantity and maker/taker are carried through exactly as
-    the frozen engine produced them. This function chooses field NAMES and
-    TYPES, nothing else.
+
+def venue_price(outcome_side_str: str, price: D) -> D:
+    """Outcome-terms price -> the venue's long-side price.value."""
+    px = D(str(price))
+    return ONE - px if str(outcome_side_str).upper().endswith("NO") else px
+
+
+def build(*, slug: str, side: str, price: Any, qty: Any,
+          post_only: bool) -> Dict[str, Any]:
+    """The venue-accepted order body. Proven representation, verbatim.
+
+    Callers supply WHAT to trade -- market, outcome, price in that outcome's
+    own terms, quantity, maker/taker. This decides HOW to say it.
     """
-    schema = schema or DEFAULT_SCHEMA
-    side = str(intent["side"]).upper()
-    maker = str(intent.get("mode", "")).upper() == "MAKER"
+    q = D(str(qty))
+    if q <= 0:
+        raise ValueError("non-positive quantity %r" % (qty,))
+    os_ = outcome_side(side)
+    return {
+        "marketSlug": slug,
+        "type": "ORDER_TYPE_LIMIT",
+        "price": {"value": str(venue_price(os_, price)), "currency": "USD"},
+        "quantity": float(q),
+        "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
+        "participateDontInitiate": bool(post_only),
+        "outcomeSide": os_,
+        "action": "ORDER_ACTION_BUY",
+        "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
+    }
 
-    if schema == LEGACY:
-        return {
-            "clientOrderId": intent["client_order_id"],
-            "marketSlug": market_slug,
-            "outcome": side,
-            "side": "BUY",
-            "price": str(intent["price"]),
-            "quantity": str(intent["qty"]),
-            "type": "LIMIT" if maker else "MARKET",
-        }
 
-    if schema == DOCUMENTED:
-        from src.l5_preview_session import outcome_side_for
-        return {
-            "marketSlug": market_slug,
-            "type": "ORDER_TYPE_LIMIT",
-            "price": {"value": str(intent["price"]), "currency": "USD"},
-            "quantity": float(D(str(intent["qty"]))),
-            "outcomeSide": outcome_side_for(side),
-            "action": "ORDER_ACTION_BUY",
-            "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
-            "participateDontInitiate": maker,
-        }
-
-    raise ValueError("unknown order schema %r" % (schema,))
+def from_intent(intent: Mapping[str, Any], market_slug: str) -> Dict[str, Any]:
+    """The L5 engine's intent -> the proven body. No reinterpretation:
+    side, price, quantity and maker/taker are carried through as the frozen
+    engine produced them."""
+    return build(slug=intent.get("market") or market_slug,
+                 side=intent["side"], price=intent["price"],
+                 qty=intent["qty"],
+                 post_only=str(intent.get("mode", "")).upper() == "MAKER")
 
 
 def preview_envelope(body: Mapping[str, Any]) -> Dict[str, Any]:
-    """The preview endpoint wraps the same body under `request`."""
+    """The preview endpoint takes the same body under `request`, exactly as
+    the proven executor sends it."""
     return {"request": dict(body)}
 
 
 def differences(preview_body: Mapping[str, Any],
                 submit_body: Mapping[str, Any]) -> Dict[str, Any]:
-    """Every field where a previewed body and a submitted body disagree.
-
-    Used to assert that the only differences are intrinsically
-    preview-specific, so a green preview cannot bless a different order.
-    """
     keys = set(preview_body) | set(submit_body)
     diff = {k: {"preview": preview_body.get(k), "submit": submit_body.get(k)}
             for k in sorted(keys)
