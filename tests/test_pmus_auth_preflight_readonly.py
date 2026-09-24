@@ -52,16 +52,6 @@ class FakeHTTP:
         return self.data[path]
 
 
-@pytest.fixture(autouse=True)
-def _clear_catalogue():
-    """resolve_market caches catalogue pages process-wide, so one test's
-    pages would otherwise answer another test's walk."""
-    from src import l5_pmus_transport as _T
-    _T._CATALOGUE.clear()
-    yield
-    _T._CATALOGUE.clear()
-
-
 @pytest.fixture()
 def creds(monkeypatch):
     monkeypatch.setenv(Q1.KEY_ENV, "key-aaaaaaaaaaaa")
@@ -310,14 +300,17 @@ def test_main_always_prints_a_verdict_and_exits_nonzero(monkeypatch, capsys):
 # ------------------------------- the credential-side read resolves BTC15m too
 
 class CatalogueHTTP(FakeHTTP):
-    """The gateway for a BTC15m window: the singular resource 404s and the
-    catalogue listing is what carries the metadata."""
+    """The gateway for a BTC15m window: it hides this series from
+    /v1/market/slug/ and serves the metadata only under the EVENT slug,
+    which is the market slug without its cpc- product prefix."""
 
     def __init__(self, **over):
         super().__init__(**over)
+        from src.l5_pmus_transport import event_slug_for
         row = self.data.pop("/v1/market/slug/%s" % SLUG)["market"]
-        self.data["/v1/markets?limit=500&offset=0"] = {
-            "markets": [{"slug": "aec-nfl-lac-ten-2025-11-02"}, row]}
+        self.data["/v1/events/slug/%s" % event_slug_for(SLUG)] = {
+            "event": {"slug": event_slug_for(SLUG),
+                      "markets": [{"slug": "cpc-unrelated"}, row]}}
 
 
 def test_the_credential_side_preflight_resolves_a_btc15m_market(creds):

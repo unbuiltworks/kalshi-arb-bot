@@ -367,270 +367,163 @@ def test_the_minimum_quantity_field_of_this_resource_is_read(creds):
 
 # ------------------------------------------------- market metadata resolution
 
-class CatalogueHTTP:
-    """The gateway as it actually behaved when probed on 2026-09-24.
+class VenueHTTP:
+    """The venue as probed on 2026-09-24, with 1245z live.
 
-    Two facts drive every test below. The singular resource 404s for a
-    BTC15m window even when that window has traded and settled; and the
-    listing silently IGNORES filter parameters it does not know, answering
-    200 with the unfiltered default page.
+    The public gateway hides this series: /v1/market/slug/ and /v1/market/id/
+    both answer "not found" for a BTC15m window that is trading, while
+    /bbo and /book serve it. The event resource is what carries the metadata,
+    under the slug WITHOUT the cpc- prefix.
     """
 
-    def __init__(self, rows, *, singular=None):
-        self.rows = rows
+    def __init__(self, *, events=None, singular=None, api_events=None,
+                 api_raises=None):
+        self.events = events or {}
+        self.api_events = api_events or {}
         self.singular = singular
+        self.api_raises = api_raises
         self.calls = []
 
     def request(self, method, path, body=None, base=None):
-        self.calls.append((method, path))
-        if path == "/v1/account/balances":
-            return {"balances": [{"buyingPower": "42.50"}]}
+        self.calls.append((base, path))
+        if base == Q1.API and self.api_raises:
+            raise self.api_raises("api host refused")
+        table = self.api_events if base == Q1.API else self.events
         if path.startswith("/v1/market/slug/"):
-            if self.singular is None:
+            if self.singular is None or base == Q1.API:
                 raise RuntimeError("404 Market not found")
             return {"market": self.singular}
-        if path.startswith("/v1/markets?"):
-            q = dict(p.split("=", 1) for p in path.split("?", 1)[1].split("&")
-                     if "=" in p)
-            # unknown filters are ignored by the venue, so they are ignored
-            # here too -- that is the trap being guarded against
-            lim, off = int(q.get("limit", 500)), int(q.get("offset", 0))
-            return {"markets": self.rows[off:off + lim]}
+        if path.startswith("/v1/events/slug/"):
+            ev = table.get(path.rsplit("/", 1)[-1])
+            if ev is None:
+                raise RuntimeError("404 Event not found")
+            return {"event": ev}
         raise RuntimeError("404 %s" % path)
 
 
 def row(slug, **over):
     d = {"slug": slug, "outcomes": '["Up", "Down"]', "active": True,
          "closed": False, "archived": False, "status": "OPEN",
-         "orderPriceMinTickSize": "0.01", "minimumTradeQty": "1"}
+         "orderPriceMinTickSize": "0.01", "minimumTradeQty": "0.01"}
     d.update(over)
     return d
+
+
+def event(*markets, slug=None):
+    return {"slug": slug or T.event_slug_for(markets[0]["slug"]),
+            "seriesSlug": "btc-updown-15m", "markets": list(markets)}
 
 
 def tx(http):
     return T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
 
 
-@pytest.fixture(autouse=True)
-def _clear_catalogue():
-    """The catalogue cache is process-wide, so one test's pages would
-    otherwise answer another test's walk."""
-    T._CATALOGUE.clear()
-    yield
-    T._CATALOGUE.clear()
+# ------------------------------------------------------- the derived slug
+
+def test_the_event_slug_drops_the_product_prefix():
+    """market cpc-btc-updown-15m-...-1245z lives under event
+    btc-updown-15m-...-1245z, so the event needs no id lookup."""
+    assert T.event_slug_for("cpc-btc-updown-15m-2026-09-24-1245z") == \
+        "btc-updown-15m-2026-09-24-1245z"
 
 
-def test_the_catalogue_answers_when_the_singular_resource_404s():
-    """The regression that failed market_readable on 35 consecutive windows:
-    /v1/market/slug/{slug} serves sports, not cpc-* crypto windows."""
-    mk = tx(CatalogueHTTP([row("aec-nfl-lac-ten-2025-11-02"), row(SLUG)])
+def test_a_slug_without_the_prefix_is_left_alone():
+    assert T.event_slug_for("aec-nfl-lac-ten-2025-11-02") == \
+        "aec-nfl-lac-ten-2025-11-02"
+
+
+# ------------------------------------------------------------- resolution
+
+def test_the_event_resource_supplies_what_the_gates_read():
+    mk = tx(VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))})
             ).market(SLUG)
     assert mk["slug"] == SLUG
     assert mk["orderPriceMinTickSize"] == "0.01"
+    assert mk["minimumTradeQty"] == "0.01"
+    assert "Up" in mk["outcomes"] and "Down" in mk["outcomes"]
 
 
-def test_an_ignored_filter_can_never_pass_off_another_market():
-    """The listing returns 200 with an unrelated page when it does not know
-    a filter. Trusting that would hand preflight some NFL market's tick and
-    outcomes while looking like a clean read."""
-    http = CatalogueHTTP([row("aec-nfl-lac-ten-2025-11-02"),
-                          row("atc-uecl-ggk-zil-2026-07-30-ggk")])
+def test_the_right_market_is_picked_out_of_a_multi_market_event():
+    """An event carries several markets; taking the first would hand
+    preflight another market's tick and outcomes."""
+    ev = event(row("cpc-other-market"), row(SLUG, orderPriceMinTickSize="0.05"),
+               slug=T.event_slug_for(SLUG))
+    mk = tx(VenueHTTP(events={T.event_slug_for(SLUG): ev})).market(SLUG)
+    assert mk["slug"] == SLUG and mk["orderPriceMinTickSize"] == "0.05"
+
+
+def test_an_event_that_does_not_contain_our_market_fails_closed():
+    ev = event(row("cpc-some-other-window"), slug=T.event_slug_for(SLUG))
     with pytest.raises(LookupError):
-        tx(http).market(SLUG)
+        tx(VenueHTTP(events={T.event_slug_for(SLUG): ev})).market(SLUG)
 
 
-def test_a_singular_hit_for_the_WRONG_slug_is_not_accepted():
-    http = CatalogueHTTP([row(SLUG)], singular=row("some-other-market"))
-    assert tx(http).market(SLUG)["slug"] == SLUG
-
-
-def test_the_singular_resource_is_still_used_when_it_does_answer():
-    """Sports still resolve in one request; the catalogue is the fallback,
-    not a replacement."""
-    http = CatalogueHTTP([], singular=row(SLUG, seriesSlug="btc-updown-15m"))
+def test_the_singular_resource_still_serves_sports_first():
+    """Sports resolve in one request; the event route is the fallback."""
+    http = VenueHTTP(singular=row(SLUG, seriesSlug="btc-updown-15m"))
     assert tx(http).market(SLUG)["seriesSlug"] == "btc-updown-15m"
-    assert not any("limit=" in p for _, p in http.calls)
+    # the host that answered did so from the singular resource; it never had
+    # to fall through to the event route
+    assert not any(b == Q1.GATEWAY and "/v1/events/" in p
+                   for b, p in http.calls)
 
 
-def test_a_market_absent_from_the_venue_fails_closed():
-    """No metadata must never become invented metadata: preflight has to
-    fail rather than proceed on a market the venue is not serving."""
-    with pytest.raises(LookupError):
-        tx(CatalogueHTTP([])).market(SLUG)
-
-
-def test_the_catalogue_walk_is_bounded():
-    """A preflight must not turn into an unbounded crawl."""
-    http = CatalogueHTTP([row("filler-%d" % i) for i in range(100_000)])
-    with pytest.raises(LookupError):
-        tx(http).market(SLUG)
-    pages = [p for _, p in http.calls if "limit=" in p]
-    # two hosts are walked (api then gateway), each bounded independently
-    assert len(pages) <= T.PmusTransport.CATALOGUE_MAX_PAGES * 2
-
-
-def test_a_later_page_still_resolves():
-    rows = [row("filler-%d" % i) for i in range(700)] + [row(SLUG)]
-    assert tx(CatalogueHTTP(rows)).market(SLUG)["slug"] == SLUG
-
-
-def test_market_readable_fails_closed_when_metadata_is_unavailable(creds):
-    """The gate stays failed rather than being skipped or weakened."""
-    t = tx(CatalogueHTTP([]))
-    with pytest.raises(T.PreflightFailed) as e:
-        t.preflight()
-    rep = json.loads(str(e.value))
-    assert rep["preflight"] == "FAILED"
-    assert "market_readable" in [c["check"] for c in rep["checks"]
-                                 if not c["passed"]]
-
-
-# ------------------------------------------- the walk must not stall the loop
-
-def test_repeated_misses_do_not_refetch_the_catalogue():
-    """The preflight calling this runs inside the realtime probe's 5.0s poll
-    loop, and the full walk measured 6.1s against the live gateway. Uncached,
-    13 retries a window would stall observation for ~9% of it and degrade the
-    first-book and coverage gates this read path exists to satisfy."""
-    T._CATALOGUE.clear()
-    http = CatalogueHTTP([row("filler-%d" % i) for i in range(2000)])
-    for _ in range(5):
-        with pytest.raises(LookupError):
-            tx(http).market(SLUG)
-    pages = [p for _, p in http.calls if "limit=" in p]
-    assert len(pages) <= T.CATALOGUE_MAX_PAGES * 2, (
-        "%d page fetches across 5 attempts" % len(pages))
-
-
-def test_a_market_that_appears_later_is_still_found():
-    """Caching must not make a miss permanent: a window published mid-session
-    has to resolve on the next preflight attempt."""
-    T._CATALOGUE.clear()
-    http = CatalogueHTTP([row("filler")])
-    with pytest.raises(LookupError):
-        tx(http).market(SLUG)
-    http.rows = [row("filler"), row(SLUG)]
-    T._CATALOGUE.clear()                    # TTL expiry, simulated
+def test_the_authenticated_host_is_tried_before_the_gateway():
+    http = VenueHTTP(api_events={T.event_slug_for(SLUG): event(row(SLUG))})
     assert tx(http).market(SLUG)["slug"] == SLUG
-
-
-def test_the_cache_cannot_outlive_a_preflight_retry_cycle():
-    """A page must never be older than the retry interval that reads it, or
-    a market could be reported absent using evidence from a previous cycle."""
-    from scripts import l5_pmus_realtime_probe as P
-    assert T.CATALOGUE_TTL_S < P.PREFLIGHT_RETRY_S
-
-
-def test_a_cached_page_still_verifies_the_slug():
-    """Reuse must not relax the identity check."""
-    T._CATALOGUE.clear()
-    http = CatalogueHTTP([row("aec-nfl-lac-ten-2025-11-02")])
-    with pytest.raises(LookupError):
-        tx(http).market(SLUG)
-    with pytest.raises(LookupError):        # served from cache, same answer
-        tx(http).market(SLUG)
-
-
-# ------------------------------- the authenticated host is tried, and signed
-
-class TwoHostHTTP:
-    """Gateway and api are different surfaces. The gateway does not carry
-    btc-updown-15m at all; the api answers 401 unless the request is signed,
-    which only the credential-holding recorder can do."""
-
-    def __init__(self, api_rows=(), gateway_rows=()):
-        self.api_rows, self.gateway_rows = list(api_rows), list(gateway_rows)
-        self.calls = []
-
-    def request(self, method, path, body=None, base=None):
-        self.calls.append((base, path))
-        rows = self.api_rows if base == Q1.API else self.gateway_rows
-        if path.startswith("/v1/market/slug/"):
-            raise RuntimeError("404 Market not found")
-        if path.startswith("/v1/markets?"):
-            q = dict(p.split("=", 1) for p in path.split("?", 1)[1].split("&")
-                     if "=" in p)
-            lim, off = int(q.get("limit", 500)), int(q.get("offset", 0))
-            return {"markets": rows[off:off + lim]}
-        raise RuntimeError("404 %s" % path)
-
-
-def test_a_market_only_the_api_host_serves_is_still_resolved():
-    """The gateway carries 0 of 2,499 markets for this series even while the
-    window is live and trading, so the account-scoped host must be tried."""
-    T._CATALOGUE.clear()
-    http = TwoHostHTTP(api_rows=[row(SLUG)], gateway_rows=[row("nfl-thing")])
-    assert T.resolve_market(http, SLUG)["slug"] == SLUG
-    assert any(b == Q1.API for b, _ in http.calls)
-
-
-def test_the_api_host_is_tried_before_the_gateway():
-    T._CATALOGUE.clear()
-    http = TwoHostHTTP(api_rows=[row(SLUG)], gateway_rows=[row(SLUG)])
-    T.resolve_market(http, SLUG)
     assert http.calls[0][0] == Q1.API
 
 
-def test_an_api_host_that_401s_does_not_prevent_the_gateway_resolving():
-    """Sports still resolve from the public gateway when the signed host
-    refuses, so adding the api host cannot break what already worked."""
-    T._CATALOGUE.clear()
-
-    class Api401(TwoHostHTTP):
-        def request(self, method, path, body=None, base=None):
-            if base == Q1.API:
-                raise RuntimeError("401 Missing required API key headers")
-            return super().request(method, path, body, base)
-
-    http = Api401(gateway_rows=[row(SLUG)])
-    assert T.resolve_market(http, SLUG)["slug"] == SLUG
-
-
-def test_neither_host_serving_it_still_fails_closed():
-    T._CATALOGUE.clear()
-    http = TwoHostHTTP(api_rows=[row("a")], gateway_rows=[row("b")])
-    with pytest.raises(LookupError) as e:
-        T.resolve_market(http, SLUG)
-    assert Q1.API in str(e.value) and Q1.GATEWAY in str(e.value)
-
-
-def test_the_two_hosts_never_share_a_cached_page():
-    """Keying the cache by page alone would let the gateway's listing answer
-    a walk of the api host, and the two carry different markets."""
-    T._CATALOGUE.clear()
-    http = TwoHostHTTP(api_rows=[row("api-only")],
-                       gateway_rows=[row(SLUG)])
-    assert T.resolve_market(http, SLUG)["slug"] == SLUG
-    keys = {k[0] for k in T._CATALOGUE}
-    assert keys == {Q1.API, Q1.GATEWAY}
+def test_an_api_host_that_refuses_does_not_prevent_the_gateway_resolving():
+    http = VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))},
+                     api_raises=RuntimeError)
+    assert tx(http).market(SLUG)["slug"] == SLUG
 
 
 def test_a_crypto_backend_panic_on_one_host_does_not_lose_the_other():
     """Signing imports the Ed25519 backend, and an unloadable one raises a
     pyo3 PanicException -- a BaseException, not an Exception. Caught live in
-    this container: it propagated out of resolve_market and would have lost
-    the gateway answer that was available all along."""
-    T._CATALOGUE.clear()
-
+    this container: it propagated and lost the gateway answer."""
     class Panic(BaseException):
         pass
 
-    class PanickingApi(TwoHostHTTP):
+    http = VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))},
+                     api_raises=Panic)
+    assert tx(http).market(SLUG)["slug"] == SLUG
+
+
+def test_keyboard_interrupt_is_never_swallowed():
+    http = VenueHTTP(api_raises=KeyboardInterrupt)
+    with pytest.raises(KeyboardInterrupt):
+        tx(http).market(SLUG)
+
+
+def test_neither_host_serving_it_fails_closed_naming_both():
+    with pytest.raises(LookupError) as e:
+        tx(VenueHTTP()).market(SLUG)
+    assert Q1.API in str(e.value) and Q1.GATEWAY in str(e.value)
+    assert T.event_slug_for(SLUG) in str(e.value)
+
+
+def test_the_catalogue_listing_is_never_walked():
+    """Paged properly it runs past 40,000 rows ordered by ascending id, so a
+    bounded walk can never reach a continuously created 15m window -- and an
+    earlier version concluded the series was absent after seeing the oldest
+    4,000. It must not come back."""
+    http = VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))})
+    tx(http).market(SLUG)
+    assert not any("/v1/markets?" in p for _, p in http.calls)
+
+
+def test_market_readable_fails_closed_when_no_host_serves_it(creds):
+    class WithBalances(VenueHTTP):
         def request(self, method, path, body=None, base=None):
-            if base == Q1.API:
-                raise Panic("Python API call failed")
+            if path == "/v1/account/balances":
+                return {"balances": [{"buyingPower": "42.50"}]}
             return super().request(method, path, body, base)
 
-    http = PanickingApi(gateway_rows=[row(SLUG)])
-    assert T.resolve_market(http, SLUG)["slug"] == SLUG
-
-
-def test_keyboard_interrupt_is_never_swallowed_by_the_host_loop():
-    T._CATALOGUE.clear()
-
-    class Interrupting(TwoHostHTTP):
-        def request(self, method, path, body=None, base=None):
-            raise KeyboardInterrupt
-
-    with pytest.raises(KeyboardInterrupt):
-        T.resolve_market(Interrupting(), SLUG)
+    with pytest.raises(T.PreflightFailed) as e:
+        tx(WithBalances()).preflight()
+    rep = json.loads(str(e.value))
+    assert "market_readable" in [c["check"] for c in rep["checks"]
+                                 if not c["passed"]]
