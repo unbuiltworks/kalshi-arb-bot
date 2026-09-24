@@ -98,45 +98,18 @@ class _SignedHTTP:
             return _json.loads(r.read() or b"{}")
 
 
-#: how many listing pages the catalogue walk will read. Bounded so a
-#: preflight can never turn into an unbounded crawl; the listing answered in
-#: full at 2,499 markets across five pages when this was measured.
-CATALOGUE_PAGE = 500
-CATALOGUE_MAX_PAGES = 8
-
-#: how long a fetched catalogue page may be reused.
-#:
-#: The walk is 8 sequential requests and takes 6.1s measured against the live
-#: gateway -- longer than the realtime probe's whole 5.0s poll period, and
-#: the preflight that calls it runs INSIDE that loop. Preflight retries for
-#: 13 attempts across a window, so an uncached miss would stall observation
-#: roughly 13 times for 6.1s: about 9% of the window spent not watching the
-#: book. That would degrade first-book latency and coverage -- the very gates
-#: this read path exists to satisfy.
-#:
-#: 45s is shorter than the 60s preflight retry interval, so a market that
-#: appears mid-window is still picked up on the next attempt and nothing is
-#: resolved from a page older than one retry cycle.
-CATALOGUE_TTL_S = 45.0
-
-#: page index -> (fetched_at, rows). Process-wide and bounded by page count.
-_CATALOGUE: Dict[int, Any] = {}
+#: the market slug carries a `cpc-` product prefix that the EVENT slug does
+#: not: market cpc-btc-updown-15m-2026-09-24-1245z belongs to event
+#: btc-updown-15m-2026-09-24-1245z. Derivable, so the event can be addressed
+#: without first resolving a numeric id.
+EVENT_PREFIXES = ("cpc-",)
 
 
-def _catalogue_page(http: Any, base: str, page: int,
-                    now: Optional[float] = None) -> List[Any]:
-    """One listing page, reused while it is younger than the TTL."""
-    import time as _time
-    now = _time.time() if now is None else now
-    key = (base, page)
-    hit = _CATALOGUE.get(key)
-    if hit is not None and now - hit[0] < CATALOGUE_TTL_S:
-        return hit[1]
-    r = http.request("GET", "/v1/markets?limit=%d&offset=%d"
-                     % (CATALOGUE_PAGE, page * CATALOGUE_PAGE), None, base) or {}
-    rows = r.get("markets") or []
-    _CATALOGUE[key] = (now, rows)
-    return rows
+def event_slug_for(market_slug: str) -> str:
+    for p in EVENT_PREFIXES:
+        if market_slug.startswith(p):
+            return market_slug[len(p):]
+    return market_slug
 
 
 def resolve_market(http: Any, slug: str,
@@ -155,9 +128,20 @@ def resolve_market(http: Any, slug: str,
     windows, and because the gate aborts the preflight, every metadata gate
     after it went unevaluated rather than passing.
 
-    `/v1/markets?limit=&offset=` is the catalogue, and its rows carry
-    exactly what the gates read: outcomes, orderPriceMinTickSize,
-    minimumTradeQty, active/closed/archived, status, slug.
+    `/v1/events/slug/{event}` is the resource that does carry it, and its
+    response embeds `markets[]` with exactly what the gates read: outcomes,
+    orderPriceMinTickSize, minimumTradeQty, active/closed/archived, status,
+    slug. The event slug is derived by stripping the `cpc-` product prefix,
+    so no numeric id has to be resolved first.
+
+    The `/v1/markets` CATALOGUE is deliberately not used. It is not a
+    shortlist: paged properly it runs past 40,000 rows ordered by ascending
+    id, so a continuously created 15m window sits at the far end and a
+    bounded walk can never reach it. An earlier version walked 8 pages and
+    concluded the series was "absent from the catalogue"; it had only
+    reached the oldest 4,000 markets, and its stop condition -- a page
+    shorter than the limit -- was itself wrong, because this listing returns
+    499 rows on some full pages.
 
     The match is made HERE, on the exact slug, never by a query parameter.
     The gateway silently IGNORES filters it does not know -- `?slug=`,
@@ -165,23 +149,20 @@ def resolve_market(http: Any, slug: str,
     default page -- so trusting one would hand preflight some unrelated NFL
     market's tick and outcomes while looking like a successful read.
 
-    Raises LookupError when no page contains the slug, so `market_readable`
+    Raises LookupError when no host serves the market, so `market_readable`
     fails closed rather than proceeding on a market the venue is not
     serving. Metadata and the executable book stay separate concerns: the
     contemporaneous book still comes from the authenticated WS feed.
     """
-    # Hosts in order. The AUTHENTICATED api host is tried as well as the
-    # public gateway because the gateway demonstrably does not carry this
-    # series: probed while 1200z was live and trading, the gateway's
-    # singular resource 404s, and btc-updown-15m appears in 0 of 2,499
-    # catalogued markets and 0 of 57 under categories=crypto, while
-    # /v1/markets/{slug}/bbo answers 200 for the same slug. The api host
-    # answers 401 "Missing required API key headers" to every unauthenticated
-    # read, so it is a different, account-scoped surface that only the
-    # credential-holding recorder can see -- and it is the one place a market
-    # catalogue could still be served from. The transport signs a request
-    # only when base is the api host, so this read is signed there and
-    # anonymous on the gateway, exactly as each host expects.
+    # Hosts in order. The venue's own OpenAPI schemas (events-schema.json,
+    # markets-schema.json) declare every endpoint used here under
+    # servers: [gateway.polymarket.us] with security: [] -- they are public
+    # and unauthenticated, so the gateway, not the account-scoped api host,
+    # is where this metadata is meant to live. The api host is still tried
+    # first because it costs one request and is the only cell not yet
+    # disproved empirically: production has shown /v1/market/slug/ failing
+    # there, but not /v1/events/slug/. The transport signs only for the api
+    # host, so each is addressed the way it expects.
     hosts = [base] if base != Q1.GATEWAY else [Q1.API, Q1.GATEWAY]
 
     # One host failing must never stop the other being tried, and the
@@ -200,25 +181,24 @@ def resolve_market(http: Any, slug: str,
         except (KeyboardInterrupt, SystemExit):
             raise
         except BaseException:                                  # noqa: BLE001
-            pass                    # the catalogue below is the real answer
+            pass                        # the event below is the real answer
 
-        for page in range(CATALOGUE_MAX_PAGES):
-            try:
-                rows = _catalogue_page(http, host, page)
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except BaseException:                              # noqa: BLE001
-                break               # this host does not serve a catalogue
-            for mk in rows:
+        try:
+            r = http.request("GET", "/v1/events/slug/%s"
+                             % event_slug_for(slug), None, host) or {}
+            ev = r.get("event") or r
+            for mk in (ev.get("markets") or []):
                 if isinstance(mk, Mapping) and mk.get("slug") == slug:
                     return dict(mk)
-            if len(rows) < CATALOGUE_PAGE:
-                break                                   # last page reached
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:                                  # noqa: BLE001
+            pass                            # try the next host, then fail
 
     raise LookupError(
-        "market metadata not served for %s on %s: the singular resource 404s "
-        "for this series and the market is absent from the catalogue listing"
-        % (slug, ", ".join(hosts)))
+        "market metadata not served for %s on %s: neither /v1/market/slug/ "
+        "nor /v1/events/slug/%s returned it"
+        % (slug, ", ".join(hosts), event_slug_for(slug)))
 
 
 class PmusTransport:
@@ -250,9 +230,6 @@ class PmusTransport:
         always used for live campaigns; these now match it.
         """
         return self._get("/v1/account/balances") or {}
-
-    CATALOGUE_PAGE = CATALOGUE_PAGE
-    CATALOGUE_MAX_PAGES = CATALOGUE_MAX_PAGES
 
     def market(self, slug: str) -> Dict[str, Any]:
         """Authoritative market METADATA, which /bbo does not carry.
