@@ -536,3 +536,126 @@ def test_the_probe_refuses_to_arm_without_an_authenticated_book(
     assert venue.armed is False, "never armed without a book"
     assert venue.posts == []
     assert rep["authorization"]["consumed"] is True
+
+
+# ------------------------------- the row shape the frozen rule actually needs
+#
+# Probe 02 armed, connected an authenticated websocket, took a book fresh to
+# 0.199s -- and handled zero L5 actions. The runner built its action rows by
+# hand:
+#
+#     out.append(dict(r, action_key=key, receipt_utc=...))
+#
+# which passes the RAW venue activity row through. FT.l5_native returns None
+# for that shape, so every action would have been refused UNREADABLE_ROW.
+# The continuous recorder, which has processed tens of thousands of actions,
+# builds the row with O.action_key and O.l5_to_pmus_action under an "l5" key.
+# The probe now does the same.
+
+RAW_ACTIVITY = {"timestamp": None, "outcome": "Up", "side": "BUY",
+                "price": 0.47, "size": 12.0, "usdcSize": 5.64,
+                "transactionHash": "0xabc"}
+
+
+def raw_at(t, **kw):
+    return dict(RAW_ACTIVITY, timestamp=t, **kw)
+
+
+def test_a_built_action_is_readable_by_the_frozen_rule():
+    """The property Probe 02 lacked, asserted end to end."""
+    import src.l5_faithful_translation as FT
+
+    ws = P.window_start(MARKET)
+    acts, ok = P.new_l5_actions(MARKET, set(),
+                                activity=lambda limit=100: [raw_at(ws + 10)])
+    assert ok is True
+    assert len(acts) == 1
+    row = acts[0]
+    assert "l5" in row, "the frozen rule reads row['l5']"
+    dec = FT.l5_native(row)
+    assert dec is not None, "Probe 02's row shape returned None here"
+    assert dec["side"] == "UP"
+    assert str(dec["price"]) == "0.47"
+
+
+def test_the_raw_venue_row_is_exactly_what_the_frozen_rule_rejects():
+    """States the defect directly, so the fix cannot silently regress."""
+    import src.l5_faithful_translation as FT
+    assert FT.l5_native(dict(RAW_ACTIVITY, timestamp=1, action_key="k",
+                             receipt_utc="2026-09-24T20:00:00+00:00")) is None
+
+
+def test_the_probe_builds_rows_the_same_way_the_recorder_does():
+    ws = P.window_start(MARKET)
+    raw = raw_at(ws + 10)
+    acts, _ = P.new_l5_actions(MARKET, set(), activity=lambda limit=100: [raw])
+    import src.l5_pmus_realtime_observer as O
+    assert acts[0]["action_key"] == O.action_key(raw)
+    assert acts[0]["l5"] == O.l5_to_pmus_action(raw)
+    assert acts[0]["pmus"] == {"slug": MARKET}
+
+
+def test_an_action_with_no_readable_side_is_dropped():
+    ws = P.window_start(MARKET)
+    acts, ok = P.new_l5_actions(
+        MARKET, set(),
+        activity=lambda limit=100: [raw_at(ws + 10, outcome="Sideways")])
+    assert ok is True and acts == []
+
+
+def test_two_fills_in_one_transaction_are_both_kept():
+    """The dedupe key is the economic identity, not the transaction hash."""
+    ws = P.window_start(MARKET)
+    rows = [raw_at(ws + 10, price=0.47), raw_at(ws + 10, price=0.48)]
+    acts, _ = P.new_l5_actions(MARKET, set(), activity=lambda limit=100: rows)
+    assert len(acts) == 2, "hashing by tx would have dropped one"
+
+
+def test_an_action_outside_the_window_is_dropped():
+    ws = P.window_start(MARKET)
+    acts, _ = P.new_l5_actions(
+        MARKET, set(), activity=lambda limit=100: [raw_at(ws - 5),
+                                                   raw_at(ws + 2000)])
+    assert acts == []
+
+
+def test_an_unparseable_window_admits_nothing(monkeypatch):
+    """Fail CLOSED: an unknown window must not admit L5's whole history."""
+    from src import l5_authenticated_observation as OBS
+    monkeypatch.setattr(OBS, "window_start_epoch", lambda slug: None)
+    acts, ok = P.new_l5_actions(MARKET, set(),
+                                activity=lambda limit=100: [raw_at(1790280000)])
+    assert ok is True and acts == []
+
+
+def test_a_readable_action_reaches_a_decision_in_the_probe(
+        tmp_path, monkeypatch):
+    """The whole path: raw venue row -> probe -> frozen rule -> a record."""
+    authorize(monkeypatch)
+    ws = P.window_start(MARKET)
+    monkeypatch.setattr(AUTH, "MARKET_ENV", AUTH.MARKET_ENV)
+    monkeypatch.setenv(AUTH.MARKET_ENV, MARKET)
+
+    t = {"now": START + P.PREFLIGHT_AT_S}
+    venue = Venue(fill="0")
+
+    real = P.new_l5_actions          # capture BEFORE patching, or it recurses
+
+    def once(slug, seen, act=None):
+        if "done" in seen:
+            return [], True
+        seen.add("done")
+        return real(slug, set(), activity=lambda limit=100: [raw_at(ws + 10)])
+
+    monkeypatch.setattr(P, "new_l5_actions", once)
+    rep = P.run(clock=lambda: t["now"],
+                sleep=lambda s: t.__setitem__("now", t["now"] + s),
+                transport_factory=lambda slug: venue,
+                book_feed=Feed(lambda: t["now"]),
+                state_path=str(tmp_path / "inv.json"),
+                journal_path=str(tmp_path / "j.jsonl"),
+                ledger_path=str(tmp_path / "auth.jsonl"))
+    assert rep["armed"] is True
+    assert rep["l5_actions"] == 1, "the action reached a decision"
+    # and it was NOT rejected for being the wrong shape
+    assert "UNREADABLE_ROW" not in rep["refused_reason"]

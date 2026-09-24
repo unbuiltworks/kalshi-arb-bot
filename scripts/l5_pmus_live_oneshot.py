@@ -93,9 +93,17 @@ def new_l5_actions(slug: str, seen: Set[str],
     `None` from the feed means the FEED FAILED; an empty list means L5 has
     not traded. They are kept apart, because a broken feed reported as a
     quiet market is evidence of nothing that looks like evidence.
+
+    The row SHAPE is the frozen rule's input contract, and it is built the
+    same way the continuous recorder builds it -- `O.action_key` for the
+    dedupe key and `O.l5_to_pmus_action` under an "l5" key. Probe 02 handed
+    the raw venue activity row straight through instead, and
+    `FT.l5_native` returns None for that shape: every action would have
+    been refused UNREADABLE_ROW, so the probe could not have traded however
+    healthy its book was.
     """
+    from src import l5_pmus_realtime_observer as O
     if activity is None:
-        from src import l5_pmus_realtime_observer as O
         activity = O.l5_activity
     from src import l5_authenticated_observation as OBS
     ws = OBS.window_start_epoch(slug)
@@ -108,15 +116,28 @@ def new_l5_actions(slug: str, seen: Set[str],
             t = float(r.get("timestamp"))
         except (TypeError, ValueError):
             continue
-        if ws is not None and not (ws <= t < ws + WINDOW_S):
+        # fail CLOSED on an unknown window: an unparseable slug must not
+        # admit every action L5 has ever taken.
+        if ws is None or not (ws <= t <= ws + WINDOW_S):
             continue
-        key = str(r.get("transactionHash") or r.get("id") or t)
+        # the whole economic identity, not the transaction hash. One
+        # transaction can carry two fills at different prices, and hashing
+        # by tx silently drops the second.
+        key = O.action_key(r)
         if key in seen:
             continue
+        act = O.l5_to_pmus_action(r)
+        if not act.get("pmus_side"):
+            continue
         seen.add(key)
-        out.append(dict(r, action_key=key,
-                        receipt_utc=dt.datetime.now(
-                            dt.timezone.utc).isoformat()))
+        now = time.time()
+        out.append({"action_key": key,
+                    "receipt_utc": dt.datetime.fromtimestamp(
+                        now, dt.timezone.utc).isoformat(),
+                    "l5_event_utc": dt.datetime.fromtimestamp(
+                        t, dt.timezone.utc).isoformat(),
+                    "observation_latency_s": round(now - t, 2),
+                    "l5": act, "pmus": {"slug": slug}})
     return out, True
 
 
