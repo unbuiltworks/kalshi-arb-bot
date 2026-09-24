@@ -79,6 +79,13 @@ COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+# The order serializer and the preview gate. Both are pure: no transport, no
+# endpoint, no credential, and no import of any executor. The preflight needs
+# the contract data in l5_order_body, and submit() needs the gate if this
+# service is ever armed. Neither adds a path that can send an order --
+# l5_preview_session, which CAN post a preview, stays out of this image.
+COPY src/l5_order_body.py src/l5_order_body.py
+COPY src/l5_preview_gate.py src/l5_preview_gate.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/pmus_interaction_classifier.py src/pmus_interaction_classifier.py
 RUN touch src/__init__.py
