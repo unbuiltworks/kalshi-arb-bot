@@ -129,8 +129,20 @@ class PmusTransport:
         return self._get("/v1/account/balances") or {}
 
     def market(self, slug: str) -> Dict[str, Any]:
-        r = self._get("/v1/markets/%s/bbo" % slug, base=Q1.GATEWAY) or {}
-        return r.get("marketData") or r.get("market") or r
+        """Authoritative market METADATA, which /bbo does not carry.
+
+        /v1/markets/{slug} (plural) 404s and /v1/markets/{slug}/bbo returns
+        QUOTE data, so series identity, outcomes, tick, minimum quantity and
+        tradability had nothing to read from and five gates failed for want
+        of a field rather than for a real reason. /v1/market/slug/{slug}
+        (singular) is the resource that carries them -- it is what this
+        recorder's own enriched module already reads for market state.
+
+        Metadata and the executable book stay separate concerns: the
+        contemporaneous book still comes from the authenticated WS feed.
+        """
+        r = self._get("/v1/market/slug/%s" % slug, base=Q1.GATEWAY) or {}
+        return r.get("market") or r
 
     def book(self, slug: str) -> Dict[str, Any]:
         r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}
@@ -168,6 +180,34 @@ class PmusTransport:
             if got:
                 return got
         return None
+
+    @staticmethod
+    def outcome_names(mk: Mapping[str, Any]) -> tuple:
+        """UP/DOWN as this venue reports them.
+
+        `outcomes` arrives either as a JSON-ENCODED STRING, a list of plain
+        names, or a list of mappings, depending on the resource. All three
+        are read; nothing is inferred when none parses.
+        """
+        raw = mk.get("outcomes")
+        if raw is None:
+            raw = mk.get("tokens")
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except ValueError:
+                raw = [x.strip() for x in raw.split(",") if x.strip()]
+        if not isinstance(raw, (list, tuple)):
+            return ()
+        out = []
+        for o in raw:
+            if isinstance(o, Mapping):
+                v = o.get("outcome") or o.get("name") or o.get("title")
+            else:
+                v = o
+            if v is not None:
+                out.append(str(v).strip().upper())
+        return tuple(out)
 
     @staticmethod
     def key_fingerprint() -> Optional[str]:
@@ -348,22 +388,30 @@ class PmusTransport:
                                             or mk.get("slug") or ""),
                        mk.get("seriesSlug") or mk.get("slug"))
 
-        # 5. open / tradable
+        # 5. open / tradable. This resource reports tradability as
+        # active/closed/archived rather than a MARKET_STATE_* enum, so both
+        # are accepted -- and a market that does not positively say it is
+        # open still fails, which is the direction that matters.
         state = str(mk.get("state") or mk.get("status") or "")
-        ok &= gate("market_open_tradable", state.upper().endswith("OPEN"),
-                   state)
+        live = state.upper().endswith("OPEN")
+        if not live and ("active" in mk or "closed" in mk):
+            live = bool(mk.get("active")) and not bool(mk.get("closed")) \
+                and not bool(mk.get("archived"))
+        ok &= gate("market_open_tradable", live,
+                   {"state": state or None, "active": mk.get("active"),
+                    "closed": mk.get("closed"),
+                    "archived": mk.get("archived")})
 
         # 6. outcome mapping
-        outs = mk.get("outcomes") or mk.get("tokens") or []
-        names = tuple(str((o.get("outcome") if isinstance(o, Mapping) else o)
-                          or "").upper() for o in outs) if outs else ()
+        names = self.outcome_names(mk)
         ok &= gate("outcome_mapping_is_up_down",
                    set(OUTCOMES).issubset(set(names)) if names else False,
                    names)
 
         # 7. tick and quantity constraints, read from the MARKET not assumed
         tick = mk.get(Q1.TICK_FIELD) or mk.get("tickSize")
-        minq = mk.get("orderMinQuantity") or mk.get("minOrderSize")
+        minq = (mk.get("orderMinQuantity") or mk.get("minimumTradeQty")
+                or mk.get("minOrderSize"))
         ok &= gate("tick_constraint_known", tick is not None, tick)
         ok &= gate("quantity_constraint_known", minq is not None, minq)
 

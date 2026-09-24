@@ -226,14 +226,18 @@ def preflight(slug: str, http: Any,
     ok &= gate("slug_is_btc15m_series", bool(BTC15M_SLUG_RE.match(slug or "")),
                slug)
 
+    # Authoritative market METADATA. /v1/markets/{slug} (plural) 404s and
+    # /bbo returns QUOTE data, so series, outcomes, tick, minimum quantity
+    # and tradability had nothing to read from. This singular resource is
+    # what the recorder's own enriched module already reads.
     raw, got = get(lambda: http.request(
-        "GET", "/v1/markets/%s/bbo" % slug, None, Q1.GATEWAY) or {},
+        "GET", "/v1/market/slug/%s" % slug, None, Q1.GATEWAY) or {},
         "market_readable")
     ok &= got
     mk: Dict[str, Any] = {}
     if got:
         gate("market_readable", True)
-        mk = raw.get("marketData") or raw.get("market") or raw
+        mk = raw.get("market") or raw
         ok &= gate("market_resolves", bool(mk), mk.get("slug"))
         ok &= gate("market_series_is_btc15m",
                    BTC15M_SERIES in str(mk.get("seriesSlug")
@@ -241,16 +245,22 @@ def preflight(slug: str, http: Any,
                    mk.get("seriesSlug") or mk.get("slug"))
 
     state = str(mk.get("state") or mk.get("status") or "")
-    ok &= gate("market_open_tradable", state.upper().endswith("OPEN"), state)
+    live = state.upper().endswith("OPEN")
+    if not live and ("active" in mk or "closed" in mk):
+        live = bool(mk.get("active")) and not bool(mk.get("closed")) \
+            and not bool(mk.get("archived"))
+    ok &= gate("market_open_tradable", live,
+               {"state": state or None, "active": mk.get("active"),
+                "closed": mk.get("closed"), "archived": mk.get("archived")})
 
-    outs = mk.get("outcomes") or mk.get("tokens") or []
-    names = tuple(str((o.get("outcome") if isinstance(o, Mapping) else o)
-                      or "").upper() for o in outs) if outs else ()
+    from src.l5_pmus_transport import PmusTransport as _TP
+    names = _TP.outcome_names(mk)
     ok &= gate("outcome_mapping_is_up_down",
                set(OUTCOMES).issubset(set(names)) if names else False, names)
 
     tick = mk.get(Q1.TICK_FIELD) or mk.get("tickSize")
-    minq = mk.get("orderMinQuantity") or mk.get("minOrderSize")
+    minq = (mk.get("orderMinQuantity") or mk.get("minimumTradeQty")
+            or mk.get("minOrderSize"))
     ok &= gate("tick_constraint_known", tick is not None, tick)
     ok &= gate("quantity_constraint_known", minq is not None, minq)
 
