@@ -52,6 +52,12 @@ MAX_SUBSCRIBED = 6
 #: silent; the 10s retry got the book at +10.8s, after trading began at
 #: +6.9s. Retrying every 3s bounds that to ~+3s.
 RESUB_EVERY_S = 3.0
+#: after this many fruitless reconnects in one window, slow to RESUB_SLOW_S.
+#: 2026-09-24 10:00Z (venue weekly maintenance, Thu 06:00-08:00 ET) produced
+#: no frames at all and 3s reconnects ran ~12/min on the shared key; a
+#: healthy window needs 1-2, so 10 is far outside normal and never delays one.
+RESUB_FAST_MAX = 10
+RESUB_SLOW_S = 30.0
 
 
 def window_start(now: Optional[float] = None) -> int:
@@ -264,7 +270,9 @@ class AuthBook:
             if slug in self.first_book:
                 continue
             r = self.resub.get(slug)
-            if r is None or now - r[1] >= RESUB_EVERY_S:
+            every = RESUB_EVERY_S if (r is None or r[2] < RESUB_FAST_MAX) \
+                else RESUB_SLOW_S
+            if r is None or now - r[1] >= every:
                 out.append(slug)
         return out
 

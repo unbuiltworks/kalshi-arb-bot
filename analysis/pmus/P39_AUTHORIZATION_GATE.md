@@ -61,6 +61,7 @@ resized.
 | frozen rule | **PASS**, `030d8bf` hash guard |
 | maker semantics | **correct** (`4f68e3a`): restable actions rest post-only at L5's price; provenance carries `frozen_rule_output: STRICT_NOT_EVALUABLE` and `live_execution: REST_AT_L5_PRICE`; crossing actions take the authenticated touch capped at displayed depth |
 | disarmed end-to-end, **3 consecutive windows with L5 active** | **PASS**: 0730z 71 NOT_ARMED / 0 NO_BOOK; 0745z 46 NOT_ARMED / 3 STALE / 0 NO_BOOK; 0800z 60 NOT_ARMED / 1 STALE / 0 NO_BOOK. Book before L5's first action every window. STALE = frozen rule's own 2.0 s bound on a silent socket (0800z: 08:14:20, last 40 s, book 0.01/0.01, stream silent 2.8 s): refused, never priced against an unproven book. Nothing transmitted, committed or resting |
+| venue maintenance | Thursday 06:00–08:00 ET (10:00–12:00 UTC) the venue is in weekly maintenance. 2026-09-24 10:00Z: the authenticated stream delivered nothing on both the runner and the independent recorder; the runner's preflight FAILED (so it cannot arm) and all L5 actions were refused NO_BOOK. Fail-closed as designed; reconnects now back off after 10 fruitless tries (`RESUB_FAST_MAX`) |
 | L5 dormancy note | L5 made no trades 01:17:52Z–~07:30Z; windows in that span carried no actions and are not counted |
 
 ## To authorize (owner only)

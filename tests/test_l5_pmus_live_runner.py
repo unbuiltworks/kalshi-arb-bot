@@ -530,3 +530,15 @@ def test_open_window_without_a_book_is_resubscribed_for_market_data():
     assert frame["subscribe"]["market_slugs"] == [SLUG]
     rep = b.window_report(SLUG)
     assert rep["book_resubscribes"] == {"first_offset_s": 1.0, "count": 1}
+
+
+def test_fruitless_reconnects_back_off():
+    b = AB.AuthBook(clock=lambda: WS + 1.0)
+    b.subscribed = [SLUG]
+    t = WS + 1.0
+    for _ in range(AB.RESUB_FAST_MAX):
+        assert b.resub_due(t) == [SLUG]
+        b.note_resub(SLUG, t)
+        t += AB.RESUB_EVERY_S
+    assert b.resub_due(t) == []                     # slowed down now
+    assert b.resub_due(t - AB.RESUB_EVERY_S + AB.RESUB_SLOW_S) == [SLUG]
