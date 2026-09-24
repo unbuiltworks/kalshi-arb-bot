@@ -265,7 +265,7 @@ def preflight(slug: str, http: Any,
     # live preview of 2026-09-24T14:40Z returned OUTCOME_SIDE_YES as intent
     # ORDER_INTENT_BUY_LONG. The published contract supplies the other link:
     # "Long side pays when the close is at or above the open", so long == Up.
-    from src import l5_preview_session as _PS
+    from src import l5_order_body as _PS
     chain = {"contract_long_is_up": _PS.STATIC_CONTRACT["yes_is"] == "UP",
              "venue_yes_is_long": True, "venue_side_labels": names,
              "provenance": [q["url"] for q in
