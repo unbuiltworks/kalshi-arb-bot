@@ -67,6 +67,12 @@ COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 # campaign engine.
 COPY scripts/l5_pmus_probe_dryrun.py scripts/l5_pmus_probe_dryrun.py
 COPY scripts/l5_pmus_realtime_probe.py scripts/l5_pmus_realtime_probe.py
+COPY src/l5_session_journal.py src/l5_session_journal.py
+COPY src/l5_session_integrity.py src/l5_session_integrity.py
+# copied so the integrity halt can verify ALL THREE frozen files at
+# runtime. It is not otherwise used by the live path; verifying only
+# the files that happen to be present would let a missing one pass.
+COPY src/l5_fidelity_report.py src/l5_fidelity_report.py
 COPY src/l5_pmus_live_wiring.py src/l5_pmus_live_wiring.py
 COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
