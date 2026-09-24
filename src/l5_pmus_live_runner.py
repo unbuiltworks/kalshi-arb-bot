@@ -66,7 +66,10 @@ PROBE_LIMITS = dict(max_usd_per_market=D("5"), max_abs_residual=D("10"),
                     max_total_exposure_usd=D("5"), max_concurrent_markets=1,
                     daily_realized_loss_halt_usd=D("5"))
 
-PREFLIGHT_RETRY_S = 20.0
+#: retried quickly: until it passes, an armed runner cannot act on the
+#: window, and L5 opens within seconds (0045z: first action at +7.0s).
+#: Five GETs per attempt, only until the first PASS of each window.
+PREFLIGHT_RETRY_S = 3.0
 HB_EVERY_S = 60.0
 
 
