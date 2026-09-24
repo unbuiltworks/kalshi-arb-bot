@@ -19,6 +19,10 @@ COPY src/l5_preview_session.py src/l5_preview_session.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# the frozen engine, needed only because the probe envelope imports through
+# it. Pure decision code: no transport, no endpoint, no credential.
+COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
+COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY scripts/__init__.py scripts/__init__.py
 COPY scripts/pmus_preview_oneshot.py scripts/pmus_preview_oneshot.py
 
