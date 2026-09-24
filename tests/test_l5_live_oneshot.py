@@ -782,3 +782,151 @@ def test_both_runners_use_the_same_action_feed():
     assert P.new_l5_actions is WA.new_l5_actions
     assert R.new_l5_actions is WA.new_l5_actions
     assert P.current_slug is WA.current_slug is R.current_slug
+
+
+# ------------------------------------------------------------- observe only
+#
+# Probes 01 and 02 both died in the pre-execution path and both spent a money
+# authorization to find out. Observe-only exercises that same production path
+# with no capability to place an order. The impossibility must be structural.
+
+def observe(tmp_path, monkeypatch, *, rows=None, books=None, transport=None,
+            market_now=None):
+    ws_market = MARKET
+    ws = P.window_start(ws_market)
+    t = {"now": (market_now if market_now is not None else ws + 1.0)}
+    monkeypatch.setattr(P, "current_slug", lambda now=None: ws_market)
+    served = {"done": False}
+
+    def activity(limit=100):
+        if served["done"]:
+            return []
+        served["done"] = True
+        return list(rows or [])
+
+    def tick(s):
+        t["now"] += 60.0            # burn the window quickly
+
+    return P.observe(clock=lambda: t["now"], sleep=tick,
+                     book_feed=Feed(lambda: t["now"], books),
+                     activity=activity, transport=transport,
+                     state_path=str(tmp_path / "obs.json"),
+                     journal_path=str(tmp_path / "obs.jsonl"))
+
+
+def test_observe_only_never_claims_an_authorization(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(AUTH.Authorization, "claim",
+                        lambda self, m: calls.append(m))
+    rep = observe(tmp_path, monkeypatch)
+    assert calls == [], "observe-only must not claim"
+    assert rep["authorization_claimed"] is False
+    led = tmp_path / "auth.jsonl"
+    assert not led.exists(), "no ledger entry is written"
+
+
+def test_observe_only_works_without_any_owner_token(tmp_path, monkeypatch):
+    deauthorize(monkeypatch)
+    ws = P.window_start(MARKET)
+    rep = observe(tmp_path, monkeypatch, rows=[raw_at(ws + 10)])
+    assert rep["LABEL"] == "LIVE_OBSERVE_ONLY"
+    assert rep["actions_handled"] >= 1
+
+
+def test_observe_only_constructs_no_post_capable_transport(
+        tmp_path, monkeypatch):
+    """Construction-level impossibility, not a flag."""
+    from src import l5_pmus_transport as TP
+
+    def forbidden(*a, **kw):
+        raise AssertionError("observe-only constructed PmusTransport")
+
+    monkeypatch.setattr(TP, "PmusTransport", forbidden)
+    ws = P.window_start(MARKET)
+    rep = observe(tmp_path, monkeypatch, rows=[raw_at(ws + 10)])
+    assert rep["post_capable"] is False
+    assert rep["transport"] == "NULL"
+
+
+def test_the_observe_transport_cannot_send_even_if_asked(tmp_path):
+    """The object the executor holds has no way to transmit."""
+    import src.l5_live_execution as E
+    tp = E.NullTransport()
+    assert tp.armed is False
+    assert not hasattr(tp, "http")
+    with pytest.raises(E.NotArmed):
+        tp.submit({"market": "m", "side": "UP", "price": D("0.5"),
+                   "qty": D("1"), "client_order_id": "x"})
+    with pytest.raises(E.NotArmed):
+        tp.cancel("x")
+
+
+def test_an_executable_action_still_cannot_reach_a_venue(
+        tmp_path, monkeypatch):
+    """The required property: a would-submit is as far as it goes."""
+    ws = P.window_start(MARKET)
+    rep = observe(tmp_path, monkeypatch, rows=[raw_at(ws + 10, size=2.0)])
+    assert rep["submitted_live"] == 0
+    assert rep["armed"] is False
+    # whatever the decision path concluded, nothing left the process
+    assert rep["would_submit"] >= 0
+
+
+def test_observe_only_reaches_the_frozen_rule_and_the_translation(
+        tmp_path, monkeypatch):
+    """The exact path Probes 01 and 02 never exercised live."""
+    ws = P.window_start(MARKET)
+    rep = observe(tmp_path, monkeypatch, rows=[raw_at(ws + 10, size=2.0)])
+    assert rep["actions_handled"] == 1
+    assert rep["l5_native_decisions"] == 1, "the row was readable"
+    assert "UNREADABLE_ROW" not in (rep["refused_reason"] or {})
+
+
+def test_observe_only_carries_the_diagnostics(tmp_path, monkeypatch):
+    ws = P.window_start(MARKET)
+    rep = observe(tmp_path, monkeypatch, rows=[raw_at(ws + 10)])
+    f = rep["l5_feed"]
+    for k in ("polls", "polls_ok", "polls_failed", "raw_rows",
+              "rows_in_window", "new_actions", "last_ok_utc", "last_error"):
+        assert k in f, k
+    b = rep["book_feed"]
+    assert b["source"] == "AUTHENTICATED_WS"
+    assert "stop_reason" in b or "fresh" in b
+    assert rep["stage_reached"] == "done"
+
+
+def test_observe_only_surfaces_its_error_on_stdout(
+        tmp_path, monkeypatch, capsys):
+    def boom(slug, seen, act=None, health=None):
+        raise RuntimeError("observe loop fell over")
+
+    monkeypatch.setattr(P, "new_l5_actions", boom)
+    rep = observe(tmp_path, monkeypatch)
+    out = capsys.readouterr().out
+    assert "L5_PROBE_ERROR" in out
+    err = json.loads([l for l in out.splitlines()
+                      if l.startswith("L5_PROBE_ERROR")][0][len("L5_PROBE_ERROR "):])
+    assert err["mode"] == "OBSERVE_ONLY"
+    assert err["stage"] == "observing"
+    assert rep["stage_reached"] == "error"
+
+
+def test_observe_mode_is_off_unless_asked(monkeypatch):
+    monkeypatch.delenv(P.OBSERVE_ENV, raising=False)
+    assert P.observe_only_enabled() is False
+    monkeypatch.setenv(P.OBSERVE_ENV, "YES")
+    assert P.observe_only_enabled() is True
+
+
+def test_observe_mode_does_not_read_the_arming_variables(monkeypatch):
+    """It must neither require nor accept the money token."""
+    import ast
+    import inspect
+    src = inspect.getsource(P.observe)
+    for env in ("PMUS_Q1_LIVE", "PMUS_Q1_SESSION_ID", "PMUS_Q1_ARM"):
+        assert env not in src
+    tree = ast.parse(src.lstrip())
+    for n in ast.walk(tree):
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr in ("claim", "arm", "consume")):
+            pytest.fail("observe-only calls %s" % n.func.attr)
