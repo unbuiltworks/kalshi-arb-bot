@@ -38,9 +38,14 @@ from src import l5_pmus_live_wiring as W
 from src import l5_probe_manifest as PM
 from src import l5_session_integrity as IG
 from src import l5_session_journal as JN
+from src import l5_window_actions as WA
 
-WINDOW_S = 900.0
-SLUG_PREFIX = "cpc-btc-updown-15m-"
+#: the window arithmetic and the L5 action feed now live in one place,
+#: `l5_window_actions`, because the bounded probe had its own copy of them
+#: and the copy is what broke Probe 02. These are aliases, so this file's
+#: behaviour is unchanged.
+WINDOW_S = WA.WINDOW_S
+SLUG_PREFIX = WA.SLUG_PREFIX
 
 #: The executor refuses anything older than 30s, so the poll must be a small
 #: fraction of that or the probe manufactures the staleness it exists to
@@ -58,12 +63,7 @@ PREFLIGHT_RETRY_S = 60.0
 PREFLIGHT_UNTIL_S = 780.0
 
 
-def current_slug(now: Optional[float] = None) -> str:
-    now = time.time() if now is None else now
-    t = dt.datetime.fromtimestamp(int(now // WINDOW_S) * WINDOW_S,
-                                  dt.timezone.utc)
-    return "%s%s-%02d%02dz" % (SLUG_PREFIX, t.strftime("%Y-%m-%d"),
-                               t.hour, t.minute)
+current_slug = WA.current_slug
 
 
 def _state(slug: str) -> Dict[str, Any]:
@@ -74,12 +74,9 @@ def _state(slug: str) -> Dict[str, Any]:
 def live_books(slug: str) -> List[dict]:
     out = []
     for h in (_state(slug).get("bbo_history") or ()):
-        bid, ask = h.get("bid"), h.get("ask")
-        out.append({"t": h.get("t"), "bid": bid, "ask": ask,
-                    "bid_qty": h.get("bid_qty"), "ask_qty": h.get("ask_qty"),
-                    "status": ("OK" if bid is not None and ask is not None
-                               else "NO_BOOK" if bid is None and ask is None
-                               else "ONE_SIDED")})
+        out.append(WA.book_row(t=h.get("t"), bid=h.get("bid"),
+                               ask=h.get("ask"), bid_qty=h.get("bid_qty"),
+                               ask_qty=h.get("ask_qty")))
     out.sort(key=lambda r: (r["t"] is None, r["t"]))
     return out
 
@@ -93,44 +90,7 @@ def live_trades(slug: str) -> List[float]:
     return sorted(ts)
 
 
-def new_l5_actions(slug: str, seen: Set[str]) -> Tuple[List[dict], bool]:
-    """L5's trades in THIS window that we have not handled yet.
-
-    Returns (actions, feed_ok). `l5_activity` returns None when the FEED
-    FAILED, and an empty list when L5 simply has not traded. Collapsing those
-    with `or []` makes a broken feed report as a quiet market -- a window
-    saying l5_actions 0 would then be evidence of nothing at all while
-    looking like evidence of inactivity. They are kept apart.
-    """
-    from src import l5_pmus_realtime_observer as O
-    ws = OBS.window_start_epoch(slug)
-    rows = O.l5_activity(limit=100)
-    if rows is None:
-        return [], False
-    out = []
-    for r in rows:
-        try:
-            t = float(r.get("timestamp"))
-        except (TypeError, ValueError):
-            continue
-        if ws is None or not (ws <= t <= ws + WINDOW_S):
-            continue
-        key = O.action_key(r)
-        if key in seen:
-            continue
-        act = O.l5_to_pmus_action(r)
-        if not act.get("pmus_side"):
-            continue
-        seen.add(key)
-        now = time.time()
-        out.append({"action_key": key,
-                    "receipt_utc": dt.datetime.fromtimestamp(
-                        now, dt.timezone.utc).isoformat(),
-                    "l5_event_utc": dt.datetime.fromtimestamp(
-                        t, dt.timezone.utc).isoformat(),
-                    "observation_latency_s": round(now - t, 2),
-                    "l5": act, "pmus": {"slug": slug}})
-    return out, True
+new_l5_actions = WA.new_l5_actions
 
 
 class Window:

@@ -49,9 +49,17 @@ from src import l5_live_execution as EX
 from src import l5_pmus_live_wiring as W
 from src import l5_probe_manifest as PM
 from src import l5_session_journal as JN
+from src import l5_window_actions as WA
 
-WINDOW_S = 900.0
-SLUG_PREFIX = "cpc-btc-updown-15m-"
+#: window arithmetic and the L5 action feed come from ONE implementation,
+#: the one the continuous recorder has run across hundreds of windows. This
+#: file had private copies; the copy of the action builder is what broke
+#: Probe 02, so there are no copies here now.
+WINDOW_S = WA.WINDOW_S
+SLUG_PREFIX = WA.SLUG_PREFIX
+current_slug = WA.current_slug
+window_start = WA.window_start
+new_l5_actions = WA.new_l5_actions
 
 #: the executor refuses an action older than 30s, so the poll must be a small
 #: fraction of that rather than a source of the staleness it guards against.
@@ -68,56 +76,6 @@ PREFLIGHT_UNTIL_S = 780.0
 #: stop opening new orders before the close, so a fill has somewhere to go
 #: and the cancel/reconcile tail is not racing the window end.
 NO_NEW_ORDERS_AFTER_S = 810.0
-
-
-def current_slug(now: Optional[float] = None) -> str:
-    now = time.time() if now is None else now
-    t = dt.datetime.fromtimestamp(int(now // WINDOW_S) * WINDOW_S,
-                                  dt.timezone.utc)
-    return "%s%s-%02d%02dz" % (SLUG_PREFIX, t.strftime("%Y-%m-%d"),
-                               t.hour, t.minute)
-
-
-def window_start(slug: str) -> float:
-    """Epoch seconds of the window this slug names."""
-    tail = slug[len(SLUG_PREFIX):]
-    day, hhmm = tail[:10], tail[11:15]
-    t = dt.datetime.strptime("%s %s" % (day, hhmm), "%Y-%m-%d %H%M")
-    return t.replace(tzinfo=dt.timezone.utc).timestamp()
-
-
-def new_l5_actions(slug: str, seen: Set[str],
-                   activity=None) -> Tuple[List[dict], bool]:
-    """L5's trades in THIS window that we have not handled yet.
-
-    `None` from the feed means the FEED FAILED; an empty list means L5 has
-    not traded. They are kept apart, because a broken feed reported as a
-    quiet market is evidence of nothing that looks like evidence.
-    """
-    if activity is None:
-        from src import l5_pmus_realtime_observer as O
-        activity = O.l5_activity
-    from src import l5_authenticated_observation as OBS
-    ws = OBS.window_start_epoch(slug)
-    rows = activity(limit=100)
-    if rows is None:
-        return [], False
-    out = []
-    for r in rows:
-        try:
-            t = float(r.get("timestamp"))
-        except (TypeError, ValueError):
-            continue
-        if ws is not None and not (ws <= t < ws + WINDOW_S):
-            continue
-        key = str(r.get("transactionHash") or r.get("id") or t)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(dict(r, action_key=key,
-                        receipt_utc=dt.datetime.now(
-                            dt.timezone.utc).isoformat()))
-    return out, True
 
 
 class Probe:
@@ -137,6 +95,10 @@ class Probe:
         self.sleep = sleep
         self.activity = activity
         self.limits = PM.probe_limits()
+        #: where the probe got to, so an exception can name its stage
+        #: instead of disappearing into the volume.
+        self.stage = "constructed"
+        self.l5_health = WA.FeedHealth()
         self.records: List[dict] = []
         self.preflight: Optional[Dict[str, Any]] = None
         self.armed = False
@@ -154,6 +116,7 @@ class Probe:
         return dt.datetime.fromtimestamp(self.clock(), dt.timezone.utc)
 
     def run_preflight(self) -> Dict[str, Any]:
+        self.stage = "preflight"
         try:
             self.preflight = self.tp.preflight()
         except BaseException as exc:                           # noqa: BLE001
@@ -175,6 +138,7 @@ class Probe:
             raise AUTH.Refused("PREFLIGHT_NOT_PASSED",
                                {"preflight": (self.preflight or {})
                                 .get("preflight", "NOT_RUN")})
+        self.stage = "arming"
         out = self.tp.arm()          # itself re-checks preflight AND the token
         self.armed = True
         self.journal.write("armed", {"market": self.market, "detail": out})
@@ -184,12 +148,14 @@ class Probe:
 
     def work_window(self, deadline: float) -> None:
         """Handle actions as they are observed, until the window closes."""
+        self.stage = "working_window"
         while self.clock() < deadline:
             now = self.clock()
             if now >= deadline - (WINDOW_S - NO_NEW_ORDERS_AFTER_S):
                 break
             actions, feed_ok = new_l5_actions(self.market, self.seen,
-                                              self.activity)
+                                              self.activity,
+                                              health=self.l5_health)
             if not feed_ok:
                 self.journal.write("feed_failed", {"market": self.market})
             if actions:
@@ -212,6 +178,7 @@ class Probe:
 
     def close_out(self) -> Dict[str, Any]:
         """Cancel, then let the VENUE say what is true. Always runs."""
+        self.stage = "close_out"
         cancelled, cancel_errors = [], []
         if self.armed:
             for coid, o in self.store.live_orders().items():
@@ -280,6 +247,8 @@ class Probe:
                     self.store.outstanding_by_market().get(self.market, D(0))),
                 "live_orders": self.store.live_order_count()},
             "book_feed": self.feed.health(),
+            "l5_feed": self.l5_health.as_dict(),
+            "stage_reached": self.stage,
             "close_out": dict(close),
             "live_limits": self.limits.as_dict(),
             "worst_case": PM.worst_case(),
@@ -328,6 +297,18 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
                   clock=clock, sleep=sleep, activity=activity)
 
     start = window_start(market)
+    if start is None:
+        out = {"LABEL": "LIVE_BOUNDED_PROBE", "market": market,
+               "refused": "WINDOW_NOT_ESTABLISHED",
+               "detail": {"slug": market,
+                          "note": "the window this slug names cannot be "
+                                  "read; nothing is decided against a "
+                                  "window we cannot place in time"},
+               "armed": False, "submitted": 0}
+        journal.write("window_not_established", out)
+        auth.consume({"armed": False, "submitted": 0,
+                      "refused": "WINDOW_NOT_ESTABLISHED"})
+        return out
     deadline = start + WINDOW_S
     close: Dict[str, Any] = {}
     try:
@@ -358,9 +339,20 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
-        journal.write("probe_error", {"market": market,
-                                      "error": type(exc).__name__,
-                                      "detail": str(exc)[:300]})
+        # STDOUT as well as the journal. Probe 02's reason went only to the
+        # volume, which cannot be read once the one-shot container exits,
+        # so the failure was undiagnosable from outside.
+        from src.l5_pmus_transport import redact
+        err = {"LABEL": "LIVE_PROBE_ERROR", "market": market,
+               "stage": probe.stage,
+               "error": type(exc).__name__,
+               "detail": redact(str(exc)[:300]),
+               "l5_feed": probe.l5_health.as_dict(),
+               "book_feed": feed.health(),
+               "note": ("redacted through the transport's own scrubber; no "
+                        "credential, header or signature appears here")}
+        journal.write("probe_error", err)
+        print("L5_PROBE_ERROR " + json.dumps(err, default=str), flush=True)
     finally:
         # 6. close out and spend the authorization, WHATEVER happened above.
         try:

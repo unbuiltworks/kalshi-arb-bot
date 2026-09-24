@@ -53,6 +53,10 @@ COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 COPY src/l5_live_book_feed.py src/l5_live_book_feed.py
 # observation: L5's public activity feed and window arithmetic
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
+# the ONE implementation of the window arithmetic and the L5 action
+# feed, shared with the continuous recorder. The probe's private copy
+# of the action builder is what broke Probe 02.
+COPY src/l5_window_actions.py src/l5_window_actions.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/pmus_interaction_classifier.py src/pmus_interaction_classifier.py
 # evidence and the one-market authorization ledger
