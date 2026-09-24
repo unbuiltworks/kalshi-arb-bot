@@ -72,13 +72,19 @@ def test_lost_credentials_halt():
     {"records": []},                                   # no L5 actions
     {"records": [{"market": MK, "refused_reason": "NO_BOOK"}]},
     {"last_book_t": None},                             # nothing yet
-    # subscribed a moment ago and the first book has not landed: ordinary
-    {"last_book_t": None, "subscribed_at": time.time() - 3.0},
+    # subscribed a moment ago and the first book has not landed: ordinary.
+    # SUBSCRIBED_JUST_NOW is resolved when the test runs, not when the
+    # decorator is evaluated: a literal time.time() here is fixed at import
+    # and "3 seconds ago" silently becomes "however long the suite took",
+    # which trips the grace and fails only in a full run.
+    {"last_book_t": None, "subscribed_at": "SUBSCRIBED_JUST_NOW"},
 ])
 def test_ordinary_quiet_does_NOT_halt(case):
     kw = {"window_market": MK, "last_book_t": time.time(),
           "submitted_live": 0}
     kw.update(case)
+    if kw.get("subscribed_at") == "SUBSCRIBED_JUST_NOW":
+        kw["subscribed_at"] = time.time() - 3.0
     assert IG.check(**kw)["ok"] is True
 
 
