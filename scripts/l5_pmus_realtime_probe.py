@@ -30,7 +30,7 @@ import json
 import os
 import time
 from decimal import Decimal as D
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from src import l5_authenticated_observation as OBS
 from src import l5_live_execution as EX
@@ -52,6 +52,10 @@ POLL_S = 5.0
 #: run executed at +899s and every market field came back empty because the
 #: window had effectively closed.
 PREFLIGHT_AT_S = 45.0
+
+#: retry cadence and cutoff for the preflight within a window
+PREFLIGHT_RETRY_S = 60.0
+PREFLIGHT_UNTIL_S = 780.0
 
 
 def current_slug(now: Optional[float] = None) -> str:
@@ -89,12 +93,22 @@ def live_trades(slug: str) -> List[float]:
     return sorted(ts)
 
 
-def new_l5_actions(slug: str, seen: Set[str]) -> List[dict]:
-    """L5's trades in THIS window that we have not handled yet."""
+def new_l5_actions(slug: str, seen: Set[str]) -> Tuple[List[dict], bool]:
+    """L5's trades in THIS window that we have not handled yet.
+
+    Returns (actions, feed_ok). `l5_activity` returns None when the FEED
+    FAILED, and an empty list when L5 simply has not traded. Collapsing those
+    with `or []` makes a broken feed report as a quiet market -- a window
+    saying l5_actions 0 would then be evidence of nothing at all while
+    looking like evidence of inactivity. They are kept apart.
+    """
     from src import l5_pmus_realtime_observer as O
     ws = OBS.window_start_epoch(slug)
+    rows = O.l5_activity(limit=100)
+    if rows is None:
+        return [], False
     out = []
-    for r in (O.l5_activity(limit=100) or []):
+    for r in rows:
         try:
             t = float(r.get("timestamp"))
         except (TypeError, ValueError):
@@ -116,7 +130,7 @@ def new_l5_actions(slug: str, seen: Set[str]) -> List[dict]:
                         t, dt.timezone.utc).isoformat(),
                     "observation_latency_s": round(now - t, 2),
                     "l5": act, "pmus": {"slug": slug}})
-    return out
+    return out, True
 
 
 class Window:
@@ -129,6 +143,8 @@ class Window:
         self.latencies: List[float] = []
         self.preflight: Optional[dict] = None
         self.preflight_at: Optional[float] = None
+        self.preflight_attempts = 0
+        self.last_preflight_t: Optional[float] = None
         # Continuously SAMPLED observation. The recorder's live state is a
         # ring buffer -- bbo_history keeps 2000 entries and trades 500 -- and
         # an active BTC15m window overruns both, so scanning it at the window
@@ -142,6 +158,8 @@ class Window:
         self.first_trade_t: Optional[float] = None
         self.book_states_seen = 0
         self.trades_seen = 0
+        self.feed_polls = 0
+        self.feed_failures = 0
         self._book_seen: Set[float] = set()
         self._trade_seen: Set[float] = set()
 
@@ -278,6 +296,13 @@ class Window:
                             "500 trades) and an active window overruns both, "
                             "so a close-of-window scan sees only the tail"),
             "l5_actions": len(self.records),
+            # a window reporting 0 actions means L5 was quiet ONLY if the feed
+            # was healthy; otherwise it means we could not see
+            "l5_feed": {"polls": self.feed_polls,
+                        "failures": self.feed_failures,
+                        "healthy": self.feed_failures == 0,
+                        "zero_actions_is_trustworthy": (
+                            self.feed_failures == 0 and self.feed_polls > 0)},
             # AGE OF L5'S ACTION when we decided on it: venue event time ->
             # our observation. This is NOT what the executor's 30s
             # STALE_ACTION gate measures; that gate measures our own
@@ -306,6 +331,7 @@ class Window:
             "preflight": ((self.preflight or {}).get("preflight")
                           if self.preflight else "NOT_RUN"),
             "preflight_at_s": self.preflight_at,
+            "preflight_attempts": self.preflight_attempts,
             "preflight_blockers": [
                 c["check"] for c in ((self.preflight or {}).get("checks") or [])
                 if not c.get("passed") and c.get("blocking", True)],
@@ -355,9 +381,20 @@ def run_forever(state_path: str, journal_path: str,
 
             now = time.time()
 
-            # preflight WHILE the market is live, not as it closes
-            if (win.preflight is None
-                    and now - win.start >= PREFLIGHT_AT_S):
+            # Preflight WHILE the market is live, retried until it passes.
+            # The market metadata read goes to the PUBLIC gateway, which does
+            # not expose a BTC15m window in its first minutes -- the same
+            # gateway behaviour already established for the book. One early
+            # shot therefore fails on market_readable for a reason that has
+            # nothing to do with the account. Retrying costs nothing and
+            # records the earliest attempt that actually succeeded.
+            due = (win.preflight is None
+                   or (win.preflight.get("preflight") != "PASSED"
+                       and now - (win.last_preflight_t or 0) >= PREFLIGHT_RETRY_S
+                       and now - win.start <= PREFLIGHT_UNTIL_S))
+            if due and now - win.start >= PREFLIGHT_AT_S:
+                win.last_preflight_t = now
+                win.preflight_attempts += 1
                 tp = (transport_factory or _default_transport)(slug)
                 try:
                     win.preflight = tp.preflight()
@@ -375,7 +412,10 @@ def run_forever(state_path: str, journal_path: str,
             books_poll = live_books(slug)
             win.observe(books_poll, live_trades(slug))
 
-            actions = new_l5_actions(slug, seen)
+            actions, feed_ok = new_l5_actions(slug, seen)
+            win.feed_polls += 1
+            if not feed_ok:
+                win.feed_failures += 1
             if actions:
                 books = books_poll
                 tp = (transport_factory or _default_transport)(slug)
