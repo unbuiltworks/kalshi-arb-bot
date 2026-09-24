@@ -509,3 +509,24 @@ def test_pre_book_frames_are_sampled_for_diagnosis():
     f = rep["pre_book_sample"][0]
     assert f["n_bids"] == 0 and f["n_offers"] == 1 and f["t_offset_s"] == 3.0
     assert rep["state_first_seen_offset_s"] == {"MARKET_STATE_OPEN": 3.0}
+
+
+def test_open_window_without_a_book_is_resubscribed_for_market_data():
+    clock = {"t": WS - 60.0}
+    b = AB.AuthBook(clock=lambda: clock["t"])
+    b.subscribed = [SLUG]
+    assert b.resub_due(clock["t"]) == []            # not open yet
+    clock["t"] = WS + 1.0
+    assert b.resub_due(clock["t"]) == [SLUG]        # open, no book
+    b.note_resub(SLUG, clock["t"])
+    assert b.resub_due(WS + 2.0) == []              # not again so soon
+    assert b.resub_due(WS + 1.0 + AB.RESUB_EVERY_S) == [SLUG]
+    b.ingest(ws_book(), WS + 5.0)                   # snapshot arrives
+    assert b.resub_due(WS + 30.0) == []
+    frame = AB.AuthBook.market_data_frame(SLUG)
+    from src import pmus_ws_evidence_recorder as R
+    R.guard_outbound(frame)                         # read-only frame
+    assert frame["subscribe"]["subscription_type"] == R.SUB_MARKET_DATA
+    assert frame["subscribe"]["market_slugs"] == [SLUG]
+    rep = b.window_report(SLUG)
+    assert rep["book_resubscribes"] == {"first_offset_s": 1.0, "count": 1}

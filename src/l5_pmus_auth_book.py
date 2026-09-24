@@ -40,6 +40,13 @@ WINDOW_S = 900
 LEAD_S = 120.0
 #: reconnect with a fresh subscription set once this many slugs accumulate
 MAX_SUBSCRIBED = 6
+#: re-send the MARKET-DATA subscription for an open window with no book yet
+#: this often. MEASURED 2026-09-24: a market-data subscription placed BEFORE
+#: a window opens stays silent for ~3 minutes (0015z: 389 trade frames from
+#: +6.7s, first book frame +184.5s; 2345z: +186.7s), while a subscription
+#: placed on an already-live market receives the full snapshot at once
+#: (0000z: subscribed at +300.4s, 17x10-level snapshot at +300.5s).
+RESUB_EVERY_S = 3.0
 
 
 def window_start(now: Optional[float] = None) -> int:
@@ -88,6 +95,8 @@ class AuthBook:
         self.pre_book: Dict[str, List[dict]] = {}
         self.pre_book_n: Dict[str, int] = {}
         self.first_state: Dict[str, Dict[str, float]] = {}
+        #: slug -> [first resubscribe t, last resubscribe t, count]
+        self.resub: Dict[str, List[float]] = {}
         self.connected = False
         self.last_frame_t: Optional[float] = None
         self.connects = 0
@@ -227,6 +236,10 @@ class AuthBook:
                 "trades_seen": len(s.get("trades") or []),
                 "subscribed_before_open": slug in self.subscribed_at_open,
                 "pre_book_frames": self.pre_book_n.get(slug, 0),
+                "book_resubscribes": (
+                    {"first_offset_s": round(self.resub[slug][0] - ws, 1),
+                     "count": self.resub[slug][2]}
+                    if slug in self.resub and ws else None),
                 "pre_book_sample": [
                     dict(f, t_offset_s=round(f["t"] - ws, 1) if ws else None)
                     for f in self.pre_book.get(slug, [])],
@@ -234,6 +247,33 @@ class AuthBook:
                     k: round(v - ws, 1) if ws else None
                     for k, v in self.first_state.get(slug, {}).items()},
             }
+
+    def resub_due(self, now: float) -> List[str]:
+        """Open windows we subscribed to that still have no book."""
+        out = []
+        for slug in self.subscribed:
+            st = slug_start(slug)
+            if st is None or now < st or now >= st + WINDOW_S:
+                continue
+            if slug in self.first_book:
+                continue
+            r = self.resub.get(slug)
+            if r is None or now - r[1] >= RESUB_EVERY_S:
+                out.append(slug)
+        return out
+
+    def note_resub(self, slug: str, now: float) -> None:
+        r = self.resub.get(slug)
+        self.resub[slug] = [now, now, 1] if r is None else [r[0], now, r[2] + 1]
+
+    @staticmethod
+    def market_data_frame(slug: str) -> dict:
+        """A MARKET-DATA-only subscribe: the trade subscription already
+        works from the first second and is not duplicated."""
+        import uuid
+        return {"subscribe": {"request_id": "mkre-%s" % uuid.uuid4().hex[:10],
+                              "subscription_type": R.SUB_MARKET_DATA,
+                              "market_slugs": [slug]}}
 
     def status(self) -> Dict[str, Any]:
         now = self.clock()
@@ -291,6 +331,11 @@ class AuthBook:
                             if len(self.subscribed) + len(want) > MAX_SUBSCRIBED:
                                 break                  # fresh, small set
                             await self._subscribe(ws, want)
+                        now = self.clock()
+                        for slug in self.resub_due(now):
+                            await ws.send(json.dumps(R.guard_outbound(
+                                self.market_data_frame(slug))))
+                            self.note_resub(slug, now)
                         try:
                             raw = await asyncio.wait_for(ws.recv(), timeout=5)
                         except asyncio.TimeoutError:
