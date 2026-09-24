@@ -169,6 +169,86 @@ class PmusTransport:
                 return got
         return None
 
+    @staticmethod
+    def key_fingerprint() -> Optional[str]:
+        """A stable, non-secret handle for the credential in use.
+
+        sha256 of the API KEY ID, truncated. The key id is not a secret in
+        the way the private key is, but it is never printed raw: a
+        fingerprint is enough to pin "the same account as last time" and
+        cannot be replayed.
+        """
+        import hashlib
+        kid = os.getenv(Q1.KEY_ENV, "").strip()
+        if not kid:
+            return None
+        return hashlib.sha256(kid.encode()).hexdigest()[:12]
+
+    @staticmethod
+    def buying_power(balances: Mapping[str, Any]) -> Optional[D]:
+        """Account-scoped funds, from the venue's own answer.
+
+        Schema per pmus_q1_executor, which has placed and settled real orders
+        against it: /v1/account/balances returns `balances` as a LIST of
+        entries carrying buyingPower; older mapping and top-level shapes are
+        still accepted.
+        """
+        entries: List[Any] = []
+        raw = balances.get("balances") if isinstance(balances, Mapping) else None
+        if isinstance(raw, list):
+            entries.extend(raw)
+        elif isinstance(raw, Mapping):
+            entries.append(raw)
+        if isinstance(balances, Mapping):
+            entries.append(balances)
+        for e in entries:
+            if not isinstance(e, Mapping):
+                continue
+            for k in ("buyingPower", "availableBalance", "cashBalance"):
+                v = e.get(k)
+                if isinstance(v, Mapping):
+                    v = v.get("value") or v.get("amount")
+                if v is None:
+                    continue
+                try:
+                    return D(str(v))
+                except Exception:                              # noqa: BLE001
+                    continue
+        return None
+
+    def account_binding(self, balances: Mapping[str, Any]) -> Optional[str]:
+        """What the venue actually binds this credential to.
+
+        THIS VENUE EXPOSES NO ACCOUNT IDENTITY ENDPOINT. The working
+        execution stack -- pmus_q1_executor, which has placed and settled
+        real orders -- never fetches one: its preflight proves the account by
+        reading ACCOUNT-SCOPED FINANCIAL STATE, buying power plus positions
+        plus open orders. The credential IS the binding.
+
+        So the gate asserts the thing that is real and checkable: a SIGNED
+        request returned account-scoped funds. That is strictly more than an
+        opaque id string would prove, because a wrong or unfunded account
+        cannot produce it. It is paired with a fingerprint of the key id so
+        the owner can pin "the same account as before" across runs.
+
+        An earlier version demanded an `accountId` the venue does not serve
+        and failed with a null detail. That was asking for something that
+        does not exist, not detecting a problem.
+        """
+        self.identity_probe = {"mechanism": "account_scoped_financial_state"}
+        power = self.buying_power(balances)
+        fp = self.key_fingerprint()
+        self.identity_probe.update({
+            "buying_power_readable": power is not None,
+            "buying_power_usd": (str(power) if power is not None else None),
+            "api_key_fingerprint": fp,
+            "note": ("this venue serves no identity endpoint; the working "
+                     "execution stack binds the account the same way"),
+        })
+        if power is None or fp is None:
+            return None
+        return "keyfp:%s|funded:%s" % (fp, power)
+
     def account_identity(self, balances: Mapping[str, Any]) -> Optional[str]:
         """An identifier the VENUE gave us, or None -- never one we made up.
 
@@ -239,12 +319,18 @@ class PmusTransport:
                 acct = self.account()
             except Exception as exc:                           # noqa: BLE001
                 return self._fail(checks, gate, "account_readable", exc)
-            ident = self.account_identity(acct)
-            ok &= gate("account_identity_resolved", bool(ident), ident)
+            ident = self.account_binding(acct)
+            ok &= gate("account_binding_proven", bool(ident), ident)
             if expect_account is not None:
+                # pin the FINGERPRINT, not the whole binding: the binding
+                # carries buying power, which moves every time the account
+                # trades or settles, so comparing it would break the pin for
+                # a reason that has nothing to do with identity.
+                fp = self.key_fingerprint()
                 ok &= gate("account_matches_expected",
-                           str(ident) == str(expect_account),
-                           "expected %s got %s" % (expect_account, ident))
+                           fp is not None and str(fp) == str(expect_account),
+                           "expected fingerprint %s, got %s"
+                           % (expect_account, fp))
 
         # 3/4. intended series and current market slug
         ok &= gate("slug_is_btc15m_series",

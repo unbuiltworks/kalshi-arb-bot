@@ -30,7 +30,7 @@ class FakeHTTP:
     def __init__(self, **over):
         self.calls = []
         self.data = {
-            "/v1/account/balances": {"accountId": "acct-123"},
+            "/v1/account/balances": {"balances": [{"buyingPower": "42.50"}]},
             "/v1/markets/%s/bbo" % SLUG: {"marketData": {
                 "slug": SLUG, "seriesSlug": "btc-updown-15m",
                 "state": "MARKET_STATE_OPEN",
@@ -172,8 +172,17 @@ def test_the_wrong_series_is_refused(creds):
 
 def test_the_wrong_account_is_refused(creds):
     rep = P.preflight(SLUG, P.GetOnly(FakeHTTP()),
-                      expect_account="someone-else", now=NOW)
+                      expect_account="deadbeefcafe", now=NOW)
     assert "account_matches_expected" in failed(rep)
+
+
+def test_binding_is_proven_by_account_scoped_funds(creds):
+    rep = run()
+    assert "account_binding_proven" not in failed(rep)
+    det = [c["detail"] for c in rep["checks"]
+           if c["check"] == "account_binding_proven"][0]
+    assert "42.50" in str(det)
+    assert "key-aaaaaaaaaaaa" not in json.dumps(rep)
 
 
 def test_owner_arm_is_reported_but_never_blocking(creds):

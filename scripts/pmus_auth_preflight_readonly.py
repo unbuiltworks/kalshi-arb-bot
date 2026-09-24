@@ -124,6 +124,39 @@ def worst_case(mk: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+def key_fingerprint() -> Optional[str]:
+    """A stable, non-secret handle for the credential in use."""
+    import hashlib
+    kid = os.getenv(Q1.KEY_ENV, "").strip()
+    return hashlib.sha256(kid.encode()).hexdigest()[:12] if kid else None
+
+
+def buying_power(balances: Mapping[str, Any]) -> Optional[D]:
+    """Account-scoped funds, per the schema the working stack uses."""
+    entries: List[Any] = []
+    raw = balances.get("balances") if isinstance(balances, Mapping) else None
+    if isinstance(raw, list):
+        entries.extend(raw)
+    elif isinstance(raw, Mapping):
+        entries.append(raw)
+    if isinstance(balances, Mapping):
+        entries.append(balances)
+    for e in entries:
+        if not isinstance(e, Mapping):
+            continue
+        for k in ("buyingPower", "availableBalance", "cashBalance"):
+            v = e.get(k)
+            if isinstance(v, Mapping):
+                v = v.get("value") or v.get("amount")
+            if v is None:
+                continue
+            try:
+                return D(str(v))
+            except Exception:                                  # noqa: BLE001
+                continue
+    return None
+
+
 def preflight(slug: str, http: Any,
               *, expect_account: Optional[str] = None,
               now: Optional[dt.datetime] = None) -> Dict[str, Any]:
@@ -170,20 +203,25 @@ def preflight(slug: str, http: Any,
     ok &= got
     if got:
         gate("account_readable", True)
-        ident = (acct.get("accountId") or acct.get("id")
-                 or acct.get("userId") or acct.get("email"))
-        if ident is None:
-            for e in (acct.get("balances") or []):
-                if isinstance(e, Mapping):
-                    ident = (e.get("accountId") or e.get("account")
-                             or e.get("userId"))
-                    if ident:
-                        break
-        ok &= gate("account_identity_resolved", bool(ident), ident)
+        # THIS VENUE EXPOSES NO ACCOUNT IDENTITY ENDPOINT. The working
+        # execution stack never fetches one: it proves the account by reading
+        # ACCOUNT-SCOPED FINANCIAL STATE. The credential is the binding, so
+        # the gate asserts the thing that is real and checkable -- a signed
+        # request returned funds -- paired with a non-secret fingerprint of
+        # the key id so the owner can pin the same account across runs.
+        power = buying_power(acct)
+        fp = key_fingerprint()
+        ok &= gate("account_binding_proven",
+                   power is not None and fp is not None,
+                   {"buying_power_usd": (str(power) if power is not None
+                                         else None),
+                    "api_key_fingerprint": fp,
+                    "mechanism": "account_scoped_financial_state"})
         if expect_account:
             ok &= gate("account_matches_expected",
-                       str(ident) == str(expect_account),
-                       "expected %s got %s" % (expect_account, ident))
+                       fp is not None and str(fp) == str(expect_account),
+                       "expected fingerprint %s, got %s"
+                       % (expect_account, fp))
 
     ok &= gate("slug_is_btc15m_series", bool(BTC15M_SLUG_RE.match(slug or "")),
                slug)

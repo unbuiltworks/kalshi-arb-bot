@@ -26,7 +26,7 @@ class FakeHTTP:
     def __init__(self, **over):
         self.calls = []
         self.data = {
-            "/v1/account/balances": {"accountId": "acct-123"},
+            "/v1/account/balances": {"balances": [{"buyingPower": "42.50"}]},
             "/v1/markets/%s/bbo" % SLUG: {"marketData": {
                 "slug": SLUG, "seriesSlug": "btc-updown-15m",
                 "state": "MARKET_STATE_OPEN",
@@ -175,6 +175,63 @@ def test_account_mismatch_is_refused(creds):
     rep = json.loads(str(e.value))
     assert "account_matches_expected" in [
         c["check"] for c in rep["checks"] if not c["passed"]]
+
+
+# --------------------------------------------- account binding, not identity
+
+def test_binding_is_proven_by_account_scoped_funds(creds):
+    rep = tp().preflight()
+    checks = {c["check"]: c["passed"] for c in rep["checks"]}
+    assert checks["account_binding_proven"] is True
+    probe = rep["identity_probe"]
+    assert probe["buying_power_readable"] is True
+    assert probe["buying_power_usd"] == "42.50"
+    assert probe["mechanism"] == "account_scoped_financial_state"
+
+
+def test_unreadable_funds_fail_the_binding_gate(creds):
+    with pytest.raises(T.PreflightFailed) as e:
+        tp(**{"/v1/account/balances": {"balances": []}}).preflight()
+    rep = json.loads(str(e.value))
+    failed = [c["check"] for c in rep["checks"] if not c["passed"]]
+    assert "account_binding_proven" in failed
+
+
+def test_the_key_fingerprint_never_exposes_the_key(creds):
+    rep = tp().preflight()
+    fp = rep["identity_probe"]["api_key_fingerprint"]
+    assert fp and len(fp) == 12
+    assert "key-aaaaaaaaaaaa" not in json.dumps(rep)
+    assert fp != "key-aaaaaaaaaaaa"
+
+
+def test_the_binding_pins_the_same_account_across_runs(creds):
+    a = tp().preflight()["identity_probe"]["api_key_fingerprint"]
+    b = tp().preflight()["identity_probe"]["api_key_fingerprint"]
+    assert a == b          # stable, so a silent account change is visible
+
+
+def test_the_pin_is_on_the_fingerprint_not_on_the_balance(creds):
+    """Buying power moves whenever the account trades or settles; pinning the
+    whole binding would break the pin for a reason unrelated to identity."""
+    fp = tp().preflight()["identity_probe"]["api_key_fingerprint"]
+    rep = tp().preflight(expect_account=fp)          # matches, funds vary
+    assert rep["preflight"] == "PASSED"
+    rich = tp(**{"/v1/account/balances":
+                 {"balances": [{"buyingPower": "999.99"}]}})
+    assert rich.preflight(expect_account=fp)["preflight"] == "PASSED"
+
+
+def test_a_different_account_fingerprint_is_refused(creds):
+    with pytest.raises(T.PreflightFailed) as e:
+        tp().preflight(expect_account="deadbeefcafe")
+    assert "account_matches_expected" in str(e.value)
+
+
+def test_missing_credentials_cannot_produce_a_binding(monkeypatch, creds):
+    monkeypatch.delenv(Q1.KEY_ENV)
+    t = tp()
+    assert t.account_binding({"balances": [{"buyingPower": "1"}]}) is None
 
 
 def test_position_drift_blocks_arming(creds):
