@@ -117,3 +117,42 @@ def test_the_preview_image_carries_no_order_capable_module():
                    "pmus_micro_executor", "pmus_migration_close"):
         assert not any(banned in c for c in copied), \
             "%s must not be COPY'd into the preview image" % banned
+
+
+def test_the_observer_image_can_actually_import_what_its_preflight_needs():
+    """A near-miss worth pinning: the corrected outcome gate reads the
+    published contract, and that data briefly lived in the module carrying
+    the POST-capable preview transport. Shipping it would have meant either
+    an ImportError in production or a POST path in the GET-only image."""
+    import ast
+    import re
+    from pathlib import Path
+    df = (DEPLOY / "pmus_ws_recorder" / "Dockerfile").read_text()
+    copied = set(re.findall(r"^COPY (\S+)", df, re.M))
+
+    # every src module the preflight and probe import must be in the image
+    for entry in ("scripts/pmus_auth_preflight_readonly.py",
+                  "scripts/l5_pmus_realtime_probe.py",
+                  "src/l5_pmus_transport.py"):
+        assert entry in copied, "%s not in the observer image" % entry
+        tree = ast.parse(Path(entry).read_text())
+        for n in ast.walk(tree):
+            mods = []
+            if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("src"):
+                mods = ([a.name for a in n.names] if n.module == "src"
+                        else [n.module.split(".")[-1]])
+            for m in mods:
+                f = "src/%s.py" % m
+                if Path(f).exists():
+                    assert f in copied, \
+                        "%s imports %s, which is not in the observer image" % (entry, f)
+
+
+def test_the_observer_image_still_has_no_post_capable_module():
+    import re
+    df = (DEPLOY / "pmus_ws_recorder" / "Dockerfile").read_text()
+    copied = re.findall(r"^COPY (\S+)", df, re.M)
+    for banned in ("l5_preview_session", "pmus_q1_executor",
+                   "pmus_micro_executor", "pmus_migration_close"):
+        assert not any(banned in c for c in copied), \
+            "%s can POST and must not be in the observer image" % banned

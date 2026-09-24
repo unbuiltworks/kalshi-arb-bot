@@ -49,6 +49,45 @@ COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
 COPY scripts/priority_vs_rotation_eval.py scripts/priority_vs_rotation_eval.py
 COPY scripts/spring_candidate_tape_read.py scripts/spring_candidate_tape_read.py
 COPY scripts/pmus_candidate_tape_readonly.py scripts/pmus_candidate_tape_readonly.py
+# Authenticated identity/market preflight. It runs WHERE THE CREDENTIALS
+# ALREADY LIVE so they are never copied to another service, and it keeps
+# this image's promise that no order endpoint exists in it: it imports
+# src/pmus_auth.py, which carries the Ed25519 signing and NOTHING that can
+# place, amend or cancel an order. pmus_q1_executor is deliberately NOT
+# copied here -- it holds place_limit_buy/cancel_all_deadman/run_campaign.
+COPY scripts/pmus_auth_preflight_readonly.py scripts/pmus_auth_preflight_readonly.py
+COPY src/pmus_auth.py src/pmus_auth.py
+COPY src/pmus_fees.py src/pmus_fees.py
+COPY scripts/l5_raw_tape_observation.py scripts/l5_raw_tape_observation.py
+COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
+# The DISARMED end-to-end probe dry run. It runs WHERE THE CREDENTIALS LIVE
+# because that is the only place the authenticated book and the account are
+# both reachable. pmus_q1_executor is still NOT copied here: the transport
+# no longer imports it, and the probe needs one bounded order rather than a
+# campaign engine.
+COPY scripts/l5_pmus_probe_dryrun.py scripts/l5_pmus_probe_dryrun.py
+COPY scripts/l5_pmus_realtime_probe.py scripts/l5_pmus_realtime_probe.py
+COPY src/l5_session_journal.py src/l5_session_journal.py
+COPY src/l5_session_integrity.py src/l5_session_integrity.py
+# copied so the integrity halt can verify ALL THREE frozen files at
+# runtime. It is not otherwise used by the live path; verifying only
+# the files that happen to be present would let a missing one pass.
+COPY src/l5_fidelity_report.py src/l5_fidelity_report.py
+COPY src/l5_pmus_live_wiring.py src/l5_pmus_live_wiring.py
+COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
+COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
+COPY src/l5_execution_translations.py src/l5_execution_translations.py
+COPY src/l5_live_execution.py src/l5_live_execution.py
+COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+# The order serializer and the preview gate. Both are pure: no transport, no
+# endpoint, no credential, and no import of any executor. The preflight needs
+# the contract data in l5_order_body, and submit() needs the gate if this
+# service is ever armed. Neither adds a path that can send an order --
+# l5_preview_session, which CAN post a preview, stays out of this image.
+COPY src/l5_order_body.py src/l5_order_body.py
+COPY src/l5_preview_gate.py src/l5_preview_gate.py
+COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
+COPY src/pmus_interaction_classifier.py src/pmus_interaction_classifier.py
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=ws-recorder \

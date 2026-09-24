@@ -508,7 +508,7 @@ class PmusTransport:
         # other link -- "One binary instrument per window. Long side pays
         # when the close is at or above the open" -- so long == Up. Requiring
         # the literal labels tested the venue's vocabulary, not the mapping.
-        from src import l5_preview_session as PS
+        from src import l5_order_body as PS
         chain = {"contract_long_is_up": PS.STATIC_CONTRACT["yes_is"] == "UP",
                  "venue_yes_is_long": True,
                  "venue_side_labels": names,

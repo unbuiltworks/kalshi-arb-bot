@@ -149,44 +149,8 @@ def key_fingerprint() -> Optional[str]:
 #: This is the SEMANTIC source for the YES<->Up mapping. A preview cannot
 #: supply it: the venue accepting OUTCOME_SIDE_YES says YES is a valid side,
 #: not that YES is "Up".
-STATIC_CONTRACT: Dict[str, Any] = {
-    "series": "btc-updown-15m",
-    "crypto_market_type": "updown",
-    "asset_price_market_type": "ASSET_PRICE_MARKET_TYPE_UP_DOWN",
-    "yes_is": "UP",
-    "no_is": "DOWN",
-    "basis": (
-        "One binary instrument per window. Long side pays when the close is "
-        "at or above the open."),
-    "provenance": [
-        {"source": "Polymarket US Trader Guide -- Crypto Schema",
-         "url": "https://docs.polymarket.us/trader-guide/crypto-schema",
-         "quote": "updown | ASSET_PRICE_MARKET_TYPE_UP_DOWN | One binary "
-                  "instrument per window. Long side pays when the close is "
-                  "at or above the open."},
-        {"source": "Polymarket US Crypto FAQs",
-         "url": "https://docs.polymarket.us/faqs/crypto-faqs",
-         "quote": "a flat Up/Down window settles Up"},
-        {"source": "Polymarket US -- Market Structure",
-         "url": "https://docs.polymarket.us/learn/trading/basics/"
-                "buying-yes-vs-selling-no",
-         "quote": "Polymarket US markets use a single instrument "
-                  "(buying Yes vs selling No)."},
-    ],
-    "retrieved_utc": "2026-09-24",
-    "LABEL": "STATIC_CONTRACT_DEFINITION -- documentation, not a live read",
-}
-
-#: Contract attributes the same source publishes for this family. Recorded
-#: for comparison against what the venue actually enforces; NEVER used as
-#: the value sent in an order.
-STATIC_FAMILY_ATTRS: Dict[str, Any] = {
-    "tick_size": "0.01",
-    "valid_price_range": ["0.01", "0.99"],
-    "minimum_order_contracts": "0.01",
-    "payout_per_contract_usd": "1.00",
-    "LABEL": "DOCUMENTED FAMILY DEFAULTS -- not a per-instrument read",
-}
+from src.l5_order_body import (  # noqa: F401  re-export
+    STATIC_CONTRACT, STATIC_FAMILY_ATTRS)
 
 
 def outcome_side_for(pmus_side: str) -> str:

@@ -295,7 +295,11 @@ def test_the_preview_module_is_not_in_the_recorder_image():
     into that image, and never appear in the service's watchPatterns."""
     from pathlib import Path
     df = Path("deploy/pmus_ws_recorder/Dockerfile").read_text()
-    assert "l5_preview_session" not in df, (
+    # COPY lines only: a comment in that file explains WHY this module stays
+    # out, and naming the thing you are forbidding is not shipping it.
+    copies = [ln for ln in df.splitlines()
+              if ln.strip().upper().startswith("COPY ")]
+    assert not [ln for ln in copies if "l5_preview_session" in ln], (
         "the preview session was added to the recorder image; that removes "
         "the observer's structural no-order-path guarantee")
 

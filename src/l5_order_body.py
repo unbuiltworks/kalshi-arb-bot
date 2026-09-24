@@ -40,10 +40,55 @@ ONE = D("1")
 PREVIEW_ONLY_FIELDS: tuple = ()
 
 #: UP/DOWN is the engine's vocabulary; YES/NO is the venue's.
-#: Provenance for the mapping is in l5_preview_session.STATIC_CONTRACT.
+#: Provenance for the mapping is in STATIC_CONTRACT just above.
 #: Accepts the engine's vocabulary AND the venue's own enum unchanged, so
 #: the proven executor -- which already speaks OUTCOME_SIDE_* -- can pass its
 #: value straight through without a lossy round trip.
+#: Up/Down semantics from Polymarket US's published contract definition, not
+#: inferred from prices, history or L5's behaviour. It lives HERE, in the
+#: module with no transport and no credentials, because the preflight reads
+#: it and the preflight runs inside the GET-only observer image; importing it
+#: from the preview session would drag a POST-capable transport in with it.
+STATIC_CONTRACT: Dict[str, Any] = {
+    "series": "btc-updown-15m",
+    "crypto_market_type": "updown",
+    "asset_price_market_type": "ASSET_PRICE_MARKET_TYPE_UP_DOWN",
+    "yes_is": "UP",
+    "no_is": "DOWN",
+    "basis": (
+        "One binary instrument per window. Long side pays when the close is "
+        "at or above the open."),
+    "provenance": [
+        {"source": "Polymarket US Trader Guide -- Crypto Schema",
+         "url": "https://docs.polymarket.us/trader-guide/crypto-schema",
+         "quote": "updown | ASSET_PRICE_MARKET_TYPE_UP_DOWN | One binary "
+                  "instrument per window. Long side pays when the close is "
+                  "at or above the open."},
+        {"source": "Polymarket US Crypto FAQs",
+         "url": "https://docs.polymarket.us/faqs/crypto-faqs",
+         "quote": "a flat Up/Down window settles Up"},
+        {"source": "Polymarket US -- Market Structure",
+         "url": "https://docs.polymarket.us/learn/trading/basics/"
+                "buying-yes-vs-selling-no",
+         "quote": "Polymarket US markets use a single instrument "
+                  "(buying Yes vs selling No)."},
+    ],
+    "retrieved_utc": "2026-09-24",
+    "LABEL": "STATIC_CONTRACT_DEFINITION -- documentation, not a live read",
+}
+
+#: Contract attributes the same source publishes for this family. Recorded
+#: for comparison against what the venue actually enforces; NEVER used as
+#: the value sent in an order.
+STATIC_FAMILY_ATTRS: Dict[str, Any] = {
+    "tick_size": "0.01",
+    "valid_price_range": ["0.01", "0.99"],
+    "minimum_order_contracts": "0.01",
+    "payout_per_contract_usd": "1.00",
+    "LABEL": "DOCUMENTED FAMILY DEFAULTS -- not a per-instrument read",
+}
+
+
 _SIDE = {"UP": "OUTCOME_SIDE_YES", "DOWN": "OUTCOME_SIDE_NO",
          "YES": "OUTCOME_SIDE_YES", "NO": "OUTCOME_SIDE_NO",
          "OUTCOME_SIDE_YES": "OUTCOME_SIDE_YES",
