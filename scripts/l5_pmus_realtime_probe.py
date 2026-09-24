@@ -251,6 +251,12 @@ class Window:
                     if str(r.get("refused_reason") or "").startswith(
                         "STALE_ACTION"))
         lat = sorted(self.latencies)
+
+        def pct(q):
+            if not lat:
+                return None
+            i = min(len(lat) - 1, int(round(q * (len(lat) - 1))))
+            return lat[i]
         return {
             "market": self.slug,
             "window_start_utc": dt.datetime.fromtimestamp(
@@ -272,6 +278,22 @@ class Window:
                             "500 trades) and an active window overruns both, "
                             "so a close-of-window scan sees only the tail"),
             "l5_actions": len(self.records),
+            # AGE OF L5'S ACTION when we decided on it: venue event time ->
+            # our observation. This is NOT what the executor's 30s
+            # STALE_ACTION gate measures; that gate measures our own
+            # receipt -> decision handoff, which is sub-second because the
+            # action is handled in the same poll iteration. Both are reported
+            # so neither is mistaken for the other.
+            "action_age_at_decision_s": {
+                "p50": pct(0.50), "p90": pct(0.90),
+                "max": (lat[-1] if lat else None),
+                "n": len(lat),
+                "measures": "L5 venue event timestamp -> our observation",
+            },
+            "stale_action_gate_measures": (
+                "our receipt_utc -> decision, bound at %.0fs; it does NOT "
+                "bound the venue-event age above"
+                % EX.STALE_ACTION_MAX_S),
             "median_observation_latency_s": (lat[len(lat) // 2] if lat
                                              else None),
             "would_orders": s["would_submit"],
