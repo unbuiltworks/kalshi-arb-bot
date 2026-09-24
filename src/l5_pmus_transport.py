@@ -625,12 +625,15 @@ class PmusTransport:
                 "note": "arming is revocable by unsetting the owner token"}
 
     def submit(self, intent: Mapping[str, Any]) -> Dict[str, Any]:
+        """Send the order. The BODY is built by the shared serializer.
+
+        submit does not serialize anything itself: `l5_order_body.build` is
+        the only place a body is constructed, so the body a preview
+        validated and the body this sends cannot drift apart.
+        """
         self._require_armed()
-        body = {"clientOrderId": intent["client_order_id"],
-                "marketSlug": intent.get("market") or self.market_slug,
-                "outcome": intent["side"], "side": "BUY",
-                "price": str(intent["price"]), "quantity": str(intent["qty"]),
-                "type": "LIMIT" if intent.get("mode") == "MAKER" else "MARKET"}
+        from src import l5_order_body as OB
+        body = OB.build(intent, intent.get("market") or self.market_slug)
         return self.http.request("POST", "/v1/orders", body, Q1.API) or {}
 
     def cancel(self, order_id: str) -> Dict[str, Any]:

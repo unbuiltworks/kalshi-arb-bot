@@ -1,0 +1,178 @@
+"""One-shot bounded preview session. Previews orders; cannot send one.
+
+Runs in its OWN ephemeral service so the 24/7 L5 observer keeps its
+structural guarantee of containing no path that can POST. The image carries
+`l5_preview_session`, the shared order serializer and the signing module --
+and no submit, cancel, modify or close-position path at all.
+
+What one run establishes, from the venue's own answers:
+
+  1. the executable market, echoed back by the authenticated feed rather
+     than assumed from a slug we constructed;
+  2. whether the representation `PmusTransport.submit()` sends today is
+     accepted or rejected;
+  3. whether the representation the published schema documents is accepted;
+  4. whether an off-tick price is refused;
+  5. whether a sub-minimum quantity is refused.
+
+It submits nothing. The only POST path the transport will carry is
+/v1/order/preview.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import sys
+from decimal import Decimal as D
+
+from src import l5_order_body as OB
+from src import l5_preview_session as P
+from src import pmus_auth as Q1
+
+WINDOW_S = 900
+
+
+def window_slug(now: dt.datetime) -> str:
+    """The candidate slug for the window that is open right now.
+
+    A candidate only: nothing is believed about it until the authenticated
+    feed echoes the same marketSlug back with a tradable state.
+    """
+    m = (now.minute // 15) * 15
+    return "cpc-btc-updown-15m-%s-%02d%02dz" % (now.strftime("%Y-%m-%d"),
+                                                now.hour, m)
+
+
+def live_market(transport, now: dt.datetime) -> dict:
+    """Confirm the executable market from the AUTHENTICATED book.
+
+    The venue echoes `marketSlug` and reports `state` plus both sides of the
+    book. Identity and tradability come from that answer, never from the
+    text of the slug we happened to construct.
+    """
+    cand = window_slug(now)
+    book = transport.request(
+        "GET", "/v1/markets/%s/book" % cand, None, Q1.GATEWAY) or {}
+    md = book.get("marketData") or {}
+    bids, offers = md.get("bids") or [], md.get("offers") or []
+
+    def top(rows):
+        if not rows:
+            return None
+        px = rows[0].get("px") or {}
+        return D(str(px.get("value"))) if px.get("value") else None
+
+    return {
+        "candidate": cand,
+        "venue_market_slug": md.get("marketSlug"),
+        "identity_confirmed": md.get("marketSlug") == cand,
+        "state": md.get("state"),
+        "open_tradable": str(md.get("state") or "").upper().endswith("OPEN"),
+        "best_bid": str(top(bids)) if top(bids) is not None else None,
+        "best_ask": str(top(offers)) if top(offers) is not None else None,
+        "two_sided": bool(bids and offers),
+        "source": "authenticated GET /v1/markets/{slug}/book",
+    }
+
+
+def proposed_intent(mkt: dict) -> dict:
+    """The order shape the bounded probe's first leg actually proposes.
+
+    A maker OPEN joining the current best bid, at the envelope's bounded
+    size. Price comes from the live authenticated book; the cap comes from
+    the frozen probe manifest. Nothing here is invented for the preview --
+    this is the shape that would be sent.
+    """
+    from src import l5_probe_manifest as PM
+    bid = D(mkt["best_bid"])
+    lam = PM.LAMBDA
+    qty = (D(1) * lam).quantize(D("0.01"))          # one median L5 action
+    cap = PM.probe_limits().max_usd_per_market
+    if bid * qty > cap:
+        qty = (cap / bid).quantize(D("0.01"))
+    return {"client_order_id": "preview-no-submit",
+            "market": mkt["venue_market_slug"],
+            "side": "UP", "price": str(bid), "qty": str(qty),
+            "mode": "MAKER"}
+
+
+def run() -> dict:
+    now = dt.datetime.now(dt.timezone.utc)
+    t = P.PreviewOnlyTransport()
+    out = {"utc": now.isoformat(),
+           "api_key_fingerprint": P.key_fingerprint(),
+           "credentials_present": Q1.has_credentials(),
+           "LABEL": "PREVIEW ONLY -- no order was submitted",
+           "armed": Q1.armed()}
+    if out["armed"]:
+        out["ABORT"] = "session reports ARMED; refusing to run"
+        return out
+
+    mkt = live_market(t, now)
+    out["market"] = mkt
+    if not (mkt["identity_confirmed"] and mkt["best_bid"]):
+        out["ABORT"] = "no confirmed live market with a bid; nothing previewed"
+        return out
+
+    intent = proposed_intent(mkt)
+    out["proposed_intent"] = intent
+    slug = mkt["venue_market_slug"]
+
+    def shot(label, body):
+        rec = {"label": label, "body": P.redact(body)}
+        try:
+            resp = t.request("POST", P.PREVIEW_PATH,
+                             OB.preview_envelope(body), Q1.API)
+            rec.update(accepted=True, response=P.redact(resp))
+        except P.MutationRefused:
+            raise
+        except BaseException as exc:                           # noqa: BLE001
+            rec.update(accepted=False,
+                       error=P.redact("%s: %s" % (type(exc).__name__, exc)))
+        return rec
+
+    legacy = OB.build(intent, slug, OB.LEGACY)
+    documented = OB.build(intent, slug, OB.DOCUMENTED)
+    out["schema_trial"] = {
+        "legacy_what_submit_sends_today": shot("LEGACY", legacy),
+        "documented_published_schema": shot("DOCUMENTED", documented),
+    }
+
+    accepted = [k for k, v in out["schema_trial"].items() if v["accepted"]]
+    out["accepted_schemas"] = accepted
+
+    # constraint probes run against whichever representation the venue took
+    if len(accepted) == 1:
+        name = OB.DOCUMENTED if "documented" in accepted[0] else OB.LEGACY
+        off = dict(intent, price=str(D(intent["price"]) + D("0.005")))
+        small = dict(intent, qty="0.005")
+        out["constraints"] = {
+            "schema_used": name,
+            "off_tick": shot("OFF_TICK", OB.build(off, slug, name)),
+            "sub_minimum_qty": shot("SUB_MIN_QTY", OB.build(small, slug, name)),
+        }
+        c = out["constraints"]
+        c["tick_enforced"] = c["off_tick"]["accepted"] is False
+        c["min_qty_enforced"] = c["sub_minimum_qty"]["accepted"] is False
+        c["proven"] = bool(c["tick_enforced"] and c["min_qty_enforced"])
+    else:
+        out["constraints"] = {
+            "skipped": "exactly one schema must be accepted before a "
+                       "constraint probe means anything",
+            "proven": False}
+
+    out["paths_touched"] = sorted({p for _, p in t.calls})
+    out["mutations_sent"] = 0
+    return out
+
+
+def main(argv=None) -> int:
+    rep = run()
+    print("PMUS_PREVIEW " + json.dumps(rep, default=str, separators=(",", ":")),
+          flush=True)
+    return 0 if rep.get("accepted_schemas") else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
