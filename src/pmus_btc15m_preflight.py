@@ -138,6 +138,46 @@ def outcome_names(mk: Mapping[str, Any]) -> Dict[str, str]:
     return out
 
 
+UP_DOWN_TYPE = "ASSET_PRICE_MARKET_TYPE_UP_DOWN"
+
+
+def up_down_mapping(mk: Mapping[str, Any], slug: str) -> Dict[str, Any]:
+    """Resolve UP/DOWN from the venue's TYPED crypto terms.
+
+    Since the 2026-09-24 maintenance the catalogue lists BTC15m markets with
+    sides labelled Yes/No, not Up/Down. The venue documents the meaning on
+    its typed field (docs: api-reference/market/overview, Crypto Price
+    Market Fields): "On UP_DOWN markets the long side (Yes) pays when the
+    close value is at or above priceToBeat" -- i.e. long == UP.
+
+    Accepted ONLY when the record proves it is this series and this window:
+    assetPriceTerms.marketType UP_DOWN, asset btc, horizon 15m, and
+    windowStart equal to the slug's own window start. Anything else is left
+    unresolved and the gate fails.
+    """
+    names = outcome_names(mk)
+    if names.get("long") == "UP" and names.get("short") == "DOWN":
+        return dict(names, source="marketSides descriptions")
+    apt = mk.get("assetPriceTerms") if isinstance(mk.get("assetPriceTerms"),
+                                                   Mapping) else None
+    if not apt or names.get("long") != "YES" or names.get("short") != "NO":
+        return dict(names, source="unresolved")
+    asset = apt.get("asset") if isinstance(apt.get("asset"), Mapping) else {}
+    m = re.search(r"(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})z$", slug or "")
+    want = ("%sT%s:%s:00Z" % m.groups()) if m else None
+    proofs = {
+        "marketType": apt.get("marketType") == UP_DOWN_TYPE,
+        "asset": str(asset.get("symbol") or "").lower() == "btc",
+        "horizon": str(apt.get("horizon") or "") == "15m",
+        "windowStart": want is not None and str(apt.get("windowStart")) == want,
+    }
+    if all(proofs.values()):
+        return {"long": "UP", "short": "DOWN",
+                "source": "assetPriceTerms UP_DOWN: long (Yes) = Up per "
+                          "venue docs; windowStart %s matches slug" % want}
+    return dict(names, source="unresolved", proofs=proofs)
+
+
 def positions_by_slug(raw: Any) -> Dict[str, D]:
     """Venue positions as {slug: net qty}. The live schema is a MAP keyed by
     market slug; the list shape is still accepted."""
@@ -349,7 +389,7 @@ def run(get: Callable[[str], Any], slug: str, *,
                {"status": state, "closed": mk.get("closed"),
                 "active": mk.get("active")})
 
-    names = outcome_names(mk)
+    names = up_down_mapping(mk, slug)
     ok &= gate("outcome_mapping_is_up_down",
                names.get("long") == "UP" and names.get("short") == "DOWN",
                names)

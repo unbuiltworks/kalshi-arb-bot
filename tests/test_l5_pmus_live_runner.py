@@ -551,3 +551,42 @@ def test_a_silent_socket_with_a_book_is_replaced():
     assert b.stall_due(WS + 5.0 + AB.STALL_S) is True
     b.stall_reconnects, b.last_stall_t = 1, WS + 15.0
     assert b.stall_due(WS + 16.0) is False           # not again at once
+
+
+CATALOGUE_YES_NO = {
+    "slug": SLUG, "active": True, "closed": False,
+    "status": "MARKET_STATUS_OPEN", "outcomes": '["Yes","No"]',
+    "marketSides": [{"description": "Yes", "long": True},
+                    {"description": "No", "long": False}],
+    "orderPriceMinTickSize": 0.01, "minimumTradeQty": 0.01,
+    "assetPriceTerms": {"marketType": "ASSET_PRICE_MARKET_TYPE_UP_DOWN",
+                        "asset": {"assetClass": "ASSET_CLASS_CRYPTO",
+                                  "symbol": "btc"},
+                        "horizon": "15m",
+                        "windowStart": "2026-09-23T21:00:00Z"}}
+
+
+def test_yes_no_catalogue_resolves_to_up_down_from_typed_terms(creds):
+    http = FakeHTTP(**{"/v1/market/slug/%s" % SLUG:
+                       {"market": dict(CATALOGUE_YES_NO)}})
+    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    rep = t.preflight()
+    chk = [c for c in rep["checks"]
+           if c["check"] == "outcome_mapping_is_up_down"][0]
+    assert chk["passed"] and "UP_DOWN" in chk["detail"]
+
+
+@pytest.mark.parametrize("bad", [
+    {"marketType": "ASSET_PRICE_MARKET_TYPE_ABOVE_BELOW"},
+    {"horizon": "5m"},
+    {"windowStart": "2026-09-23T21:15:00Z"},          # a different window
+    {"asset": {"symbol": "eth"}},
+])
+def test_yes_no_without_matching_typed_terms_fails_closed(creds, bad):
+    mk = dict(CATALOGUE_YES_NO)
+    mk["assetPriceTerms"] = dict(mk["assetPriceTerms"], **bad)
+    http = FakeHTTP(**{"/v1/market/slug/%s" % SLUG: {"market": mk}})
+    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    with pytest.raises(T.PreflightFailed) as e:
+        t.preflight()
+    assert "outcome_mapping_is_up_down" in json.loads(str(e.value))["blocking_failures"]
