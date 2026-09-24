@@ -30,6 +30,7 @@ does send passes through the recorder's own outbound guard.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import threading
@@ -142,14 +143,13 @@ class AuthenticatedBookFeed:
         return self.latest() is not None
 
     def _run(self) -> None:                                # pragma: no cover
-        import asyncio
         try:
             asyncio.run(self._session())
         except BaseException as exc:                       # noqa: BLE001
             self.errors.append("%s: %s" % (type(exc).__name__, str(exc)[:160]))
             self.connected = False
 
-    async def _session(self) -> None:                      # pragma: no cover
+    async def _session(self) -> None:
         import websockets
 
         from src import pmus_ws_evidence_recorder as R
