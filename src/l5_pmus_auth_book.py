@@ -40,13 +40,15 @@ WINDOW_S = 900
 LEAD_S = 120.0
 #: reconnect with a fresh subscription set once this many slugs accumulate
 MAX_SUBSCRIBED = 6
-#: re-send the MARKET-DATA subscription for an open window with no book yet
-#: this often. MEASURED 2026-09-24: a market-data subscription placed BEFORE
-#: a window opens stays silent for ~3 minutes (0015z: 389 trade frames from
-#: +6.7s, first book frame +184.5s; 2345z: +186.7s), while a subscription
-#: placed on an already-live market receives the full snapshot at once
-#: (0000z: subscribed at +300.4s, 17x10-level snapshot at +300.5s).
-RESUB_EVERY_S = 3.0
+#: an open window with no book forces a FRESH CONNECTION this often.
+#: MEASURED 2026-09-24. A market-data subscription placed before a window
+#: opens stays silent ~3 min (0015z +184.5s, 2345z +186.7s, 0115z +184.3s).
+#: Re-sending the subscribe on the SAME connection does not help: 0115z got
+#: 51 re-subscribes from +0.1s and still no book until +184.3s. A FRESH
+#: connection subscribing to an already-live market gets the full snapshot
+#: at once, three for three: 0000z +300.5s, 0030z +236.5s, 0100z +279.1s,
+#: each the instant the restarted service connected.
+RESUB_EVERY_S = 10.0
 
 
 def window_start(now: Optional[float] = None) -> int:
@@ -95,7 +97,8 @@ class AuthBook:
         self.pre_book: Dict[str, List[dict]] = {}
         self.pre_book_n: Dict[str, int] = {}
         self.first_state: Dict[str, Dict[str, float]] = {}
-        #: slug -> [first resubscribe t, last resubscribe t, count]
+        self.forced_reconnect = False
+        #: slug -> [first forced-reconnect t, last, count]
         self.resub: Dict[str, List[float]] = {}
         self.connected = False
         self.last_frame_t: Optional[float] = None
@@ -332,10 +335,12 @@ class AuthBook:
                                 break                  # fresh, small set
                             await self._subscribe(ws, want)
                         now = self.clock()
-                        for slug in self.resub_due(now):
-                            await ws.send(json.dumps(R.guard_outbound(
-                                self.market_data_frame(slug))))
-                            self.note_resub(slug, now)
+                        due = self.resub_due(now)
+                        if due:
+                            for slug in due:
+                                self.note_resub(slug, now)
+                            self.forced_reconnect = True
+                            break                  # fresh connection, below
                         try:
                             raw = await asyncio.wait_for(ws.recv(), timeout=5)
                         except asyncio.TimeoutError:
@@ -360,5 +365,8 @@ class AuthBook:
             self.connected = False
             if self._stop:
                 break
+            if self.forced_reconnect:
+                self.forced_reconnect = False
+                continue                           # no backoff: planned
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)
