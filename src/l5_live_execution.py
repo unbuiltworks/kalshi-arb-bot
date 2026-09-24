@@ -106,12 +106,17 @@ class SafetyLimits:
                  max_abs_residual: D = D("10"),
                  max_total_exposure_usd: D = D("10"),
                  max_concurrent_markets: int = 1,
+                 max_live_orders: int = 1,
                  daily_realized_loss_halt_usd: D = D("5"),
                  band: Optional[tuple] = None) -> None:
         self.max_usd_per_market = max_usd_per_market
         self.max_abs_residual = max_abs_residual
         self.max_total_exposure_usd = max_total_exposure_usd
         self.max_concurrent_markets = max_concurrent_markets
+        #: the first probe works ONE order at a time. A second order may not
+        #: be submitted while the first is live; only a venue-authoritative
+        #: terminal state (filled, cancelled, rejected) releases the slot.
+        self.max_live_orders = max_live_orders
         self.daily_realized_loss_halt_usd = daily_realized_loss_halt_usd
         #: None by default: a price band is a BEHAVIOURAL preference, not
         #: account protection, and the faithful engine does not impose one.
@@ -122,6 +127,7 @@ class SafetyLimits:
                 "max_abs_residual": str(self.max_abs_residual),
                 "max_total_exposure_usd": str(self.max_total_exposure_usd),
                 "max_concurrent_markets": self.max_concurrent_markets,
+                "max_live_orders": self.max_live_orders,
                 "daily_realized_loss_halt_usd":
                     str(self.daily_realized_loss_halt_usd),
                 "band": [str(x) for x in self.band] if self.band else None}
@@ -141,20 +147,39 @@ class SafetyLimits:
     def refuse(self, *, price: D, qty: D, market: str,
                committed_by_market: Mapping[str, D],
                residual_after: D, realized_today: D,
-               open_markets: Sequence[str]) -> Optional[str]:
+               open_markets: Sequence[str],
+               outstanding_by_market: Mapping[str, D],
+               live_order_count: int,
+               outstanding_residual: D = D(0),
+               orders_uncertain: Optional[str] = None) -> Optional[str]:
+        """Refuse on POTENTIAL exposure: filled + still-fillable + this one.
+
+        `outstanding_by_market` and `live_order_count` are REQUIRED rather
+        than defaulted, so a caller that has not been taught about live
+        orders fails loudly instead of silently losing the bound.
+        """
+        if orders_uncertain:
+            return "ORDER_STATE_UNCERTAIN"
+        if live_order_count >= self.max_live_orders:
+            return "MAX_LIVE_ORDERS"
         if realized_today <= -self.daily_realized_loss_halt_usd:
             return "DAILY_REALIZED_LOSS_HALT"
         cost = price * qty
-        mk = committed_by_market.get(market, D(0))
+        mk = (committed_by_market.get(market, D(0))
+              + outstanding_by_market.get(market, D(0)))
         if mk + cost > self.max_usd_per_market:
             return "MAX_USD_PER_MARKET"
-        total = sum(committed_by_market.values(), D(0))
+        total = (sum(committed_by_market.values(), D(0))
+                 + sum(outstanding_by_market.values(), D(0)))
         if total + cost > self.max_total_exposure_usd:
             return "MAX_TOTAL_EXPOSURE"
-        if abs(residual_after) > self.max_abs_residual:
+        # residual is bounded on what would land if every live order filled
+        if abs(residual_after + outstanding_residual) > self.max_abs_residual:
             return "MAX_ABS_RESIDUAL"
-        if (market not in open_markets
-                and len(open_markets) >= self.max_concurrent_markets):
+        live_markets = set(open_markets) | {
+            m for m, v in outstanding_by_market.items() if v > 0}
+        if (market not in live_markets
+                and len(live_markets) >= self.max_concurrent_markets):
             return "MAX_CONCURRENT_MARKETS"
         if self.band is not None and not (self.band[0] <= price <= self.band[1]):
             return "BAND"
@@ -194,7 +219,8 @@ class InventoryStore:
         self.path = path
         self.state: Dict[str, Any] = {"positions": {}, "committed": {},
                                       "realized_today": "0", "day": None,
-                                      "submitted": {}}
+                                      "submitted": {}, "live_orders": {},
+                                      "orders_uncertain": None}
         self._load()
 
     def _load(self) -> None:
@@ -215,6 +241,65 @@ class InventoryStore:
     def committed(self) -> Dict[str, D]:
         return {k: D(str(v)) for k, v in self.state["committed"].items()}
 
+    # ---- live orders -------------------------------------------------
+    # An order is EXPOSURE from the moment it is submitted, not from the
+    # moment it fills. `committed` counts filled notional and cannot see a
+    # resting order, so on its own it would let any number of unfilled
+    # orders sit at the venue whose combined fillable notional exceeds the
+    # envelope. Everything below exists so the caps apply to POTENTIAL
+    # exposure: filled + still-fillable.
+
+    def live_orders(self) -> Dict[str, Dict[str, Any]]:
+        return {k: dict(v) for k, v in
+                (self.state.get("live_orders") or {}).items()}
+
+    def live_order_count(self) -> int:
+        return len(self.state.get("live_orders") or {})
+
+    def outstanding_by_market(self) -> Dict[str, D]:
+        """Still-fillable notional per market, at the price we offered."""
+        out: Dict[str, D] = {}
+        for o in (self.state.get("live_orders") or {}).values():
+            m = str(o.get("market"))
+            rem = D(str(o.get("remaining") or 0))
+            if rem <= 0:
+                continue
+            out[m] = out.get(m, D(0)) + D(str(o.get("price") or 0)) * rem
+        return out
+
+    def outstanding_residual(self, market: str) -> D:
+        """Signed shares that would land if every live order filled."""
+        r = D(0)
+        for o in (self.state.get("live_orders") or {}).values():
+            if str(o.get("market")) != market:
+                continue
+            rem = D(str(o.get("remaining") or 0))
+            r += rem if str(o.get("side")) == "UP" else -rem
+        return r
+
+    def orders_uncertain(self) -> Optional[str]:
+        """Set when we cannot say whether an order reached the venue.
+
+        Cleared ONLY by an authoritative venue reconciliation. While set,
+        every further submission is refused: an unknown order is assumed to
+        be live and consuming the envelope, because assuming otherwise is
+        the assumption that loses money.
+        """
+        return self.state.get("orders_uncertain") or None
+
+    def mark_uncertain(self, why: str) -> None:
+        self.state["orders_uncertain"] = str(why)
+        self.save()
+
+    def terminate_order(self, coid: str, *, reason: str) -> None:
+        """A venue-authoritative terminal state releases the envelope."""
+        live = self.state.setdefault("live_orders", {})
+        if coid in live:
+            live[coid]["state"] = str(reason)
+            live[coid]["remaining"] = "0"
+            live.pop(coid)
+            self.save()
+
     def position(self, market: str, side: str) -> D:
         return D(str(self.state["positions"].get("%s|%s" % (market, side), 0)))
 
@@ -228,19 +313,35 @@ class InventoryStore:
         return coid in (self.state.get("submitted") or {})
 
     def record_submit(self, coid: str, intent: Mapping[str, Any]) -> None:
-        self.state.setdefault("submitted", {})[coid] = {
+        rec = {
             "t": dt.datetime.now(dt.timezone.utc).isoformat(),
             "market": intent.get("market"), "side": intent.get("side"),
             "price": str(intent.get("price")), "qty": str(intent.get("qty")),
         }
+        self.state.setdefault("submitted", {})[coid] = rec
+        # live from this instant: the envelope must already count it.
+        self.state.setdefault("live_orders", {})[coid] = dict(
+            rec, remaining=str(intent.get("qty")), state="LIVE")
         self.save()
 
-    def apply_fill(self, market: str, side: str, qty: D, price: D) -> None:
+    def apply_fill(self, market: str, side: str, qty: D, price: D,
+                   *, coid: Optional[str] = None) -> None:
         k = "%s|%s" % (market, side)
         self.state["positions"][k] = str(
             D(str(self.state["positions"].get(k, 0))) + qty)
         self.state["committed"][market] = str(
             D(str(self.state["committed"].get(market, 0))) + price * qty)
+        # A fill converts outstanding exposure into committed exposure. Not
+        # decrementing here would double-count the same shares in both.
+        live = self.state.setdefault("live_orders", {})
+        o = live.get(coid) if coid else None
+        if o is not None:
+            rem = D(str(o.get("remaining") or 0)) - qty
+            if rem <= 0:
+                live.pop(coid, None)
+            else:
+                o["remaining"] = str(rem)
+                o["state"] = "PARTIALLY_FILLED"
         self.save()
 
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
@@ -261,9 +362,42 @@ class InventoryStore:
                  for k in set(before) | set(after)
                  if str(before.get(k, "0")) != str(after.get(k, "0"))}
         self.state["positions"] = after
+
+        # The venue's open orders are the authority on what is still live.
+        # An order we think is live but the venue does not list is terminal
+        # there -- filled, cancelled or rejected -- and stops consuming the
+        # envelope. An order the venue lists that we never recorded is still
+        # OUR exposure, so it is adopted rather than ignored.
+        ours = dict(self.state.get("live_orders") or {})
+        rebuilt: Dict[str, Any] = {}
+        for o in open_orders:
+            coid = str(o.get("client_order_id") or o.get("clientOrderId")
+                       or o.get("order_id") or o.get("id") or "")
+            if not coid:
+                continue
+            mine = ours.get(coid, {})
+            rem = o.get("remaining_qty", o.get("remainingQuantity"))
+            if rem is None:
+                rem = o.get("qty", o.get("quantity", mine.get("remaining", 0)))
+            rebuilt[coid] = {
+                "t": mine.get("t"),
+                "market": o.get("market") or mine.get("market"),
+                "side": o.get("side") or mine.get("side"),
+                "price": str(o.get("price", mine.get("price", 0))),
+                "qty": str(o.get("qty", mine.get("qty", rem))),
+                "remaining": str(rem), "state": "LIVE_AT_VENUE",
+            }
+        released = sorted(set(ours) - set(rebuilt))
+        adopted = sorted(set(rebuilt) - set(ours))
+        self.state["live_orders"] = rebuilt
+        # An authoritative answer is the ONLY thing that clears uncertainty.
+        self.state["orders_uncertain"] = None
         self.save()
         return {"reconciled": True, "drift": drift,
                 "open_orders_at_venue": len(open_orders),
+                "live_orders_released": released,
+                "live_orders_adopted": adopted,
+                "uncertainty_cleared": True,
                 "authority": "VENUE"}
 
 
@@ -313,15 +447,27 @@ class FaithfulExecutor:
 
         resid_after = self.store.residual(market) + (
             tr["qty"] if dec["side"] == "UP" else -tr["qty"])
+        outstanding = self.store.outstanding_by_market()
         why = self.limits.refuse(
             price=tr["price"], qty=tr["qty"], market=market,
             committed_by_market=self.store.committed(),
             residual_after=resid_after,
             realized_today=self.store.realized_today(),
-            open_markets=open_markets)
+            open_markets=open_markets,
+            outstanding_by_market=outstanding,
+            live_order_count=self.store.live_order_count(),
+            outstanding_residual=self.store.outstanding_residual(market),
+            orders_uncertain=self.store.orders_uncertain())
         prov.stage("SAFETY_OVERLAY", {
             "permitted": why is None, "reason": why,
             "limits": self.limits.as_dict(),
+            "committed_usd": {k: str(v) for k, v
+                              in self.store.committed().items()},
+            "outstanding_usd": {k: str(v) for k, v in outstanding.items()},
+            "live_orders": self.store.live_order_count(),
+            "orders_uncertain": self.store.orders_uncertain(),
+            "measures": ("POTENTIAL exposure: filled + still-fillable + "
+                         "this order, not filled alone"),
             "note": ("account protection only; never a statement about L5 "
                      "behaviour or PMUS capability")})
         if why:
@@ -337,21 +483,49 @@ class FaithfulExecutor:
         intent = {"client_order_id": coid, "market": market,
                   "side": dec["side"], "price": tr["price"], "qty": tr["qty"],
                   "mode": tr["mode"], "action_key": key}
+        # Reserve the envelope BEFORE the wire. If the process dies between
+        # the send and the ack, the order may still be live at the venue, and
+        # a store that never recorded it would hand the whole envelope to the
+        # next decision.
+        self.store.record_submit(coid, intent)
         try:
             ack = self.transport.submit(intent)
         except NotArmed as exc:
+            # DISARMED never reached the venue, so the reservation is undone.
+            self.store.terminate_order(coid, reason="NOT_ARMED")
             prov.stage("ORDER", {"client_order_id": coid, "submitted": False,
                                  "reason": "NOT_ARMED", "detail": str(exc)[:200],
                                  "intent": {k: str(v) for k, v in intent.items()}})
             return prov.rec
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # We do NOT know whether this order reached the venue. The
+            # reservation stands and the session refuses to submit anything
+            # further until the venue answers authoritatively.
+            self.store.mark_uncertain(
+                "submit raised %s for %s" % (type(exc).__name__, coid))
+            prov.stage("ORDER", {"client_order_id": coid, "submitted": None,
+                                 "reason": "SUBMIT_OUTCOME_UNKNOWN",
+                                 "detail": str(exc)[:200],
+                                 "note": ("assumed live and still consuming "
+                                          "the envelope until the venue says "
+                                          "otherwise")})
+            return prov.refuse("SAFETY_OVERLAY", "SUBMIT_OUTCOME_UNKNOWN")
 
-        self.store.record_submit(coid, intent)
         prov.stage("ORDER", {"client_order_id": coid, "submitted": True,
                              "venue_order_id": ack.get("order_id"),
                              "transport": getattr(self.transport, "name", "?")})
         filled = D(str(ack.get("filled_qty") or 0))
+        terminal = str(ack.get("state") or ack.get("status") or "").upper()
         if filled <= 0:
-            prov.stage("FILL", {"filled": False, "filled_qty": "0"})
+            # Rejected or cancelled on the ack releases the slot; anything
+            # else stays live and keeps consuming the envelope.
+            if any(w in terminal for w in ("REJECT", "CANCEL", "EXPIRED")):
+                self.store.terminate_order(coid, reason=terminal)
+            prov.stage("FILL", {"filled": False, "filled_qty": "0",
+                                "venue_state": terminal or None,
+                                "still_live": self.store.live_order_count()})
             return prov.rec
         fill_px = D(str(ack.get("fill_price") or tr["price"]))
         fee = (fees.taker_fee(fill_px, filled) if tr["mode"] == FT.TAKER
@@ -363,13 +537,16 @@ class FaithfulExecutor:
                             "maker_rebate_usd": str(rebate),
                             "note": ("fee and rebate are separate lines and "
                                      "are never netted into trading P&L")})
-        self.store.apply_fill(market, dec["side"], filled, fill_px)
+        self.store.apply_fill(market, dec["side"], filled, fill_px, coid=coid)
         prov.stage("INVENTORY", {
             "market": market,
             "up": str(self.store.position(market, "UP")),
             "dn": str(self.store.position(market, "DOWN")),
             "residual": str(self.store.residual(market)),
-            "committed_usd": str(self.store.committed().get(market, D(0)))})
+            "committed_usd": str(self.store.committed().get(market, D(0))),
+            "outstanding_usd": str(
+                self.store.outstanding_by_market().get(market, D(0))),
+            "live_orders": self.store.live_order_count()})
         return prov.rec
 
 

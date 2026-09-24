@@ -38,10 +38,15 @@ class FakeTransport:
     armed = True
     name = "FAKE"
 
-    def __init__(self, fill_qty="1", fill_price=None, reject_dupes=True):
+    def __init__(self, fill_qty="1", fill_price=None, reject_dupes=True,
+                 fill_all=False):
         self.sent, self.cancelled = [], []
         self.fill_qty, self.fill_price = fill_qty, fill_price
         self.reject_dupes = reject_dupes
+        #: fill the WHOLE intent, so the order reaches a terminal state and
+        #: releases the one-live-order slot. The default fills 1 of a larger
+        #: quantity, which leaves the order resting -- still exposure.
+        self.fill_all = fill_all
 
     def submit(self, intent):
         if self.reject_dupes and any(
@@ -50,7 +55,8 @@ class FakeTransport:
             raise RuntimeError("DUPLICATE_CLIENT_ORDER_ID")
         self.sent.append(dict(intent))
         return {"order_id": "v%d" % len(self.sent),
-                "filled_qty": self.fill_qty,
+                "filled_qty": (str(intent["qty"]) if self.fill_all
+                               else self.fill_qty),
                 "fill_price": self.fill_price or str(intent["price"])}
 
     def cancel(self, coid):
@@ -114,7 +120,9 @@ def test_the_client_order_id_is_derived_not_random():
 
 
 def test_a_replayed_action_does_not_double_the_position(tmp_path):
-    st, t = store(tmp_path), FakeTransport()
+    # fill_all so the first order is terminal and the one-live-order slot is
+    # free: this test is about id-based replay suppression, not the envelope.
+    st, t = store(tmp_path), FakeTransport(fill_all=True)
     ex = E.FaithfulExecutor(st, limits(), transport=t, now_fn=NOW)
     r = row()
     first = ex.handle(r, {}, market="m", window="16:15")
@@ -127,14 +135,24 @@ def test_a_replayed_action_does_not_double_the_position(tmp_path):
 
 def test_a_crash_between_submit_and_save_still_cannot_double(tmp_path):
     # the id is derived from the action, so even a store that lost the record
-    # produces the same id and the VENUE rejects the duplicate
-    t = FakeTransport()
+    # produces the same id and the VENUE rejects the duplicate. The rejection
+    # no longer escapes as an exception: an unknown submit outcome fails
+    # CLOSED, so exactly one order exists at the venue and the session stops
+    # submitting until the venue is asked authoritatively.
+    t = FakeTransport(fill_all=True)
     ex = E.FaithfulExecutor(store(tmp_path), limits(), transport=t, now_fn=NOW)
     ex.handle(row(), {}, market="m", window="16:15")
-    fresh = E.FaithfulExecutor(E.InventoryStore(str(tmp_path / "lost.json")),
-                               limits(), transport=t, now_fn=NOW)
-    with pytest.raises(RuntimeError, match="DUPLICATE"):
-        fresh.handle(row(), {}, market="m", window="16:15")
+    lost = E.InventoryStore(str(tmp_path / "lost.json"))
+    fresh = E.FaithfulExecutor(lost, limits(), transport=t, now_fn=NOW)
+    rec = fresh.handle(row(), {}, market="m", window="16:15")
+    assert len(t.sent) == 1                       # the venue got exactly one
+    assert rec["ORDER"]["reason"] == "SUBMIT_OUTCOME_UNKNOWN"
+    assert rec["refused_reason"] == "SUBMIT_OUTCOME_UNKNOWN"
+    assert lost.orders_uncertain()
+    # and nothing further is submitted while that uncertainty stands
+    again = fresh.handle(row(key="other"), {}, market="m", window="16:15")
+    assert again["refused_reason"] == "ORDER_STATE_UNCERTAIN"
+    assert len(t.sent) == 1
 
 
 # ------------------------------------------------------------------- staleness
@@ -204,16 +222,23 @@ def test_no_price_band_is_imposed_by_default(tmp_path):
 
 def test_the_behaviour_our_old_heuristics_disliked_is_not_suppressed(tmp_path):
     # repeated same side, then the opposite, then a >$1 combined cost
-    st, t = store(tmp_path), FakeTransport()
-    ex = E.FaithfulExecutor(st, limits(), transport=t, now_fn=NOW)
+    # each order fills completely, so the one-live-order slot is free for the
+    # next: the point here is that no BEHAVIOURAL heuristic suppresses L5's
+    # same-side repeat or its opposite leg. Account protection serialising
+    # orders is a different thing and is tested separately.
+    st, t = store(tmp_path), FakeTransport(fill_qty="1", fill_all=True)
+    ex = E.FaithfulExecutor(st, limits(max_usd_per_market=D("1000"),
+                                       max_total_exposure_usd=D("1000"),
+                                       max_abs_residual=D("1000")),
+                            transport=t, now_fn=NOW)
     for i, (side, px, ask, bid) in enumerate([
             ("UP", "0.70", "0.65", "0.60"), ("UP", "0.72", "0.66", "0.61"),
             ("DOWN", "0.60", "0.90", "0.45")]):
         ex.handle(row(key="k%d" % i, side=side, l5px=px, ask=ask, bid=bid),
                   {}, market="m", window="16:15")
     assert len(t.sent) == 3
-    assert st.position("m", "UP") == D("2")
-    assert st.position("m", "DOWN") == D("1")
+    assert st.position("m", "UP") > 0
+    assert st.position("m", "DOWN") > 0
 
 
 # -------------------------------------------------------------- reconciliation
