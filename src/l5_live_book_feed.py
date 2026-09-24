@@ -48,12 +48,15 @@ MAX_AGE_S = 2.0
 
 
 def _row(slug: str, s: Dict[str, Any], now: float) -> Dict[str, Any]:
-    bid, ask = s.get("bid"), s.get("ask")
-    return {"t": now, "bid": bid, "ask": ask,
-            "bid_qty": s.get("bid_qty"), "ask_qty": s.get("ask_qty"),
-            "status": ("OK" if bid is not None and ask is not None
-                       else "NO_BOOK" if bid is None and ask is None
-                       else "ONE_SIDED")}
+    """One book state, in the shape the decision path reads.
+
+    The shape and its status vocabulary are `l5_window_actions.book_row`,
+    the same builder the continuous recorder's `live_books` uses, so the two
+    feeds cannot drift into disagreeing about what "usable" means.
+    """
+    from src import l5_window_actions as WA
+    return WA.book_row(t=now, bid=s.get("bid"), ask=s.get("ask"),
+                       bid_qty=s.get("bid_qty"), ask_qty=s.get("ask_qty"))
 
 
 class AuthenticatedBookFeed:
@@ -67,6 +70,9 @@ class AuthenticatedBookFeed:
         self.frames = 0
         self.errors: List[str] = []
         self.connected = False
+        #: why the session is no longer running, so an early stop can be
+        #: told apart from a healthy one without reading the volume.
+        self.stop_reason = "not_started"
         self.started_at: Optional[float] = None
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -97,6 +103,7 @@ class AuthenticatedBookFeed:
                 "last_book_age_s": (None if self.age_s() is None
                                     else round(self.age_s(), 3)),
                 "fresh": self.fresh(), "errors": self.errors[-3:],
+                "stop_reason": self.stop_reason,
                 "source": "AUTHENTICATED_WS"}
 
     # ------------------------------------------------------------ the feed
@@ -121,6 +128,7 @@ class AuthenticatedBookFeed:
 
     def start(self) -> None:
         self.started_at = self.clock()
+        self.stop_reason = "running"
         self._thread = threading.Thread(target=self._run, daemon=True,
                                         name="l5-book-feed")
         self._thread.start()
@@ -147,7 +155,13 @@ class AuthenticatedBookFeed:
             asyncio.run(self._session())
         except BaseException as exc:                       # noqa: BLE001
             self.errors.append("%s: %s" % (type(exc).__name__, str(exc)[:160]))
+            self.stop_reason = "exception:%s" % type(exc).__name__
             self.connected = False
+        else:
+            # the loop ended without raising: either we asked it to stop, or
+            # the far end went away and recv stopped yielding.
+            self.stop_reason = ("local_cancellation" if self._stop.is_set()
+                                else "remote_close")
 
     async def _session(self) -> None:
         import websockets

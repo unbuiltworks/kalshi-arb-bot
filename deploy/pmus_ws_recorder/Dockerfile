@@ -60,6 +60,11 @@ COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/pmus_fees.py src/pmus_fees.py
 COPY scripts/l5_raw_tape_observation.py scripts/l5_raw_tape_observation.py
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
+# the ONE implementation of the window arithmetic and the L5 action
+# feed. It was this file's private code; the bounded probe had a copy
+# of it, and the copy is what broke Probe 02. Pure observation: no
+# transport, no endpoint, no credential, no order path.
+COPY src/l5_window_actions.py src/l5_window_actions.py
 # The DISARMED end-to-end probe dry run. It runs WHERE THE CREDENTIALS LIVE
 # because that is the only place the authenticated book and the account are
 # both reachable. pmus_q1_executor is still NOT copied here: the transport
