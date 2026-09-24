@@ -253,7 +253,10 @@ def test_a_failed_feed_is_not_reported_as_zero_actions(monkeypatch):
         def l5_to_pmus_action(r):
             return {"pmus_side": "UP"}
 
+    import src
     monkeypatch.setitem(sys.modules, "src.l5_pmus_realtime_observer", Dead)
+    monkeypatch.setattr(src, "l5_pmus_realtime_observer", Dead,
+                        raising=False)
     actions, ok = RT.new_l5_actions(RT.current_slug(), set())
     assert actions == [] and ok is False
 
@@ -274,7 +277,10 @@ def test_a_genuinely_quiet_feed_is_healthy(monkeypatch):
         def l5_to_pmus_action(r):
             return {"pmus_side": "UP"}
 
+    import src
     monkeypatch.setitem(sys.modules, "src.l5_pmus_realtime_observer", Quiet)
+    monkeypatch.setattr(src, "l5_pmus_realtime_observer", Quiet,
+                        raising=False)
     actions, ok = RT.new_l5_actions(RT.current_slug(), set())
     assert actions == [] and ok is True
 

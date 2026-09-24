@@ -41,7 +41,10 @@ def test_the_action_receipt_is_now_not_the_l5_event_time(monkeypatch):
                     "l5_size": "22.13"}
 
     import sys
+    import src
     monkeypatch.setitem(sys.modules, "src.l5_pmus_realtime_observer", FakeObs)
+    monkeypatch.setattr(src, "l5_pmus_realtime_observer", FakeObs,
+                        raising=False)
     seen = set()
     out, feed_ok = RT.new_l5_actions(slug, seen)
     assert feed_ok is True
