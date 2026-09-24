@@ -27,11 +27,12 @@ class FakeHTTP:
         self.calls = []
         self.data = {
             "/v1/account/balances": {"balances": [{"buyingPower": "42.50"}]},
-            "/v1/markets/%s/bbo" % SLUG: {"marketData": {
+            "/v1/market/slug/%s" % SLUG: {"market": {
                 "slug": SLUG, "seriesSlug": "btc-updown-15m",
-                "state": "MARKET_STATE_OPEN",
-                "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+                "active": True, "closed": False, "archived": False,
+                "outcomes": '["Up", "Down"]',
+                "orderPriceMinTickSize": "0.01",
+                "minimumTradeQty": "1"}},
             "/v1/markets/%s/book" % SLUG: {"marketData": {
                 "bid": "0.40", "ask": "0.60",
                 "bid_shares": "100", "ask_shares": "100"}},
@@ -110,23 +111,23 @@ def test_owner_token_must_match_the_session_id(creds, monkeypatch):
 # ------------------------------------------------------------ gates fail shut
 
 @pytest.mark.parametrize("path,bad,check", [
-    ("/v1/markets/%s/bbo" % SLUG,
-     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_EXPIRED",
-                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                 "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+    ("/v1/market/slug/%s" % SLUG,
+     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+                 "active": False, "closed": True,
+                 "outcomes": '["Up", "Down"]',
+                 "orderPriceMinTickSize": "0.01", "minimumTradeQty": "1"}},
      "market_open_tradable"),
-    ("/v1/markets/%s/bbo" % SLUG,
-     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_OPEN",
-                 "outcomes": [{"outcome": "YES"}, {"outcome": "NO"}],
-                 "orderPriceMinTickSize": "0.01", "orderMinQuantity": "1"}},
+    ("/v1/market/slug/%s" % SLUG,
+     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+                 "active": True, "closed": False,
+                 "outcomes": '["Yes", "No"]',
+                 "orderPriceMinTickSize": "0.01", "minimumTradeQty": "1"}},
      "outcome_mapping_is_up_down"),
-    ("/v1/markets/%s/bbo" % SLUG,
-     {"marketData": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
-                 "state": "MARKET_STATE_OPEN",
-                 "outcomes": [{"outcome": "UP"}, {"outcome": "DOWN"}],
-                 "orderMinQuantity": "1"}},
+    ("/v1/market/slug/%s" % SLUG,
+     {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
+                 "active": True, "closed": False,
+                 "outcomes": '["Up", "Down"]',
+                 "minimumTradeQty": "1"}},
      "tick_constraint_known"),
     ("/v1/markets/%s/book" % SLUG,
      {"marketData": {"bid": None, "ask": "0.60"}},
@@ -310,3 +311,55 @@ def test_cancel_uses_the_venue_route_and_the_venue_order_id(creds, monkeypatch):
     t.arm()
     t.cancel("venue-order-7")
     assert ("POST", "/v1/order/venue-order-7/cancel") in t.http.calls
+
+
+# ------------------------------- metadata comes from the right resource
+
+def test_metadata_is_read_from_the_singular_market_resource(creds):
+    t = tp()
+    t.preflight()
+    paths = [p for m, p in t.http.calls]
+    assert "/v1/market/slug/%s" % SLUG in paths
+    # /bbo carries QUOTE data and must not be the metadata source
+    assert "/v1/markets/%s/bbo" % SLUG not in paths
+
+
+def test_outcomes_parse_from_a_json_encoded_string(creds):
+    mk = {"outcomes": '["Up", "Down"]'}
+    assert T.PmusTransport.outcome_names(mk) == ("UP", "DOWN")
+
+
+def test_outcomes_parse_from_a_plain_list_and_from_mappings(creds):
+    assert T.PmusTransport.outcome_names({"outcomes": ["Up", "Down"]}) == \
+        ("UP", "DOWN")
+    assert T.PmusTransport.outcome_names(
+        {"outcomes": [{"outcome": "Up"}, {"outcome": "Down"}]}) == \
+        ("UP", "DOWN")
+
+
+def test_unparseable_outcomes_yield_nothing_rather_than_a_guess(creds):
+    assert T.PmusTransport.outcome_names({"outcomes": None}) == ()
+    assert T.PmusTransport.outcome_names({}) == ()
+
+
+def test_tradability_accepts_active_closed_as_well_as_the_state_enum(creds):
+    rep = tp().preflight()
+    checks = {c["check"]: c["passed"] for c in rep["checks"]}
+    assert checks["market_open_tradable"] is True
+
+
+def test_an_archived_market_is_not_tradable(creds):
+    with pytest.raises(T.PreflightFailed) as e:
+        tp(**{"/v1/market/slug/%s" % SLUG: {"market": {
+            "slug": SLUG, "seriesSlug": "btc-updown-15m",
+            "active": True, "closed": False, "archived": True,
+            "outcomes": '["Up", "Down"]',
+            "orderPriceMinTickSize": "0.01",
+            "minimumTradeQty": "1"}}}).preflight()
+    assert "market_open_tradable" in str(e.value)
+
+
+def test_the_minimum_quantity_field_of_this_resource_is_read(creds):
+    rep = tp().preflight()
+    checks = {c["check"]: c["passed"] for c in rep["checks"]}
+    assert checks["quantity_constraint_known"] is True
