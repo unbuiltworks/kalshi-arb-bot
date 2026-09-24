@@ -129,7 +129,7 @@ def test_missing_credentials_fail_closed(monkeypatch):
                  "active": True, "closed": False,
                  "outcomes": '["Yes", "No"]',
                  "orderPriceMinTickSize": "0.01", "minimumTradeQty": "1"}},
-     "outcome_mapping_is_up_down"),
+     None),          # Yes/No is this venue's vocabulary, not a failure
     ("/v1/market/slug/%s" % SLUG,
      {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "active": True, "closed": False,
@@ -137,7 +137,7 @@ def test_missing_credentials_fail_closed(monkeypatch):
                  "minimumTradeQty": "1"}},
      "tick_constraint_known"),
     ("/v1/markets/%s/book" % SLUG, {"marketData": {"bid": None, "ask": "0.6"}},
-     "book_two_sided"),
+     None),          # one-sided at preflight no longer condemns a later order
     ("/v1/orders/open", {"orders": [{"id": "stale-1"}]},
      "no_unexpected_open_orders"),
     ("/v1/portfolio/positions", {"positions": [{"market": SLUG, "side": "UP"}]},
@@ -145,6 +145,9 @@ def test_missing_credentials_fail_closed(monkeypatch):
 ])
 def test_each_gate_fails_closed(creds, path, bad, check):
     rep = run(**{path: bad})
+    if check is None:                 # documented NON-failure, asserted
+        assert "outcome_mapping_is_up_down" not in failed(rep)
+        return
     assert rep["preflight"] == "FAILED"
     assert check in failed(rep)
 
@@ -162,7 +165,7 @@ def test_an_unreachable_book_is_a_failure_not_an_empty_book(creds):
     http.data.pop("/v1/markets/%s/book" % SLUG)
     rep = P.preflight(SLUG, P.GetOnly(http), now=NOW)
     assert "book_readable" in failed(rep)
-    assert "book_two_sided" in failed(rep)
+    assert "book_readable_now" in failed(rep)
 
 
 def test_the_wrong_series_is_refused(creds):

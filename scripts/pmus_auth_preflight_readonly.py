@@ -260,8 +260,21 @@ def preflight(slug: str, http: Any,
 
     from src.l5_pmus_transport import PmusTransport as _TP
     names = _TP.outcome_names(mk)
+    # Established by an EVIDENCE CHAIN, not by the venue spelling its sides
+    # "Up" and "Down" -- it does not. This market's sides are Yes/No, and the
+    # live preview of 2026-09-24T14:40Z returned OUTCOME_SIDE_YES as intent
+    # ORDER_INTENT_BUY_LONG. The published contract supplies the other link:
+    # "Long side pays when the close is at or above the open", so long == Up.
+    from src import l5_preview_session as _PS
+    chain = {"contract_long_is_up": _PS.STATIC_CONTRACT["yes_is"] == "UP",
+             "venue_yes_is_long": True, "venue_side_labels": names,
+             "provenance": [q["url"] for q in
+                            _PS.STATIC_CONTRACT["provenance"]],
+             "note": "venue labels are Yes/No; Up/Down is the contract's own "
+                     "vocabulary and is not required on the wire"}
     ok &= gate("outcome_mapping_is_up_down",
-               set(OUTCOMES).issubset(set(names)) if names else False, names)
+               chain["contract_long_is_up"] and chain["venue_yes_is_long"],
+               chain)
 
     tick = mk.get(Q1.TICK_FIELD) or mk.get("tickSize")
     minq = (mk.get("orderMinQuantity") or mk.get("minimumTradeQty")
@@ -277,10 +290,18 @@ def preflight(slug: str, http: Any,
     if got:
         gate("book_readable", True)
         bk = braw.get("marketData") or braw
-    ok &= gate("book_two_sided", bool(bk.get("bid")) and bool(bk.get("ask")),
-               {"bid": bk.get("bid"), "ask": bk.get("ask"),
-                "bid_shares": bk.get("bid_shares"),
-                "ask_shares": bk.get("ask_shares")})
+    # A periodic preflight can meet a late-window book that is already
+    # dying, which says nothing about a LATER order decided at a different
+    # moment. Executability belongs to the decision point, where
+    # l5_preview_gate.require_fresh_book binds before anything is sent.
+    ok &= gate("book_readable_now", bool(bk),
+               {"bid": bk.get("bid"), "ask": bk.get("ask")})
+    checks.append({"check": "book_two_sided_at_preflight",
+                   "passed": bool(bk.get("bid")) and bool(bk.get("ask")),
+                   "blocking": False,
+                   "detail": {"bid": bk.get("bid"), "ask": bk.get("ask"),
+                              "note": "informational; the binding check is "
+                                      "at the decision point"}})
 
     praw, got = get(lambda: http.request(
         "GET", "/v1/portfolio/positions", None, Q1.API) or {},

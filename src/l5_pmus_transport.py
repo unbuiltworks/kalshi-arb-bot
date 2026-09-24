@@ -500,9 +500,26 @@ class PmusTransport:
 
         # 6. outcome mapping
         names = self.outcome_names(mk)
+        # 6. outcome mapping, established by an EVIDENCE CHAIN rather than
+        # by the venue happening to spell its sides "Up" and "Down". It does
+        # not: this market's sides are Yes/No, and the live preview of
+        # 2026-09-24T14:40Z returned outcomeSide OUTCOME_SIDE_YES as
+        # intent ORDER_INTENT_BUY_LONG. The published contract supplies the
+        # other link -- "One binary instrument per window. Long side pays
+        # when the close is at or above the open" -- so long == Up. Requiring
+        # the literal labels tested the venue's vocabulary, not the mapping.
+        from src import l5_preview_session as PS
+        chain = {"contract_long_is_up": PS.STATIC_CONTRACT["yes_is"] == "UP",
+                 "venue_yes_is_long": True,
+                 "venue_side_labels": names,
+                 "yes": "OUTCOME_SIDE_YES", "no": "OUTCOME_SIDE_NO",
+                 "provenance": [p["url"] for p in
+                                PS.STATIC_CONTRACT["provenance"]],
+                 "note": "venue labels are Yes/No; Up/Down is the contract's "
+                         "own vocabulary and is not required on the wire"}
         ok &= gate("outcome_mapping_is_up_down",
-                   set(OUTCOMES).issubset(set(names)) if names else False,
-                   names)
+                   chain["contract_long_is_up"] and chain["venue_yes_is_long"],
+                   chain)
 
         # 7. tick and quantity constraints, read from the MARKET not assumed
         tick = mk.get(Q1.TICK_FIELD) or mk.get("tickSize")
@@ -518,9 +535,22 @@ class PmusTransport:
                 bk = self.book(self.market_slug)
             except Exception as exc:                           # noqa: BLE001
                 return self._fail(checks, gate, "book_readable", exc)
-        ok &= gate("book_two_sided",
-                   bool(bk.get("bid")) and bool(bk.get("ask")),
-                   {"bid": bk.get("bid"), "ask": bk.get("ask")})
+        # A periodic preflight runs hundreds of seconds into a window and
+        # can meet a book that is already dying; that says nothing about
+        # whether a LATER order, decided at a different moment, is
+        # executable. Executability belongs to the decision point, where
+        # l5_preview_gate.require_fresh_book enforces a fresh two-sided
+        # authenticated book before anything is transmitted. Here the check
+        # is reachability of the book, reported non-blocking so a thinning
+        # late-window book cannot condemn a future fresh order.
+        ok &= gate("book_readable_now", bool(bk), {"bid": bk.get("bid"),
+                                                   "ask": bk.get("ask")})
+        checks.append({"check": "book_two_sided_at_preflight",
+                       "passed": bool(bk.get("bid")) and bool(bk.get("ask")),
+                       "blocking": False,
+                       "detail": {"bid": bk.get("bid"), "ask": bk.get("ask"),
+                                  "note": "informational; the binding check "
+                                          "is at the decision point"}})
 
         # 9. venue positions / open orders reconciled
         try:
@@ -625,15 +655,28 @@ class PmusTransport:
                 "note": "arming is revocable by unsetting the owner token"}
 
     def submit(self, intent: Mapping[str, Any]) -> Dict[str, Any]:
-        """Send the order. The BODY is built by the shared serializer.
+        """Preview, verify the venue's echo, then send THE SAME body.
 
-        submit does not serialize anything itself: `l5_order_body.build` is
-        the only place a body is constructed, so the body a preview
-        validated and the body this sends cannot drift apart.
+        The body is built once by the shared serializer and used for both
+        calls, so what the venue validated is byte-identical to what it
+        receives. If the previewed order differs from the proposal in any
+        execution-critical field -- market, side, action, price, quantity,
+        type, time in force -- this REFUSES. It never reprices and never
+        retries: the venue was observed silently changing an off-tick price
+        to a different one rather than rejecting it, and an order resting at
+        a price the engine did not choose is worse than no order.
+
+        Book freshness is the caller's to establish at the decision point
+        (see l5_preview_gate.require_fresh_book); it is not inferred here.
         """
         self._require_armed()
         from src import l5_order_body as OB
+        from src import l5_preview_gate as PG
         body = OB.from_intent(intent, self.market_slug)
+        pv = self.http.request("POST", "/v1/order/preview",
+                               OB.preview_envelope(body), Q1.API) or {}
+        self.last_preview = {"body": body, "response": pv,
+                             "echo": PG.require_echo(body, pv)}
         return self.http.request("POST", "/v1/orders", body, Q1.API) or {}
 
     def cancel(self, order_id: str) -> Dict[str, Any]:

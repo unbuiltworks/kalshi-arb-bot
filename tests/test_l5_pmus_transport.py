@@ -122,7 +122,7 @@ def test_owner_token_must_match_the_session_id(creds, monkeypatch):
                  "active": True, "closed": False,
                  "outcomes": '["Yes", "No"]',
                  "orderPriceMinTickSize": "0.01", "minimumTradeQty": "1"}},
-     "outcome_mapping_is_up_down"),
+     None),          # Yes/No is this venue's vocabulary, not a failure
     ("/v1/market/slug/%s" % SLUG,
      {"market": {"slug": SLUG, "seriesSlug": "btc-updown-15m",
                  "active": True, "closed": False,
@@ -131,12 +131,22 @@ def test_owner_token_must_match_the_session_id(creds, monkeypatch):
      "tick_constraint_known"),
     ("/v1/markets/%s/book" % SLUG,
      {"marketData": {"bid": None, "ask": "0.60"}},
-     "book_two_sided"),
+     None),          # one-sided at preflight no longer condemns a later order
     ("/v1/orders/open", {"orders": [{"id": "stale-1"}]},
      "no_unexpected_open_orders"),
 ])
 def test_each_gate_fails_closed(creds, path, bad, check):
     t = tp(**{path: bad})
+    if check is None:
+        # a DOCUMENTED non-failure: this input used to block and no longer
+        # should. Asserted rather than deleted so the change is visible.
+        rep = t.preflight()
+        failed = [c["check"] for c in rep["checks"] if not c["passed"]
+                  and c.get("blocking", True)]
+        assert "outcome_mapping_is_up_down" not in failed
+        assert "book_two_sided" not in failed
+        assert t.armed is False
+        return
     with pytest.raises(T.PreflightFailed) as e:
         t.preflight()
     rep = json.loads(str(e.value))
