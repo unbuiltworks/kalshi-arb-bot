@@ -373,7 +373,140 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
     return rep
 
 
+# --------------------------------------------------------- observe only
+#
+# Probes 01 and 02 both died in the PRE-EXECUTION path -- the book feed and
+# the action feed -- and both spent a money authorization to find out. This
+# mode exercises that same path, in production, against a live window, with
+# no capability to place an order at all.
+#
+# The impossibility is structural, not a flag. It never calls auth.claim(),
+# never constructs PmusTransport, and hands the executor
+# `l5_live_execution.NullTransport` -- the production DISARMED transport,
+# which holds no credential, has no HTTP client of any kind, and raises
+# NotArmed from submit() and cancel(). There is no object in this mode that
+# could send an order if the decision path asked it to.
+
+OBSERVE_ENV = "L5_OBSERVE_ONLY"
+
+#: if less than this remains of the window that is open at start, wait for
+#: the next one instead -- a 30-second sample proves nothing about sustained
+#: operation. Still exactly one window, then the process exits.
+OBSERVE_MIN_S = 300.0
+
+
+def observe_only_enabled() -> bool:
+    return os.getenv(OBSERVE_ENV, "").strip().upper() in ("1", "YES", "TRUE")
+
+
+def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
+            activity=None, state_path=None, journal_path=None,
+            transport=None) -> Dict[str, Any]:
+    """Drive the real pre-execution path for one window. Sends nothing."""
+    now = clock()
+    market = current_slug(now)
+    start = window_start(market)
+    if start is not None and (start + WINDOW_S) - now < OBSERVE_MIN_S:
+        market = current_slug(start + WINDOW_S + 1.0)
+        start = window_start(market)
+    if start is None:
+        return {"LABEL": "LIVE_OBSERVE_ONLY", "market": market,
+                "refused": "WINDOW_NOT_ESTABLISHED", "armed": False,
+                "submitted_live": 0}
+    deadline = start + WINDOW_S
+
+    journal = JN.Journal(
+        journal_path or os.getenv("L5_SESSION_JOURNAL",
+                                  "/state/pmus-ws/l5_observe_journal.jsonl"))
+    store = EX.InventoryStore(
+        state_path or "/state/pmus-ws/l5_observe_inventory.json")
+    feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
+    # the production DISARMED transport. No credential, no HTTP, no POST.
+    tp = transport if transport is not None else EX.NullTransport()
+    limits = PM.probe_limits()
+    health = WA.FeedHealth()
+    seen: Set[str] = set()
+    records: List[dict] = []
+    stage = "starting"
+
+    try:
+        stage = "waiting_for_window"
+        while clock() < start:
+            sleep(POLL_S)
+        stage = "book_feed"
+        if book_feed is None:
+            feed.start()
+            feed.wait_ready(sleep=sleep)
+        journal.write("observe_book_feed", feed.health())
+        stage = "observing"
+        while clock() < deadline:
+            actions, ok = new_l5_actions(market, seen, activity, health=health)
+            if actions:
+                out = W.run_window(
+                    actions, feed.books(), market=market,
+                    window=market[-5:], store=store, limits=limits,
+                    transport=tp, lam=PM.LAMBDA,
+                    now_fn=lambda: dt.datetime.fromtimestamp(
+                        clock(), dt.timezone.utc))
+                for rec in out["records"]:
+                    records.append(rec)
+                    journal.write("observe_action", rec)
+            sleep(POLL_S)
+        stage = "done"
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        from src.l5_pmus_transport import redact
+        err = {"LABEL": "LIVE_PROBE_ERROR", "mode": "OBSERVE_ONLY",
+               "market": market, "stage": stage,
+               "error": type(exc).__name__, "detail": redact(str(exc)[:300]),
+               "l5_feed": health.as_dict(), "book_feed": feed.health()}
+        journal.write("observe_error", err)
+        print("L5_PROBE_ERROR " + json.dumps(err, default=str), flush=True)
+        stage = "error"
+    finally:
+        if book_feed is None:
+            feed.stop()
+
+    summary = W.summarize(records)
+    readable = sum(1 for r in records
+                   if r.get("refused_reason") != "UNREADABLE_ROW")
+    translated = sum(1 for r in records
+                     if (r.get("PMUS_TRANSLATION") or {}).get("ok") is True)
+    overlay_refusals = sum(1 for r in records
+                           if r.get("refused_by_layer") == "SAFETY_OVERLAY")
+    rep = {
+        "LABEL": "LIVE_OBSERVE_ONLY",
+        "market": market, "stage_reached": stage,
+        "authorization_claimed": False,
+        "post_capable": False,
+        "transport": getattr(tp, "name", "?"),
+        "l5_feed": health.as_dict(),
+        "book_feed": feed.health(),
+        "actions_handled": len(records),
+        "l5_native_decisions": readable,
+        "pmus_translations_ok": translated,
+        "overlay_refusals": overlay_refusals,
+        "would_submit": len(summary.get("would_submit") or []),
+        "refused_by_layer": summary.get("refused_by_layer"),
+        "refused_reason": summary.get("refused_reason"),
+        "armed": False,
+        "submitted_live": summary.get("submitted_live", 0),
+        "live_limits": limits.as_dict(),
+        "labels": ("OBSERVE ONLY. No authorization was claimed, no "
+                   "PmusTransport was constructed, and the executor held "
+                   "NullTransport, which has no HTTP client. A would-submit "
+                   "is an intent the transport refused, never a fill."),
+    }
+    journal.write("observe_report", rep)
+    return rep
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    if observe_only_enabled():
+        rep = observe()
+        print("L5_OBSERVE_ONLY " + json.dumps(rep, default=str), flush=True)
+        return 0
     rep = run()
     print("L5_LIVE_PROBE " + json.dumps(rep, default=str), flush=True)
     # exits either way: one market, then the process is done.
