@@ -129,7 +129,78 @@ class Window:
         self.latencies: List[float] = []
         self.preflight: Optional[dict] = None
         self.preflight_at: Optional[float] = None
-        self.first_seen_book_t: Optional[float] = None
+        # Continuously SAMPLED observation. The recorder's live state is a
+        # ring buffer -- bbo_history keeps 2000 entries and trades 500 -- and
+        # an active BTC15m window overruns both, so scanning it at the window
+        # close sees only the tail. Measured that way, three consecutive
+        # windows reported first-book latency of 645.4s, 672.2s and 644.2s
+        # with coverage stuck near 25% and max_gap exactly equal to the
+        # latency: the signature of a rolled buffer, not of a late
+        # subscription. These are accumulated as the window runs instead.
+        self.spans: List[List[float]] = []          # merged [t, t+ATTACH]
+        self.first_book_t: Optional[float] = None
+        self.first_trade_t: Optional[float] = None
+        self.book_states_seen = 0
+        self.trades_seen = 0
+        self._book_seen: Set[float] = set()
+        self._trade_seen: Set[float] = set()
+
+    ATTACH_S = 15.0
+
+    def observe(self, books: Sequence[Mapping[str, Any]],
+                trades: Sequence[float]) -> None:
+        """Fold this poll's view into the window's accumulated observation."""
+        for b in books:
+            if b.get("status") != "OK":
+                continue
+            t = OBS._epoch(b.get("t"))
+            if t is None or t in self._book_seen:
+                continue
+            self._book_seen.add(t)
+            self.book_states_seen += 1
+            if self.first_book_t is None or t < self.first_book_t:
+                self.first_book_t = t
+            self._merge(t, t + self.ATTACH_S)
+        if len(self._book_seen) > 60000:            # bounded, never unbounded
+            self._book_seen = set(sorted(self._book_seen)[-30000:])
+        for t in trades:
+            if t in self._trade_seen:
+                continue
+            self._trade_seen.add(t)
+            self.trades_seen += 1
+            if self.first_trade_t is None or t < self.first_trade_t:
+                self.first_trade_t = t
+        if len(self._trade_seen) > 60000:
+            self._trade_seen = set(sorted(self._trade_seen)[-30000:])
+
+    def _merge(self, a: float, z: float) -> None:
+        self.spans.append([a, z])
+        self.spans.sort()
+        out: List[List[float]] = []
+        for lo, hi in self.spans:
+            if out and lo <= out[-1][1]:
+                out[-1][1] = max(out[-1][1], hi)
+            else:
+                out.append([lo, hi])
+        self.spans = out
+
+    def coverage(self) -> Dict[str, Any]:
+        lo, hi = self.start, self.start + WINDOW_S
+        covered = 0.0
+        gaps: List[float] = []
+        cursor = lo
+        for a, z in self.spans:
+            a, z = max(lo, a), min(hi, z)
+            if z <= a:
+                continue
+            if a > cursor:
+                gaps.append(a - cursor)
+            covered += z - a
+            cursor = max(cursor, z)
+        if cursor < hi:
+            gaps.append(hi - cursor)
+        return {"pct": round(100.0 * covered / WINDOW_S, 1),
+                "max_gap_s": round(max(gaps), 1) if gaps else 0.0}
 
     # ------------------------------------------------------------ economics
     def shadow_economics(self) -> Dict[str, Any]:
@@ -170,13 +241,11 @@ class Window:
                          "occurred or is implied")}
 
     def summary(self, journal: JN.Journal) -> Dict[str, Any]:
-        books = live_books(self.slug)
-        trades = live_trades(self.slug)
-        ev = OBS.evaluate(self.slug, {self.slug: books},
-                          {self.slug: trades}, [])
-        first_ok = next((b for b in books if b["status"] == "OK"), None)
-        sub_dt = (round((OBS._epoch(first_ok["t"]) or 0) - self.start, 1)
-                  if first_ok else None)
+        cov = self.coverage()
+        sub_dt = (round(self.first_book_t - self.start, 1)
+                  if self.first_book_t is not None else None)
+        first_trade = (round(self.first_trade_t - self.start, 1)
+                       if self.first_trade_t is not None else None)
         s = W.summarize(self.records)
         stale = sum(1 for r in self.records
                     if str(r.get("refused_reason") or "").startswith(
@@ -189,12 +258,19 @@ class Window:
             "subscription_vs_open_s": sub_dt,
             "subscribed_before_or_at_open": bool(
                 sub_dt is not None and sub_dt <= 5.0),
-            "first_book_latency_s": ev.get("first_book_latency_s"),
-            "first_trade_latency_s": ev.get("first_trade_latency_s"),
-            "book_coverage_pct": ev.get("coverage_pct_of_window"),
-            "max_book_gap_s": ev.get("max_book_gap_s"),
-            "usable_book_states": ev.get("usable_book_states"),
-            "authenticated_trades": ev.get("authenticated_trades"),
+            "first_book_latency_s": sub_dt,
+            "first_trade_latency_s": first_trade,
+            "book_observed_before_first_trade": (
+                None if (sub_dt is None or first_trade is None)
+                else sub_dt <= first_trade),
+            "book_coverage_pct": cov["pct"],
+            "max_book_gap_s": cov["max_gap_s"],
+            "usable_book_states": self.book_states_seen,
+            "authenticated_trades": self.trades_seen,
+            "measurement": ("accumulated as the window ran; the recorder's "
+                            "live state is a ring buffer (2000 book states, "
+                            "500 trades) and an active window overruns both, "
+                            "so a close-of-window scan sees only the tail"),
             "l5_actions": len(self.records),
             "median_observation_latency_s": (lat[len(lat) // 2] if lat
                                              else None),
@@ -274,9 +350,12 @@ def run_forever(state_path: str, journal_path: str,
                                             "at_s": win.preflight_at,
                                             "report": win.preflight})
 
+            books_poll = live_books(slug)
+            win.observe(books_poll, live_trades(slug))
+
             actions = new_l5_actions(slug, seen)
             if actions:
-                books = live_books(slug)
+                books = books_poll
                 tp = (transport_factory or _default_transport)(slug)
                 out = W.run_window(actions, books, market=slug,
                                    window=slug[-5:], store=store,
