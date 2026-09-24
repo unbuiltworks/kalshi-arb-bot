@@ -82,6 +82,12 @@ class AuthBook:
         self.state: Dict[str, dict] = {}
         self.first_book: Dict[str, float] = {}
         self.first_trade: Dict[str, float] = {}
+        #: DIAGNOSTIC ONLY: compact shape of the frames a market received
+        #: before its first two-sided book, so a late first book can be
+        #: attributed to the venue (one-sided / pre-open) or to our fold
+        self.pre_book: Dict[str, List[dict]] = {}
+        self.pre_book_n: Dict[str, int] = {}
+        self.first_state: Dict[str, Dict[str, float]] = {}
         self.connected = False
         self.last_frame_t: Optional[float] = None
         self.connects = 0
@@ -113,11 +119,57 @@ class AuthBook:
                     AuthBook.market_states(v, out)
         return out
 
+    @staticmethod
+    def frame_shapes(msg: Any, out: Optional[List[dict]] = None) -> List[dict]:
+        """Every market-data dict in a frame, reduced to its shape."""
+        out = [] if out is None else out
+        if isinstance(msg, list):
+            for m in msg:
+                AuthBook.frame_shapes(m, out)
+        elif isinstance(msg, dict):
+            slug = msg.get("marketSlug") or msg.get("market_slug")
+            if slug and any(k in msg for k in ("bids", "offers", "asks",
+                                               "bestBid", "bestAsk", "state")):
+                def top(v):
+                    if isinstance(v, list) and v and isinstance(v[0], dict):
+                        return {k: v[0].get(k) for k in ("px", "price", "qty")}
+                    return v
+                out.append({"slug": str(slug), "keys": sorted(msg)[:14],
+                            "n_bids": (len(msg["bids"]) if isinstance(
+                                msg.get("bids"), list) else None),
+                            "n_offers": (len(msg.get("offers") or
+                                             msg.get("asks") or [])
+                                         if isinstance(msg.get("offers",
+                                                       msg.get("asks")), list)
+                                         else None),
+                            "bid0": top(msg.get("bids")),
+                            "offer0": top(msg.get("offers", msg.get("asks"))),
+                            "bestBid": msg.get("bestBid"),
+                            "bestAsk": msg.get("bestAsk"),
+                            "state": msg.get("state")})
+            for v in msg.values():
+                if isinstance(v, (dict, list)):
+                    AuthBook.frame_shapes(v, out)
+        return out
+
     def ingest(self, msg: Any, now: float) -> None:
         """Fold one frame. Pure bookkeeping, separated for tests."""
         with self.lock:
             self.last_frame_t = now
             R.apply_events(self.state, msg, now)
+            for sh in self.frame_shapes(msg):
+                slug = sh.pop("slug")
+                if sh.get("state"):
+                    self.first_state.setdefault(slug, {}).setdefault(
+                        sh["state"], now)
+                if slug in self.first_book:
+                    continue
+                n = self.pre_book_n.get(slug, 0) + 1
+                self.pre_book_n[slug] = n
+                if n <= 6 or (n % 25 == 0 and n <= 300):
+                    sh["n"] = n
+                    sh["t"] = round(now, 3)
+                    self.pre_book.setdefault(slug, []).append(sh)
             for slug, st in self.market_states(msg).items():
                 self.state.setdefault(slug, {"bid": None, "bid_qty": None,
                                              "ask": None, "ask_qty": None,
@@ -174,6 +226,13 @@ class AuthBook:
                 "book_updates": s.get("book_updates", 0),
                 "trades_seen": len(s.get("trades") or []),
                 "subscribed_before_open": slug in self.subscribed_at_open,
+                "pre_book_frames": self.pre_book_n.get(slug, 0),
+                "pre_book_sample": [
+                    dict(f, t_offset_s=round(f["t"] - ws, 1) if ws else None)
+                    for f in self.pre_book.get(slug, [])],
+                "state_first_seen_offset_s": {
+                    k: round(v - ws, 1) if ws else None
+                    for k, v in self.first_state.get(slug, {}).items()},
             }
 
     def status(self) -> Dict[str, Any]:

@@ -494,3 +494,18 @@ def test_catalogue_miss_without_stream_state_fails_closed(creds):
     with pytest.raises(T.PreflightFailed) as e:
         t.preflight()
     assert "market_readable" in json.loads(str(e.value))["blocking_failures"]
+
+
+def test_pre_book_frames_are_sampled_for_diagnosis():
+    b = AB.AuthBook(clock=lambda: WS + 3.0)
+    b.connected = True
+    b.ingest({"marketData": {"marketSlug": SLUG, "state": "MARKET_STATE_OPEN",
+                             "bids": [], "offers": [
+                                 {"px": {"value": "0.60"}, "qty": "5"}]}},
+             WS + 3.0)
+    rep = b.window_report(SLUG)
+    assert rep["first_book_offset_s"] is None           # one-sided: no book
+    assert rep["pre_book_frames"] == 1
+    f = rep["pre_book_sample"][0]
+    assert f["n_bids"] == 0 and f["n_offers"] == 1 and f["t_offset_s"] == 3.0
+    assert rep["state_first_seen_offset_s"] == {"MARKET_STATE_OPEN": 3.0}
