@@ -84,13 +84,51 @@ class Venue:
     def open_orders(self):
         return list(self._open)
 
-    def book(self, slug):
-        return {"bestBid": "0.40", "bestAsk": "0.60",
-                "bestBidQuantity": "500", "bestAskQuantity": "500"}
+
+
+
+class Feed:
+    """A book feed double in the shape of the authenticated one."""
+
+    def __init__(self, clock, rows=None):
+        self.clock = clock
+        self._rows = rows
+        self.started = self.stopped = False
+
+    def books(self):
+        if self._rows is not None:
+            return list(self._rows)
+        return [{"t": self.clock() - 0.2, "bid": "0.40", "ask": "0.60",
+                 "bid_qty": "500", "ask_qty": "500", "status": "OK"}]
+
+    def latest(self):
+        b = self.books()
+        return b[-1] if b else None
+
+    def age_s(self):
+        last = self.latest()
+        return None if last is None else self.clock() - last["t"]
+
+    def fresh(self):
+        return self.age_s() is not None and self.age_s() <= 2.0
+
+    def health(self):
+        return {"market": MARKET, "connected": True,
+                "book_states": len(self.books()), "fresh": self.fresh(),
+                "source": "AUTHENTICATED_WS"}
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        self.stopped = True
+
+    def wait_ready(self, timeout_s=60.0, sleep=None):
+        return self.latest() is not None
 
 
 def drive(tmp_path, monkeypatch, *, venue=None, actions=None, ledger=None,
-          market=MARKET):
+          market=MARKET, books=None):
     """Run one probe over a simulated window, with no real clock or network."""
     venue = venue or Venue()
     rows = list(actions or [])
@@ -116,6 +154,7 @@ def drive(tmp_path, monkeypatch, *, venue=None, actions=None, ledger=None,
     monkeypatch.setattr(P, "new_l5_actions", once)
     rep = P.run(clock=clock, sleep=sleep,
                 transport_factory=lambda slug: venue,
+                book_feed=Feed(clock, books),
                 state_path=str(tmp_path / "inv.json"),
                 journal_path=str(tmp_path / "j.jsonl"),
                 ledger_path=str(ledger or (tmp_path / "auth.jsonl")))
@@ -435,3 +474,65 @@ def test_only_the_oneshot_probe_arms_anything():
                 callers.append("%s:%d" % (f, n.lineno))
     assert callers, "something must be able to arm, or the probe cannot run"
     assert all("l5_pmus_live_oneshot" in c for c in callers), callers
+
+
+# ------------------------------- the book the decision is actually taken against
+
+def test_the_probe_decides_against_the_authenticated_feed(
+        tmp_path, monkeypatch):
+    authorize(monkeypatch)
+    rep, _ = drive(tmp_path, monkeypatch, actions=[l5row(size=2.0)])
+    assert rep["book_feed"]["source"] == "AUTHENTICATED_WS"
+    assert rep["book_feed"]["fresh"] is True
+
+
+def test_a_stale_book_produces_no_order(tmp_path, monkeypatch):
+    """A book older than the bound is not a book you may trade against."""
+    authorize(monkeypatch)
+    stale = [{"t": START - 600.0, "bid": "0.40", "ask": "0.60",
+              "bid_qty": "500", "ask_qty": "500", "status": "OK"}]
+    rep, venue = drive(tmp_path, monkeypatch, actions=[l5row(size=2.0)],
+                       books=stale)
+    assert venue.posts == []
+    assert rep["submitted"] == 0
+
+
+def test_no_book_at_all_produces_no_order(tmp_path, monkeypatch):
+    authorize(monkeypatch)
+    rep, venue = drive(tmp_path, monkeypatch, actions=[l5row(size=2.0)],
+                       books=[])
+    assert venue.posts == []
+    assert rep["submitted"] == 0
+    assert rep["refused_reason"].get("NO_BOOK") == 1
+
+
+def test_the_probe_refuses_to_arm_without_an_authenticated_book(
+        tmp_path, monkeypatch):
+    """Started for real, a feed that never produces a book stops the probe."""
+    authorize(monkeypatch)
+
+    class Dead(Feed):
+        def latest(self):
+            return None
+
+        def books(self):
+            return []
+
+        def wait_ready(self, timeout_s=60.0, sleep=None):
+            return False
+
+    t = {"now": START + P.PREFLIGHT_AT_S}
+    venue = Venue()
+    monkeypatch.setenv(AUTH.MARKET_ENV, MARKET)
+    monkeypatch.setattr(P, "new_l5_actions", lambda slug, seen, act=None: ([], True))
+    monkeypatch.setattr(P.FEED, "AuthenticatedBookFeed",
+                        lambda market, clock=None: Dead(lambda: t["now"]))
+    rep = P.run(clock=lambda: t["now"],
+                sleep=lambda s: t.__setitem__("now", t["now"] + s),
+                transport_factory=lambda slug: venue,
+                state_path=str(tmp_path / "inv.json"),
+                journal_path=str(tmp_path / "j.jsonl"),
+                ledger_path=str(tmp_path / "auth.jsonl"))
+    assert venue.armed is False, "never armed without a book"
+    assert venue.posts == []
+    assert rep["authorization"]["consumed"] is True

@@ -24,7 +24,7 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-RUN pip install --no-cache-dir cryptography==42.0.5
+RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 
 COPY src/__init__.py src/__init__.py
 # signing and fees
@@ -43,6 +43,14 @@ COPY src/l5_pmus_live_wiring.py src/l5_pmus_live_wiring.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_fidelity_report.py src/l5_fidelity_report.py
+# the AUTHENTICATED book. The probe subscribes to the same stream the
+# recorder validates every gate against, for ONE market, in its own
+# process -- it cannot see the recorder's memory from another service, and
+# the REST book is served unsigned from the public gateway. This module is
+# read-only: it carries the recorder's subscribe frames, its outbound frame
+# guard and its event fold, and no order path.
+COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
+COPY src/l5_live_book_feed.py src/l5_live_book_feed.py
 # observation: L5's public activity feed and window arithmetic
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py

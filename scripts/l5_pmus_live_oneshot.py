@@ -44,6 +44,7 @@ from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from src import l5_live_authorization as AUTH
+from src import l5_live_book_feed as FEED
 from src import l5_live_execution as EX
 from src import l5_pmus_live_wiring as W
 from src import l5_probe_manifest as PM
@@ -85,30 +86,6 @@ def window_start(slug: str) -> float:
     return t.replace(tzinfo=dt.timezone.utc).timestamp()
 
 
-def books_from_transport(tp: Any, slug: str, now: float) -> List[dict]:
-    """One authenticated book sample, in the shape the wiring expects.
-
-    A GET on the proven read path. This runs in its own service and cannot
-    see the recorder's in-process websocket state, so it reads the book
-    itself rather than depending on another service's memory.
-    """
-    try:
-        md = tp.book(slug) or {}
-    except BaseException:                                      # noqa: BLE001
-        return []
-    bid = md.get("bestBid") or md.get("bid")
-    ask = md.get("bestAsk") or md.get("ask")
-    row = {"t": now,
-           "bid": None if bid is None else str(bid),
-           "ask": None if ask is None else str(ask),
-           "bid_qty": md.get("bestBidQuantity") or md.get("bid_qty"),
-           "ask_qty": md.get("bestAskQuantity") or md.get("ask_qty")}
-    row["status"] = ("OK" if row["bid"] is not None and row["ask"] is not None
-                     else "NO_BOOK" if row["bid"] is None and row["ask"] is None
-                     else "ONE_SIDED")
-    return [row]
-
-
 def new_l5_actions(slug: str, seen: Set[str],
                    activity=None) -> Tuple[List[dict], bool]:
     """L5's trades in THIS window that we have not handled yet.
@@ -148,9 +125,10 @@ class Probe:
 
     def __init__(self, *, market: str, store: EX.InventoryStore,
                  journal: JN.Journal, auth: AUTH.Authorization,
-                 transport, clock=time.time, sleep=time.sleep,
+                 transport, book_feed, clock=time.time, sleep=time.sleep,
                  activity=None) -> None:
         self.market = market
+        self.feed = book_feed
         self.store = store
         self.journal = journal
         self.auth = auth
@@ -217,7 +195,10 @@ class Probe:
             if actions:
                 # every order re-checks the claim: one market, no exceptions
                 self.auth.check_market(self.market)
-                books = books_from_transport(self.tp, self.market, now)
+                # the AUTHENTICATED book, same stream the recorder validates
+                # every gate against. `attach` matches each action to the
+                # book at or before it; the frozen rule bounds the age.
+                books = self.feed.books()
                 out = W.run_window(actions, books, market=self.market,
                                    window=self.market[-5:], store=self.store,
                                    limits=self.limits, transport=self.tp,
@@ -298,6 +279,7 @@ class Probe:
                 "outstanding_usd": str(
                     self.store.outstanding_by_market().get(self.market, D(0))),
                 "live_orders": self.store.live_order_count()},
+            "book_feed": self.feed.health(),
             "close_out": dict(close),
             "live_limits": self.limits.as_dict(),
             "worst_case": PM.worst_case(),
@@ -311,7 +293,7 @@ class Probe:
 
 def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         activity=None, state_path=None, journal_path=None,
-        ledger_path=None) -> Dict[str, Any]:
+        ledger_path=None, book_feed=None) -> Dict[str, Any]:
     """The whole probe. Returns its report; never runs a second market."""
     now = clock()
     market = (os.getenv(AUTH.MARKET_ENV, "").strip()
@@ -340,9 +322,10 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         def transport_factory(slug):                           # noqa: E306
             from src import l5_pmus_transport as TP
             return TP.PmusTransport(market_slug=slug)
+    feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
     probe = Probe(market=market, store=store, journal=journal, auth=auth,
-                  transport=transport_factory(market), clock=clock,
-                  sleep=sleep, activity=activity)
+                  transport=transport_factory(market), book_feed=feed,
+                  clock=clock, sleep=sleep, activity=activity)
 
     start = window_start(market)
     deadline = start + WINDOW_S
@@ -356,9 +339,21 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
                 sleep(PREFLIGHT_RETRY_S)
             else:
                 sleep(POLL_S)
-        # 3. arm, needing preflight AND the owner token
+        # 3. the authenticated book, before anything can be decided against
+        #    it. Started only after preflight passed, so a probe that will
+        #    not trade opens no socket.
+        if book_feed is None:
+            feed.start()
+            if not feed.wait_ready(sleep=sleep):
+                raise AUTH.Refused(
+                    "AUTH_BOOK_NEVER_STARTED",
+                    {"market": market, "health": feed.health(),
+                     "note": "no authenticated book arrived; nothing is "
+                             "decided against a book we do not have"})
+        journal.write("book_feed", feed.health())
+        # 4. arm, needing preflight AND the owner token
         probe.arm()
-        # 4. work exactly this window
+        # 5. work exactly this window
         probe.work_window(deadline)
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
@@ -367,7 +362,7 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
                                       "error": type(exc).__name__,
                                       "detail": str(exc)[:300]})
     finally:
-        # 5. close out and spend the authorization, WHATEVER happened above.
+        # 6. close out and spend the authorization, WHATEVER happened above.
         try:
             close = probe.close_out()
         except BaseException:                                  # noqa: BLE001
@@ -381,6 +376,8 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
                       "orders_uncertain": store.orders_uncertain()})
         rep = probe.report(close)
         journal.write("probe_report", rep)
+        if book_feed is None:
+            feed.stop()
     return rep
 
 
