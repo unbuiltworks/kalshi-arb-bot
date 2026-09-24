@@ -43,14 +43,15 @@ def test_the_action_receipt_is_now_not_the_l5_event_time(monkeypatch):
     import sys
     monkeypatch.setitem(sys.modules, "src.l5_pmus_realtime_observer", FakeObs)
     seen = set()
-    out = RT.new_l5_actions(slug, seen)
+    out, feed_ok = RT.new_l5_actions(slug, seen)
+    assert feed_ok is True
     assert len(out) == 1
     age = (dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(
         out[0]["receipt_utc"])).total_seconds()
     assert age < EX.STALE_ACTION_MAX_S, "handled action must not start stale"
     assert out[0]["l5_event_utc"]          # L5's own time is preserved
     # and it is not handed out twice
-    assert RT.new_l5_actions(slug, seen) == []
+    assert RT.new_l5_actions(slug, seen) == ([], True)
 
 
 def test_the_stale_bound_itself_is_unchanged():
