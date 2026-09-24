@@ -52,6 +52,16 @@ class FakeHTTP:
         return self.data[path]
 
 
+@pytest.fixture(autouse=True)
+def _clear_catalogue():
+    """resolve_market caches catalogue pages process-wide, so one test's
+    pages would otherwise answer another test's walk."""
+    from src import l5_pmus_transport as _T
+    _T._CATALOGUE.clear()
+    yield
+    _T._CATALOGUE.clear()
+
+
 @pytest.fixture()
 def creds(monkeypatch):
     monkeypatch.setenv(Q1.KEY_ENV, "key-aaaaaaaaaaaa")

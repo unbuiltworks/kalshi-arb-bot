@@ -104,6 +104,39 @@ class _SignedHTTP:
 CATALOGUE_PAGE = 500
 CATALOGUE_MAX_PAGES = 8
 
+#: how long a fetched catalogue page may be reused.
+#:
+#: The walk is 8 sequential requests and takes 6.1s measured against the live
+#: gateway -- longer than the realtime probe's whole 5.0s poll period, and
+#: the preflight that calls it runs INSIDE that loop. Preflight retries for
+#: 13 attempts across a window, so an uncached miss would stall observation
+#: roughly 13 times for 6.1s: about 9% of the window spent not watching the
+#: book. That would degrade first-book latency and coverage -- the very gates
+#: this read path exists to satisfy.
+#:
+#: 45s is shorter than the 60s preflight retry interval, so a market that
+#: appears mid-window is still picked up on the next attempt and nothing is
+#: resolved from a page older than one retry cycle.
+CATALOGUE_TTL_S = 45.0
+
+#: page index -> (fetched_at, rows). Process-wide and bounded by page count.
+_CATALOGUE: Dict[int, Any] = {}
+
+
+def _catalogue_page(http: Any, base: str, page: int,
+                    now: Optional[float] = None) -> List[Any]:
+    """One listing page, reused while it is younger than the TTL."""
+    import time as _time
+    now = _time.time() if now is None else now
+    hit = _CATALOGUE.get(page)
+    if hit is not None and now - hit[0] < CATALOGUE_TTL_S:
+        return hit[1]
+    r = http.request("GET", "/v1/markets?limit=%d&offset=%d"
+                     % (CATALOGUE_PAGE, page * CATALOGUE_PAGE), None, base) or {}
+    rows = r.get("markets") or []
+    _CATALOGUE[page] = (now, rows)
+    return rows
+
 
 def resolve_market(http: Any, slug: str,
                    base: str = Q1.GATEWAY) -> Dict[str, Any]:
@@ -148,9 +181,7 @@ def resolve_market(http: Any, slug: str,
         pass                        # the catalogue below is the real answer
 
     for page in range(CATALOGUE_MAX_PAGES):
-        r = _get("/v1/markets?limit=%d&offset=%d"
-                 % (CATALOGUE_PAGE, page * CATALOGUE_PAGE)) or {}
-        rows = r.get("markets") or []
+        rows = _catalogue_page(http, base, page)
         for mk in rows:
             if isinstance(mk, Mapping) and mk.get("slug") == slug:
                 return dict(mk)

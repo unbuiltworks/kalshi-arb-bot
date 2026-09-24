@@ -411,6 +411,15 @@ def tx(http):
     return T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
 
 
+@pytest.fixture(autouse=True)
+def _clear_catalogue():
+    """The catalogue cache is process-wide, so one test's pages would
+    otherwise answer another test's walk."""
+    T._CATALOGUE.clear()
+    yield
+    T._CATALOGUE.clear()
+
+
 def test_the_catalogue_answers_when_the_singular_resource_404s():
     """The regression that failed market_readable on 35 consecutive windows:
     /v1/market/slug/{slug} serves sports, not cpc-* crypto windows."""
@@ -473,3 +482,49 @@ def test_market_readable_fails_closed_when_metadata_is_unavailable(creds):
     assert rep["preflight"] == "FAILED"
     assert "market_readable" in [c["check"] for c in rep["checks"]
                                  if not c["passed"]]
+
+
+# ------------------------------------------- the walk must not stall the loop
+
+def test_repeated_misses_do_not_refetch_the_catalogue():
+    """The preflight calling this runs inside the realtime probe's 5.0s poll
+    loop, and the full walk measured 6.1s against the live gateway. Uncached,
+    13 retries a window would stall observation for ~9% of it and degrade the
+    first-book and coverage gates this read path exists to satisfy."""
+    T._CATALOGUE.clear()
+    http = CatalogueHTTP([row("filler-%d" % i) for i in range(2000)])
+    for _ in range(5):
+        with pytest.raises(LookupError):
+            tx(http).market(SLUG)
+    pages = [p for _, p in http.calls if "limit=" in p]
+    assert len(pages) <= T.CATALOGUE_MAX_PAGES, (
+        "%d page fetches across 5 attempts" % len(pages))
+
+
+def test_a_market_that_appears_later_is_still_found():
+    """Caching must not make a miss permanent: a window published mid-session
+    has to resolve on the next preflight attempt."""
+    T._CATALOGUE.clear()
+    http = CatalogueHTTP([row("filler")])
+    with pytest.raises(LookupError):
+        tx(http).market(SLUG)
+    http.rows = [row("filler"), row(SLUG)]
+    T._CATALOGUE.clear()                    # TTL expiry, simulated
+    assert tx(http).market(SLUG)["slug"] == SLUG
+
+
+def test_the_cache_cannot_outlive_a_preflight_retry_cycle():
+    """A page must never be older than the retry interval that reads it, or
+    a market could be reported absent using evidence from a previous cycle."""
+    from scripts import l5_pmus_realtime_probe as P
+    assert T.CATALOGUE_TTL_S < P.PREFLIGHT_RETRY_S
+
+
+def test_a_cached_page_still_verifies_the_slug():
+    """Reuse must not relax the identity check."""
+    T._CATALOGUE.clear()
+    http = CatalogueHTTP([row("aec-nfl-lac-ten-2025-11-02")])
+    with pytest.raises(LookupError):
+        tx(http).market(SLUG)
+    with pytest.raises(LookupError):        # served from cache, same answer
+        tx(http).market(SLUG)
