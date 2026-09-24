@@ -104,6 +104,40 @@ class _SignedHTTP:
 CATALOGUE_PAGE = 500
 CATALOGUE_MAX_PAGES = 8
 
+#: how long a fetched catalogue page may be reused.
+#:
+#: The walk is 8 sequential requests and takes 6.1s measured against the live
+#: gateway -- longer than the realtime probe's whole 5.0s poll period, and
+#: the preflight that calls it runs INSIDE that loop. Preflight retries for
+#: 13 attempts across a window, so an uncached miss would stall observation
+#: roughly 13 times for 6.1s: about 9% of the window spent not watching the
+#: book. That would degrade first-book latency and coverage -- the very gates
+#: this read path exists to satisfy.
+#:
+#: 45s is shorter than the 60s preflight retry interval, so a market that
+#: appears mid-window is still picked up on the next attempt and nothing is
+#: resolved from a page older than one retry cycle.
+CATALOGUE_TTL_S = 45.0
+
+#: page index -> (fetched_at, rows). Process-wide and bounded by page count.
+_CATALOGUE: Dict[int, Any] = {}
+
+
+def _catalogue_page(http: Any, base: str, page: int,
+                    now: Optional[float] = None) -> List[Any]:
+    """One listing page, reused while it is younger than the TTL."""
+    import time as _time
+    now = _time.time() if now is None else now
+    key = (base, page)
+    hit = _CATALOGUE.get(key)
+    if hit is not None and now - hit[0] < CATALOGUE_TTL_S:
+        return hit[1]
+    r = http.request("GET", "/v1/markets?limit=%d&offset=%d"
+                     % (CATALOGUE_PAGE, page * CATALOGUE_PAGE), None, base) or {}
+    rows = r.get("markets") or []
+    _CATALOGUE[key] = (now, rows)
+    return rows
+
 
 def resolve_market(http: Any, slug: str,
                    base: str = Q1.GATEWAY) -> Dict[str, Any]:
@@ -136,31 +170,55 @@ def resolve_market(http: Any, slug: str,
     serving. Metadata and the executable book stay separate concerns: the
     contemporaneous book still comes from the authenticated WS feed.
     """
-    def _get(path: str) -> Any:
-        return http.request("GET", path, None, base)
+    # Hosts in order. The AUTHENTICATED api host is tried as well as the
+    # public gateway because the gateway demonstrably does not carry this
+    # series: probed while 1200z was live and trading, the gateway's
+    # singular resource 404s, and btc-updown-15m appears in 0 of 2,499
+    # catalogued markets and 0 of 57 under categories=crypto, while
+    # /v1/markets/{slug}/bbo answers 200 for the same slug. The api host
+    # answers 401 "Missing required API key headers" to every unauthenticated
+    # read, so it is a different, account-scoped surface that only the
+    # credential-holding recorder can see -- and it is the one place a market
+    # catalogue could still be served from. The transport signs a request
+    # only when base is the api host, so this read is signed there and
+    # anonymous on the gateway, exactly as each host expects.
+    hosts = [base] if base != Q1.GATEWAY else [Q1.API, Q1.GATEWAY]
 
-    try:
-        r = _get("/v1/market/slug/%s" % slug) or {}
-        mk = r.get("market") or r
-        if isinstance(mk, Mapping) and mk.get("slug") == slug:
-            return dict(mk)
-    except Exception:                                          # noqa: BLE001
-        pass                        # the catalogue below is the real answer
-
-    for page in range(CATALOGUE_MAX_PAGES):
-        r = _get("/v1/markets?limit=%d&offset=%d"
-                 % (CATALOGUE_PAGE, page * CATALOGUE_PAGE)) or {}
-        rows = r.get("markets") or []
-        for mk in rows:
+    # One host failing must never stop the other being tried, and the
+    # failure is caught as BaseException on purpose: an unloadable crypto
+    # backend raises a pyo3 PanicException, which is NOT an Exception, so
+    # `except Exception` would let a signing failure on the api host
+    # propagate and lose the gateway answer that was available all along.
+    # KeyboardInterrupt and SystemExit are never swallowed.
+    for host in hosts:
+        try:
+            r = http.request("GET", "/v1/market/slug/%s" % slug, None,
+                             host) or {}
+            mk = r.get("market") or r
             if isinstance(mk, Mapping) and mk.get("slug") == slug:
                 return dict(mk)
-        if len(rows) < CATALOGUE_PAGE:
-            break                                       # last page reached
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:                                  # noqa: BLE001
+            pass                    # the catalogue below is the real answer
+
+        for page in range(CATALOGUE_MAX_PAGES):
+            try:
+                rows = _catalogue_page(http, host, page)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException:                              # noqa: BLE001
+                break               # this host does not serve a catalogue
+            for mk in rows:
+                if isinstance(mk, Mapping) and mk.get("slug") == slug:
+                    return dict(mk)
+            if len(rows) < CATALOGUE_PAGE:
+                break                                   # last page reached
 
     raise LookupError(
-        "market metadata not served for %s: the singular resource 404s for "
-        "this series and the market is absent from the catalogue listing"
-        % slug)
+        "market metadata not served for %s on %s: the singular resource 404s "
+        "for this series and the market is absent from the catalogue listing"
+        % (slug, ", ".join(hosts)))
 
 
 class PmusTransport:
