@@ -56,10 +56,12 @@ resized.
 
 | gate | result |
 |---|---|
-| authenticated book from window open | **PASS** from `ec19b6b`: 0045z first two-sided book **+1.1 s**, before first trade (+15.1 s) and first L5 action (+7.0 s); 0 NO_BOOK |
-| preflight | **PASS** every window, 0 blocking failures: credentials, signed balances, buying power ≥ worst case, market state OPEN (authenticated stream) + published contract terms, UP=long, tick 0.01, min qty 0.01, book two-sided/authenticated/fresh, no positions, no open orders |
+| authenticated book from window open | **PASS**, build `72ee0ad` (fresh connection at window open, retried every 3 s): every full window 04:45Z–08:00Z had its first two-sided book at +0.2 s to +5.2 s, before the first trade. History: a subscription placed before open is silent ~3 min (+184 s); same-connection re-subscribe does not fix it (`ec19b6b`, 0115z); a fresh connection does |
+| preflight | **PASS** every window, 0 blocking failures: credentials, signed balances (buying power 63.05 ≥ 5.1738), market state OPEN (authenticated stream) + published contract terms, UP=long, tick 0.01, min qty 0.01, book two-sided/authenticated/fresh, no positions, no open orders |
 | frozen rule | **PASS**, `030d8bf` hash guard |
-| disarmed end-to-end | **PASS**: every translatable action reached the transport and was refused NOT_ARMED (0045z: 245; 0015z: 288); nothing transmitted, nothing committed |
+| maker semantics | **correct** (`4f68e3a`): restable actions rest post-only at L5's price; provenance carries `frozen_rule_output: STRICT_NOT_EVALUABLE` and `live_execution: REST_AT_L5_PRICE`; crossing actions take the authenticated touch capped at displayed depth |
+| disarmed end-to-end, **3 consecutive windows with L5 active** | **PASS**: 0730z 71 NOT_ARMED / 0 NO_BOOK; 0745z 46 NOT_ARMED / 3 STALE / 0 NO_BOOK; 0800z 60 NOT_ARMED / 1 STALE / 0 NO_BOOK. Book before L5's first action every window. STALE = frozen rule's own 2.0 s bound on a silent socket (0800z: 08:14:20, last 40 s, book 0.01/0.01, stream silent 2.8 s): refused, never priced against an unproven book. Nothing transmitted, committed or resting |
+| L5 dormancy note | L5 made no trades 01:17:52Z–~07:30Z; windows in that span carried no actions and are not counted |
 
 ## To authorize (owner only)
 
