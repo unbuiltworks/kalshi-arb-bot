@@ -233,3 +233,93 @@ def test_duplicate_states_are_not_double_counted():
     w.observe(b, [1.0])
     w.observe(b, [1.0])
     assert w.book_states_seen == 1 and w.trades_seen == 1
+
+
+# ------------------- a broken L5 feed must never read as a quiet market
+
+def test_a_failed_feed_is_not_reported_as_zero_actions(monkeypatch):
+    import sys
+
+    class Dead:
+        @staticmethod
+        def l5_activity(limit=100):
+            return None                     # the feed FAILED
+
+        @staticmethod
+        def action_key(r):
+            return "k"
+
+        @staticmethod
+        def l5_to_pmus_action(r):
+            return {"pmus_side": "UP"}
+
+    monkeypatch.setitem(sys.modules, "src.l5_pmus_realtime_observer", Dead)
+    actions, ok = RT.new_l5_actions(RT.current_slug(), set())
+    assert actions == [] and ok is False
+
+
+def test_a_genuinely_quiet_feed_is_healthy(monkeypatch):
+    import sys
+
+    class Quiet:
+        @staticmethod
+        def l5_activity(limit=100):
+            return []                       # L5 simply has not traded
+
+        @staticmethod
+        def action_key(r):
+            return "k"
+
+        @staticmethod
+        def l5_to_pmus_action(r):
+            return {"pmus_side": "UP"}
+
+    monkeypatch.setitem(sys.modules, "src.l5_pmus_realtime_observer", Quiet)
+    actions, ok = RT.new_l5_actions(RT.current_slug(), set())
+    assert actions == [] and ok is True
+
+
+def test_zero_actions_is_only_trustworthy_when_the_feed_was_healthy():
+    w = RT.Window(MK)
+    w.feed_polls, w.feed_failures = 10, 0
+    ok = w.summary(JN.Journal("/dev/null"))["l5_feed"]
+    assert ok["healthy"] is True and ok["zero_actions_is_trustworthy"] is True
+
+    w2 = RT.Window(MK)
+    w2.feed_polls, w2.feed_failures = 10, 4
+    bad = w2.summary(JN.Journal("/dev/null"))["l5_feed"]
+    assert bad["healthy"] is False
+    assert bad["zero_actions_is_trustworthy"] is False
+
+
+def test_preflight_retries_until_it_passes_not_once(monkeypatch, tmp_path):
+    """market_readable fails early because the PUBLIC gateway does not expose
+    a BTC15m window in its first minutes. One shot fails for a reason that
+    has nothing to do with the account."""
+    clock = {"t": 1790208000.0}
+    monkeypatch.setattr(RT.time, "time", lambda: clock["t"])
+    monkeypatch.setattr(RT, "new_l5_actions", lambda s, seen: ([], True))
+    monkeypatch.setattr(RT, "live_books", lambda s: [
+        {"t": clock["t"], "bid": "0.4", "ask": "0.6", "status": "OK"}])
+    monkeypatch.setattr(RT, "live_trades", lambda s: [])
+    monkeypatch.setattr(RT, "_creds_present", lambda: True)
+
+    calls = {"n": 0}
+
+    class Flaky:
+        def preflight(self, **kw):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                return {"preflight": "FAILED",
+                        "checks": [{"check": "market_readable",
+                                    "passed": False}]}
+            return {"preflight": "PASSED", "checks": []}
+
+    monkeypatch.setattr(RT, "_default_transport", lambda slug: Flaky())
+
+    def tick(_s):
+        clock["t"] += 70.0
+
+    RT.run_forever(str(tmp_path / "inv.json"), str(tmp_path / "j.jsonl"),
+                   max_windows=1, sleep_fn=tick)
+    assert calls["n"] >= 3, "must retry, not give up after one attempt"
