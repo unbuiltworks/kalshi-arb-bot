@@ -465,7 +465,8 @@ def test_the_catalogue_walk_is_bounded():
     with pytest.raises(LookupError):
         tx(http).market(SLUG)
     pages = [p for _, p in http.calls if "limit=" in p]
-    assert len(pages) <= T.PmusTransport.CATALOGUE_MAX_PAGES
+    # two hosts are walked (api then gateway), each bounded independently
+    assert len(pages) <= T.PmusTransport.CATALOGUE_MAX_PAGES * 2
 
 
 def test_a_later_page_still_resolves():
@@ -497,7 +498,7 @@ def test_repeated_misses_do_not_refetch_the_catalogue():
         with pytest.raises(LookupError):
             tx(http).market(SLUG)
     pages = [p for _, p in http.calls if "limit=" in p]
-    assert len(pages) <= T.CATALOGUE_MAX_PAGES, (
+    assert len(pages) <= T.CATALOGUE_MAX_PAGES * 2, (
         "%d page fetches across 5 attempts" % len(pages))
 
 
@@ -528,3 +529,108 @@ def test_a_cached_page_still_verifies_the_slug():
         tx(http).market(SLUG)
     with pytest.raises(LookupError):        # served from cache, same answer
         tx(http).market(SLUG)
+
+
+# ------------------------------- the authenticated host is tried, and signed
+
+class TwoHostHTTP:
+    """Gateway and api are different surfaces. The gateway does not carry
+    btc-updown-15m at all; the api answers 401 unless the request is signed,
+    which only the credential-holding recorder can do."""
+
+    def __init__(self, api_rows=(), gateway_rows=()):
+        self.api_rows, self.gateway_rows = list(api_rows), list(gateway_rows)
+        self.calls = []
+
+    def request(self, method, path, body=None, base=None):
+        self.calls.append((base, path))
+        rows = self.api_rows if base == Q1.API else self.gateway_rows
+        if path.startswith("/v1/market/slug/"):
+            raise RuntimeError("404 Market not found")
+        if path.startswith("/v1/markets?"):
+            q = dict(p.split("=", 1) for p in path.split("?", 1)[1].split("&")
+                     if "=" in p)
+            lim, off = int(q.get("limit", 500)), int(q.get("offset", 0))
+            return {"markets": rows[off:off + lim]}
+        raise RuntimeError("404 %s" % path)
+
+
+def test_a_market_only_the_api_host_serves_is_still_resolved():
+    """The gateway carries 0 of 2,499 markets for this series even while the
+    window is live and trading, so the account-scoped host must be tried."""
+    T._CATALOGUE.clear()
+    http = TwoHostHTTP(api_rows=[row(SLUG)], gateway_rows=[row("nfl-thing")])
+    assert T.resolve_market(http, SLUG)["slug"] == SLUG
+    assert any(b == Q1.API for b, _ in http.calls)
+
+
+def test_the_api_host_is_tried_before_the_gateway():
+    T._CATALOGUE.clear()
+    http = TwoHostHTTP(api_rows=[row(SLUG)], gateway_rows=[row(SLUG)])
+    T.resolve_market(http, SLUG)
+    assert http.calls[0][0] == Q1.API
+
+
+def test_an_api_host_that_401s_does_not_prevent_the_gateway_resolving():
+    """Sports still resolve from the public gateway when the signed host
+    refuses, so adding the api host cannot break what already worked."""
+    T._CATALOGUE.clear()
+
+    class Api401(TwoHostHTTP):
+        def request(self, method, path, body=None, base=None):
+            if base == Q1.API:
+                raise RuntimeError("401 Missing required API key headers")
+            return super().request(method, path, body, base)
+
+    http = Api401(gateway_rows=[row(SLUG)])
+    assert T.resolve_market(http, SLUG)["slug"] == SLUG
+
+
+def test_neither_host_serving_it_still_fails_closed():
+    T._CATALOGUE.clear()
+    http = TwoHostHTTP(api_rows=[row("a")], gateway_rows=[row("b")])
+    with pytest.raises(LookupError) as e:
+        T.resolve_market(http, SLUG)
+    assert Q1.API in str(e.value) and Q1.GATEWAY in str(e.value)
+
+
+def test_the_two_hosts_never_share_a_cached_page():
+    """Keying the cache by page alone would let the gateway's listing answer
+    a walk of the api host, and the two carry different markets."""
+    T._CATALOGUE.clear()
+    http = TwoHostHTTP(api_rows=[row("api-only")],
+                       gateway_rows=[row(SLUG)])
+    assert T.resolve_market(http, SLUG)["slug"] == SLUG
+    keys = {k[0] for k in T._CATALOGUE}
+    assert keys == {Q1.API, Q1.GATEWAY}
+
+
+def test_a_crypto_backend_panic_on_one_host_does_not_lose_the_other():
+    """Signing imports the Ed25519 backend, and an unloadable one raises a
+    pyo3 PanicException -- a BaseException, not an Exception. Caught live in
+    this container: it propagated out of resolve_market and would have lost
+    the gateway answer that was available all along."""
+    T._CATALOGUE.clear()
+
+    class Panic(BaseException):
+        pass
+
+    class PanickingApi(TwoHostHTTP):
+        def request(self, method, path, body=None, base=None):
+            if base == Q1.API:
+                raise Panic("Python API call failed")
+            return super().request(method, path, body, base)
+
+    http = PanickingApi(gateway_rows=[row(SLUG)])
+    assert T.resolve_market(http, SLUG)["slug"] == SLUG
+
+
+def test_keyboard_interrupt_is_never_swallowed_by_the_host_loop():
+    T._CATALOGUE.clear()
+
+    class Interrupting(TwoHostHTTP):
+        def request(self, method, path, body=None, base=None):
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        T.resolve_market(Interrupting(), SLUG)
