@@ -44,6 +44,7 @@ def probe_limits() -> SafetyLimits:
         max_total_exposure_usd=D("5"),
         max_abs_residual=D("10"),
         max_concurrent_markets=1,
+        max_live_orders=1,   # one live order at a time for the first probe
         daily_realized_loss_halt_usd=D("5"),
         band=None,          # a band is behavioural; the faithful engine has none
     )
