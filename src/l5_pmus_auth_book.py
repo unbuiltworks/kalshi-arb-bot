@@ -48,7 +48,10 @@ MAX_SUBSCRIBED = 6
 #: connection subscribing to an already-live market gets the full snapshot
 #: at once, three for three: 0000z +300.5s, 0030z +236.5s, 0100z +279.1s,
 #: each the instant the restarted service connected.
-RESUB_EVERY_S = 10.0
+#: 0415z: a reconnect at +0.1s landed before the market was live and went
+#: silent; the 10s retry got the book at +10.8s, after trading began at
+#: +6.9s. Retrying every 3s bounds that to ~+3s.
+RESUB_EVERY_S = 3.0
 
 
 def window_start(now: Optional[float] = None) -> int:
