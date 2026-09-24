@@ -88,34 +88,39 @@ def transport_with(book):
     return t
 
 
+def market(book, *, wait_s=0.0):
+    """live_market with clock and sleep injected, so no test ever waits on
+    the real polling interval."""
+    return R.live_market(transport_with(book), NOW, wait_s=wait_s,
+                         sleep=lambda _s: None, clock=lambda: NOW)
+
+
 def test_the_candidate_slug_tracks_the_clock():
     assert R.window_slug(NOW) == SLUG
     assert R.window_slug(NOW.replace(minute=59)).endswith("-1345z")
 
 
 def test_identity_is_confirmed_by_the_venue_echo_not_by_our_string():
-    m = R.live_market(transport_with(Book()), NOW)
+    m = market(Book())
     assert m["identity_confirmed"] is True
     assert m["venue_market_slug"] == SLUG
     assert m["source"].startswith("authenticated")
 
 
 def test_a_venue_echo_for_a_different_market_is_not_confirmed():
-    m = R.live_market(transport_with(Book(slug="cpc-btc-updown-15m-x")), NOW)
+    m = market(Book(slug="cpc-btc-updown-15m-x"))
     assert m["identity_confirmed"] is False
 
 
 def test_tradability_comes_from_the_venue_state():
-    assert R.live_market(transport_with(Book()), NOW)["open_tradable"] is True
-    closed = R.live_market(
-        transport_with(Book(state="MARKET_STATE_EXPIRED")), NOW)
-    assert closed["open_tradable"] is False
+    assert market(Book())["open_tradable"] is True
+    assert market(Book(state="MARKET_STATE_EXPIRED"))["open_tradable"] is False
 
 
 # ------------------------------------------- the order shape is the real one
 
 def test_the_proposed_order_joins_the_live_bid_and_is_envelope_bounded():
-    m = R.live_market(transport_with(Book()), NOW)
+    m = market(Book())
     i = R.proposed_intent(m)
     from src import l5_probe_manifest as PM
     assert i["price"] == "0.47"                 # the live best bid
@@ -124,7 +129,7 @@ def test_the_proposed_order_joins_the_live_bid_and_is_envelope_bounded():
 
 
 def test_an_expensive_market_shrinks_the_quantity_to_the_cap():
-    m = R.live_market(transport_with(Book(bids=(("0.99", "10"),))), NOW)
+    m = market(Book(bids=(("0.99", "10"),)))
     i = R.proposed_intent(m)
     from src import l5_probe_manifest as PM
     assert D(i["price"]) * D(i["qty"]) <= PM.probe_limits().max_usd_per_market
@@ -216,12 +221,33 @@ def test_an_armed_session_refuses_to_run(monkeypatch, creds):
     monkeypatch.setenv(Q1.LIVE_ENV, "YES")
     monkeypatch.setenv(Q1.SID_ENV, "s1")
     monkeypatch.setenv(Q1.ARM_ENV, "s1")
-    out = R.run()
+    out = R.run(wait_s=0.0, sleep=lambda _s: None, clock=lambda: NOW)
     assert "ABORT" in out and out["armed"] is True
 
 
 def test_no_confirmed_market_means_nothing_is_previewed(monkeypatch, creds):
     stub = transport_with(Book(slug="a-different-market"))
     monkeypatch.setattr(R.P, "PreviewOnlyTransport", lambda: stub)
-    out = R.run()
+    out = R.run(wait_s=0.0, sleep=lambda _s: None, clock=lambda: NOW)
     assert "ABORT" in out and "schema_trial" not in out
+
+
+def test_a_window_not_yet_published_is_waited_for_then_given_up_on():
+    """This venue publishes a BTC15m window's REST resources minutes after it
+    opens, and a 404 there is ordinary. The live run died on exactly this:
+    an unhandled HTTPError ended the session on a market simply not listed
+    yet. It must now be recorded and waited out, then given up on cleanly."""
+    class NotFound:
+        def __call__(self, method, path, body=None, base=None):
+            raise RuntimeError("HTTP Error 404: Not Found")
+
+    m = market(NotFound())
+    assert m["identity_confirmed"] is False
+    assert m["gave_up_after_s"] == 0.0
+    assert m["attempts"] and m["attempts"][0]["served"] is False
+    assert "404" in m["attempts"][0]["error"]
+
+
+def test_a_market_that_is_served_but_not_open_is_not_previewed():
+    m = market(Book(state="MARKET_STATE_EXPIRED"))
+    assert m["identity_confirmed"] is True and m["open_tradable"] is False

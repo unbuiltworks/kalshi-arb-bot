@@ -24,6 +24,7 @@ import datetime as dt
 import json
 import os
 import sys
+import time
 from decimal import Decimal as D
 
 from src import l5_order_body as OB
@@ -44,36 +45,71 @@ def window_slug(now: dt.datetime) -> str:
                                                 now.hour, m)
 
 
-def live_market(transport, now: dt.datetime) -> dict:
+def read_book(transport, slug: str) -> dict:
+    """The authenticated book for one slug, or an explicit miss.
+
+    A 404 here is ordinary, not exceptional: this venue publishes a BTC15m
+    window's REST resources some minutes after the window opens, and an
+    unhandled HTTPError would end the session on a market that is simply
+    not listed yet.
+    """
+    try:
+        r = transport.request(
+            "GET", "/v1/markets/%s/book" % slug, None, Q1.GATEWAY) or {}
+        return {"ok": True, "marketData": r.get("marketData") or {}}
+    except BaseException as exc:                               # noqa: BLE001
+        return {"ok": False, "error": "%s: %s" % (type(exc).__name__, exc)}
+
+
+def live_market(transport, now: dt.datetime, *, wait_s: float = 240.0,
+                sleep=time.sleep, clock=None) -> dict:
     """Confirm the executable market from the AUTHENTICATED book.
 
     The venue echoes `marketSlug` and reports `state` plus both sides of the
     book. Identity and tradability come from that answer, never from the
-    text of the slug we happened to construct.
+    text of the slug we happened to construct -- that slug is only ever a
+    candidate. Polls for a bounded period because the window may not be
+    published the instant it opens, then gives up cleanly.
     """
-    cand = window_slug(now)
-    book = transport.request(
-        "GET", "/v1/markets/%s/book" % cand, None, Q1.GATEWAY) or {}
-    md = book.get("marketData") or {}
-    bids, offers = md.get("bids") or [], md.get("offers") or []
+    clock = clock or (lambda: dt.datetime.now(dt.timezone.utc))
+    deadline = now.timestamp() + wait_s
+    attempts = []
+    while True:
+        t_now = clock()
+        cand = window_slug(t_now)
+        book = read_book(transport, cand)
+        md = book.get("marketData") or {}
+        bids, offers = md.get("bids") or [], md.get("offers") or []
 
-    def top(rows):
-        if not rows:
-            return None
-        px = rows[0].get("px") or {}
-        return D(str(px.get("value"))) if px.get("value") else None
+        def top(rows):
+            if not rows:
+                return None
+            px = (rows[0].get("px") or {}).get("value")
+            return D(str(px)) if px else None
 
-    return {
-        "candidate": cand,
-        "venue_market_slug": md.get("marketSlug"),
-        "identity_confirmed": md.get("marketSlug") == cand,
-        "state": md.get("state"),
-        "open_tradable": str(md.get("state") or "").upper().endswith("OPEN"),
-        "best_bid": str(top(bids)) if top(bids) is not None else None,
-        "best_ask": str(top(offers)) if top(offers) is not None else None,
-        "two_sided": bool(bids and offers),
-        "source": "authenticated GET /v1/markets/{slug}/book",
-    }
+        out = {
+            "candidate": cand,
+            "venue_market_slug": md.get("marketSlug"),
+            "identity_confirmed": md.get("marketSlug") == cand,
+            "state": md.get("state"),
+            "open_tradable": str(md.get("state") or "").upper().endswith("OPEN"),
+            "best_bid": str(top(bids)) if top(bids) is not None else None,
+            "best_ask": str(top(offers)) if top(offers) is not None else None,
+            "two_sided": bool(bids and offers),
+            "source": "authenticated GET /v1/markets/{slug}/book",
+            "attempts": attempts,
+        }
+        attempts.append({"utc": t_now.isoformat(), "slug": cand,
+                         "served": book.get("ok"),
+                         "error": book.get("error"),
+                         "state": md.get("state")})
+        if out["identity_confirmed"] and out["open_tradable"] \
+                and out["best_bid"]:
+            return out
+        if t_now.timestamp() >= deadline:
+            out["gave_up_after_s"] = round(wait_s, 1)
+            return out
+        sleep(10.0)
 
 
 def proposed_intent(mkt: dict) -> dict:
@@ -97,8 +133,9 @@ def proposed_intent(mkt: dict) -> dict:
             "mode": "MAKER"}
 
 
-def run() -> dict:
-    now = dt.datetime.now(dt.timezone.utc)
+def run(*, wait_s: float = 240.0, sleep=time.sleep, clock=None) -> dict:
+    clock = clock or (lambda: dt.datetime.now(dt.timezone.utc))
+    now = clock()
     t = P.PreviewOnlyTransport()
     out = {"utc": now.isoformat(),
            "api_key_fingerprint": P.key_fingerprint(),
@@ -109,10 +146,12 @@ def run() -> dict:
         out["ABORT"] = "session reports ARMED; refusing to run"
         return out
 
-    mkt = live_market(t, now)
+    mkt = live_market(t, now, wait_s=wait_s, sleep=sleep, clock=clock)
     out["market"] = mkt
-    if not (mkt["identity_confirmed"] and mkt["best_bid"]):
-        out["ABORT"] = "no confirmed live market with a bid; nothing previewed"
+    if not (mkt["identity_confirmed"] and mkt["open_tradable"]
+            and mkt["best_bid"]):
+        out["ABORT"] = ("no confirmed OPEN market with a bid within the wait "
+                        "window; nothing previewed")
         return out
 
     intent = proposed_intent(mkt)
