@@ -170,3 +170,66 @@ def test_the_session_rolls_through_windows_without_stopping(monkeypatch,
 class _NoPreflight:
     def preflight(self, **kw):
         return {"preflight": "FAILED", "checks": []}
+
+
+# ------------------------- measurement must not read a rolled ring buffer
+
+def test_first_book_is_remembered_from_when_it_was_seen(monkeypatch):
+    """The live state keeps only the last 2000 book states. A window that
+    overruns that must still report when the book FIRST appeared, not when
+    the surviving tail begins."""
+    w = RT.Window(MK)
+    ws = w.start
+    early = [{"t": ws + 3.0, "bid": "0.4", "ask": "0.6", "status": "OK"}]
+    w.observe(early, [])
+    assert w.first_book_t == ws + 3.0
+    # later the buffer has rolled: only much later states remain visible
+    w.observe([{"t": ws + 700.0, "bid": "0.4", "ask": "0.6", "status": "OK"}],
+              [])
+    assert w.first_book_t == ws + 3.0, "must not drift forward with the tail"
+
+
+def test_first_trade_is_remembered_across_a_rolled_trade_buffer():
+    w = RT.Window(MK)
+    ws = w.start
+    w.observe([], [ws + 9.0])
+    w.observe([], [ws + 800.0])
+    assert w.first_trade_t == ws + 9.0
+
+
+def test_coverage_accumulates_and_is_not_the_tail_only():
+    w = RT.Window(MK)
+    ws = w.start
+    for off in range(0, 900, 10):
+        w.observe([{"t": ws + off, "bid": "0.4", "ask": "0.6",
+                    "status": "OK"}], [])
+    c = w.coverage()
+    assert c["pct"] == 100.0
+    assert c["max_gap_s"] == 0.0
+
+
+def test_a_real_hole_still_shows_as_a_gap():
+    w = RT.Window(MK)
+    ws = w.start
+    w.observe([{"t": ws + 0.0, "bid": "0.4", "ask": "0.6", "status": "OK"}], [])
+    w.observe([{"t": ws + 600.0, "bid": "0.4", "ask": "0.6",
+                "status": "OK"}], [])
+    c = w.coverage()
+    assert c["max_gap_s"] == 585.0
+    assert c["pct"] == round(100.0 * 30 / 900, 1)
+
+
+def test_a_one_sided_state_never_counts_as_a_usable_book():
+    w = RT.Window(MK)
+    w.observe([{"t": w.start + 1.0, "bid": "0.4", "ask": None,
+                "status": "ONE_SIDED"}], [])
+    assert w.first_book_t is None
+    assert w.book_states_seen == 0
+
+
+def test_duplicate_states_are_not_double_counted():
+    w = RT.Window(MK)
+    b = [{"t": w.start + 5.0, "bid": "0.4", "ask": "0.6", "status": "OK"}]
+    w.observe(b, [1.0])
+    w.observe(b, [1.0])
+    assert w.book_states_seen == 1 and w.trades_seen == 1
