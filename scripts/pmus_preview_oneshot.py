@@ -132,34 +132,27 @@ def run() -> dict:
                        error=P.redact("%s: %s" % (type(exc).__name__, exc)))
         return rec
 
-    legacy = OB.build(intent, slug, OB.LEGACY)
-    documented = OB.build(intent, slug, OB.DOCUMENTED)
-    out["schema_trial"] = {
-        "legacy_what_submit_sends_today": shot("LEGACY", legacy),
-        "documented_published_schema": shot("DOCUMENTED", documented),
-    }
+    body = OB.from_intent(intent, slug)
+    out["submit_body"] = P.redact(body)
+    out["preview_equals_submit_body"] = OB.differences(
+        OB.preview_envelope(body)["request"], body
+    )["identical_but_for_preview_fields"]
 
-    accepted = [k for k, v in out["schema_trial"].items() if v["accepted"]]
-    out["accepted_schemas"] = accepted
+    out["proven_body"] = shot("PROVEN", body)
 
-    # constraint probes run against whichever representation the venue took
-    if len(accepted) == 1:
-        name = OB.DOCUMENTED if "documented" in accepted[0] else OB.LEGACY
+    if out["proven_body"]["accepted"]:
         off = dict(intent, price=str(D(intent["price"]) + D("0.005")))
         small = dict(intent, qty="0.005")
-        out["constraints"] = {
-            "schema_used": name,
-            "off_tick": shot("OFF_TICK", OB.build(off, slug, name)),
-            "sub_minimum_qty": shot("SUB_MIN_QTY", OB.build(small, slug, name)),
-        }
-        c = out["constraints"]
+        c = {"off_tick": shot("OFF_TICK", OB.from_intent(off, slug)),
+             "sub_minimum_qty": shot("SUB_MIN_QTY", OB.from_intent(small, slug))}
         c["tick_enforced"] = c["off_tick"]["accepted"] is False
         c["min_qty_enforced"] = c["sub_minimum_qty"]["accepted"] is False
         c["proven"] = bool(c["tick_enforced"] and c["min_qty_enforced"])
+        out["constraints"] = c
     else:
         out["constraints"] = {
-            "skipped": "exactly one schema must be accepted before a "
-                       "constraint probe means anything",
+            "skipped": "the proposed order itself was refused; a refusal of "
+                       "a bad shape would prove nothing",
             "proven": False}
 
     out["paths_touched"] = sorted({p for _, p in t.calls})
@@ -171,7 +164,7 @@ def main(argv=None) -> int:
     rep = run()
     print("PMUS_PREVIEW " + json.dumps(rep, default=str, separators=(",", ":")),
           flush=True)
-    return 0 if rep.get("accepted_schemas") else 1
+    return 0 if (rep.get("proven_body") or {}).get("accepted") else 1
 
 
 if __name__ == "__main__":

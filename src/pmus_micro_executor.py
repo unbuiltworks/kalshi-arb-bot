@@ -307,29 +307,15 @@ def outcome_price(order: Mapping[str, Any], venue_px: D) -> D:
 
 def _body(slug: str, outcome_side: str, price: D, qty: D,
           post_only: bool) -> dict[str, Any]:
-    qty = D(str(qty))
-    if qty <= 0:
+    """The proven order body. DELEGATES to src.l5_order_body, which holds the
+    single implementation so the L5 transport can share it without importing
+    an executor into the GET-only observer image. Behaviour is unchanged:
+    same fields, same NO-side 1-X wire mapping, same float quantity."""
+    from src import l5_order_body as OB
+    if D(str(qty)) <= 0:                 # preserved: this exact Halt code
         raise Halt("MICRO_NONPOSITIVE_QTY")
-    return {
-        "marketSlug": slug,
-        "type": "ORDER_TYPE_LIMIT",
-        # VENUE CONVENTION (docs.polymarket.us, Create Order): "price.value
-        # always represents the long side's price, regardless of which
-        # order intent you use ... To trade the NO side at any price X,
-        # set price.value = 1.00 - X." LIVE 2026-09-05/06: every NO-side
-        # post-only order priced in NO terms (24/24) was rejected because
-        # the venue read it as NO at 1-X, which crosses. Internally every
-        # price stays in the outcome's own terms; only the wire value maps.
-        "price": {"value": str(venue_price(outcome_side, price)),
-                  "currency": "USD"},
-        # PMUS documents quantity as number<double> when minimumTradeQty < 1.
-        "quantity": float(qty),
-        "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
-        "participateDontInitiate": bool(post_only),
-        "outcomeSide": outcome_side,
-        "action": "ORDER_ACTION_BUY",
-        "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
-    }
+    return OB.build(slug=slug, side=outcome_side, price=price, qty=qty,
+                    post_only=post_only)
 
 
 def authoritative_fill(order: Mapping[str, Any], requested_qty: D,

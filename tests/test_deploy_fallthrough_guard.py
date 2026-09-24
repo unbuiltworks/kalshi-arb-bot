@@ -94,3 +94,26 @@ def test_src_main_still_runs_when_explicitly_opted_in():
     from src import main as m
     src = inspect.getsource(m.main)
     assert "refuse_reason" in src and "KALSHI_BOT_REFUSED" in src
+
+
+def test_preview_manifest_is_one_shot_and_owner_gated():
+    """A preview session must never loop and never redeploy itself: it is a
+    deliberate, bounded act. Redeploy is gated on a directory only the owner
+    creates, exactly as the book-diag one-shot is."""
+    d = DEPLOY / "pmus_preview"
+    m = json.loads((d / "railway.json").read_text())
+    assert m["deploy"]["startCommand"] == "python3 -m scripts.pmus_preview_oneshot"
+    assert m["deploy"]["restartPolicyType"] == "NEVER"
+    assert m["build"]["watchPatterns"] == [
+        "deploy/pmus_preview/ENABLE_RUN_BY_OWNER_ONLY/**"]
+    assert not (d / "ENABLE_RUN_BY_OWNER_ONLY").exists()
+
+
+def test_the_preview_image_carries_no_order_capable_module():
+    import re
+    df = (DEPLOY / "pmus_preview" / "Dockerfile").read_text()
+    copied = re.findall(r"^COPY (\S+)", df, re.M)   # comments explain the
+    for banned in ("l5_pmus_transport", "pmus_q1_executor",   # exclusions,
+                   "pmus_micro_executor", "pmus_migration_close"):
+        assert not any(banned in c for c in copied), \
+            "%s must not be COPY'd into the preview image" % banned

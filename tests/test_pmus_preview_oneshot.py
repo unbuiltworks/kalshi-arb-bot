@@ -130,44 +130,84 @@ def test_an_expensive_market_shrinks_the_quantity_to_the_cap():
     assert D(i["price"]) * D(i["qty"]) <= PM.probe_limits().max_usd_per_market
 
 
-# --------------------------------------------- the two representations
+# --------------------------------------------- ONE proven serializer
 
-def test_legacy_is_exactly_what_submit_sent_before():
-    b = OB.build(INTENT, SLUG, OB.LEGACY)
-    assert b == {"clientOrderId": "c1", "marketSlug": SLUG, "outcome": "UP",
-                 "side": "BUY", "price": "0.47", "quantity": "1.00",
-                 "type": "LIMIT"}
+def test_the_body_is_the_one_that_has_actually_traded():
+    """Byte-for-byte the representation pmus_micro_executor sent on the
+    live venue, including the fields the old submit() omitted."""
+    from src import pmus_micro_executor as M
+    proven = M._body(SLUG, "OUTCOME_SIDE_YES", D("0.47"), D("1.00"), True)
+    assert OB.from_intent(INTENT, SLUG) == proven
 
 
-def test_documented_matches_the_published_schema(creds):
-    b = OB.build(INTENT, SLUG, OB.DOCUMENTED)
-    assert b["type"] == "ORDER_TYPE_LIMIT"
-    assert b["price"] == {"value": "0.47", "currency": "USD"}
-    assert b["quantity"] == 1.0
-    assert b["outcomeSide"] == "OUTCOME_SIDE_YES"
-    assert b["action"] == "ORDER_ACTION_BUY"
-    assert b["participateDontInitiate"] is True
+def test_the_no_side_price_is_inverted_on_the_wire():
+    """The defect that got 24 of 24 real NO orders rejected on 2026-09-05/06:
+    price.value is always the LONG side's price, so NO at X goes out as 1-X."""
+    down = OB.from_intent(dict(INTENT, side="DOWN"), SLUG)
+    assert down["outcomeSide"] == "OUTCOME_SIDE_NO"
+    assert down["price"]["value"] == "0.53"
+    up = OB.from_intent(INTENT, SLUG)
+    assert up["price"]["value"] == "0.47"
+
+
+def test_the_old_hand_written_representation_is_gone():
+    b = OB.from_intent(INTENT, SLUG)
     assert "outcome" not in b and "side" not in b
+    assert b["type"] == "ORDER_TYPE_LIMIT" and b["type"] != "LIMIT"
+    assert isinstance(b["price"], dict) and b["price"]["currency"] == "USD"
+    assert isinstance(b["quantity"], float)
+    assert b["manualOrderIndicator"] == "MANUAL_ORDER_INDICATOR_AUTOMATIC"
 
 
-def test_the_two_representations_really_do_disagree(creds):
-    d = OB.differences(OB.build(INTENT, SLUG, OB.DOCUMENTED),
-                       OB.build(INTENT, SLUG, OB.LEGACY))
-    assert not d["identical_but_for_preview_fields"]
+def test_the_proven_executor_delegates_rather_than_keeping_a_copy():
+    """Two implementations would drift; there must be exactly one."""
+    src = Path("src/pmus_micro_executor.py").read_text()
+    body = src.split("def _body(")[1].split("def authoritative_fill(")[0]
+    assert "OB.build" in body
+    assert "ORDER_TYPE_LIMIT" not in body and "outcomeSide" not in body
+
+
+def test_preview_and_submit_send_the_same_body():
+    b = OB.from_intent(INTENT, SLUG)
+    assert OB.preview_envelope(b)["request"] == b
+    assert OB.differences(b, b)["identical_but_for_preview_fields"]
 
 
 def test_submit_has_no_body_of_its_own():
-    """If submit ever serializes again, a preview stops proving anything."""
     src = Path("src/l5_pmus_transport.py").read_text()
     body = src.split("def submit(")[1].split("def cancel(")[0]
-    assert "OB.build" in body
-    assert "clientOrderId" not in body and "marketSlug" not in body
+    assert "OB.from_intent" in body
+    assert "marketSlug" not in body and "clientOrderId" not in body
 
 
-def test_default_schema_is_still_legacy_until_evidence():
-    """Changing execution before the venue has answered is exactly what the
-    preview exists to prevent."""
-    assert OB.DEFAULT_SCHEMA == OB.LEGACY
+def test_the_shared_serializer_imports_no_executor():
+    """It is COPY'd into the GET-only observer image, so it must not drag an
+    order path in with it. Checked on the AST: the module documents WHY it
+    is separate from the executors, so prose naming them is expected and
+    only executable code is examined."""
+    import ast
+    tree = ast.parse(Path("src/l5_order_body.py").read_text())
+    imported = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            imported |= {a.name for a in n.names}
+        elif isinstance(n, ast.ImportFrom):
+            imported.add(n.module or "")
+            imported |= {"%s.%s" % (n.module or "", a.name) for a in n.names}
+    for bad in ("pmus_q1_executor", "pmus_micro_executor", "urllib",
+                "l5_pmus_transport"):
+        assert not any(bad in m for m in imported), \
+            "shared serializer imports %s" % bad
+    docs = set()
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Module, ast.ClassDef, ast.FunctionDef)):
+            d = ast.get_docstring(n, clean=False)
+            if d:
+                docs.add(d)
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) \
+                and n.value not in docs:
+            assert "/v1/order" not in n.value, "endpoint in executable code"
 
 
 # ------------------------------------------------------------ the run itself
