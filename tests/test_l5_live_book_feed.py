@@ -179,3 +179,184 @@ def test_the_recorder_image_does_not_gain_the_feed_or_the_probe():
     for banned in ("l5_live_book_feed", "l5_pmus_live_oneshot",
                    "l5_live_authorization"):
         assert not [l for l in copies if banned in l], banned
+
+
+# ---------------------------------------------- the real _run -> _session path
+#
+# Probe 01 on cpc-btc-updown-15m-2026-09-24-1900z never armed. The feed
+# reported:
+#
+#   "errors": ["NameError: name 'asyncio' is not defined"]
+#
+# `_run` imported asyncio inside its own body and `_session` used
+# asyncio.wait_for and asyncio.TimeoutError, which that import did not reach.
+# Both methods were marked `pragma: no cover` and every feed test above used
+# a double that bypassed them, so 20 passing tests could not see it.
+#
+# These tests drive the actual code path -- _run, asyncio.run, _session, the
+# websocket loop -- with a fake transport, far enough to execute the lines
+# that referenced the missing name.
+
+import asyncio as _asyncio
+import json as _json
+import sys
+import types
+
+
+class _FakeWS:
+    """A websocket that serves canned frames, then stops the session."""
+
+    def __init__(self, frames, feed):
+        self._frames = list(frames)
+        self._feed = feed
+        self.sent = []
+
+    async def send(self, payload):
+        self.sent.append(payload)
+
+    async def recv(self):
+        if self._frames:
+            return _json.dumps(self._frames.pop(0))
+        # nothing left: end the loop rather than hanging the test
+        self._feed._stop.set()
+        return _json.dumps({})
+
+
+class _FakeConnect:
+    def __init__(self, ws):
+        self._ws = ws
+
+    async def __aenter__(self):
+        return self._ws
+
+    async def __aexit__(self, *a):
+        return False
+
+
+def _install_fake_websockets(monkeypatch, ws):
+    mod = types.ModuleType("websockets")
+    mod.connect = lambda url, **kw: _FakeConnect(ws)
+    monkeypatch.setitem(sys.modules, "websockets", mod)
+    return mod
+
+
+def _credentials(monkeypatch):
+    from src import pmus_ws_evidence_recorder as R
+    monkeypatch.setenv(R.KEY_ENV, "test-key-id")
+    monkeypatch.setenv(R.SECRET_ENV, "dGVzdC1zZWNyZXQtbm90LWEtcmVhbC1rZXktMDAwMA==")
+    # the signature itself is proven elsewhere; this test is about the
+    # session loop, and the crypto backend is unavailable in this sandbox.
+    monkeypatch.setattr(R, "auth_headers",
+                        lambda k, s, path=None, now_ms=None: {"X-PM-Access-Key": k})
+
+
+def test_the_real_session_loop_runs_and_folds_a_book(monkeypatch):
+    """_run -> asyncio.run(_session) -> the recv loop, for real.
+
+    This is the test that would have caught probe 01: with asyncio missing
+    from _session's scope, the wait_for line raises NameError and no book
+    ever arrives.
+    """
+    f = F.AuthenticatedBookFeed("cpc-btc-updown-15m-2026-09-23-1615z")
+    ws = _FakeWS([book_msg(f.market, "0.40", "0.60")], f)
+    _install_fake_websockets(monkeypatch, ws)
+    _credentials(monkeypatch)
+
+    f._run()                      # the real thing, synchronously
+
+    assert f.errors == [], f.errors
+    assert f.latest() is not None, "no book arrived through the real loop"
+    assert f.latest()["bid"] == "0.40"
+    assert f.latest()["ask"] == "0.60"
+    assert ws.sent, "the session subscribed"
+
+
+def test_the_session_subscribes_through_the_recorders_guard(monkeypatch):
+    f = F.AuthenticatedBookFeed("cpc-btc-updown-15m-2026-09-23-1615z")
+    ws = _FakeWS([book_msg(f.market, "0.40", "0.60")], f)
+    _install_fake_websockets(monkeypatch, ws)
+    _credentials(monkeypatch)
+
+    f._run()
+
+    frames = [_json.loads(s) for s in ws.sent]
+    assert frames, "at least one subscribe frame"
+    for fr in frames:
+        assert set(fr) == {"subscribe"}, fr
+        assert fr["subscribe"]["market_slugs"] == [f.market]
+
+
+def test_asyncio_is_reachable_from_the_session_itself():
+    """The defect stated directly: _session's own globals must carry it.
+
+    A function-local import in _run satisfies _run and nothing else. This
+    asserts the name resolves where it is actually used.
+    """
+    import inspect
+    src = inspect.getsource(F.AuthenticatedBookFeed._session)
+    assert "asyncio." in src, "the session uses asyncio"
+    assert "asyncio" in F.AuthenticatedBookFeed._session.__globals__, (
+        "asyncio must be importable from _session's module scope, not from "
+        "some other function's body")
+
+
+def test_a_timeout_does_not_end_the_session(monkeypatch):
+    """asyncio.TimeoutError is caught and the loop continues.
+
+    The other line that referenced the missing name, so it gets its own test.
+    """
+    f = F.AuthenticatedBookFeed("cpc-btc-updown-15m-2026-09-23-1615z")
+    state = {"first": True}
+
+    class TimingOutWS(_FakeWS):
+        async def recv(self):
+            if state["first"]:
+                state["first"] = False
+                raise _asyncio.TimeoutError()
+            return await super().recv()
+
+    ws = TimingOutWS([book_msg(f.market, "0.41", "0.61")], f)
+    _install_fake_websockets(monkeypatch, ws)
+    _credentials(monkeypatch)
+
+    f._run()
+
+    assert f.errors == [], f.errors
+    assert f.latest()["bid"] == "0.41", "the loop survived the timeout"
+
+
+def test_an_unparseable_frame_is_skipped_not_fatal(monkeypatch):
+    f = F.AuthenticatedBookFeed("cpc-btc-updown-15m-2026-09-23-1615z")
+
+    class JunkWS(_FakeWS):
+        async def recv(self):
+            if self._frames:
+                self._frames.pop(0)          # consume it, or the loop never ends
+                return "{not json"
+            self._feed._stop.set()
+            return _json.dumps({})
+
+    ws = JunkWS([{"junk": True}], f)
+    _install_fake_websockets(monkeypatch, ws)
+    _credentials(monkeypatch)
+
+    f._run()
+    assert f.errors == [], f.errors
+
+
+def test_a_connect_failure_is_recorded_not_raised(monkeypatch):
+    f = F.AuthenticatedBookFeed("cpc-btc-updown-15m-2026-09-23-1615z")
+    mod = types.ModuleType("websockets")
+
+    def boom(url, **kw):
+        raise OSError("connection refused")
+
+    mod.connect = boom
+    monkeypatch.setitem(sys.modules, "websockets", mod)
+    _credentials(monkeypatch)
+
+    f._run()                      # must not raise out of the thread body
+
+    assert f.errors and "OSError" in f.errors[0]
+    assert f.connected is False
+    assert f.latest() is None
