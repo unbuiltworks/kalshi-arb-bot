@@ -58,6 +58,13 @@ RESUB_EVERY_S = 3.0
 #: healthy window needs 1-2, so 10 is far outside normal and never delays one.
 RESUB_FAST_MAX = 10
 RESUB_SLOW_S = 30.0
+#: a connected socket silent this long while the open window already has a
+#: book is treated as dead and replaced. 2026-09-24 1215z, after the venue's
+#: post-maintenance server restarts ("1001 server shutting down" x3), our
+#: socket stayed open but delivered 26 book updates in the window while the
+#: independent recorder received 1,747; 115 L5 actions were refused STALE.
+#: A legitimately quiet market was measured silent ~2.8s, far below this.
+STALL_S = 10.0
 
 
 def window_start(now: Optional[float] = None) -> int:
@@ -107,6 +114,8 @@ class AuthBook:
         self.pre_book_n: Dict[str, int] = {}
         self.first_state: Dict[str, Dict[str, float]] = {}
         self.forced_reconnect = False
+        self.stall_reconnects = 0
+        self.last_stall_t = 0.0
         #: slug -> [first forced-reconnect t, last, count]
         self.resub: Dict[str, List[float]] = {}
         self.connected = False
@@ -276,6 +285,18 @@ class AuthBook:
                 out.append(slug)
         return out
 
+    def stall_due(self, now: float) -> bool:
+        """The open window has a book, yet the socket has gone silent."""
+        if not self.connected or self.last_frame_t is None:
+            return False
+        if now - self.last_frame_t < STALL_S:
+            return False
+        if now - self.last_stall_t < (STALL_S if self.stall_reconnects < RESUB_FAST_MAX
+                                      else RESUB_SLOW_S):
+            return False
+        cur = slug_for(window_start(now))
+        return cur in self.first_book
+
     def note_resub(self, slug: str, now: float) -> None:
         r = self.resub.get(slug)
         self.resub[slug] = [now, now, 1] if r is None else [r[0], now, r[2] + 1]
@@ -292,6 +313,7 @@ class AuthBook:
     def status(self) -> Dict[str, Any]:
         now = self.clock()
         return {"connected": self.connected, "connects": self.connects,
+                "stall_reconnects": self.stall_reconnects,
                 "subscribed": list(self.subscribed),
                 "stream_age_s": (round(now - self.last_frame_t, 1)
                                  if self.last_frame_t else None),
@@ -346,6 +368,11 @@ class AuthBook:
                                 break                  # fresh, small set
                             await self._subscribe(ws, want)
                         now = self.clock()
+                        if self.stall_due(now):
+                            self.stall_reconnects += 1
+                            self.last_stall_t = now
+                            self.forced_reconnect = True
+                            break                  # dead socket: replace it
                         due = self.resub_due(now)
                         if due:
                             for slug in due:

@@ -542,3 +542,12 @@ def test_fruitless_reconnects_back_off():
         t += AB.RESUB_EVERY_S
     assert b.resub_due(t) == []                     # slowed down now
     assert b.resub_due(t - AB.RESUB_EVERY_S + AB.RESUB_SLOW_S) == [SLUG]
+
+
+def test_a_silent_socket_with_a_book_is_replaced():
+    b, clock = live_book(t0=WS + 5.0)
+    b.first_book[SLUG] = WS + 5.0
+    assert b.stall_due(WS + 5.0 + 2.8) is False      # ordinary quiet
+    assert b.stall_due(WS + 5.0 + AB.STALL_S) is True
+    b.stall_reconnects, b.last_stall_t = 1, WS + 15.0
+    assert b.stall_due(WS + 16.0) is False           # not again at once
