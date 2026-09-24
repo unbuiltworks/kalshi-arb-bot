@@ -41,6 +41,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from src import pmus_auth as Q1
 from src import pmus_fees as fees
+from src.l5_pmus_transport import resolve_market
 
 BTC15M_SERIES = "btc-updown-15m"
 BTC15M_SLUG_RE = re.compile(r"^cpc-btc-updown-15m-\d{4}-\d{2}-\d{2}-\d{4}z$")
@@ -228,16 +229,20 @@ def preflight(slug: str, http: Any,
 
     # Authoritative market METADATA. /v1/markets/{slug} (plural) 404s and
     # /bbo returns QUOTE data, so series, outcomes, tick, minimum quantity
-    # and tradability had nothing to read from. This singular resource is
-    # what the recorder's own enriched module already reads.
-    raw, got = get(lambda: http.request(
-        "GET", "/v1/market/slug/%s" % slug, None, Q1.GATEWAY) or {},
-        "market_readable")
+    # and tradability had nothing to read from.
+    #
+    # The singular /v1/market/slug/{slug} serves SPORTS and 404s "Market not
+    # found" for a BTC15m window even after that window has traded and
+    # settled, so the catalogue listing is the resource that answers for
+    # this series. Resolution lives in the transport; this shares it rather
+    # than keeping a second copy, because the gate evidence collected here
+    # has to mean what it means there.
+    raw, got = get(lambda: resolve_market(http, slug), "market_readable")
     ok &= got
     mk: Dict[str, Any] = {}
     if got:
         gate("market_readable", True)
-        mk = raw.get("market") or raw
+        mk = raw
         ok &= gate("market_resolves", bool(mk), mk.get("slug"))
         ok &= gate("market_series_is_btc15m",
                    BTC15M_SERIES in str(mk.get("seriesSlug")
