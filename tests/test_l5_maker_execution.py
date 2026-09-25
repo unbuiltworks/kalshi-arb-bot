@@ -233,3 +233,101 @@ def test_obstruction_counts_what_the_envelope_prevented():
     assert d["maker_blocked_by_one_live"] == 2
     assert d["maker_blocked_by_envelope"] == 1
     assert d["maker_blocked_other"] == {"BAND": 1}
+
+
+# ============ the treatment driving the REAL order path, end to end ========
+
+def _maker_row():
+    """An L5 action strictly inside our touch: restable, hence unevaluable."""
+    import tests.test_l5_live_execution as L
+    # L5 at 0.42 with our ask at 0.60 -> restable, so the frozen rule calls it
+    # MAKER and refuses STRICT_NOT_EVALUABLE for want of interaction evidence
+    return L.row(l5px="0.42", ask="0.60", bid="0.30")
+
+
+def _drive(tmp_path, **flags):
+    import tests.test_l5_quantity_quantization as Q
+    import tests.test_l5_live_execution as L
+    import src.l5_live_execution as EX
+    from src import l5_probe_manifest as PM
+    tp = Q.GridTransport()
+    store = EX.InventoryStore(str(tmp_path / "inv.json"))
+    ex = EX.FaithfulExecutor(store, PM.probe_limits(), transport=tp,
+                             lam=PM.LAMBDA, now_fn=L.NOW, **flags)
+    rec = ex.handle(_maker_row(), {}, market=Q.MARKET, window="0215z")
+    return rec, tp, store
+
+
+def test_without_the_treatment_a_passive_action_is_still_refused(tmp_path):
+    rec, tp, _ = _drive(tmp_path)
+    assert rec["refused_reason"] == "STRICT_NOT_EVALUABLE"
+    assert tp.sent == []
+
+
+def test_with_the_treatment_it_reaches_the_order_post(tmp_path):
+    rec, tp, store = _drive(tmp_path, maker_treatment=True)
+    assert rec["refused_reason"] is None, rec["refused_reason"]
+    assert rec["ORDER"]["submitted"] is True
+    assert tp.paths == ["/v1/order/preview", "/v1/orders"], "preview first"
+    assert store.live_order_count() == 1
+
+
+def test_the_order_rests_at_l5s_own_price(tmp_path):
+    rec, tp, _ = _drive(tmp_path, maker_treatment=True)
+    assert D(str(tp.sent[0]["price"])) == D("0.42")
+    assert rec["MAKER_TREATMENT"]["rested_at_l5_price"] == "0.42"
+
+
+def test_the_order_is_post_only_on_the_wire(tmp_path):
+    from src import l5_order_body as OB
+    import tests.test_l5_quantity_quantization as Q
+    rec, tp, _ = _drive(tmp_path, maker_treatment=True)
+    body = OB.from_intent(tp.sent[0], Q.MARKET)
+    assert body["participateDontInitiate"] is True
+
+
+def test_the_quantity_is_floored_not_rounded_up(tmp_path):
+    rec, tp, _ = _drive(tmp_path, maker_treatment=True)
+    sent = D(str(tp.sent[0]["qty"]))
+    desired = D(rec["MAKER_TREATMENT"]["qty_desired"])
+    assert sent <= desired
+    assert (sent / D("0.01")) == (sent / D("0.01")).to_integral_value()
+
+
+def test_maker_only_does_not_block_the_maker_treatment(tmp_path):
+    rec, tp, _ = _drive(tmp_path, maker_treatment=True, maker_only=True)
+    assert rec["ORDER"]["submitted"] is True
+
+
+def test_maker_only_blocks_a_crossing_action(tmp_path):
+    import tests.test_l5_quantity_quantization as Q
+    import tests.test_l5_live_execution as L
+    import src.l5_live_execution as EX
+    from src import l5_probe_manifest as PM
+    tp = Q.GridTransport()
+    store = EX.InventoryStore(str(tmp_path / "inv.json"))
+    ex = EX.FaithfulExecutor(store, PM.probe_limits(), transport=tp,
+                             lam=PM.LAMBDA, now_fn=L.NOW,
+                             maker_treatment=True, maker_only=True)
+    rec = ex.handle(L.row(), {}, market=Q.MARKET, window="0215z")
+    # L.row() crosses, so the frozen rule calls it TAKER
+    assert rec["refused_reason"] == "MAKER_ONLY_NO_TAKER"
+    assert tp.sent == [], "no taker fallback, by construction"
+
+
+def test_the_treatment_does_not_rescue_any_other_refusal(tmp_path):
+    """Stale, no-book and depth refusals stand exactly as the rule made them."""
+    import tests.test_l5_quantity_quantization as Q
+    import tests.test_l5_live_execution as L
+    import src.l5_live_execution as EX
+    from src import l5_probe_manifest as PM
+    tp = Q.GridTransport()
+    store = EX.InventoryStore(str(tmp_path / "inv.json"))
+    ex = EX.FaithfulExecutor(store, PM.probe_limits(), transport=tp,
+                             lam=PM.LAMBDA, now_fn=L.NOW,
+                             maker_treatment=True)
+    row = _maker_row()
+    row["pmus"]["bbo"] = {"bid": None, "ask": None}       # no book
+    rec = ex.handle(row, {}, market=Q.MARKET, window="0215z")
+    assert rec["refused_reason"] != "STRICT_NOT_EVALUABLE"
+    assert tp.sent == []
