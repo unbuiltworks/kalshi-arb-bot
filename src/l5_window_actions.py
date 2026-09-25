@@ -81,6 +81,12 @@ class FeedHealth:
         self.new_actions = 0
         self.last_ok_t: Optional[float] = None
         self.last_error: Optional[str] = None
+        # rows that were in the window by TIME and still did not belong to
+        # this market. Probe 05 had six and traded two of them.
+        self.identity_refused = 0
+        self.identity_reasons: Dict[str, int] = {}
+        self.admitted_tokens: Dict[str, int] = {}
+        self.binding: Optional[Dict[str, Any]] = None
 
     def as_dict(self) -> Dict[str, Any]:
         return {"polls": self.polls, "polls_ok": self.polls_ok,
@@ -93,6 +99,11 @@ class FeedHealth:
                                     self.last_ok_t,
                                     dt.timezone.utc).isoformat()),
                 "last_error": self.last_error,
+                "identity_refused": self.identity_refused,
+                "identity_reasons": dict(self.identity_reasons),
+                "admitted_tokens": dict(self.admitted_tokens),
+                "market_binding": self.binding,
+                "foreign_tokens_admitted": 0,
                 "healthy": self.polls_ok > 0 and self.polls_failed == 0}
 
 
@@ -173,13 +184,16 @@ def new_l5_actions(slug: str, seen: Set[str],
         verdict = MB.admit(r, binding)
         if verdict["verdict"] != MB.ADMITTED:
             if health is not None:
-                health.identity_refused = getattr(
-                    health, "identity_refused", 0) + 1
-                health.identity_reasons = getattr(
-                    health, "identity_reasons", {})
+                health.identity_refused += 1
                 health.identity_reasons[verdict["verdict"]] = (
                     health.identity_reasons.get(verdict["verdict"], 0) + 1)
             continue
+        if health is not None:
+            tok = str(verdict.get("token"))
+            health.admitted_tokens[tok] = (
+                health.admitted_tokens.get(tok, 0) + 1)
+            if health.binding is None and binding is not None:
+                health.binding = binding.as_dict()
         # the whole economic identity, not the transaction hash. One
         # transaction can carry two fills at different prices, and hashing
         # by tx silently drops the second.
