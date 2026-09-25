@@ -23,13 +23,23 @@ def test_the_action_receipt_is_now_not_the_l5_event_time(monkeypatch):
     separately so nothing about when L5 acted is lost."""
     ws = int(time.time() // RT.WINDOW_S) * RT.WINDOW_S
     slug = RT.current_slug()
+    # bind the window to a market carrying this row's token, so the identity
+    # gate has something authoritative to match against without a network call
+    from src import l5_market_binding as MB
+    from src import l5_window_actions as WA
+    WA._BINDINGS[int(ws)] = MB.Binding(
+        window_start=int(ws), condition_id="c",
+        token_up="77777777", token_down="88888888", slug="bound")
 
     class FakeObs:
         @staticmethod
         def l5_activity(limit=100):
             return [{"timestamp": ws + 5.0, "outcome": "Up", "side": "BUY",
                      "price": "0.70", "size": "22.13", "usdcSize": "15",
-                     "transactionHash": "0xaa", "conditionId": "c"}]
+                     "transactionHash": "0xaa", "conditionId": "c",
+                     # a real activity row carries the token it traded, and
+                     # the identity gate admits on that token
+                     "asset": "77777777"}]
 
         @staticmethod
         def action_key(r):

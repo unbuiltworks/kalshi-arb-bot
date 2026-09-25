@@ -582,12 +582,34 @@ def test_the_probe_refuses_to_arm_without_an_authenticated_book(
 # builds the row with O.action_key and O.l5_to_pmus_action under an "l5" key.
 # The probe now does the same.
 
+# A real activity row carries the CTF token it traded, and the identity gate
+# admits an action only if that token is one of the two the venue publishes
+# for the window. These fixtures carry one, and the binding is injected, so
+# what they exercise is the probe path -- not the network, and not the
+# admission policy, which is tested in test_l5_market_identity.py.
+TOKEN_UP, TOKEN_DOWN = "11111111", "22222222"
+
 RAW_ACTIVITY = {"timestamp": None, "outcome": "Up", "side": "BUY",
                 "price": 0.47, "size": 12.0, "usdcSize": 5.64,
-                "transactionHash": "0xabc"}
+                "transactionHash": "0xabc", "asset": TOKEN_UP,
+                "conditionId": "0xcond"}
+
+
+def bind(market=None):
+    """Bind the window under test to a market carrying these tokens."""
+    from src import l5_market_binding as MB
+    from src import l5_window_actions as WA
+    ws = P.window_start(market or MARKET)
+    if ws is None:          # an unparseable slug binds to nothing, on purpose
+        return None
+    WA._BINDINGS[int(ws)] = MB.Binding(
+        window_start=int(ws), condition_id="0xcond",
+        token_up=TOKEN_UP, token_down=TOKEN_DOWN, slug="bound")
+    return ws
 
 
 def raw_at(t, **kw):
+    bind()
     return dict(RAW_ACTIVITY, timestamp=t, **kw)
 
 
@@ -595,7 +617,9 @@ def test_a_built_action_is_readable_by_the_frozen_rule():
     """The property Probe 02 lacked, asserted end to end."""
     import src.l5_faithful_translation as FT
 
-    ws = P.window_start(MARKET)
+    # the row is built lazily inside the feed lambda, which runs AFTER the
+    # binding lookup, so the window is bound up front here
+    ws = bind()
     acts, ok = P.new_l5_actions(MARKET, set(),
                                 activity=lambda limit=100: [raw_at(ws + 10)])
     assert ok is True
