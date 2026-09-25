@@ -29,12 +29,20 @@ import os
 import re
 import sys
 import urllib.error
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from src import pmus_auth as Q1
 
 #: the order Probe 04 left unresolved
 ORDER_ID = os.getenv("RECOVERY_ORDER_ID", "CQ5NPBADMYC3").strip()
+
+#: every venue order id to read in full, comma separated. Probe 05 filled
+#: eighteen orders and its ACKs all said filled_qty 0, so the average fill
+#: price and commission exist ONLY at the venue -- the journal never held
+#: them. One GET each is the authoritative way to complete the per-order
+#: table, and it is still GET.
+ORDER_IDS = [x.strip() for x in
+             os.getenv("RECOVERY_ORDER_IDS", "").split(",") if x.strip()]
 MARKET = os.getenv("RECOVERY_MARKET",
                    "cpc-btc-updown-15m-2026-09-25-1300z").strip()
 
@@ -166,6 +174,35 @@ def main() -> int:
                    "claims no authorization and writes no inventory state."),
     }
     print("PMUS_RECOVERY " + redact(json.dumps(out, default=str)), flush=True)
+
+    # one line per order, so eighteen orders cannot truncate each other
+    for oid in ORDER_IDS:
+        r = get("/v1/order/%s" % oid)
+        row = (r.get("body") or {}).get("order") if r.get("ok") else None
+        if isinstance(row, Mapping):
+            print("PMUS_ORDER " + redact(json.dumps({
+                "id": row.get("id"),
+                "marketSlug": row.get("marketSlug"),
+                "side": row.get("side"),
+                "outcomeSide": row.get("outcomeSide"),
+                "intent": row.get("intent"),
+                "state": row.get("state"),
+                "price": (row.get("price") or {}).get("value"),
+                "quantity": row.get("quantity"),
+                "cumQuantity": row.get("cumQuantity"),
+                "leavesQuantity": row.get("leavesQuantity"),
+                "avgPx": (row.get("avgPx") or {}).get("value"),
+                "commission": (row.get("commissionNotionalTotalCollected")
+                               or {}).get("value"),
+                "insertTime": row.get("insertTime"),
+                "lastTransactTime": row.get("lastTransactTime"),
+            }, default=str)), flush=True)
+        else:
+            print("PMUS_ORDER " + redact(json.dumps(
+                {"id": oid, "unreadable": r.get("error"),
+                 "status": r.get("status")}, default=str)), flush=True)
+    if ORDER_IDS:
+        print("PMUS_ORDERS %d" % len(ORDER_IDS), flush=True)
 
     # the bodies that decide the question, separately so one huge catalogue
     # response cannot push the verdict out of a truncated log line
