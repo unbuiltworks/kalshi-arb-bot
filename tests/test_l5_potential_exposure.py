@@ -252,6 +252,11 @@ class NeverFills:
     maker case, and the one the old accounting could not see."""
 
     armed = True
+    #: the venue's own quantity grid, as this market's preflight
+    #: reported it on 2026-09-25. A double without it is not
+    #: modelling the transport -- and an unfaithful double is how
+    #: the unquantized quantity reached the wire in the first place.
+    quantity_increment = D("0.01")
     name = "NEVER_FILLS"
 
     def __init__(self):

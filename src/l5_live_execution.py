@@ -47,7 +47,7 @@ import hashlib
 import json
 import os
 import pathlib
-from decimal import Decimal as D
+from decimal import ROUND_FLOOR, Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_fees as fees
@@ -64,6 +64,72 @@ STALE_ACTION_MAX_S = 30.0
 
 class NotArmed(RuntimeError):
     """Raised on any attempt to transmit without an explicit authorization."""
+
+
+def venue_quantity_increment(transport: Any) -> Optional[D]:
+    """The venue's quantity grid, from ITS metadata, or None.
+
+    Read off the transport, which took it from this market's own preflight.
+    None means not established, and an armed order is refused rather than
+    guessed at -- never defaulted to 0.01, which is only what this market
+    happened to answer on 2026-09-25.
+    """
+    inc = getattr(transport, "quantity_increment", None)
+    if inc is None:
+        return None
+    try:
+        inc = D(str(inc))
+    except Exception:                                          # noqa: BLE001
+        return None
+    return inc if inc > 0 else None
+
+
+def floor_to_increment(qty: D, increment: D) -> D:
+    """The largest multiple of `increment` that does not exceed `qty`.
+
+    Floor, never round: rounding up would submit more than the safety
+    overlay reserved, and the overlay is the thing standing between a
+    translation and the account. The increment is not assumed to be a power
+    of ten -- 0.05 and 0.25 grids exist -- so this divides rather than
+    quantizing to a number of places.
+    """
+    if increment <= 0:
+        raise ValueError("increment must be positive")
+    steps = (qty / increment).to_integral_value(rounding=ROUND_FLOOR)
+    return (steps * increment).normalize() + D(0)
+
+
+def _redact(text: Any) -> str:
+    """The transport's own scrubber, or a refusal to print at all.
+
+    Imported lazily so this module keeps no import-time dependency on the
+    transport, and defensively: if the scrubber cannot be reached, nothing
+    is printed rather than something unscrubbed.
+    """
+    try:
+        from src.l5_pmus_transport import redact
+    except Exception:                                          # noqa: BLE001
+        return "[REDACTION UNAVAILABLE]"
+    return redact(text)
+
+
+def submit_forensics(transport: Any) -> Dict[str, Any]:
+    """WHICH call was in flight when submit() raised.
+
+    str(HTTPError) is "HTTP Error 400: Bad Request" and str(URLError) is
+    "<urlopen error timed out>". Neither carries the path, so the exception
+    alone cannot distinguish a failed /v1/order/preview from a failed
+    /v1/orders -- the question Probe 03 could not answer about itself. The
+    transport records its own progress; this reads it, and never assumes:
+    an attribute that is not there reads as None, not as False.
+    """
+    def got(name):
+        return getattr(transport, name, None)
+
+    return {"failure_stage": got("submit_stage"),
+            "preview_attempted": got("preview_attempted"),
+            "preview_status": got("preview_status"),
+            "order_post_attempted": got("order_post_attempted")}
 
 
 class NullTransport:
@@ -449,13 +515,51 @@ class FaithfulExecutor:
 
         want = dec["l5_size"] * self.lam
         tr = FT.pmus_translate(dec, row, authenticated, want)
+
+        # The venue can only create orders on its own quantity grid. Probe 03
+        # asked for 0.4066877541798463 against an increment of 0.01, the
+        # preview came back as 0.40, and the echo gate refused -- correctly,
+        # because an order resting at a size the engine did not choose is
+        # worse than no order. The gate is not the defect; sending a quantity
+        # the venue cannot represent is. Everything downstream -- reservation,
+        # preview, echo, submission, fill and reconciliation -- uses the
+        # EXECUTABLE quantity from here on, so nothing is ever reserved at one
+        # size and sent at another.
+        inc = venue_quantity_increment(self.transport)
+        desired = tr.get("qty")
+        executable = desired
+        if tr.get("ok") and desired is not None and inc is not None:
+            executable = floor_to_increment(D(str(desired)), inc)
+        delta = (None if (desired is None or executable is None)
+                 else D(str(desired)) - D(str(executable)))
+
         prov.stage("PMUS_TRANSLATION", {
             "ok": bool(tr.get("ok")), "mode": tr.get("mode"),
-            "price": str(tr.get("price")), "qty": str(tr.get("qty")),
+            "price": str(tr.get("price")),
+            # `qty` is what we will execute. The translation's own number is
+            # kept beside it: L5's behaviour is not rewritten to pretend he
+            # asked for a round lot.
+            "qty": str(executable),
+            "qty_desired": str(desired),
+            "quantity_increment": (None if inc is None else str(inc)),
+            "quantization_delta": (None if delta is None else str(delta)),
+            "quantized": bool(inc is not None and tr.get("ok")),
             "slippage_vs_l5": str(tr.get("slippage")),
             "depth": str(tr.get("depth")), "reason": tr.get("reason")})
         if not tr.get("ok"):
             return prov.refuse("PMUS_TRANSLATION", tr["reason"])
+
+        # An armed transport has passed preflight, and preflight does not pass
+        # without quantity_constraint_known -- so an unknown grid here means
+        # something is wrong with what we believe about this market, and the
+        # answer is to send nothing.
+        if inc is None and bool(getattr(self.transport, "armed", False)):
+            return prov.refuse("SAFETY_OVERLAY", "QUANTITY_INCREMENT_UNKNOWN")
+        if inc is not None and executable <= 0:
+            return prov.refuse("SAFETY_OVERLAY",
+                               "QUANTITY_BELOW_MIN_INCREMENT:%s<%s"
+                               % (desired, inc))
+        tr = dict(tr, qty=executable)
 
         resid_after = self.store.residual(market) + (
             tr["qty"] if dec["side"] == "UP" else -tr["qty"])
@@ -519,7 +623,11 @@ class FaithfulExecutor:
                 "submit raised %s for %s" % (type(exc).__name__, coid))
             prov.stage("ORDER", {"client_order_id": coid, "submitted": None,
                                  "reason": "SUBMIT_OUTCOME_UNKNOWN",
-                                 "detail": str(exc)[:200],
+                                 "error": type(exc).__name__,
+                                 "detail": _redact(str(exc))[:200],
+                                 **submit_forensics(self.transport),
+                                 "intent": {k: str(v)
+                                            for k, v in intent.items()},
                                  "note": ("assumed live and still consuming "
                                           "the envelope until the venue says "
                                           "otherwise")})
