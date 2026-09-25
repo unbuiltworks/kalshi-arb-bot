@@ -59,6 +59,18 @@ COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 COPY src/l5_window_actions.py src/l5_window_actions.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/pmus_interaction_classifier.py src/pmus_interaction_classifier.py
+# l5_pmus_realtime_observer imports these at MODULE scope, so they are
+# required to import it at all -- and new_l5_actions imports the observer
+# lazily, inside the observing loop, so a missing one does not fail at
+# startup: it kills the run mid-window. That is exactly what happened to
+# Probe 02 (armed, real money, silent) and to the 21:36Z observe-only run.
+# The two functions actually used, action_key and l5_to_pmus_action, touch
+# neither pv2 nor state_key -- these are import-time dependencies only, so
+# the JSON model artifacts they load lazily are deliberately NOT packaged.
+COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
+COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
+COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
+COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 # evidence and the one-market authorization ledger
 COPY src/l5_session_journal.py src/l5_session_journal.py
 COPY src/l5_session_integrity.py src/l5_session_integrity.py
