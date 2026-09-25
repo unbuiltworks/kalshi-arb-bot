@@ -244,3 +244,45 @@ def test_the_walk_orders_by_venue_time_not_by_list_order():
                        insertTime="2026-09-25T15:00:00Z")
     w = A.walk_exposure([late, early], D(5))
     assert w["steps"][0]["order"] == "EARLY"
+
+
+# ------------------------------- the gate now reads the bound, not notional
+
+def test_the_store_prices_a_short_leg_as_a_credit_not_as_cash_out():
+    import src.l5_live_execution as EX
+    import tempfile, pathlib
+    d = tempfile.mkdtemp()
+    st = EX.InventoryStore(str(pathlib.Path(d) / "inv.json"))
+    # Probe 05's legs, in our own YES-convention prices
+    st.apply_fill("m", "UP", D("10.34"), D("1.6047") / D("10.34"))
+    st.apply_fill("m", "DOWN", D("7.50"), D("6.2568") / D("7.50"))
+    # committed still adds both as cash out -- that is what it is for
+    assert st.committed()["m"] > D("7.8")
+    # the bound is the worst case over both settlements, and it is not that
+    assert abs(st.risk_exposure_usd("m") - D("0.3615")) < D("0.0001")
+
+
+def test_a_short_credit_does_not_create_capacity_in_the_store_either():
+    import src.l5_live_execution as EX
+    import tempfile, pathlib
+    st = EX.InventoryStore(str(pathlib.Path(tempfile.mkdtemp()) / "i.json"))
+    st.apply_fill("m", "DOWN", D("10"), D("0.90"))     # short 10, takes in $1
+    # if YES settles 1 the short owes $10 having received $1: a $9 bound
+    assert st.risk_exposure_usd("m") == D("9.0")
+
+
+def test_the_five_dollar_gate_reads_the_bound():
+    import src.l5_live_execution as EX
+    lim = EX.SafetyLimits()
+    assert lim.refuse(price=D("0.5"), qty=D(1), market="m",
+                      committed_by_market={"m": D("100")},
+                      residual_after=D(0), realized_today=D(0),
+                      open_markets=["m"], outstanding_by_market={},
+                      live_order_count=0,
+                      risk_by_market={"m": D("1")}) is None
+    assert lim.refuse(price=D("0.5"), qty=D(1), market="m",
+                      committed_by_market={"m": D(0)},
+                      residual_after=D(0), realized_today=D(0),
+                      open_markets=["m"], outstanding_by_market={},
+                      live_order_count=0,
+                      risk_by_market={"m": D("5.01")}) == "MAX_USD_PER_MARKET"

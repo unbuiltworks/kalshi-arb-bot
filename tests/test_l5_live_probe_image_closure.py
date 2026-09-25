@@ -103,10 +103,20 @@ PROBE = textwrap.dedent(
         importlib.import_module(name)
 
     from src import l5_window_actions as WA
+    from src import l5_market_binding as MB
     ws = WA.window_start(%(slug)r)
     assert ws is not None
+    # the identity gate admits nothing without an authoritative binding, and
+    # this check must not reach the network, so the binding is injected. The
+    # ADMISSION POLICY is tested in test_l5_market_identity.py; what is being
+    # proved here is only that the image can import and run the path.
+    TOK_UP, TOK_DOWN = "1111", "2222"
+    WA._BINDINGS[int(ws)] = MB.Binding(
+        window_start=int(ws), condition_id="0xabc",
+        token_up=TOK_UP, token_down=TOK_DOWN, slug="x")
     row = {"timestamp": ws + 10, "side": "BUY", "outcome": "Up",
            "price": 0.42, "size": 30, "transactionHash": "0xdeadbeef",
+           "asset": TOK_UP, "conditionId": "0xabc",
            "slug": "bitcoin-up-or-down", "title": "x"}
     acts, ok = WA.new_l5_actions(%(slug)r, set(), activity=lambda limit=100: [row])
     assert ok is True, "feed reported failure"

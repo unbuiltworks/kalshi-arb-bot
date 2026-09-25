@@ -96,6 +96,26 @@ class FeedHealth:
                 "healthy": self.polls_ok > 0 and self.polls_failed == 0}
 
 
+from src import l5_market_binding as MB
+
+_BINDINGS: Dict[int, Any] = {}
+
+
+def _binding_for(window_start_epoch: int, *, getter=None):
+    """The venue's own record for this window, fetched once and kept.
+
+    A miss is NOT cached: a transient failure must not disable identity for
+    the rest of the session, and an uncached miss simply admits nothing
+    until the venue answers.
+    """
+    b = _BINDINGS.get(window_start_epoch)
+    if b is None:
+        b = MB.fetch_binding(window_start_epoch, getter=getter)
+        if b is not None:
+            _BINDINGS[window_start_epoch] = b
+    return b
+
+
 def new_l5_actions(slug: str, seen: Set[str],
                    activity=None,
                    health: Optional["FeedHealth"] = None
@@ -118,6 +138,9 @@ def new_l5_actions(slug: str, seen: Set[str],
     if activity is None:
         activity = O.l5_activity
     ws = window_start(slug)
+    # one authoritative lookup per window, cached. No binding -> nothing is
+    # admitted: a window we cannot identify is a window we do not trade.
+    binding = None if ws is None else _binding_for(int(ws))
     if health is not None:
         health.polls += 1
     rows = activity(limit=100)
@@ -142,6 +165,21 @@ def new_l5_actions(slug: str, seen: Set[str],
             continue
         if health is not None:
             health.in_window += 1
+        # IDENTITY, not time. Probe 05 traded two L5 actions from OTHER
+        # markets because this filter stopped here. An action may enter only
+        # if its own CTF token is one of the two outcome tokens the venue
+        # publishes for this exact window; anything else is refused and never
+        # reaches L5_NATIVE or execution.
+        verdict = MB.admit(r, binding)
+        if verdict["verdict"] != MB.ADMITTED:
+            if health is not None:
+                health.identity_refused = getattr(
+                    health, "identity_refused", 0) + 1
+                health.identity_reasons = getattr(
+                    health, "identity_reasons", {})
+                health.identity_reasons[verdict["verdict"]] = (
+                    health.identity_reasons.get(verdict["verdict"], 0) + 1)
+            continue
         # the whole economic identity, not the transaction hash. One
         # transaction can carry two fills at different prices, and hashing
         # by tx silently drops the second.

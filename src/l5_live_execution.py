@@ -266,7 +266,9 @@ class SafetyLimits:
                outstanding_by_market: Mapping[str, D],
                live_order_count: int,
                outstanding_residual: D = D(0),
-               orders_uncertain: Optional[str] = None) -> Optional[str]:
+               orders_uncertain: Optional[str] = None,
+               risk_by_market: Optional[Mapping[str, D]] = None
+               ) -> Optional[str]:
         """Refuse on POTENTIAL exposure: filled + still-fillable + this one.
 
         `outstanding_by_market` and `live_order_count` are REQUIRED rather
@@ -280,14 +282,23 @@ class SafetyLimits:
         if realized_today <= -self.daily_realized_loss_halt_usd:
             return "DAILY_REALIZED_LOSS_HALT"
         cost = price * qty
-        mk = (committed_by_market.get(market, D(0))
-              + outstanding_by_market.get(market, D(0)))
-        if mk + cost > self.max_usd_per_market:
-            return "MAX_USD_PER_MARKET"
-        total = (sum(committed_by_market.values(), D(0))
-                 + sum(outstanding_by_market.values(), D(0)))
-        if total + cost > self.max_total_exposure_usd:
-            return "MAX_TOTAL_EXPOSURE"
+        if risk_by_market is None:
+            # no risk model supplied: fall back to notional, which OVERSTATES
+            # a short leg rather than understating it, so the fallback is
+            # conservative and never lets more risk through than the bound.
+            mk = (committed_by_market.get(market, D(0))
+                  + outstanding_by_market.get(market, D(0)))
+            if mk + cost > self.max_usd_per_market:
+                return "MAX_USD_PER_MARKET"
+            total = (sum(committed_by_market.values(), D(0))
+                     + sum(outstanding_by_market.values(), D(0)))
+            if total + cost > self.max_total_exposure_usd:
+                return "MAX_TOTAL_EXPOSURE"
+        else:
+            if risk_by_market.get(market, D(0)) > self.max_usd_per_market:
+                return "MAX_USD_PER_MARKET"
+            if sum(risk_by_market.values(), D(0)) > self.max_total_exposure_usd:
+                return "MAX_TOTAL_EXPOSURE"
         # residual is bounded on what would land if every live order filled
         if abs(residual_after + outstanding_residual) > self.max_abs_residual:
             return "MAX_ABS_RESIDUAL"
@@ -548,6 +559,11 @@ class InventoryStore:
             D(str(self.state["positions"].get(k, 0))) + qty)
         self.state["committed"][market] = str(
             D(str(self.state["committed"].get(market, 0))) + price * qty)
+        # committed sums both legs as cash OUT, which the venue contradicts:
+        # a DOWN fill is a short and CREDITS us. The per-leg cost is kept so
+        # the risk bound can price each leg the way the venue settles it.
+        lc = self.state.setdefault("leg_cost", {})
+        lc[k] = str(D(str(lc.get(k, 0))) + price * qty)
         # A fill converts outstanding exposure into committed exposure. Not
         # decrementing here would double-count the same shares in both.
         live = self.state.setdefault("live_orders", {})
@@ -560,6 +576,59 @@ class InventoryStore:
                 o["remaining"] = str(rem)
                 o["state"] = "PARTIALLY_FILLED"
         self.save()
+
+
+    def leg_cost(self, market: str) -> Dict[str, D]:
+        lc = self.state.get("leg_cost") or {}
+        return {side: D(str(lc.get("%s|%s" % (market, side), 0)))
+                for side in ("UP", "DOWN")}
+
+    def risk_exposure_usd(self, market: str, *, extra_side: str = "",
+                          extra_qty: D = D(0), extra_price: D = D(0)) -> D:
+        """Worst-case cash loss in this market, over both settlements.
+
+        `committed` is not this number and never was: it adds a DOWN fill's
+        notional as cash out when the venue CREDITS it, so on Probe 05 it
+        read $2.8479 against $0.4615 of movement. It stays for reporting
+        cash; the gates read this.
+
+        Prices are our YES-convention prices, so an UP share costs `price`
+        and a DOWN share -- a short -- takes in `1 - price` and owes $1 if
+        YES settles 1. Both legs are evaluated under the SAME settlement, so
+        a genuine hedge reduces the bound while a short's credit never buys
+        headroom on its own.
+
+        An order that has not filled is priced as though it fills in full,
+        which is what `extra_*` and the outstanding legs are for.
+        """
+        pos = self.state.get("positions") or {}
+        up_q = D(str(pos.get("%s|UP" % market, 0)))
+        dn_q = D(str(pos.get("%s|DOWN" % market, 0)))
+        cost = self.leg_cost(market)
+        up_c, dn_c = cost["UP"], cost["DOWN"]
+        for o in (self.state.get("live_orders") or {}).values():
+            if str(o.get("market")) != market:
+                continue
+            q = D(str(o.get("remaining") or 0))
+            px = D(str(o.get("price") or 0))
+            if str(o.get("side") or "").upper().startswith("U"):
+                up_q += q
+                up_c += px * q
+            else:
+                dn_q += q
+                dn_c += px * q
+        if extra_qty > 0:
+            if str(extra_side).upper().startswith("U"):
+                up_q += extra_qty
+                up_c += extra_price * extra_qty
+            else:
+                dn_q += extra_qty
+                dn_c += extra_price * extra_qty
+        # cash if YES settles 0, and if it settles 1
+        at_zero = -up_c + (dn_q - dn_c)
+        at_one = (up_q - up_c) - dn_c
+        worst = max(-at_zero, -at_one)
+        return worst if worst > 0 else D(0)
 
     def applied_fill_qty(self, coid: str) -> D:
         """How much of this order we have already booked. Idempotency key."""
@@ -762,7 +831,13 @@ class FaithfulExecutor:
             outstanding_by_market=outstanding,
             live_order_count=self.store.live_order_count(),
             outstanding_residual=self.store.outstanding_residual(market),
-            orders_uncertain=self.store.orders_uncertain())
+            orders_uncertain=self.store.orders_uncertain(),
+            # the corrected metric: worst-case loss over both settlements,
+            # with this order counted as if it fills in full. committed_usd
+            # is still passed, and still reported, but no longer gates.
+            risk_by_market={market: self.store.risk_exposure_usd(
+                market, extra_side=dec["side"], extra_qty=tr["qty"],
+                extra_price=tr["price"])})
         prov.stage("SAFETY_OVERLAY", {
             "permitted": why is None, "reason": why,
             "limits": self.limits.as_dict(),
@@ -771,8 +846,11 @@ class FaithfulExecutor:
             "outstanding_usd": {k: str(v) for k, v in outstanding.items()},
             "live_orders": self.store.live_order_count(),
             "orders_uncertain": self.store.orders_uncertain(),
+            "risk_exposure_usd": str(self.store.risk_exposure_usd(market)),
             "measures": ("POTENTIAL exposure: filled + still-fillable + "
-                         "this order, not filled alone"),
+                         "this order, not filled alone. The $5 caps read "
+                         "risk_exposure_usd -- worst case over both "
+                         "settlements -- not committed_usd notional."),
             "note": ("account protection only; never a statement about L5 "
                      "behaviour or PMUS capability")})
         if why:
