@@ -14,3 +14,5 @@ inventory state; the image does not contain `l5_pmus_transport`.
 <!-- Probe 06: reading its six orders by venue id. -->
 
 <!-- Probe 07 (1945z): settlement, positions, balance. -->
+
+<!-- Probe 07: reading its nine maker orders by venue id. -->
