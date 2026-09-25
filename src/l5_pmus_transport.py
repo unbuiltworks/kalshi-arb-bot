@@ -216,6 +216,21 @@ def resolve_market(http: Any, slug: str,
         % (slug, ", ".join(hosts), event_slug_for(slug)))
 
 
+def rows_of(resp: Any, key: str) -> List[dict]:
+    """Position rows out of a response that may key them or list them.
+
+    Copied in behaviour from `pmus_settlement_auditor._rows_of`, which has
+    run against real fills and settlements on this venue. A mapping is keyed
+    by market slug and the key is folded back in as `marketSlug`; a list is
+    taken as rows. Anything else yields nothing rather than a guess.
+    """
+    rows = resp.get(key) if isinstance(resp, Mapping) else None
+    if isinstance(rows, Mapping):
+        return [{"marketSlug": k, **v} for k, v in rows.items()
+                if isinstance(v, Mapping)]
+    return [r for r in (rows or []) if isinstance(r, Mapping)]
+
+
 class PmusTransport:
     """GET-only until armed. Mutations exist but are gated behind preflight."""
 
@@ -438,9 +453,54 @@ class PmusTransport:
         return None
 
     def positions(self) -> List[dict]:
-        r = self._get("/v1/portfolio/positions") or {}
-        return (r.get("positions") or []) if isinstance(r, Mapping) \
-            else (r or [])
+        """The account's position ROWS, whichever shape the venue used.
+
+        LIVE 2026-09-25T13:40Z, this account: /v1/portfolio/positions answers
+        {"positions": {}, "availablePositions": [], "nextCursor": "",
+        "eof": true} -- `positions` is an OBJECT keyed by market slug, not an
+        array. Empty, `{}` is falsy and the old `or []` yielded a list, so
+        this never showed. Probe 04 was the first close-out ever to run while
+        the account actually held something: the dict came back populated,
+        `for p in positions` yielded string keys, and `p["market"]` raised
+        TypeError -- which is why that probe could not reconcile.
+
+        The mapping-keyed-by-slug form is not inferred here. It is what
+        `pmus_settlement_auditor._rows_of` has read against real fills and
+        settlements on this venue, and this matches that behaviour rather
+        than inventing a second reading of the same resource.
+        """
+        return rows_of(self._get("/v1/portfolio/positions"), "positions")
+
+    def available_positions(self) -> List[dict]:
+        """`availablePositions`, which the venue serves beside `positions`.
+
+        Kept separate and never merged: the settlement auditor treats it as
+        explicitly NOT a held position, and collapsing the two would inflate
+        what we think we own.
+        """
+        return rows_of(self._get("/v1/portfolio/positions"),
+                       "availablePositions")
+
+    def order(self, order_id: str) -> Dict[str, Any]:
+        """One order, as the VENUE currently has it. GET, never a mutation.
+
+        /v1/order/{id} answered 200 for CQ5NPBADMYC3 on 2026-09-25T13:40Z
+        with the row below; /v1/orders/{id} 404s and /v1/orders 501s, so this
+        is the route. The fields Probe 04 needed and never asked for:
+
+            state "ORDER_STATE_FILLED", quantity 2.25, cumQuantity 2.25,
+            leavesQuantity 0, avgPx {"value": "0.2900"},
+            commissionNotionalTotalCollected {"value": "0.0300"},
+            lastTransactTime "2026-09-25T13:01:46.847706680Z"
+
+        The ACK for that order had said filled_qty 0. It filled two
+        milliseconds later and nothing ever asked again.
+        """
+        r = self._get("/v1/order/%s" % order_id) or {}
+        if isinstance(r, Mapping):
+            inner = r.get("order")
+            return dict(inner) if isinstance(inner, Mapping) else dict(r)
+        return {}
 
     def open_orders(self) -> List[dict]:
         r = self._get("/v1/orders/open") or {}

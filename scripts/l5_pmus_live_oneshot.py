@@ -181,6 +181,39 @@ class Probe:
 
     # -------------------------------------------------------------- trading
 
+    def refresh_live_orders(self) -> List[dict]:
+        """Ask the venue what our outstanding orders are actually doing.
+
+        Probe 04's ACK said filled_qty 0; the order filled two milliseconds
+        later and nothing ever asked again, so the books carried it as
+        resting for the rest of the window. 29 later actions were refused
+        MAX_LIVE_ORDERS against an order that no longer existed, and close-out
+        then tried to cancel it. The ACK is a receipt, not a final state.
+        """
+        out: List[dict] = []
+        for coid, o in list(self.store.live_orders().items()):
+            vid = o.get("venue_order_id")
+            if not vid:
+                continue
+            try:
+                row = self.tp.order(str(vid))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # unknowable state stays unknowable; nothing is released
+                self.store.mark_uncertain(
+                    "order query raised %s for %s" % (type(exc).__name__,
+                                                      coid))
+                out.append({"coid": coid, "error": type(exc).__name__})
+                continue
+            prog = EX.order_progress(row)
+            res = self.store.apply_order_progress(
+                coid, prog, market=self.market, side=str(o.get("side") or ""))
+            res["venue_order_id"] = str(vid)
+            out.append(res)
+            self.journal.write("order_progress", res)
+        return out
+
     def work_window(self, deadline: float) -> None:
         """Handle actions as they are observed, until the window closes."""
         self.stage = "working_window"
@@ -188,6 +221,12 @@ class Probe:
             now = self.clock()
             if now >= deadline - (WINDOW_S - NO_NEW_ORDERS_AFTER_S):
                 break
+            # the venue first: a filled order must stop blocking the next
+            # decision, and a stale "resting" order must stop consuming the
+            # envelope. Cheap -- one GET per outstanding order, and there is
+            # at most one.
+            if self.armed and self.store.live_order_count():
+                self.refresh_live_orders()
             actions, feed_ok = new_l5_actions(self.market, self.seen,
                                               self.activity,
                                               health=self.l5_health)
@@ -215,8 +254,13 @@ class Probe:
         """Cancel, then let the VENUE say what is true. Always runs."""
         self.stage = "close_out"
         cancelled, cancel_errors = [], []
+        # Ask before acting. Probe 04 cancelled an order that had been FILLED
+        # for eleven minutes, because nothing had asked the venue since the
+        # ACK. Cancelling a terminal order is a guaranteed error and tells us
+        # nothing; reading its state tells us everything.
+        progress = self.refresh_live_orders() if self.armed else []
         if self.armed:
-            for coid, o in self.store.live_orders().items():
+            for coid, o in list(self.store.live_orders().items()):
                 vid = o.get("venue_order_id")
                 if not vid:
                     continue
@@ -245,6 +289,7 @@ class Probe:
                      "note": "exposure NOT released; this probe ends "
                              "uncertain and the state says so"}
         out = {"cancelled": cancelled, "cancel_errors": cancel_errors,
+               "order_progress": progress,
                "reconciliation": recon,
                "orders_uncertain": self.store.orders_uncertain()}
         self.journal.write("close_out", out)
@@ -312,6 +357,8 @@ class Probe:
             # comes out with the report, redacted through the transport's own
             # scrubber, and says WHICH call was in flight.
             "submit_failures": self.submit_failures(),
+            "fills_from_venue": self.store.state.get("filled_qty") or {},
+            "fees_from_venue": self.store.state.get("fees") or {},
             "inventory": {
                 "up": str(self.store.position(self.market, "UP")),
                 "dn": str(self.store.position(self.market, "DOWN")),
