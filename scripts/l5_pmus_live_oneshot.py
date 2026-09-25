@@ -46,6 +46,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 from src import l5_live_authorization as AUTH
 from src import l5_live_book_feed as FEED
 from src import l5_live_execution as EX
+from src import l5_maker_execution as MK
 from src import l5_pmus_live_wiring as W
 from src import l5_probe_manifest as PM
 from src import l5_session_journal as JN
@@ -977,6 +978,20 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
             feed.stop()
 
     summary = W.summarize(records)
+    # THE SECOND TREATMENT, in shadow. Every action the frozen rule called
+    # MAKER and then refused STRICT_NOT_EVALUABLE becomes a genuine resting
+    # order INTENT here -- price, size and post-only flag -- so a window can
+    # show that passive L5 actions produce placeable orders rather than
+    # nothing. L5_NATIVE is untouched; this reads its output and adds
+    # nothing to its decision.
+    maker_intents = []
+    for r in records:
+        mi = MK.maker_intent(r, lam=PM.LAMBDA,
+                             quantity_increment=D("0.01"),
+                             floor_fn=EX.floor_to_increment)
+        if mi is not None:
+            maker_intents.append(mi)
+            journal.write("maker_intent", mi)
     readable = sum(1 for r in records if l5_native_was_readable(r))
     translated = sum(1 for r in records
                      if (r.get("PMUS_TRANSLATION") or {}).get("ok") is True)
@@ -999,6 +1014,25 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
         # so the report could only be written when there was nothing to
         # report. 00:30:06Z on 2026-09-25, after a full window's work.
         "would_submit": summary.get("would_submit", 0),
+        # what the maker treatment WOULD rest, and what it is worth knowing
+        # before any of it is real: an intent is not an order and not a fill
+        "maker_treatment": {
+            "intents": len(maker_intents),
+            "placeable": sum(1 for m in maker_intents if m["placeable"]),
+            "unplaceable_after_flooring":
+                sum(1 for m in maker_intents if not m["placeable"]),
+            "by_side": {side: sum(1 for m in maker_intents
+                                  if m["side"] == side)
+                        for side in ("UP", "DOWN")},
+            "notional_usd": str(sum(
+                (D(m["price"]) * D(m["qty"]) for m in maker_intents), D(0))),
+            "sample": maker_intents[:5],
+            "labels": ("INTENTS ONLY. Nothing was placed, nothing rested and "
+                       "nothing filled. These are the actions the frozen "
+                       "rule refused STRICT_NOT_EVALUABLE, which is a "
+                       "statement about replay evidence, not about whether "
+                       "the venue would accept the order."),
+        },
         "refused_by_layer": summary.get("refused_by_layer"),
         "refused_reason": summary.get("refused_reason"),
         "armed": False,

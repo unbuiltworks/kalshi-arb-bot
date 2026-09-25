@@ -37,6 +37,10 @@ COPY src/l5_preview_gate.py src/l5_preview_gate.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
 # inventory, exposure reservation, safety overlay, venue reconciliation
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# the SECOND treatment. Reads the frozen rule's output and turns the actions
+# it refused STRICT_NOT_EVALUABLE -- restable, but unprovable in replay --
+# into genuine resting-order intents. It adds nothing to L5_NATIVE's decision.
+COPY src/l5_maker_execution.py src/l5_maker_execution.py
 COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
 COPY src/l5_pmus_live_wiring.py src/l5_pmus_live_wiring.py
 # the frozen engine, byte-identical to 030d8bf. Pure decision code.
