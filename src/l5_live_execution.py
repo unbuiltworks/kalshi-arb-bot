@@ -66,6 +66,55 @@ class NotArmed(RuntimeError):
     """Raised on any attempt to transmit without an explicit authorization."""
 
 
+#: PMUS order states seen or documented as terminal. The AUTHORITY is
+#: leavesQuantity == 0, which is numeric and was observed directly on
+#: CQ5NPBADMYC3; these strings corroborate it and never override it, because
+#: only ORDER_STATE_FILLED has actually been seen on this venue and inventing
+#: the spelling of the others would be the same mistake as inventing a shape.
+TERMINAL_HINTS = ("FILLED", "CANCEL", "REJECT", "EXPIR", "DONE")
+
+
+def _money(v: Any) -> D:
+    """A venue money field, which arrives as {"value","currency"} or scalar."""
+    if isinstance(v, Mapping):
+        v = v.get("value")
+    try:
+        return D(str(v))
+    except Exception:                                          # noqa: BLE001
+        return D(0)
+
+
+def order_progress(row: Mapping[str, Any]) -> Dict[str, Any]:
+    """What the venue says about one order, in the terms the store needs.
+
+    CQ5NPBADMYC3 answered state ORDER_STATE_FILLED, quantity 2.25,
+    cumQuantity 2.25, leavesQuantity 0, avgPx 0.2900, commission 0.0300 --
+    eleven minutes after an ACK that had said filled_qty 0. `cum` is
+    CUMULATIVE, so a caller must apply the DELTA against what it has already
+    recorded or it will double-count its own partials.
+    """
+    state = str(row.get("state") or "")
+    has_leaves = row.get("leavesQuantity") is not None
+    leaves = _money(row.get("leavesQuantity"))
+    cum = _money(row.get("cumQuantity"))
+    # leavesQuantity DECIDES when the venue sends it. The state string only
+    # decides when it does not -- and it must not be allowed to override the
+    # number, because "ORDER_STATE_PARTIALLY_FILLED" contains "FILLED" and a
+    # substring match would retire an order that is still working.
+    if has_leaves:
+        terminal = leaves <= 0
+    else:
+        terminal = any(h in state.upper() for h in TERMINAL_HINTS)
+    return {"venue_order_id": str(row.get("id") or ""),
+            "state": state or None,
+            "cum_qty": cum,
+            "leaves_qty": leaves,
+            "avg_px": _money(row.get("avgPx")),
+            "commission": _money(
+                row.get("commissionNotionalTotalCollected")),
+            "terminal": bool(terminal)}
+
+
 def venue_quantity_increment(transport: Any) -> Optional[D]:
     """The venue's quantity grid, from ITS metadata, or None.
 
@@ -421,6 +470,55 @@ class InventoryStore:
                 o["remaining"] = str(rem)
                 o["state"] = "PARTIALLY_FILLED"
         self.save()
+
+    def applied_fill_qty(self, coid: str) -> D:
+        """How much of this order we have already booked. Idempotency key."""
+        o = (self.state.get("live_orders") or {}).get(coid) or {}
+        done = (self.state.get("filled_qty") or {}).get(coid)
+        if done is not None:
+            return D(str(done))
+        return D(str(o.get("applied") or 0))
+
+    def apply_order_progress(self, coid: str, prog: Mapping[str, Any],
+                             *, market: str, side: str) -> Dict[str, Any]:
+        """Book the venue's cumulative fill for one order, exactly once.
+
+        The delta, never the total: polling is idempotent because a second
+        call with the same cumQuantity books nothing. A terminal order stops
+        consuming the envelope and frees the one-live-order slot; a partial
+        keeps the remainder outstanding.
+        """
+        was_live = coid in (self.state.get("live_orders") or {})
+        already = self.applied_fill_qty(coid)
+        cum = D(str(prog.get("cum_qty") or 0))
+        delta = cum - already
+        out = {"coid": coid, "already": str(already), "cum": str(cum),
+               "delta": str(delta), "terminal": bool(prog.get("terminal")),
+               "state": prog.get("state")}
+        if delta > 0:
+            self.apply_fill(market, side, delta,
+                            D(str(prog.get("avg_px") or 0)), coid=coid)
+            self.state.setdefault("filled_qty", {})[coid] = str(cum)
+            fees = self.state.setdefault("fees", {})
+            fees[coid] = str(D(str(prog.get("commission") or 0)))
+        elif delta < 0:
+            # the venue went BACKWARDS on a cumulative field. Do not guess.
+            self.mark_uncertain(
+                "venue cum_qty %s below booked %s for %s" % (cum, already,
+                                                             coid))
+            out["refused"] = "CUM_QTY_WENT_BACKWARDS"
+            self.save()
+            return out
+        if prog.get("terminal"):
+            # whatever remains is not live: the venue says the order is done.
+            # `released` reports that it WAS holding the slot on entry -- a
+            # full fill has already popped it inside apply_fill, and the slot
+            # is no less freed for that.
+            self.state.setdefault("filled_qty", {})[coid] = str(cum)
+            self.state.setdefault("live_orders", {}).pop(coid, None)
+            out["released"] = bool(was_live)
+        self.save()
+        return out
 
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
                              open_orders: Sequence[Mapping[str, Any]]

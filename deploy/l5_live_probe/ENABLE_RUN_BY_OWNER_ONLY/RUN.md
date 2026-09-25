@@ -128,3 +128,19 @@ with no running container. Observe-only mounts it and cannot send an order:
 `L5_OBSERVE_ONLY=YES`, no `PMUS_Q1_*`, no `auth.claim()`, no
 `PmusTransport`, `NullTransport` in the executor. The journal is opened
 append-only and never truncated, so Probe 04's records survive.
+
+### 2026-09-25 1430z — OBSERVE-ONLY, the integration gate after the lifecycle fix
+
+Owner-approved: "Then run the existing observe-only integration gate as
+appropriate. Do not run Probe 05."
+
+Cannot send an order: `L5_OBSERVE_ONLY=YES`, no `PMUS_Q1_*`, no
+`auth.claim()`, no `PmusTransport`, `NullTransport` in the executor.
+
+Scope, stated honestly: observe-only never arms, so it exercises neither
+`refresh_live_orders()` (gated on `self.armed`) nor the corrected
+`positions()` (NullTransport makes no venue reads). What it proves is that
+the changed decision path still reaches a would-submit without erroring.
+The lifecycle itself is proven in test against Probe 04's verbatim venue
+row, and its first live exercise would be Probe 05 -- which is not
+authorized.
