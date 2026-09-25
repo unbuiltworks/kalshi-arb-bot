@@ -99,3 +99,21 @@ changing executable order representation."
   execution-path error. Observe-only is DISARMED, so it quantizes nothing --
   the grid is only known after a preflight, which observe-only never runs.
   What it proves is that the changed code path still reaches a would-submit.
+
+### 2026-09-25 1300z — PROBE 04, REAL MONEY
+
+Owner-authorized: "AUTHORIZED: run Probe 04."
+
+- market `cpc-btc-updown-15m-2026-09-25-1300z`, bound in
+  `L5_LIVE_PROBE_MARKET` before the authorization is claimed
+- session `l5probe-20260925-btc15m-04`, consume-once
+- account pinned `d51b44a3fa83`; a mismatch fails preflight and `arm()` is
+  never reached
+- `L5_OBSERVE_ONLY` emptied (not deleted: Railway cannot delete a variable
+  without a commit that deploys, and a deploy of this service STARTS a run)
+- first live exercise of the quantization: L5 desired quantity -> floor to
+  the venue's own increment -> reserve the executable quantity -> preview
+  that same quantity -> exact echo -> POST the identical body
+- envelope unchanged: $5/market, $5 total potential exposure including
+  outstanding orders, one live order, residual <= 10, one market, $5 daily
+  realized-loss halt, modelled maximum cash bound $5.1738
