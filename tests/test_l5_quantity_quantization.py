@@ -107,9 +107,13 @@ class GridTransport:
 
     name = "GRID"
 
-    def __init__(self, increment="0.01", echo_quantity=None):
+    def __init__(self, increment="0.01", echo_quantity=None, tick="0.01"):
         self.armed = True
         self.quantity_increment = None if increment is None else D(increment)
+        # the real PmusTransport keeps BOTH grids off preflight; a double
+        # that carries only one lets a price defect through, which is how
+        # Probe 07 sent 0.7399999979 and had the echo gate refuse it
+        self.tick_size = None if tick is None else D(tick)
         self.sent = []
         self.paths = []
         self.echo_quantity = echo_quantity
@@ -233,14 +237,43 @@ def test_a_disarmed_run_still_reaches_a_would_submit(tmp_path):
 
 
 def test_the_echo_gate_is_not_loosened(tmp_path):
-    """A venue that changes the EXECUTABLE quantity must still be refused."""
+    """A venue that changes the EXECUTABLE quantity must still be refused.
+
+    The GATE is untouched: the order is refused and the POST never happens.
+    What changed is the CONSEQUENCE. A refusal at the preview stage did not
+    create an order -- the transport records order_post_attempted False --
+    so the outcome is terminal and KNOWN, not unknown. Probe 07 lost nine
+    subsequent actions to ORDER_STATE_UNCERTAIN on exactly this path.
+    """
     tp = GridTransport(echo_quantity=0.39)      # not what we asked for
     rec, store = drive(tmp_path, tp)
 
-    assert rec["ORDER"]["reason"] == "SUBMIT_OUTCOME_UNKNOWN"
+    assert rec["ORDER"]["submitted"] is False
+    assert rec["ORDER"]["reason"] == "REFUSED_BEFORE_ORDER_POST"
     assert "/v1/orders" not in tp.paths, "refused before the order post"
     assert rec["ORDER"]["failure_stage"] == "PREVIEW_ECHO_VALIDATION"
+    assert rec["ORDER"]["order_post_attempted"] is False
+    # nothing is outstanding, so nothing is uncertain and the slot is free
+    assert not store.orders_uncertain()
+    assert store.live_order_count() == 0
+
+
+def test_a_failure_after_the_post_still_fails_closed(tmp_path):
+    """The distinction, from the other side: once the POST is attempted we
+    genuinely do not know, and the session stops until the venue says."""
+    class PostBlewUp(GridTransport):
+        def submit(self, intent):
+            self.submit_stage = "ORDER_POST"
+            self.preview_attempted = True
+            self.preview_status = 200
+            self.order_post_attempted = True
+            raise OSError("connection reset after the POST went out")
+
+    tp = PostBlewUp()
+    rec, store = drive(tmp_path, tp)
+    assert rec["ORDER"]["reason"] == "SUBMIT_OUTCOME_UNKNOWN"
     assert store.orders_uncertain(), "an unknown outcome still fails closed"
+    assert store.live_order_count() == 1, "the reservation stands"
 
 
 def test_the_exact_probe_03_echo_would_now_be_accepted():
