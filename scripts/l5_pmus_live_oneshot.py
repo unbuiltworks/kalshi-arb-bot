@@ -50,6 +50,7 @@ from src import l5_pmus_live_wiring as W
 from src import l5_probe_manifest as PM
 from src import l5_session_journal as JN
 from src import l5_window_actions as WA
+from src import pmus_auth as Q1
 
 #: window arithmetic and the L5 action feed come from ONE implementation,
 #: the one the continuous recorder has run across hundreds of windows. This
@@ -509,6 +510,145 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
 # NotArmed from submit() and cancel(). There is no object in this mode that
 # could send an order if the decision path asked it to.
 
+# ------------------------------------------------------- recovery only
+#
+# Probe 04 filled and our books never learned. The local file still says one
+# order is live at $0.72 outstanding while the venue says CQ5NPBADMYC3 was
+# ORDER_STATE_FILLED at 13:01:46.847706680Z, the account holds nothing, and
+# the market expired at settlementPx 0.0000.
+#
+# Hand-editing that file is not an option: the whole point of the design is
+# that only an authoritative answer moves state. So this runs the SAME
+# production lifecycle and reconciliation code the armed session runs --
+# order_progress, apply_order_progress, reconcile_from_venue -- against the
+# venue, over a transport that cannot mutate.
+#
+# It differs from observe-only deliberately. Observe-only never constructs
+# PmusTransport at all; this constructs one INJECTED with
+# pmus_auth.ReadOnlyTransport, which raises PermissionError on any method
+# but GET. That is what lets it use the production read paths (order(),
+# positions(), open_orders()) rather than a parallel copy of them -- and a
+# parallel copy is what produced every defect this probe has found. Two
+# independent barriers stand in front of a mutation: the http object refuses
+# it, and the transport is never armed, so submit() raises NotArmed first.
+
+RECOVER_ENV = "L5_RECOVER_ONLY"
+
+
+def recover_only_enabled() -> bool:
+    return os.getenv(RECOVER_ENV, "").strip().upper() in ("1", "YES", "TRUE")
+
+
+def recover(*, http=None, state_path=None, journal_path=None,
+            market: Optional[str] = None) -> Dict[str, Any]:
+    """Reconcile stale local order state against the venue. GET only."""
+    from src import l5_pmus_transport as TP
+    market = (market or os.getenv(AUTH.MARKET_ENV, "").strip()
+              or os.getenv("L5_RECOVER_MARKET", "").strip())
+    store = EX.InventoryStore(
+        state_path or os.getenv("L5_PROBE_STATE",
+                                "/state/pmus-ws/l5_probe_inventory.json"))
+    journal = JN.Journal(
+        journal_path or os.getenv("L5_SESSION_JOURNAL",
+                                  "/state/pmus-ws/l5_session_journal.jsonl"))
+    ro = http or Q1.ReadOnlyTransport()
+    tp = TP.PmusTransport(market_slug=market, http=ro)
+
+    # prove the incapability rather than assert it
+    try:
+        ro.request("POST", "/v1/orders", {}, Q1.API)
+        post_capable = True
+    except PermissionError:
+        post_capable = False
+    except BaseException:                                      # noqa: BLE001
+        post_capable = True
+
+    before = {
+        "live_orders": {k: dict(v) for k, v in store.live_orders().items()},
+        "outstanding_usd": {k: str(v) for k, v
+                            in store.outstanding_by_market().items()},
+        "positions": dict(store.state.get("positions") or {}),
+        "orders_uncertain": store.orders_uncertain(),
+    }
+
+    progress: List[dict] = []
+    for coid, o in list(store.live_orders().items()):
+        vid = o.get("venue_order_id")
+        if not vid:
+            progress.append({"coid": coid, "skipped": "NO_VENUE_ORDER_ID"})
+            continue
+        try:
+            row = tp.order(str(vid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            store.mark_uncertain("recovery order query raised %s for %s"
+                                 % (type(exc).__name__, coid))
+            progress.append({"coid": coid, "error": type(exc).__name__})
+            continue
+        prog = EX.order_progress(row)
+        res = store.apply_order_progress(
+            coid, prog, market=str(o.get("market") or market),
+            side=str(o.get("side") or ""))
+        res.update({"venue_order_id": str(vid),
+                    "venue_state": prog.get("state"),
+                    "avg_px": str(prog.get("avg_px")),
+                    "commission": str(prog.get("commission"))})
+        progress.append(res)
+
+    recon: Dict[str, Any]
+    try:
+        recon = store.reconcile_from_venue(tp.positions(), tp.open_orders())
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        store.mark_uncertain("recovery reconciliation failed: %s"
+                             % type(exc).__name__)
+        recon = {"reconciled": False, "authority": "VENUE",
+                 "error": type(exc).__name__,
+                 "note": "nothing released; the state stays uncertain"}
+
+    market_state: Dict[str, Any] = {}
+    if market:
+        try:
+            md = (ro.request("GET", "/v1/markets/%s/bbo" % market, None,
+                             Q1.API) or {}).get("marketData") or {}
+            market_state = {"state": md.get("state"),
+                            "settlement_px": (md.get("settlementPx") or {})
+                            .get("value")}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            market_state = {"error": type(exc).__name__}
+
+    rep = {
+        "LABEL": "LIVE_RECOVERY",
+        "market": market,
+        "post_capable": post_capable,
+        "armed": bool(getattr(tp, "armed", False)),
+        "transport": "PmusTransport+ReadOnlyTransport",
+        "before": before,
+        "order_progress": progress,
+        "reconciliation": recon,
+        "market_state": market_state,
+        "after": {
+            "live_orders": {k: dict(v) for k, v
+                            in store.live_orders().items()},
+            "outstanding_usd": {k: str(v) for k, v
+                                in store.outstanding_by_market().items()},
+            "positions": dict(store.state.get("positions") or {}),
+            "orders_uncertain": store.orders_uncertain(),
+        },
+        "labels": ("GET only. The http object raises PermissionError on any "
+                   "method but GET and the transport is never armed, so "
+                   "submit() would raise NotArmed first. No order was "
+                   "created, cancelled or modified. Local state moved only "
+                   "where the venue said so."),
+    }
+    journal.write("recovery", rep)
+    return rep
+
+
 OBSERVE_ENV = "L5_OBSERVE_ONLY"
 
 #: if less than this remains of the window that is open at start, wait for
@@ -642,6 +782,10 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    if recover_only_enabled():
+        rep = recover()
+        print("L5_RECOVERY " + json.dumps(rep, default=str), flush=True)
+        return 0
     if observe_only_enabled():
         rep = observe()
         print("L5_OBSERVE_ONLY " + json.dumps(rep, default=str), flush=True)
