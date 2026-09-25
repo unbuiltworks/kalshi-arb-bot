@@ -252,6 +252,32 @@ class Probe:
 
     # -------------------------------------------------------------- report
 
+    def submit_failures(self) -> List[dict]:
+        """Every submit whose outcome could not be established, with cause.
+
+        One entry per SUBMIT_OUTCOME_UNKNOWN: the exception class, the
+        redacted message, the lifecycle stage the transport had reached, and
+        whether the preview and the order POST were actually attempted. The
+        intent is carried as strings so a Decimal cannot break the
+        serializer at the one moment the report matters most.
+        """
+        out: List[dict] = []
+        for r in self.records:
+            o = r.get("ORDER") or {}
+            if o.get("reason") != "SUBMIT_OUTCOME_UNKNOWN":
+                continue
+            out.append({
+                "client_order_id": o.get("client_order_id"),
+                "error": o.get("error"),
+                "detail": o.get("detail"),
+                "failure_stage": o.get("failure_stage"),
+                "preview_attempted": o.get("preview_attempted"),
+                "preview_status": o.get("preview_status"),
+                "order_post_attempted": o.get("order_post_attempted"),
+                "intent": o.get("intent"),
+                "action_key": r.get("action_key")})
+        return out
+
     def report(self, close: Mapping[str, Any]) -> Dict[str, Any]:
         submitted = [r for r in self.records
                      if (r.get("ORDER") or {}).get("submitted") is True]
@@ -281,6 +307,11 @@ class Probe:
             "submitted": len(submitted),
             "filled": len(filled),
             "refused_reason": refused,
+            # Probe 03 reported SUBMIT_OUTCOME_UNKNOWN as a bare count and
+            # sent the cause to a volume no one could read. The cause now
+            # comes out with the report, redacted through the transport's own
+            # scrubber, and says WHICH call was in flight.
+            "submit_failures": self.submit_failures(),
             "inventory": {
                 "up": str(self.store.position(self.market, "UP")),
                 "dn": str(self.store.position(self.market, "DOWN")),

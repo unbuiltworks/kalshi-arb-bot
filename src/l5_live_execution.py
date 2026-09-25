@@ -66,6 +66,39 @@ class NotArmed(RuntimeError):
     """Raised on any attempt to transmit without an explicit authorization."""
 
 
+def _redact(text: Any) -> str:
+    """The transport's own scrubber, or a refusal to print at all.
+
+    Imported lazily so this module keeps no import-time dependency on the
+    transport, and defensively: if the scrubber cannot be reached, nothing
+    is printed rather than something unscrubbed.
+    """
+    try:
+        from src.l5_pmus_transport import redact
+    except Exception:                                          # noqa: BLE001
+        return "[REDACTION UNAVAILABLE]"
+    return redact(text)
+
+
+def submit_forensics(transport: Any) -> Dict[str, Any]:
+    """WHICH call was in flight when submit() raised.
+
+    str(HTTPError) is "HTTP Error 400: Bad Request" and str(URLError) is
+    "<urlopen error timed out>". Neither carries the path, so the exception
+    alone cannot distinguish a failed /v1/order/preview from a failed
+    /v1/orders -- the question Probe 03 could not answer about itself. The
+    transport records its own progress; this reads it, and never assumes:
+    an attribute that is not there reads as None, not as False.
+    """
+    def got(name):
+        return getattr(transport, name, None)
+
+    return {"failure_stage": got("submit_stage"),
+            "preview_attempted": got("preview_attempted"),
+            "preview_status": got("preview_status"),
+            "order_post_attempted": got("order_post_attempted")}
+
+
 class NullTransport:
     """The default. Refuses everything and holds no credential."""
 
@@ -519,7 +552,11 @@ class FaithfulExecutor:
                 "submit raised %s for %s" % (type(exc).__name__, coid))
             prov.stage("ORDER", {"client_order_id": coid, "submitted": None,
                                  "reason": "SUBMIT_OUTCOME_UNKNOWN",
-                                 "detail": str(exc)[:200],
+                                 "error": type(exc).__name__,
+                                 "detail": _redact(str(exc))[:200],
+                                 **submit_forensics(self.transport),
+                                 "intent": {k: str(v)
+                                            for k, v in intent.items()},
                                  "note": ("assumed live and still consuming "
                                           "the envelope until the venue says "
                                           "otherwise")})

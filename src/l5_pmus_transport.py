@@ -672,11 +672,27 @@ class PmusTransport:
         self._require_armed()
         from src import l5_order_body as OB
         from src import l5_preview_gate as PG
+        # Which call was in flight. Probe 03 raised somewhere in here and the
+        # record could not say where: str(HTTPError) is "HTTP Error 400: Bad
+        # Request" and str(URLError) is "<urlopen error timed out>" -- neither
+        # carries the path, so the exception alone cannot tell a failed
+        # /v1/order/preview from a failed /v1/orders. These are read by the
+        # executor when submit() raises; they change no control flow.
+        self.submit_stage = "SERIALIZE"
+        self.preview_attempted = False
+        self.preview_status = None
+        self.order_post_attempted = False
         body = OB.from_intent(intent, self.market_slug)
+        self.submit_stage = "PREVIEW_REQUEST"
+        self.preview_attempted = True
         pv = self.http.request("POST", "/v1/order/preview",
                                OB.preview_envelope(body), Q1.API) or {}
+        self.preview_status = 200          # urlopen raises on any non-2xx
+        self.submit_stage = "PREVIEW_ECHO_VALIDATION"
         self.last_preview = {"body": body, "response": pv,
                              "echo": PG.require_echo(body, pv)}
+        self.submit_stage = "ORDER_POST"
+        self.order_post_attempted = True
         return self.http.request("POST", "/v1/orders", body, Q1.API) or {}
 
     def cancel(self, order_id: str) -> Dict[str, Any]:
