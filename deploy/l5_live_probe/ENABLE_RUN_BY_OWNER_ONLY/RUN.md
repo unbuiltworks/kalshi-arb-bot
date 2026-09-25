@@ -62,3 +62,21 @@ directly to Probe 03 if and only if the targeted tests pass."
   realized-loss halt, modelled maximum cash bound $5.1738 including fee
 - timed so the container is up before the window opens and the preflight
   runs at T+45s, inside the window it will trade
+
+### 2026-09-25 ~1130z — OBSERVE-ONLY, to mount the volume and read the Probe 03 journal
+
+Owner-authorized: "use the least-invasive read-only method available to
+mount/read the existing persistent volume. Do not run another trading probe
+merely to reproduce the error."
+
+Railway cannot read a volume without a running container, and the recorder
+mounts a DIFFERENT volume (18bd5702-...), so the only way to reach
+156032e0-... is to start this service's own container. Observe-only does
+that and cannot send an order: `L5_OBSERVE_ONLY=YES`, no `PMUS_Q1_*`
+variable exists, `auth.claim()` is never called, no `PmusTransport` is
+constructed, and the executor holds `NullTransport`.
+
+The target is the Probe 03 `action` record carrying
+`ORDER.reason == "SUBMIT_OUTCOME_UNKNOWN"` and its `detail`, in
+`/state/pmus-ws/l5_session_journal.jsonl`. `Journal` opens that file in
+append mode and never truncates, so the Probe 03 lines survive this run.
