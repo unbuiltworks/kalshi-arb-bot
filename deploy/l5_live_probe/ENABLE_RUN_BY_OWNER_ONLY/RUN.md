@@ -29,3 +29,17 @@ it... If green, make one corrective observe-only deployment."
   the L5 action feed now polls, that L5_NATIVE decisions are readable, and
   that the would-submit path runs end to end, against the continuous
   recorder over the same interval
+
+### 2026-09-25 01:15z — OBSERVE-ONLY, final verification
+
+Authorized: "fix the demonstrated observe-only reporting defect and make
+one final observe-only verification deployment... Run long enough to obtain
+meaningful live evidence."
+
+- artifact: the commit fixing `would_submit` and the non-zero report
+  regression tests
+- `L5_OBSERVE_ONLY=YES` remains set; no `PMUS_Q1_*` variable exists on the
+  service; the executor holds `NullTransport`
+- timed so the container starts with under `OBSERVE_MIN_S` left in the
+  0100z window, which rolls the run forward to **0115z** and gives a FULL
+  15-minute window directly comparable to the recorder's own 0115z line
