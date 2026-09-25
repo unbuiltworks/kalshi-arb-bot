@@ -251,7 +251,9 @@ class Probe:
                 out = W.run_window(actions, books, market=self.market,
                                    window=self.market[-5:], store=self.store,
                                    limits=self.limits, transport=self.tp,
-                                   lam=PM.LAMBDA, now_fn=self._utc)
+                                   lam=PM.LAMBDA, now_fn=self._utc,
+                                   maker_treatment=maker_treatment_enabled(),
+                                   maker_only=maker_only_enabled())
                 for rec in out["records"]:
                     self.records.append(rec)
                     self.journal.write("action", rec)
@@ -407,6 +409,8 @@ class Probe:
             "account_matches_expected": gate_result(
                 self.preflight, "account_matches_expected"),
             "armed": self.armed,
+            "maker_treatment": maker_treatment_enabled(),
+            "maker_only": maker_only_enabled(),
             "l5_actions": len(self.records),
             "submitted": len(submitted),
             "filled": len(filled),
@@ -779,6 +783,22 @@ def action_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
             "followed": sum(1 for r in rows if r.get("submitted") is True)}
 
 
+#: Probe 07's two treatment switches. Both default OFF, so every earlier
+#: probe's behaviour is exactly what it was.
+MAKER_TREATMENT_ENV = "L5_MAKER_TREATMENT"
+MAKER_ONLY_ENV = "L5_MAKER_ONLY"
+
+
+def maker_treatment_enabled() -> bool:
+    return os.getenv(MAKER_TREATMENT_ENV, "").strip().upper() in (
+        "1", "YES", "TRUE")
+
+
+def maker_only_enabled() -> bool:
+    return os.getenv(MAKER_ONLY_ENV, "").strip().upper() in ("1", "YES",
+                                                             "TRUE")
+
+
 RECOVER_ENV = "L5_RECOVER_ONLY"
 
 
@@ -1110,6 +1130,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "recover_only": os.getenv(RECOVER_ENV, ""),
         "market_pin": os.getenv(AUTH.MARKET_ENV, ""),
         "recover_market": os.getenv("L5_RECOVER_MARKET", ""),
+        "maker_treatment": maker_treatment_enabled(),
+        "maker_only": maker_only_enabled(),
     }), flush=True)
     if recover_only_enabled():
         rep = recover()

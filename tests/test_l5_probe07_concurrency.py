@@ -250,3 +250,40 @@ def test_the_treatment_flags_are_off_unless_asked_for():
     ex = EX.FaithfulExecutor(store(), limits())
     assert ex.maker_treatment is False
     assert ex.maker_only is False
+
+
+# ------------------------------------------- the switches reach the engine
+
+def test_the_treatment_flags_default_off(monkeypatch):
+    import scripts.l5_pmus_live_oneshot as P
+    monkeypatch.delenv("L5_MAKER_TREATMENT", raising=False)
+    monkeypatch.delenv("L5_MAKER_ONLY", raising=False)
+    assert P.maker_treatment_enabled() is False
+    assert P.maker_only_enabled() is False
+
+
+def test_the_flags_read_the_environment(monkeypatch):
+    import scripts.l5_pmus_live_oneshot as P
+    monkeypatch.setenv("L5_MAKER_TREATMENT", "YES")
+    monkeypatch.setenv("L5_MAKER_ONLY", "yes")
+    assert P.maker_treatment_enabled() is True
+    assert P.maker_only_enabled() is True
+
+
+def test_run_window_passes_the_flags_to_the_executor(monkeypatch):
+    """The wiring, asserted rather than assumed."""
+    import src.l5_pmus_live_wiring as W
+    import src.l5_live_execution as EX
+    seen = {}
+    real = EX.FaithfulExecutor
+
+    def spy(*a, **kw):
+        seen.update(kw)
+        return real(*a, **kw)
+
+    monkeypatch.setattr(W.EX, "FaithfulExecutor", spy)
+    W.run_window([], [], market=MARKET, window="1945z", store=store(),
+                 limits=PM.probe_limits(), transport=None, lam=D("1"),
+                 maker_treatment=True, maker_only=True)
+    assert seen.get("maker_treatment") is True
+    assert seen.get("maker_only") is True
