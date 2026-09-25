@@ -86,6 +86,7 @@ class FeedHealth:
         self.identity_refused = 0
         self.identity_reasons: Dict[str, int] = {}
         self.admitted_tokens: Dict[str, int] = {}
+        self.rejected_tokens: Dict[str, int] = {}
         self.binding: Optional[Dict[str, Any]] = None
 
     def as_dict(self) -> Dict[str, Any]:
@@ -102,6 +103,9 @@ class FeedHealth:
                 "identity_refused": self.identity_refused,
                 "identity_reasons": dict(self.identity_reasons),
                 "admitted_tokens": dict(self.admitted_tokens),
+                "rejected_tokens": dict(self.rejected_tokens),
+                "distinct_admitted": sum(self.admitted_tokens.values()),
+                "distinct_identity_refused": self.identity_refused,
                 "market_binding": self.binding,
                 "foreign_tokens_admitted": 0,
                 "healthy": self.polls_ok > 0 and self.polls_failed == 0}
@@ -110,6 +114,11 @@ class FeedHealth:
 from src import l5_market_binding as MB
 
 _BINDINGS: Dict[int, Any] = {}
+
+#: action keys already refused on identity, per market slug. `seen` holds the
+#: ones we HANDLED; a refused action is in neither, so without this it is
+#: re-judged on every poll and every counter becomes a poll count.
+_REFUSED: Dict[str, Set[str]] = {}
 
 
 def _binding_for(window_start_epoch: int, *, getter=None):
@@ -165,6 +174,7 @@ def new_l5_actions(slug: str, seen: Set[str],
         health.last_ok_t = time.time()
         health.raw_rows += len(rows)
     out: List[dict] = []
+    refused_keys = _REFUSED.setdefault(slug, set())
     for r in rows:
         try:
             t = float(r.get("timestamp"))
@@ -176,17 +186,34 @@ def new_l5_actions(slug: str, seen: Set[str],
             continue
         if health is not None:
             health.in_window += 1
+        # the whole economic identity, not the transaction hash. One
+        # transaction can carry two fills at different prices, and hashing
+        # by tx silently drops the second.
+        #
+        # Identity is judged per DISTINCT action. The feed re-serves the same
+        # rows every poll, so counting each time a row is seen answers "how
+        # often did we look", not "how many of L5's actions were foreign" --
+        # the 1615z window counted 147 refusals and 5,070 admissions against
+        # 97 distinct actions. Every counter below is keyed on the action.
+        key = O.action_key(r)
+        if key in seen or key in refused_keys:
+            continue
         # IDENTITY, not time. Probe 05 traded two L5 actions from OTHER
-        # markets because this filter stopped here. An action may enter only
-        # if its own CTF token is one of the two outcome tokens the venue
-        # publishes for this exact window; anything else is refused and never
-        # reaches L5_NATIVE or execution.
+        # markets because this filter stopped at the timestamp. An action may
+        # enter only if its own CTF token is one of the two outcome tokens
+        # the venue publishes for this exact window; anything else is refused
+        # and never reaches L5_NATIVE or execution.
         verdict = MB.admit(r, binding)
         if verdict["verdict"] != MB.ADMITTED:
+            refused_keys.add(key)
             if health is not None:
                 health.identity_refused += 1
                 health.identity_reasons[verdict["verdict"]] = (
                     health.identity_reasons.get(verdict["verdict"], 0) + 1)
+                tok = verdict.get("token")
+                if tok:
+                    health.rejected_tokens[str(tok)] = (
+                        health.rejected_tokens.get(str(tok), 0) + 1)
             continue
         if health is not None:
             tok = str(verdict.get("token"))
@@ -194,12 +221,6 @@ def new_l5_actions(slug: str, seen: Set[str],
                 health.admitted_tokens.get(tok, 0) + 1)
             if health.binding is None and binding is not None:
                 health.binding = binding.as_dict()
-        # the whole economic identity, not the transaction hash. One
-        # transaction can carry two fills at different prices, and hashing
-        # by tx silently drops the second.
-        key = O.action_key(r)
-        if key in seen:
-            continue
         act = O.l5_to_pmus_action(r)
         if not act.get("pmus_side"):
             continue
