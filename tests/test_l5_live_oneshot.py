@@ -39,8 +39,11 @@ class Venue:
 
     name = "VENUE_DOUBLE"
 
+    #: the account the credential in this double resolves to
+    FINGERPRINT = "d51b44a3fa83"
+
     def __init__(self, *, preflight="PASSED", fill="0", reject=None,
-                 positions=(), open_orders=()):
+                 positions=(), open_orders=(), fingerprint=None):
         self.armed = False
         self.posts, self.cancels = [], []
         self._preflight = preflight
@@ -48,11 +51,30 @@ class Venue:
         self._reject = reject
         self._positions = list(positions)
         self._open = list(open_orders)
+        self.fingerprint = fingerprint or self.FINGERPRINT
         self.preflight_report = None
 
-    def preflight(self):
-        self.preflight_report = {"preflight": self._preflight, "checks": []}
-        if self._preflight != "PASSED":
+    def preflight(self, *, expect_account=None, known_positions=None):
+        """The real signature, including the account pin.
+
+        The pin is honoured here rather than ignored, because a double that
+        accepts the argument and does nothing with it would let the gate go
+        inert again without a single test noticing -- which is exactly how
+        it went inert in the first place.
+        """
+        checks = []
+        matched = None
+        if expect_account is not None:
+            matched = self.fingerprint == expect_account
+            checks.append({"check": "account_matches_expected",
+                           "passed": matched,
+                           "detail": "expected %s, got %s"
+                                     % (expect_account, self.fingerprint)})
+        verdict = "FAILED" if matched is False else self._preflight
+        self.preflight_report = {
+            "preflight": verdict, "checks": checks,
+            "identity_probe": {"api_key_fingerprint": self.fingerprint}}
+        if verdict != "PASSED":
             raise RuntimeError(json.dumps(self.preflight_report))
         return self.preflight_report
 
@@ -1155,3 +1177,95 @@ def test_an_unreadable_row_does_not_count_as_a_decision(tmp_path):
     assert P.l5_native_was_readable({"refused_reason": "UNREADABLE_ROW:x"}) \
         is False
     assert W.summarize([]) ["refused_reason"] == {}
+
+
+# ------------------------------------------- the account this actually ran on
+#
+# PmusTransport has carried an account_matches_expected gate all along, but
+# the probe called preflight() with no expect_account, so the gate never ran
+# -- and report() collapsed the whole preflight to the single word "PASSED",
+# sending the fingerprint only to the journal on a volume that cannot be read
+# once a one-shot container exits. The account could therefore be neither
+# pinned before arming nor checked afterwards.
+
+def pin(monkeypatch, value):
+    monkeypatch.setenv(P.ACCOUNT_ENV, value)
+
+
+def test_a_fingerprint_mismatch_fails_preflight_and_never_arms(
+        tmp_path, monkeypatch):
+    """The required property: fail closed BEFORE arm(), with no order."""
+    authorize(monkeypatch)
+    pin(monkeypatch, "000000000000")
+    venue = Venue()                      # answers as d51b44a3fa83
+    rep, venue = drive(tmp_path, monkeypatch, venue=venue,
+                       actions=[l5row()])
+
+    assert rep["preflight"] == "FAILED"
+    assert rep["account_matches_expected"] is False
+    assert rep["expected_account"] == "000000000000"
+    assert rep["api_key_fingerprint"] == "d51b44a3fa83"
+    assert rep["armed"] is False, "arm() must never be reached"
+    assert venue.armed is False
+    assert venue.posts == [], "nothing may reach the venue"
+    assert rep["submitted"] == 0
+
+
+def test_the_matching_fingerprint_passes_and_the_report_says_so(
+        tmp_path, monkeypatch):
+    authorize(monkeypatch)
+    pin(monkeypatch, Venue.FINGERPRINT)
+    rep, venue = drive(tmp_path, monkeypatch, actions=[l5row()])
+
+    assert rep["preflight"] == "PASSED"
+    assert rep["account_matches_expected"] is True
+    assert rep["expected_account"] == Venue.FINGERPRINT
+    assert rep["api_key_fingerprint"] == Venue.FINGERPRINT
+    assert rep["armed"] is True
+
+
+def test_an_unpinned_run_reports_not_checked_rather_than_matched(
+        tmp_path, monkeypatch):
+    """None and False are different answers and must not be collapsed."""
+    authorize(monkeypatch)
+    monkeypatch.delenv(P.ACCOUNT_ENV, raising=False)
+    rep, venue = drive(tmp_path, monkeypatch, actions=[l5row()])
+
+    assert rep["expected_account"] is None
+    assert rep["account_matches_expected"] is None, "not checked, not matched"
+    assert rep["preflight"] == "PASSED"
+    assert rep["armed"] is True, "behaviour without the pin is as before"
+
+
+def test_the_fingerprint_reaches_stdout(tmp_path, monkeypatch):
+    """main() prints this dict; the account must survive the serializer."""
+    authorize(monkeypatch)
+    pin(monkeypatch, Venue.FINGERPRINT)
+    rep, _ = drive(tmp_path, monkeypatch, actions=[l5row()])
+    back = json.loads(json.dumps(rep, default=str))
+    assert back["api_key_fingerprint"] == Venue.FINGERPRINT
+    assert back["account_matches_expected"] is True
+    assert back["expected_account"] == Venue.FINGERPRINT
+
+
+def test_the_probe_actually_passes_the_pin_to_the_transport(monkeypatch):
+    """Guard the wiring itself: an ignored argument is an inert gate."""
+    import inspect
+    src = inspect.getsource(P.Probe.run_preflight)
+    assert "expect_account=expected_account()" in src, (
+        "run_preflight must pass the pin into PmusTransport.preflight")
+    monkeypatch.setenv(P.ACCOUNT_ENV, "  abc123  ")
+    assert P.expected_account() == "abc123"
+    monkeypatch.setenv(P.ACCOUNT_ENV, "   ")
+    assert P.expected_account() is None
+
+
+def test_gate_result_keeps_absent_and_failed_apart():
+    assert P.gate_result({"checks": []}, "account_matches_expected") is None
+    assert P.gate_result(None, "account_matches_expected") is None
+    assert P.gate_result(
+        {"checks": [{"check": "account_matches_expected", "passed": False}]},
+        "account_matches_expected") is False
+    assert P.gate_result(
+        {"checks": [{"check": "account_matches_expected", "passed": True}]},
+        "account_matches_expected") is True

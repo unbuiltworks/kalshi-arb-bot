@@ -71,11 +71,42 @@ POLL_S = 5.0
 #: window is nowhere near closing.
 PREFLIGHT_AT_S = 45.0
 PREFLIGHT_RETRY_S = 60.0
+
+#: the account this probe is pinned to, as a key-id fingerprint. Absent, the
+#: gate does not run and behaviour is exactly as before -- present, a
+#: credential pointing anywhere else fails preflight and nothing arms.
+ACCOUNT_ENV = "PMUS_PREFLIGHT_ACCOUNT"
 PREFLIGHT_UNTIL_S = 780.0
 
 #: stop opening new orders before the close, so a fill has somewhere to go
 #: and the cancel/reconcile tail is not racing the window end.
 NO_NEW_ORDERS_AFTER_S = 810.0
+
+
+
+def expected_account() -> Optional[str]:
+    """The pinned account fingerprint, or None if the owner did not pin one."""
+    return os.getenv(ACCOUNT_ENV, "").strip() or None
+
+
+def gate_result(report: Optional[Mapping[str, Any]],
+                name: str) -> Optional[bool]:
+    """Whether a named preflight gate passed. None means it did not run.
+
+    None and False are different answers and are kept apart: "the account
+    was not checked" must never read as "the account matched".
+    """
+    for c in (report or {}).get("checks") or []:
+        if c.get("check") == name:
+            return bool(c.get("passed"))
+    return None
+
+
+def preflight_fingerprint(report: Optional[Mapping[str, Any]]
+                          ) -> Optional[str]:
+    """The key-id fingerprint the venue answered under, never the key."""
+    return ((report or {}).get("identity_probe") or {}).get(
+        "api_key_fingerprint")
 
 
 class Probe:
@@ -118,7 +149,11 @@ class Probe:
     def run_preflight(self) -> Dict[str, Any]:
         self.stage = "preflight"
         try:
-            self.preflight = self.tp.preflight()
+            # the pin activates PmusTransport's own
+            # account_matches_expected gate; without it that gate does
+            # not run at all, which is how it came to be inert here.
+            self.preflight = self.tp.preflight(
+                expect_account=expected_account())
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -232,6 +267,15 @@ class Probe:
             "market": self.market,
             "authorization": self.auth.as_dict(),
             "preflight": (self.preflight or {}).get("preflight", "NOT_RUN"),
+            # the account this actually ran against. Previously the whole
+            # preflight collapsed to one word here and the fingerprint went
+            # only to the journal, on a volume no one can read once a
+            # one-shot exits -- so the account could be neither gated nor
+            # checked afterwards.
+            "expected_account": expected_account(),
+            "api_key_fingerprint": preflight_fingerprint(self.preflight),
+            "account_matches_expected": gate_result(
+                self.preflight, "account_matches_expected"),
             "armed": self.armed,
             "l5_actions": len(self.records),
             "submitted": len(submitted),
