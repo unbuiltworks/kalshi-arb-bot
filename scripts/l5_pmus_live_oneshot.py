@@ -251,7 +251,9 @@ class Probe:
                 out = W.run_window(actions, books, market=self.market,
                                    window=self.market[-5:], store=self.store,
                                    limits=self.limits, transport=self.tp,
-                                   lam=PM.LAMBDA, now_fn=self._utc)
+                                   lam=PM.LAMBDA, now_fn=self._utc,
+                                   maker_treatment=maker_treatment_enabled(),
+                                   maker_only=maker_only_enabled())
                 for rec in out["records"]:
                     self.records.append(rec)
                     self.journal.write("action", rec)
@@ -268,10 +270,29 @@ class Probe:
         # ACK. Cancelling a terminal order is a guaranteed error and tells us
         # nothing; reading its state tells us everything.
         progress = self.refresh_live_orders() if self.armed else []
+        skipped_terminal: List[dict] = []
+        not_ours: List[str] = []
         if self.armed:
-            for coid, o in list(self.store.live_orders().items()):
+            sid = os.getenv("PMUS_Q1_SESSION_ID", "").strip()
+            # ENUMERATE every remaining resting order, not one. Probe 07 can
+            # hold up to eight at once, and the refresh above has already
+            # retired whatever the venue says is terminal -- so what is left
+            # here is what is genuinely still working.
+            mine = (self.store.live_orders_for_session(sid) if sid
+                    else self.store.live_orders())
+            for coid in self.store.live_orders():
+                if coid not in mine:
+                    not_ours.append(coid)
+            for coid, o in list(mine.items()):
                 vid = o.get("venue_order_id")
                 if not vid:
+                    skipped_terminal.append({"coid": coid,
+                                             "why": "NO_VENUE_ORDER_ID"})
+                    continue
+                if str(o.get("state") or "").upper() in ("FILLED",
+                                                         "CANCELLED"):
+                    skipped_terminal.append({"coid": coid, "venue_order_id":
+                                             str(vid), "why": "TERMINAL"})
                     continue
                 try:
                     self.tp.cancel(str(vid))
@@ -279,6 +300,8 @@ class Probe:
                 except BaseException as exc:                   # noqa: BLE001
                     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                         raise
+                    # a cancel whose outcome we cannot establish leaves the
+                    # exposure exactly where it was; reconciliation decides.
                     cancel_errors.append({"order": vid,
                                           "error": type(exc).__name__})
 
@@ -298,6 +321,11 @@ class Probe:
                              "uncertain and the state says so"}
             recon.update(shape_evidence(exc))
         out = {"cancelled": cancelled, "cancel_errors": cancel_errors,
+               "cancel_skipped_terminal": skipped_terminal,
+               # resting orders belonging to an earlier session are OUR
+               # exposure and are counted, but this run did not place them
+               # and does not cancel them.
+               "live_orders_not_this_session": not_ours,
                "order_progress": progress,
                "reconciliation": recon,
                "orders_uncertain": self.store.orders_uncertain()}
@@ -381,6 +409,8 @@ class Probe:
             "account_matches_expected": gate_result(
                 self.preflight, "account_matches_expected"),
             "armed": self.armed,
+            "maker_treatment": maker_treatment_enabled(),
+            "maker_only": maker_only_enabled(),
             "l5_actions": len(self.records),
             "submitted": len(submitted),
             "filled": len(filled),
@@ -753,6 +783,22 @@ def action_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
             "followed": sum(1 for r in rows if r.get("submitted") is True)}
 
 
+#: Probe 07's two treatment switches. Both default OFF, so every earlier
+#: probe's behaviour is exactly what it was.
+MAKER_TREATMENT_ENV = "L5_MAKER_TREATMENT"
+MAKER_ONLY_ENV = "L5_MAKER_ONLY"
+
+
+def maker_treatment_enabled() -> bool:
+    return os.getenv(MAKER_TREATMENT_ENV, "").strip().upper() in (
+        "1", "YES", "TRUE")
+
+
+def maker_only_enabled() -> bool:
+    return os.getenv(MAKER_ONLY_ENV, "").strip().upper() in ("1", "YES",
+                                                             "TRUE")
+
+
 RECOVER_ENV = "L5_RECOVER_ONLY"
 
 
@@ -1084,6 +1130,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "recover_only": os.getenv(RECOVER_ENV, ""),
         "market_pin": os.getenv(AUTH.MARKET_ENV, ""),
         "recover_market": os.getenv("L5_RECOVER_MARKET", ""),
+        "maker_treatment": maker_treatment_enabled(),
+        "maker_only": maker_only_enabled(),
     }), flush=True)
     if recover_only_enabled():
         rep = recover()

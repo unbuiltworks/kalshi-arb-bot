@@ -202,7 +202,9 @@ def test_the_stated_envelope_is_unchanged(tmp_path):
     assert p.max_total_exposure_usd == D("5")
     assert p.max_abs_residual == D("10")
     assert p.max_concurrent_markets == 1
-    assert p.max_live_orders == 1
+    # the ONLY change: a concurrency bound. Every dollar limit above is
+    # unchanged, which is what this test exists to hold.
+    assert p.max_live_orders == 8
     assert p.daily_realized_loss_halt_usd == D("5")
     assert p.band is None
 
@@ -267,27 +269,36 @@ class NeverFills:
         return {"order_id": "v%d" % len(self.sent), "filled_qty": "0"}
 
 
-def test_rapid_l5_decisions_reach_the_wire_at_most_once(tmp_path, monkeypatch):
-    """The 1630z shape: many decisions, no acknowledgement, one envelope."""
+def test_rapid_l5_decisions_are_bounded_by_the_dollars(tmp_path, monkeypatch):
+    """The 1630z shape: many decisions, no acknowledgement, one envelope.
+
+    This used to assert ONE order, because one live order was the binding
+    constraint. Probe 07 allows eight concurrent, so the bound under test is
+    now the money -- which is the point of the change: the risk engine, not
+    the order count, is the hard boundary. 2 shares at 0.60 is $1.20, so four
+    orders reach $4.80 and the fifth would breach $5.
+    """
     import datetime as dt
     import tests.test_l5_live_execution as L
 
     t = NeverFills()
     ex = E.FaithfulExecutor(store(tmp_path), probe_limits(),
                             transport=t, now_fn=L.NOW)
-    # size 2 -> 2 shares at 0.60 = $1.20, comfortably inside the $5 cap, so
-    # the FIRST order is permitted and the bound under test is the live-order
-    # slot rather than the dollars.
     recs = [ex.handle(L.row(key="k%d" % i, size=2.0), {},
                       market="m", window="16:30")
             for i in range(25)]
-    assert len(t.sent) == 1
-    later = recs[1:]
+    assert len(t.sent) == 4, "$4.80 resting; a fifth would breach $5"
+    assert sum(1 for r in recs
+               if r.get("refused_reason") == "MAX_USD_PER_MARKET") == 21
+    # nothing ever acknowledged a fill, and nothing ran away
+    assert all(r.get("refused_reason") != "MAX_LIVE_ORDERS" for r in recs)
+    later = recs[4:]
     assert all(r["refused_by_layer"] == "SAFETY_OVERLAY" for r in later)
-    assert {r["refused_reason"] for r in later} == {"MAX_LIVE_ORDERS"}
-    # and the one order that did go out is inside the envelope
-    only = t.sent[0]
-    assert D(str(only["price"])) * D(str(only["qty"])) <= D("5")
+    assert {r["refused_reason"] for r in later} == {"MAX_USD_PER_MARKET"}
+    # and everything that did go out is inside the envelope, in AGGREGATE
+    total = sum(D(str(o["price"])) * D(str(o["qty"])) for o in t.sent)
+    assert total <= D("5")
+    assert total == D("4.80")
 
 
 def test_the_dollar_cap_alone_also_stops_the_1630z_shape(tmp_path):

@@ -312,9 +312,18 @@ def test_main_runs_the_probe_once(monkeypatch):
     assert len(calls) == 1
 
 
-# 5 ------------------------- one live order / $5 reservation through partials
+# 5 --------------------- concurrent live orders / $5 reservation via partials
 
-def test_one_live_order_holds_through_a_partial_fill(tmp_path, monkeypatch):
+def test_a_partial_fill_keeps_consuming_the_envelope(tmp_path, monkeypatch):
+    """What this has always been about: a partial keeps counting.
+
+    It used to be asserted through the ONE-order limit -- two follow-on
+    actions refused MAX_LIVE_ORDERS proved the first was still live. Probe 07
+    allows eight concurrent orders, because replaying 12 windows showed the
+    count excluded 143 of 217 maker intents while the dollars excluded none.
+    So the same property is now asserted directly: the partially filled order
+    is still live, and its REMAINING quantity is still in the risk bound.
+    """
     authorize(monkeypatch)
     # lambda-normalised size 2.0 translates to well under one share, so the
     # partial has to be smaller still: this fills a fraction and leaves the
@@ -324,8 +333,12 @@ def test_one_live_order_holds_through_a_partial_fill(tmp_path, monkeypatch):
                        actions=[l5row(key="a", size=2.0),
                                 l5row(key="b", size=2.0),
                                 l5row(key="c", size=2.0)])
-    assert len(venue.posts) == 1, "a partially filled order is still live"
-    assert rep["refused_reason"].get("MAX_LIVE_ORDERS") == 2
+    # all three are now allowed to rest at once
+    assert len(venue.posts) == 3
+    assert rep["refused_reason"].get("MAX_LIVE_ORDERS") is None
+    # close-out then enumerated and cancelled every one of them, which is
+    # the other half of allowing eight: they must all be retired.
+    assert len(rep["close_out"]["cancelled"]) == 3
 
 
 def test_the_five_dollar_envelope_is_the_probe_envelope(tmp_path, monkeypatch):
@@ -336,7 +349,9 @@ def test_the_five_dollar_envelope_is_the_probe_envelope(tmp_path, monkeypatch):
     assert lim["max_total_exposure_usd"] == "5"
     assert lim["max_abs_residual"] == "10"
     assert lim["max_concurrent_markets"] == 1
-    assert lim["max_live_orders"] == 1
+    # a CONCURRENCY bound, not a money bound: every dollar limit above is
+    # unchanged and the worst case below is still 5.1738
+    assert lim["max_live_orders"] == 8
     assert lim["daily_realized_loss_halt_usd"] == "5"
     assert rep["worst_case"]["worst_case_total_usd"] == "5.1738"
 
@@ -1145,7 +1160,7 @@ def test_the_whole_report_survives_a_window_that_actually_did_something(
     assert "UNREADABLE_ROW" not in rep["refused_reason"]
 
     assert rep["live_limits"]["max_usd_per_market"] == "5"
-    assert rep["live_limits"]["max_live_orders"] == 1
+    assert rep["live_limits"]["max_live_orders"] == 8
     assert "OBSERVE ONLY" in rep["labels"]
 
 

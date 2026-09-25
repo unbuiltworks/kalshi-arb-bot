@@ -44,7 +44,18 @@ def probe_limits() -> SafetyLimits:
         max_total_exposure_usd=D("5"),
         max_abs_residual=D("10"),
         max_concurrent_markets=1,
-        max_live_orders=1,   # one live order at a time for the first probe
+        # EIGHT, not one, and this is a CONCURRENCY change rather than any
+        # additional risk. Replaying the preregistered maker lifecycle over
+        # 12 clean authenticated windows: under one-live-order, 143 of 217
+        # maker intents were lost to the COUNT and ZERO to money, and
+        # concurrent premium never exceeded $4.4198. Remove the count and 19
+        # orders rest simultaneously for $4.9983 -- still inside $5.
+        #
+        # So the dollar engine, not the order count, is the hard boundary.
+        # Eight is deliberately below the 19 the replay reached, so the
+        # aggregate risk bound is what refuses an order and the count never
+        # becomes the reason. Every monetary limit below is UNCHANGED.
+        max_live_orders=8,
         daily_realized_loss_halt_usd=D("5"),
         band=None,          # a band is behavioural; the faithful engine has none
     )

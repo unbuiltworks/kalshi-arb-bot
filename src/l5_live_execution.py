@@ -585,17 +585,39 @@ class InventoryStore:
     def already_submitted(self, coid: str) -> bool:
         return coid in (self.state.get("submitted") or {})
 
-    def record_submit(self, coid: str, intent: Mapping[str, Any]) -> None:
+    def record_submit(self, coid: str, intent: Mapping[str, Any],
+                      *, session_id: Optional[str] = None,
+                      mode: Optional[str] = None) -> None:
         rec = {
             "t": dt.datetime.now(dt.timezone.utc).isoformat(),
             "market": intent.get("market"), "side": intent.get("side"),
             "price": str(intent.get("price")), "qty": str(intent.get("qty")),
+            # RUN PROVENANCE, stamped at submit. The inventory store is a file
+            # on a volume that outlives the process, so without this a later
+            # reconciliation cannot tell this run's orders from Probe 04's.
+            "session_id": session_id,
+            "mode": mode,
         }
         self.state.setdefault("submitted", {})[coid] = rec
         # live from this instant: the envelope must already count it.
         self.state.setdefault("live_orders", {})[coid] = dict(
             rec, remaining=str(intent.get("qty")), state="LIVE")
         self.save()
+
+    def live_orders_for_session(self, session_id: str) -> Dict[str, Any]:
+        """This run's resting orders, and only this run's."""
+        return {k: dict(v) for k, v in (self.state.get("live_orders") or {}).items()
+                if str(v.get("session_id") or "") == str(session_id)}
+
+    def live_orders_other_sessions(self, session_id: str) -> Dict[str, Any]:
+        """Anything resting that this run did not place. Never cancelled here.
+
+        An order from an earlier session is still OUR exposure and still
+        counts against the envelope, but cancelling it is not this run's
+        business -- it did not place it and cannot know what it was for.
+        """
+        return {k: dict(v) for k, v in (self.state.get("live_orders") or {}).items()
+                if str(v.get("session_id") or "") != str(session_id)}
 
     def apply_fill(self, market: str, side: str, qty: D, price: D,
                    *, coid: Optional[str] = None) -> None:
@@ -787,11 +809,23 @@ class FaithfulExecutor:
 
     def __init__(self, store: InventoryStore, limits: SafetyLimits, *,
                  transport: Optional[Any] = None,
-                 lam: D = D("1"), now_fn=None) -> None:
+                 lam: D = D("1"), now_fn=None,
+                 maker_treatment: bool = False,
+                 maker_only: bool = False) -> None:
         self.store = store
         self.limits = limits
         self.transport = transport or NullTransport()
         self.lam = lam
+        #: MAKER_TREATMENT: an action the frozen rule called MAKER and then
+        #: refused STRICT_NOT_EVALUABLE is RESTED at L5's own price instead of
+        #: dropped. That refusal is about replay evidence -- whether a
+        #: hypothetical resting order would have filled -- and live we do not
+        #: need to prove it, we place the order and let the venue answer.
+        #: L5_NATIVE is untouched: this reads its output and adds nothing.
+        self.maker_treatment = maker_treatment
+        #: MAKER_ONLY: no taker fallback at all. Probe 07 is a test of the
+        #: maker mechanism, and a crossing order would contaminate it.
+        self.maker_only = maker_only
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
 
     def _age_s(self, row: Mapping[str, Any]) -> Optional[float]:
@@ -850,7 +884,42 @@ class FaithfulExecutor:
             "slippage_vs_l5": str(tr.get("slippage")),
             "depth": str(tr.get("depth")), "reason": tr.get("reason")})
         if not tr.get("ok"):
-            return prov.refuse("PMUS_TRANSLATION", tr["reason"])
+            # The one refusal the maker treatment answers empirically. Every
+            # other refusal -- stale, no book, no depth, queue-ambiguous --
+            # stands exactly as the frozen rule made it.
+            if (self.maker_treatment
+                    and str(tr.get("mode") or "").upper() == "MAKER"
+                    and str(tr.get("reason") or "") == "STRICT_NOT_EVALUABLE"
+                    and dec.get("price") is not None):
+                want = dec["l5_size"] * self.lam
+                px = D(str(dec["price"]))          # P1: L5's price, exactly
+                executable = (floor_to_increment(want, inc)
+                              if inc is not None else want)
+                if executable <= 0:
+                    return prov.refuse("PMUS_TRANSLATION",
+                                       "QUANTITY_BELOW_MIN_INCREMENT")
+                tr = {"ok": True, "mode": FT.MAKER, "price": px,
+                      "qty": executable, "qty_desired": want,
+                      "slippage": D(0), "depth": None,
+                      "fee": D(0), "rebate": D(0),
+                      "treatment": "MAKER_TREATMENT_V1"}
+                desired = want
+                prov.stage("MAKER_TREATMENT", {
+                    "rested_at_l5_price": str(px),
+                    "qty_desired": str(want), "qty": str(executable),
+                    "post_only": True,
+                    "why": ("the frozen rule called this restable and could "
+                            "not prove the fill in replay. Live, the venue "
+                            "answers that question instead."),
+                })
+            else:
+                return prov.refuse("PMUS_TRANSLATION", tr["reason"])
+
+        # Probe 07 is a test of the MAKER mechanism. A crossing order would
+        # contaminate the endpoint it exists to measure, so there is no taker
+        # fallback and the refusal says which rule declined it.
+        if self.maker_only and str(tr.get("mode") or "").upper() != FT.MAKER:
+            return prov.refuse("SAFETY_OVERLAY", "MAKER_ONLY_NO_TAKER")
 
         # An armed transport has passed preflight, and preflight does not pass
         # without quantity_constraint_known -- so an unknown grid here means
@@ -915,7 +984,10 @@ class FaithfulExecutor:
         # the send and the ack, the order may still be live at the venue, and
         # a store that never recorded it would hand the whole envelope to the
         # next decision.
-        self.store.record_submit(coid, intent)
+        self.store.record_submit(
+            coid, intent,
+            session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,
+            mode=str(tr.get("mode") or ""))
         try:
             ack = self.transport.submit(intent)
         except NotArmed as exc:
