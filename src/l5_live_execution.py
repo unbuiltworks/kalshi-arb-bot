@@ -355,20 +355,29 @@ VENUE_POSITION_MARKET_KEYS = ("marketSlug", "market", "slug")
 VENUE_POSITION_QTY_KEYS = ("netPositionDecimal", "netPosition", "quantity",
                            "qty")
 
-#: What it might call the side. NOT confirmed against a populated row: this
-#: account was flat by the time the response could be captured, so these are
-#: candidates, and a row matching none of them is REFUSED rather than guessed.
-VENUE_POSITION_SIDE_KEYS = ("side", "outcomeSide", "positionSide",
-                            "marketSide", "outcome")
+#: What the row calls the two halves of the position. These need NO sign
+#: convention: shares bought and shares sold are unambiguous, and their
+#: difference is long-positive by construction. Decimal twins first, because
+#: the settlement auditor measured `qty` disagreeing with its own decimal
+#: field on 12 of 13 rows.
+VENUE_POSITION_BOUGHT_KEYS = ("qtyBoughtDecimal", "qtyBought")
+VENUE_POSITION_SOLD_KEYS = ("qtySoldDecimal", "qtySold")
 
-#: How the venue spells the two sides, mapped onto our ledger's UP/DOWN.
-VENUE_SIDE_WORDS = {
-    "YES": "UP", "UP": "UP", "LONG": "UP", "BUY": "UP",
-    "OUTCOME_SIDE_YES": "UP", "POSITION_SIDE_LONG": "UP",
-    "NO": "DOWN", "DOWN": "DOWN", "DN": "DOWN", "SHORT": "DOWN",
-    "SELL": "DOWN", "OUTCOME_SIDE_NO": "DOWN", "POSITION_SIDE_SHORT": "DOWN",
-}
-
+#: The signed net position. Probe 06 captured the real field list of a
+#: POPULATED row and there is no side field in it at all:
+#:
+#:   avgPx baseCost bodPosition bodPositionDecimal cashValue comboLegDetails
+#:   cost costPerShare expired fees marketMetadata marketSlug netPosition
+#:   netPositionDecimal positionId qtyAvailable qtyAvailableDecimal qtyBought
+#:   qtyBoughtDecimal qtySold qtySoldDecimal realized updateTime
+#:
+#: so the direction lives in the SIGN. Which sign means long is not asserted
+#: here: no populated row's VALUES have ever been captured, the account was
+#: flat by the time one could be, and nothing in this repository has ever
+#: read the field for anything but a non-zero check. The convention is
+#: therefore proven per row, from `qtyBought - qtySold`, and a net that
+#: disagrees with that difference fails closed.
+VENUE_POSITION_NET_KEYS = ("netPositionDecimal", "netPosition")
 
 class UnrecognizedVenueShape(RuntimeError):
     """A venue row we cannot read. Carries the structure, never a guess.
@@ -378,10 +387,27 @@ class UnrecognizedVenueShape(RuntimeError):
     Probe 05 and had to reason about from the exception name alone.
     """
 
+    #: fields of a position row that are numbers or identifiers -- never a
+    #: credential, and the only things that can settle a shape question
+    VALUE_FIELDS = ("marketSlug", "netPosition", "netPositionDecimal",
+                    "qtyBought", "qtyBoughtDecimal", "qtySold",
+                    "qtySoldDecimal", "qtyAvailable", "qtyAvailableDecimal",
+                    "bodPosition", "bodPositionDecimal", "avgPx", "cost",
+                    "costPerShare", "baseCost", "cashValue", "realized",
+                    "fees", "expired", "positionId", "updateTime")
+
     def __init__(self, what: str, rows: Sequence[Mapping[str, Any]]) -> None:
         super().__init__(what)
         self.what = what
         self.rows = [sorted(r) for r in rows if isinstance(r, Mapping)]
+        # Probe 06 reported the KEYS of the first populated position row we
+        # had ever seen and not its values, so the one question the capture
+        # existed to answer -- which sign means long -- still could not be
+        # answered, and by then the account was flat again. The values come
+        # out too now. They are quantities and identifiers; nothing here is
+        # a credential.
+        self.values = [{k: r.get(k) for k in self.VALUE_FIELDS if k in r}
+                       for r in rows if isinstance(r, Mapping)]
 
 
 def _first_key(row: Mapping[str, Any], keys: Sequence[str]) -> Any:
@@ -401,22 +427,41 @@ def venue_side(raw: Any) -> Optional[str]:
 def position_row(p: Mapping[str, Any]) -> Dict[str, str]:
     """One venue position row as market / side / qty, or refuse it.
 
-    Every field is looked up by NAME against what the venue is known to
-    serve. Nothing is positional, nothing is inferred from ordering, and a
-    row that does not yield all three raises rather than contributing a
-    half-read position to the ledger the envelope is enforced against.
+    The row has no side. It has a SIGNED net position, and two unsigned
+    halves -- shares bought and shares sold -- whose difference is
+    long-positive by construction and needs no convention at all. That
+    difference is what decides the side here.
+
+    `netPositionDecimal` is then used as a CHECK, not as the source: if it is
+    present and disagrees with bought-minus-sold, the row is refused rather
+    than resolved in favour of one of them. A row carrying only the signed
+    net, with no halves to prove the convention against, is also refused --
+    guessing which sign means long is exactly the assumption this function
+    exists to avoid.
     """
     if not isinstance(p, Mapping):
         raise UnrecognizedVenueShape("position row is not an object", [])
     market = _first_key(p, VENUE_POSITION_MARKET_KEYS)
-    qty = _first_key(p, VENUE_POSITION_QTY_KEYS)
-    side = venue_side(_first_key(p, VENUE_POSITION_SIDE_KEYS))
-    if market is None or qty is None or side is None:
+    if market is None:
+        raise UnrecognizedVenueShape("position row lacks market", [p])
+    bought = _first_key(p, VENUE_POSITION_BOUGHT_KEYS)
+    sold = _first_key(p, VENUE_POSITION_SOLD_KEYS)
+    net = _first_key(p, VENUE_POSITION_NET_KEYS)
+    if bought is None or sold is None:
         raise UnrecognizedVenueShape(
-            "position row lacks %s" % ", ".join(
-                n for n, v in (("market", market), ("qty", qty),
-                               ("side", side)) if v is None), [p])
-    return {"market": str(market), "side": side, "qty": str(_as_qty(qty))}
+            "position row carries no bought/sold halves, so the sign "
+            "convention of its net position cannot be proven from it", [p])
+    signed = _as_qty(bought) - _as_qty(sold)
+    if net is not None:
+        n = _as_qty(net)
+        if n != signed:
+            raise UnrecognizedVenueShape(
+                "net position %s disagrees with qtyBought - qtySold %s"
+                % (n, signed), [p])
+    side = "UP" if signed >= 0 else "DOWN"
+    qty = signed if signed >= 0 else -signed
+    return {"market": str(market), "side": side, "qty": str(qty),
+            "signed_net": str(signed)}
 
 
 def _as_qty(v: Any) -> D:
