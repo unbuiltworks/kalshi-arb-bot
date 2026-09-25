@@ -590,6 +590,9 @@ def shape_evidence(exc: BaseException) -> Dict[str, Any]:
     rows = getattr(exc, "rows", None)
     if rows is not None:
         ev["row_keys"] = rows
+    vals = getattr(exc, "values", None)
+    if vals is not None:
+        ev["row_values"] = vals
     return ev
 
 

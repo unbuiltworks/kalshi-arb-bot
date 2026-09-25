@@ -188,15 +188,17 @@ def test_reconciliation_survives_the_populated_mapping(tmp_path):
     """The exact TypeError Probe 04 died of, reproduced and fixed."""
     from src.l5_pmus_transport import rows_of
     s = store_with_live_order(tmp_path)
-    populated = {"positions": {MARKET: {"netPosition": "2.25",
-                                        "side": "UP", "qty": "2.25"}}}
+    # the venue's real populated shape: keyed by slug, no side field, the
+    # direction in the sign of the net with unsigned halves beside it
+    populated = {"positions": {MARKET: {"netPositionDecimal": "2.25",
+                                        "qtyBoughtDecimal": "2.25",
+                                        "qtySoldDecimal": "0"}}}
     rows = rows_of(populated, "positions")
     # before the fix this list was ["cpc-..."], strings, and p["market"]
     # raised TypeError: string indices must be integers
     for p in rows:
         assert isinstance(p, dict)
-    out = s.reconcile_from_venue(
-        [{"market": MARKET, "side": "UP", "qty": "2.25"}], [])
+    out = s.reconcile_from_venue(rows, [])
     assert out["reconciled"] is True
     assert out["open_orders_at_venue"] == 0
 

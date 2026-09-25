@@ -26,68 +26,98 @@ import scripts.l5_pmus_live_oneshot as ONE
 # --------------------------------------------------------------- the row
 
 def venue_row(**over):
-    """A position row in the shape `positions()` actually produces."""
+    """A position row in the shape the venue actually serves.
+
+    Probe 06's close-out captured the field list of the first POPULATED row
+    we had ever seen. There is no side field in it: direction lives in the
+    sign of netPosition, and the unsigned halves qtyBought/qtySold prove
+    which sign means long without anyone having to assume it.
+    """
     row = {"marketSlug": "cpc-btc-updown-15m-2026-09-25-1500z",
-           "outcomeSide": "OUTCOME_SIDE_YES",
+           "qtyBoughtDecimal": "10.34", "qtySoldDecimal": "0",
            "netPositionDecimal": "10.34"}
     row.update(over)
     return row
 
 
 def test_the_row_positions_builds_has_no_market_key_at_all():
-    # the premise of the bug, stated as a fact rather than assumed
+    # the premise of the original KeyError, stated as a fact
     assert "market" not in venue_row()
     assert "marketSlug" in venue_row()
+
+
+def test_the_populated_row_carries_no_side_field_at_all():
+    """The Probe 06 finding. Every side name I had guessed was absent."""
+    captured = ["avgPx", "baseCost", "bodPosition", "bodPositionDecimal",
+                "cashValue", "comboLegDetails", "cost", "costPerShare",
+                "expired", "fees", "marketMetadata", "marketSlug",
+                "netPosition", "netPositionDecimal", "positionId",
+                "qtyAvailable", "qtyAvailableDecimal", "qtyBought",
+                "qtyBoughtDecimal", "qtySold", "qtySoldDecimal", "realized",
+                "updateTime"]
+    for guess in ("side", "outcomeSide", "positionSide", "marketSide",
+                  "outcome"):
+        assert guess not in captured
 
 
 def test_position_row_reads_the_shape_the_venue_serves():
     assert EX.position_row(venue_row()) == {
         "market": "cpc-btc-updown-15m-2026-09-25-1500z",
-        "side": "UP", "qty": "10.34"}
+        "side": "UP", "qty": "10.34", "signed_net": "10.34"}
 
 
-@pytest.mark.parametrize("word,side", [
-    ("OUTCOME_SIDE_YES", "UP"), ("YES", "UP"), ("yes", "UP"),
-    ("OUTCOME_SIDE_NO", "DOWN"), ("NO", "DOWN"), ("no", "DOWN")])
-def test_both_sides_are_recognised(word, side):
-    assert EX.position_row(venue_row(outcomeSide=word))["side"] == side
+def test_the_side_comes_from_bought_minus_sold_not_from_a_convention():
+    short = EX.position_row(venue_row(qtyBoughtDecimal="1",
+                                      qtySoldDecimal="4",
+                                      netPositionDecimal="-3"))
+    assert short["side"] == "DOWN" and short["qty"] == "3"
 
 
-@pytest.mark.parametrize("key", ["netPositionDecimal", "netPosition",
-                                 "quantity", "qty"])
-def test_every_quantity_spelling_the_auditor_has_seen(key):
-    row = {"marketSlug": "m", "side": "YES", key: "3.5"}
-    assert EX.position_row(row)["qty"] == "3.5"
-
-
-def test_the_decimal_field_wins_when_both_are_present():
-    # the auditor measured qty disagreeing with its own decimal twin on 12
-    # of 13 rows; preferring the wrong one produced a 17x phantom position
-    row = {"marketSlug": "m", "side": "YES",
-           "netPositionDecimal": "45.01", "qty": "774.62"}
-    assert EX.position_row(row)["qty"] == "45.01"
-
-
-def test_a_row_with_no_recognisable_side_is_refused_not_guessed():
+def test_a_net_that_disagrees_with_the_halves_is_refused():
     with pytest.raises(EX.UnrecognizedVenueShape) as e:
-        EX.position_row({"marketSlug": "m", "netPositionDecimal": "1"})
-    assert "side" in e.value.what
+        EX.position_row(venue_row(qtyBoughtDecimal="6", qtySoldDecimal="1",
+                                  netPositionDecimal="-5"))
+    assert "disagrees" in e.value.what
 
 
-def test_a_row_with_an_unknown_side_word_is_refused():
-    with pytest.raises(EX.UnrecognizedVenueShape):
-        EX.position_row(venue_row(outcomeSide="OUTCOME_SIDE_SIDEWAYS"))
-
-
-def test_the_refusal_carries_the_keys_the_venue_actually_sent():
+def test_a_row_with_only_a_signed_net_cannot_prove_its_own_convention():
+    # refusing here is the point: guessing which sign means long is the
+    # assumption this function exists to avoid
     with pytest.raises(EX.UnrecognizedVenueShape) as e:
-        EX.position_row({"marketSlug": "m", "netPositionDecimal": "1"})
-    assert e.value.rows == [["marketSlug", "netPositionDecimal"]]
+        EX.position_row({"marketSlug": "m", "netPositionDecimal": "6.08"})
+    assert "cannot be proven" in e.value.what
+
+
+def test_the_decimal_halves_are_preferred_over_their_plain_twins():
+    # the auditor measured qty disagreeing with its own decimal field on
+    # 12 of 13 rows; preferring the wrong one produced a 17x phantom position
+    r = EX.position_row({"marketSlug": "m", "qtyBoughtDecimal": "45.01",
+                         "qtyBought": "774.62", "qtySoldDecimal": "0",
+                         "qtySold": "0"})
+    assert r["qty"] == "45.01"
+
+
+def test_a_row_with_no_market_is_refused():
+    with pytest.raises(EX.UnrecognizedVenueShape) as e:
+        EX.position_row({"qtyBoughtDecimal": "1", "qtySoldDecimal": "0"})
+    assert "market" in e.value.what
 
 
 def test_a_non_numeric_quantity_is_refused():
     with pytest.raises(EX.UnrecognizedVenueShape):
-        EX.position_row(venue_row(netPositionDecimal="lots"))
+        EX.position_row(venue_row(qtyBoughtDecimal="lots"))
+
+
+def test_the_refusal_now_carries_the_rows_values_not_just_its_keys():
+    """Probe 06 captured keys only, so the question it existed to answer --
+    which sign means long -- still could not be answered."""
+    try:
+        EX.position_row({"marketSlug": "m", "netPositionDecimal": "6.08"})
+    except EX.UnrecognizedVenueShape as e:
+        assert e.rows == [["marketSlug", "netPositionDecimal"]]
+        assert e.values == [{"marketSlug": "m", "netPositionDecimal": "6.08"}]
+    else:
+        raise AssertionError("should have refused")
 
 
 # ------------------------------------------------- reconcile_from_venue
