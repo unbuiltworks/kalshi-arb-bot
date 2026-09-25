@@ -42,6 +42,12 @@ class Venue:
     #: the account the credential in this double resolves to
     FINGERPRINT = "d51b44a3fa83"
 
+    #: the venue's own quantity grid, as this market's preflight reported it
+    #: on 2026-09-25. A double without it is not modelling the transport --
+    #: and an unfaithful double is how an unquantized quantity reached the
+    #: wire in the first place.
+    quantity_increment = D("0.01")
+
     def __init__(self, *, preflight="PASSED", fill="0", reject=None,
                  positions=(), open_orders=(), fingerprint=None):
         self.armed = False

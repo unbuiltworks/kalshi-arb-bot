@@ -37,6 +37,11 @@ class FakeTransport:
 
     armed = True
     name = "FAKE"
+    #: the venue's own quantity grid, as this market's preflight
+    #: reported it on 2026-09-25. A double without it is not
+    #: modelling the transport -- and an unfaithful double is how
+    #: the unquantized quantity reached the wire in the first place.
+    quantity_increment = D("0.01")
 
     def __init__(self, fill_qty="1", fill_price=None, reject_dupes=True,
                  fill_all=False):

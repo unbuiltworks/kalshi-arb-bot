@@ -163,6 +163,7 @@ def test_the_record_carries_the_redacted_cause_and_the_stage(tmp_path,
     class Raising:
         armed = True
         name = "FAKE"
+        quantity_increment = D("0.01")
         submit_stage = "ORDER_POST"
         preview_attempted = True
         preview_status = 200

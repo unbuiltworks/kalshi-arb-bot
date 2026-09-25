@@ -66,6 +66,21 @@ def redact(text: Any) -> str:
     return s[:600]
 
 
+def _as_decimal(v: Any) -> Optional[D]:
+    """A venue-supplied constraint as an exact Decimal, or None.
+
+    str() first: the venue sends these as JSON numbers, and D(float) would
+    carry the binary representation error into a value we quantize against.
+    """
+    if v is None:
+        return None
+    try:
+        d = D(str(v))
+    except Exception:                                          # noqa: BLE001
+        return None
+    return d if d > 0 else None
+
+
 class PreflightFailed(RuntimeError):
     pass
 
@@ -215,6 +230,10 @@ class PmusTransport:
         self.armed = False
         self.preflight_report: Optional[Dict[str, Any]] = None
         self.identity_probe: Dict[str, Any] = {}
+        #: the venue's own execution grid, filled in by preflight(). None
+        #: until then, and None is "not established" -- never a default.
+        self.tick_size: Optional[D] = None
+        self.quantity_increment: Optional[D] = None
 
     # ------------------------------------------------------------ read only
 
@@ -527,6 +546,13 @@ class PmusTransport:
                 or mk.get("minOrderSize"))
         ok &= gate("tick_constraint_known", tick is not None, tick)
         ok &= gate("quantity_constraint_known", minq is not None, minq)
+        # Keep the constraints, not just the verdict that they were readable.
+        # Probe 03 passed both of these gates and then sent
+        # 0.4066877541798463 against an increment of 0.01: the numbers were
+        # READ and never APPLIED. They are the venue's own, from this
+        # market's metadata, and are never assumed.
+        self.tick_size = _as_decimal(tick)
+        self.quantity_increment = _as_decimal(minq)
 
         # 8. authenticated book / read connectivity
         bk: Dict[str, Any] = {}
