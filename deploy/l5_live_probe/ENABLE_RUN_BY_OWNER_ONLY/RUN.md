@@ -1,17 +1,17 @@
-# RUN MARKER — RECOVER-ONLY, Probe 06
+# RUN MARKER — OBSERVE-ONLY, maker-treatment shadow
 
-`L5_RECOVER_ONLY=YES`, market `cpc-btc-updown-15m-2026-09-25-1700z`, live
-authorization variables cleared. GET only: `ReadOnlyTransport` raises on any
-method but GET and the transport is never armed. `main()` branches to
-recovery before observe and before run.
+`L5_OBSERVE_ONLY=YES`, live authorization cleared, nothing armed,
+NullTransport in the executor. This run cannot send an order.
 
-Two jobs:
+What it demonstrates over one complete BTC15m window: the actions the frozen
+rule refuses `STRICT_NOT_EVALUABLE` now produce genuine resting-order
+INTENTS — a side, L5's own price, a lambda-scaled quantity floored to the
+venue increment, and the post-only flag — instead of producing nothing.
 
-1. reconcile Probe 06's quarantined state -- `reconciliation failed:
-   UnrecognizedVenueShape`, exposure never released -- now that a position
-   row is read by its signed net, proven per row against qtyBought minus
-   qtySold;
-2. extract the run's per-order table and the 52-action comparison from the
-   journal, one printed line each.
+Probe 06 executed 6 of 52 actions and refused 43 on that reason. Every
+execution was a TAKER and every refusal was a MAKER, so the clone currently
+reproduces only L5's aggressive behaviour.
 
-No order is created, cancelled or modified. Nothing frozen is touched.
+INTENTS ONLY. Nothing is placed, nothing rests, nothing fills. The report
+says so in its own labels. `L5_NATIVE` 030d8bf is untouched: the treatment
+reads its output and adds nothing to its decision.

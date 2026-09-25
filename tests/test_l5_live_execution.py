@@ -251,7 +251,11 @@ def test_the_behaviour_our_old_heuristics_disliked_is_not_suppressed(tmp_path):
 def test_the_venue_overrides_our_file_and_drift_is_reported(tmp_path):
     st = store(tmp_path)
     st.state["positions"] = {"m|UP": "5"}
-    out = st.reconcile_from_venue([{"market": "m", "side": "UP", "qty": "3"}], [])
+    # the venue's real row: keyed by slug, no side field, direction in the
+    # sign of the net with the unsigned halves beside it to prove it
+    out = st.reconcile_from_venue(
+        [{"marketSlug": "m", "qtyBoughtDecimal": "3", "qtySoldDecimal": "0",
+          "netPositionDecimal": "3"}], [])
     assert out["authority"] == "VENUE"
     assert out["drift"]["m|UP"] == {"ours": "5", "venue": "3"}
     assert st.position("m", "UP") == D("3")
