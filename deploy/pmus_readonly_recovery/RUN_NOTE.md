@@ -12,3 +12,5 @@ Creates no order, cancels nothing, claims no authorization, writes no
 inventory state; the image does not contain `l5_pmus_transport`.
 
 <!-- Probe 06: reading its six orders by venue id. -->
+
+<!-- Probe 07 (1945z): settlement, positions, balance. -->
