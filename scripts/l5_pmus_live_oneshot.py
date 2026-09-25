@@ -775,6 +775,20 @@ def recover(*, http=None, state_path=None, journal_path=None,
     ro = http or Q1.ReadOnlyTransport()
     tp = TP.PmusTransport(market_slug=market, http=ro)
 
+    # nothing to reconcile is not a reason to run. A recovery flag left set
+    # from an earlier run has twice hijacked a window that was meant to
+    # observe, and a no-op recovery looks exactly like a successful one.
+    if not store.live_orders() and not store.orders_uncertain():
+        rep = {"LABEL": "LIVE_RECOVERY", "market": market,
+               "post_capable": False, "armed": False,
+               "skipped": "NOTHING_TO_RECONCILE",
+               "live_orders": {}, "orders_uncertain": None,
+               "labels": ("state was already clean, so this run reconciled "
+                          "nothing. If a window was meant to be observed, "
+                          "L5_RECOVER_ONLY is still set.")}
+        journal.write("recovery_skipped", rep)
+        return rep
+
     # prove the incapability rather than assert it
     try:
         ro.request("POST", "/v1/orders", {}, Q1.API)
@@ -1047,7 +1061,30 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
     return rep
 
 
+def selected_mode() -> str:
+    """Which branch this process will take, decided once and announced.
+
+    A stale L5_RECOVER_ONLY has now hijacked two runs that were meant to
+    observe -- once before the 1615z window and once before 1800z -- and both
+    times the only symptom was a report that never appeared. The mode is
+    printed before anything else so the wrong one is obvious immediately
+    rather than fifteen minutes later.
+    """
+    if recover_only_enabled():
+        return "RECOVER_ONLY"
+    if observe_only_enabled():
+        return "OBSERVE_ONLY"
+    return "LIVE_PROBE"
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    print("L5_MODE " + json.dumps({
+        "mode": selected_mode(),
+        "observe_only": os.getenv(OBSERVE_ENV, ""),
+        "recover_only": os.getenv(RECOVER_ENV, ""),
+        "market_pin": os.getenv(AUTH.MARKET_ENV, ""),
+        "recover_market": os.getenv("L5_RECOVER_MARKET", ""),
+    }), flush=True)
     if recover_only_enabled():
         rep = recover()
         table = rep.pop("order_table", [])

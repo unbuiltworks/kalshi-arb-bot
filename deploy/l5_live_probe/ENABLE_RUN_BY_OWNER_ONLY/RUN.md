@@ -15,3 +15,7 @@ reproduces only L5's aggressive behaviour.
 INTENTS ONLY. Nothing is placed, nothing rests, nothing fills. The report
 says so in its own labels. `L5_NATIVE` 030d8bf is untouched: the treatment
 reads its output and adds nothing to its decision.
+
+<!-- Redeploy: L5_RECOVER_ONLY was still set from 17:26 and hijacked the
+     17:58 container, so it recovered instead of observing. Cleared, and the
+     build now prints L5_MODE first so the wrong branch is visible at once. -->

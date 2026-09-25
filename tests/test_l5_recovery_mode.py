@@ -120,9 +120,13 @@ def test_running_recovery_twice_changes_nothing_the_second_time(tmp_path):
     second = P.recover(http=GetOnly(), **args)
 
     assert first["order_progress"][0]["delta"] == "2.25"
-    assert second["order_progress"] == [], "nothing left to refresh"
-    assert second["after"]["live_orders"] == {}
-    assert second["reconciliation"]["reconciled"] is True
+    # the second run has nothing to reconcile and says so rather than
+    # performing a no-op that looks exactly like a successful reconciliation.
+    # A recovery flag left set from an earlier run has twice hijacked a
+    # window that was meant to observe, and that is how it stayed invisible.
+    assert second["skipped"] == "NOTHING_TO_RECONCILE"
+    assert second["live_orders"] == {}
+    assert second["orders_uncertain"] is None
 
 
 def test_recovery_refuses_to_release_when_the_venue_cannot_be_read(tmp_path):
