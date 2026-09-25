@@ -1,27 +1,36 @@
-# RUN MARKER — OBSERVE-ONLY, identity gate proof
+# RUN MARKER — PROBE 06, REAL MONEY
 
-`L5_OBSERVE_ONLY=YES`, live authorization variables cleared, `armed` false,
-`NullTransport` in the executor. This run cannot send an order.
+Owner-authorized, conditional on a clean full suite returning the established
+baseline. It did: **26 failed, 14 errors, identical file-for-file to
+baseline, zero new regressions.**
 
-What it must prove over one complete BTC15m window:
+- session `l5probe-20260925-btc15m-06`, fresh and one-use
+- market pinned `cpc-btc-updown-15m-2026-09-25-1700z`
+- account pinned `d51b44a3fa83`; a different fingerprint fails closed
+  before arming
 
-- **zero foreign tokens admitted** — `admitted_tokens` contains at most the
-  two ids in `market_binding`, and nothing else;
-- **exact market binding on every eligible action** — the binding is the
-  venue's own record for this window: conditionId, both clobTokenIds, and an
-  endDate equal to the window's end;
-- **authenticated book healthy** — `AUTHENTICATED_WS`, frames arriving;
-- **corrected risk gate active** — the $5 caps read `risk_exposure_usd`
-  (worst case over both settlements) rather than `committed_usd` notional;
-- **`submitted_live: 0`**.
+Envelope unchanged and not scaled: $5 per market, $5 total potential
+exposure, one live outstanding order, residual <= 10 shares, one concurrent
+market, $5 daily realized-loss halt.
 
-Probe 05's 1500z window admitted five distinct tokens where the venue
-publishes two, and traded two of the foreign ones. Replayed through this
-gate it admits 104 of 110 and refuses 6 as MARKET_IDENTITY_MISMATCH,
-including both erroneous orders.
+Frozen and untouched: L5_NATIVE 030d8bf, lambda and relative sizing, the
+authenticated WS book, exact preview-echo validation, quantity flooring to
+the authoritative increment, the market->token identity gate, the corrected
+risk_exposure_usd $5 gates, and authoritative order refresh/reconciliation.
 
-No Probe 06. Nothing armed. Envelope unchanged.
+## What this run is for
 
-<!-- redeploy: L5_RECOVER_ONLY was still set from the reconciliation run, so
-     the 16:12Z container would have run recovery instead of observing. The
-     variable is cleared; this marker starts the observe run. -->
+1. Prove no foreign-market action reaches translation or submission. Probe 05
+   traded two that did.
+2. Exercise the post-fill lifecycle again, continuously. A fill is not a
+   reason to stop.
+3. Exercise the corrected risk metric against REAL inventory. Observe-only
+   holds none, so the bound was never stressed.
+4. Compare every legitimate L5 action with our actual response.
+5. Obtain authoritative settlement and realized P&L.
+
+Identity counters are per DISTINCT action, not per poll: the 1615z window
+reported 147 refusals and 5,070 admissions against 97 distinct actions,
+because the feed re-serves the same rows every poll.
+
+One probe. No Probe 07. No scaling. No strategy change.

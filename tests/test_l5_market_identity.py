@@ -178,3 +178,48 @@ def test_the_gate_admits_nothing_when_the_venue_will_not_identify_the_window(
                                 set(), activity=activity)
     assert out == []
     assert ok is True                    # the FEED was fine; identity was not
+
+
+# ------------------------------------------------ distinct, not per-poll
+
+def test_a_foreign_action_is_counted_once_however_often_the_feed_serves_it(
+        monkeypatch):
+    """The 1615z window counted 147 refusals against 97 distinct actions.
+
+    The feed re-serves the same rows every poll. A refused action lands in
+    neither `seen` nor the output, so without its own memory it is re-judged
+    -- and re-counted -- on every single poll.
+    """
+    b = binding()
+    monkeypatch.setattr(WA, "_binding_for", lambda ws, **kw: b)
+    WA._REFUSED.pop("cpc-btc-updown-15m-2026-09-25-1500z", None)
+    rows = [{"asset": FOREIGN[0], "timestamp": WS + 30, "side": "BUY",
+             "price": 0.5, "size": 10, "outcome": "Up",
+             "transactionHash": "0xf1"},
+            {"asset": UP, "timestamp": WS + 31, "side": "BUY",
+             "price": 0.5, "size": 10, "outcome": "Up",
+             "transactionHash": "0xa1"}]
+    h = WA.FeedHealth()
+    seen = set()
+    for _ in range(10):                       # ten polls, same two rows
+        WA.new_l5_actions("cpc-btc-updown-15m-2026-09-25-1500z", seen,
+                          activity=lambda limit=100: rows, health=h)
+    d = h.as_dict()
+    assert d["distinct_identity_refused"] == 1
+    assert d["distinct_admitted"] == 1
+    assert d["rejected_tokens"] == {FOREIGN[0]: 1}
+    assert sum(d["admitted_tokens"].values()) == 1
+
+
+def test_the_admitted_action_is_still_handled_exactly_once(monkeypatch):
+    b = binding()
+    monkeypatch.setattr(WA, "_binding_for", lambda ws, **kw: b)
+    WA._REFUSED.pop("cpc-btc-updown-15m-2026-09-25-1500z", None)
+    rows = [{"asset": UP, "timestamp": WS + 40, "side": "BUY", "price": 0.5,
+             "size": 10, "outcome": "Up", "transactionHash": "0xb1"}]
+    seen = set()
+    first, _ = WA.new_l5_actions("cpc-btc-updown-15m-2026-09-25-1500z", seen,
+                                 activity=lambda limit=100: rows)
+    again, _ = WA.new_l5_actions("cpc-btc-updown-15m-2026-09-25-1500z", seen,
+                                 activity=lambda limit=100: rows)
+    assert len(first) == 1 and again == []
