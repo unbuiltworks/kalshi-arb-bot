@@ -284,3 +284,63 @@ def test_repeated_identical_refreshes_book_the_fill_exactly_once(tmp_path):
     assert st.state["filled_qty"][MINE] == "2.25"
     assert st.position("m", "UP") == D("2.25")
     assert st.live_order_count() == 0
+
+
+# ------------------------------------------- L5 beside us, action by action
+
+def action_rec(**over):
+    rec = {"kind": "action", "market": "m", "action_key": "a1",
+           "L5_NATIVE": {"side": "UP", "price": "0.31", "l5_size": "50",
+                         "relation": "INSIDE"},
+           "PMUS_TRANSLATION": {"mode": "MAKER", "price": "0.32",
+                                "qty_desired": "2.30", "qty": "2.25"},
+           "ORDER": {"client_order_id": MINE, "submitted": True},
+           "stage_reached": "INVENTORY",
+           "book_source": "AUTHENTICATED_WS", "pmus_snapshot_age_s": 0.4}
+    rec.update(over)
+    return rec
+
+
+def test_the_comparison_puts_l5_and_us_on_one_row():
+    r = ONE.action_table([action_rec()], "m")[0]
+    assert (r["l5_side"], r["l5_price"], r["l5_size"]) == ("UP", "0.31", "50")
+    assert (r["our_mode"], r["our_price"]) == ("MAKER", "0.32")
+    assert (r["our_qty_desired"], r["our_qty_executable"]) == ("2.30", "2.25")
+    assert r["submitted"] is True
+
+
+def test_a_refused_action_still_appears_with_its_reason():
+    rec = action_rec(ORDER=None, refused_by_layer="PMUS_TRANSLATION",
+                     refused_reason="STRICT_NOT_EVALUABLE")
+    r = ONE.action_table([rec], "m")[0]
+    assert r["submitted"] is None
+    assert r["refused_reason"] == "STRICT_NOT_EVALUABLE"
+    assert r["l5_side"] == "UP"        # what he did is recorded regardless
+
+
+def test_order_progress_records_are_not_actions():
+    assert ONE.action_table(
+        [{"kind": "order_progress", "coid": MINE}], "m") == []
+
+
+def test_the_summary_splits_by_l5_side_and_by_refusal():
+    rows = ONE.action_table([
+        action_rec(),
+        action_rec(action_key="a2", ORDER=None,
+                   refused_reason="STRICT_NOT_EVALUABLE",
+                   refused_by_layer="PMUS_TRANSLATION"),
+        action_rec(action_key="a3",
+                   L5_NATIVE={"side": "DOWN", "price": "0.7",
+                              "l5_size": "10", "relation": "AT"},
+                   ORDER=None, refused_reason="MAX_LIVE_ORDERS",
+                   refused_by_layer="SAFETY_OVERLAY"),
+    ], "m")
+    s = ONE.action_summary(rows)
+    assert s["actions"] == 3
+    assert s["followed"] == 1
+    assert s["by_l5_side"]["UP"] == {"actions": 2, "submitted": 1,
+                                     "refused": 1}
+    assert s["by_l5_side"]["DOWN"] == {"actions": 1, "submitted": 0,
+                                       "refused": 1}
+    assert s["by_refusal"] == {"STRICT_NOT_EVALUABLE": 1,
+                               "MAX_LIVE_ORDERS": 1}

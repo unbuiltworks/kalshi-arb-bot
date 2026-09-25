@@ -680,6 +680,75 @@ def order_table(records: Sequence[Mapping[str, Any]],
     return [rows[k] for k in sorted(rows)]
 
 
+#: one comparison row per L5 action: what he did, what we did about it.
+ACTION_COLUMNS = ("action_key", "l5_side", "l5_price", "l5_size",
+                  "l5_relation", "our_mode", "our_price", "our_qty_desired",
+                  "our_qty_executable", "submitted", "stage_reached",
+                  "refused_by_layer", "refused_reason", "book_source",
+                  "snapshot_age_s")
+
+
+def action_table(records: Sequence[Mapping[str, Any]],
+                 market: str) -> List[Dict[str, Any]]:
+    """L5's action beside our decision on it, one row each.
+
+    This is the comparison the validation standard asks for -- side, price,
+    size, aggressiveness and outcome at the same market state -- and it is
+    the honest version of it: our engine is DRIVEN by his actions, so this
+    says what we did about each thing he did. It does not claim to know what
+    he would have done at a state we reached on our own.
+    """
+    out: List[Dict[str, Any]] = []
+    for rec in records:
+        if rec.get("kind") != "action":
+            continue
+        if market and rec.get("market") not in (None, market):
+            continue
+        l5 = rec.get("L5_NATIVE") or {}
+        tr = rec.get("PMUS_TRANSLATION") or {}
+        o = rec.get("ORDER") or {}
+        out.append({
+            "action_key": rec.get("action_key"),
+            "l5_side": l5.get("side"),
+            "l5_price": str(l5.get("price")) if l5.get("price") is not None
+            else None,
+            "l5_size": str(l5.get("l5_size")) if l5.get("l5_size") is not None
+            else None,
+            "l5_relation": l5.get("relation"),
+            "our_mode": tr.get("mode"),
+            "our_price": tr.get("price"),
+            "our_qty_desired": tr.get("qty_desired"),
+            "our_qty_executable": tr.get("qty"),
+            "submitted": o.get("submitted"),
+            "stage_reached": rec.get("stage_reached"),
+            "refused_by_layer": rec.get("refused_by_layer"),
+            "refused_reason": rec.get("refused_reason"),
+            "book_source": rec.get("book_source"),
+            "snapshot_age_s": rec.get("pmus_snapshot_age_s"),
+        })
+    return out
+
+
+def action_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """How the window went, by L5 side and by what stopped us."""
+    by_side: Dict[str, Dict[str, int]] = {}
+    by_reason: Dict[str, int] = {}
+    for r in rows:
+        side = str(r.get("l5_side") or "?")
+        d = by_side.setdefault(side, {"actions": 0, "submitted": 0,
+                                      "refused": 0})
+        d["actions"] += 1
+        if r.get("submitted") is True:
+            d["submitted"] += 1
+        why = r.get("refused_reason")
+        if why:
+            d["refused"] += 1
+            by_reason[str(why)] = by_reason.get(str(why), 0) + 1
+    return {"actions": len(rows), "by_l5_side": by_side,
+            "by_refusal": by_reason,
+            "followed": sum(1 for r in rows if r.get("submitted") is True)}
+
+
 RECOVER_ENV = "L5_RECOVER_ONLY"
 
 
@@ -803,6 +872,8 @@ def recover(*, http=None, state_path=None, journal_path=None,
                             if r.get("session_id")}),
     }
     rep["order_table"] = order_table(recs, market)
+    rep["action_table"] = action_table(recs, market)
+    rep["action_summary"] = action_summary(rep["action_table"])
     journal.write("recovery", rep)
     return rep
 
@@ -943,12 +1014,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if recover_only_enabled():
         rep = recover()
         table = rep.pop("order_table", [])
+        actions = rep.pop("action_table", [])
         print("L5_RECOVERY " + json.dumps(rep, default=str), flush=True)
         # one line per order. A single line carrying eighteen orders is a
         # line that gets truncated exactly when it matters.
         for r in table:
             print("L5_ORDER_ROW " + json.dumps(r, default=str), flush=True)
         print("L5_ORDER_ROWS %d" % len(table), flush=True)
+        for a in actions:
+            print("L5_ACTION_ROW " + json.dumps(a, default=str), flush=True)
+        print("L5_ACTION_ROWS %d" % len(actions), flush=True)
         return 0
     if observe_only_enabled():
         rep = observe()
