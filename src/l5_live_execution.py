@@ -115,6 +115,44 @@ def order_progress(row: Mapping[str, Any]) -> Dict[str, Any]:
             "terminal": bool(terminal)}
 
 
+def venue_tick_size(transport: Any) -> Optional[D]:
+    """The venue's PRICE grid, from ITS metadata, or None.
+
+    Same rule as the quantity grid: read off the transport, which took it
+    from this market's own preflight. None means not established, and a
+    maker order is refused rather than sent at a price the venue will
+    normalise -- which is what the exact-echo gate caught on Probe 07.
+    """
+    tick = getattr(transport, "tick_size", None)
+    if tick is None:
+        return None
+    try:
+        tick = D(str(tick))
+    except Exception:                                          # noqa: BLE001
+        return None
+    return tick if tick > 0 else None
+
+
+def quantize_price_non_aggressive(price: D, tick: D, side: str) -> D:
+    """L5's price on the venue's grid, never made more aggressive.
+
+    PREREGISTERED ROUNDING RULE. Every L5 action in this corpus is a BUY of
+    an outcome, and for a buy the aggressive direction is UP: paying more
+    crosses sooner. So the price is FLOORED to the tick, always. A rounding
+    rule that could round up would be price improvement by arithmetic, which
+    the manifest forbids, and it could turn a resting order into a crossing
+    one -- exactly the thing post-only exists to prevent.
+
+    Probe 07 sent 0.7399999979 and the venue echoed 0.73. The echo gate
+    refused, correctly. The gate is not the defect; sending a price the
+    venue cannot represent is.
+    """
+    if tick <= 0:
+        raise ValueError("tick must be positive")
+    steps = (price / tick).to_integral_value(rounding=ROUND_FLOOR)
+    return (steps * tick).normalize() + D(0)
+
+
 def venue_quantity_increment(transport: Any) -> Optional[D]:
     """The venue's quantity grid, from ITS metadata, or None.
 
@@ -746,6 +784,54 @@ class InventoryStore:
         self.save()
         return out
 
+    @staticmethod
+    def _gross_by_market(positions: Mapping[str, Any]) -> Dict[str, Dict[str, D]]:
+        """Our own book, kept as LONG and SHORT rather than collapsed.
+
+        matched = min(up, dn) is the pair whose settlement value is locked at
+        $1 whatever happens. residual = up - dn is the only directional part.
+        A net number cannot distinguish 0/0 from 5/5, and those are entirely
+        different positions.
+        """
+        out: Dict[str, Dict[str, D]] = {}
+        for k, v in positions.items():
+            if "|" not in k:
+                continue
+            market, side = k.rsplit("|", 1)
+            d = out.setdefault(market, {"up": D(0), "dn": D(0)})
+            try:
+                q = D(str(v))
+            except Exception:                                  # noqa: BLE001
+                continue
+            d["up" if side.upper().startswith("U") else "dn"] += q
+        for m, d in out.items():
+            d["matched"] = min(d["up"], d["dn"])
+            d["residual"] = d["up"] - d["dn"]
+            d["net"] = d["up"] - d["dn"]
+        return out
+
+    @staticmethod
+    def _net_by_market(positions: Mapping[str, Any]) -> Dict[str, D]:
+        out: Dict[str, D] = {}
+        for k, v in positions.items():
+            if "|" not in k:
+                continue
+            market, side = k.rsplit("|", 1)
+            try:
+                q = D(str(v))
+            except Exception:                                  # noqa: BLE001
+                continue
+            out[market] = out.get(market, D(0)) + (
+                q if side.upper().startswith("U") else -q)
+        return out
+
+    def gross_inventory(self, market: str) -> Dict[str, str]:
+        """Gross long/short, matched and residual, for reporting."""
+        g = self._gross_by_market(self.state.get("positions") or {}).get(
+            market, {"up": D(0), "dn": D(0), "matched": D(0),
+                     "residual": D(0), "net": D(0)})
+        return {k: str(v) for k, v in g.items()}
+
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
                              open_orders: Sequence[Mapping[str, Any]]
                              ) -> Dict[str, Any]:
@@ -764,7 +850,40 @@ class InventoryStore:
         drift = {k: {"ours": before.get(k, "0"), "venue": after.get(k, "0")}
                  for k in set(before) | set(after)
                  if str(before.get(k, "0")) != str(after.get(k, "0"))}
-        self.state["positions"] = after
+
+        # GROSS vs NET. The venue nets the two outcome tokens of a market:
+        # Probe 07 held UP 2.47 and DOWN 5.28 and /v1/portfolio/positions
+        # reported DOWN 2.8100, because 5.28 - 2.47 = 2.81. Overwriting our
+        # book with that number does not merely lose detail -- it DELETES THE
+        # MATCHED PAIR, which is the half of the position whose economics are
+        # locked and the half this whole strategy is built on.
+        #
+        # So the venue's net is recorded as the venue's net, our gross is
+        # kept as gross, and the two are reconciled by the identity
+        # net = long - short rather than by replacement. The gross book is
+        # only overwritten where it CONTRADICTS that identity.
+        gross = self._gross_by_market(before)
+        net = self._net_by_market(after)
+        agrees = {m: (gross[m]["net"] == net.get(m, D(0))) for m in gross}
+        for m, ok in agrees.items():
+            if not ok and m in net:
+                # our gross cannot be reconstructed from a single net, so the
+                # venue's number becomes the position of record and the loss
+                # of the matched detail is REPORTED, never silent.
+                self.state["positions"].pop("%s|UP" % m, None)
+                self.state["positions"].pop("%s|DOWN" % m, None)
+                n = net[m]
+                if n > 0:
+                    self.state["positions"]["%s|UP" % m] = str(n)
+                elif n < 0:
+                    self.state["positions"]["%s|DOWN" % m] = str(-n)
+        for k, v in after.items():
+            if k.rsplit("|", 1)[0] not in agrees:
+                self.state["positions"][k] = v
+        for k in list(self.state["positions"]):
+            m = k.rsplit("|", 1)[0]
+            if m not in agrees and k not in after:
+                self.state["positions"].pop(k, None)
 
         # The venue's open orders are the authority on what is still live.
         # An order we think is live but the venue does not list is terminal
@@ -797,6 +916,20 @@ class InventoryStore:
         self.state["orders_uncertain"] = None
         self.save()
         return {"reconciled": True, "drift": drift,
+                # stated separately and never collapsed into one another
+                "gross_before": {m: {k: str(v) for k, v in d.items()}
+                                 for m, d in gross.items()},
+                "venue_net": {m: str(v) for m, v in net.items()},
+                "gross_net_agrees": agrees,
+                "gross_detail_lost": sorted(m for m, ok in agrees.items()
+                                            if not ok),
+                "labels_inventory": (
+                    "the venue reports a NET position; our book is GROSS. "
+                    "Where they agree the matched pair is preserved. Where "
+                    "they disagree the venue's net becomes the position of "
+                    "record and the market is named in gross_detail_lost, "
+                    "because a matched pair silently deleted is a locked "
+                    "economic result silently deleted."),
                 "open_orders_at_venue": len(open_orders),
                 "live_orders_released": released,
                 "live_orders_adopted": adopted,
@@ -892,7 +1025,20 @@ class FaithfulExecutor:
                     and str(tr.get("reason") or "") == "STRICT_NOT_EVALUABLE"
                     and dec.get("price") is not None):
                 want = dec["l5_size"] * self.lam
-                px = D(str(dec["price"]))          # P1: L5's price, exactly
+                raw_px = D(str(dec["price"]))      # P1: L5's price
+                # ...on the venue's grid. L5 trades at full float precision
+                # and the venue does not: 0.7399999979 came back 0.73 and
+                # the echo gate refused. FLOORED, never rounded up, because
+                # up is the aggressive direction for a buy.
+                tick = venue_tick_size(self.transport)
+                if tick is None and bool(getattr(self.transport, "armed",
+                                                 False)):
+                    return prov.refuse("SAFETY_OVERLAY", "TICK_SIZE_UNKNOWN")
+                px = (quantize_price_non_aggressive(raw_px, tick, dec["side"])
+                      if tick is not None else raw_px)
+                if px <= 0:
+                    return prov.refuse("PMUS_TRANSLATION",
+                                       "PRICE_BELOW_MIN_TICK")
                 executable = (floor_to_increment(want, inc)
                               if inc is not None else want)
                 if executable <= 0:
@@ -906,6 +1052,10 @@ class FaithfulExecutor:
                 desired = want
                 prov.stage("MAKER_TREATMENT", {
                     "rested_at_l5_price": str(px),
+                    "l5_price_raw": str(raw_px),
+                    "tick_size": (None if tick is None else str(tick)),
+                    "price_quantization_delta": str(raw_px - px),
+                    "rounding": "FLOOR_NEVER_MORE_AGGRESSIVE",
                     "qty_desired": str(want), "qty": str(executable),
                     "post_only": True,
                     "why": ("the frozen rule called this restable and could "
@@ -1000,16 +1150,39 @@ class FaithfulExecutor:
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
-            # We do NOT know whether this order reached the venue. The
-            # reservation stands and the session refuses to submit anything
-            # further until the venue answers authoritatively.
+            # TERMINAL KNOWN-NO-ORDER. A failure that happened BEFORE the
+            # order POST was attempted did not create an order -- the
+            # transport records that it never got there -- so the outcome is
+            # not unknown at all. Probe 07 lost nine subsequent actions to
+            # ORDER_STATE_UNCERTAIN because a preview echo refusal, with
+            # order_post_attempted False, was treated as if an order might be
+            # resting somewhere. The reservation is released and the session
+            # continues; the echo gate itself is untouched and still refused
+            # the order, which is exactly what it is for.
+            forensics = submit_forensics(self.transport)
+            if forensics.get("order_post_attempted") is False:
+                self.store.terminate_order(coid, reason="NO_ORDER_CREATED")
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "REFUSED_BEFORE_ORDER_POST",
+                    "error": type(exc).__name__,
+                    "detail": _redact(str(exc))[:200], **forensics,
+                    "intent": {k: str(v) for k, v in intent.items()},
+                    "note": ("the venue was never asked to create this "
+                             "order, so nothing is outstanding and the "
+                             "reservation is released")})
+                return prov.refuse("SAFETY_OVERLAY",
+                                   "REFUSED_BEFORE_ORDER_POST")
+            # Otherwise we genuinely do NOT know whether it reached the
+            # venue. The reservation stands and the session refuses to submit
+            # anything further until the venue answers authoritatively.
             self.store.mark_uncertain(
                 "submit raised %s for %s" % (type(exc).__name__, coid))
             prov.stage("ORDER", {"client_order_id": coid, "submitted": None,
                                  "reason": "SUBMIT_OUTCOME_UNKNOWN",
                                  "error": type(exc).__name__,
                                  "detail": _redact(str(exc))[:200],
-                                 **submit_forensics(self.transport),
+                                 **forensics,
                                  "intent": {k: str(v)
                                             for k, v in intent.items()},
                                  "note": ("assumed live and still consuming "

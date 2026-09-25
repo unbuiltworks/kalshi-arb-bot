@@ -187,3 +187,31 @@ def test_the_recovery_record_is_journaled_and_serialisable(tmp_path):
     assert "recovery" in kinds, "the change is recorded where it happened"
     line = json.dumps(rep, default=str)
     assert json.loads(line)["LABEL"] == "LIVE_RECOVERY"
+
+
+def test_a_skipped_recovery_still_extracts_the_journal(tmp_path):
+    """Reconciling nothing is not a reason to report nothing.
+
+    This guard exists because a stale L5_RECOVER_ONLY twice hijacked a window
+    meant for observing. Refusing the JOURNAL too is a different thing, and
+    it cost us Probe 07's order table.
+    """
+    j = tmp_path / "j.jsonl"
+    j.write_text(
+        '{"kind": "action", "market": "%s", "action_key": "k1",'
+        ' "L5_NATIVE": {"side": "UP", "price": "0.42", "l5_size": "30"},'
+        ' "PMUS_TRANSLATION": {"mode": "MAKER", "qty": "1.35"},'
+        ' "ORDER": {"client_order_id": "c1", "submitted": true,'
+        ' "venue_order_id": "CQZ1", "price": "0.42"}}\n'
+        '{"kind": "order_progress", "coid": "c1", "cum": "1.35",'
+        ' "avg_px": "0.4200", "commission": "-0.0100"}\n' % MARKET)
+    rep = P.recover(http=GetOnly(), market=MARKET,
+                    state_path=str(tmp_path / "clean.json"),
+                    journal_path=str(j))
+    assert rep["skipped"] == "NOTHING_TO_RECONCILE"
+    assert rep["journal"]["records"] == 2
+    rows = rep["order_table"]
+    assert len(rows) == 1
+    assert rows[0]["venue_order_id"] == "CQZ1"
+    assert rows[0]["commission"] == "-0.0100"
+    assert rep["action_summary"]["actions"] == 1

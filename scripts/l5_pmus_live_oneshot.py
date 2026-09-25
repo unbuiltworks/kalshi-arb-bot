@@ -825,14 +825,25 @@ def recover(*, http=None, state_path=None, journal_path=None,
     # from an earlier run has twice hijacked a window that was meant to
     # observe, and a no-op recovery looks exactly like a successful one.
     if not store.live_orders() and not store.orders_uncertain():
+        # Nothing to RECONCILE -- but the journal extraction is a separate
+        # job and is often the only reason to run at all, so it still runs.
+        # Refusing it too is how this guard cost us Probe 07's order table.
+        recs = journal_rows(str(journal.path))
         rep = {"LABEL": "LIVE_RECOVERY", "market": market,
                "post_capable": False, "armed": False,
                "skipped": "NOTHING_TO_RECONCILE",
                "live_orders": {}, "orders_uncertain": None,
+               "journal": {"path": str(journal.path), "records": len(recs)},
+               "order_table": order_table(recs, market),
+               "action_table": action_table(recs, market),
                "labels": ("state was already clean, so this run reconciled "
-                          "nothing. If a window was meant to be observed, "
+                          "nothing and the journal was extracted anyway. If "
+                          "a window was meant to be observed, "
                           "L5_RECOVER_ONLY is still set.")}
-        journal.write("recovery_skipped", rep)
+        rep["action_summary"] = action_summary(rep["action_table"])
+        journal.write("recovery_skipped",
+                      {k: v for k, v in rep.items()
+                       if k not in ("order_table", "action_table")})
         return rep
 
     # prove the incapability rather than assert it
