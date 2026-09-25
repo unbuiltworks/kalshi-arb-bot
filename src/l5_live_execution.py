@@ -47,7 +47,7 @@ import hashlib
 import json
 import os
 import pathlib
-from decimal import ROUND_FLOOR, Decimal as D
+from decimal import ROUND_FLOOR, Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_fees as fees
@@ -327,6 +327,96 @@ class Provenance:
         self.rec["stage_reached"] = name
 
 
+#: What a venue POSITION ROW calls the market. `positions()` returns rows
+#: built by `rows_of`, which folds the response's mapping KEY back in as
+#: `marketSlug` -- so the row never carries `market`, which is what
+#: `reconcile_from_venue` used to subscript. Probe 04's account was flat, the
+#: loop never ran, and the bug stayed invisible; Probe 05 closed out holding
+#: positions, the loop ran, and `p["market"]` raised KeyError.
+VENUE_POSITION_MARKET_KEYS = ("marketSlug", "market", "slug")
+
+#: What it calls the quantity. Taken from `pmus_settlement_auditor.
+#: _net_position`, which has read these against real fills and settlements on
+#: this venue, rather than invented here. `qtyDecimal`-style decimal fields
+#: come FIRST: the auditor measured `qty` disagreeing with its own decimal
+#: twin on 12 of 13 rows, and preferring the wrong one produced a 17x
+#: phantom position.
+VENUE_POSITION_QTY_KEYS = ("netPositionDecimal", "netPosition", "quantity",
+                           "qty")
+
+#: What it might call the side. NOT confirmed against a populated row: this
+#: account was flat by the time the response could be captured, so these are
+#: candidates, and a row matching none of them is REFUSED rather than guessed.
+VENUE_POSITION_SIDE_KEYS = ("side", "outcomeSide", "positionSide",
+                            "marketSide", "outcome")
+
+#: How the venue spells the two sides, mapped onto our ledger's UP/DOWN.
+VENUE_SIDE_WORDS = {
+    "YES": "UP", "UP": "UP", "LONG": "UP", "BUY": "UP",
+    "OUTCOME_SIDE_YES": "UP", "POSITION_SIDE_LONG": "UP",
+    "NO": "DOWN", "DOWN": "DOWN", "DN": "DOWN", "SHORT": "DOWN",
+    "SELL": "DOWN", "OUTCOME_SIDE_NO": "DOWN", "POSITION_SIDE_SHORT": "DOWN",
+}
+
+
+class UnrecognizedVenueShape(RuntimeError):
+    """A venue row we cannot read. Carries the structure, never a guess.
+
+    Raised instead of KeyError so the caller can fail CLOSED with evidence:
+    which keys the row actually had. That is the thing we did not have after
+    Probe 05 and had to reason about from the exception name alone.
+    """
+
+    def __init__(self, what: str, rows: Sequence[Mapping[str, Any]]) -> None:
+        super().__init__(what)
+        self.what = what
+        self.rows = [sorted(r) for r in rows if isinstance(r, Mapping)]
+
+
+def _first_key(row: Mapping[str, Any], keys: Sequence[str]) -> Any:
+    for k in keys:
+        if k in row and row[k] is not None:
+            return row[k]
+    return None
+
+
+def venue_side(raw: Any) -> Optional[str]:
+    """UP or DOWN, or None when the venue said something we do not know."""
+    if raw is None:
+        return None
+    return VENUE_SIDE_WORDS.get(str(raw).strip().upper())
+
+
+def position_row(p: Mapping[str, Any]) -> Dict[str, str]:
+    """One venue position row as market / side / qty, or refuse it.
+
+    Every field is looked up by NAME against what the venue is known to
+    serve. Nothing is positional, nothing is inferred from ordering, and a
+    row that does not yield all three raises rather than contributing a
+    half-read position to the ledger the envelope is enforced against.
+    """
+    if not isinstance(p, Mapping):
+        raise UnrecognizedVenueShape("position row is not an object", [])
+    market = _first_key(p, VENUE_POSITION_MARKET_KEYS)
+    qty = _first_key(p, VENUE_POSITION_QTY_KEYS)
+    side = venue_side(_first_key(p, VENUE_POSITION_SIDE_KEYS))
+    if market is None or qty is None or side is None:
+        raise UnrecognizedVenueShape(
+            "position row lacks %s" % ", ".join(
+                n for n, v in (("market", market), ("qty", qty),
+                               ("side", side)) if v is None), [p])
+    return {"market": str(market), "side": side, "qty": str(_as_qty(qty))}
+
+
+def _as_qty(v: Any) -> D:
+    if isinstance(v, Mapping):                 # {"value": "...", "currency"}
+        v = v.get("value")
+    try:
+        return D(str(v))
+    except (InvalidOperation, ValueError, TypeError):
+        raise UnrecognizedVenueShape("quantity %r is not a number" % (v,), [])
+
+
 class InventoryStore:
     """Persisted inventory. The VENUE is authoritative; this is a cache."""
 
@@ -533,7 +623,8 @@ class InventoryStore:
         before = dict(self.state["positions"])
         after: Dict[str, str] = {}
         for p in positions:
-            after["%s|%s" % (p["market"], p["side"])] = str(p["qty"])
+            row = position_row(p)          # raises UnrecognizedVenueShape
+            after["%s|%s" % (row["market"], row["side"])] = row["qty"]
         drift = {k: {"ours": before.get(k, "0"), "venue": after.get(k, "0")}
                  for k in set(before) | set(after)
                  if str(before.get(k, "0")) != str(after.get(k, "0"))}

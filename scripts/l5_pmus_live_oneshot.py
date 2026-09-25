@@ -211,6 +211,13 @@ class Probe:
             res = self.store.apply_order_progress(
                 coid, prog, market=self.market, side=str(o.get("side") or ""))
             res["venue_order_id"] = str(vid)
+            # the venue's own numbers, carried with the delta rather than
+            # discarded: without these the per-order audit cannot state an
+            # average fill price or a commission after the fact, which is
+            # exactly what Probe 05's journal turned out to be missing.
+            for k in ("avg_px", "commission", "leaves", "cum_qty", "state"):
+                if prog.get(k) is not None and k not in res:
+                    res[k] = str(prog.get(k))
             out.append(res)
             self.journal.write("order_progress", res)
         return out
@@ -286,9 +293,9 @@ class Probe:
             self.store.mark_uncertain("reconciliation failed: %s"
                                       % type(exc).__name__)
             recon = {"reconciled": False, "authority": "VENUE",
-                     "error": type(exc).__name__,
                      "note": "exposure NOT released; this probe ends "
                              "uncertain and the state says so"}
+            recon.update(shape_evidence(exc))
         out = {"cancelled": cancelled, "cancel_errors": cancel_errors,
                "order_progress": progress,
                "reconciliation": recon,
@@ -324,6 +331,30 @@ class Probe:
                 "action_key": r.get("action_key")})
         return out
 
+    def session_coids(self) -> List[str]:
+        """The client order ids THIS run submitted. Immutable run provenance.
+
+        `filled_qty` and `fees` live in the inventory store, which is a file
+        on a volume that outlives the process. Probe 05's report therefore
+        carried Probe 04's fill -- coid l5f-e2e57f2b..., 2.25 shares from the
+        1300z window -- as if this run had produced it, which would have
+        inflated any accounting taken from the report. A probe reports what
+        IT submitted; the store keeps the rest.
+        """
+        out: List[str] = []
+        for r in self.records:
+            o = r.get("ORDER") or {}
+            coid = o.get("client_order_id")
+            if o.get("submitted") is True and coid and coid not in out:
+                out.append(str(coid))
+        return out
+
+    def scoped(self, key: str) -> Dict[str, str]:
+        """One store map, narrowed to this run's orders."""
+        mine = set(self.session_coids())
+        book = self.store.state.get(key) or {}
+        return {k: str(v) for k, v in book.items() if k in mine}
+
     def report(self, close: Mapping[str, Any]) -> Dict[str, Any]:
         submitted = [r for r in self.records
                      if (r.get("ORDER") or {}).get("submitted") is True]
@@ -358,8 +389,20 @@ class Probe:
             # comes out with the report, redacted through the transport's own
             # scrubber, and says WHICH call was in flight.
             "submit_failures": self.submit_failures(),
-            "fills_from_venue": self.store.state.get("filled_qty") or {},
-            "fees_from_venue": self.store.state.get("fees") or {},
+            # scoped to THIS run's submissions -- see session_coids()
+            "fills_from_venue": self.scoped("filled_qty"),
+            "fees_from_venue": self.scoped("fees"),
+            "fills_excluded_prior_sessions": sorted(
+                set(self.store.state.get("filled_qty") or {})
+                - set(self.session_coids())),
+            # an ACK that says filled_qty 0 is not evidence of no fill, which
+            # is the whole lesson of Probe 04. Both counts are reported so
+            # they can never be confused again.
+            "filled_at_ack": len([r for r in self.records
+                                  if (r.get("FILL") or {}).get("filled")
+                                  is True]),
+            "filled_at_venue": len([v for v in self.scoped("filled_qty")
+                                    .values() if D(str(v)) > 0]),
             "inventory": {
                 "up": str(self.store.position(self.market, "UP")),
                 "dn": str(self.store.position(self.market, "DOWN")),
@@ -532,6 +575,111 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
 # independent barriers stand in front of a mutation: the http object refuses
 # it, and the transport is never armed, so submit() raises NotArmed first.
 
+def shape_evidence(exc: BaseException) -> Dict[str, Any]:
+    """What the venue actually sent, when we could not read it.
+
+    Probe 05 ended with `reconciliation failed: KeyError` and nothing else,
+    so the shape that caused it had to be reasoned about after the fact --
+    and by then the account was flat and the market expired, so it could not
+    be fetched at all. An unreadable row now reports its OWN key list.
+    """
+    ev: Dict[str, Any] = {"error": type(exc).__name__}
+    what = getattr(exc, "what", None)
+    if what is not None:
+        ev["what"] = str(what)
+    rows = getattr(exc, "rows", None)
+    if rows is not None:
+        ev["row_keys"] = rows
+    return ev
+
+
+def journal_rows(path: str) -> List[dict]:
+    """Every journal record, oldest first. Unparseable lines are kept."""
+    out: List[dict] = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    out.append({"unparsed": line[:400]})
+    except OSError as exc:
+        return [{"unreadable": type(exc).__name__}]
+    return out
+
+
+#: the per-order columns the lifecycle audit needs, in order.
+ORDER_COLUMNS = ("coid", "venue_order_id", "side", "qty_desired",
+                 "qty_executable", "quantization_delta", "limit_px",
+                 "avg_fill_px", "cum_qty", "leaves_qty", "commission",
+                 "inventory_after", "venue_state", "released", "submitted")
+
+
+def order_table(records: Sequence[Mapping[str, Any]],
+                market: str) -> List[Dict[str, Any]]:
+    """One row per submitted order, folded from the journal's own records.
+
+    Two record kinds carry it. An `action` record holds the layered stages --
+    PMUS_TRANSLATION for desired vs executable quantity and the quantization
+    delta, ORDER for the side, limit price and venue id, INVENTORY for the
+    ledger immediately after a fill. An `order_progress` record holds what
+    the venue said on refresh. Nothing is recomputed: a number recomputed
+    after the fact is not evidence of what the run did, and a column the
+    journal does not carry stays None rather than being filled in.
+    """
+    rows: Dict[str, Dict[str, Any]] = {}
+
+    def row(coid: str) -> Dict[str, Any]:
+        r = rows.get(coid)
+        if r is None:
+            r = {c: None for c in ORDER_COLUMNS}
+            r["coid"] = coid
+            rows[coid] = r
+        return r
+
+    def put(r: Dict[str, Any], col: str, v: Any) -> None:
+        if v is not None:
+            r[col] = v if isinstance(v, (dict, list)) else str(v)
+
+    for rec in records:
+        kind = rec.get("kind")
+        if kind == "order_progress":
+            coid = rec.get("coid")
+            if not coid:
+                continue
+            r = row(str(coid))
+            put(r, "venue_order_id", rec.get("venue_order_id"))
+            put(r, "cum_qty", rec.get("cum") or rec.get("cum_qty"))
+            put(r, "avg_fill_px", rec.get("avg_px"))
+            put(r, "commission", rec.get("commission"))
+            put(r, "leaves_qty", rec.get("leaves"))
+            put(r, "venue_state", rec.get("state"))
+            put(r, "released", rec.get("released"))
+            continue
+        if market and rec.get("market") not in (None, market):
+            continue
+        o = rec.get("ORDER") or {}
+        coid = o.get("client_order_id")
+        if not coid:
+            continue
+        r = row(str(coid))
+        tr = rec.get("PMUS_TRANSLATION") or {}
+        put(r, "side", o.get("side") or tr.get("side"))
+        put(r, "limit_px", o.get("price") if o.get("price") is not None
+            else tr.get("price"))
+        put(r, "venue_order_id", o.get("venue_order_id"))
+        put(r, "qty_desired", tr.get("qty_desired"))
+        put(r, "qty_executable", tr.get("qty"))
+        put(r, "quantization_delta", tr.get("quantization_delta"))
+        put(r, "submitted", o.get("submitted"))
+        inv = rec.get("INVENTORY")
+        if isinstance(inv, Mapping):
+            r["inventory_after"] = dict(inv)
+    return [rows[k] for k in sorted(rows)]
+
+
 RECOVER_ENV = "L5_RECOVER_ONLY"
 
 
@@ -605,8 +753,8 @@ def recover(*, http=None, state_path=None, journal_path=None,
         store.mark_uncertain("recovery reconciliation failed: %s"
                              % type(exc).__name__)
         recon = {"reconciled": False, "authority": "VENUE",
-                 "error": type(exc).__name__,
                  "note": "nothing released; the state stays uncertain"}
+        recon.update(shape_evidence(exc))
 
     market_state: Dict[str, Any] = {}
     if market:
@@ -645,6 +793,16 @@ def recover(*, http=None, state_path=None, journal_path=None,
                    "created, cancelled or modified. Local state moved only "
                    "where the venue said so."),
     }
+    recs = journal_rows(journal.path if isinstance(journal.path, str)
+                        else str(journal.path))
+    rep["journal"] = {
+        "path": str(journal.path),
+        "records": len(recs),
+        "kinds": sorted({str(r.get("kind")) for r in recs if r.get("kind")}),
+        "sessions": sorted({str(r.get("session_id")) for r in recs
+                            if r.get("session_id")}),
+    }
+    rep["order_table"] = order_table(recs, market)
     journal.write("recovery", rep)
     return rep
 
@@ -784,7 +942,13 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
 def main(argv: Optional[Sequence[str]] = None) -> int:
     if recover_only_enabled():
         rep = recover()
+        table = rep.pop("order_table", [])
         print("L5_RECOVERY " + json.dumps(rep, default=str), flush=True)
+        # one line per order. A single line carrying eighteen orders is a
+        # line that gets truncated exactly when it matters.
+        for r in table:
+            print("L5_ORDER_ROW " + json.dumps(r, default=str), flush=True)
+        print("L5_ORDER_ROWS %d" % len(table), flush=True)
         return 0
     if observe_only_enabled():
         rep = observe()
