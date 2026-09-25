@@ -80,3 +80,22 @@ The target is the Probe 03 `action` record carrying
 `ORDER.reason == "SUBMIT_OUTCOME_UNKNOWN"` and its `detail`, in
 `/state/pmus-ws/l5_session_journal.jsonl`. `Journal` opens that file in
 append mode and never truncates, so the Probe 03 lines survive this run.
+
+### 2026-09-25 1215z — OBSERVE-ONLY, the pre-money gate after changing order representation
+
+Owner-approved: "deploy the quantization fix + b458618 observability
+instrumentation and run one full observe-only production-path window. This
+is not new research; it's the existing pre-money integration gate after
+changing executable order representation."
+
+- artifact: the commit that floors the order quantity onto the venue's own
+  grid and records which call is in flight when a submit dies
+- `L5_OBSERVE_ONLY=YES`, no `PMUS_Q1_*` on the service, `NullTransport` in
+  the executor, `auth.claim()` never called: it cannot send an order
+- `PMUS_PREFLIGHT_ACCOUNT=d51b44a3fa83` stays
+- timed so the container starts with under `OBSERVE_MIN_S` left in 1200z,
+  which rolls it forward to a FULL 1215z window
+- what this run has to show: L5 actions, non-zero WOULD_SUBMIT, and no
+  execution-path error. Observe-only is DISARMED, so it quantizes nothing --
+  the grid is only known after a preflight, which observe-only never runs.
+  What it proves is that the changed code path still reaches a would-submit.
