@@ -170,10 +170,11 @@ def main() -> int:
     # the bodies that decide the question, separately so one huge catalogue
     # response cannot push the verdict out of a truncated log line
     for r in reads:
-        if r.get("ok") and r["path"] in ("/v1/orders/open",
-                                         "/v1/portfolio/positions",
-                                         "/v1/account/balances",
-                                         "/v1/mytrades"):
+        if r.get("ok") and r["path"] in (
+                "/v1/orders/open", "/v1/portfolio/positions",
+                "/v1/account/balances", "/v1/mytrades",
+                "/v1/order/%s" % ORDER_ID,
+                "/v1/markets/%s/bbo" % MARKET):
             print("PMUS_RECOVERY_BODY " + redact(json.dumps(
                 {"path": r["path"], "body": r["body"]}, default=str))[:6000],
                 flush=True)
