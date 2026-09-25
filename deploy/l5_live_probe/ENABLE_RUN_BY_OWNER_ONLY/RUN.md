@@ -117,3 +117,14 @@ Owner-authorized: "AUTHORIZED: run Probe 04."
 - envelope unchanged: $5/market, $5 total potential exposure including
   outstanding orders, one live order, residual <= 10, one market, $5 daily
   realized-loss halt, modelled maximum cash bound $5.1738
+
+### 2026-09-25 ~1400z — OBSERVE-ONLY, to read the Probe 04 cancel record
+
+Owner-authorized: "Recover the exact cancel HTTP status + redacted venue
+response for CQ5NPBADMYC3 from the existing journal."
+
+The journal lives on this service's volume and Railway cannot read a volume
+with no running container. Observe-only mounts it and cannot send an order:
+`L5_OBSERVE_ONLY=YES`, no `PMUS_Q1_*`, no `auth.claim()`, no
+`PmusTransport`, `NullTransport` in the executor. The journal is opened
+append-only and never truncated, so Probe 04's records survive.
