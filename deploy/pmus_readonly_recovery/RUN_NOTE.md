@@ -1,15 +1,12 @@
-# Read-only run: Probe 05 settlement / cashflow
+# Read-only run: Probe 06 settlement / cashflow
 
-`RECOVERY_MARKET=cpc-btc-updown-15m-2026-09-25-1500z`, set with
-`skipDeploys: true` before this push.
+`RECOVERY_MARKET=cpc-btc-updown-15m-2026-09-25-1700z`.
 
-Probe 05 submitted 18 orders into the 1500z window and the venue reports a
-fill for every one of them. This run asks the venue, GET only, for the
-settled market state, the account's open orders, its positions and its
-balance, so the cashflow can be attributed. It creates no order, cancels
-nothing, claims no authorization and writes no inventory state; the image
-does not contain `l5_pmus_transport` at all, so it holds no object able to
-POST.
+Probe 06 filled six orders in the 1700z window and its close-out
+reconciliation failed closed on `UnrecognizedVenueShape: position row lacks
+side` -- which is the first time we have seen a POPULATED position row and
+its real field list. This run asks the venue, GET only, for the settled
+market state, open orders, positions and balance.
 
-`RECOVERY_ORDER_ID` is left at Probe 04's `CQ5NPBADMYC3`: Probe 05's venue
-order ids are not in hand, and that read costs nothing.
+Creates no order, cancels nothing, claims no authorization, writes no
+inventory state; the image does not contain `l5_pmus_transport`.
