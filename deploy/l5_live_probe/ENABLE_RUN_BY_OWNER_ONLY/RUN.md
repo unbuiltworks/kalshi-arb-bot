@@ -21,3 +21,7 @@ gate it admits 104 of 110 and refuses 6 as MARKET_IDENTITY_MISMATCH,
 including both erroneous orders.
 
 No Probe 06. Nothing armed. Envelope unchanged.
+
+<!-- redeploy: L5_RECOVER_ONLY was still set from the reconciliation run, so
+     the 16:12Z container would have run recovery instead of observing. The
+     variable is cleared; this marker starts the observe run. -->
