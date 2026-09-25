@@ -395,6 +395,20 @@ OBSERVE_ENV = "L5_OBSERVE_ONLY"
 OBSERVE_MIN_S = 300.0
 
 
+def l5_native_was_readable(rec: Mapping[str, Any]) -> bool:
+    """Did the frozen rule get a decision out of this row?
+
+    The codebase's convention for a refusal reason is CODE[:detail] --
+    summarize() splits on ":" for exactly this, because reasons such as
+    "STALE_ACTION:12.4s" carry their measurement. Comparing the whole string
+    worked only because UNREADABLE_ROW happens to be bare today; the day it
+    carries detail, every unreadable row would count as a readable one and
+    the report would overstate the thing it exists to measure.
+    """
+    return (str(rec.get("refused_reason") or "").split(":")[0]
+            != "UNREADABLE_ROW")
+
+
 def observe_only_enabled() -> bool:
     return os.getenv(OBSERVE_ENV, "").strip().upper() in ("1", "YES", "TRUE")
 
@@ -469,8 +483,7 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
             feed.stop()
 
     summary = W.summarize(records)
-    readable = sum(1 for r in records
-                   if r.get("refused_reason") != "UNREADABLE_ROW")
+    readable = sum(1 for r in records if l5_native_was_readable(r))
     translated = sum(1 for r in records
                      if (r.get("PMUS_TRANSLATION") or {}).get("ok") is True)
     overlay_refusals = sum(1 for r in records
@@ -487,7 +500,11 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
         "l5_native_decisions": readable,
         "pmus_translations_ok": translated,
         "overlay_refusals": overlay_refusals,
-        "would_submit": len(summary.get("would_submit") or []),
+        # summarize() already returns a COUNT. Taking len() of it raised
+        # TypeError for every non-zero value, and `or []` hid that at zero --
+        # so the report could only be written when there was nothing to
+        # report. 00:30:06Z on 2026-09-25, after a full window's work.
+        "would_submit": summary.get("would_submit", 0),
         "refused_by_layer": summary.get("refused_by_layer"),
         "refused_reason": summary.get("refused_reason"),
         "armed": False,

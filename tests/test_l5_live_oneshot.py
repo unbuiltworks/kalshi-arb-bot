@@ -930,3 +930,228 @@ def test_observe_mode_does_not_read_the_arming_variables(monkeypatch):
         if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
                 and n.func.attr in ("claim", "arm", "consume")):
             pytest.fail("observe-only calls %s" % n.func.attr)
+
+
+# ------------------------------------- the final report, on a NON-ZERO run
+#
+# 2026-09-25T00:30:06Z: observe() ran a whole window and then died writing
+# its summary -- `len(summary.get("would_submit") or [])`, where summarize()
+# already returns a count. At zero the falsy int became [] and the
+# expression gave the right answer, so every test passed; at one it raised
+# TypeError. The report could only be written when there was nothing to
+# report, and a window's evidence went to the volume with it.
+#
+# The lesson is not "assert on that expression". It is that observe()'s
+# reporting tail had never once run against real numbers. So this drives a
+# realistic window -- marketable and unmarketable actions, rows in and out
+# of the window -- and validates the WHOLE report dict, then the journal
+# record written from it.
+
+class RichFeed:
+    """A book feed double in the AUTHENTICATED feed's real report shape.
+
+    The plain `Feed` above omits frames, last_book_age_s, errors and
+    stop_reason, so a report built from it cannot show the fields an
+    operator actually reads.
+    """
+
+    def __init__(self, clock, bid="0.40", ask="0.60"):
+        self.clock = clock
+        self.bid, self.ask = bid, ask
+        self.frames = 0
+        self.started = self.stopped = False
+
+    def books(self):
+        self.frames += 1
+        now = self.clock()
+        return [{"t": now - 1.0, "bid": self.bid, "ask": self.ask,
+                 "bid_qty": "500", "ask_qty": "500", "status": "OK"},
+                {"t": now - 0.2, "bid": self.bid, "ask": self.ask,
+                 "bid_qty": "500", "ask_qty": "500", "status": "OK"}]
+
+    def latest(self):
+        return self.books()[-1]
+
+    def age_s(self):
+        return self.clock() - self.latest()["t"]
+
+    def fresh(self):
+        return self.age_s() <= 2.0
+
+    def health(self):
+        return {"market": MARKET, "connected": self.started and not self.stopped,
+                "frames": self.frames, "book_states": len(self.books()),
+                "last_book_age_s": round(self.age_s(), 3),
+                "fresh": self.fresh(), "errors": [],
+                "stop_reason": ("local_cancellation" if self.stopped
+                                else "running"),
+                "source": "AUTHENTICATED_WS"}
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        self.stopped = True
+
+    def wait_ready(self, timeout_s=60.0, sleep=None):
+        return True
+
+
+class _FakeTime:
+    """`time` as l5_window_actions sees it, on the simulated clock.
+
+    new_l5_actions stamps receipt_utc from time.time(), and the translation
+    prices an action against the book's age at that receipt. On a real clock
+    beside a simulated book every action is refused STALE_OBSERVATION, which
+    is correct behaviour and not what this is testing.
+    """
+
+    def __init__(self, t):
+        self._t = t
+
+    def time(self):
+        return self._t["now"]
+
+
+def busy_observe(tmp_path, monkeypatch):
+    """One window with real traffic through it. Returns (report, paths)."""
+    ws = P.window_start(MARKET)
+    t = {"now": ws + 1.0}
+    monkeypatch.setattr(P, "current_slug", lambda now=None: MARKET)
+    monkeypatch.setattr(WA, "time", _FakeTime(t))
+
+    #: 0.65 against an ask of 0.60 is marketable, so it translates and the
+    #: transport refuses it NOT_ARMED -- a would-submit. 0.47 rests strictly
+    #: inside the spread, which the frozen rule refuses STRICT_NOT_EVALUABLE
+    #: without an observed interaction. One row sits outside the window.
+    rows = [raw_at(ws + 10, price=0.65, size=12.0, transactionHash="0xtake"),
+            raw_at(ws + 20, price=0.47, size=12.0, transactionHash="0xrest"),
+            raw_at(ws - 500, price=0.65, size=12.0, transactionHash="0xold")]
+    served = {"n": 0}
+
+    def activity(limit=100):
+        served["n"] += 1
+        return list(rows) if served["n"] == 1 else []
+
+    def tick(s):
+        t["now"] += 60.0
+
+    feed = RichFeed(lambda: t["now"])
+    journal = tmp_path / "obs.jsonl"
+    rep = P.observe(clock=lambda: t["now"], sleep=tick, book_feed=feed,
+                    activity=activity, state_path=str(tmp_path / "obs.json"),
+                    journal_path=str(journal))
+    return rep, journal
+
+
+def test_the_whole_report_survives_a_window_that_actually_did_something(
+        tmp_path, monkeypatch):
+    """Every field, on a run with non-zero counts. This is the regression.
+
+    Reinstating `len(summary.get("would_submit") or [])` makes this raise
+    TypeError, because would_submit is 1 here and not 0.
+    """
+    rep, _ = busy_observe(tmp_path, monkeypatch)
+
+    # --- the safety properties, which must hold on a busy window too
+    assert rep["LABEL"] == "LIVE_OBSERVE_ONLY"
+    assert rep["market"] == MARKET
+    assert rep["stage_reached"] == "done", "no early exit"
+    assert rep["authorization_claimed"] is False
+    assert rep["post_capable"] is False
+    assert rep["transport"] == "NULL"
+    assert rep["armed"] is False
+    assert rep["submitted_live"] == 0
+
+    # --- the feed counted a real poll sequence, not a single lucky one
+    f = rep["l5_feed"]
+    assert f["polls"] > 1 and f["polls_ok"] == f["polls"]
+    assert f["polls_failed"] == 0
+    assert f["raw_rows"] == 3, "all three rows were seen"
+    assert f["rows_in_window"] == 2, "the third is outside the window"
+    assert f["new_actions"] == 2
+    assert f["last_ok_utc"] and f["last_error"] is None
+    assert f["healthy"] is True
+
+    # --- the book feed reported its own statistics, not a stub
+    b = rep["book_feed"]
+    assert b["source"] == "AUTHENTICATED_WS"
+    assert b["frames"] > 0 and b["book_states"] == 2
+    assert b["last_book_age_s"] is not None and b["fresh"] is True
+    assert b["errors"] == [] and b["stop_reason"]
+
+    # --- the decision chain, end to end, with both outcomes present
+    assert rep["actions_handled"] == 2
+    assert rep["l5_native_decisions"] == 2, "both rows were readable"
+    assert rep["pmus_translations_ok"] == 1, "only the marketable one"
+    assert rep["would_submit"] == 1, "and it got as far as the transport"
+    assert rep["overlay_refusals"] == 0
+
+    # --- the refusal that did happen is attributed and counted
+    assert rep["refused_by_layer"] == {"PMUS_TRANSLATION": 1}
+    assert sum(rep["refused_reason"].values()) == 1
+    assert "UNREADABLE_ROW" not in rep["refused_reason"]
+
+    assert rep["live_limits"]["max_usd_per_market"] == "5"
+    assert rep["live_limits"]["max_live_orders"] == 1
+    assert "OBSERVE ONLY" in rep["labels"]
+
+
+def test_would_submit_is_the_count_summarize_already_produced(
+        tmp_path, monkeypatch):
+    """Producer and consumer agree on the type, which is what broke."""
+    import src.l5_pmus_live_wiring as W
+
+    produced = W.summarize([{"ORDER": {"submitted": False,
+                                       "reason": "NOT_ARMED",
+                                       "intent": {"mode": "TAKER"}}}])
+    assert isinstance(produced["would_submit"], int)
+    with pytest.raises(TypeError):
+        len(produced["would_submit"])        # the line that shipped
+
+    rep, _ = busy_observe(tmp_path, monkeypatch)
+    assert isinstance(rep["would_submit"], int) and rep["would_submit"] == 1
+
+
+def test_the_busy_report_is_written_to_the_journal(tmp_path, monkeypatch):
+    """The crash was one line BEFORE journal.write, so nothing persisted."""
+    rep, journal = busy_observe(tmp_path, monkeypatch)
+    recs = [json.loads(l) for l in
+            journal.read_text().splitlines() if l.strip()]
+    kinds = [r["kind"] for r in recs]
+    assert "observe_book_feed" in kinds
+    assert kinds.count("observe_action") == 2, "each action journaled"
+
+    written = [r for r in recs if r["kind"] == "observe_report"]
+    assert len(written) == 1, "the report reaches the journal"
+    got = written[0]
+    for k, v in rep.items():
+        assert k in got, "the journal record dropped %s" % k
+        assert got[k] == json.loads(json.dumps(v, default=str)), k
+
+
+def test_every_report_field_survives_json(tmp_path, monkeypatch):
+    """main() prints this. A field the serializer cannot take is a crash."""
+    rep, _ = busy_observe(tmp_path, monkeypatch)
+    line = json.dumps(rep, default=str)
+    back = json.loads(line)
+    assert set(back) == set(rep), "a field was lost in serialization"
+    for k, v in back.items():
+        assert not isinstance(v, (bytes, set)), k
+    # no Decimal reaches the wire as a bare repr: limits pre-stringify
+    assert all(isinstance(x, (str, int, type(None), list))
+               for x in back["live_limits"].values())
+
+
+def test_an_unreadable_row_does_not_count_as_a_decision(tmp_path):
+    """The convention is CODE[:detail]; the comparison must honour it."""
+    import src.l5_pmus_live_wiring as W
+    recs = [{"refused_reason": "UNREADABLE_ROW"},
+            {"refused_reason": "UNREADABLE_ROW:mangled qty"},
+            {"refused_reason": "STALE_ACTION:12.4s"},
+            {"refused_reason": None}]
+    readable = sum(1 for r in recs if P.l5_native_was_readable(r))
+    assert readable == 2, "detail on the code must not make it readable"
+    assert P.l5_native_was_readable({"refused_reason": "UNREADABLE_ROW:x"}) \
+        is False
+    assert W.summarize([]) ["refused_reason"] == {}
