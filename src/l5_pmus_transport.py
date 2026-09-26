@@ -81,6 +81,37 @@ def _as_decimal(v: Any) -> Optional[D]:
     return d if d > 0 else None
 
 
+#: states in which the venue has finished with a market. CLOSED is NOT
+#: here: it is observed at the 900s boundary before the settlement price
+#: exists, and retiring a position against a price that is not yet final is
+#: how a book gets closed at the wrong number.
+TERMINAL_MARKET_STATES = ("MARKET_STATE_EXPIRED", "MARKET_STATE_SETTLED",
+                          "MARKET_STATE_RESOLVED")
+
+
+def settlement_decimal(v: Any) -> Optional[D]:
+    """A SETTLEMENT price, where 0 is a real answer.
+
+    `_as_decimal` exists for venue CONSTRAINTS -- a tick size, a minimum
+    quantity -- where a non-positive value is meaningless, so it returns
+    None for anything <= 0. A settlement price is not a constraint. 0.0000
+    is what this venue reports when the long side lost, and it is exactly
+    as final as 1.0000. Reusing the constraint parser here would silently
+    refuse to settle every market UP lost, which is about half of them.
+    """
+    if v is None:
+        return None
+    if isinstance(v, Mapping):                 # {"value": ..., "currency":}
+        v = v.get("value")
+        if v is None:
+            return None
+    try:
+        d = D(str(v))
+    except Exception:                                          # noqa: BLE001
+        return None
+    return d if D(0) <= d <= D(1) else None
+
+
 class PreflightFailed(RuntimeError):
     pass
 
@@ -277,6 +308,23 @@ class PmusTransport:
     def book(self, slug: str) -> Dict[str, Any]:
         r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}
         return r.get("marketData") or r
+
+    def settlement(self, slug: str) -> Dict[str, Any]:
+        """What the venue says this market finally settled at, if anything.
+
+        /v1/markets/{slug}/bbo is the route that carries `settlementPx` and
+        `state` together; it answered 200 for the Probe 08 market on
+        2026-09-26T14:37Z with state MARKET_STATE_EXPIRED and settlementPx
+        1.0000. `terminal` is true only when BOTH a terminal state and a
+        price are present -- never on the state alone.
+        """
+        r = self._get("/v1/markets/%s/bbo" % slug) or {}
+        md = r.get("marketData") or r
+        state = str((md or {}).get("state") or "")
+        px = settlement_decimal((md or {}).get("settlementPx"))
+        return {"market": slug, "state": state,
+                "settlement_px": px,
+                "terminal": state in TERMINAL_MARKET_STATES and px is not None}
 
     #: endpoints that could carry a stable account identifier. Probed
     #: read-only and in order; the FIRST that yields one wins. This list is

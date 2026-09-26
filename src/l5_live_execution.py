@@ -928,6 +928,113 @@ class InventoryStore:
                      "residual": D(0), "net": D(0)})
         return {k: str(v) for k, v in g.items()}
 
+    def markets_with_exposure(self) -> List[str]:
+        """Every market this book still has anything in.
+
+        Both sources, because they are written by different paths and can
+        disagree: `committed` moves on our own fills, while
+        reconcile_from_venue writes `positions` straight from the venue
+        without touching committed. A market that came back from a restart
+        through reconciliation therefore has positions and no committed, and
+        sweeping only committed would leave it in the book forever.
+        """
+        out = {m for m, v in self.committed().items() if v != 0}
+        for key in (self.state.get("positions") or {}):
+            out.add(str(key).split("|")[0])
+        for key in (self.state.get("leg_cost") or {}):
+            out.add(str(key).split("|")[0])
+        return sorted(out)
+
+    def retire_settled_market(self, market: str, *, yes_value: D
+                              ) -> Dict[str, Any]:
+        """Close a settled market's book and release what it was holding.
+
+        WHY THIS EXISTS. `committed` is incremented on every fill and nothing
+        ever retired it, because every probe before this ran ONE window and
+        exited. Run continuously and that is fatal: `open_markets` keeps
+        naming a market forever, and MAX_CONCURRENT_MARKETS then refuses
+        every later window. The executor would trade once and spend the rest
+        of the day silently declining.
+
+        It is also what makes the daily loss halt real. `realized_today` is
+        read by SafetyLimits.refuse and was written by nothing at all, so the
+        halt could never fire. Settlement is the only event that turns a
+        position into cash, so it is the only thing entitled to move it.
+
+        REALIZED, strictly. `yes_value` must be the venue's own settlement
+        price -- callers pass what /bbo reported, never a mark, a model or a
+        mid. Redemption is computed under that one settlement for BOTH legs:
+        an UP share pays `yes_value`, a DOWN share pays `1 - yes_value`.
+
+        The lines are kept APART. Matched-pair economics are locked at fill
+        time and cannot be luck; residual P&L is a directional bet that
+        happened to land. Reporting one number would hide exactly the
+        distinction this programme is built on, so both are returned and the
+        caller is free to sum them -- this does not.
+
+        Refuses while an order is still live in the market: an order that can
+        still fill is exposure, and releasing the cap against it would let
+        the next market's first leg sit on top of it.
+        """
+        live = [c for c, o in (self.state.get("live_orders") or {}).items()
+                if str(o.get("market")) == market]
+        if live:
+            return {"retired": False, "market": market,
+                    "reason": "LIVE_ORDERS_IN_MARKET", "live_orders": live}
+        v = D(str(yes_value))
+        if not (D(0) <= v <= D(1)):
+            return {"retired": False, "market": market,
+                    "reason": "SETTLEMENT_OUT_OF_RANGE", "yes_value": str(v)}
+
+        up = self.position(market, "UP")
+        dn = self.position(market, "DOWN")
+        lc = self.leg_cost(market)
+        cost_up, cost_dn = lc["UP"], lc["DOWN"]
+
+        redeem = up * v + dn * (D(1) - v)
+        cost = cost_up + cost_dn
+        pnl = redeem - cost
+
+        # matched at average cost per leg; the residual carries the rest.
+        matched = min(up, dn)
+        avg_up = (cost_up / up) if up else D(0)
+        avg_dn = (cost_dn / dn) if dn else D(0)
+        matched_cost = matched * (avg_up + avg_dn)
+        matched_redeem = matched * D(1)          # a pair redeems exactly $1
+        residual_qty = up - dn                   # + is UP-heavy
+        residual_cost = cost - matched_cost
+        residual_redeem = redeem - matched_redeem
+
+        for side in ("UP", "DOWN"):
+            self.state["positions"].pop("%s|%s" % (market, side), None)
+            (self.state.get("leg_cost") or {}).pop(
+                "%s|%s" % (market, side), None)
+        released = D(str(self.state["committed"].pop(market, 0)))
+        self.state["realized_today"] = str(self.realized_today() + pnl)
+        self.save()
+        return {
+            "retired": True, "market": market, "yes_value": str(v),
+            "up_qty": str(up), "dn_qty": str(dn),
+            "up_cost": str(cost_up), "dn_cost": str(cost_dn),
+            "matched_qty": str(matched), "matched_cost": str(matched_cost),
+            "matched_redeem": str(matched_redeem),
+            "matched_pnl": str(matched_redeem - matched_cost),
+            "residual_qty": str(abs(residual_qty)),
+            "residual_side": ("UP" if residual_qty > 0
+                              else "DOWN" if residual_qty < 0 else None),
+            "residual_cost": str(residual_cost),
+            "residual_redeem": str(residual_redeem),
+            "residual_pnl": str(residual_redeem - residual_cost),
+            "redemption_total": str(redeem), "cost_total": str(cost),
+            "settlement_pnl": str(pnl),
+            "committed_released": str(released),
+            "realized_today_after": str(self.realized_today()),
+            "labels": ("SETTLED. matched and residual are separate lines and "
+                       "are NOT summed here. Commissions and maker rebates "
+                       "are their own lines elsewhere and are not in "
+                       "settlement_pnl."),
+        }
+
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
                              open_orders: Sequence[Mapping[str, Any]]
                              ) -> Dict[str, Any]:

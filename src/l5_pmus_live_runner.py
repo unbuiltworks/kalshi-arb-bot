@@ -206,6 +206,47 @@ class Runner:
                 emit("L5_LIVE_TICK_UNKNOWN", {"market": t.market_slug})
             self.try_arm()
 
+    def sweep_settlements(self) -> None:
+        """Retire every market the venue has finished with.
+
+        Without this the executor trades exactly one window. `committed` is
+        incremented on every fill and was never retired, so `open_markets`
+        kept naming the first market forever and MAX_CONCURRENT_MARKETS
+        refused every window after it. The probes never saw it because they
+        ran one window and exited.
+
+        Only the venue may declare a market finished, and only a terminal
+        state WITH a settlement price counts -- MARKET_STATE_CLOSED shows up
+        at the 900s boundary before the price is final, and retiring against
+        a price that is not final closes the book at the wrong number. A
+        market that has closed but not yet settled therefore keeps holding
+        its slot, which is the safe direction to be wrong in: it delays the
+        next window rather than letting two markets' exposure overlap.
+        """
+        t = self.transport
+        if t is None:
+            return
+        for market in self.store.markets_with_exposure():
+            if market == t.market_slug:
+                continue                       # the one we are working now
+            try:
+                rep = t.settlement(market)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["settlement_read_error"] += 1
+                continue
+            if not rep.get("terminal"):
+                self.stats["awaiting_settlement"] += 1
+                continue
+            out = self.store.retire_settled_market(
+                market, yes_value=rep["settlement_px"])
+            if out.get("retired"):
+                emit("L5_LIVE_SETTLED", dict(out, venue_state=rep["state"]))
+            else:
+                self.stats["retire_refused:%s"
+                           % out.get("reason", "?")] += 1
+
     def reconcile_once(self) -> None:
         """Let the venue overwrite our book, ONCE, before this process arms.
 
@@ -480,6 +521,9 @@ class Runner:
         self.maybe_preflight(now)
         if self.store.live_order_count():
             self.poll_orders()
+        # before acting on this window: give back any market the venue has
+        # finished with, or the concurrency cap never frees up.
+        self.sweep_settlements()
         self.poll(now)
 
 
