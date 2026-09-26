@@ -25,6 +25,11 @@ Primary-eligibility gate, frozen before any data arrived
 | 2026-09-26 1430z | 0.994158 | 5.258 | 500 | 3936 | 8463 | 69 | **yes** | — |
 | 2026-09-26 1445z | 0.994245 | 5.179 | 500 | 5730 | 10680 | 198 | **yes** | — |
 | 2026-09-26 1500z | 0.994241 | 5.183 | 500 | 6036 | 12142 | 400 | **yes** | — |
+| 2026-09-26 1515z | 0.994125 | 5.288 | 500 | 5526 | 11150 | 97 | **yes** | — |
+| 2026-09-26 1530z | 0.994223 | 5.199 | 500 | 4852 | 10196 | 83 | **yes** | — |
+| 2026-09-26 1545z | 0.994225 | 5.198 | 500 | 5725 | 11577 | 384 | **yes** | — |
+| 2026-09-26 1600z | 0.994254 | 5.171 | 500 | 4725 | 10447 | 158 | **yes** | — |
+| 2026-09-26 1615z | 0.994282 | 5.146 | 500 | 5383 | 10804 | 283 | **yes** | — |
 
 Causes, so the gaps are not later mistaken for quiet markets:
 
@@ -40,7 +45,16 @@ Causes, so the gaps are not later mistaken for quiet markets:
 * 1400z opened at `lead_s -5.2` and ran to close with no interference. The
   0.6% it misses is those 5.2s.
 
-**Coverage status: 5 primary-eligible windows, 1 independent day.**
+**Coverage status: 10 primary-eligible windows, 1 independent day.**
+
+Ten consecutive complete windows, 1400z through 1615z, every one
+between observed_fraction 0.9940 and 0.9943 with a worst gap of
+5.1-5.4s. The collector has stopped being a source of variance.
+
+1600z is the window the live executor traded in. The collector
+recorded 158 L5 actions there independently of the executor's own
+log, which is the first time a traded window has a second,
+untouched record of what L5 did in it.
 
 1415z and 1430z were collected THROUGH the execution service's
 redeploy and repointing (2026-09-26 14:58-15:15Z). The collector's
