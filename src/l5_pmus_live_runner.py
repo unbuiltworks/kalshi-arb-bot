@@ -95,6 +95,20 @@ SETTLEMENT_POLL_S = 10.0
 #: first or second attempt; the interval exists so a genuinely unreadable
 #: order cannot become a hot loop against a venue that is already refusing.
 PENDING_RESOLVE_S = 5.0
+#: SOAK INSTRUMENTATION, off unless set, and ignored while armed.
+#:
+#: A disarmed process with no live orders reconciles once at boot and then
+#: never again -- nothing sets uncertainty, nothing stalls, so the venue is
+#: never re-read. That is correct for production and useless for proving
+#: that the reconciliation path works against the real venue rather than
+#: against a fake one, which is the whole point of a disarmed soak.
+#:
+#: When set, and ONLY while disarmed, the runner takes a periodic
+#: authoritative read: two GETs, positions and open orders, through the
+#: same rate limiter and the same InventoryStore.reconcile_from_venue that
+#: an armed process uses. It creates nothing, cancels nothing and submits
+#: nothing. Unset (the default) the behaviour is bit-for-bit what it was.
+SOAK_RECONCILE_S = float(os.getenv("L5_LIVE_SOAK_RECONCILE_S", "0") or 0)
 
 
 def emit(kind: str, doc: Mapping[str, Any]) -> None:
@@ -404,7 +418,14 @@ class Runner:
             return
         uncertain = self.store.orders_uncertain()
         stalled = self.orders_stalled_for_s(now)
-        if self.reconciled and not uncertain and stalled < STALLED_ORDER_S:
+        # disarmed soak only: a periodic authoritative read so the real
+        # reconciliation path is exercised against the real venue. Never
+        # while armed -- there it would adopt and park live orders on a
+        # timer nobody asked for.
+        soak_due = (SOAK_RECONCILE_S > 0 and not (t is not None and t.armed)
+                    and (now - self.last_reconcile_t) >= SOAK_RECONCILE_S)
+        if (self.reconciled and not uncertain
+                and stalled < STALLED_ORDER_S and not soak_due):
             return
         if stalled >= STALLED_ORDER_S and not uncertain:
             # not an error, so nothing marked it: the book simply stopped
@@ -443,6 +464,17 @@ class Runner:
         emit("L5_LIVE_RECONCILE",
              dict(out, market=t.market_slug,
                   cleared_uncertainty=str(uncertain or ""),
+                  trigger=("SOAK_PERIODIC" if soak_due and not uncertain
+                           else "UNCERTAIN_OR_UNCONFIRMED"),
+                  armed=bool(t.armed),
+                  # getattr, because TELEMETRY MUST NOT BE ABLE TO KILL A
+                  # RECONCILE. By the time this line runs the venue has
+                  # already answered and the book is already saved; an
+                  # AttributeError here would throw that away and report it
+                  # as a reconcile failure, which is a lie about the venue.
+                  venue_requests=(lim.metrics()
+                                  if (lim := getattr(t, "limiter", None))
+                                  is not None else None),
                   realized_today=str(self.store.realized_today())))
 
     def try_arm(self) -> None:

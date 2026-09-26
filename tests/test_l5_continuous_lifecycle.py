@@ -379,3 +379,81 @@ def test_an_adopted_order_from_another_session_is_polled_not_stalled(tmp):
     assert r.store.position(MKTS[0], LX.UP) == D("1")
     assert r.store.leg_cost(MKTS[0])[LX.UP] == D("0.60")
     assert r.orders_stalled_for_s(r.now_t) == 0.0
+
+
+# =====================================================================
+# soak instrumentation: read-only, disarmed-only, off by default
+# =====================================================================
+
+def test_the_soak_reconcile_is_off_unless_asked_for(tmp, monkeypatch):
+    """Default behaviour must be bit-for-bit what it was: a disarmed
+    process reconciles once at boot and then not again."""
+    monkeypatch.setattr(R, "SOAK_RECONCILE_S", 0.0)
+    v = Venue()
+    v.armed = False
+    r = runner(tmp, v)
+    step(r)
+    assert v.reads["positions"] == 1
+    for _ in range(50):
+        step(r, dt_s=60.0)
+    assert v.reads["positions"] == 1
+
+
+def test_the_soak_reconcile_reads_the_venue_on_a_timer_while_disarmed(
+        tmp, monkeypatch):
+    """Two GETs, through the same limiter and the same
+    reconcile_from_venue an armed process uses. It creates nothing."""
+    monkeypatch.setattr(R, "SOAK_RECONCILE_S", 300.0)
+    v = Venue()
+    v.armed = False
+    r = runner(tmp, v)
+    step(r)
+    assert v.reads["positions"] == 1
+    step(r, dt_s=301.0)
+    assert v.reads["positions"] == 2
+    assert v.reads["open_orders"] == 2
+    step(r, dt_s=10.0)                       # not yet due
+    assert v.reads["positions"] == 2
+    # nothing was created, nothing booked
+    assert r.store.live_orders() == {}
+    assert r.store.state["positions"] == {}
+    assert r.store.realized_today() == D(0)
+
+
+def test_the_soak_reconcile_never_runs_while_armed(tmp, monkeypatch):
+    """Armed, this would adopt and park live orders on a timer nobody
+    asked for. The soak knob is instrumentation, not behaviour."""
+    monkeypatch.setattr(R, "SOAK_RECONCILE_S", 300.0)
+    v = Venue()
+    v.armed = True
+    r = runner(tmp, v)
+    step(r)
+    assert v.reads["positions"] == 1
+    for _ in range(5):
+        step(r, dt_s=301.0)
+    assert v.reads["positions"] == 1
+
+
+def test_a_retired_market_is_never_re_read_or_re_emitted_over_a_long_soak(tmp):
+    """2115z was re-settled every ~3 seconds for as long as the process
+    lived. Over a simulated hour of ticks a retired market must cost zero
+    settlement reads and produce zero settlement events."""
+    v = Venue()
+    r = runner(tmp, v)
+    submit(r, v, "V1", MKTS[0], "ORDER_SIDE_BUY", "0.50", "2")
+    step(r)
+    v.fill("V1", "2", "0.50", done=True)
+    step(r, dt_s=R.ORDER_POLL_S + 1)
+    v.settled[MKTS[0]] = D("1.0000")
+    v.market_slug = MKTS[1]
+    step(r, dt_s=R.SETTLEMENT_POLL_S + 1)
+    assert list(r.store.state["retired_markets"]) == [MKTS[0]]
+    realized = r.store.realized_today()
+    retired_at = dict(r.store.state["retired_markets"][MKTS[0]])
+
+    v.reads.clear()
+    for _ in range(1200):                    # an hour of 3s ticks
+        step(r, dt_s=3.0)
+    assert v.reads["settlement"] == 0
+    assert r.store.realized_today() == realized
+    assert r.store.state["retired_markets"][MKTS[0]] == retired_at
