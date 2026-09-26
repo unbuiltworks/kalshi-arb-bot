@@ -34,6 +34,7 @@ import datetime as dt
 import json
 import os
 import re
+import time
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -53,6 +54,151 @@ ARM_ENV, SID_ENV, LIVE_ENV = Q1.ARM_ENV, Q1.SID_ENV, Q1.LIVE_ENV
 _SECRETISH = re.compile(
     r"(X-PM-Access-Key|X-PM-Signature|X-PM-Timestamp|Authorization)"
     r"\s*[:=]\s*\S+", re.I)
+
+
+class VenueThrottled(RuntimeError):
+    """The venue told us to slow down and we are still inside the cool-off.
+
+    Raised WITHOUT sending anything. A caller sees the same shape it sees
+    for a real 429 -- an error, no answer, nothing established -- which is
+    the point: every path that already fails closed on an HTTP error fails
+    closed on this too, and none of them has to learn about rate limiting.
+    """
+
+
+class RateLimiter:
+    """One token bucket and one shared cool-off for every venue request.
+
+    LIVE 2026-09-26. The executor ran a 3s tick and, on every single tick,
+    polled each live order (up to 8 GETs), read a settlement for each market
+    still carrying exposure, and re-tried reconciliation 15s apart. With a
+    market stuck in the book -- which the retirement defect guaranteed --
+    that is well over 1 request a second sustained and ~3.5/s with a full
+    order envelope. The venue answered `HTTP Error 429: Too Many Requests`,
+    reconcile failed, orders could not be polled to terminal, and the
+    fallback path released them into costless venue-net inventory. The rate
+    limit was not an external misfortune; we generated it, and it cost
+    $1.09 in lost cost basis.
+
+    Two mechanisms, deliberately separate:
+
+    * a TOKEN BUCKET that paces ordinary traffic, so the steady state never
+      approaches the limit;
+    * a COOL-OFF that every caller shares the moment the venue says 429,
+      doubling per consecutive refusal with jitter. Shared, because a
+      per-caller backoff is no backoff at all when six callers take turns.
+
+    Writes are exempt from WAITING for a token -- a bounded maker order must
+    not sit in a queue behind a settlement poll -- but they are NOT exempt
+    from the cool-off, because a venue refusing reads will refuse an order
+    too and sending it anyway is how a 429 becomes a duplicate submission.
+    """
+
+    def __init__(self, *, rps: float = 1.5, burst: float = 4.0,
+                 backoff_s: float = 2.0, backoff_max_s: float = 60.0,
+                 now_fn=None, sleep_fn=None) -> None:
+        self.rps = float(rps)
+        self.burst = float(burst)
+        self.backoff_s = float(backoff_s)
+        self.backoff_max_s = float(backoff_max_s)
+        self._now = now_fn or time.monotonic
+        self._sleep = sleep_fn or time.sleep
+        self.tokens = float(burst)
+        self.last_t = self._now()
+        self.cool_until = 0.0
+        self.consecutive_429 = 0
+        self.first_429_t: Optional[float] = None
+        self.counts: Dict[str, int] = {"requests": 0, "http_429": 0,
+                                       "throttled_waits": 0,
+                                       "refused_in_cooloff": 0,
+                                       "recoveries": 0}
+        self.total_wait_s = 0.0
+        self.last_recovery_s: Optional[float] = None
+
+    def _refill(self) -> None:
+        now = self._now()
+        self.tokens = min(self.burst,
+                          self.tokens + (now - self.last_t) * self.rps)
+        self.last_t = now
+
+    def before(self, *, write: bool) -> None:
+        """Called before a request leaves. Raises inside the cool-off."""
+        now = self._now()
+        if now < self.cool_until:
+            self.counts["refused_in_cooloff"] += 1
+            raise VenueThrottled(
+                "venue rate limit: %.1fs of cool-off remaining"
+                % (self.cool_until - now))
+        self._refill()
+        if write:
+            # not queued, but it still spends what is there
+            self.tokens = max(0.0, self.tokens - 1.0)
+            self.counts["requests"] += 1
+            return
+        if self.tokens < 1.0:
+            wait = (1.0 - self.tokens) / self.rps if self.rps > 0 else 0.0
+            self.counts["throttled_waits"] += 1
+            self.total_wait_s += wait
+            self._sleep(wait)
+            self._refill()
+        self.tokens = max(0.0, self.tokens - 1.0)
+        self.counts["requests"] += 1
+
+    def on_success(self) -> None:
+        if self.consecutive_429:
+            self.counts["recoveries"] += 1
+            if self.first_429_t is not None:
+                # TIME TO AUTHORITATIVE RECOVERY: how long the venue spent
+                # refusing us before an answer came back. This is the number
+                # that says whether the backoff is actually working.
+                self.last_recovery_s = self._now() - self.first_429_t
+        self.consecutive_429 = 0
+        self.first_429_t = None
+        self.cool_until = 0.0
+
+    def on_429(self) -> float:
+        if self.first_429_t is None:
+            self.first_429_t = self._now()
+        self.consecutive_429 += 1
+        self.counts["http_429"] += 1
+        span = min(self.backoff_max_s,
+                   self.backoff_s * (2 ** (self.consecutive_429 - 1)))
+        # deterministic jitter from the counter, so a test can predict it
+        # and two processes do not resynchronise on the same boundary.
+        jitter = span * 0.25 * ((self.consecutive_429 * 7919) % 100) / 100.0
+        span += jitter
+        self.cool_until = self._now() + span
+        return span
+
+    def metrics(self) -> Dict[str, Any]:
+        now = self._now()
+        return {
+            "requests": self.counts["requests"],
+            "http_429": self.counts["http_429"],
+            "throttled_waits": self.counts["throttled_waits"],
+            "refused_in_cooloff": self.counts["refused_in_cooloff"],
+            "recoveries": self.counts["recoveries"],
+            "consecutive_429": self.consecutive_429,
+            "in_cooloff": now < self.cool_until,
+            "cooloff_remaining_s": round(max(0.0, self.cool_until - now), 2),
+            "total_wait_s": round(self.total_wait_s, 2),
+            "rps_budget": self.rps,
+            "time_to_authoritative_recovery_s": (
+                None if self.last_recovery_s is None
+                else round(self.last_recovery_s, 2)),
+            "labels": ("requests counts what actually left this process. "
+                       "time_to_authoritative_recovery_s is the span from "
+                       "the first 429 of a run to the next successful "
+                       "answer, which is what says the backoff works."),
+        }
+
+
+def is_rate_limited(exc: BaseException) -> bool:
+    """True for a venue 429, however the stdlib happened to wrap it."""
+    code = getattr(exc, "code", None)
+    if code == 429:
+        return True
+    return "429" in str(exc) and "too many requests" in str(exc).lower()
 
 
 def redact(text: Any) -> str:
@@ -280,11 +426,41 @@ class PmusTransport:
         #: until then, and None is "not established" -- never a default.
         self.tick_size: Optional[D] = None
         self.quantity_increment: Optional[D] = None
+        #: ONE limiter for this transport, so every path shares the budget
+        #: and shares the cool-off. Tunable from the environment because the
+        #: venue's real limit is not published anywhere we can read.
+        self.limiter = RateLimiter(
+            rps=float(os.getenv("PMUS_RPS", "1.5")),
+            burst=float(os.getenv("PMUS_BURST", "4")),
+            backoff_s=float(os.getenv("PMUS_BACKOFF_S", "2")),
+            backoff_max_s=float(os.getenv("PMUS_BACKOFF_MAX_S", "60")))
 
     # ------------------------------------------------------------ read only
 
+    def _request(self, method: str, path: str, body=None,
+                 base: str = Q1.API) -> Any:
+        """The single door every venue request goes through.
+
+        Nothing here retries. A 429 is recorded, the shared cool-off is
+        extended, and the error propagates to a caller that already knows
+        how to fail closed. Retrying inside this function would be the
+        fastest possible way to deepen a rate limit.
+        """
+        write = str(method).upper() != "GET"
+        self.limiter.before(write=write)
+        try:
+            out = self.http.request(method, path, body, base)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            if is_rate_limited(exc):
+                self.limiter.on_429()
+            raise
+        self.limiter.on_success()
+        return out
+
     def _get(self, path: str, base: str = Q1.API) -> Any:
-        return self.http.request("GET", path, None, base)
+        return self._request("GET", path, None, base)
 
     def account(self) -> Dict[str, Any]:
         """/v1/account/balances is the route this venue serves.
@@ -840,7 +1016,7 @@ class PmusTransport:
         body = OB.from_intent(intent, self.market_slug)
         self.submit_stage = "PREVIEW_REQUEST"
         self.preview_attempted = True
-        pv = self.http.request("POST", "/v1/order/preview",
+        pv = self._request("POST", "/v1/order/preview",
                                OB.preview_envelope(body), Q1.API) or {}
         self.preview_status = 200          # urlopen raises on any non-2xx
         self.submit_stage = "PREVIEW_ECHO_VALIDATION"
@@ -848,7 +1024,7 @@ class PmusTransport:
                              "echo": PG.require_echo(body, pv)}
         self.submit_stage = "ORDER_POST"
         self.order_post_attempted = True
-        return self.http.request("POST", "/v1/orders", body, Q1.API) or {}
+        return self._request("POST", "/v1/orders", body, Q1.API) or {}
 
     def cancel(self, order_id: str) -> Dict[str, Any]:
         """Cancel by the VENUE order id, via the route the venue serves.
@@ -858,5 +1034,5 @@ class PmusTransport:
         client order id -- passing the latter would silently cancel nothing.
         """
         self._require_armed()
-        return self.http.request(
+        return self._request(
             "POST", "/v1/order/%s/cancel" % order_id, {}, Q1.API) or {}

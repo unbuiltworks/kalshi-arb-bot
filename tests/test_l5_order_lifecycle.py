@@ -204,11 +204,34 @@ def test_reconciliation_survives_the_populated_mapping(tmp_path):
 
 
 def test_reconciliation_with_no_position_and_no_orders(tmp_path):
+    """SUPERSEDED 2026-09-26, and rewritten rather than deleted.
+
+    This asserted that an order the venue no longer lists is RELEASED: gone
+    from live_orders and forgotten. Half of that is right and stays --
+    an order absent from /v1/orders/open cannot fill again, so it must stop
+    consuming the live-order envelope. The other half cost $1.09.
+
+    Absent from the open list includes FILLED. 2045z: CR157F2WJYC3 filled,
+    dropped off the list, its /v1/order read raised, reconcile released it
+    without booking anything, and the 2.25 DOWN shares it had bought
+    arrived instead from the venue's net position with no cost beside them.
+    They settled at zero P&L against real money spent.
+
+    So the order now leaves the envelope and enters PENDING TERMINAL: it
+    still owes the ledger its final cumQuantity, and the book is uncertain
+    -- which refuses submissions -- until an authoritative read supplies it.
+    """
     s = store_with_live_order(tmp_path)
     out = s.reconcile_from_venue([], [])
     assert out["reconciled"] is True
-    assert "l5f-probe04" in out["live_orders_released"]
+    assert "l5f-probe04" in out["live_orders_pending_terminal"]
+    assert "live_orders_released" not in out
+    # off the envelope...
     assert s.live_order_count() == 0
+    # ...but not forgotten, and not yet safe to act on
+    assert "l5f-probe04" in s.pending_terminal()
+    assert s.orders_uncertain() is not None
+    assert out["uncertainty_cleared"] is False
 
 
 # --------------------------------------------- the probe, end to end

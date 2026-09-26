@@ -25,10 +25,16 @@ def store():
     return EX.InventoryStore(str(pathlib.Path(tempfile.mkdtemp()) / "i.json"))
 
 
-def rest(st, coid, side="UP", price="0.50", qty="1", session=SID):
+def rest(st, coid, side="UP", price="0.50", qty="1", session=SID,
+         acked=True):
     st.record_submit(coid, {"market": MARKET, "side": side,
                             "price": D(price), "qty": D(qty)},
                      session_id=session, mode="MAKER")
+    if acked:
+        # a RESTING order is one the venue acknowledged, and the id it gave
+        # back is what /v1/order/{id} is asked by later. An order with no
+        # id was never ACKed and is a different case entirely.
+        st.attach_venue_id(coid, "V-%s" % coid)
 
 
 # --------------------------------------------------------- the envelope
@@ -219,13 +225,23 @@ def test_state_survives_a_restart_with_several_orders_resting():
 
 
 def test_recovery_releases_every_order_the_venue_no_longer_lists():
+    """SUPERSEDED 2026-09-26: all three leave the envelope, none is dropped.
+
+    Probe 07's claim -- that recovery must not carry phantom orders against
+    MAX_LIVE_ORDERS forever -- holds and is still asserted. What is no
+    longer true is that an absent order is finished with: absent includes
+    filled, and 2045z settled 2.25 DOWN shares at zero because an absent
+    order was released without its fill being booked.
+    """
     st = store()
     for i in range(3):
         rest(st, "o%d" % i)
     out = st.reconcile_from_venue([], [])
-    assert sorted(out["live_orders_released"]) == ["o0", "o1", "o2"]
+    assert sorted(out["live_orders_pending_terminal"]) == ["o0", "o1", "o2"]
     assert st.live_order_count() == 0
     assert st.risk_exposure_usd(MARKET) == D(0)
+    # each one still owes a final fill before this market can settle
+    assert sorted(st.pending_terminal()) == ["o0", "o1", "o2"]
 
 
 def test_recovery_adopts_an_order_the_venue_lists_that_we_lost():

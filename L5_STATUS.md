@@ -1448,3 +1448,65 @@ timing was not the binding constraint — and that is the report, not a request
 for more uptime.
 
 See `BTC15M_TIMING_CORRECTION_1.md`.
+
+---
+
+## 2026-09-26 — costless inventory: four defects fixed, DISARMED
+
+The third continuous arm (`12a30e2`, session
+`l5cont-20260926T2049Z-btc15m-a9a936`) traded three windows and lost
+**$1.09230 that the books reported as profit**. Disarmed at ~21:0xZ; not
+re-armed.
+
+Authoritative, both flat, key fingerprint `d51b44a3fa83`:
+
+```
+programme start  2026-09-26T15:49:54Z   61.69765
+after disarm     2026-09-26T21:35:58Z   61.42595   (0 orders, {} positions, 0 unsettled)
+actual cash P&L  -0.27170
+book claimed     +0.82060      overstated by exactly 1.09230
+```
+
+Two windows settled against inventory with no cost basis: 2045z booked
+`dn_qty 2.2500 / dn_cost 0` and settled at zero; 2115z held 3.25 shares
+under `...2115z|ORDER_SIDE_SELL` and settled reading all zeros. 2100z, the
+control, settled correctly at `-1.81710`.
+
+Four defects, all fixed disarmed:
+
+1. **Adopted side words.** An adopted order kept the venue's own word, and
+   `apply_fill` builds its ledger key as `market|side`. `canonical_side()` /
+   `venue_row_side()` now normalise at the boundary, cross-check a row's
+   three side statements, fail closed on anything unmapped, and preserve the
+   raw word for audit. Latent half: `own_outcome_price` used
+   `startswith("U")`, so an adopted **BUY** would have been priced at
+   `1 - p`. Also fixed: `poll_orders` booked fills into the transport's
+   *current* market rather than the order's own.
+2. **`QUANTITY_WITHOUT_COST`.** The missing mirror of the 1815z check,
+   gated on `fill_count` so a genuine $0.00 fill stays legal. Blocks risk,
+   submissions and settlement retirement. `reconstruct_cost_basis()` is the
+   audited way out.
+3. **Self-inflicted 429s.** The 3s tick polled every order and every open
+   market every tick. A shared token bucket plus a shared, doubling,
+   jittered cool-off on the transport's single request door; per-thing
+   cadence (`ORDER_POLL_S 6`, `SETTLEMENT_POLL_S 10`). A vanished order is
+   now **parked, not released** — absent from the open list includes
+   FILLED — and resolved from an authoritative `/v1/order` read.
+4. **Repeated settlement.** 2115z re-emitted `L5_LIVE_SETTLED` 40+ times.
+   Retirement is now idempotent, persisted, and clears *every* key of the
+   market.
+
+Accounting rebased to the authoritative cash: attributed **+2.35460**
+(2115z's `-0.66000` reconstructed from four venue fill rows), unattributed
+**-2.62630** (the prior `-2.19400` plus `-0.43230` for 2045z, whose fill row
+does not survive — derived by difference, so it stays unattributed and is
+**not** relabelled as trading P&L, fees or rebates). The live volume's
+contaminated keys are migrated and its markets closed against the flat read
+**posting no P&L**.
+
+Risk gate unchanged at $5 worst-case loss. Gross cash deployed is now
+reported beside it — 2100z put **$7.4871** of cash out under a **$1.8171**
+worst case — with no decision yet on whether cash deployed needs its own cap.
+
+Full detail and line-level evidence:
+`analysis/pmus/evidence/COSTLESS_INVENTORY_20260926.md`.

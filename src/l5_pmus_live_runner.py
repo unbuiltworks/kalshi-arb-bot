@@ -82,6 +82,19 @@ RECONCILE_RETRY_S = 15.0
 #: the uncertainty path could not rescue it either.
 STALLED_ORDER_S = 90.0
 HB_EVERY_S = 60.0
+#: how often ONE order may be re-read. The tick is 3s and the old code
+#: polled every live order on every tick: with a full envelope that is 2.7
+#: GETs a second from this path alone, which is most of how we rate-limited
+#: ourselves into the 2045z defect. A fill is still seen within seconds, and
+#: the authenticated websocket book -- not this poll -- is the fast path.
+ORDER_POLL_S = 6.0
+#: how often ONE market's settlement may be re-read. A market that has not
+#: expired will not have expired 3 seconds later either.
+SETTLEMENT_POLL_S = 10.0
+#: how often a vanished order may be re-asked about. These resolve on the
+#: first or second attempt; the interval exists so a genuinely unreadable
+#: order cannot become a hot loop against a venue that is already refusing.
+PENDING_RESOLVE_S = 5.0
 
 
 def emit(kind: str, doc: Mapping[str, Any]) -> None:
@@ -160,6 +173,13 @@ class Runner:
         self.tape = os.path.join(root, "decisions.jsonl")
         #: the tick's clock; the executor's staleness is judged against it
         self.now_t = clock()
+        #: per-key last-read clocks, so cadence is bounded per THING rather
+        #: than per tick. Without these the request rate scales with the
+        #: number of live orders and open markets, which is exactly
+        #: backwards: the busier we are, the harder we hit the venue.
+        self.last_order_poll: Dict[str, float] = {}
+        self.last_settlement_poll: Dict[str, float] = {}
+        self.last_pending_resolve: Dict[str, float] = {}
 
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
@@ -242,23 +262,107 @@ class Runner:
         for market in self.store.markets_with_exposure():
             if market == t.market_slug:
                 continue                       # the one we are working now
+            # ONE READ PER MARKET PER SETTLEMENT_POLL_S. This loop used to
+            # run on every 3s tick against every market still in the book,
+            # and with 2115z stuck there by the retirement defect that was a
+            # settlement GET every 3 seconds forever.
+            if (self.now_t - self.last_settlement_poll.get(market, 0.0)
+                    < SETTLEMENT_POLL_S):
+                continue
+            self.last_settlement_poll[market] = self.now_t
             try:
                 rep = t.settlement(market)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
                 self.stats["settlement_read_error"] += 1
+                if T.is_rate_limited(exc):
+                    self.stats["settlement_read_429"] += 1
                 continue
             if not rep.get("terminal"):
                 self.stats["awaiting_settlement"] += 1
                 continue
-            out = self.store.retire_settled_market(
-                market, yes_value=rep["settlement_px"])
+            try:
+                out = self.store.retire_settled_market(
+                    market, yes_value=rep["settlement_px"])
+            except LX.IncoherentBook as exc:
+                # the book cannot be settled because it is not a book a
+                # trade could have produced -- quantity with no cost, or
+                # cost with no quantity. Settling it anyway is what posted
+                # 2045z at zero. It stays open, uncertain and unretired
+                # until reconciliation or a pending order resolves it.
+                self.stats["retire_refused:INCOHERENT_BOOK"] += 1
+                emit("L5_LIVE_SETTLE_REFUSED",
+                     {"market": market, "reason": "INCOHERENT_BOOK",
+                      "detail": T.redact("%s" % exc)[:400],
+                      "venue_state": rep.get("state"),
+                      "submissions_allowed": False,
+                      "why": ("a settlement computed against an incoherent "
+                              "book posts a wrong realized P&L and moves "
+                              "the loss halt with it")})
+                continue
             if out.get("retired"):
-                emit("L5_LIVE_SETTLED", dict(out, venue_state=rep["state"]))
+                emit("L5_LIVE_SETTLED", dict(
+                    out, venue_state=rep["state"],
+                    cash_deployed=self.store.cash_deployed_usd(market)))
             else:
                 self.stats["retire_refused:%s"
                            % out.get("reason", "?")] += 1
+
+    def resolve_pending_terminal(self, now: float) -> List[Dict[str, Any]]:
+        """Book the final fill of every order that left the venue's open list.
+
+        THE REPAIR FOR 2045z. An order that disappears is no longer released
+        unbooked -- reconcile parks it, and this asks the venue what it
+        finally did. `/v1/order/{id}` answers for a filled order long after
+        it has left the open list (the read-only recovery service reads a
+        day-old one), so this resolves on the first attempt in the ordinary
+        case. When it does not, the order stays parked and the book stays
+        uncertain, which refuses submissions until it is settled one way or
+        the other. That is the correct direction to be stuck in.
+        """
+        t = self.transport
+        out: List[Dict[str, Any]] = []
+        if t is None:
+            return out
+        for coid, row in self.store.pending_terminal().items():
+            vid = row.get("venue_order_id")
+            if not vid:
+                # nothing to ask by. It cannot be resolved automatically and
+                # must not be silently dropped: it stays parked and loud.
+                self.stats["pending_unresolvable"] += 1
+                emit("L5_LIVE_PENDING_UNRESOLVABLE",
+                     dict(row, why=("no venue order id, so the venue cannot "
+                                    "be asked what this order finally did"),
+                          submissions_allowed=False))
+                continue
+            if (now - self.last_pending_resolve.get(coid, 0.0)
+                    < PENDING_RESOLVE_S):
+                continue
+            self.last_pending_resolve[coid] = now
+            try:
+                prog = LX.order_progress(t.order(str(vid)))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.store.note_pending_attempt(coid, type(exc).__name__)
+                self.stats["pending_resolve_error"] += 1
+                out.append({"coid": coid, "event": "PENDING_RESOLVE_ERROR",
+                            "error": type(exc).__name__,
+                            "rate_limited": T.is_rate_limited(exc),
+                            "market": row.get("market")})
+                continue
+            res = self.store.resolve_pending_terminal(coid, prog)
+            res.setdefault("event", "PENDING_TERMINAL_RESOLVED")
+            res["venue_order_id"] = str(vid)
+            res.setdefault("market", row.get("market"))
+            for k in ("avg_px", "commission", "cum_qty", "state"):
+                if prog.get(k) is not None and k not in res:
+                    res[k] = str(prog.get(k))
+            out.append(res)
+        if out:
+            self.lifecycle(out)
+        return out
 
     def reconcile_if_needed(self, now: float) -> None:
         """Reconcile against the venue when our book is unconfirmed OR uncertain.
@@ -532,6 +636,9 @@ class Runner:
             vid = o.get("venue_order_id")
             if not vid:
                 continue
+            if self.now_t - self.last_order_poll.get(coid, 0.0) < ORDER_POLL_S:
+                continue
+            self.last_order_poll[coid] = self.now_t
             try:
                 row = t.order(str(vid))
             except BaseException as exc:                       # noqa: BLE001
@@ -541,13 +648,22 @@ class Runner:
                     "order query raised %s for %s" % (type(exc).__name__,
                                                       coid))
                 out.append({"coid": coid, "event": "PROGRESS_ERROR",
-                            "error": type(exc).__name__})
+                            "error": type(exc).__name__,
+                            "rate_limited": T.is_rate_limited(exc)})
                 continue
             prog = LX.order_progress(row)
+            # THE ORDER'S OWN MARKET, not the transport's current one. The
+            # transport follows the window; an order placed in 2045z that is
+            # still live when 2100z opens would have had its fill booked
+            # into 2100z -- a whole market's inventory attributed to the
+            # wrong book. Visible in the 21:01:21Z lifecycle events, which
+            # report two 2045z orders under market 2100z. They had filled
+            # nothing, so nothing was misbooked. That was luck.
             res = self.store.apply_order_progress(
-                coid, prog, market=t.market_slug,
+                coid, prog, market=str(o.get("market") or t.market_slug),
                 side=str(o.get("side") or ""))
             res["venue_order_id"] = str(vid)
+            res["market"] = str(o.get("market") or t.market_slug)
             res.setdefault("event", "ORDER_PROGRESS")
             # the venue's own numbers, carried with the delta rather than
             # discarded: without them a per-order audit cannot state an
@@ -565,8 +681,9 @@ class Runner:
         for e in events:
             self.stats["LIFECYCLE:%s" % e.get("event", "ERROR")] += 1
             self.win["LIFECYCLE:%s" % e.get("event", "ERROR")] += 1
-            emit("L5_LIVE_LIFECYCLE", dict(e, market=(
-                self.transport.market_slug if self.transport else None)))
+            emit("L5_LIVE_LIFECYCLE", dict(
+                e, market=e.get("market") or (
+                    self.transport.market_slug if self.transport else None)))
 
     def open_markets(self) -> List[str]:
         return [m for m, v in self.store.committed().items() if v > 0]
@@ -582,6 +699,27 @@ class Runner:
             "book_now": self.book.snapshot(t.market_slug) if t else None,
             "stats": dict(self.stats),
             "committed_usd": {k: str(v) for k, v in self.store.committed().items()},
+            # GROSS CASH OUT, beside the gate and never instead of it. The
+            # gate is worst-case loss and is unchanged at $5; this is what
+            # actually left the account, which on 2100z was $7.4871 under a
+            # $1.8171 worst case. Reported so the difference is visible.
+            "cash_deployed": [self.store.cash_deployed_usd(m)
+                              for m in self.store.markets_with_exposure()],
+            "risk_gate": {
+                "measures": "worst-case loss over both settlements",
+                "max_usd_per_market": str(self.limits.max_usd_per_market),
+                "note": ("cash_deployed is reported, NOT gated. Changing "
+                         "which of the two the gate reads is an explicit "
+                         "decision and has not been made."),
+            },
+            # SELF-INFLICTED RATE LIMIT TELEMETRY. 2026-09-26 ran >1 req/s
+            # sustained and the venue answered 429; the fallback from that
+            # is what lost a cost basis. These say whether it is fixed.
+            "venue_requests": t.limiter.metrics() if t else None,
+            "pending_terminal": sorted(self.store.pending_terminal()),
+            "retired_markets": sorted(
+                self.store.state.get("retired_markets") or {}),
+            "realized": self.store.realized_lines(),
             "limits": self.limits.as_dict(), "lambda": str(self.lam),
             "frozen_rule": "030d8bf"})
 
@@ -612,6 +750,12 @@ class Runner:
         # on stale live orders; the reconcile below releases those, and the
         # next tick retires it properly. One tick late is fine. Erased
         # accounting is not.
+        # BEFORE settling. A market whose last order vanished still owes
+        # the ledger that order's fill, and retire_settled_market now
+        # refuses while anything is parked -- so resolving first is what
+        # lets an ordinary window settle on the same tick it expires.
+        if self.store.pending_terminal():
+            self.resolve_pending_terminal(now)
         self.sweep_settlements()
         # a book that has gone uncertain gets another authoritative read,
         # rather than latching the session shut until a redeploy
@@ -675,6 +819,83 @@ ACCOUNTING_REBASES = [
         "reason": ("1815z settled against a book whose DOWN quantity had "
                    "been deleted by reconcile while its cost survived"),
     },
+    {
+        "id": "costless-venue-net-2045z-2115z",
+        "matches_realized_total": D("0.82060000"),
+        # Two windows settled against inventory that had NO cost beside it.
+        #
+        # 2115z is reconstructed from venue order rows and is a real line.
+        # Four adopted orders filled, all DOWN (the venue's ORDER_SIDE_SELL
+        # / OUTCOME_SIDE_NO / ORDER_INTENT_BUY_SHORT triple), commission
+        # 0.0000 on every one:
+        #     0.91 @ wire 0.79 -> own 0.21 = 0.1911
+        #     0.53 @ wire 0.80 -> own 0.20 = 0.1060
+        #     1.72 @ wire 0.80 -> own 0.20 = 0.3440
+        #     0.09 @ wire 0.79 -> own 0.21 = 0.0189
+        #     3.25 shares, 0.6600 of cost -- and 3.25 is exactly what the
+        #     book held under `...2115z|ORDER_SIDE_SELL`.
+        # UP won (yes_value 1.0000), so those DOWN shares redeemed 0 and the
+        # window's residual P&L is -0.6600.
+        #
+        # 2045z is NOT reconstructed. Its 2.25 DOWN shares came from order
+        # CR157F2WJYC3, which filled, left the open list, and whose
+        # /v1/order read raised before anything was booked; no fill row for
+        # it survives in what we hold. The cash anchor says the remainder is
+        # -0.43230 (2.25 shares at ~0.192 own terms, consistent with the
+        # 0.79-0.80 wire regime of the adjacent window) -- but derived by
+        # difference is precisely what `unattributed` means, so that is
+        # where it stays. It is NOT called a trading line, a fee or a rebate.
+        #
+        # attributed = 4.8317 (1600z +3.4442, 1815z +1.3875)
+        #              - 1.81710 (2100z, settled from a coherent gross book)
+        #              - 0.66000 (2115z, from four venue fill rows)
+        #            = 2.35460
+        "attributed": D("2.35460"),
+        "cash_delta": D("-0.27170"),         # 61.42595 - 61.69765
+        "anchor": {
+            # pre_arm_* is the anchor the cash_delta is measured FROM, and
+            # for this rebase that is the START OF THE PROGRAMME, because
+            # the attributed line spans every window since it (1600z, 1815z,
+            # 2100z, 2115z). The third arm's own pre-arm read is recorded
+            # below as third_arm_*, which is evidence, not the anchor.
+            "pre_arm_utc": "2026-09-26T15:49:54Z",
+            "pre_arm_balance": "61.69765",
+            "third_arm_utc": "2026-09-26T20:49:29Z",
+            "third_arm_balance": "64.33535",
+            "at_disarm_utc": "2026-09-26T21:35:58Z",
+            "at_disarm_balance": "61.42595",
+            "flat_at_each_read": "zero positions, zero open orders, zero unsettled",
+            "api_key_fingerprint": "d51b44a3fa83",
+            "attributed_detail": ("1600z +3.4442, 1815z +1.3875, "
+                                  "2100z -1.81710, 2115z -0.66000"),
+            "unattributed_detail": ("-2.19400 carried forward, plus -0.43230 "
+                                    "for 2045z whose 2.25 DOWN shares have "
+                                    "no surviving fill row"),
+            "superseded_total": "+0.82060 , overstated by 1.09230",
+            "commissions_observed": "0.0000 on every 2115z row",
+            "rebates_confirmed": ("none. A zero commission is not a rebate "
+                                  "and nothing was credited as one."),
+        },
+        "reason": ("2045z and 2115z settled against quantity that had no "
+                   "cost basis: an order released unbooked after a failed "
+                   "query, and an adopted order filed under the venue's "
+                   "raw side word"),
+        # AND the book those defects left behind. The live volume still
+        # holds `...2115z|ORDER_SIDE_SELL`, which the canonical-side rules
+        # now treat as a permanent gross/net disagreement -- an uncertain
+        # book that never submits again. The 21:35:58Z read says the venue
+        # holds nothing, owes nothing and has nothing outstanding, and the
+        # attributed/unattributed lines above already account for every
+        # window in it, so those markets are CLOSED with no P&L posted
+        # rather than settled a second time.
+        "flat_account": {
+            "utc": "2026-09-26T21:35:58Z", "balance": "61.42595",
+            "open_orders": 0, "positions": {}, "unsettled_funds": 0,
+            "api_key_fingerprint": "d51b44a3fa83",
+            "source": ("read-only recovery service 247304c7, GET-only "
+                       "transport, deployment 6d9e19ca"),
+        },
+    },
 ]
 
 
@@ -691,9 +912,20 @@ def rebase_contaminated_accounting(store) -> Optional[Dict[str, Any]]:
             continue
         if store.realized_today() != spec["matches_realized_total"]:
             continue
+        # the KEYS first, so a book written under a raw venue side word is
+        # readable before anything decides what to do with it
+        keys = store.canonicalize_position_keys()
+        if keys["moved"] or keys["unmapped"]:
+            emit("L5_LIVE_KEYS_CANONICALIZED", keys)
         out = store.rebase_session_accounting(
             attributed=spec["attributed"], cash_delta=spec["cash_delta"],
             anchor=spec["anchor"], reason=spec["reason"])
+        flat = spec.get("flat_account")
+        if flat:
+            emit("L5_LIVE_FLAT_ACCOUNT_ADOPTED",
+                 dict(store.adopt_flat_account(anchor=flat,
+                                               reason=spec["reason"]),
+                      rebase_id=spec["id"]))
         log = store.state.setdefault("accounting_rebase_log", [])
         if log:
             log[-1]["id"] = spec["id"]

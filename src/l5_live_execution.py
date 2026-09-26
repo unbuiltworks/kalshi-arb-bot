@@ -400,7 +400,7 @@ def own_outcome_price(side: str, price: D, *, basis: str) -> D:
     if basis != WIRE:
         raise ValueError("price basis must be %r or %r, got %r"
                          % (WIRE, OWN, basis))
-    return p if str(side).upper().startswith("U") else D(1) - p
+    return p if canonical_side(side, doing="pricing a fill") == UP else D(1) - p
 
 
 def inventory_class(residual: D, side: str) -> str:
@@ -412,7 +412,7 @@ def inventory_class(residual: D, side: str) -> str:
     by `risk_exposure_usd`, so the dollar bound is unaffected by this
     choice; only the classification is.
     """
-    up = str(side).upper().startswith("U")
+    up = canonical_side(side, doing="classifying an action") == UP
     if residual == 0:
         return FLAT_OPEN
     return INCREASE_RESIDUAL if ((residual > 0) == up) else REDUCE_RESIDUAL
@@ -586,11 +586,118 @@ def venue_order_price(row: Mapping[str, Any]) -> Optional[D]:
 UNKNOWN_PRICE_WORST_CASE = D(1)
 
 
+class UnknownSide(RuntimeError):
+    """A side word no layer of this system is allowed to guess at.
+
+    LIVE 2026-09-26, 2115z. An order adopted from the venue kept the venue's
+    own word for its side -- "ORDER_SIDE_SELL" -- and carried it all the way
+    into apply_fill, which builds its ledger key as `market|side`. Three and
+    a quarter DOWN shares and every dollar they cost went into
+    `...2115z|ORDER_SIDE_SELL`, a key that leg_cost(), risk_exposure_usd and
+    retire_settled_market never read, because those read only `|UP` and
+    `|DOWN`. The venue's net then arrived under `...2115z|DOWN` with no cost
+    beside it, the market settled reading all zeros, and $0.66 of real cost
+    settled off the books.
+
+    Nothing anywhere else in this file decided that "ORDER_SIDE_SELL" was
+    DOWN. It never had to: `own_outcome_price` asked `startswith("U")`, which
+    is False for ORDER_SIDE_SELL and therefore happened to price it as a
+    DOWN leg, and False for ORDER_SIDE_BUY too -- so an adopted BUY would
+    have been priced at `1 - p` AND filed under the wrong key at once. A
+    convention that survives only because two wrongs agree is not a
+    convention. This is the one that is written down.
+    """
+
+
+UP = "UP"
+DOWN = "DOWN"
+CANONICAL_SIDES = (UP, DOWN)
+
+#: Every word this venue has been OBSERVED to use for a side, and what it
+#: means in our terms. Sourced from authoritative /v1/order rows read by the
+#: read-only recovery service on 2026-09-26, which pair them exactly:
+#:
+#:   side ORDER_SIDE_BUY  + outcomeSide OUTCOME_SIDE_YES + ORDER_INTENT_BUY_LONG
+#:   side ORDER_SIDE_SELL + outcomeSide OUTCOME_SIDE_NO  + ORDER_INTENT_BUY_SHORT
+#:
+#: The venue's `side` is about the YES token: it expresses "buy NO" as "sell
+#: YES". `outcomeSide` names the outcome you end up long. They are two views
+#: of one fact, which is why venue_row_side below requires them to agree
+#: rather than picking a favourite.
+VENUE_SIDE_WORDS = {
+    # our own words, so a round trip through this table is the identity
+    "UP": UP, "DOWN": DOWN,
+    # the outcome, named directly
+    "YES": UP, "NO": DOWN,
+    "OUTCOME_SIDE_YES": UP, "OUTCOME_SIDE_NO": DOWN,
+    # the order's direction on the YES token
+    "BUY": UP, "SELL": DOWN,
+    "ORDER_SIDE_BUY": UP, "ORDER_SIDE_SELL": DOWN,
+    # the order's stated intent
+    "LONG": UP, "SHORT": DOWN,
+    "ORDER_INTENT_BUY_LONG": UP, "ORDER_INTENT_BUY_SHORT": DOWN,
+}
+
+#: The keys of a venue order/fill row that state a side, most direct first.
+VENUE_ROW_SIDE_KEYS = ("outcomeSide", "outcome_side", "intent", "side")
+
+
 def venue_side(raw: Any) -> Optional[str]:
-    """UP or DOWN, or None when the venue said something we do not know."""
+    """UP or DOWN, or None when the venue said something we do not know.
+
+    Non-raising, for callers that want to test a word. Anything that is
+    about to write to the ledger uses canonical_side instead.
+    """
     if raw is None:
         return None
     return VENUE_SIDE_WORDS.get(str(raw).strip().upper())
+
+
+def canonical_side(raw: Any, *, doing: str) -> str:
+    """UP or DOWN, or refuse. THE ONLY WAY A SIDE ENTERS THE LEDGER.
+
+    Fails closed on purpose. A side we cannot map is not a DOWN by default
+    and not an UP by default -- it is a fact about our own position that we
+    do not have, and booking inventory against it is how 2115z happened.
+    """
+    got = venue_side(raw)
+    if got is None:
+        raise UnknownSide(json.dumps({
+            "raw": None if raw is None else str(raw),
+            "doing": doing, "accepts": sorted(VENUE_SIDE_WORDS),
+            "why": ("internal accounting accepts only canonical UP/DOWN; an "
+                    "unmapped side word must not reach a ledger key, a "
+                    "price conversion, an exposure bound or a settlement")}))
+    return got
+
+
+def venue_row_side(row: Mapping[str, Any], *, doing: str) -> str:
+    """The canonical side of one venue order/fill row, cross-checked.
+
+    A row usually states its side three times -- outcomeSide, intent and
+    side. Where more than one is present they must agree once mapped: a row
+    saying OUTCOME_SIDE_YES and ORDER_SIDE_SELL at the same time is not a
+    row this system understands (it would be selling a YES position, which
+    no path here creates), and resolving it in favour of whichever key we
+    happened to read first is exactly the guess this refuses to make.
+    """
+    seen: Dict[str, str] = {}
+    for key in VENUE_ROW_SIDE_KEYS:
+        if key not in row or row.get(key) is None:
+            continue
+        got = venue_side(row.get(key))
+        if got is not None:
+            seen[key] = got
+    if not seen:
+        raise UnknownSide(json.dumps({
+            "doing": doing, "row_keys": sorted(row),
+            "why": "no recognisable side on this venue row"}))
+    if len(set(seen.values())) > 1:
+        raise UnknownSide(json.dumps({
+            "doing": doing, "disagreement": seen,
+            "why": ("this row states its side more than once and the "
+                    "statements do not agree")}))
+    return next(iter(seen.values()))
 
 
 def position_row(p: Mapping[str, Any]) -> Dict[str, str]:
@@ -873,9 +980,20 @@ class InventoryStore:
         booking a wire price into an own-terms field, which is exactly how
         the 1600z cost basis went wrong. Normalisation happens ONCE, here,
         so the ACK, progress and reconcile paths cannot disagree.
+
+        THE SIDE IS NORMALISED HERE TOO, and for the same reason. This is
+        the only writer of `positions` and `leg_cost` on the fill path, so
+        it is the only place the ledger key is built -- and on 2115z it
+        built `market|ORDER_SIDE_SELL` from a word the venue chose. The raw
+        word is kept beside the entry for audit; the KEY is always canonical.
         """
-        own = own_outcome_price(side, price, basis=basis)
-        k = "%s|%s" % (market, side)
+        own_side = canonical_side(side, doing="booking a fill")
+        own = own_outcome_price(own_side, price, basis=basis)
+        k = "%s|%s" % (market, own_side)
+        if str(side).strip().upper() != own_side:
+            raw = self.state.setdefault("venue_side_raw", {})
+            raw.setdefault(k, sorted(set(raw.get(k, []))
+                                     | {str(side)}))
         self.state["positions"][k] = str(
             D(str(self.state["positions"].get(k, 0))) + qty)
         # both of these are CASH OUT in the leg's own terms now. They used to
@@ -884,6 +1002,13 @@ class InventoryStore:
             D(str(self.state["committed"].get(market, 0))) + own * qty)
         lc = self.state.setdefault("leg_cost", {})
         lc[k] = str(D(str(lc.get(k, 0))) + own * qty)
+        # HOW MANY FILLS BUILT THIS LEG. A leg with shares and no cost is
+        # either a genuine fill at $0.00 -- rare but real, and attested by
+        # this counter -- or quantity that arrived from the venue's net
+        # with no cost basis at all, which is 2045z. book_violations reads
+        # this to tell the two apart instead of guessing.
+        fc = self.state.setdefault("fill_count", {})
+        fc[k] = int(fc.get(k, 0)) + 1
         # A fill converts outstanding exposure into committed exposure. Not
         # decrementing here would double-count the same shares in both.
         live = self.state.setdefault("live_orders", {})
@@ -902,6 +1027,23 @@ class InventoryStore:
         lc = self.state.get("leg_cost") or {}
         return {side: D(str(lc.get("%s|%s" % (market, side), 0)))
                 for side in ("UP", "DOWN")}
+
+    def fill_count(self, market: str, side: str) -> int:
+        """How many fills built this leg. 0 means nothing we saw did."""
+        fc = self.state.get("fill_count") or {}
+        return int(fc.get("%s|%s" % (market, side), 0) or 0)
+
+    def cost_attested(self, market: str, side: str) -> bool:
+        """Did a fill actually state this leg's price, whatever it was?
+
+        A leg built by apply_fill has an attested basis even when that basis
+        is $0.00 -- an UP fill at a wire price of 0.00 costs nothing and is
+        a real thing that can happen. A leg whose quantity was written by
+        reconcile from the venue's net has no attestation at all, and the
+        difference between those two is the difference between free shares
+        and shares whose cost we lost.
+        """
+        return self.fill_count(market, side) > 0
 
     #: a share of a $0-$1 contract cannot have cost more than $1 or less
     #: than $0. Fees are attributable separately and are never folded into a
@@ -939,6 +1081,27 @@ class InventoryStore:
                             "side": side, "qty": str(q), "cost": str(c),
                             "why": ("cost survived a quantity that did not; "
                                     "the two were written independently")})
+            if q > 0 and c == 0 and not self.cost_attested(market, side):
+                # THE MIRROR, and the one that was missing. 2045z: an order
+                # filled, the venue dropped it from /v1/orders/open, its
+                # /v1/order/{id} read raised, reconcile released it without
+                # booking the fill, and the venue's NET then supplied 2.25
+                # DOWN shares with no cost beside them. per_share was
+                # 0/2.25 = 0, which is inside [0,1], so every check below
+                # passed: the shares priced at zero risk and settled at
+                # zero P&L. Real money, spent, reported as free inventory.
+                #
+                # Shares we hold were paid for. A leg with quantity and no
+                # cost is therefore not free inventory, it is a cost basis
+                # we have LOST -- unless a fill actually attested a $0.00
+                # price, which fill_count records.
+                out.append({"violation": "QUANTITY_WITHOUT_COST",
+                            "side": side, "qty": str(q), "cost": str(c),
+                            "fills_booked": self.fill_count(market, side),
+                            "why": ("quantity with no cost basis and no "
+                                    "fill that attested a zero price; the "
+                                    "cost of these shares is unknown, not "
+                                    "zero")})
             if q > 0:
                 per = c / q
                 if per > self.MAX_OWN_COST_PER_SHARE or per < 0:
@@ -960,6 +1123,34 @@ class InventoryStore:
             % (market, doing, ";".join(str(v.get("violation")) for v in bad)))
         raise IncoherentBook(json.dumps({"market": market, "doing": doing,
                                          "violations": bad}))
+
+    def cash_deployed_usd(self, market: str) -> Dict[str, str]:
+        """Gross cash actually paid out into this market. REPORTING ONLY.
+
+        This is NOT the gate and must not become one without being asked
+        for. The gate is risk_exposure_usd, which bounds worst-case LOSS
+        over both settlements, and it stays exactly as it was.
+
+        The two differ by more than people expect and 2100z is the example:
+        $7.4871 of cash went out (5.67 UP at 5.1627 plus 18.89 DOWN at
+        2.3244) while the worst case over either settlement was $1.8171. A
+        bound on loss permits a cash outlay several times its own size,
+        because the two legs pay for each other at settlement. That is
+        sound, and it is also worth SEEING, so it is reported beside the
+        gate rather than folded into it.
+        """
+        lc = self.leg_cost(market)
+        return {
+            "market": market,
+            "cash_deployed_usd": str(D(str(
+                (self.state.get("committed") or {}).get(market, 0)))),
+            "leg_cost_up": str(lc["UP"]), "leg_cost_down": str(lc["DOWN"]),
+            "leg_cost_total": str(lc["UP"] + lc["DOWN"]),
+            "labels": ("gross cash out in own-outcome terms. NOT the "
+                       "worst-case-loss gate and not bounded by it; "
+                       "reported so a large two-sided outlay under a small "
+                       "loss bound is visible rather than implicit."),
+        }
 
     def risk_exposure_usd(self, market: str, *, extra_side: str = "",
                           extra_qty: D = D(0), extra_price: D = D(0)) -> D:
@@ -997,14 +1188,33 @@ class InventoryStore:
                 # which is what `or 0` did, would have handed the gate a
                 # position that looked costless.
                 px = UNKNOWN_PRICE_WORST_CASE
-            if str(o.get("side") or "").upper().startswith("U"):
+            # canonical_side, not a prefix test: an order carrying the
+            # venue's own word would be silently bucketed as DOWN here and
+            # the gate would bound the wrong leg.
+            #
+            # A side we cannot read at all is priced like a price we cannot
+            # read -- at the worst it could be -- rather than raising out of
+            # the hot path. Charging its notional against BOTH settlements
+            # with no offsetting quantity makes at_zero and at_one each
+            # worse by exactly that amount and can never create redemption
+            # that does not exist, so the bound is strictly conservative
+            # whichever side it turns out to be.
+            try:
+                is_up = canonical_side(
+                    o.get("side"), doing="pricing an outstanding order") == UP
+            except UnknownSide:
+                up_c += px * q
+                dn_c += px * q
+                continue
+            if is_up:
                 up_q += q
                 up_c += px * q
             else:
                 dn_q += q
                 dn_c += px * q
         if extra_qty > 0:
-            if str(extra_side).upper().startswith("U"):
+            if canonical_side(extra_side,
+                              doing="pricing a proposed action") == UP:
                 up_q += extra_qty
                 up_c += extra_price * extra_qty
             else:
@@ -1067,6 +1277,190 @@ class InventoryStore:
         self.save()
         return out
 
+    def canonicalize_position_keys(self) -> Dict[str, Any]:
+        """Merge ledger keys written under a raw venue side word.
+
+        MIGRATION, for a state file written before canonical_side existed.
+        The live volume holds `...2115z|ORDER_SIDE_SELL` with 3.25 shares
+        and $0.66 of cost beside it. Left alone those keys are now counted
+        as uncanonical by _gross_by_market and skipped by _net_by_market,
+        which is a permanent gross/net disagreement and therefore a book
+        that is uncertain forever and never submits again.
+
+        So they are MERGED, not dropped: quantity and cost move together
+        into the canonical key, which is exactly where apply_fill should
+        have put them. A key whose word maps to nothing at all is left
+        alone -- inventing a side for it would be the original sin again --
+        and named in the result so it is visible.
+        """
+        moved: List[Dict[str, Any]] = []
+        unmapped: List[str] = []
+        for name in ("positions", "leg_cost", "fill_count"):
+            d = self.state.get(name)
+            if not isinstance(d, dict):
+                continue
+            for key in [k for k in d if "|" in str(k)]:
+                market, raw = str(key).rsplit("|", 1)
+                if raw in CANONICAL_SIDES:
+                    continue
+                got = venue_side(raw)
+                if got is None:
+                    unmapped.append(key)
+                    continue
+                dest = "%s|%s" % (market, got)
+                if name == "fill_count":
+                    d[dest] = int(d.get(dest, 0) or 0) + int(d.pop(key) or 0)
+                else:
+                    d[dest] = str(D(str(d.get(dest, 0)))
+                                  + D(str(d.pop(key))))
+                moved.append({"store": name, "from": key, "to": dest})
+                raws = self.state.setdefault("venue_side_raw", {})
+                raws.setdefault(dest, [])
+                if raw not in raws[dest]:
+                    raws[dest].append(raw)
+        if moved:
+            self.state.setdefault("key_migrations", []).append(
+                {"t": dt.datetime.now(dt.timezone.utc).isoformat(),
+                 "moved": moved})
+            self.save()
+        return {"moved": moved, "unmapped": sorted(unmapped)}
+
+    def adopt_flat_account(self, *, anchor: Mapping[str, Any], reason: str
+                           ) -> Dict[str, Any]:
+        """Close every market in the book against an authoritative FLAT read.
+
+        NO P&L IS POSTED. This is not a settlement -- it is the statement
+        that the venue holds nothing, owes nothing and has nothing
+        outstanding, so whatever these markets were is finished and their
+        result is already wherever the accounting put it. Using it when the
+        account is NOT flat would silently delete live exposure, so the
+        anchor must say so and is recorded verbatim.
+
+        It exists because the alternative for the 2026-09-26 volume is
+        worse: canonicalising its keys would leave two already-settled
+        markets looking open, and the next sweep would settle them a second
+        time on top of a rebase that has already accounted for them.
+        """
+        closed = sorted(self.markets_with_exposure())
+        for name in ("positions", "leg_cost", "fill_count",
+                     "venue_side_raw"):
+            if isinstance(self.state.get(name), dict):
+                self.state[name] = {}
+        self.state["committed"] = {}
+        self.state["live_orders"] = {}
+        self.state["pending_terminal"] = {}
+        self.state["orders_uncertain"] = None
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        for m in closed:
+            self.state.setdefault("retired_markets", {})[m] = {
+                "t": now, "settlement_pnl": "0",
+                "closed_against": "AUTHORITATIVE_FLAT_ACCOUNT",
+                "why": ("no P&L posted here: the result is already in the "
+                        "accounting lines, and the venue holds nothing"),
+            }
+        self.state.setdefault("flat_adoptions", []).append(
+            {"t": now, "reason": str(reason), "anchor": dict(anchor),
+             "markets_closed": closed})
+        self.save()
+        return {"closed": closed, "posted_pnl": "0", "anchor": dict(anchor)}
+
+    def pending_terminal(self) -> Dict[str, Dict[str, Any]]:
+        """Orders that left the venue's open list still owing us a fill."""
+        return {k: dict(v) for k, v in
+                (self.state.get("pending_terminal") or {}).items()}
+
+    def note_pending_attempt(self, coid: str, why: str) -> None:
+        """Record that we asked the venue about this one and could not tell."""
+        pend = self.state.setdefault("pending_terminal", {})
+        row = pend.get(coid)
+        if row is None:
+            return
+        row["attempts"] = int(row.get("attempts") or 0) + 1
+        row["last_error"] = str(why)[:200]
+        self.save()
+
+    def resolve_pending_terminal(self, coid: str, prog: Mapping[str, Any]
+                                 ) -> Dict[str, Any]:
+        """Book a vanished order's FINAL fill from an authoritative read.
+
+        This is the reconstruction that lets a QUANTITY_WITHOUT_COST book
+        become a coherent one again, and it is the only thing that clears a
+        pending order. `prog` must come from the venue's own /v1/order row
+        (order_progress of it), never from a guess, a mark or our own memory
+        of what we sent.
+
+        Idempotent by the same key apply_order_progress uses: a second call
+        with the same cumQuantity books nothing.
+        """
+        pend = self.state.setdefault("pending_terminal", {})
+        row = dict(pend.get(coid) or {})
+        if not row:
+            return {"coid": coid, "resolved": False, "reason": "NOT_PENDING"}
+        market = str(row.get("market") or "")
+        side = canonical_side(row.get("side"),
+                              doing="booking a pending terminal order")
+        # put it back on the live map just long enough for the shared
+        # booking path to see it, so the delta/idempotency logic is the same
+        # code that books an ordinary progress read. Nothing else reads it
+        # in between: this returns before the next tick.
+        live = self.state.setdefault("live_orders", {})
+        restored = coid not in live
+        if restored:
+            live[coid] = {"market": market, "side": side,
+                          "venue_order_id": row.get("venue_order_id"),
+                          "client_order_id": coid,
+                          "session_id": row.get("session_id"),
+                          "remaining": "0", "state": "PENDING_TERMINAL",
+                          "price": None, "price_unreadable": True}
+        out = self.apply_order_progress(coid, dict(prog, terminal=True),
+                                        market=market, side=side)
+        live.pop(coid, None)
+        if out.get("refused"):
+            # the venue went backwards on a cumulative field. Still pending.
+            pend[coid] = dict(row, attempts=int(row.get("attempts") or 0) + 1,
+                              last_error=str(out.get("refused")))
+            self.save()
+            return dict(out, coid=coid, resolved=False)
+        pend.pop(coid, None)
+        self.save()
+        return dict(out, coid=coid, resolved=True, market=market, side=side,
+                    labels=("final fill booked from the venue's own order "
+                            "row; this is the reconstruction that resolves "
+                            "a lost cost basis, not an assumption about it"))
+
+    def reconstruct_cost_basis(self, market: str, side: str, *, qty: D,
+                               cost: D, source: str) -> Dict[str, Any]:
+        """Attest a leg's quantity and cost together, from named evidence.
+
+        The operator-level escape from QUANTITY_WITHOUT_COST, for a leg whose
+        order rows can be read by hand when the automatic path cannot reach
+        them. `source` is required and is recorded: a cost basis with no
+        stated evidence is the thing this whole check exists to refuse.
+
+        It writes quantity and cost in ONE step, which is the invariant the
+        1815z defect broke by writing them in two.
+        """
+        if not str(source).strip():
+            raise ValueError("reconstruct_cost_basis requires a source")
+        own_side = canonical_side(side, doing="reconstructing a cost basis")
+        k = "%s|%s" % (market, own_side)
+        q, c = D(str(qty)), D(str(cost))
+        if q < 0 or c < 0:
+            raise ValueError("reconstructed quantity and cost must be >= 0")
+        if q > 0 and c / q > self.MAX_OWN_COST_PER_SHARE:
+            raise ValueError("reconstructed cost exceeds $1 a share")
+        self.state["positions"][k] = str(q)
+        self.state.setdefault("leg_cost", {})[k] = str(c)
+        fc = self.state.setdefault("fill_count", {})
+        fc[k] = int(fc.get(k, 0)) + 1
+        log = self.state.setdefault("cost_reconstructions", [])
+        log.append({"t": dt.datetime.now(dt.timezone.utc).isoformat(),
+                    "market": market, "side": own_side, "qty": str(q),
+                    "cost": str(c), "source": str(source)})
+        self.save()
+        return {"reconstructed": True, "market": market, "side": own_side,
+                "qty": str(q), "cost": str(c), "source": str(source)}
+
     @staticmethod
     def _gross_by_market(positions: Mapping[str, Any]) -> Dict[str, Dict[str, D]]:
         """Our own book, kept as LONG and SHORT rather than collapsed.
@@ -1081,12 +1475,20 @@ class InventoryStore:
             if "|" not in k:
                 continue
             market, side = k.rsplit("|", 1)
-            d = out.setdefault(market, {"up": D(0), "dn": D(0)})
+            d = out.setdefault(market, {"up": D(0), "dn": D(0),
+                                        "uncanonical": D(0)})
             try:
                 q = D(str(v))
             except Exception:                                  # noqa: BLE001
                 continue
-            d["up" if side.upper().startswith("U") else "dn"] += q
+            # a key whose side is not canonical is NOT folded into either
+            # leg: it is counted apart so the caller can see that the book
+            # holds quantity under a key nothing else reads.
+            got = venue_side(side)
+            if got is None:
+                d["uncanonical"] = d.get("uncanonical", D(0)) + q
+                continue
+            d["up" if got == UP else "dn"] += q
         for m, d in out.items():
             d["matched"] = min(d["up"], d["dn"])
             d["residual"] = d["up"] - d["dn"]
@@ -1104,15 +1506,20 @@ class InventoryStore:
                 q = D(str(v))
             except Exception:                                  # noqa: BLE001
                 continue
-            out[market] = out.get(market, D(0)) + (
-                q if side.upper().startswith("U") else -q)
+            got = venue_side(side)
+            if got is None:
+                # unknown side: it cannot be added OR subtracted honestly,
+                # so it is left out of the net and shows up instead as a
+                # gross/net disagreement, which fails closed.
+                continue
+            out[market] = out.get(market, D(0)) + (q if got == UP else -q)
         return out
 
     def gross_inventory(self, market: str) -> Dict[str, str]:
         """Gross long/short, matched and residual, for reporting."""
         g = self._gross_by_market(self.state.get("positions") or {}).get(
             market, {"up": D(0), "dn": D(0), "matched": D(0),
-                     "residual": D(0), "net": D(0)})
+                     "residual": D(0), "net": D(0), "uncanonical": D(0)})
         return {k: str(v) for k, v in g.items()}
 
     def markets_with_exposure(self) -> List[str]:
@@ -1127,10 +1534,25 @@ class InventoryStore:
         """
         out = {m for m, v in self.committed().items() if v != 0}
         for key in (self.state.get("positions") or {}):
-            out.add(str(key).split("|")[0])
+            out.add(str(key).rsplit("|", 1)[0])
         for key in (self.state.get("leg_cost") or {}):
-            out.add(str(key).split("|")[0])
-        return sorted(out)
+            out.add(str(key).rsplit("|", 1)[0])
+        # AN OUTSTANDING ORDER IS SOMETHING THE BOOK HAS IN A MARKET, even
+        # before it fills. A market whose only trace is a live or parked
+        # order was invisible here, so the settlement sweep never looked at
+        # it -- and a sweep that never looks cannot refuse, which is how a
+        # market with an unbooked fill would have slipped past the
+        # UNBOOKED_TERMINAL_ORDERS guard entirely.
+        for o in (self.state.get("live_orders") or {}).values():
+            if o.get("market"):
+                out.add(str(o["market"]))
+        for o in (self.state.get("pending_terminal") or {}).values():
+            if o.get("market"):
+                out.add(str(o["market"]))
+        # a market already retired is finished with, whatever residue a
+        # future defect leaves behind: it is never swept, never re-settled
+        # and never re-read from the venue.
+        return sorted(out - set(self.state.get("retired_markets") or {}))
 
     def retire_settled_market(self, market: str, *, yes_value: D
                               ) -> Dict[str, Any]:
@@ -1163,11 +1585,34 @@ class InventoryStore:
         still fill is exposure, and releasing the cap against it would let
         the next market's first leg sit on top of it.
         """
+        # ONCE. A market retired once must never be retired again: the
+        # second pass would post a second P&L into realized and move the
+        # loss halt with it. On 2026-09-26 2115z re-emitted L5_LIVE_SETTLED
+        # every ~3 seconds, 40+ times, because retirement popped only the
+        # `|UP` and `|DOWN` keys while the market's real inventory sat under
+        # `|ORDER_SIDE_SELL`, so markets_with_exposure kept naming it. The
+        # side fix removes that particular residue; this makes a repeat
+        # impossible whatever the residue is, and it persists in the state
+        # file so a restart cannot resurrect it either.
+        done = (self.state.get("retired_markets") or {}).get(market)
+        if done:
+            return {"retired": False, "market": market,
+                    "reason": "ALREADY_RETIRED", "retired_at": done.get("t"),
+                    "first_settlement_pnl": done.get("settlement_pnl")}
         live = [c for c, o in (self.state.get("live_orders") or {}).items()
                 if str(o.get("market")) == market]
         if live:
             return {"retired": False, "market": market,
                     "reason": "LIVE_ORDERS_IN_MARKET", "live_orders": live}
+        pending = [c for c, o in (self.state.get("pending_terminal") or {}
+                                  ).items() if str(o.get("market")) == market]
+        if pending:
+            # an order that left the open list still owes this market a
+            # fill. Settling before it is booked prices the redemption
+            # against an incomplete book -- which is 2045z exactly.
+            return {"retired": False, "market": market,
+                    "reason": "UNBOOKED_TERMINAL_ORDERS",
+                    "pending_terminal": sorted(pending)}
         self.require_coherent_book(market, doing="settling")
         v = D(str(yes_value))
         if not (D(0) <= v <= D(1)):
@@ -1193,10 +1638,17 @@ class InventoryStore:
         residual_cost = cost - matched_cost
         residual_redeem = redeem - matched_redeem
 
-        for side in ("UP", "DOWN"):
-            self.state["positions"].pop("%s|%s" % (market, side), None)
-            (self.state.get("leg_cost") or {}).pop(
-                "%s|%s" % (market, side), None)
+        # EVERY key of this market, not the two we expect. A key under any
+        # other side word is exactly what kept 2115z alive in
+        # markets_with_exposure after it had been retired.
+        for store_name in ("positions", "leg_cost", "fill_count",
+                           "venue_side_raw"):
+            d = self.state.get(store_name)
+            if not isinstance(d, dict):
+                continue
+            for key in [k for k in d
+                        if str(k).rsplit("|", 1)[0] == market]:
+                d.pop(key, None)
         released = D(str(self.state["committed"].pop(market, 0)))
         # a settlement is attributable by construction: it came from filled
         # inventory and the venue's own settlement price.
@@ -1208,6 +1660,12 @@ class InventoryStore:
         # keep the legacy scalar moving too, for anything still reading it
         self.state["realized_today"] = str(
             D(str(self.state.get("realized_today") or 0)) + pnl)
+        self.state.setdefault("retired_markets", {})[market] = {
+            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "yes_value": str(v), "settlement_pnl": str(pnl),
+            "up_qty": str(up), "dn_qty": str(dn),
+            "cost_total": str(cost), "redemption_total": str(redeem),
+        }
         self.save()
         return {
             "retired": True, "market": market, "yes_value": str(v),
@@ -1320,6 +1778,14 @@ class InventoryStore:
             rem = o.get("remaining_qty", o.get("remainingQuantity"))
             if rem is None:
                 rem = o.get("qty", o.get("quantity", mine.get("remaining", 0)))
+            # The venue row states the side up to three ways and they must
+            # agree; if the row says nothing we recognise, fall back to what
+            # WE recorded when we sent it, and refuse if that is missing too.
+            try:
+                _adopt_side = venue_row_side(o, doing="adopting an order")
+            except UnknownSide:
+                _adopt_side = canonical_side(
+                    mine.get("side"), doing="adopting an order")
             rebuilt[coid] = {
                 "t": mine.get("t"),
                 # THE ID poll_orders ASKS THE VENUE BY. Adoption used to omit
@@ -1333,7 +1799,16 @@ class InventoryStore:
                 "session_id": mine.get("session_id"),
                 "adopted": coid not in ours,
                 "market": o.get("market") or mine.get("market"),
-                "side": o.get("side") or mine.get("side"),
+                # CANONICAL, always. Adoption used to copy the venue's own
+                # word straight through -- "ORDER_SIDE_SELL" -- and
+                # apply_fill then built its ledger key from it. The raw word
+                # is kept beside it for audit and provenance; nothing
+                # downstream is allowed to read it.
+                "side": _adopt_side,
+                "venue_side_raw": (None if o.get("side") is None
+                                   else str(o.get("side"))),
+                "venue_outcome_side_raw": (None if o.get("outcomeSide") is None
+                                           else str(o.get("outcomeSide"))),
                 # by name, never str() of whatever arrived: an unreadable
                 # price is recorded AS unreadable so the risk readers can
                 # price it at worst case instead of at zero.
@@ -1344,9 +1819,8 @@ class InventoryStore:
                 # leg costs us -- the same mismatch that wrecked leg_cost.
                 # An order WE placed was already stored in own terms by
                 # record_submit, so only the venue's number is converted.
-                "price": (str(own_outcome_price(
-                              o.get("side") or mine.get("side") or "",
-                              _adopt_px, basis=WIRE))
+                "price": (str(own_outcome_price(_adopt_side,
+                                                _adopt_px, basis=WIRE))
                           if (_adopt_px := venue_order_price(o)) is not None
                           else (str(mine.get("price"))
                                 if venue_decimal(mine.get("price")) is not None
@@ -1359,7 +1833,53 @@ class InventoryStore:
                 "qty": str(o.get("qty", mine.get("qty", rem))),
                 "remaining": str(rem), "state": "LIVE_AT_VENUE",
             }
-        released = sorted(set(ours) - set(rebuilt))
+        # AN ORDER THAT VANISHED IS NOT AN ORDER THAT DID NOTHING.
+        #
+        # This used to release every live order the venue no longer lists,
+        # on the reasoning that an order absent from /v1/orders/open is
+        # terminal there. It is -- but terminal covers FILLED as well as
+        # cancelled and expired, and releasing it books neither. 2045z:
+        # CR157F2WJYC3 filled, dropped off the open list, its /v1/order read
+        # raised, reconcile released it, and the 2.25 DOWN shares it had
+        # bought arrived instead from the venue's net with no cost at all.
+        #
+        # So disappearance now moves an order to PENDING TERMINAL, not to
+        # gone. It stops consuming the live-order envelope -- it cannot fill
+        # any further -- but its final cumQuantity and avgPx are still owed
+        # to the ledger, and the book stays uncertain until an authoritative
+        # /v1/order/{id} read supplies them. Fail-closed on the accounting,
+        # open on the envelope: the shape that loses no money and no facts.
+        # AN ORDER WITH NO VENUE ID IS A DIFFERENT CASE and must not be
+        # parked, because nothing can ever ask about it: the id is what
+        # /v1/order/{id} takes. It has no id because it was never ACKed, so
+        # we hold no proof it reached the venue at all -- and this same
+        # reconcile has just read the venue's positions, which is the only
+        # evidence that could show it had. If it did fill, the shares land
+        # with no cost basis and QUANTITY_WITHOUT_COST fails the book
+        # closed; that is the backstop. Parking it instead would wedge the
+        # session on a question with no way to answer it, which is what the
+        # eight 1700z phantoms would have done.
+        vanished = sorted(c for c in (set(ours) - set(rebuilt))
+                          if (ours.get(c) or {}).get("venue_order_id"))
+        unacked = sorted(c for c in (set(ours) - set(rebuilt))
+                         if not (ours.get(c) or {}).get("venue_order_id"))
+        pend = self.state.setdefault("pending_terminal", {})
+        for coid in vanished:
+            was = dict(ours.get(coid) or {})
+            prior = dict(pend.get(coid) or {})
+            pend[coid] = {
+                "coid": coid,
+                "venue_order_id": was.get("venue_order_id"),
+                "market": was.get("market"),
+                "side": was.get("side"),
+                "session_id": was.get("session_id"),
+                "applied": str(self.applied_fill_qty(coid)),
+                "first_seen_missing": prior.get("first_seen_missing")
+                or dt.datetime.now(dt.timezone.utc).isoformat(),
+                "attempts": int(prior.get("attempts") or 0),
+                "reason": "ABSENT_FROM_VENUE_OPEN_ORDERS",
+                "resolvable": bool(was.get("venue_order_id")),
+            }
         adopted = sorted(set(rebuilt) - set(ours))
         self.state["live_orders"] = rebuilt
         # An authoritative answer is the ONLY thing that clears uncertainty
@@ -1371,10 +1891,12 @@ class InventoryStore:
             bad = self.book_violations(m)
             if bad:
                 incoherent[m] = bad
-        if disputed or incoherent:
+        pending = sorted(self.state.get("pending_terminal") or {})
+        if disputed or incoherent or pending:
             self.state["orders_uncertain"] = (
-                "gross/net divergence %s; incoherent book %s"
-                % (sorted(set(disputed)), sorted(incoherent)))
+                "gross/net divergence %s; incoherent book %s; "
+                "unbooked terminal orders %s"
+                % (sorted(set(disputed)), sorted(incoherent), pending))
         self.save()
         return {"reconciled": True, "drift": drift,
                 # stated separately and never collapsed into one another
@@ -1392,9 +1914,23 @@ class InventoryStore:
                     "because a matched pair silently deleted is a locked "
                     "economic result silently deleted."),
                 "open_orders_at_venue": len(open_orders),
-                "live_orders_released": released,
+                # named for what it is now: these orders are OFF the live
+                # envelope but still owe the ledger their final fill.
+                "live_orders_pending_terminal": vanished,
+                "live_orders_released_unacked": unacked,
+                "pending_terminal_total": len(pending),
                 "live_orders_adopted": adopted,
-                "uncertainty_cleared": True,
+                "labels_pending": (
+                    "an order absent from the venue's open orders is "
+                    "terminal there, which includes FILLED. It is not "
+                    "released until an authoritative /v1/order read books "
+                    "its final cumQuantity, because releasing it unbooked "
+                    "is how 2.25 DOWN shares arrived at 2045z with no cost. "
+                    "An order that was never ACKed has no id to ask by and "
+                    "is released instead; if it did fill, the shares arrive "
+                    "without a cost basis and the book fails closed."),
+                "uncertainty_cleared": not (disputed or incoherent
+                                            or pending),
                 "authority": "VENUE"}
 
 
@@ -1737,7 +2273,15 @@ def settle(records: Sequence[Mapping[str, Any]], *, market: str,
         px = D(str(f["fill_price"]))
         fee += D(str(f.get("fee_usd") or 0))
         rebate += D(str(f.get("maker_rebate_usd") or 0))
-        if (r.get("L5_NATIVE") or {}).get("side") == "UP":
+        # canonical_side rather than `== "UP"`: this is a settlement, and
+        # a settlement that buckets an unrecognised side into DOWN by
+        # falling off the end of an if is the same silent default that
+        # filed 2115z under the venue's own word. These records come from
+        # the L5 engine and are canonical by construction, so this raises
+        # only when something upstream has already gone wrong -- which is
+        # when a settlement should refuse to produce a number.
+        if canonical_side((r.get("L5_NATIVE") or {}).get("side"),
+                          doing="settling a filled record") == UP:
             up += q
             cost_up += px * q
         else:

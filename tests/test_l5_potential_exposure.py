@@ -47,9 +47,12 @@ def ask(limits, st, *, price="0.50", qty="4", market="m"):
         orders_uncertain=st.orders_uncertain())
 
 
-def submit(st, coid, *, market="m", side="UP", price="0.50", qty="4"):
+def submit(st, coid, *, market="m", side="UP", price="0.50", qty="4",
+           acked=True):
     st.record_submit(coid, {"market": market, "side": side,
                             "price": D(price), "qty": D(qty)})
+    if acked:
+        st.attach_venue_id(coid, "V-%s" % coid)
 
 
 # ------------------------------------------------- the bug, stated as a test
@@ -166,11 +169,36 @@ def test_only_the_venue_clears_uncertainty(tmp_path):
 
 
 def test_the_venue_releases_an_order_we_think_is_live(tmp_path):
+    """SUPERSEDED 2026-09-26: released from the ENVELOPE, not from the books.
+
+    The exposure claim this test exists for is unchanged and is re-asserted
+    below: an order the venue does not list can no longer fill, so it stops
+    reserving worst-case dollars and the next action is free to use them.
+
+    What changed is that the order is no longer forgotten at the same
+    moment. See 2045z -- an order can leave the open list by FILLING, and
+    releasing it unbooked is how quantity arrived with no cost basis.
+    """
     st = store(tmp_path)
     submit(st, "a", price="0.50", qty="4")
     out = st.reconcile_from_venue([], [])            # venue lists none open
-    assert out["live_orders_released"] == ["a"]
+    assert out["live_orders_pending_terminal"] == ["a"]
     assert st.live_order_count() == 0
+    # The one refusal left is the order's unknown fate, NOT its exposure:
+    # the dollars and the slot it held are genuinely back.
+    assert ask(lim(), st) == "ORDER_STATE_UNCERTAIN"
+    assert st.pending_terminal()["a"]["reason"] == (
+        "ABSENT_FROM_VENUE_OPEN_ORDERS")
+    assert st.outstanding_by_market().get("m", D(0)) == D(0)
+    assert st.live_order_count() == 0
+
+    # and once the venue says what it finally did -- here, nothing -- the
+    # original claim holds exactly as it did: the envelope is free.
+    st.resolve_pending_terminal("a", {"cum_qty": D(0), "avg_px": D(0),
+                                      "terminal": True,
+                                      "state": "ORDER_STATE_CANCELLED"})
+    assert st.pending_terminal() == {}
+    st.reconcile_from_venue([], [])
     assert ask(lim(), st) is None
 
 
