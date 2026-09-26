@@ -46,10 +46,8 @@ def tmp():
 @pytest.fixture(autouse=True)
 def _fresh_process_state():
     T.reset_shared_limiter()
-    T.reset_preflight_cache()
     yield
     T.reset_shared_limiter()
-    T.reset_preflight_cache()
 
 
 class Clock:
@@ -276,12 +274,14 @@ def test_the_documented_budgets_match_the_shipped_constants():
     parked = 1 / R.PENDING_RESOLVE_S
     settle = 2 / R.SETTLEMENT_POLL_S
     recon = 2 / R.RECONCILE_RETRY_S
-    preflight = 1 / R.PREFLIGHT_BACKOFF_S[-1]
+    # two reads per backed-off attempt now that nothing is cached:
+    # the account read and the market read.
+    preflight = 2 / R.PREFLIGHT_BACKOFF_S[-1]
     assert order8 == 0.5
     assert round(parked, 3) == 0.333
     assert round(order8 + settle, 3) == 0.700           # full envelope
     stressed = order8 + parked + settle + recon + preflight
-    assert round(stressed, 3) == 1.208
+    assert round(stressed, 3) == 1.250
     assert stressed < 1.5 * 0.85                        # real headroom
     assert float(os.getenv("PMUS_RPS", "1.5")) == 1.5   # ceiling unraised
 
@@ -334,56 +334,63 @@ class PreflightHttp:
         raise urllib.error.HTTPError(path, 404, "nope", {}, None)
 
 
-def test_preflight_caches_the_account_binding_across_a_rollover(creds):
-    """Process-invariant: whether this key binds this account does not
-    change between windows, and re-reading it every 3s for the whole of a
-    failing preflight was 0.63 req/s of the 1.5 we have."""
+def test_preflight_caches_nothing_because_every_read_is_a_live_assertion(
+        creds):
+    """THE PLAN CHANGED, and the reason is worth keeping.
+
+    Caching the account read looked safe: whether this key binds this
+    account is invariant between windows. It is -- but that read also
+    carries the BALANCE, which account_binding_proven is computed from and
+    identity_probe reports, and which moves every time the account trades or
+    settles. Six tests in test_l5_pmus_transport caught it at once.
+
+    The same is true of every other read preflight makes. The checks that
+    are genuinely invariant -- credentials_present, slug_is_btc15m_series,
+    outcome_mapping_is_up_down -- make no venue call at all. So there is
+    nothing to cache that would not weaken the gate, and the cost is bounded
+    by asking LESS OFTEN instead.
+    """
     http = PreflightHttp()
     a = T.PmusTransport(market_slug=MKTS[0], http=http)
     a.limiter = T.RateLimiter(rps=1e6, burst=1e6)
     try_preflight(a)
-    assert http.paths["/v1/account/balances"] == 1
+    try_preflight(a)
+    try_preflight(a)
+    # EVERY read, EVERY attempt. No staleness is possible because no state
+    # is kept.
+    assert http.paths["/v1/account/balances"] == 3
+    assert http.paths["/v1/portfolio/positions"] == 3
 
     b = T.PmusTransport(market_slug=MKTS[1], http=http)   # the roll
     b.limiter = a.limiter
     try_preflight(b)
-    assert http.paths["/v1/account/balances"] == 1        # cached
-    assert b._preflight_reads_saved == 1
+    assert http.paths["/v1/account/balances"] == 4
+    assert not hasattr(T, "_PREFLIGHT_CACHE")
 
 
-def test_preflight_never_caches_the_two_live_assertions(creds):
-    """market_open_tradable and no_unexpected_open_orders are statements
-    about NOW. A cache that answers either is a cache that turns unknown
-    into safe, which is the whole family of defect this came from."""
-    http = PreflightHttp()
-    a = T.PmusTransport(market_slug=MKTS[0], http=http)
-    a.limiter = T.RateLimiter(rps=1e6, burst=1e6)
-    try_preflight(a)
-    try_preflight(a)
-    try_preflight(a)
-    # THE SHAPE THAT MATTERS: one read of the invariant across three
-    # attempts, and one read of the live assertion PER attempt.
-    assert http.paths["/v1/account/balances"] == 1      # cached
-    assert http.paths["/v1/portfolio/positions"] == 3   # never cached
-    assert a._preflight_reads_saved == 2
+def test_the_backoff_is_what_bounds_the_preflight_cost(tmp):
+    """0.63 req/s measured on 2300z, at a fixed 3s retry against a market
+    the venue had not listed yet. Retrying four times as often does not
+    list it any sooner; it spends the budget the orders need."""
+    assert R.PREFLIGHT_BACKOFF_S == (3.0, 6.0, 12.0, 24.0)
+    v = Venue()
+    r = runner(tmp, v)
+    r.preflight_status = "FAILED"
+    r.preflight_attempts = 0
+    r.last_preflight_t = 0.0
 
-
-def test_a_submit_or_cancel_drops_the_cache(creds):
-    """After a mutation the account has an order out and less buying power
-    than the cached read proved."""
-    http = PreflightHttp()
-    a = T.PmusTransport(market_slug=MKTS[0], http=http)
-    a.limiter = T.RateLimiter(rps=1e6, burst=1e6)
-    try_preflight(a)
-    assert http.paths["/v1/account/balances"] == 1
-    a.armed = True
-    try:
-        a.cancel("V1")
-    except BaseException:                                  # noqa: BLE001
-        pass
-    a.armed = False
-    try_preflight(a)
-    assert http.paths["/v1/account/balances"] == 2         # re-read
+    fired, now = [], 0.0
+    for _ in range(400):                       # 1200 seconds of 3s ticks
+        now += 3.0
+        idx = min(r.preflight_attempts, len(R.PREFLIGHT_BACKOFF_S) - 1)
+        if now - r.last_preflight_t >= R.PREFLIGHT_BACKOFF_S[idx]:
+            r.last_preflight_t = now
+            r.preflight_attempts += 1
+            fired.append(now)
+    rate = len(fired) / now
+    # the old fixed 3s retry made ~5 reads per attempt at 1/3s
+    assert rate <= 1 / R.PREFLIGHT_BACKOFF_S[-1] + 0.01, rate
+    assert rate < (1 / 3.0) / 5
 
 
 # =====================================================================

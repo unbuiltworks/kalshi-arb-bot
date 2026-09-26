@@ -831,8 +831,7 @@ class Runner:
             # is what lost a cost basis. These say whether it is fixed.
             "venue_requests": t.limiter.metrics() if t else None,
             "order_progress": self.order_progress_latency_s(self.now_t),
-            "preflight_reads_saved": (getattr(t, "_preflight_reads_saved", 0)
-                                      if t else 0),
+            "preflight_attempts": self.preflight_attempts,
             "pending_terminal": sorted(self.store.pending_terminal()),
             "retired_markets": sorted(
                 self.store.state.get("retired_markets") or {}),

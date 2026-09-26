@@ -252,26 +252,13 @@ def reset_shared_limiter() -> None:
     _SHARED_LIMITER = None
 
 
-#: PROCESS-INVARIANT PREFLIGHT FACTS, and nothing else.
-#:
-#: Preflight made five venue reads every PREFLIGHT_RETRY_S until it passed,
-#: on every window. Measured on 2026-09-26: 80 requests in 126 seconds --
-#: 0.63 req/s, disarmed, with no orders at all -- while 2300z waited for the
-#: venue to list the new market.
-#:
-#: What is cached here does not change between windows: whether this key
-#: binds this account, and what the series' outcome vocabulary is. What is
-#: NOT cached, and never will be, is every assertion about NOW:
-#: market_open_tradable and no_unexpected_open_orders are re-read on every
-#: single attempt, because a cache that answers "is this market tradable"
-#: or "do I have orders out" is a cache that turns unknown into safe.
-_PREFLIGHT_CACHE: Dict[str, Any] = {}
-PREFLIGHT_ACCOUNT_TTL_S = 600.0
-
-
+#: THERE IS NO PREFLIGHT CACHE, deliberately. See PmusTransport.preflight:
+#: every read it makes is an assertion about now, and the checks that are
+#: invariant make no venue call. The cost is bounded by PREFLIGHT_BACKOFF_S
+#: in the runner instead. This shim stays so callers that reset state in
+#: tests keep working and so the decision is discoverable from the name.
 def reset_preflight_cache() -> None:
-    """Tests only, and on any mutation -- see PmusTransport.submit."""
-    _PREFLIGHT_CACHE.clear()
+    """A no-op. Kept so the absence of a cache is explicit, not implied."""
 
 
 def is_rate_limited(exc: BaseException) -> bool:
@@ -511,8 +498,6 @@ class PmusTransport:
         #: the budget and the cool-off, and both survive the rollover that
         #: replaces this object. Injectable for tests only.
         self.limiter = limiter if limiter is not None else shared_limiter()
-        #: how many venue reads the preflight cache avoided, for telemetry
-        self._preflight_reads_saved = 0
 
     # ------------------------------------------------------------ read only
 
@@ -832,31 +817,31 @@ class PmusTransport:
 
         # 2. authenticated account identity, from the venue's own answer
         #
-        # CACHED, because "does this key bind this account" does not change
-        # between windows and this read was being made every 3 seconds for
-        # the whole of every failing preflight. The cache holds the BINDING
-        # and the FINGERPRINT only. It is dropped on any mutation (see
-        # submit/cancel) and expires on its own, and if the key were revoked
-        # mid-session every other authenticated read in the process would
-        # fail anyway -- there is no state here that a stale answer could
-        # make look safe.
+        # NOT CACHED, and the attempt to cache it is worth recording.
+        #
+        # The plan was to cache this read because "does this key bind this
+        # account" is invariant between windows. It is -- but that is not
+        # all this read carries. account_binding_proven is computed from the
+        # BALANCE, and identity_probe reports buying_power_usd from it, and
+        # the balance moves every time the account trades or settles. Six
+        # tests in test_l5_pmus_transport caught it immediately: they vary
+        # the funds and expect preflight to say what the venue says now.
+        #
+        # Every read preflight makes is like that. account, market, book and
+        # positions are all assertions about NOW; the checks that are
+        # genuinely invariant -- credentials_present, slug_is_btc15m_series,
+        # outcome_mapping_is_up_down -- make no venue call at all. There is
+        # nothing here to cache that would not weaken the gate, so the cost
+        # is bounded by asking LESS OFTEN instead: PREFLIGHT_BACKOFF_S.
+        # That alone takes a failing preflight from the measured 0.63 req/s
+        # to under 0.1, which is the whole of what the cache was for.
         acct: Dict[str, Any] = {}
         if ok:
-            _now_t = time.monotonic()
-            _cached = _PREFLIGHT_CACHE.get("account")
-            if (_cached is not None
-                    and _now_t - _cached["t"] < PREFLIGHT_ACCOUNT_TTL_S):
-                ident = _cached["binding"]
-                acct = dict(_cached["acct"])
-                self._preflight_reads_saved += 1
-            else:
-                try:
-                    acct = self.account()
-                except Exception as exc:                       # noqa: BLE001
-                    return self._fail(checks, gate, "account_readable", exc)
-                ident = self.account_binding(acct)
-                _PREFLIGHT_CACHE["account"] = {
-                    "t": _now_t, "binding": ident, "acct": dict(acct)}
+            try:
+                acct = self.account()
+            except Exception as exc:                           # noqa: BLE001
+                return self._fail(checks, gate, "account_readable", exc)
+            ident = self.account_binding(acct)
             ok &= gate("account_binding_proven", bool(ident), ident)
             if expect_account is not None:
                 # pin the FINGERPRINT, not the whole binding: the binding
@@ -1114,9 +1099,6 @@ class PmusTransport:
         body = OB.from_intent(intent, self.market_slug)
         self.submit_stage = "PREVIEW_REQUEST"
         self.preview_attempted = True
-        # same reason as cancel: after this the account has an order out
-        # and less buying power than the cached read proved.
-        reset_preflight_cache()
         pv = self._request("POST", "/v1/order/preview",
                                OB.preview_envelope(body), Q1.API) or {}
         self.preview_status = 200          # urlopen raises on any non-2xx
@@ -1135,10 +1117,5 @@ class PmusTransport:
         client order id -- passing the latter would silently cancel nothing.
         """
         self._require_armed()
-        # ANY MUTATION DROPS THE CACHE. A cancel changes what
-        # no_unexpected_open_orders would say and moves the balance the
-        # binding was proven against; a cached answer from before it is a
-        # statement about a venue that no longer exists.
-        reset_preflight_cache()
         return self._request(
             "POST", "/v1/order/%s/cancel" % order_id, {}, Q1.API) or {}
