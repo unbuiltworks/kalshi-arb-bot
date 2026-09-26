@@ -137,6 +137,7 @@ class Runner:
         self.ws: Optional[int] = None
         self.transport: Optional[T.PmusTransport] = None
         self.executor: Optional[LX.FaithfulExecutor] = None
+        self.reconciled = False        # venue has not confirmed our book
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
         self.last_blockers: Optional[List[str]] = None
@@ -205,9 +206,59 @@ class Runner:
                 emit("L5_LIVE_TICK_UNKNOWN", {"market": t.market_slug})
             self.try_arm()
 
+    def reconcile_once(self) -> None:
+        """Let the venue overwrite our book, ONCE, before this process arms.
+
+        restartPolicyType is ALWAYS. A crash mid-window brings the process
+        straight back with the owner's token still set, reading an inventory
+        file that may be stale (a fill landed after our last save) or ahead
+        (we saved an optimistic fill that never happened). Arming on either
+        is how an executor comes to believe it is flat while it holds
+        inventory. The venue's answer replaces ours, and the divergence is
+        REPORTED rather than averaged.
+
+        `positions()`, not `available_positions()`: the venue serves both and
+        the settlement auditor treats the latter as explicitly NOT held, so
+        merging them would inflate what we think we own.
+
+        If the read fails, or the venue's shape is unrecognised, this stays
+        unreconciled and returns -- and try_arm refuses. Unknowable is not
+        flat; it is retried next window rather than assumed away.
+        """
+        if self.reconciled or self.transport is None:
+            return
+        t = self.transport
+        try:
+            pos = t.positions()
+            oo = t.open_orders()
+            out = self.store.reconcile_from_venue(pos, oo)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.store.mark_uncertain(
+                "startup reconcile raised %s" % type(exc).__name__)
+            emit("L5_LIVE_RECONCILE_FAILED",
+                 {"error": type(exc).__name__,
+                  "detail": T.redact("%s" % exc)[:300], "armable": False})
+            return
+        self.reconciled = True
+        emit("L5_LIVE_RECONCILE", dict(out, market=t.market_slug))
+
     def try_arm(self) -> None:
         t = self.transport
         if t is None or t.armed or self.halted():
+            return
+        # never arm on a book the venue has not confirmed
+        self.reconcile_once()
+        if not self.reconciled:
+            self.win["arm_refused_unreconciled"] += 1
+            return
+        if self.store.orders_uncertain():
+            self.win["arm_refused_orders_uncertain"] += 1
+            if self.win["arm_refused_orders_uncertain"] == 1:
+                emit("L5_LIVE_DISARMED",
+                     {"market": t.market_slug,
+                      "why": "orders in an UNCERTAIN state; refusing to arm"})
             return
         try:
             res = t.arm()
@@ -242,8 +293,15 @@ class Runner:
         if t is not None and t.armed:
             out["deadman"] = LX.deadman(self.store, t, reason="window_end")
             try:
-                out["venue_position"] = str(t.positions().get(slug, "0"))
-            except Exception as exc:                           # noqa: BLE001
+                # positions() returns ROWS; .get() on a list silently raised
+                # AttributeError into the except below, so this field was
+                # never populated in any window.
+                rows = [LX.position_row(p) for p in t.positions()]
+                out["venue_position"] = {
+                    r["side"]: r["qty"] for r in rows if r["market"] == slug}
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
                 out["venue_position_error"] = type(exc).__name__
             t.disarm("window_end")
         emit("L5_LIVE_WINDOW", out)
