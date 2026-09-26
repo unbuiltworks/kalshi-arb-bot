@@ -234,9 +234,11 @@ class Runner:
             fb = obs.get("first_book_offset_s")
             out["book_before_first_l5_action"] = (
                 fb is not None and fb <= out["first_l5_action_offset_s"])
-        if self.executor is not None and self.store.resting():
-            out["resting_ended"] = self.executor.end_resting("WINDOW_END")
-            self.lifecycle(out["resting_ended"])
+        # A final progress read BEFORE the deadman, so an order that filled
+        # between the last poll and window close is recorded as a fill rather
+        # than disappearing into a cancel.
+        if self.store.live_order_count():
+            out["final_progress"] = self.poll_orders()
         if t is not None and t.armed:
             out["deadman"] = LX.deadman(self.store, t, reason="window_end")
             try:
@@ -297,22 +299,18 @@ class Runner:
             else:
                 if self.first_action_t is None:
                     self.first_action_t = float(r.get("timestamp") or recv)
-                # faithful order life: L5's next action that changes the
-                # translated intent (side or price) ends every resting order
-                # that it no longer matches
-                if self.store.resting():
-                    try:
-                        npx = LX.quantize_price_non_aggressive(
-                            D(str(act.get("l5_price"))),
-                            LX.venue_tick_size(self.transport),
-                            act.get("pmus_side"))
-                    except Exception:                          # noqa: BLE001
-                        npx = None
-                    side = act.get("pmus_side")
-                    self.lifecycle(ex.end_resting(
-                        "L5_INTENT_CHANGED",
-                        keep=lambda o: (o["side"] == side and npx is not None
-                                        and D(o["price"]) == npx)))
+                # NO intra-window cancel-and-replace. The P39 harness ended
+                # every resting order that L5's next action no longer matched,
+                # which the canonical core has no method for -- deliberately.
+                # The lifecycle Probes 04-08 actually traded is: rest at L5's
+                # price, and let the venue answer; orders that never fill are
+                # cancelled by the deadman at window end, which close_window
+                # already calls. Probe 08's three cheapest repairs rested to
+                # the end exactly that way, and that is the evidence we have.
+                # Re-pricing a resting order toward L5's newer price is
+                # chasing under another name, and it has never been tested
+                # with money. The 8-live-order cap and the $5 exposure bound
+                # are what keep unfilled orders from accumulating.
                 rec = ex.handle(row, {}, market=slug, window=str(ws),
                                 open_markets=self.open_markets())
         layer = rec.get("refused_by_layer")
@@ -339,6 +337,56 @@ class Runner:
                        "state", "error")} if order else None,
             "intent": order.get("intent"),
             "armed": bool(t and t.armed)})
+
+    def poll_orders(self) -> List[Dict[str, Any]]:
+        """Ask the venue what each live order actually did.
+
+        THE ACK IS A RECEIPT, NOT A FINAL STATE. Probe 05 took an ACK for a
+        resting order, never asked again, and carried it as live for the rest
+        of the window; 29 later actions were refused MAX_LIVE_ORDERS against
+        an order that no longer existed. So every live order is re-read from
+        the venue, and this is the only thing that moves a fill into
+        inventory -- without it residual stays 0 and every exposure number
+        downstream is wrong.
+
+        An order whose state cannot be established stays UNCERTAIN and
+        nothing is released: unknowable is not the same as flat.
+        """
+        t = self.transport
+        out: List[Dict[str, Any]] = []
+        if t is None:
+            return out
+        for coid, o in list(self.store.live_orders().items()):
+            vid = o.get("venue_order_id")
+            if not vid:
+                continue
+            try:
+                row = t.order(str(vid))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.store.mark_uncertain(
+                    "order query raised %s for %s" % (type(exc).__name__,
+                                                      coid))
+                out.append({"coid": coid, "event": "PROGRESS_ERROR",
+                            "error": type(exc).__name__})
+                continue
+            prog = LX.order_progress(row)
+            res = self.store.apply_order_progress(
+                coid, prog, market=t.market_slug,
+                side=str(o.get("side") or ""))
+            res["venue_order_id"] = str(vid)
+            res.setdefault("event", "ORDER_PROGRESS")
+            # the venue's own numbers, carried with the delta rather than
+            # discarded: without them a per-order audit cannot state an
+            # average fill price or a commission after the fact.
+            for k in ("avg_px", "commission", "leaves", "cum_qty", "state"):
+                if prog.get(k) is not None and k not in res:
+                    res[k] = str(prog.get(k))
+            out.append(res)
+        if out:
+            self.lifecycle(out)
+        return out
 
     def lifecycle(self, events: List[Dict[str, Any]]) -> None:
         for e in events:
@@ -372,8 +420,8 @@ class Runner:
                                             reason="operator_halt"))
             self.transport.disarm("operator_halt")
         self.maybe_preflight(now)
-        if self.executor is not None and self.store.resting():
-            self.lifecycle(self.executor.poll_resting())
+        if self.store.live_order_count():
+            self.poll_orders()
         self.poll(now)
 
 

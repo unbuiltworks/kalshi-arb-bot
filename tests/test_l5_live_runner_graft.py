@@ -123,6 +123,78 @@ def test_the_runner_only_calls_attributes_that_exist_on_the_core():
     assert not missing, missing
 
 
+def test_every_method_the_runner_calls_on_the_core_objects_exists():
+    """The graft bug the kwarg check missed.
+
+    `store.resting()`, `executor.end_resting()` and `executor.poll_resting()`
+    were P39 methods the canonical core never had. Nothing raised until the
+    container was running, because an attribute on `self.store` is resolved
+    at call time, not at import. The runner reached the venue, failed
+    closed, and logged the same AttributeError every three seconds.
+
+    Checking constructor kwargs cannot see this; only the attribute names
+    can. Receivers are matched by the name they are bound to in the runner.
+    """
+    import tempfile
+    from src import l5_live_execution as LX
+    from src import l5_pmus_transport as T
+    from src import l5_pmus_live_runner as R
+    # INSTANCES, not classes: `armed`, `market_slug` and `tick_size` are set
+    # in __init__, so a class-level hasattr would call them missing and the
+    # real rot would be lost in the noise.
+    with tempfile.TemporaryDirectory() as d:
+        store = LX.InventoryStore(os.path.join(d, "inv.json"))
+        limits = LX.SafetyLimits(**R.PROBE_LIMITS)
+        transport = T.PmusTransport(market_slug="cpc-btc-updown-15m-x")
+        ex_obj = LX.FaithfulExecutor(store, limits, transport=transport)
+        receivers = {
+            "self.store": store,
+            "self.executor": ex_obj,
+            "ex": ex_obj,
+            "self.transport": transport,
+            "t": transport,
+        }
+        def rendered(node):
+            parts = []
+            while isinstance(node, ast.Attribute):
+                parts.append(node.attr)
+                node = node.value
+            if isinstance(node, ast.Name):
+                parts.append(node.id)
+                return ".".join(reversed(parts))
+            return None
+
+        missing = []
+        for n in ast.walk(_tree(RUNNER)):
+            if not isinstance(n, ast.Attribute):
+                continue
+            base = rendered(n.value)
+            if base in receivers and not hasattr(receivers[base], n.attr):
+                missing.append("%s.%s" % (base, n.attr))
+        assert sorted(set(missing)) == [], sorted(set(missing))
+
+
+def test_the_runner_moves_venue_fills_into_inventory():
+    """Without an order-progress read, residual stays 0 and every exposure
+    number downstream is wrong. Assert the three canonical calls are wired."""
+    tree = _tree(RUNNER)
+    names = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    assert "live_orders" in names
+    assert "apply_order_progress" in names
+    assert "order_progress" in names        # LX.order_progress(row)
+    assert "mark_uncertain" in names        # unknowable stays unknowable
+
+
+def test_no_intra_window_cancel_and_replace():
+    """Re-pricing a resting order toward L5's newer price is chasing under
+    another name. The traded lifecycle rests, and the deadman clears."""
+    tree = _tree(RUNNER)
+    names = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    assert "end_resting" not in names
+    assert "poll_resting" not in names
+    assert _call_named(tree, "LX.deadman"), "window end must still deadman"
+
+
 # ------------------------------------------------------------ the boundaries
 
 def _closure(entry):
