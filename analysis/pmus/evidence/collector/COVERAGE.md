@@ -21,6 +21,8 @@ Primary-eligibility gate, frozen before any data arrived
 | 2026-09-26 1330z | — | — | — | — | — | — | no | no record; lost to the credential redeploy |
 | 2026-09-26 1345z | 0.499688 | 450.281 | 500 | 2318 | 4599 | 140 | no | OBSERVED_FRACTION, GAP |
 | 2026-09-26 1400z | 0.994019 | 5.383 | 500 | 5231 | 10697 | 153 | **yes** | — |
+| 2026-09-26 1415z | 0.994248 | 5.177 | 500 | 5204 | 10051 | 59 | **yes** | — |
+| 2026-09-26 1430z | 0.994158 | 5.258 | 500 | 3936 | 8463 | 69 | **yes** | — |
 
 Causes, so the gaps are not later mistaken for quiet markets:
 
@@ -36,7 +38,13 @@ Causes, so the gaps are not later mistaken for quiet markets:
 * 1400z opened at `lead_s -5.2` and ran to close with no interference. The
   0.6% it misses is those 5.2s.
 
-**Coverage status: 1 primary-eligible window, 1 independent day.**
+**Coverage status: 3 primary-eligible windows, 1 independent day.**
+
+1415z and 1430z were collected THROUGH the execution service's
+redeploy and repointing (2026-09-26 14:58-15:15Z). The collector's
+deployment for that push reads SKIPPED and its windows show no gap,
+which is the isolation between the evidence and execution services
+demonstrated rather than asserted.
 
 ## Known limitation: `prints` is capped at 500
 
