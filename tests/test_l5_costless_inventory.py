@@ -628,3 +628,24 @@ def test_the_live_volume_migrates_end_to_end_in_one_pass():
         assert R.rebase_contaminated_accounting(again) is None
         assert again.realized_today() == D("-0.27170")
         assert len(again.state["flat_adoptions"]) == 1
+
+
+def test_an_order_that_comes_back_stops_being_pending(store):
+    """The venue can drop an order from its open list and list it again on
+    the next read. A parked entry left behind for an order that is live
+    again would refuse its market's settlement for ever -- and double
+    booking is not the risk, because apply_order_progress is idempotent on
+    the cumulative."""
+    row = {"id": "V1", "client_order_id": "V1", "market": M2045,
+           "side": "ORDER_SIDE_SELL", "outcomeSide": "OUTCOME_SIDE_NO",
+           "price": {"value": "0.80", "currency": "USD"},
+           "quantity": "2", "remainingQuantity": "2"}
+    store.reconcile_from_venue([], [row])
+    store.reconcile_from_venue([], [])                 # vanished
+    assert "V1" in store.pending_terminal()
+
+    out = store.reconcile_from_venue([], [row])        # and back again
+    assert out["pending_terminal_returned"] == ["V1"]
+    assert store.pending_terminal() == {}
+    assert "V1" in store.live_orders()
+    assert store.orders_uncertain() is None

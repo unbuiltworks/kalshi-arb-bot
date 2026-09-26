@@ -1880,6 +1880,15 @@ class InventoryStore:
                 "reason": "ABSENT_FROM_VENUE_OPEN_ORDERS",
                 "resolvable": bool(was.get("venue_order_id")),
             }
+        # AN ORDER THAT CAME BACK is not pending any more. The venue can
+        # drop an order from its open list and list it again on the next
+        # read, and a parked entry left behind for one that is live again
+        # would refuse its market's settlement for ever. Double-booking is
+        # not the risk here -- apply_order_progress is idempotent on the
+        # cumulative -- a permanently unsettleable market is.
+        returned = sorted(set(rebuilt) & set(pend))
+        for coid in returned:
+            pend.pop(coid, None)
         adopted = sorted(set(rebuilt) - set(ours))
         self.state["live_orders"] = rebuilt
         # An authoritative answer is the ONLY thing that clears uncertainty
@@ -1918,6 +1927,7 @@ class InventoryStore:
                 # envelope but still owe the ledger their final fill.
                 "live_orders_pending_terminal": vanished,
                 "live_orders_released_unacked": unacked,
+                "pending_terminal_returned": returned,
                 "pending_terminal_total": len(pending),
                 "live_orders_adopted": adopted,
                 "labels_pending": (
