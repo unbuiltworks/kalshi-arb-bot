@@ -23,6 +23,8 @@ Primary-eligibility gate, frozen before any data arrived
 | 2026-09-26 1400z | 0.994019 | 5.383 | 500 | 5231 | 10697 | 153 | **yes** | — |
 | 2026-09-26 1415z | 0.994248 | 5.177 | 500 | 5204 | 10051 | 59 | **yes** | — |
 | 2026-09-26 1430z | 0.994158 | 5.258 | 500 | 3936 | 8463 | 69 | **yes** | — |
+| 2026-09-26 1445z | 0.994245 | 5.179 | 500 | 5730 | 10680 | 198 | **yes** | — |
+| 2026-09-26 1500z | 0.994241 | 5.183 | 500 | 6036 | 12142 | 400 | **yes** | — |
 
 Causes, so the gaps are not later mistaken for quiet markets:
 
@@ -38,7 +40,7 @@ Causes, so the gaps are not later mistaken for quiet markets:
 * 1400z opened at `lead_s -5.2` and ran to close with no interference. The
   0.6% it misses is those 5.2s.
 
-**Coverage status: 3 primary-eligible windows, 1 independent day.**
+**Coverage status: 5 primary-eligible windows, 1 independent day.**
 
 1415z and 1430z were collected THROUGH the execution service's
 redeploy and repointing (2026-09-26 14:58-15:15Z). The collector's
