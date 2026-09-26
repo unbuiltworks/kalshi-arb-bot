@@ -843,6 +843,15 @@ def recover_only_enabled() -> bool:
 #: act of reading it. Set this to read one file and write another.
 RECOVER_JOURNAL_ENV = "L5_RECOVER_JOURNAL"
 
+#: The inventory file recovery must reconcile a COPY of, never in place.
+#: reconcile_from_venue rewrites positions and live_orders and saves; run
+#: against Probe 08's own inventory that would overwrite the second of the
+#: two artifacts the window left behind.
+RECOVER_STATE_SOURCE_ENV = "L5_RECOVER_STATE_SOURCE"
+
+#: Extra paths to hash and re-hash around the run, beyond the two sources.
+FREEZE_ENV = "L5_FREEZE_ORIGINALS"
+
 
 def recovery_read_path(journal) -> str:
     """The journal to extract FROM. Defaults to the one we write to."""
@@ -851,14 +860,33 @@ def recovery_read_path(journal) -> str:
 
 
 def recover(*, http=None, state_path=None, journal_path=None,
-            read_path=None, market: Optional[str] = None) -> Dict[str, Any]:
-    """Reconcile stale local order state against the venue. GET only."""
+            read_path=None, state_source=None,
+            market: Optional[str] = None) -> Dict[str, Any]:
+    """Reconcile stale local order state against the venue. GET only.
+
+    Where a source journal or a source inventory is named, the ORIGINALS are
+    hashed, the inventory is copied to the working path, and every original
+    is re-hashed at the end. An unmutated original is then something the
+    report measured, not something this docstring promised.
+    """
     from src import l5_pmus_transport as TP
+    from src import l5_evidence_freeze as FZ
     market = (market or os.getenv(AUTH.MARKET_ENV, "").strip()
               or os.getenv("L5_RECOVER_MARKET", "").strip())
-    store = EX.InventoryStore(
-        state_path or os.getenv("L5_PROBE_STATE",
-                                "/state/pmus-ws/l5_probe_inventory.json"))
+    work_state = (state_path
+                  or os.getenv("L5_PROBE_STATE",
+                               "/state/pmus-ws/l5_probe_inventory.json"))
+    src_state = (state_source
+                 or os.getenv(RECOVER_STATE_SOURCE_ENV, "").strip() or None)
+    frozen_paths = [q for q in (
+        (read_path or os.getenv(RECOVER_JOURNAL_ENV, "").strip() or None),
+        src_state,
+        *[x.strip() for x in os.getenv(FREEZE_ENV, "").split(",") if x.strip()],
+    ) if q]
+    frozen = FZ.freeze_originals(frozen_paths)
+    staged = (FZ.stage_copy(src_state, work_state) if src_state
+              else {"copied": False, "reason": "NO_SOURCE_NAMED"})
+    store = EX.InventoryStore(work_state)
     journal = JN.Journal(
         journal_path or os.getenv("L5_SESSION_JOURNAL",
                                   "/state/pmus-ws/l5_session_journal.jsonl"))
@@ -881,6 +909,8 @@ def recover(*, http=None, state_path=None, journal_path=None,
                "journal": {"path": src_path, "records": len(recs),
                            "written_to": str(journal.path),
                            "read_only_source": src_path != str(journal.path)},
+               "evidence": {"frozen": frozen, "staged_state": staged,
+                            "verified": FZ.verify_unchanged(frozen)},
                "order_table": order_table(recs, market),
                "action_table": action_table(recs, market),
                "labels": ("state was already clean, so this run reconciled "
@@ -986,6 +1016,7 @@ def recover(*, http=None, state_path=None, journal_path=None,
     }
     src_path = read_path or recovery_read_path(journal)
     recs = journal_rows(src_path)
+    rep["evidence"] = {"frozen": frozen, "staged_state": staged}
     rep["journal"] = {
         "path": src_path,
         "written_to": str(journal.path),
@@ -998,6 +1029,8 @@ def recover(*, http=None, state_path=None, journal_path=None,
     rep["order_table"] = order_table(recs, market)
     rep["action_table"] = action_table(recs, market)
     rep["action_summary"] = action_summary(rep["action_table"])
+    # re-hash AFTER everything the run could possibly have touched
+    rep["evidence"]["verified"] = FZ.verify_unchanged(frozen)
     journal.write("recovery", rep)
     return rep
 
