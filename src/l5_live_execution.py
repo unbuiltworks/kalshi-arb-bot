@@ -62,6 +62,15 @@ STAGES = ("L5_NATIVE", "PMUS_TRANSLATION", "SAFETY_OVERLAY", "ORDER",
 STALE_ACTION_MAX_S = 30.0
 
 
+class IncoherentBook(RuntimeError):
+    """The quantities and the costs disagree in a way no trade could produce.
+
+    Raised rather than returned: every caller of the risk and settlement
+    paths must stop, because a book like this cannot be priced at all and
+    guessing at it is what produced the 1815z settlement.
+    """
+
+
 class NotArmed(RuntimeError):
     """Raised on any attempt to transmit without an explicit authorization."""
 
@@ -894,6 +903,64 @@ class InventoryStore:
         return {side: D(str(lc.get("%s|%s" % (market, side), 0)))
                 for side in ("UP", "DOWN")}
 
+    #: a share of a $0-$1 contract cannot have cost more than $1 or less
+    #: than $0. Fees are attributable separately and are never folded into a
+    #: leg's cost, so this bound is exact rather than approximate.
+    MAX_OWN_COST_PER_SHARE = D(1)
+
+    def book_violations(self, market: str) -> List[Dict[str, Any]]:
+        """Ways this market's book cannot be true. Empty means coherent.
+
+        LIVE 2026-09-26, 1815z settled on up_qty 1.8100, dn_qty 0, up_cost
+        0.0931 and dn_cost 4.2494 -- four dollars of cost against zero DOWN
+        shares -- and priced the surviving 1.81 UP shares at 4.3425, which is
+        $2.40 a share for an instrument that pays at most $1. It posted
+        -4.3425 to realized and moved the loss halt with it.
+
+        That book was not produced by any trade. reconcile_from_venue
+        rewrote `positions` and never touched `leg_cost`, so when the venue's
+        NET replaced our GROSS the matched pair's quantities vanished while
+        both legs' costs stayed. The quantities and the costs are one ledger
+        and must be written together; this is the check that says so.
+        """
+        out: List[Dict[str, Any]] = []
+        lc = self.leg_cost(market)
+        for side in ("UP", "DOWN"):
+            q = self.position(market, side)
+            c = lc[side]
+            if q < 0:
+                out.append({"violation": "NEGATIVE_QUANTITY", "side": side,
+                            "qty": str(q)})
+            if c < 0:
+                out.append({"violation": "NEGATIVE_COST", "side": side,
+                            "cost": str(c)})
+            if q == 0 and c != 0:
+                out.append({"violation": "COST_WITHOUT_QUANTITY",
+                            "side": side, "qty": str(q), "cost": str(c),
+                            "why": ("cost survived a quantity that did not; "
+                                    "the two were written independently")})
+            if q > 0:
+                per = c / q
+                if per > self.MAX_OWN_COST_PER_SHARE or per < 0:
+                    out.append({"violation": "COST_PER_SHARE_IMPOSSIBLE",
+                                "side": side, "qty": str(q), "cost": str(c),
+                                "per_share": str(per),
+                                "bound": str(self.MAX_OWN_COST_PER_SHARE),
+                                "why": ("a share of a $0-$1 contract cannot "
+                                        "have cost this much")})
+        return out
+
+    def require_coherent_book(self, market: str, *, doing: str) -> None:
+        """Fail closed before risk or settlement reads an impossible book."""
+        bad = self.book_violations(market)
+        if not bad:
+            return
+        self.mark_uncertain(
+            "incoherent book for %s while %s: %s"
+            % (market, doing, ";".join(str(v.get("violation")) for v in bad)))
+        raise IncoherentBook(json.dumps({"market": market, "doing": doing,
+                                         "violations": bad}))
+
     def risk_exposure_usd(self, market: str, *, extra_side: str = "",
                           extra_qty: D = D(0), extra_price: D = D(0)) -> D:
         """Worst-case cash loss in this market, over both settlements.
@@ -912,6 +979,7 @@ class InventoryStore:
         An order that has not filled is priced as though it fills in full,
         which is what `extra_*` and the outstanding legs are for.
         """
+        self.require_coherent_book(market, doing="pricing risk")
         pos = self.state.get("positions") or {}
         up_q = D(str(pos.get("%s|UP" % market, 0)))
         dn_q = D(str(pos.get("%s|DOWN" % market, 0)))
@@ -1100,6 +1168,7 @@ class InventoryStore:
         if live:
             return {"retired": False, "market": market,
                     "reason": "LIVE_ORDERS_IN_MARKET", "live_orders": live}
+        self.require_coherent_book(market, doing="settling")
         v = D(str(yes_value))
         if not (D(0) <= v <= D(1)):
             return {"retired": False, "market": market,
@@ -1196,25 +1265,44 @@ class InventoryStore:
         gross = self._gross_by_market(before)
         net = self._net_by_market(after)
         agrees = {m: (gross[m]["net"] == net.get(m, D(0))) for m in gross}
-        for m, ok in agrees.items():
-            if not ok and m in net:
-                # our gross cannot be reconstructed from a single net, so the
-                # venue's number becomes the position of record and the loss
-                # of the matched detail is REPORTED, never silent.
-                self.state["positions"].pop("%s|UP" % m, None)
-                self.state["positions"].pop("%s|DOWN" % m, None)
-                n = net[m]
-                if n > 0:
-                    self.state["positions"]["%s|UP" % m] = str(n)
-                elif n < 0:
-                    self.state["positions"]["%s|DOWN" % m] = str(-n)
+        # WE DO NOT INVENT GROSS FROM NET. This used to overwrite our two
+        # legs with the venue's single net number and leave `leg_cost`
+        # untouched -- the quantities collapsed, both legs' costs stayed, and
+        # 1815z settled 1.81 UP shares against $4.3425 of cost, $2.40 a share
+        # for a contract that pays at most $1.
+        #
+        # A net cannot be decomposed into a gross book. When ours disagrees
+        # with the venue's, the honest state is NOT KNOWN: the divergence is
+        # named and the book is marked uncertain, which fails every
+        # submission closed until the difference is resolved. Keeping our
+        # gross unchanged is not a claim that it is right -- it is a refusal
+        # to fabricate a cost basis for shares whose composition we cannot
+        # see.
+        # ONLY a market the venue actually reports can contradict us. A
+        # market it says nothing about is the ordinary post-settlement
+        # state -- the venue drops a position the moment the market expires,
+        # while our book legitimately still holds it until
+        # retire_settled_market books the redemption. Treating that silence
+        # as divergence would mark the book uncertain after every single
+        # settled window.
+        disputed = sorted(m for m, ok in agrees.items()
+                          if not ok and m in net)
         for k, v in after.items():
-            if k.rsplit("|", 1)[0] not in agrees:
-                self.state["positions"][k] = v
+            m = k.rsplit("|", 1)[0]
+            if m in agrees:
+                continue
+            # a market the venue holds and we have never booked: record the
+            # quantity so risk can see the shares, and mark it uncertain
+            # because we have NO cost basis for them at all.
+            self.state["positions"][k] = v
+            if k not in (self.state.get("leg_cost") or {}):
+                disputed.append(m)
         for k in list(self.state["positions"]):
             m = k.rsplit("|", 1)[0]
             if m not in agrees and k not in after:
+                # the venue does not hold it and neither did our gross book
                 self.state["positions"].pop(k, None)
+                (self.state.get("leg_cost") or {}).pop(k, None)
 
         # The venue's open orders are the authority on what is still live.
         # An order we think is live but the venue does not list is terminal
@@ -1234,6 +1322,16 @@ class InventoryStore:
                 rem = o.get("qty", o.get("quantity", mine.get("remaining", 0)))
             rebuilt[coid] = {
                 "t": mine.get("t"),
+                # THE ID poll_orders ASKS THE VENUE BY. Adoption used to omit
+                # it, so an adopted order could never be polled: it made no
+                # progress, tripped the 90s stall, was re-adopted, and looped
+                # every 92s with submissions refused the whole time. 1830z
+                # spent its entire window in that loop.
+                "venue_order_id": str(o.get("id") or o.get("order_id")
+                                      or coid),
+                "client_order_id": coid,
+                "session_id": mine.get("session_id"),
+                "adopted": coid not in ours,
                 "market": o.get("market") or mine.get("market"),
                 "side": o.get("side") or mine.get("side"),
                 # by name, never str() of whatever arrived: an unreadable
@@ -1264,8 +1362,19 @@ class InventoryStore:
         released = sorted(set(ours) - set(rebuilt))
         adopted = sorted(set(rebuilt) - set(ours))
         self.state["live_orders"] = rebuilt
-        # An authoritative answer is the ONLY thing that clears uncertainty.
+        # An authoritative answer is the ONLY thing that clears uncertainty
+        # -- and only when what it leaves behind is a book that could exist.
         self.state["orders_uncertain"] = None
+        incoherent: Dict[str, Any] = {}
+        for m in sorted({k.rsplit("|", 1)[0]
+                         for k in (self.state.get("positions") or {})}):
+            bad = self.book_violations(m)
+            if bad:
+                incoherent[m] = bad
+        if disputed or incoherent:
+            self.state["orders_uncertain"] = (
+                "gross/net divergence %s; incoherent book %s"
+                % (sorted(set(disputed)), sorted(incoherent)))
         self.save()
         return {"reconciled": True, "drift": drift,
                 # stated separately and never collapsed into one another

@@ -116,7 +116,22 @@ def test_the_matched_pair_is_reported_not_merely_implied():
     assert g["net"] == "-2.81"
 
 
-def test_a_net_that_contradicts_our_gross_takes_over_and_says_so():
+def test_a_net_that_contradicts_our_gross_is_reported_and_fails_closed():
+    """SUPERSEDED CONTRACT, deliberately reversed on 2026-09-26.
+
+    This used to let the venue's net TAKE OVER: positions became {UP: 9} and
+    `leg_cost` was left holding the cost of both original legs. That is how
+    1815z came to settle 1.81 UP shares against $4.3425 -- $2.40 a share for
+    a contract paying at most $1 -- and post -4.3425 when the truth was
+    +1.3875.
+
+    A single net cannot be decomposed into a gross book, and overwriting one
+    with it manufactures a cost basis for shares whose composition we cannot
+    see. So the divergence is NAMED and the book goes uncertain, which fails
+    every submission closed until it is resolved. Our gross is left as it
+    was -- not because it is trusted, but because inventing a replacement is
+    the error this test now guards.
+    """
     st = store()
     st.state["positions"] = {"%s|UP" % MARKET: "2.47",
                              "%s|DOWN" % MARKET: "5.28"}   # net -2.81
@@ -125,7 +140,10 @@ def test_a_net_that_contradicts_our_gross_takes_over_and_says_so():
           "qtySoldDecimal": "0", "netPositionDecimal": "9"}], [])
     assert out["gross_net_agrees"][MARKET] is False
     assert out["gross_detail_lost"] == [MARKET]
-    assert st.state["positions"] == {"%s|UP" % MARKET: "9"}
+    # our gross is NOT replaced by the venue's net
+    assert st.state["positions"] == {"%s|UP" % MARKET: "2.47",
+                                     "%s|DOWN" % MARKET: "5.28"}
+    assert st.orders_uncertain() is not None
 
 
 def test_a_flat_venue_against_a_matched_book_is_a_contradiction():

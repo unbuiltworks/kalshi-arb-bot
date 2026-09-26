@@ -147,14 +147,19 @@ def test_reconcile_books_the_venue_position_under_our_own_key(tmp_path):
         "cpc-btc-updown-15m-2026-09-25-1500z|UP": "10.34"}
 
 
-def test_reconcile_reports_drift_without_averaging_it(tmp_path):
+def test_reconcile_reports_drift_without_averaging_or_adopting_it(tmp_path):
+    """Drift is still REPORTED exactly. What changed on 2026-09-26 is that
+    it is no longer silently resolved in the venue's favour: taking 10.34
+    while holding a cost basis for 7.00 manufactures a cost for 3.34 shares.
+    The difference is named and the book fails closed instead."""
     st = store(tmp_path, positions={
         "cpc-btc-updown-15m-2026-09-25-1500z|UP": "7.00"})
     out = st.reconcile_from_venue([venue_row()], [])
     assert out["drift"] == {"cpc-btc-updown-15m-2026-09-25-1500z|UP":
                             {"ours": "7.00", "venue": "10.34"}}
     assert st.state["positions"][
-        "cpc-btc-updown-15m-2026-09-25-1500z|UP"] == "10.34"
+        "cpc-btc-updown-15m-2026-09-25-1500z|UP"] == "7.00"
+    assert st.orders_uncertain() is not None
 
 
 def test_an_unreadable_row_fails_closed_and_changes_nothing(tmp_path):

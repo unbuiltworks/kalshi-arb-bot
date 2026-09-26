@@ -219,7 +219,7 @@ def test_the_startup_rebase_decomposes_the_live_contaminated_total():
     from src import l5_pmus_live_runner as R
     with tempfile.TemporaryDirectory() as d:
         s = LX.InventoryStore(os.path.join(d, "i.json"))
-        s.state["realized_today"] = str(R.CONTAMINATED_REALIZED)
+        s.state["realized_today"] = "4.766200"
         s.save()
         out = R.rebase_contaminated_accounting(s)
         assert D(out["realized_attributed"]) == D("3.4442")
@@ -232,7 +232,7 @@ def test_the_rebase_is_idempotent_and_cannot_fire_twice():
     from src import l5_pmus_live_runner as R
     with tempfile.TemporaryDirectory() as d:
         s = LX.InventoryStore(os.path.join(d, "i.json"))
-        s.state["realized_today"] = str(R.CONTAMINATED_REALIZED)
+        s.state["realized_today"] = "4.766200"
         s.save()
         assert R.rebase_contaminated_accounting(s) is not None
         assert R.rebase_contaminated_accounting(s) is None
@@ -250,12 +250,13 @@ def test_the_rebase_leaves_an_uncontaminated_store_alone():
         assert s.realized_today() == D("-1.25")
 
 
-def test_the_anchor_records_that_the_account_was_flat_at_each_read():
+def test_every_rebase_anchor_records_a_flat_account():
     from src import l5_pmus_live_runner as R
-    assert "zero open orders" in R.REBASE_ANCHOR["flat_at_each_read"]
-    assert (D(R.REBASE_ANCHOR["at_disarm_balance"])
-            - D(R.REBASE_ANCHOR["pre_arm_balance"])
-            == D(R.REBASE_ANCHOR["cash_delta"]))
+    for spec in R.ACCOUNTING_REBASES:
+        a = spec["anchor"]
+        assert "zero open orders" in a["flat_at_each_read"]
+        assert (D(a["at_disarm_balance"]) - D(a["pre_arm_balance"])
+                == spec["cash_delta"])
 
 
 # ----------------------------------- the same defect in the RESTING-order path

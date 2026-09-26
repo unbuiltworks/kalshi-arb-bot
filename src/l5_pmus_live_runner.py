@@ -619,47 +619,88 @@ class Runner:
         self.poll(now)
 
 
-#: The realized total the 2026-09-26 session accumulated under the wire-priced
-#: DOWN cost basis. It cannot be repaired in place -- the per-fill prices that
-#: produced it are gone -- so it is replaced ONCE by a decomposition built
-#: from evidence we do hold, and the difference is carried as unattributed
-#: rather than folded into the trading line.
-CONTAMINATED_REALIZED = D("4.766200")
-#: 1600z settlement, recomputed in own-outcome terms. Sum(1-p)q = Sum q - Sum pq,
-#: so 10.46 - 4.4399 = 6.0201 is exact rather than averaged.
-REBASE_ATTRIBUTED = D("3.4442")
-#: three authoritative flat balance reads, venue-confirmed
-REBASE_ANCHOR = {
-    "pre_arm_utc": "2026-09-26T15:49:54Z", "pre_arm_balance": "61.69765",
-    "after_1600z_utc": "2026-09-26T16:23:28Z", "after_1600z_balance":
-        "65.22685",
-    "at_disarm_utc": "2026-09-26T17:11:40Z", "at_disarm_balance": "63.60685",
-    "cash_delta": "1.90920",
-    "flat_at_each_read": "zero positions, zero open orders, zero unsettled",
-}
-REBASE_CASH_DELTA = D("1.90920")
+#: Known contaminated realized totals and what the authoritative evidence
+#: says they should have been. Each applies AT MOST ONCE, keyed by id, and
+#: only when the stored total still matches the contaminated figure.
+#:
+#: Neither is "make realized equal the balance". Each carries an attributed
+#: line reconstructed from venue records and an explicit unattributed
+#: remainder against a flat-account cash anchor. The remainder is named, not
+#: absorbed into the trading line.
+ACCOUNTING_REBASES = [
+    {
+        "id": "wire-priced-down-legs",
+        "matches_realized_total": D("4.766200"),
+        # 1600z, recomputed in own-outcome terms: Sum(1-p)q = Sum q - Sum pq,
+        # so 10.46 - 4.4399 = 6.0201 exactly.
+        "attributed": D("3.4442"),
+        "cash_delta": D("1.90920"),          # 63.60685 - 61.69765
+        "anchor": {
+            "pre_arm_utc": "2026-09-26T15:49:54Z",
+            "pre_arm_balance": "61.69765",
+            "at_disarm_utc": "2026-09-26T17:11:40Z",
+            "at_disarm_balance": "63.60685",
+            "flat_at_each_read": "zero positions, zero open orders, zero unsettled",
+        },
+        "reason": ("realized accumulated from DOWN legs priced at the "
+                   "venue's WIRE number instead of own-outcome cash"),
+    },
+    {
+        "id": "deleted-down-quantity-1815z",
+        "matches_realized_total": D("-2.43330000"),
+        # 1815z settled on a book whose DOWN quantity had been deleted while
+        # its cost survived: the record read up 1.81 / dn 0 / cost 4.3425 and
+        # posted -4.3425. The seven venue order rows say the gross book was
+        # UP 0.49 at 0.0931 and DOWN 5.73 at 4.2494 -- BOTH COSTS MATCH THE
+        # RECORD EXACTLY, so leg_cost was right and only the quantities were
+        # lost. Settled at 0.0000 (DOWN won) that book redeems 5.73 against
+        # 4.3425, a GAIN of 1.3875. The error is exactly 5.73: the deleted
+        # DOWN shares, each paying $1.
+        #
+        # Cumulative attributed across both arms: 3.4442 + 1.3875 = 4.8317.
+        "attributed": D("4.8317"),
+        "cash_delta": D("2.63770"),          # 64.33535 - 61.69765
+        "anchor": {
+            "pre_arm_utc": "2026-09-26T15:49:54Z",
+            "pre_arm_balance": "61.69765",
+            "rearm_utc": "2026-09-26T18:14:18Z", "rearm_balance": "63.60685",
+            "at_disarm_utc": "2026-09-26T18:55:54Z",
+            "at_disarm_balance": "64.33535",
+            "flat_at_each_read": "zero positions, zero open orders, zero unsettled",
+            "attributed_detail": ("1600z +3.4442 and 1815z +1.3875, both "
+                                  "recomputed in own-outcome terms from "
+                                  "venue order rows"),
+            "commissions_observed": "0.0000 on every 1815z row",
+        },
+        "reason": ("1815z settled against a book whose DOWN quantity had "
+                   "been deleted by reconcile while its cost survived"),
+    },
+]
 
 
 def rebase_contaminated_accounting(store) -> Optional[Dict[str, Any]]:
-    """Retire the wire-priced realized total, once, on this store.
+    """Retire a known-contaminated realized total, once per contamination.
 
-    Runs only when the stored legacy scalar still equals the contaminated
-    figure AND no decomposition exists yet, so it cannot fire twice and
-    cannot touch a store that never carried the defect.
+    Matches on the stored total, so a store that never carried the defect is
+    untouched and a store already rebased past it cannot be rebased again.
     """
-    if store.state.get("realized_attributed") is not None:
-        return None
-    legacy = D(str(store.state.get("realized_today") or 0))
-    if legacy != CONTAMINATED_REALIZED:
-        return None
-    out = store.rebase_session_accounting(
-        attributed=REBASE_ATTRIBUTED, cash_delta=REBASE_CASH_DELTA,
-        anchor=REBASE_ANCHOR,
-        reason=("realized_today was accumulated from DOWN legs priced at the "
-                "venue's WIRE (long-side) number instead of own-outcome "
-                "cash; the per-fill prices behind it are gone"))
-    emit("L5_LIVE_ACCOUNTING_REBASED", out)
-    return out
+    done = {r.get("id") for r in (store.state.get("accounting_rebase_log")
+                                  or [])}
+    for spec in ACCOUNTING_REBASES:
+        if spec["id"] in done:
+            continue
+        if store.realized_today() != spec["matches_realized_total"]:
+            continue
+        out = store.rebase_session_accounting(
+            attributed=spec["attributed"], cash_delta=spec["cash_delta"],
+            anchor=spec["anchor"], reason=spec["reason"])
+        log = store.state.setdefault("accounting_rebase_log", [])
+        if log:
+            log[-1]["id"] = spec["id"]
+            store.save()
+        emit("L5_LIVE_ACCOUNTING_REBASED", dict(out, rebase_id=spec["id"]))
+        return out
+    return None
 
 
 def assert_role() -> None:

@@ -248,7 +248,12 @@ def test_the_behaviour_our_old_heuristics_disliked_is_not_suppressed(tmp_path):
 
 # -------------------------------------------------------------- reconciliation
 
-def test_the_venue_overrides_our_file_and_drift_is_reported(tmp_path):
+def test_the_venue_contradicting_our_file_is_reported_and_fails_closed(tmp_path):
+    """SUPERSEDED CONTRACT, reversed 2026-09-26. The venue is still the
+    authority on what EXISTS, but its net is not a gross book and adopting
+    it leaves `leg_cost` describing shares that are gone -- which is how
+    1815z settled 1.81 shares against $4.3425. The drift is reported and the
+    book fails closed; nothing is silently replaced."""
     st = store(tmp_path)
     st.state["positions"] = {"m|UP": "5"}
     # the venue's real row: keyed by slug, no side field, direction in the
@@ -258,7 +263,8 @@ def test_the_venue_overrides_our_file_and_drift_is_reported(tmp_path):
           "netPositionDecimal": "3"}], [])
     assert out["authority"] == "VENUE"
     assert out["drift"]["m|UP"] == {"ours": "5", "venue": "3"}
-    assert st.position("m", "UP") == D("3")
+    assert st.position("m", "UP") == D("5")
+    assert st.orders_uncertain() is not None
 
 
 def test_inventory_survives_restart(tmp_path):
