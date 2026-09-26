@@ -483,6 +483,64 @@ def _first_key(row: Mapping[str, Any], keys: Sequence[str]) -> Any:
     return None
 
 
+#: What a venue OPEN-ORDER row calls its limit price. Probes 04-07 never
+#: exercised the adoption path at all -- every one of them closed out with
+#: nothing resting, so `open_orders` was empty and the price was never read
+#: from a real row. Probe 08 is the first probe whose treatment left an order
+#: resting at the close, and the line that read it had been written against
+#: a shape nobody had seen: `str(o.get("price", ...))` produced the STRING
+#: "None" (or a dict repr) and `Decimal` refused it, killing the report after
+#: the close-out had already run.
+VENUE_ORDER_PRICE_KEYS = ("price", "limitPrice", "limit_price", "orderPrice",
+                          "px", "avgPx", "priceDecimal")
+
+#: PMUS wraps some numbers as objects rather than scalars, so a price may
+#: arrive as {"value": "0.66"}. Unwrapped by name, never by guessing.
+VENUE_SCALAR_KEYS = ("value", "amount", "decimal")
+
+
+def venue_decimal(raw: Any) -> Optional[D]:
+    """A venue number as a Decimal, or None when it cannot be read.
+
+    Accepts a number, a numeric string, or a single-valued wrapper object.
+    Returns None rather than raising, because the callers are RISK metrics
+    and a risk metric that raises stops the process at exactly the moment it
+    is most needed. What the callers must not do is read None as zero.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, Mapping):
+        for k in VENUE_SCALAR_KEYS:
+            if k in raw:
+                return venue_decimal(raw[k])
+        return None
+    if isinstance(raw, bool):
+        return None
+    try:
+        return D(str(raw))
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return None
+
+
+def venue_order_price(row: Mapping[str, Any]) -> Optional[D]:
+    """The limit price off a venue order row, by name, or None."""
+    if not isinstance(row, Mapping):
+        return None
+    for k in VENUE_ORDER_PRICE_KEYS:
+        if k in row:
+            px = venue_decimal(row[k])
+            if px is not None:
+                return px
+    return None
+
+
+#: What an order whose price we cannot read is worth, per share, when
+#: bounding risk. A share cannot settle above $1, so $1 is the worst it can
+#: have cost us -- and the one thing that must never happen is reading an
+#: unknown price as free.
+UNKNOWN_PRICE_WORST_CASE = D(1)
+
+
 def venue_side(raw: Any) -> Optional[str]:
     """UP or DOWN, or None when the venue said something we do not know."""
     if raw is None:
@@ -588,10 +646,13 @@ class InventoryStore:
         out: Dict[str, D] = {}
         for o in (self.state.get("live_orders") or {}).values():
             m = str(o.get("market"))
-            rem = D(str(o.get("remaining") or 0))
+            rem = venue_decimal(o.get("remaining")) or D(0)
             if rem <= 0:
                 continue
-            out[m] = out.get(m, D(0)) + D(str(o.get("price") or 0)) * rem
+            px = venue_decimal(o.get("price"))
+            if px is None:
+                px = UNKNOWN_PRICE_WORST_CASE
+            out[m] = out.get(m, D(0)) + px * rem
         return out
 
     def outstanding_residual(self, market: str) -> D:
@@ -600,7 +661,7 @@ class InventoryStore:
         for o in (self.state.get("live_orders") or {}).values():
             if str(o.get("market")) != market:
                 continue
-            rem = D(str(o.get("remaining") or 0))
+            rem = venue_decimal(o.get("remaining")) or D(0)
             r += rem if str(o.get("side")) == "UP" else -rem
         return r
 
@@ -742,8 +803,15 @@ class InventoryStore:
         for o in (self.state.get("live_orders") or {}).values():
             if str(o.get("market")) != market:
                 continue
-            q = D(str(o.get("remaining") or 0))
-            px = D(str(o.get("price") or 0))
+            q = venue_decimal(o.get("remaining")) or D(0)
+            px = venue_decimal(o.get("price"))
+            if px is None:
+                # a price we cannot read is priced at the most it could have
+                # cost. On BOTH legs the higher price is the worse case, so
+                # $1 a share bounds it either way -- and reading it as free,
+                # which is what `or 0` did, would have handed the gate a
+                # position that looked costless.
+                px = UNKNOWN_PRICE_WORST_CASE
             if str(o.get("side") or "").upper().startswith("U"):
                 up_q += q
                 up_c += px * q
@@ -933,7 +1001,19 @@ class InventoryStore:
                 "t": mine.get("t"),
                 "market": o.get("market") or mine.get("market"),
                 "side": o.get("side") or mine.get("side"),
-                "price": str(o.get("price", mine.get("price", 0))),
+                # by name, never str() of whatever arrived: an unreadable
+                # price is recorded AS unreadable so the risk readers can
+                # price it at worst case instead of at zero
+                "price": (str(_adopt_px) if (_adopt_px := venue_order_price(o))
+                          is not None
+                          else (str(mine.get("price"))
+                                if venue_decimal(mine.get("price")) is not None
+                                else None)),
+                "price_unreadable": (venue_order_price(o) is None
+                                     and venue_decimal(mine.get("price"))
+                                     is None),
+                "price_row_keys": (sorted(o) if venue_order_price(o) is None
+                                   else None),
                 "qty": str(o.get("qty", mine.get("qty", rem))),
                 "remaining": str(rem), "state": "LIVE_AT_VENUE",
             }

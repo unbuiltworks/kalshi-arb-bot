@@ -42,6 +42,8 @@ COPY src/l5_live_execution.py src/l5_live_execution.py
 # into genuine resting-order intents. It adds nothing to L5_NATIVE's decision.
 COPY src/l5_maker_execution.py src/l5_maker_execution.py
 COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
+# Probe 08 froze its own evidence; the module that hashes it must ship
+COPY src/l5_evidence_freeze.py src/l5_evidence_freeze.py
 COPY src/l5_pmus_live_wiring.py src/l5_pmus_live_wiring.py
 # the frozen engine, byte-identical to 030d8bf. Pure decision code.
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
