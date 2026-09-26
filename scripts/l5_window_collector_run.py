@@ -156,6 +156,8 @@ def collect_one(slug: str, start: float, *, clock=time.time,
         "prints": len(prints), "book_states": len(books),
         "raw_frames": rec.raw_frames,
         "l5_actions": len(actions), "l5_polls_ok": polls_ok,
+        "feed_connected_ever": coverage["frames"] > 0,
+        "feed_errors": feed.errors[-2:],
         "primary": elig["primary"], "excluded_for": elig["excluded_for"]})
     return doc
 
@@ -186,6 +188,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     except BaseException as exc:                           # noqa: BLE001
         say("L5_COLLECTOR_SNAPSHOT_FAILED", {
             "error": type(exc).__name__, "detail": str(exc)[:200]})
+
+    missing = C.missing_feed_credentials()
+    if missing:
+        say("L5_COLLECTOR_CREDENTIALS_MISSING", {
+            "missing": missing,
+            "effect": "the authenticated feed cannot connect; L5 actions "
+                      "will still be collected and every window will be "
+                      "excluded FEED_NEVER_CONNECTED rather than look quiet",
+            "labels": "a half-collecting collector says so on every boot"})
 
     once = bool(os.getenv(ONCE_ENV, "").strip())
     while True:

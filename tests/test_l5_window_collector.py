@@ -376,3 +376,39 @@ def test_the_inventory_opens_nothing_for_writing():
         if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "open":
             mode = n.args[1].value if len(n.args) > 1 else "r"
             assert "w" not in mode and "a" not in mode, mode
+
+
+# ------------------------ the failure that ran for two windows in silence
+
+def test_missing_credentials_are_detected():
+    assert C.missing_feed_credentials({}) == list(C.FEED_CREDENTIAL_ENV)
+    assert C.missing_feed_credentials(
+        {"PMUS_API_KEY_ID": "a", "PMUS_API_SECRET_KEY": "b"}) == []
+    assert C.missing_feed_credentials(
+        {"PMUS_API_KEY_ID": "a", "PMUS_API_SECRET_KEY": "  "}) == [
+            "PMUS_API_SECRET_KEY"]
+
+
+def test_a_window_that_never_connected_says_so_not_no_prints():
+    """prints: 0 reads exactly like a quiet market. It was not one."""
+    c = C.Coverage(1000.0, 1900.0)          # nothing ever connected
+    e = C.primary_eligible(c.as_dict(), prints=0, l5_feed_ok=True)
+    assert "FEED_NEVER_CONNECTED" in e["excluded_for"]
+    assert "NO_PRINTS" not in e["excluded_for"]
+
+
+def test_a_connected_window_with_no_trades_is_a_quiet_market():
+    c = C.Coverage(1000.0, 1900.0)
+    c.connected(1000.0); c.frame(1500.0); c.disconnected(1900.0)
+    e = C.primary_eligible(c.as_dict(), prints=0, l5_feed_ok=True)
+    assert "NO_PRINTS" in e["excluded_for"]
+    assert "FEED_NEVER_CONNECTED" not in e["excluded_for"]
+
+
+def test_the_two_are_never_the_same_verdict():
+    never = C.Coverage(1000.0, 1900.0)
+    quiet = C.Coverage(1000.0, 1900.0)
+    quiet.connected(1000.0); quiet.frame(1500.0); quiet.disconnected(1900.0)
+    a = C.primary_eligible(never.as_dict(), 0, True)["excluded_for"]
+    b = C.primary_eligible(quiet.as_dict(), 0, True)["excluded_for"]
+    assert a != b

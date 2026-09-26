@@ -63,6 +63,21 @@ PRIMARY_MAX_GAP_S = 20.0
 PRIMARY_MIN_PRINTS = 1
 PRIMARY_REQUIRE_L5_FEED_OK = True
 
+#: env the authenticated feed cannot start without. The first cutover ran for
+#: two whole windows collecting L5 actions and ZERO frames, because the
+#: service it moved onto had never needed PMUS credentials -- the old observer
+#: polled a public activity API. `os.environ[KEY]` raised inside the session
+#: thread, the retry loop swallowed it, and the only symptom was prints: 0,
+#: which reads exactly like a quiet market. Checked at startup now, and named
+#: in the window record when it bites.
+FEED_CREDENTIAL_ENV = ("PMUS_API_KEY_ID", "PMUS_API_SECRET_KEY")
+
+
+def missing_feed_credentials(env: Optional[Mapping[str, str]] = None
+                             ) -> List[str]:
+    e = os.environ if env is None else env
+    return [k for k in FEED_CREDENTIAL_ENV if not str(e.get(k, "")).strip()]
+
 
 def _now() -> float:
     return time.time()
@@ -282,7 +297,11 @@ def primary_eligible(cov: Mapping[str, Any], prints: int,
                        % PRIMARY_MIN_OBSERVED_FRACTION)
     if float(cov.get("max_gap_s") or 0) > PRIMARY_MAX_GAP_S:
         reasons.append("GAP_ABOVE_%.0fs" % PRIMARY_MAX_GAP_S)
-    if int(prints) < PRIMARY_MIN_PRINTS:
+    if int(cov.get("frames") or 0) <= 0:
+        # never watched is not the same fact as nothing traded, and the
+        # record has to say which one it is
+        reasons.append("FEED_NEVER_CONNECTED")
+    elif int(prints) < PRIMARY_MIN_PRINTS:
         reasons.append("NO_PRINTS")
     if PRIMARY_REQUIRE_L5_FEED_OK and not l5_feed_ok:
         reasons.append("L5_FEED_NOT_OK")
