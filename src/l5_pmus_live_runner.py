@@ -71,6 +71,10 @@ PROBE_LIMITS = dict(max_usd_per_market=D("5"), max_abs_residual=D("10"),
 #: window, and L5 opens within seconds (0045z: first action at +7.0s).
 #: Five GETs per attempt, only until the first PASS of each window.
 PREFLIGHT_RETRY_S = 3.0
+#: while the book is uncertain, how often we may re-ask the venue. Not every
+#: tick: hammering a venue that is already erroring turns a transient fault
+#: into a rate limit.
+RECONCILE_RETRY_S = 15.0
 HB_EVERY_S = 60.0
 
 
@@ -138,6 +142,7 @@ class Runner:
         self.transport: Optional[T.PmusTransport] = None
         self.executor: Optional[LX.FaithfulExecutor] = None
         self.reconciled = False        # venue has not confirmed our book
+        self.last_reconcile_t = 0.0
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
         self.last_blockers: Optional[List[str]] = None
@@ -247,28 +252,50 @@ class Runner:
                 self.stats["retire_refused:%s"
                            % out.get("reason", "?")] += 1
 
-    def reconcile_once(self) -> None:
-        """Let the venue overwrite our book, ONCE, before this process arms.
+    def reconcile_if_needed(self, now: float) -> None:
+        """Reconcile against the venue when our book is unconfirmed OR uncertain.
 
-        restartPolicyType is ALWAYS. A crash mid-window brings the process
-        straight back with the owner's token still set, reading an inventory
-        file that may be stale (a fill landed after our last save) or ahead
-        (we saved an optimistic fill that never happened). Arming on either
-        is how an executor comes to believe it is flat while it holds
-        inventory. The venue's answer replaces ours, and the divergence is
-        REPORTED rather than averaged.
+        ONCE PER PROCESS WAS A LATCH, and it shut the executor down live on
+        2026-09-26. Three order-progress GETs returned HTTPError at 16:12:06,
+        poll_orders marked the book uncertain -- correctly, an order whose
+        state we cannot read might be live and consuming the envelope -- and
+        the SAFETY_OVERLAY then refused every action with
+        ORDER_STATE_UNCERTAIN. Submissions stopped dead at 43. Uncertainty is
+        cleared ONLY by a full authoritative reconciliation, and this method
+        would not run a second one, so nothing in the process could ever
+        clear it. A transient GET failure cost the whole session.
+
+        So: reconcile when we have never confirmed a book, and AGAIN whenever
+        the book goes uncertain. Not on every tick -- at most once every
+        RECONCILE_RETRY_S, because hammering the venue while it is already
+        returning errors is how a transient fault becomes a rate limit.
+
+        WHAT DOES NOT CHANGE. A GET that merely succeeds clears nothing. Only
+        InventoryStore.reconcile_from_venue clears the flag, and it does so
+        at the END, after the venue's positions have replaced ours by the
+        net = long - short identity, its open orders have been adopted or
+        released, and the divergence has been reported. If either read
+        raises, or the reconcile itself raises on a venue shape we do not
+        recognise, the flag stays set, no order may be submitted, and we try
+        again later. Fail-closed is the resting state, not the exception.
+
+        Adoption, not duplication: orders are keyed by our deterministic
+        client_order_id, so an order the venue lists that we had lost is
+        adopted under the same id rather than re-sent as a second order.
 
         `positions()`, not `available_positions()`: the venue serves both and
         the settlement auditor treats the latter as explicitly NOT held, so
         merging them would inflate what we think we own.
-
-        If the read fails, or the venue's shape is unrecognised, this stays
-        unreconciled and returns -- and try_arm refuses. Unknowable is not
-        flat; it is retried next window rather than assumed away.
         """
-        if self.reconciled or self.transport is None:
-            return
         t = self.transport
+        if t is None:
+            return
+        uncertain = self.store.orders_uncertain()
+        if self.reconciled and not uncertain:
+            return
+        if now - self.last_reconcile_t < RECONCILE_RETRY_S:
+            return
+        self.last_reconcile_t = now
         try:
             pos = t.positions()
             oo = t.open_orders()
@@ -276,21 +303,29 @@ class Runner:
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
+            # still unknowable. Keep the flag, keep refusing, come back.
             self.store.mark_uncertain(
-                "startup reconcile raised %s" % type(exc).__name__)
+                "reconcile raised %s" % type(exc).__name__)
+            self.reconciled = False
             emit("L5_LIVE_RECONCILE_FAILED",
                  {"error": type(exc).__name__,
-                  "detail": T.redact("%s" % exc)[:300], "armable": False})
+                  "detail": T.redact("%s" % exc)[:300],
+                  "was_uncertain": str(uncertain or ""),
+                  "submissions_allowed": False,
+                  "retry_in_s": RECONCILE_RETRY_S})
             return
         self.reconciled = True
-        emit("L5_LIVE_RECONCILE", dict(out, market=t.market_slug))
+        emit("L5_LIVE_RECONCILE",
+             dict(out, market=t.market_slug,
+                  cleared_uncertainty=str(uncertain or ""),
+                  realized_today=str(self.store.realized_today())))
 
     def try_arm(self) -> None:
         t = self.transport
         if t is None or t.armed or self.halted():
             return
         # never arm on a book the venue has not confirmed
-        self.reconcile_once()
+        self.reconcile_if_needed(self.now_t)
         if not self.reconciled:
             self.win["arm_refused_unreconciled"] += 1
             return
@@ -521,9 +556,27 @@ class Runner:
         self.maybe_preflight(now)
         if self.store.live_order_count():
             self.poll_orders()
-        # before acting on this window: give back any market the venue has
-        # finished with, or the concurrency cap never frees up.
+        # ORDER MATTERS, and it is the opposite of what it looks like.
+        #
+        # Settle FIRST, reconcile second. Once a market expires the venue
+        # reports no position in it at all -- 1600z settled at 16:15Z and
+        # /v1/portfolio/positions came back {} -- so the venue cannot tell us
+        # what we held. Our own book is the ONLY surviving record of that
+        # market's economics. Reconciling first and settling second would
+        # compute the settlement against an emptied book and post a P&L of
+        # zero, silently erasing a real result and, with it, the realized
+        # total the -$5 halt is measured on.
+        #
+        # Retirement is still gated on the VENUE: it happens only for a
+        # market the venue reports terminal WITH a settlement price, and only
+        # when no order is live in it. On a restart the first pass may refuse
+        # on stale live orders; the reconcile below releases those, and the
+        # next tick retires it properly. One tick late is fine. Erased
+        # accounting is not.
         self.sweep_settlements()
+        # a book that has gone uncertain gets another authoritative read,
+        # rather than latching the session shut until a redeploy
+        self.reconcile_if_needed(now)
         self.poll(now)
 
 
