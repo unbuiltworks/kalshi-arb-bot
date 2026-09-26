@@ -169,6 +169,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         "once": bool(os.getenv(ONCE_ENV, "").strip()),
         "capability": "no order, no preview, no cancel, no account mutation",
     })
+    # the boundary first, before this process creates anything of its own
+    try:
+        prior = os.getenv("L5_PRIOR_ACTION_COUNT", "").strip()
+        snap = C.snapshot_pre_cutover(
+            root(), note=os.getenv("L5_CUTOVER_NOTE", "").strip(),
+            action_count=int(prior) if prior.isdigit() else None)
+        say("L5_COLLECTOR_PRE_CUTOVER", {
+            "file_count": snap.get("file_count"),
+            "total_bytes": snap.get("total_bytes"),
+            "taken_utc": snap.get("taken_utc"),
+            "prior_collector_action_count":
+                snap.get("prior_collector_action_count"),
+            "reused_existing_manifest": snap.get("reused_existing_manifest")})
+        say("L5_COLLECTOR_EVIDENCE_INTACT", C.verify_pre_cutover(root()))
+    except BaseException as exc:                           # noqa: BLE001
+        say("L5_COLLECTOR_SNAPSHOT_FAILED", {
+            "error": type(exc).__name__, "detail": str(exc)[:200]})
+
     once = bool(os.getenv(ONCE_ENV, "").strip())
     while True:
         try:

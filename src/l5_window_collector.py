@@ -68,6 +68,120 @@ def _now() -> float:
     return time.time()
 
 
+#: the boundary file between the old collector and this one. Written ONCE,
+#: never rewritten, so a restart cannot move the line it marks.
+PRE_CUTOVER = "PRE_CUTOVER_MANIFEST.json"
+
+#: everything this process is permitted to create, relative to the root. It
+#: appends and it creates; it never deletes, truncates, renames or rewrites
+#: anything that was already on the volume.
+WRITES_UNDER = ("windows/", PRE_CUTOVER)
+
+
+def sha256_file(path: Path) -> Dict[str, Any]:
+    import hashlib
+    h = hashlib.sha256()
+    n = 0
+    with open(path, "rb") as fh:
+        while True:
+            b = fh.read(1 << 20)
+            if not b:
+                break
+            n += len(b)
+            h.update(b)
+    return {"sha256": h.hexdigest(), "bytes": n}
+
+
+def inventory(root: str, *, skip=(PRE_CUTOVER,)) -> List[Dict[str, Any]]:
+    """Hash every file already on the volume. Opens nothing for writing."""
+    base = Path(root)
+    out: List[Dict[str, Any]] = []
+    if not base.exists():
+        return out
+    for p in sorted(base.rglob("*")):
+        if not p.is_file():
+            continue
+        rel = str(p.relative_to(base))
+        if rel in skip:
+            continue
+        try:
+            rec = sha256_file(p)
+        except OSError as exc:
+            out.append({"path": rel, "error": str(exc)[:120]})
+            continue
+        rec["path"] = rel
+        out.append(rec)
+    return out
+
+
+def snapshot_pre_cutover(root: str, *, note: str = "",
+                         action_count: Optional[int] = None) -> Dict[str, Any]:
+    """Record what was on the volume BEFORE this collector wrote anything.
+
+    Written once. If the manifest already exists it is read back and
+    returned unchanged, because the boundary between the old collector and
+    this one is a fact about a moment, not about the latest restart.
+    """
+    import datetime as _dt
+    base = Path(root)
+    base.mkdir(parents=True, exist_ok=True)
+    p = base / PRE_CUTOVER
+    if p.exists():
+        try:
+            doc = json.loads(p.read_text())
+            doc["reused_existing_manifest"] = True
+            return doc
+        except ValueError:
+            pass                       # unreadable: fall through and write
+    files = inventory(root)
+    doc = {
+        "schema": "l5_window_collector/pre_cutover/v1",
+        "taken_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "root": str(root),
+        "files": files,
+        "file_count": len(files),
+        "total_bytes": sum(int(f.get("bytes") or 0) for f in files),
+        "prior_collector_action_count": action_count,
+        "note": note,
+        "labels": ("the boundary between the previous observer and the "
+                   "joined collector. Historical files are preserved "
+                   "byte-for-byte; this process only ever creates new ones "
+                   "under windows/."),
+    }
+    tmp = base / (PRE_CUTOVER + ".tmp")
+    with open(tmp, "w") as fh:
+        json.dump(doc, fh, indent=1, default=str)
+    tmp.replace(p)
+    doc["reused_existing_manifest"] = False
+    return doc
+
+
+def verify_pre_cutover(root: str) -> Dict[str, Any]:
+    """Re-hash every file the manifest recorded and compare. A measurement."""
+    base = Path(root)
+    p = base / PRE_CUTOVER
+    if not p.exists():
+        return {"checked": 0, "drift": [], "all_unchanged": None,
+                "reason": "NO_MANIFEST"}
+    doc = json.loads(p.read_text())
+    before = {f["path"]: f for f in doc.get("files") or [] if "sha256" in f}
+    now = {f["path"]: f for f in inventory(root) if "sha256" in f}
+    drift = []
+    for rel, rec in sorted(before.items()):
+        cur = now.get(rel)
+        if cur is None:
+            drift.append({"path": rel, "problem": "MISSING"})
+        elif cur["sha256"] != rec["sha256"] or cur["bytes"] != rec["bytes"]:
+            drift.append({"path": rel, "problem": "CHANGED",
+                          "before": rec["sha256"], "after": cur["sha256"]})
+    return {"checked": len(before), "drift": drift,
+            "all_unchanged": not drift,
+            "taken_utc": doc.get("taken_utc"),
+            "prior_collector_action_count":
+                doc.get("prior_collector_action_count"),
+            "labels": "historical evidence re-hashed after the run, not assumed"}
+
+
 class Coverage:
     """What fraction of the 900 seconds we actually watched, and the gaps.
 

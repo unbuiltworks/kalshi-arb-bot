@@ -291,3 +291,88 @@ def test_an_observed_trade_is_never_called_a_fill():
     for path in MODULES:
         src = pathlib.Path(path).read_text().lower()
         assert "not a fill" in src or "never a fill" in src
+
+
+# ------------------------------- the boundary with the previous collector
+
+def test_the_snapshot_hashes_everything_already_on_the_volume(tmp_path):
+    (tmp_path / "old").mkdir()
+    (tmp_path / "old" / "a.jsonl").write_text('{"x":1}\n')
+    (tmp_path / "b.json").write_text("{}")
+    snap = C.snapshot_pre_cutover(str(tmp_path), action_count=23696)
+    assert snap["file_count"] == 2
+    assert snap["prior_collector_action_count"] == 23696
+    assert {f["path"] for f in snap["files"]} == {"old/a.jsonl", "b.json"}
+
+
+def test_the_boundary_is_written_once_and_a_restart_cannot_move_it(tmp_path):
+    (tmp_path / "a.jsonl").write_text("1\n")
+    first = C.snapshot_pre_cutover(str(tmp_path), action_count=23696)
+    assert first["reused_existing_manifest"] is False
+    (tmp_path / "later.jsonl").write_text("2\n")          # new data arrives
+    again = C.snapshot_pre_cutover(str(tmp_path), action_count=99999)
+    assert again["reused_existing_manifest"] is True
+    assert again["prior_collector_action_count"] == 23696
+    assert again["file_count"] == 1, "the boundary moved"
+
+
+def test_verification_passes_when_history_is_intact(tmp_path):
+    (tmp_path / "a.jsonl").write_text("1\n")
+    C.snapshot_pre_cutover(str(tmp_path))
+    assert C.verify_pre_cutover(str(tmp_path))["all_unchanged"] is True
+
+
+def test_verification_catches_a_changed_historical_file(tmp_path):
+    (tmp_path / "a.jsonl").write_text("1\n")
+    C.snapshot_pre_cutover(str(tmp_path))
+    (tmp_path / "a.jsonl").write_text("2\n")
+    v = C.verify_pre_cutover(str(tmp_path))
+    assert v["all_unchanged"] is False
+    assert v["drift"][0]["problem"] == "CHANGED"
+
+
+def test_verification_catches_a_deleted_historical_file(tmp_path):
+    (tmp_path / "a.jsonl").write_text("1\n")
+    C.snapshot_pre_cutover(str(tmp_path))
+    (tmp_path / "a.jsonl").unlink()
+    v = C.verify_pre_cutover(str(tmp_path))
+    assert v["all_unchanged"] is False
+    assert v["drift"][0]["problem"] == "MISSING"
+
+
+def test_new_windows_do_not_disturb_the_history(tmp_path):
+    (tmp_path / "old").mkdir()
+    (tmp_path / "old" / "a.jsonl").write_text('{"historical":1}\n')
+    C.snapshot_pre_cutover(str(tmp_path))
+    r = C.WindowRecord(str(tmp_path), "cpc-btc-updown-15m-2026-09-26-1300z",
+                       1000.0)
+    sink = r.open_raw()
+    sink({"kind": "ws", "t": 1.0, "msg": {}})
+    r.close_raw()
+    r.write({"market": "m"})
+    assert C.verify_pre_cutover(str(tmp_path))["all_unchanged"] is True
+    assert (tmp_path / "old" / "a.jsonl").read_text() == '{"historical":1}\n'
+
+
+def test_the_collector_calls_no_destructive_verb():
+    """Asserted on call names, not on source text.
+
+    A grep version of this failed on the module's own atomic-write helper,
+    which is the third time in this session a text-scanning test has tripped
+    over the code it was meant to protect. The behavioural guarantee is
+    test_new_windows_do_not_disturb_the_history; this is the belt.
+    """
+    calls = called("src/l5_window_collector.py")
+    for verb in ("unlink", "rmtree", "remove", "truncate", "rmdir",
+                 "move", "copytree"):
+        assert verb not in calls, verb
+    assert C.WRITES_UNDER == ("windows/", C.PRE_CUTOVER)
+
+
+def test_the_inventory_opens_nothing_for_writing():
+    fn = next(n for n in ast.walk(tree("src/l5_window_collector.py"))
+              if isinstance(n, ast.FunctionDef) and n.name == "inventory")
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "open":
+            mode = n.args[1].value if len(n.args) > 1 else "r"
+            assert "w" not in mode and "a" not in mode, mode
