@@ -740,6 +740,27 @@ class PmusTransport:
                 "preflight": pf,
                 "note": "arming is revocable by unsetting the owner token"}
 
+    def disarm(self, reason: str = "") -> Dict[str, Any]:
+        """Give up the arm, and the ability to POST with it.
+
+        `arm()` is what puts a POST-capable object in this process; leaving
+        that object in place while merely clearing a boolean would keep the
+        capability and rely on the flag being checked everywhere. So this
+        puts the read-only transport back, which raises on any method but
+        GET. An injected transport is left alone -- it belongs to the caller.
+
+        Always permitted, and idempotent: it can only ever REMOVE capability,
+        so no gate guards it and nothing it does can fail open.
+        """
+        was = bool(self.armed)
+        self.armed = False
+        if not self._injected:
+            self.http = Q1.ReadOnlyTransport()
+        return {"disarmed": True, "was_armed": was,
+                "market": self.market_slug,
+                "reason": str(reason)[:120],
+                "post_capable": False}
+
     def submit(self, intent: Mapping[str, Any]) -> Dict[str, Any]:
         """Preview, verify the venue's echo, then send THE SAME body.
 
