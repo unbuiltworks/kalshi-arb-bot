@@ -254,8 +254,8 @@ def test_the_store_prices_a_short_leg_as_a_credit_not_as_cash_out():
     d = tempfile.mkdtemp()
     st = EX.InventoryStore(str(pathlib.Path(d) / "inv.json"))
     # Probe 05's legs, in our own YES-convention prices
-    st.apply_fill("m", "UP", D("10.34"), D("1.6047") / D("10.34"))
-    st.apply_fill("m", "DOWN", D("7.50"), D("6.2568") / D("7.50"))
+    st.apply_fill("m", "UP", D("10.34"), D("1.6047") / D("10.34"), basis=EX.OWN)
+    st.apply_fill("m", "DOWN", D("7.50"), D("6.2568") / D("7.50"), basis=EX.OWN)
     # committed still adds both as cash out -- that is what it is for
     assert st.committed()["m"] > D("7.8")
     # the bound is the worst case over both settlements, and it is not that
@@ -266,7 +266,7 @@ def test_a_short_credit_does_not_create_capacity_in_the_store_either():
     import src.l5_live_execution as EX
     import tempfile, pathlib
     st = EX.InventoryStore(str(pathlib.Path(tempfile.mkdtemp()) / "i.json"))
-    st.apply_fill("m", "DOWN", D("10"), D("0.90"))     # short 10, takes in $1
+    st.apply_fill("m", "DOWN", D("10"), D("0.90"), basis=EX.OWN)     # short 10, takes in $1
     # if YES settles 1 the short owes $10 having received $1: a $9 bound
     assert st.risk_exposure_usd("m") == D("9.0")
 

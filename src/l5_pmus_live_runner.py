@@ -75,6 +75,12 @@ PREFLIGHT_RETRY_S = 3.0
 #: tick: hammering a venue that is already erroring turns a transient fault
 #: into a rate limit.
 RECONCILE_RETRY_S = 15.0
+#: a locally-live order that produces no venue progress for this long is not
+#: trusted to be live. 1700z sat on eight of them: the venue had finished
+#: with all eight, we never learned it, and MAX_LIVE_ORDERS refused 276
+#: actions against orders that did not exist. Uncertainty was never set, so
+#: the uncertainty path could not rescue it either.
+STALLED_ORDER_S = 90.0
 HB_EVERY_S = 60.0
 
 
@@ -134,6 +140,7 @@ class Runner:
         self.feed = feed
         self.clock = clock
         self.store = LX.InventoryStore(os.path.join(root, "inventory.json"))
+        rebase_contaminated_accounting(self.store)
         self.limits = LX.SafetyLimits(**PROBE_LIMITS)
         self.lam = lam
         self.seen: set = set()
@@ -143,6 +150,7 @@ class Runner:
         self.executor: Optional[LX.FaithfulExecutor] = None
         self.reconciled = False        # venue has not confirmed our book
         self.last_reconcile_t = 0.0
+        self.last_progress_t = 0.0
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
         self.last_blockers: Optional[List[str]] = None
@@ -291,8 +299,20 @@ class Runner:
         if t is None:
             return
         uncertain = self.store.orders_uncertain()
-        if self.reconciled and not uncertain:
+        stalled = self.orders_stalled_for_s(now)
+        if self.reconciled and not uncertain and stalled < STALLED_ORDER_S:
             return
+        if stalled >= STALLED_ORDER_S and not uncertain:
+            # not an error, so nothing marked it: the book simply stopped
+            # agreeing with the venue. Fail closed until the venue answers.
+            self.store.mark_uncertain(
+                "no venue progress on %d live order(s) for %.0fs"
+                % (self.store.live_order_count(), stalled))
+            uncertain = self.store.orders_uncertain()
+            emit("L5_LIVE_ORDERS_STALLED",
+                 {"live_orders": self.store.live_order_count(),
+                  "stalled_s": round(stalled, 1),
+                  "submissions_allowed": False})
         if now - self.last_reconcile_t < RECONCILE_RETRY_S:
             return
         self.last_reconcile_t = now
@@ -315,6 +335,7 @@ class Runner:
                   "retry_in_s": RECONCILE_RETRY_S})
             return
         self.reconciled = True
+        self.last_progress_t = now
         emit("L5_LIVE_RECONCILE",
              dict(out, market=t.market_slug,
                   cleared_uncertainty=str(uncertain or ""),
@@ -472,6 +493,23 @@ class Runner:
             "intent": order.get("intent"),
             "armed": bool(t and t.armed)})
 
+    def orders_stalled_for_s(self, now: float) -> float:
+        """How long our live orders have gone without any venue progress.
+
+        0.0 when nothing is live, or when progress moved. This is the signal
+        that says a live-order book has drifted from the venue WITHOUT the
+        uncertainty flag being set -- an order we cannot query (no venue id)
+        or one the venue quietly finished never raises an error, it just
+        stops changing while it holds a slot in MAX_LIVE_ORDERS.
+        """
+        if not self.store.live_order_count():
+            self.last_progress_t = now
+            return 0.0
+        if self.last_progress_t <= 0:
+            self.last_progress_t = now
+            return 0.0
+        return max(0.0, now - self.last_progress_t)
+
     def poll_orders(self) -> List[Dict[str, Any]]:
         """Ask the venue what each live order actually did.
 
@@ -520,6 +558,7 @@ class Runner:
             out.append(res)
         if out:
             self.lifecycle(out)
+            self.last_progress_t = self.now_t
         return out
 
     def lifecycle(self, events: List[Dict[str, Any]]) -> None:
@@ -578,6 +617,49 @@ class Runner:
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)
         self.poll(now)
+
+
+#: The realized total the 2026-09-26 session accumulated under the wire-priced
+#: DOWN cost basis. It cannot be repaired in place -- the per-fill prices that
+#: produced it are gone -- so it is replaced ONCE by a decomposition built
+#: from evidence we do hold, and the difference is carried as unattributed
+#: rather than folded into the trading line.
+CONTAMINATED_REALIZED = D("4.766200")
+#: 1600z settlement, recomputed in own-outcome terms. Sum(1-p)q = Sum q - Sum pq,
+#: so 10.46 - 4.4399 = 6.0201 is exact rather than averaged.
+REBASE_ATTRIBUTED = D("3.4442")
+#: three authoritative flat balance reads, venue-confirmed
+REBASE_ANCHOR = {
+    "pre_arm_utc": "2026-09-26T15:49:54Z", "pre_arm_balance": "61.69765",
+    "after_1600z_utc": "2026-09-26T16:23:28Z", "after_1600z_balance":
+        "65.22685",
+    "at_disarm_utc": "2026-09-26T17:11:40Z", "at_disarm_balance": "63.60685",
+    "cash_delta": "1.90920",
+    "flat_at_each_read": "zero positions, zero open orders, zero unsettled",
+}
+REBASE_CASH_DELTA = D("1.90920")
+
+
+def rebase_contaminated_accounting(store) -> Optional[Dict[str, Any]]:
+    """Retire the wire-priced realized total, once, on this store.
+
+    Runs only when the stored legacy scalar still equals the contaminated
+    figure AND no decomposition exists yet, so it cannot fire twice and
+    cannot touch a store that never carried the defect.
+    """
+    if store.state.get("realized_attributed") is not None:
+        return None
+    legacy = D(str(store.state.get("realized_today") or 0))
+    if legacy != CONTAMINATED_REALIZED:
+        return None
+    out = store.rebase_session_accounting(
+        attributed=REBASE_ATTRIBUTED, cash_delta=REBASE_CASH_DELTA,
+        anchor=REBASE_ANCHOR,
+        reason=("realized_today was accumulated from DOWN legs priced at the "
+                "venue's WIRE (long-side) number instead of own-outcome "
+                "cash; the per-fill prices behind it are gone"))
+    emit("L5_LIVE_ACCOUNTING_REBASED", out)
+    return out
 
 
 def assert_role() -> None:

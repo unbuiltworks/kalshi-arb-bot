@@ -77,7 +77,7 @@ def test_with_no_fills_the_overlay_never_binds(tmp_path):
 
 def test_the_5_dollar_cap_binds_once_inventory_is_real(tmp_path):
     s = EX.InventoryStore(str(tmp_path / "b.json"))
-    s.apply_fill(MK, "UP", D("8"), D("0.60"))        # $4.80 committed
+    s.apply_fill(MK, "UP", D("8"), D("0.60"), basis=EX.OWN)        # $4.80 committed
     assert s.committed()[MK] == D("4.80")
     out = run(s, [action(2.0)])
     r = out["records"][0]
@@ -87,7 +87,7 @@ def test_the_5_dollar_cap_binds_once_inventory_is_real(tmp_path):
 
 def test_the_residual_cap_binds(tmp_path):
     s = EX.InventoryStore(str(tmp_path / "c.json"))
-    s.apply_fill(MK, "UP", D("10"), D("0.01"))       # residual +10, cheap
+    s.apply_fill(MK, "UP", D("10"), D("0.01"), basis=EX.OWN)       # residual +10, cheap
     assert s.residual(MK) == D("10")
     out = run(s, [action(3.0, side="UP")])
     assert out["records"][0]["refused_by_layer"] == "SAFETY_OVERLAY"
@@ -106,8 +106,9 @@ def test_the_maximum_live_exposure_is_the_cap_not_the_shadow_number(tmp_path):
         if o.get("reason") == "NOT_ARMED" and o.get("intent"):
             # simulate the fill the live path would have taken
             it = o["intent"]
+            # the intent carries L5's own-side price, so OWN terms
             s.apply_fill(MK, it["side"], D(str(it["qty"])),
-                         D(str(it["price"])))
+                         D(str(it["price"])), basis=EX.OWN)
             committed = s.committed()[MK]
         assert committed <= lim.max_usd_per_market, committed
         assert abs(s.residual(MK)) <= lim.max_abs_residual

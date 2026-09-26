@@ -93,7 +93,7 @@ def test_flat_open_is_permitted_under_treatment(tmp_path):
 
 def test_the_repairing_side_is_permitted_under_treatment(tmp_path):
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     assert store.residual(MARKET) == D("2")
     rec = drive(ex, side="DOWN", key="repair")
     assert rec["INVENTORY_CLASS"]["inventory_class"] == EX.REDUCE_RESIDUAL
@@ -103,7 +103,7 @@ def test_the_repairing_side_is_permitted_under_treatment(tmp_path):
 def test_the_repairing_side_is_permitted_even_far_past_any_cap(tmp_path):
     """No residual threshold was authorized. Repair is never blocked by size."""
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("9.5"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("9.5"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="DOWN", key="deep")
     assert rec["INVENTORY_CLASS"]["inventory_class"] == EX.REDUCE_RESIDUAL
     assert rec["refused_reason"] != "IMBALANCE_INCREASE_SUPPRESSED"
@@ -113,7 +113,7 @@ def test_the_repairing_side_is_permitted_even_far_past_any_cap(tmp_path):
 
 def test_increasing_a_long_residual_is_refused(tmp_path):
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="UP", key="more_up")
     assert rec["refused_reason"] == "IMBALANCE_INCREASE_SUPPRESSED"
     assert rec["refused_by_layer"] == "SAFETY_OVERLAY"
@@ -121,7 +121,7 @@ def test_increasing_a_long_residual_is_refused(tmp_path):
 
 def test_increasing_a_short_residual_is_refused(tmp_path):
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "DOWN", D("2"), D("0.30"))
+    store.apply_fill(MARKET, "DOWN", D("2"), D("0.30"), basis=EX.OWN)
     assert store.residual(MARKET) == D("-2")
     rec = drive(ex, side="DOWN", key="more_down")
     assert rec["refused_reason"] == "IMBALANCE_INCREASE_SUPPRESSED"
@@ -130,7 +130,7 @@ def test_increasing_a_short_residual_is_refused(tmp_path):
 def test_the_smallest_possible_residual_still_triggers_it(tmp_path):
     """Non-zero means non-zero. No tolerance band was authorized."""
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("0.01"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("0.01"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="UP", key="tiny")
     assert rec["refused_reason"] == "IMBALANCE_INCREASE_SUPPRESSED"
 
@@ -138,7 +138,7 @@ def test_the_smallest_possible_residual_still_triggers_it(tmp_path):
 def test_a_refused_action_sends_nothing(tmp_path):
     tp = L.FakeTransport()
     ex, store = executor(tmp_path, treated=True, transport=tp)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="UP", key="nosend")
     assert tp.sent == [], "a suppressed action reached the transport"
     assert rec["ORDER"] is None, "a suppressed action recorded an order"
@@ -146,7 +146,7 @@ def test_a_refused_action_sends_nothing(tmp_path):
 
 def test_a_refused_action_reserves_nothing(tmp_path):
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     before = store.live_order_count()
     drive(ex, side="UP", key="nores")
     assert store.live_order_count() == before
@@ -171,7 +171,7 @@ def test_the_switch_reads_only_explicit_yes(monkeypatch, val, on):
 def test_untreated_the_same_action_is_not_refused(tmp_path):
     """Probe 07's behaviour, reproduced exactly with the switch off."""
     ex, store = executor(tmp_path, treated=False)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="UP", key="control")
     assert rec["refused_reason"] != "IMBALANCE_INCREASE_SUPPRESSED"
     assert rec["INVENTORY_CLASS"]["treatment_active"] is False
@@ -180,7 +180,7 @@ def test_untreated_the_same_action_is_not_refused(tmp_path):
 def test_untreated_still_classifies_every_action(tmp_path):
     """The class is evidence, not a side effect of the treatment."""
     ex, store = executor(tmp_path, treated=False)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="UP", key="classify")
     assert rec["INVENTORY_CLASS"]["inventory_class"] == EX.INCREASE_RESIDUAL
 
@@ -198,7 +198,7 @@ def test_the_treatment_never_changes_price_or_quantity(tmp_path):
 
 def test_the_treatment_never_flips_a_side(tmp_path):
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="UP", key="flip")
     assert rec["L5_NATIVE"]["side"] == "UP"
     assert rec["ORDER"] is None
@@ -210,7 +210,7 @@ def test_the_treatment_cannot_raise_exposure(tmp_path):
     a, sa = executor(tmp_path / "a", treated=False)
     b, sb = executor(tmp_path / "b", treated=True)
     for s in (sa, sb):
-        s.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+        s.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     for i in range(4):
         drive(a, side="UP", key="a%d" % i)
         drive(b, side="UP", key="b%d" % i)
@@ -219,7 +219,7 @@ def test_the_treatment_cannot_raise_exposure(tmp_path):
 
 def test_classification_does_not_advance_the_provenance_chain(tmp_path):
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     rec = drive(ex, side="UP", key="stage")
     assert rec["stage_reached"] != "INVENTORY_CLASS"
 
@@ -227,7 +227,7 @@ def test_classification_does_not_advance_the_provenance_chain(tmp_path):
 def test_the_reason_string_is_exact(tmp_path):
     """Reports and the manifest both key on it; a rename is a silent break."""
     ex, store = executor(tmp_path, treated=True)
-    store.apply_fill(MARKET, "UP", D("2"), D("0.70"))
+    store.apply_fill(MARKET, "UP", D("2"), D("0.70"), basis=EX.OWN)
     assert drive(ex, side="UP", key="s")["refused_reason"] == (
         "IMBALANCE_INCREASE_SUPPRESSED")
 

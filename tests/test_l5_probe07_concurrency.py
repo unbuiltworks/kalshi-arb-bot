@@ -71,7 +71,7 @@ def test_a_partial_fill_counts_filled_plus_remaining_exactly_once():
     st = store()
     rest(st, "a", price="0.50", qty="4")           # 2.00 of premium
     assert st.risk_exposure_usd(MARKET) == D("2.00")
-    st.apply_fill(MARKET, "UP", D("1"), D("0.50"), coid="a")
+    st.apply_fill(MARKET, "UP", D("1"), D("0.50"), coid="a", basis=EX.OWN)
     # 1 share held at 0.50 + 3 still resting at 0.50 -- still 2.00, not 2.50
     assert st.risk_exposure_usd(MARKET) == D("2.00")
     assert st.live_orders()["a"]["remaining"] == "3"
@@ -80,7 +80,7 @@ def test_a_partial_fill_counts_filled_plus_remaining_exactly_once():
 def test_a_full_fill_moves_the_premium_and_does_not_double_count():
     st = store()
     rest(st, "a", price="0.50", qty="2")
-    st.apply_fill(MARKET, "UP", D("2"), D("0.50"), coid="a")
+    st.apply_fill(MARKET, "UP", D("2"), D("0.50"), coid="a", basis=EX.OWN)
     assert "a" not in st.live_orders()
     assert st.risk_exposure_usd(MARKET) == D("1.00")
 

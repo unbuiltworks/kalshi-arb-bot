@@ -59,6 +59,7 @@ def make_runner(tmp, transport):
     r.transport = transport
     r.reconciled = False
     r.last_reconcile_t = 0.0
+    r.last_progress_t = 0.0
     r.now_t = 1000.0
     import collections
     r.stats = collections.Counter()
@@ -241,6 +242,91 @@ def test_realized_survives_a_restart_because_the_store_is_on_the_volume(tmp):
     s1.state["realized_today"] = "-1.75"
     s1.save()
     assert LX.InventoryStore(path).realized_today() == D("-1.75")
+
+
+# -------------------------------------------- phantom / stalled live orders
+
+def test_live_orders_that_stop_progressing_force_a_reconcile(tmp):
+    """1700z: eight orders the venue had finished with, which we never
+    learned. No error was raised, so nothing set uncertainty; they simply
+    stopped changing while holding every slot in MAX_LIVE_ORDERS, and 276
+    actions were refused against orders that did not exist."""
+    t = FakeTransport(open_orders=[])          # the venue has none of them
+    r = make_runner(tmp, t)
+    r.reconcile_if_needed(r.now_t)             # a first, clean confirmation
+    assert r.store.orders_uncertain() is None
+
+    live = r.store.state.setdefault("live_orders", {})
+    for i in range(8):
+        live["l5f-phantom%d" % i] = {"market": t.market_slug, "side": "UP",
+                                     "price": "0.5", "qty": "1",
+                                     "remaining": "1"}
+    r.store.save()
+    r.last_progress_t = r.now_t                # progress was moving...
+    assert r.store.live_order_count() == 8
+
+    r.now_t += R.STALLED_ORDER_S + 1           # ...and then stopped
+    r.reconcile_if_needed(r.now_t)
+
+    # the venue is the authority: all eight released, nothing invented
+    assert r.store.live_orders() == {}
+    assert r.store.orders_uncertain() is None  # cleared by the reconcile
+    assert r.store.position(t.market_slug, "UP") == D(0)
+
+
+def test_a_stall_fails_closed_before_it_is_resolved(tmp):
+    """While the state is unknown, no new order may be submitted."""
+    t = FakeTransport(raises=RuntimeError("HTTPError"))
+    r = make_runner(tmp, t)
+    r.reconciled = True
+    live = r.store.state.setdefault("live_orders", {})
+    live["l5f-stuck"] = {"market": t.market_slug, "side": "UP",
+                         "price": "0.5", "qty": "1", "remaining": "1"}
+    r.store.save()
+    r.last_progress_t = r.now_t
+    r.now_t += R.STALLED_ORDER_S + 1
+    r.reconcile_if_needed(r.now_t)
+    assert r.store.orders_uncertain() is not None
+    assert r.limits.refuse(
+        price=D("0.5"), qty=D("1"), market=t.market_slug,
+        committed_by_market={}, residual_after=D(0), realized_today=D(0),
+        open_markets=[], outstanding_by_market={}, outstanding_residual=D(0),
+        live_order_count=1, risk_by_market={},
+        orders_uncertain=r.store.orders_uncertain()) == "ORDER_STATE_UNCERTAIN"
+
+
+def test_a_disappeared_order_is_released_not_turned_into_a_fill(tmp):
+    """Disappearance is not evidence of execution."""
+    t = FakeTransport(open_orders=[])
+    r = make_runner(tmp, t)
+    r.store.state.setdefault("live_orders", {})["l5f-gone"] = {
+        "market": "m", "side": "DOWN", "price": "0.4", "qty": "3",
+        "remaining": "3"}
+    r.store.save()
+    r.reconcile_if_needed(r.now_t)
+    assert r.store.live_orders() == {}
+    assert r.store.position("m", "DOWN") == D(0)
+    assert r.store.leg_cost("m")["DOWN"] == D(0)
+    assert r.store.realized_today() == D(0)
+
+
+def test_progress_that_keeps_moving_never_trips_the_stall(tmp):
+    t = FakeTransport()
+    r = make_runner(tmp, t)
+    r.store.state.setdefault("live_orders", {})["l5f-a"] = {
+        "market": "m", "side": "UP", "price": "0.5", "qty": "1",
+        "remaining": "1"}
+    r.store.save()
+    r.last_progress_t = r.now_t
+    r.now_t += R.STALLED_ORDER_S - 1
+    assert r.orders_stalled_for_s(r.now_t) < R.STALLED_ORDER_S
+
+
+def test_no_live_orders_means_no_stall(tmp):
+    t = FakeTransport()
+    r = make_runner(tmp, t)
+    r.now_t += 10_000
+    assert r.orders_stalled_for_s(r.now_t) == 0.0
 
 
 # --------------------------------------------------------- the tick ordering

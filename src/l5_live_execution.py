@@ -358,6 +358,42 @@ INCREASE_RESIDUAL = "INCREASE_RESIDUAL"
 REDUCE_RESIDUAL = "REDUCE_RESIDUAL"
 
 
+#: how a price arrived. There is no default anywhere: a caller that does not
+#: say which convention its number is in does not get to book a fill.
+WIRE = "WIRE"      # the venue's number: ALWAYS the long (YES) side's price
+OWN = "OWN"        # already in the outcome's own terms
+
+
+def own_outcome_price(side: str, price: D, *, basis: str) -> D:
+    """The cash one share of `side` actually costs, in its own terms.
+
+    THE VENUE QUOTES ONE NUMBER PER MARKET and it is always the LONG (YES)
+    side's price (l5_order_body: "To buy NO at X the wire value is 1.00 - X").
+    So a wire price p means an UP share costs p and a DOWN share costs 1 - p.
+
+    Everything downstream of a fill is in OWN terms and always was:
+    risk_exposure_usd computes `at_zero = -up_c + (dn_q - dn_c)`, which is
+    only true if dn_c is what the DOWN shares cost; retire_settled_market
+    pays a DOWN share $1 against dn_c for the same reason.
+
+    LIVE 2026-09-26. apply_order_progress booked fills at the venue's avgPx,
+    a WIRE number, straight into leg_cost, an OWN field. On 1600z that
+    recorded 10.46 DOWN shares as costing 4.4399 when they cost
+    10.46 - 4.4399 = 6.0201, reported a settlement of +5.0244 against a real
+    +3.4442, and left realized_today reading +4.7662 while the account had
+    actually made +1.9092. The same dn_c feeds the $5 exposure gate, so the
+    gate was under-binding on exactly the cheap short legs this strategy
+    accumulates. One conversion, in one place, is the whole fix.
+    """
+    p = D(str(price))
+    if basis == OWN:
+        return p
+    if basis != WIRE:
+        raise ValueError("price basis must be %r or %r, got %r"
+                         % (WIRE, OWN, basis))
+    return p if str(side).upper().startswith("U") else D(1) - p
+
+
 def inventory_class(residual: D, side: str) -> str:
     """What this action would do to |residual|, from REALIZED inventory.
 
@@ -707,7 +743,80 @@ class InventoryStore:
         return self.position(market, "UP") - self.position(market, "DOWN")
 
     def realized_today(self) -> D:
+        """The loss halt's authority: attributed settled P&L PLUS the
+        explicit difference we could not attribute.
+
+        Two lines, never one. `realized_attributed` is the sum of settlement
+        results computed from filled inventory in own-outcome terms.
+        `realized_unattributed` is what an authoritative cash anchor says is
+        left over -- windows whose settlement record we do not hold, fees,
+        credits, anything not yet traced to a line. Adding them is not the
+        same as setting realized := balance: the parts stay separate and
+        auditable, and the halt sees the whole of what the account did.
+
+        The legacy scalar is still read if the new fields are absent, so a
+        store written before this change keeps working.
+        """
+        if ("realized_attributed" in self.state
+                or "realized_unattributed" in self.state):
+            return (D(str(self.state.get("realized_attributed") or 0))
+                    + D(str(self.state.get("realized_unattributed") or 0)))
         return D(str(self.state.get("realized_today") or 0))
+
+    def realized_lines(self) -> Dict[str, str]:
+        """Every line apart, for reporting. Never collapsed by this method."""
+        return {
+            "realized_attributed": str(
+                D(str(self.state.get("realized_attributed") or 0))),
+            "realized_unattributed": str(
+                D(str(self.state.get("realized_unattributed") or 0))),
+            "realized_total": str(self.realized_today()),
+            "cash_anchor": dict(self.state.get("cash_anchor") or {}),
+            "legacy_realized_today": str(
+                D(str(self.state.get("realized_today") or 0))),
+            "labels": ("attributed is settlement P&L from filled inventory "
+                       "in own-outcome terms; unattributed is the explicit "
+                       "difference against an authoritative cash anchor and "
+                       "is NOT a trading result. Fees, maker rebates and "
+                       "rewards are separate confirmed lines and are not in "
+                       "either. A zero commission is NOT a rebate."),
+        }
+
+    def rebase_session_accounting(self, *, attributed: D, cash_delta: D,
+                                  anchor: Mapping[str, Any],
+                                  reason: str) -> Dict[str, Any]:
+        """Replace a contaminated realized total with a decomposed one.
+
+        Used once, after the own-terms cost-basis defect was found: the
+        stored realized_today of +4.7662 was computed from wire-priced DOWN
+        legs and cannot be repaired in place, because the per-fill prices
+        that produced it are gone.
+
+        `attributed` is what we CAN derive from evidence we hold.
+        `cash_delta` is what the venue's balance actually did between two
+        authoritative flat reads. The remainder is recorded as unattributed
+        rather than folded into the trading line, because calling an
+        unexplained cash movement a trading result is the thing this whole
+        accounting discipline exists to prevent.
+        """
+        att = D(str(attributed))
+        cash = D(str(cash_delta))
+        prior = dict(self.state.get("accounting_rebases") or {})
+        self.state["realized_attributed"] = str(att)
+        self.state["realized_unattributed"] = str(cash - att)
+        self.state["cash_anchor"] = dict(anchor)
+        hist = self.state.setdefault("accounting_rebase_log", [])
+        hist.append({"t": dt.datetime.now(dt.timezone.utc).isoformat(),
+                     "reason": reason,
+                     "superseded_realized_today": str(
+                         D(str(self.state.get("realized_today") or 0))),
+                     "attributed": str(att),
+                     "unattributed": str(cash - att),
+                     "cash_delta": str(cash)})
+        # the contaminated scalar is KEPT, not deleted, and stops being the
+        # authority: realized_today() prefers the decomposed fields.
+        self.save()
+        return dict(self.realized_lines(), rebases=len(hist), prior=prior)
 
     def already_submitted(self, coid: str) -> bool:
         return coid in (self.state.get("submitted") or {})
@@ -747,17 +856,25 @@ class InventoryStore:
                 if str(v.get("session_id") or "") != str(session_id)}
 
     def apply_fill(self, market: str, side: str, qty: D, price: D,
-                   *, coid: Optional[str] = None) -> None:
+                   *, coid: Optional[str] = None, basis: str) -> None:
+        """Book a fill. `basis` says which convention `price` is in.
+
+        It is keyword-only and has NO DEFAULT on purpose: a caller that does
+        not state its convention raises TypeError here rather than quietly
+        booking a wire price into an own-terms field, which is exactly how
+        the 1600z cost basis went wrong. Normalisation happens ONCE, here,
+        so the ACK, progress and reconcile paths cannot disagree.
+        """
+        own = own_outcome_price(side, price, basis=basis)
         k = "%s|%s" % (market, side)
         self.state["positions"][k] = str(
             D(str(self.state["positions"].get(k, 0))) + qty)
+        # both of these are CASH OUT in the leg's own terms now. They used to
+        # take the wire number, which credits a short instead of charging it.
         self.state["committed"][market] = str(
-            D(str(self.state["committed"].get(market, 0))) + price * qty)
-        # committed sums both legs as cash OUT, which the venue contradicts:
-        # a DOWN fill is a short and CREDITS us. The per-leg cost is kept so
-        # the risk bound can price each leg the way the venue settles it.
+            D(str(self.state["committed"].get(market, 0))) + own * qty)
         lc = self.state.setdefault("leg_cost", {})
-        lc[k] = str(D(str(lc.get(k, 0))) + price * qty)
+        lc[k] = str(D(str(lc.get(k, 0))) + own * qty)
         # A fill converts outstanding exposure into committed exposure. Not
         # decrementing here would double-count the same shares in both.
         live = self.state.setdefault("live_orders", {})
@@ -856,8 +973,10 @@ class InventoryStore:
                "delta": str(delta), "terminal": bool(prog.get("terminal")),
                "state": prog.get("state")}
         if delta > 0:
+            # avgPx is the VENUE's number, so it is WIRE and gets converted
             self.apply_fill(market, side, delta,
-                            D(str(prog.get("avg_px") or 0)), coid=coid)
+                            D(str(prog.get("avg_px") or 0)), coid=coid,
+                            basis=WIRE)
             self.state.setdefault("filled_qty", {})[coid] = str(cum)
             fees = self.state.setdefault("fees", {})
             fees[coid] = str(D(str(prog.get("commission") or 0)))
@@ -1010,7 +1129,16 @@ class InventoryStore:
             (self.state.get("leg_cost") or {}).pop(
                 "%s|%s" % (market, side), None)
         released = D(str(self.state["committed"].pop(market, 0)))
-        self.state["realized_today"] = str(self.realized_today() + pnl)
+        # a settlement is attributable by construction: it came from filled
+        # inventory and the venue's own settlement price.
+        self.state["realized_attributed"] = str(
+            D(str(self.state.get("realized_attributed") or 0)) + pnl)
+        self.state.setdefault("realized_unattributed",
+                              str(D(str(self.state.get(
+                                  "realized_unattributed") or 0))))
+        # keep the legacy scalar moving too, for anything still reading it
+        self.state["realized_today"] = str(
+            D(str(self.state.get("realized_today") or 0)) + pnl)
         self.save()
         return {
             "retired": True, "market": market, "yes_value": str(v),
@@ -1110,9 +1238,18 @@ class InventoryStore:
                 "side": o.get("side") or mine.get("side"),
                 # by name, never str() of whatever arrived: an unreadable
                 # price is recorded AS unreadable so the risk readers can
-                # price it at worst case instead of at zero
-                "price": (str(_adopt_px) if (_adopt_px := venue_order_price(o))
-                          is not None
+                # price it at worst case instead of at zero.
+                #
+                # AND IN OWN-OUTCOME TERMS. venue_order_price returns the
+                # venue's number, which is the long (YES) side's price, while
+                # risk_exposure_usd reads live_orders["price"] as what the
+                # leg costs us -- the same mismatch that wrecked leg_cost.
+                # An order WE placed was already stored in own terms by
+                # record_submit, so only the venue's number is converted.
+                "price": (str(own_outcome_price(
+                              o.get("side") or mine.get("side") or "",
+                              _adopt_px, basis=WIRE))
+                          if (_adopt_px := venue_order_price(o)) is not None
                           else (str(mine.get("price"))
                                 if venue_decimal(mine.get("price")) is not None
                                 else None)),
@@ -1441,7 +1578,12 @@ class FaithfulExecutor:
                                 "venue_state": terminal or None,
                                 "still_live": self.store.live_order_count()})
             return prov.rec
-        fill_px = D(str(ack.get("fill_price") or tr["price"]))
+        # tr["price"] is L5's own-side price, already in OWN terms. The
+        # venue's ACK carries no own-terms price -- anything it returns is
+        # WIRE -- so a raw ACK field must never be read as though it were
+        # own. The authoritative fill price arrives later from
+        # order_progress, which converts it.
+        fill_px = D(str(tr["price"]))
         fee = (fees.taker_fee(fill_px, filled) if tr["mode"] == FT.TAKER
                else D(0))
         rebate = (fees.maker_rebate(fill_px, filled) if tr["mode"] == FT.MAKER
@@ -1451,7 +1593,12 @@ class FaithfulExecutor:
                             "maker_rebate_usd": str(rebate),
                             "note": ("fee and rebate are separate lines and "
                                      "are never netted into trading P&L")})
-        self.store.apply_fill(market, dec["side"], filled, fill_px, coid=coid)
+        self.store.apply_fill(market, dec["side"], filled, fill_px,
+                              coid=coid, basis=OWN)
+        # record what this path booked, or the next order_progress read will
+        # see cum > already == 0 and book the same shares a second time.
+        self.store.state.setdefault("filled_qty", {})[coid] = str(filled)
+        self.store.save()
         prov.stage("INVENTORY", {
             "market": market,
             "up": str(self.store.position(market, "UP")),

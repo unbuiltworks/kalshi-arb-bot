@@ -263,7 +263,7 @@ def test_the_venue_overrides_our_file_and_drift_is_reported(tmp_path):
 
 def test_inventory_survives_restart(tmp_path):
     st = store(tmp_path)
-    st.apply_fill("m", "UP", D("2"), D("0.5"))
+    st.apply_fill("m", "UP", D("2"), D("0.5"), basis=E.OWN)
     again = E.InventoryStore(str(tmp_path / "inv.json"))
     assert again.position("m", "UP") == D("2")
     assert again.committed()["m"] == D("1.0")

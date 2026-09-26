@@ -8,6 +8,7 @@ import json
 from decimal import Decimal as D
 
 from src.l5_expectancy_replay import Fill, InventoryWalk, UP, DOWN
+from src import l5_live_execution as EXEC
 from src.l5_live_execution import InventoryStore
 
 SRC = "analysis/pmus/evidence/probe08b_sequence.json"
@@ -82,10 +83,15 @@ def main():
     events = sorted(orders, key=lambda o: (o["l5_ts"], o["seq"]))
     for o in events:
         if o["venue_state"] == "ORDER_STATE_FILLED":
-            st.apply_fill(m, o["side"], D(o["cum_qty"]), D(o["wire"]))
+            st.apply_fill(m, o["side"], D(o["cum_qty"]), D(o["wire"]),
+                          basis=EXEC.WIRE)
         else:
+            # live_orders["price"] is read by risk_exposure_usd as what the
+            # leg COSTS, so the venue's wire number is converted here too.
             st.state["live_orders"][o["venue_order_id"]] = {
-                "market": m, "side": o["side"], "price": o["wire"],
+                "market": m, "side": o["side"],
+                "price": str(EXEC.own_outcome_price(
+                    o["side"], D(o["wire"]), basis=EXEC.WIRE)),
                 "remaining": o["qty"], "state": "LIVE_AT_VENUE"}
         r = st.risk_exposure_usd(m)
         peak = max(peak, r)

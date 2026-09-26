@@ -105,7 +105,7 @@ def test_a_terminal_order_releases_the_slot_and_the_dollars(tmp_path):
 def test_a_partial_fill_moves_dollars_across_not_away(tmp_path):
     st = store(tmp_path)
     submit(st, "a", price="0.50", qty="4")             # $2.00 outstanding
-    st.apply_fill("m", "UP", D("1"), D("0.50"), coid="a")
+    st.apply_fill("m", "UP", D("1"), D("0.50"), coid="a", basis=E.OWN)
     # 1 share filled: $0.50 committed, $1.50 still fillable. The total the
     # envelope sees must not drop just because part of it landed.
     assert st.committed()["m"] == D("0.50")
@@ -117,7 +117,7 @@ def test_a_partial_fill_moves_dollars_across_not_away(tmp_path):
 def test_a_partially_filled_order_is_still_live(tmp_path):
     st = store(tmp_path)
     submit(st, "a", price="0.50", qty="4")
-    st.apply_fill("m", "UP", D("1"), D("0.50"), coid="a")
+    st.apply_fill("m", "UP", D("1"), D("0.50"), coid="a", basis=E.OWN)
     assert st.live_order_count() == 1
     assert ask(lim(), st) == "MAX_LIVE_ORDERS"
 
@@ -125,7 +125,7 @@ def test_a_partially_filled_order_is_still_live(tmp_path):
 def test_a_complete_fill_ends_the_order(tmp_path):
     st = store(tmp_path)
     submit(st, "a", price="0.50", qty="4")
-    st.apply_fill("m", "UP", D("4"), D("0.50"), coid="a")
+    st.apply_fill("m", "UP", D("4"), D("0.50"), coid="a", basis=E.OWN)
     assert st.live_order_count() == 0
     assert st.outstanding_by_market() == {}
     assert st.committed()["m"] == D("2.00")
@@ -139,7 +139,7 @@ def test_partial_fills_still_cannot_breach_the_cap(tmp_path):
         if why:
             break
         submit(st, "o%d" % i, price="0.50", qty="4")
-        st.apply_fill("m", "UP", D("1"), D("0.50"), coid="o%d" % i)
+        st.apply_fill("m", "UP", D("1"), D("0.50"), coid="o%d" % i, basis=E.OWN)
     potential = (sum(st.committed().values(), D(0))
                  + sum(st.outstanding_by_market().values(), D(0)))
     assert potential <= D("5")
