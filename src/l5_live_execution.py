@@ -350,6 +350,29 @@ class SafetyLimits:
         return None
 
 
+#: Probe 08's inventory classes. Every eligible action gets one, whether it
+#: is permitted or refused, so the treatment can be read off the record
+#: rather than inferred from what happened afterwards.
+FLAT_OPEN = "FLAT_OPEN"
+INCREASE_RESIDUAL = "INCREASE_RESIDUAL"
+REDUCE_RESIDUAL = "REDUCE_RESIDUAL"
+
+
+def inventory_class(residual: D, side: str) -> str:
+    """What this action would do to |residual|, from REALIZED inventory.
+
+    Realized, not realized-plus-outstanding: the directive says "current
+    realized residual", and an order that has not filled has not moved the
+    imbalance. Outstanding orders are still priced as if they fill in full
+    by `risk_exposure_usd`, so the dollar bound is unaffected by this
+    choice; only the classification is.
+    """
+    up = str(side).upper().startswith("U")
+    if residual == 0:
+        return FLAT_OPEN
+    return INCREASE_RESIDUAL if ((residual > 0) == up) else REDUCE_RESIDUAL
+
+
 class Provenance:
     """One record per L5 action, carrying the whole chain."""
 
@@ -374,6 +397,11 @@ class Provenance:
     def stage(self, name: str, payload: Mapping[str, Any]) -> None:
         self.rec[name] = dict(payload)
         self.rec["stage_reached"] = name
+
+    def note(self, name: str, payload: Mapping[str, Any]) -> None:
+        """Record a fact about the action without claiming a stage was
+        reached. Classification is not progress through the chain."""
+        self.rec[name] = dict(payload)
 
 
 #: What a venue POSITION ROW calls the market. `positions()` returns rows
@@ -944,7 +972,8 @@ class FaithfulExecutor:
                  transport: Optional[Any] = None,
                  lam: D = D("1"), now_fn=None,
                  maker_treatment: bool = False,
-                 maker_only: bool = False) -> None:
+                 maker_only: bool = False,
+                 suppress_imbalance_increase: bool = False) -> None:
         self.store = store
         self.limits = limits
         self.transport = transport or NullTransport()
@@ -959,6 +988,14 @@ class FaithfulExecutor:
         #: MAKER_ONLY: no taker fallback at all. Probe 07 is a test of the
         #: maker mechanism, and a crossing order would contaminate it.
         self.maker_only = maker_only
+        #: PROBE 08 TREATMENT. While the market's REALIZED residual is
+        #: non-zero, an order that would deepen the imbalance is refused.
+        #: It refuses and nothing else: it never invents a trade, never
+        #: crosses, never chases, never re-prices, and never blocks the
+        #: complementary side or an opening leg from flat. Because it can
+        #: only ever decline, it cannot raise exposure above what the
+        #: untreated path would have reached.
+        self.suppress_imbalance_increase = suppress_imbalance_increase
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
 
     def _age_s(self, row: Mapping[str, Any]) -> Optional[float]:
@@ -1083,7 +1120,18 @@ class FaithfulExecutor:
                                % (desired, inc))
         tr = dict(tr, qty=executable)
 
-        resid_after = self.store.residual(market) + (
+        resid_before = self.store.residual(market)
+        klass = inventory_class(resid_before, dec["side"])
+        prov.note("INVENTORY_CLASS", {
+            "inventory_class": klass,
+            "residual_before": str(resid_before),
+            "side": dec["side"],
+            "treatment_active": bool(self.suppress_imbalance_increase),
+            "basis": "REALIZED residual; outstanding orders are not counted"})
+        if self.suppress_imbalance_increase and klass == INCREASE_RESIDUAL:
+            return prov.refuse("SAFETY_OVERLAY", "IMBALANCE_INCREASE_SUPPRESSED")
+
+        resid_after = resid_before + (
             tr["qty"] if dec["side"] == "UP" else -tr["qty"])
         outstanding = self.store.outstanding_by_market()
         why = self.limits.refuse(

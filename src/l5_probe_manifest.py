@@ -89,6 +89,20 @@ def manifest(market: str) -> Dict[str, Any]:
         "limits": lim.as_dict(),
         "worst_case": worst_case(lim),
         "armed": False,
+        #: Probe 08 changes no number above. Its one treatment is a REFUSAL
+        #: in the overlay -- while the realized residual is non-zero, an
+        #: order that would deepen it is declined -- so it can only ever
+        #: reduce exposure, never raise it. Named here so the envelope and
+        #: the treatment are read from one place.
+        "treatment": {
+            "name": "IMBALANCE_INCREASE_SUPPRESSED",
+            "env": "L5_IMBALANCE_SUPPRESS",
+            "default": "OFF (Probe 07 is the control)",
+            "permits": ["FLAT_OPEN", "REDUCE_RESIDUAL"],
+            "refuses": ["INCREASE_RESIDUAL"],
+            "basis": "REALIZED residual only",
+            "changes_no_limit": True,
+        },
         "labels": ("DISARMED. These are account-protection bounds only and "
                    "say nothing about L5 behaviour or PMUS capability."),
     }

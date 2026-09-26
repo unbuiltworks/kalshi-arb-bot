@@ -253,7 +253,9 @@ class Probe:
                                    limits=self.limits, transport=self.tp,
                                    lam=PM.LAMBDA, now_fn=self._utc,
                                    maker_treatment=maker_treatment_enabled(),
-                                   maker_only=maker_only_enabled())
+                                   maker_only=maker_only_enabled(),
+                                   suppress_imbalance_increase=(
+                                       imbalance_suppress_enabled()))
                 for rec in out["records"]:
                     self.records.append(rec)
                     self.journal.write("action", rec)
@@ -719,7 +721,7 @@ ACTION_COLUMNS = ("action_key", "l5_side", "l5_price", "l5_size",
                   "l5_relation", "our_mode", "our_price", "our_qty_desired",
                   "our_qty_executable", "submitted", "stage_reached",
                   "refused_by_layer", "refused_reason", "book_source",
-                  "snapshot_age_s")
+                  "snapshot_age_s", "inventory_class", "residual_before")
 
 
 def action_table(records: Sequence[Mapping[str, Any]],
@@ -741,6 +743,7 @@ def action_table(records: Sequence[Mapping[str, Any]],
         l5 = rec.get("L5_NATIVE") or {}
         tr = rec.get("PMUS_TRANSLATION") or {}
         o = rec.get("ORDER") or {}
+        ic = rec.get("INVENTORY_CLASS") or {}
         out.append({
             "action_key": rec.get("action_key"),
             "l5_side": l5.get("side"),
@@ -759,6 +762,8 @@ def action_table(records: Sequence[Mapping[str, Any]],
             "refused_reason": rec.get("refused_reason"),
             "book_source": rec.get("book_source"),
             "snapshot_age_s": rec.get("pmus_snapshot_age_s"),
+            "inventory_class": ic.get("inventory_class"),
+            "residual_before": ic.get("residual_before"),
         })
     return out
 
@@ -778,8 +783,24 @@ def action_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         if why:
             d["refused"] += 1
             by_reason[str(why)] = by_reason.get(str(why), 0) + 1
+    by_class: Dict[str, Dict[str, int]] = {}
+    for r in rows:
+        k = str(r.get("inventory_class") or "UNCLASSIFIED")
+        d = by_class.setdefault(k, {"actions": 0, "permitted": 0,
+                                    "submitted": 0, "suppressed": 0})
+        d["actions"] += 1
+        if r.get("submitted") is True:
+            d["submitted"] += 1
+        why = str(r.get("refused_reason") or "")
+        if why == "IMBALANCE_INCREASE_SUPPRESSED":
+            d["suppressed"] += 1
+        elif not why:
+            d["permitted"] += 1
     return {"actions": len(rows), "by_l5_side": by_side,
             "by_refusal": by_reason,
+            "by_inventory_class": by_class,
+            "imbalance_increase_suppressed": by_reason.get(
+                "IMBALANCE_INCREASE_SUPPRESSED", 0),
             "followed": sum(1 for r in rows if r.get("submitted") is True)}
 
 
@@ -787,6 +808,9 @@ def action_summary(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
 #: probe's behaviour is exactly what it was.
 MAKER_TREATMENT_ENV = "L5_MAKER_TREATMENT"
 MAKER_ONLY_ENV = "L5_MAKER_ONLY"
+#: Probe 08's single treatment switch, likewise default OFF. With it unset,
+#: Probe 07 is reproduced exactly, which is what makes Probe 07 the control.
+IMBALANCE_SUPPRESS_ENV = "L5_IMBALANCE_SUPPRESS"
 
 
 def maker_treatment_enabled() -> bool:
@@ -797,6 +821,11 @@ def maker_treatment_enabled() -> bool:
 def maker_only_enabled() -> bool:
     return os.getenv(MAKER_ONLY_ENV, "").strip().upper() in ("1", "YES",
                                                              "TRUE")
+
+
+def imbalance_suppress_enabled() -> bool:
+    return os.getenv(IMBALANCE_SUPPRESS_ENV, "").strip().upper() in (
+        "1", "YES", "TRUE")
 
 
 RECOVER_ENV = "L5_RECOVER_ONLY"
@@ -1143,6 +1172,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "recover_market": os.getenv("L5_RECOVER_MARKET", ""),
         "maker_treatment": maker_treatment_enabled(),
         "maker_only": maker_only_enabled(),
+        "imbalance_suppress": imbalance_suppress_enabled(),
+        "treatment": ("IMBALANCE_INCREASE_SUPPRESSED"
+                      if imbalance_suppress_enabled() else "NONE"),
+        "session": os.getenv("PMUS_Q1_SESSION_ID", ""),
+        "armed": os.getenv("PMUS_Q1_ARM", ""),
+        "live": os.getenv("PMUS_Q1_LIVE", ""),
     }), flush=True)
     if recover_only_enabled():
         rep = recover()
