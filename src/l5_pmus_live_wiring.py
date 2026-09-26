@@ -99,7 +99,8 @@ def run_window(rows: Sequence[Mapping[str, Any]],
                interaction: Optional[Mapping[str, Any]] = None,
                now_fn=None,
                maker_treatment: bool = False,
-               maker_only: bool = False) -> Dict[str, Any]:
+               maker_only: bool = False,
+               suppress_imbalance_increase: bool = False) -> Dict[str, Any]:
     """Drive one window's L5 actions through the real production path.
 
     `interaction` maps action_key -> observed interaction class, which the
@@ -111,7 +112,9 @@ def run_window(rows: Sequence[Mapping[str, Any]],
     ex = EX.FaithfulExecutor(store, limits, transport=transport, lam=lam,
                              now_fn=now_fn,
                              maker_treatment=maker_treatment,
-                             maker_only=maker_only)
+                             maker_only=maker_only,
+                             suppress_imbalance_increase=(
+                                 suppress_imbalance_increase))
     records: List[dict] = []
     for row in sorted(rows, key=lambda r: str(r.get("receipt_utc") or "")):
         wired = attach(row, books)
