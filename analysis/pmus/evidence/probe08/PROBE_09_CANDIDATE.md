@@ -43,6 +43,33 @@ and on the real numbers it works.
 | maker rebates | +0.0400 | +0.0100 | −0.0300 |
 | **total** | **−0.5598** | **−0.6788** | **−0.1190** |
 
+### Correction — the P&L delta above is not evidence
+
+`total −0.5598 → −0.6788` was reported first and should not have been. It is
+settlement-direction dependent and therefore noise on a single window:
+
+| branch | control | candidate | delta |
+|---|---:|---:|---:|
+| UP won (what happened) | −0.5598 | −0.6788 | −0.1190 |
+| DOWN won (counterfactual) | −1.3498 | **+1.0012** | **+2.3510** |
+
+Flip the settlement and the candidate wins by $2.35. The rejection does not
+rest on that column and never should have.
+
+**It rests on the settlement-independent quantities:**
+
+| | control | candidate |
+|---|---:|---:|
+| matched qty produced | 3.93 | **0** |
+| matched P&L (locked at fill, cannot be luck) | −0.7806 | 0 |
+| terminal residual | 0.79 UP | **1.68 DOWN** |
+| residual cost at risk | 0.6092 | **0.6888** |
+| repair orders placed / filled | 6 / 3 | 2 / 0 |
+
+The candidate produces **no locked economics at all** and carries **more**
+naked directional exposure into settlement. Both statements hold whichever
+way the market resolves. That is the case against it.
+
 **An unfilled order consumes repair capacity.** Two repairs resting at 0.56
 and 0.60 reserve +2.67 of direction, which pushes the prospective residual
 to +0.99 and makes every later repair look like deepening a long. The three

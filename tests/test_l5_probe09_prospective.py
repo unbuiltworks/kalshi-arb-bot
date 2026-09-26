@@ -226,3 +226,56 @@ def test_l5_native_is_untouched_by_this_work():
     for frozen in ("src.l5_faithful_translation", "src.l5_native_shadow",
                    "l5_native", "pmus_translate"):
         assert frozen not in names, frozen
+
+
+# --------------------------------- the rejection must not rest on luck
+
+def test_the_pnl_delta_flips_with_the_settlement_direction():
+    """Reported as the headline once; it is noise on a single window.
+
+    The candidate loses by 0.119 when UP settles and wins by 2.351 when DOWN
+    does. Any argument built on that column is an argument about which way
+    one BTC15m window happened to close.
+    """
+    from src.l5_expectancy_replay import Fill, InventoryWalk, UP, DOWN
+
+    o = {x["seq"]: x for x in sequence()}
+
+    def econ(seqs, winner):
+        w = InventoryWalk("m")
+        for s in sorted(seqs):
+            x = o[s]
+            if x["venue_state"] != "ORDER_STATE_FILLED":
+                continue
+            w.accept(Fill(x["l5_ts"], UP if x["side"] == "UP" else DOWN,
+                          D(x["own_price"]), D(x["cum_qty"]),
+                          rebate=-D(x["commission"])))
+        return w.settle(winner)
+
+    control, cand = [1, 2, 3, 4, 5, 6, 7, 8], [1, 3, 4]
+    up = econ(cand, UP)["total"] - econ(control, UP)["total"]
+    dn = econ(cand, DOWN)["total"] - econ(control, DOWN)["total"]
+    assert up < 0 < dn, "the sign of the delta flips with the settlement"
+
+
+def test_the_rejection_rests_on_settlement_independent_quantities():
+    """Matched production and residual size, which luck cannot move."""
+    from src.l5_expectancy_replay import Fill, InventoryWalk, UP, DOWN
+
+    o = {x["seq"]: x for x in sequence()}
+
+    def walk(seqs):
+        w = InventoryWalk("m")
+        for s in sorted(seqs):
+            x = o[s]
+            if x["venue_state"] != "ORDER_STATE_FILLED":
+                continue
+            w.accept(Fill(x["l5_ts"], UP if x["side"] == "UP" else DOWN,
+                          D(x["own_price"]), D(x["cum_qty"])))
+        return w
+
+    control, cand = walk([1, 2, 3, 4, 5, 6, 7, 8]), walk([1, 3, 4])
+    # identical under either settlement, because neither is settled here
+    assert control.matched_pairs == D("3.93")
+    assert cand.matched_pairs == D(0), "the candidate produces no locked pair"
+    assert abs(cand.residual()) > abs(control.residual()), "more naked risk"
