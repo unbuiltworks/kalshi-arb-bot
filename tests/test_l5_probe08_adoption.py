@@ -196,3 +196,60 @@ def test_report_time_reconciliation_survives_a_resting_order():
     st.risk_exposure_usd(MARKET)
     st.outstanding_residual(MARKET)
     st.gross_inventory(MARKET)
+
+
+# ------------------------------- reading the evidence without changing it
+
+def test_recovery_reads_one_journal_and_writes_another(tmp_path, monkeypatch):
+    """Probe 08's journal is the only record of a window whose report died.
+
+    Recovery appends its own row to the journal it holds, so extracting the
+    evidence by pointing L5_SESSION_JOURNAL at it would modify the evidence
+    in the act of reading it.
+    """
+    import scripts.l5_pmus_live_oneshot as ONE
+
+    evidence = tmp_path / "probe08b_journal.jsonl"
+    evidence.write_text(
+        '{"kind": "action", "market": "%s", "action_key": "a1",'
+        ' "L5_NATIVE": {"side": "UP"}, "PMUS_TRANSLATION": {},'
+        ' "INVENTORY_CLASS": {"inventory_class": "FLAT_OPEN",'
+        ' "residual_before": "0"}}\n' % MARKET)
+    before = evidence.read_bytes()
+
+    out = ONE.recover(http=object(), state_path=str(tmp_path / "inv.json"),
+                      journal_path=str(tmp_path / "recovery.jsonl"),
+                      read_path=str(evidence), market=MARKET)
+
+    assert out["journal"]["records"] == 1
+    assert out["journal"]["read_only_source"] is True
+    assert evidence.read_bytes() == before, "the evidence was appended to"
+    assert (tmp_path / "recovery.jsonl").exists(), "the row went elsewhere"
+
+
+def test_the_extracted_action_carries_its_inventory_class(tmp_path):
+    import scripts.l5_pmus_live_oneshot as ONE
+
+    evidence = tmp_path / "j.jsonl"
+    evidence.write_text(
+        '{"kind": "action", "market": "%s", "action_key": "a1",'
+        ' "L5_NATIVE": {"side": "DOWN"}, "PMUS_TRANSLATION": {},'
+        ' "INVENTORY_CLASS": {"inventory_class": "REDUCE_RESIDUAL",'
+        ' "residual_before": "2.25"}}\n' % MARKET)
+    out = ONE.recover(http=object(), state_path=str(tmp_path / "inv.json"),
+                      journal_path=str(tmp_path / "r.jsonl"),
+                      read_path=str(evidence), market=MARKET)
+    row = out["action_table"][0]
+    assert row["inventory_class"] == "REDUCE_RESIDUAL"
+    assert row["residual_before"] == "2.25"
+
+
+def test_without_the_override_it_reads_the_journal_it_writes(tmp_path,
+                                                             monkeypatch):
+    import scripts.l5_pmus_live_oneshot as ONE
+    monkeypatch.delenv(ONE.RECOVER_JOURNAL_ENV, raising=False)
+    j = tmp_path / "j.jsonl"
+    j.write_text("")
+    out = ONE.recover(http=object(), state_path=str(tmp_path / "inv.json"),
+                      journal_path=str(j), market=MARKET)
+    assert out["journal"]["read_only_source"] is False
