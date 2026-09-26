@@ -130,6 +130,10 @@ def runner(tmp, venue):
     r.last_order_poll = {}
     r.last_settlement_poll = {}
     r.last_pending_resolve = {}
+    r.last_pending_resolve_t = 0.0
+    r.preflight_attempts = 0
+    r.last_preflight_t = 0.0
+    r.preflight_status = "PASSED"
     r.stats = collections.Counter()
     r.win = collections.Counter()
     return r
@@ -299,7 +303,10 @@ def test_the_loop_survives_a_venue_that_answers_429_to_everything(tmp):
     assert r.store.realized_today() == D(0)
 
     v.fail_everything = 0
-    for _ in range(4):
+    # long enough for the parked order to resolve AND for a reconcile to
+    # run: booking the fill clears the parking, but only an authoritative
+    # reconciliation is allowed to clear the uncertainty it caused.
+    for _ in range(10):
         step(r, dt_s=R.PENDING_RESOLVE_S + 1)
     assert r.store.pending_terminal() == {}
     assert r.store.position(MKTS[0], LX.DOWN) == D("2")

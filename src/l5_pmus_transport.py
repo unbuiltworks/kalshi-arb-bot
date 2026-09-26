@@ -108,11 +108,20 @@ class RateLimiter:
         self.cool_until = 0.0
         self.consecutive_429 = 0
         self.first_429_t: Optional[float] = None
-        self.counts: Dict[str, int] = {"requests": 0, "http_429": 0,
-                                       "throttled_waits": 0,
+        #: DEMANDED vs TRANSMITTED. Pacing makes the observed HTTP rate look
+        #: safe by construction -- it is the rate we chose -- so the number
+        #: that says whether the schedule actually fits is how much was
+        #: ASKED FOR. demanded == transmitted means nothing queued; a gap
+        #: that grows means the callers want more than the ceiling allows
+        #: and something downstream is falling behind, which is invisible in
+        #: the transmitted rate alone.
+        self.counts: Dict[str, int] = {"requests": 0, "demanded": 0,
+                                       "http_429": 0, "throttled_waits": 0,
                                        "refused_in_cooloff": 0,
                                        "recoveries": 0}
+        self.started_t = self.last_t
         self.total_wait_s = 0.0
+        self.max_wait_s = 0.0
         self.last_recovery_s: Optional[float] = None
 
     def _refill(self) -> None:
@@ -124,6 +133,7 @@ class RateLimiter:
     def before(self, *, write: bool) -> None:
         """Called before a request leaves. Raises inside the cool-off."""
         now = self._now()
+        self.counts["demanded"] += 1
         if now < self.cool_until:
             self.counts["refused_in_cooloff"] += 1
             raise VenueThrottled(
@@ -139,6 +149,7 @@ class RateLimiter:
             wait = (1.0 - self.tokens) / self.rps if self.rps > 0 else 0.0
             self.counts["throttled_waits"] += 1
             self.total_wait_s += wait
+            self.max_wait_s = max(self.max_wait_s, wait)
             self._sleep(wait)
             self._refill()
         self.tokens = max(0.0, self.tokens - 1.0)
@@ -172,8 +183,20 @@ class RateLimiter:
 
     def metrics(self) -> Dict[str, Any]:
         now = self._now()
+        span = max(1e-9, now - self.started_t)
         return {
             "requests": self.counts["requests"],
+            "demanded": self.counts["demanded"],
+            # the two rates side by side. transmitted_rps is the rate we
+            # chose; demand_rps is the rate the schedule actually wants.
+            "transmitted_rps": round(self.counts["requests"] / span, 4),
+            "demand_rps": round(self.counts["demanded"] / span, 4),
+            "unmet_demand": (self.counts["demanded"]
+                             - self.counts["requests"]),
+            "max_wait_s": round(self.max_wait_s, 3),
+            "mean_wait_s": round(
+                self.total_wait_s / max(1, self.counts["throttled_waits"]), 3),
+            "uptime_s": round(span, 1),
             "http_429": self.counts["http_429"],
             "throttled_waits": self.counts["throttled_waits"],
             "refused_in_cooloff": self.counts["refused_in_cooloff"],
@@ -191,6 +214,64 @@ class RateLimiter:
                        "the first 429 of a run to the next successful "
                        "answer, which is what says the backoff works."),
         }
+
+
+#: ONE LIMITER FOR THE PROCESS.
+#:
+#: It used to be built in PmusTransport.__init__, and Runner.roll() builds a
+#: NEW PmusTransport for every 15-minute window -- so the token bucket and,
+#: far worse, the shared 429 cool-off were thrown away at every rollover.
+#: Observed live on 2026-09-26: the request counter read 134 at 22:57:06Z on
+#: the 2245z transport and 24 at 23:00:40Z on the 2300z one. A venue that
+#: refused us at 23:14:50 would have had its cool-off discarded ten seconds
+#: later, at exactly the boundary where the original incident's failures
+#: clustered. A cool-off shared between callers but not across windows is
+#: not a cool-off.
+#:
+#: The venue's rate limit belongs to the ACCOUNT and the process, not to a
+#: market that happens to be open, so the limiter lives here and every
+#: transport shares it by default.
+_SHARED_LIMITER: Optional["RateLimiter"] = None
+
+
+def shared_limiter() -> "RateLimiter":
+    """The process's one limiter, created on first use."""
+    global _SHARED_LIMITER
+    if _SHARED_LIMITER is None:
+        _SHARED_LIMITER = RateLimiter(
+            rps=float(os.getenv("PMUS_RPS", "1.5")),
+            burst=float(os.getenv("PMUS_BURST", "4")),
+            backoff_s=float(os.getenv("PMUS_BACKOFF_S", "2")),
+            backoff_max_s=float(os.getenv("PMUS_BACKOFF_MAX_S", "60")))
+    return _SHARED_LIMITER
+
+
+def reset_shared_limiter() -> None:
+    """Tests only. A live process never discards its limiter."""
+    global _SHARED_LIMITER
+    _SHARED_LIMITER = None
+
+
+#: PROCESS-INVARIANT PREFLIGHT FACTS, and nothing else.
+#:
+#: Preflight made five venue reads every PREFLIGHT_RETRY_S until it passed,
+#: on every window. Measured on 2026-09-26: 80 requests in 126 seconds --
+#: 0.63 req/s, disarmed, with no orders at all -- while 2300z waited for the
+#: venue to list the new market.
+#:
+#: What is cached here does not change between windows: whether this key
+#: binds this account, and what the series' outcome vocabulary is. What is
+#: NOT cached, and never will be, is every assertion about NOW:
+#: market_open_tradable and no_unexpected_open_orders are re-read on every
+#: single attempt, because a cache that answers "is this market tradable"
+#: or "do I have orders out" is a cache that turns unknown into safe.
+_PREFLIGHT_CACHE: Dict[str, Any] = {}
+PREFLIGHT_ACCOUNT_TTL_S = 600.0
+
+
+def reset_preflight_cache() -> None:
+    """Tests only, and on any mutation -- see PmusTransport.submit."""
+    _PREFLIGHT_CACHE.clear()
 
 
 def is_rate_limited(exc: BaseException) -> bool:
@@ -414,7 +495,7 @@ class PmusTransport:
     name = "PMUS"
 
     def __init__(self, *, market_slug: str, http: Optional[Any] = None,
-                 now_fn=None) -> None:
+                 now_fn=None, limiter: Optional["RateLimiter"] = None) -> None:
         self.market_slug = market_slug
         self._injected = http is not None
         self.http = http or Q1.ReadOnlyTransport()
@@ -426,14 +507,12 @@ class PmusTransport:
         #: until then, and None is "not established" -- never a default.
         self.tick_size: Optional[D] = None
         self.quantity_increment: Optional[D] = None
-        #: ONE limiter for this transport, so every path shares the budget
-        #: and shares the cool-off. Tunable from the environment because the
-        #: venue's real limit is not published anywhere we can read.
-        self.limiter = RateLimiter(
-            rps=float(os.getenv("PMUS_RPS", "1.5")),
-            burst=float(os.getenv("PMUS_BURST", "4")),
-            backoff_s=float(os.getenv("PMUS_BACKOFF_S", "2")),
-            backoff_max_s=float(os.getenv("PMUS_BACKOFF_MAX_S", "60")))
+        #: THE PROCESS'S limiter, not this transport's. Every path shares
+        #: the budget and the cool-off, and both survive the rollover that
+        #: replaces this object. Injectable for tests only.
+        self.limiter = limiter if limiter is not None else shared_limiter()
+        #: how many venue reads the preflight cache avoided, for telemetry
+        self._preflight_reads_saved = 0
 
     # ------------------------------------------------------------ read only
 
@@ -752,13 +831,32 @@ class PmusTransport:
                    "env %s / %s" % (Q1.KEY_ENV, Q1.SECRET_ENV))
 
         # 2. authenticated account identity, from the venue's own answer
+        #
+        # CACHED, because "does this key bind this account" does not change
+        # between windows and this read was being made every 3 seconds for
+        # the whole of every failing preflight. The cache holds the BINDING
+        # and the FINGERPRINT only. It is dropped on any mutation (see
+        # submit/cancel) and expires on its own, and if the key were revoked
+        # mid-session every other authenticated read in the process would
+        # fail anyway -- there is no state here that a stale answer could
+        # make look safe.
         acct: Dict[str, Any] = {}
         if ok:
-            try:
-                acct = self.account()
-            except Exception as exc:                           # noqa: BLE001
-                return self._fail(checks, gate, "account_readable", exc)
-            ident = self.account_binding(acct)
+            _now_t = time.monotonic()
+            _cached = _PREFLIGHT_CACHE.get("account")
+            if (_cached is not None
+                    and _now_t - _cached["t"] < PREFLIGHT_ACCOUNT_TTL_S):
+                ident = _cached["binding"]
+                acct = dict(_cached["acct"])
+                self._preflight_reads_saved += 1
+            else:
+                try:
+                    acct = self.account()
+                except Exception as exc:                       # noqa: BLE001
+                    return self._fail(checks, gate, "account_readable", exc)
+                ident = self.account_binding(acct)
+                _PREFLIGHT_CACHE["account"] = {
+                    "t": _now_t, "binding": ident, "acct": dict(acct)}
             ok &= gate("account_binding_proven", bool(ident), ident)
             if expect_account is not None:
                 # pin the FINGERPRINT, not the whole binding: the binding
@@ -1016,6 +1114,9 @@ class PmusTransport:
         body = OB.from_intent(intent, self.market_slug)
         self.submit_stage = "PREVIEW_REQUEST"
         self.preview_attempted = True
+        # same reason as cancel: after this the account has an order out
+        # and less buying power than the cached read proved.
+        reset_preflight_cache()
         pv = self._request("POST", "/v1/order/preview",
                                OB.preview_envelope(body), Q1.API) or {}
         self.preview_status = 200          # urlopen raises on any non-2xx
@@ -1034,5 +1135,10 @@ class PmusTransport:
         client order id -- passing the latter would silently cancel nothing.
         """
         self._require_armed()
+        # ANY MUTATION DROPS THE CACHE. A cancel changes what
+        # no_unexpected_open_orders would say and moves the balance the
+        # binding was proven against; a cached answer from before it is a
+        # statement about a venue that no longer exists.
+        reset_preflight_cache()
         return self._request(
             "POST", "/v1/order/%s/cancel" % order_id, {}, Q1.API) or {}

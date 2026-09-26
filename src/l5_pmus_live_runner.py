@@ -71,6 +71,12 @@ PROBE_LIMITS = dict(max_usd_per_market=D("5"), max_abs_residual=D("10"),
 #: window, and L5 opens within seconds (0045z: first action at +7.0s).
 #: Five GETs per attempt, only until the first PASS of each window.
 PREFLIGHT_RETRY_S = 3.0
+#: and how it grows while the venue simply has not listed the next market
+#: yet. 2300z on 2026-09-26 spent 126 seconds in that state and spent 80
+#: venue requests on it -- 0.63 req/s, disarmed, with no orders. Retrying at
+#: a fixed 3s against a market that does not exist yet is not urgency, it is
+#: a busy-wait against a rate limit.
+PREFLIGHT_BACKOFF_S = (3.0, 6.0, 12.0, 24.0)
 #: while the book is uncertain, how often we may re-ask the venue. Not every
 #: tick: hammering a venue that is already erroring turns a transient fault
 #: into a rate limit.
@@ -88,13 +94,30 @@ HB_EVERY_S = 60.0
 #: ourselves into the 2045z defect. A fill is still seen within seconds, and
 #: the authenticated websocket book -- not this poll -- is the fast path.
 ORDER_POLL_S = 6.0
+#: THE AGGREGATE CEILING for order progress, which is what actually matters.
+#: A per-order interval alone scales the request rate with the size of the
+#: envelope: eight orders at one read per 6s is 1.333 req/s from this path
+#: alone, most of the 1.5 the venue tolerates, before preflight or
+#: settlement or reconciliation have asked for anything. The per-order
+#: interval is therefore a FLOOR and this is the cap: with few orders
+#: nothing changes, and a full envelope stretches instead of overflowing.
+ORDER_POLL_RATE = 0.5
 #: how often ONE market's settlement may be re-read. A market that has not
 #: expired will not have expired 3 seconds later either.
 SETTLEMENT_POLL_S = 10.0
 #: how often a vanished order may be re-asked about. These resolve on the
 #: first or second attempt; the interval exists so a genuinely unreadable
 #: order cannot become a hot loop against a venue that is already refusing.
-PENDING_RESOLVE_S = 5.0
+#: SERIAL, and globally. Parked orders are the highest-priority read in the
+#: system -- each one owes the ledger a fill and the book is uncertain until
+#: every one of them is resolved -- but they are also the easiest to
+#: multiply: eight parked orders at one read each per 5s is 1.6 req/s from a
+#: path that only exists because the venue was already refusing us. One
+#: request per interval, oldest first, however many are parked. Serial
+#: resolution is slower and is not less safe: the book stays uncertain and
+#: every submission stays refused for the whole of it, which is the same
+#: state it would be in anyway.
+PENDING_RESOLVE_S = 3.0
 #: SOAK INSTRUMENTATION, off unless set, and ignored while armed.
 #:
 #: A disarmed process with no live orders reconciles once at boot and then
@@ -194,6 +217,10 @@ class Runner:
         self.last_order_poll: Dict[str, float] = {}
         self.last_settlement_poll: Dict[str, float] = {}
         self.last_pending_resolve: Dict[str, float] = {}
+        #: the single global slot the parked-order reads take turns in
+        self.last_pending_resolve_t = 0.0
+        #: preflight's escalating retry index, reset on every window roll
+        self.preflight_attempts = 0
 
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
@@ -207,8 +234,12 @@ class Runner:
             self.close_window()
         self.ws = ws
         slug = AB.slug_for(ws)
+        # THE SAME LIMITER, explicitly. PmusTransport would reach for the
+        # process-wide one anyway; naming it here is the point -- this line
+        # is where the old code silently created a fresh token bucket and a
+        # fresh 429 cool-off every fifteen minutes.
         self.transport = T.PmusTransport(
-            market_slug=slug, http=self.http)
+            market_slug=slug, http=self.http, limiter=T.shared_limiter())
         self.executor = LX.FaithfulExecutor(
             self.store, self.limits, transport=self.transport, lam=self.lam,
             now_fn=lambda: dt.datetime.fromtimestamp(self.now_t,
@@ -219,6 +250,7 @@ class Runner:
             suppress_imbalance_increase=False)
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
+        self.preflight_attempts = 0
         self.last_blockers = None
         self.win = collections.Counter()
         self.first_action_t = None
@@ -227,9 +259,16 @@ class Runner:
         t = self.transport
         if t is None or self.preflight_status == "PASSED":
             return
-        if now - self.last_preflight_t < PREFLIGHT_RETRY_S:
+        # escalating while it keeps failing: 3, 6, 12, then 24 seconds.
+        # The common failure is simply that the venue has not listed the
+        # next market yet, and asking four times as often does not list it
+        # any sooner -- it only spends the budget that the orders and the
+        # reconciliation need.
+        idx = min(self.preflight_attempts, len(PREFLIGHT_BACKOFF_S) - 1)
+        if now - self.last_preflight_t < PREFLIGHT_BACKOFF_S[idx]:
             return
         self.last_preflight_t = now
+        self.preflight_attempts += 1
         try:
             rep = t.preflight(
                 expect_account=os.getenv("L5_LIVE_EXPECT_ACCOUNT", "").strip()
@@ -339,9 +378,19 @@ class Runner:
         out: List[Dict[str, Any]] = []
         if t is None:
             return out
-        for coid, row in self.store.pending_terminal().items():
-            vid = row.get("venue_order_id")
-            if not vid:
+        parked = self.store.pending_terminal()
+        # ONE GLOBAL SLOT, oldest attempt first. Eight parked orders used to
+        # mean eight reads every PENDING_RESOLVE_S; now they mean one read
+        # per interval and eight intervals to clear, with the book uncertain
+        # and every submission refused for all of it -- which is exactly the
+        # state it was in before the first of them resolved.
+        if now - self.last_pending_resolve_t < PENDING_RESOLVE_S:
+            return out
+        askable = sorted(
+            ((c, r) for c, r in parked.items() if r.get("venue_order_id")),
+            key=lambda cr: self.last_pending_resolve.get(cr[0], 0.0))
+        for coid, row in parked.items():
+            if not row.get("venue_order_id"):
                 # nothing to ask by. It cannot be resolved automatically and
                 # must not be silently dropped: it stays parked and loud.
                 self.stats["pending_unresolvable"] += 1
@@ -349,11 +398,10 @@ class Runner:
                      dict(row, why=("no venue order id, so the venue cannot "
                                     "be asked what this order finally did"),
                           submissions_allowed=False))
-                continue
-            if (now - self.last_pending_resolve.get(coid, 0.0)
-                    < PENDING_RESOLVE_S):
-                continue
+        for coid, row in askable[:1]:
+            vid = row.get("venue_order_id")
             self.last_pending_resolve[coid] = now
+            self.last_pending_resolve_t = now
             try:
                 prog = LX.order_progress(t.order(str(vid)))
             except BaseException as exc:                       # noqa: BLE001
@@ -664,11 +712,20 @@ class Runner:
         out: List[Dict[str, Any]] = []
         if t is None:
             return out
-        for coid, o in list(self.store.live_orders().items()):
+        live = list(self.store.live_orders().items())
+        # the per-order interval is a FLOOR; the aggregate rate is the cap.
+        # One or two orders poll every 6s exactly as before; eight stretch
+        # to 16s each so this path never exceeds ORDER_POLL_RATE.
+        interval = max(ORDER_POLL_S,
+                       len(live) / ORDER_POLL_RATE if ORDER_POLL_RATE else 0)
+        # oldest-read first, so a stretched envelope still round-robins
+        # fairly instead of starving whichever order sorts last.
+        live.sort(key=lambda kv: self.last_order_poll.get(kv[0], 0.0))
+        for coid, o in live:
             vid = o.get("venue_order_id")
             if not vid:
                 continue
-            if self.now_t - self.last_order_poll.get(coid, 0.0) < ORDER_POLL_S:
+            if self.now_t - self.last_order_poll.get(coid, 0.0) < interval:
                 continue
             self.last_order_poll[coid] = self.now_t
             try:
@@ -717,6 +774,31 @@ class Runner:
                 e, market=e.get("market") or (
                     self.transport.market_slug if self.transport else None)))
 
+    def order_progress_latency_s(self, now: float) -> Dict[str, Any]:
+        """How stale our knowledge of any live order is, right now.
+
+        THE NUMBER PACING CAN HIDE. A limiter makes the transmitted request
+        rate look safe by construction -- it is the rate we chose -- while
+        the thing that actually degrades is how long an order's true state
+        goes unread. This reports it directly: the oldest live order's age
+        since its last authoritative read, and how far past its own
+        scheduled interval that is.
+        """
+        live = self.store.live_orders()
+        interval = max(ORDER_POLL_S,
+                       len(live) / ORDER_POLL_RATE if ORDER_POLL_RATE else 0)
+        ages = [now - self.last_order_poll.get(c, now) for c in live]
+        oldest = max(ages) if ages else 0.0
+        return {"live_orders": len(live),
+                "poll_interval_s": round(interval, 2),
+                "oldest_unread_s": round(oldest, 2),
+                "overdue_s": round(max(0.0, oldest - interval), 2),
+                "parked_orders": len(self.store.pending_terminal()),
+                "labels": ("oldest_unread_s is how stale our knowledge of "
+                           "any live order is. overdue_s above zero means "
+                           "the schedule is not keeping up, which a "
+                           "transmitted request rate cannot show.")}
+
     def open_markets(self) -> List[str]:
         return [m for m, v in self.store.committed().items() if v > 0]
 
@@ -748,6 +830,9 @@ class Runner:
             # sustained and the venue answered 429; the fallback from that
             # is what lost a cost basis. These say whether it is fixed.
             "venue_requests": t.limiter.metrics() if t else None,
+            "order_progress": self.order_progress_latency_s(self.now_t),
+            "preflight_reads_saved": (getattr(t, "_preflight_reads_saved", 0)
+                                      if t else 0),
             "pending_terminal": sorted(self.store.pending_terminal()),
             "retired_markets": sorted(
                 self.store.state.get("retired_markets") or {}),
