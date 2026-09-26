@@ -55,7 +55,7 @@ That is the mechanism this programme exists to reach, observed on the account.
 
 ## Cash identity — closes exactly
 
-    execution     +2.028200     (long -2.0480, short +4.0762)
+    execution     +2.028200     (long -1.7361, short +3.7643)
     commission    +0.010000     a CREDIT, not a cost
     settlement    -2.810000     settlementPx 1.0000; 2.47 long paid,
                                 5.28 short owed
@@ -65,6 +65,18 @@ That is the mechanism this programme exists to reach, observed on the account.
     balance       63.02925 -> 62.25745    delta -0.77180
 
 **REALIZED NET P&L: -$0.77180.**
+
+> **Corrected 2026-09-26.** The per-leg split above originally read
+> `long -2.0480, short +4.0762`. Both figures were inflated by 0.3119 and
+> the error cancelled in the net, so the total and the balance delta were
+> always right. The legs are now re-derived directly from the nine venue
+> order rows in `probe07_orders.json`.
+>
+> **The claim below that "the loss is the residual, not the matched book" is
+> also corrected.** The matched book lost 7.39 cents: it was acquired at an
+> average pair cost of **1.0299** and redeems at 1.00. The residual is 91.7%
+> of the loss, not all of it. Full chronological decomposition, which closes
+> to the cent, is in `PROBE_07_EXPECTANCY.md`.
 
 ## Inventory
 
