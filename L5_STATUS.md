@@ -1510,3 +1510,53 @@ worst case — with no decision yet on whether cash deployed needs its own cap.
 
 Full detail and line-level evidence:
 `analysis/pmus/evidence/COSTLESS_INVENTORY_20260926.md`.
+
+---
+
+## 2026-09-27 — Step C: run length carries no incremental signal
+
+Executor frozen at `e2bd442`, deployed (`b168b50a`), **DISARMED**, preflight
+PASSING, zero live orders, zero parked, zero quarantined, zero 429s, account
+$59.69195. Nothing below touched the execution core.
+
+**`RUN_LENGTH_SIGNAL_INCREMENTAL = NO`.** 35,578 heavy-side EXTENDs across
+1,779 settled windows. The raw win-rate ladder (48.8% → 26.5%) is ~92% price:
+mean price falls 0.4984 → 0.2934 across the same span, and the price *is* the
+market's probability. With intervals bootstrapped over **windows** — a window
+is one settlement draw, not a few hundred independent bets — every run
+length's edge covers zero, and the controlled difference flips sign across
+chronological quarters (+0.0304, −0.0589, −0.0034, +0.0303).
+
+**Asked economically, the same answer.** At a matched take rate a direct
+residual cap beats the run rule by $756 and is the only candidate that beats
+its volume-matched random control in all four quarters; adding the run rule on
+top of the cap *costs* $202. Run length was a noisy proxy for the residual
+magnitude it rides on.
+
+**`BEST_ADAPTED_POLICY = RESIDUAL_CAP_k2`** — refuse an acquisition that would
+carry \|residual\| past 2 × the largest clip the market has already filled.
+Never refuses a repairing leg, an opening leg, or invents a trade. Historically
+retains 83.7% of L5's actions and 78.5% of his contracts while cutting peak
+\|residual\| 67% and max drawdown 68%, with its advantage in **determinate**
+economics (+$700 of +$679 OOS). Pre-registered for a bounded probe in
+`analysis/pmus/NEXT_PROFIT_POLICY_PREREG.md`. **Not implemented, not armed.**
+
+**Two findings that outrank the policy choice.**
+
+1. L5's own tape rated at the PMUS fee schedule is **−$1,020 net** over 2,216
+   windows (total +$2,740, taker fees $3,760). His behaviour transplants
+   profitably **only if the maker rebate is credited** (+$2,257 accrued). The
+   operating model forbids assuming that, so no live result may be scored as
+   profitable on accrued-but-uncredited rebates.
+2. Per-action marginal economics are **not identified**. Window total P&L is
+   exactly `Σ(won − price)` over contracts and is invariant to the pairing
+   convention (+$2,758.58 under both FIFO and LIFO), but the *allocation*
+   reverses the sign: a run-5+ extend nets −$0.0125/contract under FIFO and
+   +$0.0278 under LIFO. Only counterfactual replay answers the question.
+
+`PAIR_COST_CAP_0.96` is catastrophic in this regime (−$13,182 out of sample):
+it refuses *completing* legs and so prevents repair. The standing "no
+pair-cost ceiling" on the live gate is independently confirmed.
+
+Detail: `analysis/l5/RUN_LENGTH_PREREGISTRATION.md` (frozen before scoring),
+`analysis/l5/RUN_LENGTH_FINDINGS.md`.
