@@ -167,15 +167,24 @@
         "fees": 0.229,
         "incentives": 0.624
       },
-      "caveat": "L5 population is 16501 windows over 5.5 months on Polymarket; PMUS is 5 windows on one day on PMUS. Not matched samples; this is a decomposition, not a controlled test."
+      "caveat": "L5 population is 16501 windows over 5.5 months on Polymarket; PMUS is 5 windows on one day on PMUS. Not matched samples; this is a decomposition, not a controlled test.",
+      "scope": "queue-aware BTC15m shadow ONLY",
+      "scope_conflict": "src/l5_full_wallet_economics.py measures the live-probe lane at -6.458%/dollar trading loss vs L5 -0.037% and concludes the binding constraint is NOT the payment; the shadow loses 0.38%/dollar at q25, the probe lane 17x more. Both true on their own populations."
     },
     {
       "id": "PMUS_ECON_003",
-      "status": "SUPPORTED",
-      "claim": "Authoritative observed PMUS CREDITED incentives remain $0, confirmed zero three independent ways. Do not substitute modeled or raw rebates for credited rebates.",
-      "credited_usd": 0,
+      "status": "SUPPORTED_AMENDED",
+      "claim": "Credited liquidity rewards $0 and credited taker rebates $0; credited MAKER REBATES are +$2.1300 over 293 fills / 55 markets / 19 settled markets / $554.4908 basis = 0.384% of notional (realized bridge, venue numbers only). Modeled rebate is never substituted for credited.",
+      "credited_usd": {
+        "maker_rebates": 2.13,
+        "liquidity_rewards": 0.0,
+        "taker_rebates": 0.0,
+        "fees_charged": 0.0
+      },
       "modeled_maker_theta": 0.0125,
-      "enforcement": "src/pmus_completion_shadow.py credited_rebate hard-wired to D(0); modeled rebate never added into net"
+      "enforcement": "src/pmus_completion_shadow.py credited_rebate hard-wired to D(0); modeled rebate never added into net",
+      "credited_maker_rate_of_notional": 0.00384,
+      "amended_reason": "prior text \"credited incentives remain $0\" was wrong for maker rebates"
     },
     {
       "id": "RESIDUAL_001",
@@ -192,8 +201,8 @@
     },
     {
       "id": "RESIDUAL_002",
-      "status": "UNCERTAIN_IMPORTANT",
-      "claim": "PMUS residual loss per unit is substantially worse than L5's historical residual distribution; mechanism not yet identified.",
+      "status": "RESOLVED",
+      "claim": "The -0.4050 vs -0.0889 per-unit gap is NOT a behavioural deficiency. E = w - b per unit reproduces L5's band table exactly (weighted w 0.3540, b 0.4429, E -0.0889). Our 1830z residual lost, and a losing residual loses exactly its basis, so -0.4050 is arithmetic.",
       "pmus_residual_usd_per_unit": -0.405,
       "pmus_band_concentration": {
         "25-45c": 1.0
@@ -210,7 +219,14 @@
         "venue microstructure",
         "n=1 terminal residual episode"
       ],
-      "priority": "highest-value open diagnostic; NOT explained"
+      "priority": "highest-value open diagnostic; NOT explained",
+      "decomposition_usd_per_unit": {
+        "band_basis_concentration": -0.2148,
+        "single_draw_loss_vs_band_win_rate": -0.1013
+      },
+      "l5_weighted_win_rate": 0.354,
+      "l5_weighted_basis": 0.4429,
+      "note": "L5's weighted residual basis (0.4429) is HIGHER than ours; he wins 35.4% vs 10.1% in the cheap band because 36.2% of his residual units sit at 55-90c where win rates run 70-96%."
     },
     {
       "id": "THETA_001",
@@ -241,6 +257,110 @@
       "grounds_against_loosening": [
         "sign flip between n=2 and n=5 is a noise signature, not a better threshold",
         "L5's >$1 pair tolerance (30-45% of matched pairs, median 0.975) is a purchase of INCENTIVES with guaranteed trading losses; PMUS credited incentives are $0 (PMUS_ECON_003)"
+      ]
+    },
+    {
+      "id": "PMUS_INC_001",
+      "status": "SUPPORTED",
+      "claim": "BTC15m is in no liquidity program. All 54 category=CRY programs are long-dated; zero updown/15m matches.",
+      "crypto_program": {
+        "programId": "crypto_20260924",
+        "rewardPool_usd_per_day": 400,
+        "shared": true,
+        "discountFactor": 0.3,
+        "targetSize": 15000,
+        "period": "daily",
+        "maxSpread": "NOT_SOURCEABLE"
+      },
+      "achievable_pmus_incentive_rate_of_notional": 0.00396,
+      "l5_credited_rate": 0.009188,
+      "share_of_l5": 0.43,
+      "gap_cause": "program access, not rebate pricing"
+    },
+    {
+      "id": "PMUS_INC_002",
+      "status": "SUPPORTED",
+      "claim": "maker rebate = 0.0125 * C * p * (1-p), banker's rounding to the cent PER FILL, credited at point of trade.",
+      "verification": "all 99 published price rows reproduce exactly (tests/test_pmus_fees.py)",
+      "q1_rebate_all_prices": 0.0,
+      "q1_max_unrounded": 0.0031,
+      "expected_per_window": {
+        "q25": 0.502,
+        "q50": 1.002
+      },
+      "cross_validation": "EXPECTED 0.396% of notional vs CREDITED 0.384% over 293 fills"
+    },
+    {
+      "id": "RESIDUAL_003",
+      "status": "SUPPORTED",
+      "claim": "ECONOMIC_COMPLETE systematically retires the WINNING leg: it is arithmetically 'sell the aged leg into the bid', and the aged leg is the risen high-basis likely winner. L5 never sells and keeps it.",
+      "measured_queue_aware_n5": {
+        "bprime": {
+          "episodes": "4/5",
+          "qty_per_window": 40,
+          "usd_per_unit": 0.1702,
+          "weighted_basis": 0.5798,
+          "wins": "3/4"
+        },
+        "bprime_plus_ec": {
+          "episodes": "1/5",
+          "qty_per_window": 10,
+          "usd_per_unit": -0.405,
+          "weighted_basis": 0.405,
+          "wins": "0/1"
+        }
+      },
+      "authorises_change": false
+    },
+    {
+      "id": "BPRIME_001",
+      "status": "FALSIFIED_AS_PATH_TO_5",
+      "claim": "B' baseline nets +5.70/window at q25 and +11.40 at q50 queue-aware, and must NOT be adopted: matched economics are NEGATIVE (-1.1088 at q25) and the entire net is unhedged directional residual on a 3-of-4 win rate over 4 episodes.",
+      "repriced_at_l5_win_rate_0354": {
+        "q25": -10.1408,
+        "q50": -20.2816
+      },
+      "swing_per_window": {
+        "q25": 15.84,
+        "q50": 31.68
+      },
+      "do_not_retest_without": "residual win-rate estimate on n>=25"
+    },
+    {
+      "id": "TARGET_001",
+      "status": "SUPPORTED_PRELIMINARY",
+      "claim": "No executable path to >=$5/window exists on current evidence.",
+      "waterfall_per_window": {
+        "q25": {
+          "matched_gross": 4.2825,
+          "taker_fees": -0.8007,
+          "matched_net": 3.4818,
+          "residual_observed": -4.05,
+          "incentives_expected": 0.502,
+          "liquidity_rewards": 0.0,
+          "realized_equivalent": -0.0662,
+          "projected_band_expectation": 0.9468,
+          "distance_to_5": 4.0532
+        },
+        "q50": {
+          "matched_gross": 7.9507,
+          "taker_fees": -1.5153,
+          "matched_net": 6.4354,
+          "residual_observed": -8.1,
+          "incentives_expected": 1.002,
+          "liquidity_rewards": 0.0,
+          "realized_equivalent": -0.6626,
+          "projected_band_expectation": 1.3634,
+          "distance_to_5": 3.6366
+        }
+      },
+      "scale_needed": {
+        "q25": 5.3,
+        "q50": 3.7
+      },
+      "blocking_constraints": [
+        "research-loss budget $0.49320 vs observed $20.25 single-episode residual loss at q25 (41x)",
+        "BTC15m absent from any liquidity program"
       ]
     }
   ],
@@ -297,5 +417,13 @@
   ],
   "authorises_model_change": false,
   "authorises_parameter_change": false,
-  "authorises_live_order": false
+  "authorises_live_order": false,
+  "updated_at_commit": "8bc089b4+",
+  "rolling_estimates": {
+    "n5": "available",
+    "n10": "NOT YET AVAILABLE",
+    "n25": "NOT YET AVAILABLE",
+    "n50": "NOT YET AVAILABLE",
+    "note": "only 5 usable windows exist; checkpoint 25 not reached"
+  }
 }

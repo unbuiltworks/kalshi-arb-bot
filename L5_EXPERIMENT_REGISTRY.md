@@ -79,3 +79,31 @@ distribution. Blocked on more usable windows (n=1 terminal residual episode).
 - ATOMIC_RECYCLE: falsified/no-op, default OFF, not a variant.
 - PMUS_Q1_ARM empty. No live orders. Loss budget untouched.
 - Checkpoint 25 remains the preregistered economic checkpoint (currently n=5).
+
+### EXP-004 — PMUS INCENTIVE REALITY CHECK
+**Status: COMPLETE.** Commit `8bc089b4`, `analysis/pmus/PMUS_INCENTIVE_REALITY_CHECK.md`.
+Findings PMUS_INC_001/002. Forced an amendment to PMUS_ECON_003 (credited maker
+rebates are +$2.13, not $0) and a scope narrowing of PMUS_ECON_002.
+
+### EXP-006 — RESIDUAL_002 mechanism (supersedes EXP-005)
+**Status: COMPLETE.** Resolved analytically from `E = w − b`, no new data needed.
+RESIDUAL_002 → RESOLVED; RESIDUAL_003 records the causal mechanism (EC retires the
+winning leg). No rule added.
+
+## DO NOT RETEST — falsified or resolved
+
+| idea | verdict | why |
+|---|---|---|
+| ATOMIC_RECYCLE / cancel stale orders after completion | **FALSIFIED, no-op** | no stale passive orders exist; residual is 100% from new decisions (`7c11bc23`) |
+| B′ baseline as the path to ≥$5/window | **FALSIFIED** | net is unhedged directional residual on 3-of-4 episodes; repriced at L5's measured 0.3540 win rate it is −$10.14 (q25) / −$20.28 (q50). BPRIME_001. |
+| θ=1.02 (or any θ) selected from the n=5 sweep | **FORBIDDEN** | THETA_001; sign flipped between n=2 and n=5 |
+| "PMUS residual per unit is worse than L5's, so our execution is worse" | **RESOLVED, false** | a losing residual loses exactly its basis; decomposes to band concentration + one draw. RESIDUAL_002. |
+| "credited PMUS incentives are $0" | **CORRECTED** | maker rebates +$2.13 over 293 fills are credited. PMUS_ECON_003 amended. |
+| Applying L5's 0.919%/$ incentive rate to PMUS as achievable | **NOT AVAILABLE** | BTC15m is in no liquidity program; achievable is maker-rebate-only 0.396%. PMUS_INC_001. |
+| Simultaneous YES+NO<$1 arbitrage on this tape | **FALSIFIED** | fresh two-sided pair cost is 1.01–1.03 at every completion instant, never below $1 |
+
+### EXP-007 — rolling money accounting to checkpoint 25
+**Status: OPEN, passive.** Per-window ledger: matched gross → taker fees →
+matched net → terminal residual → credited incentives → REALIZED-equivalent.
+Rolling n=5 available; **n=10/25/50 not yet available** (only 5 usable windows
+exist). Hourly routine continues under the frozen policy. No action until n≥25.

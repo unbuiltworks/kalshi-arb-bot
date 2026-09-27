@@ -188,3 +188,120 @@ independent grounds.
 `7c11bc23` completion state semantics, ATOMIC_RECYCLE falsified →
 `19955307` 1900z/1915z/1930z scraped and scored, n=5 →
 `0bf8f0ee` L5 advantage decomposition.
+
+---
+
+# Additions at commit `8bc089b4`+ (EXP-004 / EXP-006)
+
+## PMUS_ECON_003 — AMENDED
+Prior text ("credited incentives remain $0") was wrong for maker rebates.
+Corrected: credited **liquidity rewards $0** and **taker rebates $0**; credited
+**maker rebates +$2.1300** over 293 fills / 55 markets / 19 settled markets /
+$554.4908 basis = **0.384% of notional**, from the realized bridge (venue numbers
+only). Modeled rebate is still never substituted for credited.
+
+## PMUS_ECON_002 — SCOPE NARROWED
+"Missing incentives are 74.7% of the gap" holds **only for the queue-aware
+BTC15m shadow**. `src/l5_full_wallet_economics.py` measures the live-probe lane
+at −6.458%/dollar of trading loss against L5's −0.037%, and concludes there that
+the binding constraint is *not* the payment. Both are true of their own
+populations; the shadow loses 0.38%/dollar at q25, the probe lane 17× more.
+
+## PMUS_INC_001 — SUPPORTED
+**BTC15m is in no liquidity program.** All 54 `category=CRY` programs on
+`/v1/incentives` are long-dated (`100k`, `150k`, `above-yr`, `hitprice`,
+`pricerange`); zero matches for `updown` or `15m`. The crypto program
+`crypto_20260924` pays a **shared $400/day pool**, `discountFactor 0.3`,
+`targetSize 15000`; `maxSpread` is not published for crypto (NOT SOURCEABLE).
+Achievable PMUS incentive is therefore maker rebate only: **0.396% of notional
+= 43% of L5's 0.919%**. The missing 57% is program access, not rebate pricing.
+
+## PMUS_INC_002 — SUPPORTED
+Maker rebate = `0.0125 × C × p × (1−p)`, **banker's rounding to the cent per
+fill**, credited at the point of trade. All 99 published price rows reproduce
+exactly. **q=1 earns $0.00 at every price** (max unrounded $0.0031) — per-fill
+rounding annihilates the rebate at clip 1. EXPECTED on observed queue-aware
+fills: **q25 +$0.5020/window, q50 +$1.0020/window**, cross-validating against the
+independently CREDITED 0.384%.
+
+## RESIDUAL_002 — RESOLVED (supersedes the UNCERTAIN entry)
+**The −$0.4050/unit vs −$0.0889/unit "gap" is not a behavioural deficiency.**
+
+A residual pays $1 if it wins and $0 if it loses, so per unit `E = w − b`. This
+reproduces L5's published band table exactly (weighted w = 0.3540, weighted
+b = 0.4429, E = −0.0889 ✓; implied 25–45c w = 0.1013 and 75–90c w = 0.9632,
+matching the module's stated "near 10%" and "near 96%").
+
+Our 1830z residual: 50 DOWN at basis 0.4050, window settled UP, so it **lost —
+and a losing residual loses exactly its basis.** −0.4050 is arithmetic.
+Decomposition of the 0.3161 difference:
+
+| term | $/unit |
+|---|---|
+| band/basis concentration (our 0.405 in his worst band) | −0.2148 |
+| single-draw loss vs that band's 0.1013 win rate | −0.1013 |
+
+L5's weighted residual basis (0.4429) is **higher** than ours. He is not buying
+cheaper residual — **his residual wins 35.4% of the time against 10.1% in the
+cheap band**, because 36.2% of his residual units sit at 55–90c where win rates
+run 70–96%. That is the "adverse selection on what fails to pair" effect:
+his unpaired leg is the side the market had already decided, i.e. the likely
+winner.
+
+## RESIDUAL_003 — SUPPORTED (mechanism, causal, observable)
+**ECONOMIC_COMPLETE systematically retires the winning leg.** EC is arithmetically
+"sell the aged leg into the bid" (superseded-claims table). The aged leg is the
+one that *rose*, i.e. the high-basis likely winner. EC sells it and leaves the
+cheap complement as residual. L5 never sells ($2.18 of sell proceeds in 742,964
+trades) and therefore keeps it.
+
+Measured on the already-preregistered arms, queue-aware, n=5:
+
+| arm | residual episodes | residual qty | $/unit | weighted basis | wins |
+|---|---|---|---|---|---|
+| B′ baseline (θ=None) | 4 of 5 | 40/win | **+0.1702** | 0.5798 | **3/4** |
+| B′+EC (θ=0.96) | 1 of 5 | 10/win | **−0.4050** | 0.4050 | **0/1** |
+
+This is a real, observable behavioural difference from L5 that we had not
+reproduced. It is recorded as mechanism, **not** as authority to change anything.
+
+## BPRIME_001 — FALSIFIED AS A PATH TO $5
+B′ baseline nets **+$5.70/window at q25 and +$11.40 at q50** under queue-aware
+fills — above target — and it **must not be adopted**. Its matched economics are
+**negative** (−1.1088 at q25); the entire net is unhedged directional residual
+(+6.8088) resting on a **3-of-4 win rate over 4 episodes**.
+
+Re-priced at L5's own measured residual win rate of 0.3540 with B′'s observed
+basis 0.5798:
+
+| q | at observed 3/4 | at L5 measured 0.3540 | swing |
+|---|---|---|---|
+| 25 | **+5.6992** | **−10.1408** | $15.84/window |
+| 50 | **+11.3984** | **−20.2816** | $31.68/window |
+
+A single win-rate assumption moves the answer by $15.84–$31.68 per window. B′'s
+apparent success is a directional draw at n=4, and the standing rule that
+residual exposure carries no predictive skill applies. **Do not test B′ as a
+profit path again without a residual win-rate estimate on n≥25.**
+
+## TARGET_001 — SUPPORTED PRELIMINARY
+**No executable path to ≥$5/window exists on current evidence.**
+
+Frozen B′+EC θ=0.96 queue-aware, per window:
+
+| line | q=25 | q=50 |
+|---|---|---|
+| matched gross | +4.2825 | +7.9507 |
+| taker fees | −0.8007 | −1.5153 |
+| = matched net | +3.4818 | +6.4354 |
+| terminal residual (observed) | −4.0500 | −8.1000 |
+| credited incentives EXPECTED | +0.5020 | +1.0020 |
+| liquidity rewards | 0.0000 | 0.0000 |
+| **REALIZED-equivalent (observed residual)** | **−0.0662** | **−0.6626** |
+| **PROJECTED (residual at band expectation)** | **+0.9468** | **+1.3634** |
+| **distance to +$5** | **$4.0532** | **$3.6366** |
+
+Reaching $5 on the projected path needs **5.3× scale at q25 / 3.7× at q50**
+(~q=185), against a remaining research-loss budget of **$0.49320** and an
+observed single-episode residual loss of $20.25 at q25 — 41× that budget.
+Capital is not the constraint; the loss budget and the absent liquidity program are.
