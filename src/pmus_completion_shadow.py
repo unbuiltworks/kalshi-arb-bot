@@ -233,6 +233,9 @@ class Book:
                 if self.edges else None),
             "net": net,
             "recycle_cancels": self.recycle_cancels,
+            "lock_via": getattr(self, "lock_via", None),
+            "lock_inventory": getattr(self, "lock_inventory", None),
+            "lock_cancels": getattr(self, "lock_cancels", 0),
         }
 
 
@@ -322,6 +325,36 @@ def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
     return qty, px
 
 
+def settlement_independent_floor(bk: "Book", *, resting=None) -> D:
+    """The P&L this portfolio is GUARANTEED, whichever way the market settles.
+
+    If UP settles, the up leg pays $1/contract and the down leg pays nothing; if
+    DOWN settles, the reverse. So across both outcomes the payout is at least
+    min(q_up, q_down), and
+
+        floor = min(q_up, q_down) - cash_paid - fees_already_incurred
+
+    is attainable by DOING NOTHING and holding to settlement. That is what makes
+    it settlement-independent: it is not a mark, and it needs no future fill, no
+    future price and no knowledge of the outcome. `locked` is already realized
+    completion margin and is carried in the same terms.
+
+    OUTSTANDING ORDERS ARE CHARGED CONSERVATIVELY. A resting acquisition may
+    still fill, and a fill can only add cost on one side, so every resting order
+    is assumed to fill at its own resting price and its cost is subtracted while
+    its contribution to `min` is ignored. That can only understate the floor,
+    which is the direction a floor must err in.
+    """
+    m = min(bk.q["up"], bk.q["down"])
+    floor = m - (bk.c["up"] + bk.c["down"]) - bk.fees + bk.locked
+    for side in ("up", "down"):
+        st = (resting or {}).get(side) or {}
+        px, qty = st.get("px"), st.get("qty")
+        if px is not None and qty:
+            floor -= D(str(px)) * D(str(qty))
+    return floor
+
+
 def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                variant: str = "A", queue_aware: bool = False,
                fill_model: Optional[str] = None,
@@ -331,7 +364,9 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                respect_live_bbo: bool = False,
                fill_prob: Optional[float] = None,
                seed: int = 0,
-               atomic_recycle: bool = False
+               atomic_recycle: bool = False,
+               complement_bias_c: Optional[D] = None,
+               profit_lock_usd: Optional[D] = None
                ) -> Dict[str, Any]:
     """Forward walk of ONE window. No settlement is consulted until settle().
 
@@ -348,8 +383,30 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
       respect_live_bbo -- drop ladder levels priced BETTER than the
         contemporaneous BBO touch, so a stale favourable ladder cannot be used
         when a newer BBO contradicts it.
+
+    CHALLENGERS, both default OFF so the frozen arm is byte-identical:
+
+      complement_bias_c -- COMPLEMENT_BIAS. Suppress SAME-SIDE acquisition while
+        the held side's own price has risen at least this many cents above its
+        basis. Measured independently from L5's raw corpus (66,949 BTC15m states,
+        `src/l5_sequence_corpus.py`): once the held side has risen, his next fill
+        is the COMPLEMENT 0.613 / 0.623 / 0.591 of the time in the +2..+5c,
+        +5..+10c and >=+10c buckets, while after a FALL he adds to the same side
+        ~0.59-0.62. This reproduces the canonical RESPONSE_CURVE from raw data.
+        It is inventory-and-move conditioned and symmetric -- NOT a directional
+        forecast, and not a stop.
+
+      profit_lock_usd -- PROFIT_LOCK_5. Latch once the portfolio's WORST-CASE
+        executable terminal P&L across BOTH settlement outcomes reaches this
+        figure, then stop opening/extending. See `settlement_independent_floor`:
+        the floor is min(q_up, q_down) - cost - fees, which is exactly the P&L
+        guaranteed by holding to settlement whichever way it resolves. No
+        settlement outcome, future price or future fill is consulted.
     """
     bk = Book()
+    locked_at = None                  # (t, floor, inventory) once latched
+    lock_floor = None
+    floor_trace = []
     # ANALYSIS-ONLY. fill_prob thins the modelled passive acquisitions to answer
     # "what fill rate does the result actually need?". Default None = no thinning.
     _rnd = None
@@ -438,11 +495,89 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                 elif variant == "C":
                     need_flat = True
 
+        # ---- PROFIT_LOCK (challenger, default OFF) -----------------------
+        # Causal and settlement-independent. Evaluated at every action
+        # timestamp on contemporaneous state only.
+        if profit_lock_usd is not None and locked_at is None:
+            fh = settlement_independent_floor(bk, resting=qstate)
+            secured_by = None
+            if fh >= profit_lock_usd:
+                # already guaranteed by holding: no trade is needed, so the
+                # cheapest way to preserve the floor is to stop adding risk.
+                secured_by = "HOLD"
+                new_floor = fh
+            else:
+                # A completion can RAISE the floor, because buying n of the
+                # deficient side for `cost` adds n to min() and costs cost+fee.
+                # Priced on the CONTEMPORANEOUS ladder, depth-limited, with NO
+                # theta gate -- theta governs opportunistic completion, this is
+                # a floor-securing action and is only taken when it actually
+                # secures the floor.
+                r2 = bk.residual()
+                new_floor, n2, cost2, fee2 = fh, D(0), D(0), D(0)
+                if r2 != 0 and ladder:
+                    held2 = "up" if r2 > 0 else "down"
+                    comp2 = complement(held2)
+                    n2, cost2, _short = walk_ladder(
+                        buy_levels(ladder, comp2), abs(r2))
+                    if n2 > 0:
+                        fee2 = taker_fee(cost2 / n2, n2)
+                        new_floor = fh + n2 - cost2 - fee2
+                if new_floor >= profit_lock_usd and n2 > 0:
+                    bk.add(comp2, n2, cost2, maker=False, fee=fee2)
+                    secured_by = "COMPLETE"
+            # CHANNEL A vs B. The floor above is EXECUTABLE. This is the
+            # ordinary mark-to-market at the contemporaneous mid, which is what
+            # a naive reading would call "+$5 in the window" -- it is a MARK,
+            # it is not settlement-independent, and it can evaporate.
+            bid, ask = _d(row.get("bid")), _d(row.get("ask"))
+            mid = ((bid + ask) / 2) if (bid is not None and ask is not None) \
+                else (bid if bid is not None else ask)
+            mtm = None
+            if mid is not None:
+                mtm = (bk.q["up"] * mid + bk.q["down"] * (D(1) - mid)
+                       - bk.c["up"] - bk.c["down"] - bk.fees + bk.locked)
+            floor_trace.append({
+                "t": ts, "floor": fh, "mark_to_market": mtm,
+                "floor_after_securing_action": new_floor,
+                "locked": secured_by is not None, "via": secured_by,
+            })
+            if secured_by is not None:
+                locked_at = ts
+                lock_floor = settlement_independent_floor(bk)
+                bk.lock_via = secured_by
+                bk.lock_inventory = {"up": bk.q["up"], "down": bk.q["down"]}
+                bk.lock_tte_s = None
+                # cancel every resting acquisition: they are new risk
+                bk.lock_cancels = len([k for k, v in qstate.items()
+                                       if v and v.get("px") is not None])
+                qstate.clear()
+        if locked_at is not None:
+            # no OPEN, no ACQUIRE, no EXTEND for the rest of the window
+            continue
+
         # ---- acquisition: two-sided resting, one clip per side
         if need_flat and bk.residual() != 0:
             continue
         need_flat = False
         for side in ("up", "down"):
+            # ---- COMPLEMENT_BIAS (challenger, default OFF) ----------------
+            # While the held side's own price has risen at least
+            # complement_bias_c above its basis, do not add to that side. L5's
+            # raw corpus says the complement is his majority action in exactly
+            # that state; our unconditional two-sided quoting has no such
+            # asymmetry, which is how 2245z bought UP at 0.44, 0.77, 0.76, 0.89
+            # and 0.98 while UP climbed. Symmetric and inventory-conditioned:
+            # after a FALL the same side stays allowed, as his corpus also says.
+            if complement_bias_c is not None:
+                rb = bk.residual()
+                held_b = "up" if rb > 0 else ("down" if rb < 0 else None)
+                if held_b is not None and side == held_b:
+                    own_now = live_touch_own(row, held_b)
+                    basis_b = bk.avg(held_b)
+                    if (own_now is not None and basis_b > 0
+                            and own_now - basis_b >= complement_bias_c):
+                        continue
             if variant == "B" and now < blocked_until:
                 rr = bk.residual()
                 if rr != 0 and ((rr > 0) == (side == "up")):
@@ -467,6 +602,14 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                 max_clip_seen = qty
     out = bk.settle(winner)
     out["window_s"] = None
+    out["locked_at"] = locked_at
+    out["lock_floor"] = lock_floor
+    out["floor_trace"] = floor_trace
+    out["peak_floor_seen"] = (max((f["floor"] for f in floor_trace))
+                              if floor_trace else None)
+    _m = [f["mark_to_market"] for f in floor_trace
+          if f.get("mark_to_market") is not None]
+    out["peak_mark_to_market_seen"] = max(_m) if _m else None
     return out
 
 
