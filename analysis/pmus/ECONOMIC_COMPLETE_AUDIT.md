@@ -237,3 +237,134 @@ freshness bound exists to prevent. The preregistration-justified bound is 32s.
 
 Status unchanged: **AUDITED_PRELIMINARY**, n=2, both windows settled UP.
 Checkpoint 25 remains the preregistered economic checkpoint.
+
+---
+
+# P0: is the frozen L5/B' policy represented correctly around completion?
+
+## The hypothesis under test is FALSIFIED
+
+Premise: "acquisitions after completion rebuild/flip residual inventory" via
+stale passive orders left working on the opposite side. Audited at every
+queue-aware completion in 1830z and 1845z:
+
+| | |
+|---|---|
+| Outstanding passive orders immediately after each completion | **none, at every completion** |
+| Residual attributable to PRE-existing orders | **0 contracts, $0** |
+| Residual attributable to NEW post-completion decisions | **50 contracts at q=25 (100%)** |
+
+**Our simulator does not leave stale passive orders working.** There is no
+persistent order object at all: the queue position is created and consumed
+inside the evidence-bearing states, because the causal precondition (volume plus
+a print through our price) gates the *joining* of the queue as well as the fill.
+So answer to "is the simulator treating a completed pair as merely reducing one
+side while leaving stale orders on the other?" is **no** — it reduces the held
+side and holds no orders at all.
+
+Consequently **ATOMIC_RECYCLE is an exact no-op** on this tape:
+
+| treatment | q | matched net | residual P&L | total net | completed con | cancellations | resid PRE | resid NEW |
+|---|---|---|---|---|---|---|---|---|
+| queue-aware base | 25 | +4.0000 | −10.1250 | −6.9442 | 62.5 | 0 | 0 | 50 |
+| **ATOMIC_RECYCLE** | 25 | +4.0000 | −10.1250 | **−6.9442** | 62.5 | **0** | 0 | 50 |
+| queue-aware base | 50 | +7.9300 | −20.2500 | −13.9588 | 125.0 | 0 | 0 | 100 |
+| **ATOMIC_RECYCLE** | 50 | +7.9300 | −20.2500 | **−13.9588** | 125.0 | **0** | 0 | 100 |
+
+There are no stale orders to cancel, so cancelling them changes nothing. This is
+a state-consistency *negative*: the state was already consistent.
+
+## What the canonical L5 corpus says (measured, not invented)
+
+From `src/l5_complement_response_curve.py` — the Complement Response Curve over
+**71,354 inventory-changing fills with a defined next action**, canonical L5
+sequence, systematic regime onward:
+
+| move of the side we hold | n | SAME | OPP | median delay |
+|---|---|---|---|---|
+| −5..−2c | 6,503 | 66.7% | 33.3% | 4.0s |
+| 0..+1c | 21,129 | 51.3% | 48.7% | **0.0s** |
+| +2..+5c | 6,736 | 32.3% | **67.7%** | 4.0s |
+| +5..+10c | 3,087 | 36.5% | **63.5%** | 10.0s |
+| ≥ +10c | 2,503 | 43.3% | 56.7% | 18.0s |
+
+Answering the five questions:
+
+1. **Does L5 immediately resume symmetric acquisition?** He resumes essentially
+   immediately (median delay 0.0–4.0s), but *not* symmetrically. Side choice is
+   conditioned on how the held side moved; it is near 50/50 only in the no-move
+   bucket.
+2. **Does he preferentially acquire the side just depleted?** **No — the
+   opposite.** A completion fires precisely because the held side *rose*, and
+   after a rise of +2..+10c L5 takes the **complement 63.5–67.7%** of the time.
+   Our simulator buying DOWN after retiring risen UP is therefore **L5-faithful**.
+3. **Does he stop extending the opposite side until inventory rebalances?**
+   **No evidence for any such gate.** Conditioned on imbalance ratio the response
+   is non-monotone (0–25% same-side 49.6%, 75–95% 42.0%, 95–100% 61.0%), and OOS
+   the imbalance feature *hurts*: adding B to A+C scores **−0.28%**.
+4. **Does completion/reset change subsequent side choice?** The driver is price
+   movement, not the completion event. OOS logloss gains: movement-only **+11.63%**,
+   pair-cost-only +1.62%, imbalance-only +0.32%; adding movement to the others
+   **+10.79%**. The module states outright that this *contradicts* our frame:
+   "Our shell treats COMPLETE as an inventory/cap event … L5's own history says
+   the complement decision is a PRICE-MOVEMENT response and barely an inventory
+   response at all."
+5. **Stale opposite-side orders?** Answered above: none exist in our simulator.
+
+## The residual loss is L5-expected, not a representation defect
+
+L5's own price-band decomposition (same module) gives residual P&L per unit:
+
+| band | residual units | resid $/unit |
+|---|---|---|
+| 10–25c | 55,973 | −0.1584 |
+| **25–45c** | **59,603** | **−0.2487** |
+| 55–75c | 38,951 | +0.0508 |
+| 75–90c | 36,515 | +0.1382 |
+
+"Cheap residuals lose heavily and dear residuals win … his unpaired leg is
+systematically the side the market had already decided — adverse selection on
+what fails to pair."
+
+Our 1830z queue-aware residual was **50 DOWN acquired at ~0.36–0.37 — squarely
+the 25–45c band — losing −$0.405/unit** against L5's measured −$0.2487/unit in
+that same band. Same sign, same order of magnitude, ours from a single residual
+episode against L5's 59,603 units. The corpus also finds maker fills are
+adversely selected (after a maker fill the next print favours him only 43.2% of
+the time, median +0.0000).
+
+So the mechanism is: the frozen policy correctly leans to the complement after a
+favourable move (L5-faithful), that complement is cheap, and cheap unpaired legs
+lose — in L5's history and in ours. **This is a known measured property of the
+strategy family, not a simulator bug and not something ATOMIC_RECYCLE addresses.**
+
+## Verdict on ATOMIC_RECYCLE
+
+**PMUS adaptation. Not L5-corresponding, and not verifiable against L5.** The
+corpus is a *fill* feed; the module is explicit that order-level semantics cannot
+be settled by it: "WHAT WOULD ACTUALLY BE NEEDED to test pre-positioning:
+order-level data — placement and cancellation timestamps, order identifiers, and
+book snapshots at those timestamps. None of it is derivable from a fill feed."
+
+Independently, the inventory-rebalancing *motivation* for ATOMIC_RECYCLE is
+contradicted by the corpus, where inventory imbalance is the weakest signal and
+actively harmful once movement and pair cost are present. It would require OOS
+validation before any status beyond diagnostic — and on this tape it has no
+effect to validate.
+
+## Settlement diversity (the two-UP problem)
+
+Authoritative settlements retrieved for every completed window:
+
+| window | state | settlementPx | outcome |
+|---|---|---|---|
+| 1830z | EXPIRED | 1.0000 | UP |
+| 1845z | EXPIRED | 1.0000 | UP |
+| **1900z** | EXPIRED | **0.0000** | **DOWN** |
+| **1915z** | EXPIRED | **0.0000** | **DOWN** |
+| 1930z | EXPIRED | 1.0000 | UP |
+
+3 UP / 2 DOWN. Tape scrape and scoring for 1900z/1915z/1930z is **outstanding**.
+Because the 1830z residual was DOWN and lost only because UP won, a DOWN-settling
+window should flip the residual P&L sign — that is the decisive test of whether
+the queue-aware loss is structural or directional, and it is not yet run.

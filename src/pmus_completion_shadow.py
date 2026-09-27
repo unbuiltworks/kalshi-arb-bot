@@ -165,6 +165,7 @@ class Book:
         self.gross_margin = D(0)
         self.edges: List[D] = []
         self.cum_matched = D(0)
+        self.recycle_cancels = 0
 
     def residual(self) -> D:
         return self.q["up"] - self.q["down"]
@@ -231,6 +232,7 @@ class Book:
                 sorted(self.edges)[len(self.edges) // 2]
                 if self.edges else None),
             "net": net,
+            "recycle_cancels": self.recycle_cancels,
         }
 
 
@@ -328,7 +330,8 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                ladder_max_age_s: Optional[float] = None,
                respect_live_bbo: bool = False,
                fill_prob: Optional[float] = None,
-               seed: int = 0
+               seed: int = 0,
+               atomic_recycle: bool = False
                ) -> Dict[str, Any]:
     """Forward walk of ONE window. No settlement is consulted until settle().
 
@@ -418,6 +421,18 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                 bk.completions += 1
                 bk.completed_qty += n
                 bk.completion_cost += cost + fee
+                # ATOMIC_RECYCLE DIAGNOSTIC (analysis only, default OFF).
+                # State consistency, NOT a new rule and NOT a predictor: a
+                # completion that retires aged inventory also invalidates the
+                # passive acquisition orders that were resting on the strength
+                # of the pre-completion inventory state. Clearing the queue
+                # state cancels them, so the next decision must re-join at the
+                # back of whatever level it then chooses.
+                if atomic_recycle and qstate:
+                    bk.recycle_cancels += len(
+                        [k for k, v in qstate.items()
+                         if v and v.get("px") is not None])
+                    qstate.clear()
                 if variant == "B":
                     blocked_until = now + hold_s
                 elif variant == "C":
