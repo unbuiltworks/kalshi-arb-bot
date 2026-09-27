@@ -91,3 +91,219 @@ def buy_levels(row: Dict[str, Any], side: str) -> List[List[str]]:
             continue
         out.append([str(D(1) - p), str(lvl[1])])
     return out
+
+
+# --------------------------------------------------------------- the walk
+
+class Book:
+    """Our simulated inventory over one window. Own-outcome terms."""
+
+    def __init__(self) -> None:
+        self.q = {"up": D(0), "down": D(0)}
+        self.c = {"up": D(0), "down": D(0)}
+        self.maker_qty = D(0)
+        self.taker_qty = D(0)
+        self.fees = D(0)
+        self.modeled_rebate = D(0)
+        self.locked = D(0)          # realized P&L of completed pairs
+        self.completions = 0
+        self.completed_qty = D(0)
+        self.completion_cost = D(0)
+        self.unknown_events = 0     # depth shortfalls
+        self.peak_resid = D(0)
+
+    def residual(self) -> D:
+        return self.q["up"] - self.q["down"]
+
+    def avg(self, side: str) -> D:
+        return (self.c[side] / self.q[side]) if self.q[side] > 0 else D(0)
+
+    def add(self, side: str, qty: D, cost: D, *, maker: bool) -> None:
+        if qty <= 0:
+            return
+        self.q[side] += qty
+        self.c[side] += cost
+        if maker:
+            self.maker_qty += qty
+            self.modeled_rebate += modeled_maker_rebate(cost / qty, qty)
+        else:
+            self.taker_qty += qty
+            self.fees += taker_fee(cost / qty, qty)
+        a = abs(self.residual())
+        if a > self.peak_resid:
+            self.peak_resid = a
+
+    def settle(self, winner: Optional[str]) -> Dict[str, Any]:
+        m = min(self.q["up"], self.q["down"])
+        matched_cost = m * (self.avg("up") + self.avg("down"))
+        matched_pnl = m - matched_cost
+        r = self.residual()
+        if r > 0:
+            rq, ravg, rwin = r, self.avg("up"), (winner == "up")
+        elif r < 0:
+            rq, ravg, rwin = -r, self.avg("down"), (winner == "down")
+        else:
+            rq, ravg, rwin = D(0), D(0), False
+        resid_cost = rq * ravg
+        resid_pnl = ((rq if rwin else D(0)) - resid_cost) if winner else None
+        net = None
+        if resid_pnl is not None:
+            net = matched_pnl + resid_pnl + self.locked - self.fees
+        return {
+            "matched_qty": m + self.completed_qty,
+            "matched_pnl": matched_pnl + self.locked,
+            "resid_qty": rq, "resid_pnl": resid_pnl,
+            "fees": self.fees, "modeled_rebate": self.modeled_rebate,
+            "credited_rebate": D(0),
+            "maker_qty": self.maker_qty, "taker_qty": self.taker_qty,
+            "completions": self.completions,
+            "completed_qty": self.completed_qty,
+            "completion_cost": self.completion_cost,
+            "unknown_events": self.unknown_events,
+            "peak_resid": self.peak_resid,
+            "net": net,
+        }
+
+
+def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
+               queue_aware: bool) -> Tuple[D, Optional[D]]:
+    """Would a clip resting at `side`'s touch have filled on THIS observation?
+
+    Evidence required: the tape must show trade volume in this interval, and
+    `last` must be at or through our resting price in our own terms. Quantity
+    is capped by the observed volume delta, which is itself a LOWER BOUND on
+    traded volume, so the model errs toward fewer fills.
+
+    `queue_aware` additionally requires the displayed size at the touch to be
+    consumed first, since we join the BACK of that queue. It is the pessimistic
+    bound; the optimistic bound ignores queue position. Both are reported,
+    because queue position is the one thing the public tape cannot show and it
+    is the dominant assumption in this whole exercise.
+    """
+    dlt = _d(row.get("shares_traded_delta_lower_bound"))
+    if dlt is None or dlt <= 0:
+        return D(0), None
+    quote = _d(row.get("bid") if side == "up" else row.get("bid"))
+    if side == "up":
+        px = _d(row.get("bid"))
+        ahead = _d(row.get("bid_shares")) or D(0)
+    else:
+        b = _d(row.get("ask"))
+        px = (D(1) - b) if b is not None else None
+        ahead = _d(row.get("ask_shares")) or D(0)
+    if px is None or px <= 0 or px >= 1:
+        return D(0), None
+    last = _d(row.get("last"))
+    if last is None:
+        return D(0), None
+    last_own = own_price(side, last)
+    if last_own > px:
+        return D(0), None          # nothing traded at or through our price
+    avail = dlt - ahead if queue_aware else dlt
+    if avail <= 0:
+        return D(0), None
+    qty = clip if clip < avail else avail
+    return qty, px
+
+
+def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
+               variant: str = "A", queue_aware: bool = False,
+               winner: Optional[str] = None,
+               residual_cap_k: D = D(2), hold_s: float = 60.0
+               ) -> Dict[str, Any]:
+    """Forward walk of ONE window. No settlement is consulted until settle().
+
+    variant A: complete, then continue normally.
+    variant B: complete, then block same-side rebuild for `hold_s`.
+    variant C: complete, then resume only from a genuinely flat book.
+    theta None means B' baseline: acquire only, never complete.
+    """
+    bk = Book()
+    blocked_until = 0.0
+    need_flat = False
+    max_clip_seen = D(0)
+    ladder = {}                       # last seen ladder per slug
+    t0 = None
+    for row in rows:
+        kind = row.get("kind")
+        if kind == "book":
+            ladder = row
+            continue
+        if kind != "bbo":
+            continue
+        if str(row.get("state") or "") != "MARKET_STATE_OPEN":
+            continue
+        ts = row.get("t")
+        now = _epoch(ts)
+        if t0 is None:
+            t0 = now
+
+        # ---- completion decision FIRST, on the residual held right now
+        r = bk.residual()
+        if theta is not None and r != 0:
+            held = "up" if r > 0 else "down"
+            comp = complement(held)
+            want = abs(r)
+            lv = buy_levels(ladder, comp) if ladder else []
+            filled, cost, short = walk_ladder(lv, want)
+            if short:
+                bk.unknown_events += 1
+            if filled > 0:
+                px = cost / filled
+                fee = taker_fee(px, filled)
+                # effective pair cost per contract, at THIS instant
+                basis = bk.avg(held)
+                pair_cost = basis + px + (fee / filled)
+                if pair_cost <= theta:
+                    bk.add(comp, filled, cost, maker=False)
+                    # the completed pairs redeem $1 each: lock and remove
+                    n = filled
+                    lock = n * D(1) - n * basis - cost - fee
+                    bk.locked += lock
+                    bk.q[held] -= n
+                    bk.c[held] -= n * basis
+                    bk.q[comp] -= n
+                    bk.c[comp] -= cost
+                    bk.completions += 1
+                    bk.completed_qty += n
+                    bk.completion_cost += cost + fee
+                    if variant == "B":
+                        blocked_until = now + hold_s
+                    elif variant == "C":
+                        need_flat = True
+
+        # ---- acquisition: two-sided resting, one clip per side
+        if need_flat and bk.residual() != 0:
+            continue
+        need_flat = False
+        for side in ("up", "down"):
+            if variant == "B" and now < blocked_until:
+                rr = bk.residual()
+                if rr != 0 and ((rr > 0) == (side == "up")):
+                    continue
+            qty, px = maker_fill(row, side, clip, queue_aware=queue_aware)
+            if qty <= 0 or px is None:
+                continue
+            # B' RESIDUAL_CAP_k2 / PROSPECTIVE_NET, unchanged
+            rr = bk.residual()
+            signed = qty if side == "up" else -qty
+            after = rr + signed
+            if rr != 0 and abs(after) > abs(rr):
+                mc = max_clip_seen if max_clip_seen > qty else qty
+                if abs(after) > residual_cap_k * mc:
+                    continue
+            bk.add(side, qty, qty * px, maker=True)
+            if qty > max_clip_seen:
+                max_clip_seen = qty
+    out = bk.settle(winner)
+    out["window_s"] = None
+    return out
+
+
+def _epoch(ts) -> float:
+    import datetime as _dt
+    try:
+        return _dt.datetime.fromisoformat(
+            str(ts).replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return 0.0
