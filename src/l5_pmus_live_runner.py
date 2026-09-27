@@ -281,7 +281,29 @@ class Runner:
 
     def maybe_preflight(self, now: float) -> None:
         t = self.transport
-        if t is None or self.preflight_status == "PASSED":
+        if t is None:
+            return
+        if self.preflight_status == "PASSED":
+            # ARMING IS RETRIED; PREFLIGHT IS NOT. A PASSED preflight is a
+            # fact about this market and is never re-run, but try_arm can
+            # refuse for reasons that clear on their own a few seconds
+            # later -- an unconfirmed book, or an order in an UNCERTAIN
+            # state. Reaching try_arm only through the not-yet-PASSED branch
+            # gave arming exactly ONE attempt per market window.
+            #
+            # 1545z was lost to precisely that: the one attempt at 15:45:23
+            # hit a terminal order that was not yet booked, the uncertainty
+            # cleared at 15:45:35, and nothing in the process ever asked
+            # again. The whole window ran disarmed with owner_arm_token true
+            # and preflight PASSED.
+            #
+            # Retrying costs nothing: try_arm returns at once when already
+            # armed or halted, reconcile_if_needed returns at once on a
+            # confirmed book, and transport.arm() is a local gate check that
+            # touches no venue. The refusal is still logged only on its
+            # first occurrence in the window, so a long refusal does not
+            # spam; its duration shows in the window counters.
+            self.try_arm()
             return
         # escalating while it keeps failing: 3, 6, 12, then 24 seconds.
         # The common failure is simply that the venue has not listed the
