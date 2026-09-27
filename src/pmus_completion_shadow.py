@@ -111,6 +111,13 @@ class Book:
         self.completion_cost = D(0)
         self.unknown_events = 0     # depth shortfalls
         self.peak_resid = D(0)
+        self.eligible_states = 0
+        self.attempted_states = 0
+        self.executable_states = 0
+        self.missed_qualifying = 0
+        self.gross_margin = D(0)
+        self.edges: List[D] = []
+        self.cum_matched = D(0)
 
     def residual(self) -> D:
         return self.q["up"] - self.q["down"]
@@ -161,6 +168,16 @@ class Book:
             "completion_cost": self.completion_cost,
             "unknown_events": self.unknown_events,
             "peak_resid": self.peak_resid,
+            "max_simultaneous_residual": self.peak_resid,
+            "cumulative_matched": m + self.completed_qty,
+            "eligible_states": self.eligible_states,
+            "attempted_states": self.attempted_states,
+            "executable_states": self.executable_states,
+            "missed_qualifying": self.missed_qualifying,
+            "gross_margin": self.gross_margin,
+            "median_edge_per_contract": (
+                sorted(self.edges)[len(self.edges) // 2]
+                if self.edges else None),
             "net": net,
         }
 
@@ -244,33 +261,35 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
             held = "up" if r > 0 else "down"
             comp = complement(held)
             want = abs(r)
+            bk.eligible_states += 1
             lv = buy_levels(ladder, comp) if ladder else []
-            filled, cost, short = walk_ladder(lv, want)
-            if short:
+            if lv:
+                bk.attempted_states += 1
+            basis = bk.avg(held)
+            # MARGINAL, level by level, on the CONTEMPORANEOUS ladder only.
+            n, cost, fee, depth_limited = marginal_complete(
+                lv, want, basis, theta)
+            if depth_limited:
+                bk.missed_qualifying += 1
                 bk.unknown_events += 1
-            if filled > 0:
-                px = cost / filled
-                fee = taker_fee(px, filled)
-                # effective pair cost per contract, at THIS instant
-                basis = bk.avg(held)
-                pair_cost = basis + px + (fee / filled)
-                if pair_cost <= theta:
-                    bk.add(comp, filled, cost, maker=False)
-                    # the completed pairs redeem $1 each: lock and remove
-                    n = filled
-                    lock = n * D(1) - n * basis - cost - fee
-                    bk.locked += lock
-                    bk.q[held] -= n
-                    bk.c[held] -= n * basis
-                    bk.q[comp] -= n
-                    bk.c[comp] -= cost
-                    bk.completions += 1
-                    bk.completed_qty += n
-                    bk.completion_cost += cost + fee
-                    if variant == "B":
-                        blocked_until = now + hold_s
-                    elif variant == "C":
-                        need_flat = True
+            if n > 0:
+                bk.executable_states += 1
+                bk.add(comp, n, cost, maker=False)
+                lock = n * D(1) - n * basis - cost - fee
+                bk.locked += lock
+                bk.gross_margin += n * D(1) - n * basis - cost
+                bk.edges.append(lock / n)
+                bk.q[held] -= n
+                bk.c[held] -= n * basis
+                bk.q[comp] -= n
+                bk.c[comp] -= cost
+                bk.completions += 1
+                bk.completed_qty += n
+                bk.completion_cost += cost + fee
+                if variant == "B":
+                    blocked_until = now + hold_s
+                elif variant == "C":
+                    need_flat = True
 
         # ---- acquisition: two-sided resting, one clip per side
         if need_flat and bk.residual() != 0:
@@ -307,3 +326,49 @@ def _epoch(ts) -> float:
             str(ts).replace("Z", "+00:00")).timestamp()
     except Exception:
         return 0.0
+
+
+def marginal_complete(levels: Sequence[Sequence[str]], want: D, basis: D,
+                      theta: D) -> Tuple[D, D, D, bool]:
+    """Take ONLY the contracts whose MARGINAL economics clear theta.
+
+    Holding `want` contracts at `basis`, walk the complement ladder in price
+    order. At each level price p the marginal pair cost of one more contract is
+    basis + p + per-contract taker fee at p. Take from the level while that is
+    <= theta; stop at the first level that fails, since levels ascend in price
+    and every later one is worse.
+
+    Returns (qty, cost, fee, depth_limited). `qty` may be a strict fraction of
+    `want`: completing only what the book actually pays for is the point, and a
+    blended average would hide the levels that do not.
+
+    `depth_limited` marks the case where every affordable level was exhausted
+    and residual remains -- economics said yes, depth said no. That is a MISSED
+    QUALIFYING STATE, not a rejection on economics, and is counted separately.
+    """
+    qty = D(0)
+    cost = D(0)
+    fee = D(0)
+    affordable_exhausted = False
+    for lvl in levels or []:
+        if qty >= want:
+            break
+        px = _d(lvl[0] if len(lvl) > 0 else None)
+        avail = _d(lvl[1] if len(lvl) > 1 else None)
+        if px is None or avail is None or avail <= 0:
+            continue
+        if not (D(0) < px < D(1)):
+            continue
+        unit_fee = THETA_TAKER * px * (D(1) - px)
+        if basis + px + unit_fee > theta:
+            break                      # this level and all worse ones fail
+        take = want - qty
+        if take > avail:
+            take = avail
+            affordable_exhausted = True
+        else:
+            affordable_exhausted = False
+        qty += take
+        cost += take * px
+        fee += take * unit_fee
+    return qty, cost, fee, (qty < want and affordable_exhausted)
