@@ -147,3 +147,52 @@ Armed: **no**. Orders placed: **none**. Live orders 0, parked 0, quarantined
 0, pending terminal 0. Accounting anchor `-2.00570000`, unchanged. Policy
 `RESIDUAL_CAP_k2` wired and reporting, with zero live binds because a
 disarmed executor cannot reach the gate.
+
+## 7. Finding: a FAILED preflight is never logged. Not fixed here.
+
+While confirming the state was clean I watched 1115z sit at
+`"preflight": "FAILED"` from 11:15 through `preflight_attempts: 8` with **no
+`L5_LIVE_PREFLIGHT` record emitted at all**. It later passed on attempt 13 at
+about 11:20 — the venue had not yet listed the market on REST, which is the
+benign case the retry backoff exists for. But the silence is not benign.
+
+`src/l5_pmus_live_runner.py:305`:
+
+```python
+blockers = rep.get("blocking_failures")
+# log every PASS, and a FAIL only when what blocks it changes
+if self.preflight_status == "PASSED" or blockers != self.last_blockers:
+    emit("L5_LIVE_PREFLIGHT", rep)
+self.last_blockers = blockers
+```
+
+`PmusTransport.preflight()` **never returns a `blocking_failures` key**. Its
+report carries `checks`, each with its own `passed` and `blocking` flags;
+`blocking_failures` exists only in `src/l5_preview_session.py`, a different
+module. So `blockers` is always `None`, `roll()` sets `last_blockers = None`,
+`None != None` is False, and the emit condition reduces to
+`preflight_status == "PASSED"`.
+
+**Only a PASS is ever logged. A failing preflight is silent forever**, and the
+sole evidence it is failing is the heartbeat's `preflight` field and a rising
+`preflight_attempts`. The intent in the comment is right; the key is wrong for
+this transport.
+
+Status:
+
+- **Pre-existing.** The same line is at `283` in frozen `e2bd442`, and
+  `git diff e2bd442 -- src/l5_pmus_live_runner.py` touches neither
+  `maybe_preflight` nor `blocking_failures`. Not introduced by RESIDUAL_CAP.
+- **Fail-closed.** `try_arm()` is reached only on PASSED, so a silent failure
+  cannot arm anything. It is an observability defect, not a safety one.
+- **Pre-ARM relevant anyway.** If the probe will not start, the executor does
+  not say why, and stop criterion 5 and the arm gate both read preflight
+  state. Diagnosing a stalled probe would mean reading heartbeat counters and
+  guessing.
+
+**Not fixed in this pass**, because the instruction for this validation was to
+change nothing in the executor. The one-line repair would be to compare the
+failing check names — `[c["check"] for c in rep.get("checks", []) if not
+c["passed"] and c.get("blocking", True)]` — instead of a key the report does
+not contain. It needs its own authorization, its own test, and its own
+disarmed deploy.
