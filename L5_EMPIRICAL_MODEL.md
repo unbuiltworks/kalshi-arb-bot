@@ -811,3 +811,74 @@ admitted, is the worst). The redeploy did not truncate this window abnormally.
 just below break-even at both clips. The +$5 target of 0.0600 at q=50 is **well
 outside** the Wilson lower bound of 0.1381. No rejection recorded (TARGET_001);
 n=12 of 25. Both clips remain 4.71× and 9.42× modeled extrapolation.
+
+## COLLECTOR_003 — the bounded drain FIRED IN PRODUCTION and saved a window
+The verification I said was outstanding has now happened, on 2315z:
+
+| event | time |
+|---|---|
+| window closed | 23:30:00 |
+| last OPEN row observed | 23:29:44 |
+| **reslate dropped the slug** | **23:30:54** |
+| **venue published the close** | **23:32:58 MARKET_STATE_EXPIRED** |
+| `drain_end` row, `terminal_recorded: true` | after that row |
+
+**The close arrived 2m58s after the boundary and 2m04s after the slug had already
+left the universe. Under the old code this window was gone.** That is the 31%
+failure mode caught in the act, and it is the first genuinely new coverage the fix
+has produced — 2245z and 2300z were both captured before their reslate, so the old
+code would have got those anyway.
+
+### …and the fix creates a rule conflict that is an OWNER DECISION
+2315z is **EXCLUDED**, because the drain's own post-close polling produces a
+**194.7s gap** between the last OPEN row and the terminal row, and the
+preregistered rule says no bbo gap above 32s. Every other gap in that window is
+**≤29.1s**, so the *trading* period is densely observed and the single long gap
+lies **entirely after the close**. Settlement was UP (1.0000 vs lastTradePx
+0.9900), so the window is otherwise sound.
+
+Admitting it means reinterpreting a preregistered completeness rule in the
+direction of including a window, which is not mine to do. **The drain will produce
+a post-close gap on every future window, so this recurs until the rule is either
+amended to apply only before the close, or reaffirmed as written.** Recorded rather
+than resolved.
+
+## P0_RESIDUAL_001 — UPDATED to n=13 (2300z UP added; 2315z excluded)
+| | q=25 | q=50 |
+|---|---|---|
+| **= before residual** | **+5.0207** | **+9.7486** |
+| residual episodes | 4 of 13 | 4 of 13 |
+| frequency / Wilson 95% | 0.3077 / **[0.1268, 0.5763]** | same |
+| signed mean episode P&L | −17.5125 | −17.5125 |
+| break-even residual frequency | 0.5734 | **0.5567** |
+| frequency needed for +$5 | 0.0024 | **0.2712** |
+
+**Read this with the outlier in view.** 2300z alone produced a shadow trading net
+of **+53.48** at q=50 with zero terminal residual, and it moved before-residual
+from +6.05 to +9.75 in one step. Observed frequency 0.3077 now sits **above** the
++$5 target frequency of 0.2712 and **below** break-even 0.5567 for the first time —
+but that ordering is one window old. No establishment is recorded, exactly as no
+rejection was (TARGET_001). n=13 of 25.
+
+## PROFIT_LOCK_5 at n=13 — crosses $5, and ENTIRELY because of one window
+| q=50 | value |
+|---|---|
+| lock hit rate | 9 of 13 |
+| SHADOW TRADING NET / window | **+7.1100** |
+| …**median** | **+5.8911** |
+| …**mean excluding 2300z** | **+3.2010** (exactly the n=12 figure) |
+| $/locked window | +12.7875 |
+| worst window | −10.6526 |
+| max peak directional | **100, unchanged** |
+| SHADOW MODELED NET | +7.9177 |
+
+2300z locked at a guaranteed floor of **+54.0176** with 74.9s to expiry — slightly
+*above* the frozen arm's +53.48, because the floor-securing completion added value.
+**One observation moves the headline from +3.2010 to +7.1100.** The ≥$5 criterion is
+arithmetically met at n=13 and is **NOT recorded as met**: a result that depends on
+a single window is not a result. q=25 gives +3.1010, still short.
+
+Unchanged: q=25 and q=50 remain 4.71× and 9.42× modeled extrapolation on the
+5.31-contract largest live fill; the rebate is EXPECTED, never credited; and
+CHANNEL_A remains unresolved (`analysis/l5/p1/P1_CHANNEL_A.md`). A-vs-B split at
+n=13: zero A-only windows at q=50, one at q=25 (1945z).
