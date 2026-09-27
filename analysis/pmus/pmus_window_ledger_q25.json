@@ -34,7 +34,7 @@
     "clip_is_modeled_extrapolation": true,
     "extrapolation_multiple": "4.71"
   },
-  "n_usable": 11,
+  "n_usable": 12,
   "excluded": {
     "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states",
     "cpc-btc-updown-15m-2026-09-27-2015z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 20:29:55; the window was never observed through a terminal state, so it fails the preregistered completeness rule even though the venue later reported it settled DOWN",
@@ -231,6 +231,23 @@
       "shadow_trading_net": "8.7683187075000000",
       "expected_maker_rebate": "0.14",
       "shadow_modeled_net_including_expected_rebate": "8.9083187075000000"
+    },
+    {
+      "window": "2245z",
+      "settlement": "up",
+      "terminal_residual_occurred": false,
+      "residual_contracts": "0",
+      "residual_basis": "0.0000",
+      "residual_side": "-",
+      "matched_contracts": "50.0000",
+      "ec_matched_gross": "7.24750000000000000000000000",
+      "passive_matched_gross": "-12.18750000000000000000000000",
+      "matched_gross": "-4.94000000000000000000000000",
+      "fees": "0.3543110000000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "-5.29431100000000000000000000",
+      "expected_maker_rebate": "0.44",
+      "shadow_modeled_net_including_expected_rebate": "-4.85431100000000000000000000"
     }
   ],
   "rolling": {
@@ -266,16 +283,16 @@
         0.6032
       ]
     },
-    "n=15": "NOT YET AVAILABLE (11 of 15 windows)",
-    "n=20": "NOT YET AVAILABLE (11 of 20 windows)",
-    "n=25": "NOT YET AVAILABLE (11 of 25 windows)"
+    "n=15": "NOT YET AVAILABLE (12 of 15 windows)",
+    "n=20": "NOT YET AVAILABLE (12 of 20 windows)",
+    "n=25": "NOT YET AVAILABLE (12 of 25 windows)"
   },
   "residual_statistics": {
-    "events": "4 of 11",
-    "frequency": 0.3636,
+    "events": "4 of 12",
+    "frequency": 0.3333,
     "wilson95": [
-      0.1517,
-      0.6462
+      0.1381,
+      0.6094
     ],
     "per_episode_pnl": [
       "-20.2500",
@@ -284,14 +301,14 @@
       "1.12500000"
     ],
     "mean_episode_pnl": "-8.7562",
-    "episode_pnl_per_window": "-3.1841",
+    "episode_pnl_per_window": "-2.9188",
     "episodes_that_lost": 3,
     "episodes_that_won": 1
   },
   "p0_thresholds": {
-    "net_before_residual": "3.9138",
-    "break_even_residual_frequency": "0.4470",
-    "target_frequency_for_plus_5": "-0.1240",
+    "net_before_residual": "3.1831",
+    "break_even_residual_frequency": "0.3635",
+    "target_frequency_for_plus_5": "-0.2075",
     "note": "break-even and target use the OBSERVED SIGNED mean episode P&L, which from n=11 includes one winning residual (2215z, +2.25). A winner raises the mean and therefore RAISES break-even frequency, so this number must not be read as a severity. The mean itself is uncertain at this n."
   }
 }

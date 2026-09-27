@@ -766,3 +766,48 @@ Wilson interval [0.1517, 0.6462]… but only just, and in fact 0.1423 < 0.1517, 
 it remains **outside** the lower bound. No rejection and no establishment is
 recorded either way (TARGET_001). n=11 of 25; both clips remain modeled
 extrapolation at 4.71× and 9.42× the 5.31-contract largest live fill.
+
+## COLLECTOR_002 — the drain is DEPLOYED but NOT YET EXERCISED
+Deployment `fb6de07c`, commit `c70f662b`, `SUCCESS` 22:46:34Z on the existing
+`pmus-btc15m-tape` service. Verified against the requested checklist:
+
+| check | result |
+|---|---|
+| serving SHA contains the fix | **YES** — `c70f662b`; the process header row carries the new build and `provenance: public PMUS gateway, read-only, no credentials` |
+| active window keeps recording | **YES** — booted 22:46:30 onto the live 2245z and recorded it through its close |
+| a departing slug stays in drain polling | **NOT EXERCISED** — see below |
+| polling ends on observed terminal state | **YES, by the stronger path** — 2245z was already in `terminal_seen`, so it never entered the drain at all |
+| explicit `drain_end` after 240s | **NOT OBSERVED** — no drain has started, so none is due |
+| no duplicate or corrupt rows | **YES** — 1885 rows, **0** duplicate `(slug,kind,t)` triples, **0** malformed bbo rows |
+| scorer / θ / q grid / fill model / decisions / membership | **unchanged** |
+| trading service redeployed or restarted | **NONE** — every other service's latest deployment timestamp is unchanged |
+
+**First post-deploy close, stated precisely rather than favourably.** 2245z's
+terminal row was captured at **23:00:04** `MARKET_STATE_CLOSED`; the reslate that
+dropped the slug came at **23:00:35**, 31 seconds later. So **the close was
+captured, but by the pre-existing path — the race was won on timing, and the drain
+was never entered.** This close would have been captured by the old code too. The
+fix is deployed and inert so far; the real test is the first close where the
+reslate lands *before* the venue publishes, which is the 31%-of-windows case.
+**No claim is made that the drain has been shown to work in production.**
+
+Not a deployment artifact, checked because it looked like one: 2245z's first bbo
+row is 210s after its open, but that is normal for this collector — observation
+lateness across the 12 usable windows spans **21s to 257s** (1915z, already
+admitted, is the worst). The redeploy did not truncate this window abnormally.
+
+### P0_RESIDUAL_001 — UPDATED to n=12 (2245z UP added)
+| | q=25 | q=50 |
+|---|---|---|
+| **= before residual** | **+3.1831** | **+6.0507** |
+| residual episodes | 4 of 12 | 4 of 12 |
+| frequency / Wilson 95% | 0.3333 / **[0.1381, 0.6094]** | same |
+| signed mean episode P&L | −17.5125 | −17.5125 |
+| break-even residual frequency | 0.3635 | **0.3455** |
+| frequency needed for +$5 | **IMPOSSIBLE** | 0.0600 |
+
+2245z carried **no terminal residual** and still lost: shadow trading net
+**−10.65** at q=50, on matched pair cost alone. Observed frequency 0.3333 sits
+just below break-even at both clips. The +$5 target of 0.0600 at q=50 is **well
+outside** the Wilson lower bound of 0.1381. No rejection recorded (TARGET_001);
+n=12 of 25. Both clips remain 4.71× and 9.42× modeled extrapolation.
