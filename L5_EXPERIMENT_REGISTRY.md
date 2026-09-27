@@ -198,3 +198,30 @@ exists (`micro_complement_taker_*`, `post_only=False`, gated by
 | PROBE-CAP-02 as an independent fresh $5.00 budget | **FALSE, CORRECTED** | one cumulative state is authoritative: −$4.50680000 of $5.00, **$0.49320 remaining**. BUDGET_001. Rung-A's $1.50 is NOT AUTHORIZED. |
 | "matched economics are positive at every clip and fill model" | **FALSE at n=9** | θ gates completions, not passive acquisitions; a whipsaw produced a 1.3500 pair cost at 2030z. MATCHED_002. |
 | Treating the 5.31 fill as BTC15m capacity evidence | **FALSE** | ATP tennis markets, 2026-09-07. Zero authenticated live BTC15m fills exist. |
+
+### EXP-012 — matched-unit mechanism decomposition (n=10 checkpoint)
+**Status: COMPLETE, diagnostic only, gates nothing.**
+`scripts/pmus_matched_decomposition.py` →
+`analysis/pmus/pmus_matched_decomposition_q{25,50}.json`.
+Findings MATCHED_003, PAIRCOST_001, WHIPSAW_001, EXPOSURE_001; P0_RESIDUAL_001
+updated to n=10. Policy, θ, fill model, q grid, DEV/OOS split and the
+preregistered decision rule are **unchanged**.
+
+Two defects in my own new diagnostic, found and fixed before any number was read:
+1. the reconciliation fields were assigned **after** `json.dump`, so they never
+   reached the files, and the "no mismatch printed" from the first pass was
+   **vacuous** — there was no longer a print to emit one;
+2. the EC tie check was written `abs(ec - (matched - (matched - ec)))`, an
+   identity that can never fail.
+Now: reconciliation runs before the write, the EC tie is a real `assert` against
+the scorer's `gross_margin` (passes to 1e-9 in all 10 windows), and the passive
+convention delta is printed and persisted per window.
+
+## DO NOT RETEST / DO NOT USE — additions
+
+| item | verdict | why |
+|---|---|---|
+| "the 2030z 1.78 pair is a rule defect to be gated" | **NOT ESTABLISHED** | the pair cost is an accounting relabel of an already-doomed residual; the late complement buy was **+$0.50 better** than settling the residual. WHIPSAW_001. |
+| "L5 would not have opened DOWN at 0.79 there" | **FALSE** | movement-driven side selection is STRONGLY SUPPORTED, `LEG_PATTERN` has an explicit 0.800 first-leg band, and 75–90c is L5's **best** residual band (+0.1382/unit). WHIPSAW_001. |
+| reading residual frequency 0.30 as "directional risk occurs 30% of the time" | **FALSE** | peak one-sided exposure occurred in **10 of 10** windows; 0.30 is the rate at which it failed to flatten by expiry. EXPOSURE_001. |
+| the FIFO passive matched figure as a P&L number | **DO NOT USE** | it is path pricing; per-window convention delta reaches −25.3611 at q=50. Use `passive_matched_gross_avg_cost`. MATCHED_003. |

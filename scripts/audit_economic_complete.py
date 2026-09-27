@@ -160,7 +160,8 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-27-1945z': 'down',
           'cpc-btc-updown-15m-2026-09-27-2000z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2030z': 'up',
-          'cpc-btc-updown-15m-2026-09-27-2045z': 'down'}
+          'cpc-btc-updown-15m-2026-09-27-2045z': 'down',
+          'cpc-btc-updown-15m-2026-09-27-2115z': 'down'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {

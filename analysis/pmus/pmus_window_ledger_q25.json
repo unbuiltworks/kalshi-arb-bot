@@ -13,7 +13,7 @@
     "clip_is_modeled_extrapolation": true,
     "extrapolation_multiple": "4.71"
   },
-  "n_usable": 9,
+  "n_usable": 10,
   "excluded": {
     "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states",
     "cpc-btc-updown-15m-2026-09-27-2015z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 20:29:55; the window was never observed through a terminal state, so it fails the preregistered completeness rule even though the venue later reported it settled DOWN",
@@ -154,6 +154,21 @@
       "expected_maker_rebate": "0.20",
       "total_net": "-3.818110000000",
       "realized_equivalent": "-3.618110000000"
+    },
+    {
+      "window": "2115z",
+      "settlement": "down",
+      "terminal_residual_occurred": false,
+      "residual_contracts": "0",
+      "residual_basis": "0.0000",
+      "residual_side": "-",
+      "residual_pnl": "0",
+      "matched_contracts": "175.0000",
+      "matched_gross": "16.02000000000",
+      "fees": "-2.8563805000000000",
+      "expected_maker_rebate": "0.70",
+      "total_net": "13.1636195000000000",
+      "realized_equivalent": "13.8636195000000000"
     }
   ],
   "rolling": {
@@ -171,17 +186,30 @@
         0.6245
       ]
     },
-    "n=10": "NOT YET AVAILABLE (9 of 10 windows)",
-    "n=15": "NOT YET AVAILABLE (9 of 15 windows)",
-    "n=20": "NOT YET AVAILABLE (9 of 20 windows)",
-    "n=25": "NOT YET AVAILABLE (9 of 25 windows)"
+    "n=10": {
+      "matched_gross": "4.0269",
+      "fees": "-0.9381",
+      "residual_pnl": "-3.6150",
+      "expected_maker_rebate": "0.4380",
+      "total_net": "-0.5262",
+      "realized_equivalent": "-0.0882",
+      "residual_events": "3 of 10",
+      "residual_frequency": 0.3,
+      "wilson95": [
+        0.1078,
+        0.6032
+      ]
+    },
+    "n=15": "NOT YET AVAILABLE (10 of 15 windows)",
+    "n=20": "NOT YET AVAILABLE (10 of 20 windows)",
+    "n=25": "NOT YET AVAILABLE (10 of 25 windows)"
   },
   "residual_statistics": {
-    "events": "3 of 9",
-    "frequency": 0.3333,
+    "events": "3 of 10",
+    "frequency": 0.3,
     "wilson95": [
-      0.1206,
-      0.6458
+      0.1078,
+      0.6032
     ],
     "per_episode_losses": [
       "-20.2500",
@@ -189,12 +217,12 @@
       "-0.50000000"
     ],
     "mean_episode_loss": "-12.0500",
-    "loss_per_window": "-4.0167"
+    "loss_per_window": "-3.6150"
   },
   "p0_thresholds": {
-    "net_before_residual": "2.3783",
-    "break_even_residual_frequency": "0.1974",
-    "target_frequency_for_plus_5": "-0.2176",
+    "net_before_residual": "3.5268",
+    "break_even_residual_frequency": "0.2927",
+    "target_frequency_for_plus_5": "-0.1223",
     "note": "break-even and target use the OBSERVED mean episode severity; severity itself is uncertain at this n"
   }
 }

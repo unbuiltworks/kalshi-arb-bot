@@ -481,3 +481,172 @@ MATCHED_002, not by the residual term.
 Observed residual frequency 0.3333 now sits **above** break-even at both clips.
 Still n=9 of 25; the Wilson interval remains wide and no rejection is recorded
 from it (TARGET_001 rule).
+
+## MATCHED_003 — the two matching mechanisms are near-equal and opposite
+`scripts/pmus_matched_decomposition.py`, n=10 usable BTC15m windows, frozen policy
+(θ=0.96, variant B, queue_aware). **Diagnostic only; gates nothing.**
+
+Every matched unit is attributed to the mechanism that created it:
+
+* **EC** — retired by an ECONOMIC_COMPLETE taker completion (θ-gated).
+* **PASSIVE** — matched by a later passive ACQUIRE/EXTEND on the opposite side,
+  i.e. the oscillator. **Not gated by θ or by anything else.**
+
+Authoritative split, taken from the scorer itself (`gross_margin` is the EC leg,
+`matched_pnl − gross_margin` the passive leg), so it reconciles exactly:
+
+| per window | q=25 | q=50 |
+|---|---|---|
+| EC-created matched gross (n=5) | +11.8600 | +22.7999 |
+| PASSIVE-created matched gross (n=5) | −7.5775 | −14.8491 |
+| **= total matched gross (n=5)** | **+4.2825** | **+7.9507** |
+| EC-created matched gross (n=10) | +9.6741 | +18.8066 |
+| PASSIVE-created matched gross (n=10) | −5.6472 | −11.1414 |
+| **= total matched gross (n=10)** | **+4.0269** | **+7.6652** |
+
+n=15/20/25: NOT YET AVAILABLE.
+
+**The oscillator destroys 58–59% of what completion earns.** Completion is the
+only mechanism with positive measured economics; passive matching is negative in
+7 of 10 windows at both clips. θ binds one path and nothing binds the other.
+
+### Convention disclosure (MATCHED_001 band)
+The EC leg is priced at the scorer's own running-average basis and therefore ties
+the scorer **to 1e-9 in all 10 windows** (asserted in the script). The passive leg
+does **not** tie: the per-unit path prices surviving lots **FIFO**, the scorer
+prices them at **running average**. Totals over matched+residual are invariant;
+the split is not. Per-window `passive_convention_delta` ranges **−25.3611 to
++8.5198 (q=50)** — larger than the matched figure itself in 1930z. Both files
+carry `passive_matched_gross_avg_cost` (authoritative) and
+`passive_matched_gross_fifo_path` (path pricing) side by side. **The FIFO path is
+kept only because it is the only convention under which an individual >$1 pair is
+visible at all**; the average-cost convention smears it across the window.
+
+## PAIRCOST_001 — a third of matched units pair above $1.00
+Quantity share of matched units by effective pair cost, FIFO path pricing:
+
+| bucket | q=25 n=5 | q=25 n=10 | q=50 n=5 | q=50 n=10 |
+|---|---|---|---|---|
+| <0.96 | 0.6311 | 0.6370 | 0.6260 | 0.6333 |
+| 0.96–1.00 | 0.0000 | 0.0182 | 0.0000 | 0.0183 |
+| 1.00–1.10 | 0.1341 | 0.1452 | 0.1360 | 0.1467 |
+| 1.10–1.25 | 0.0335 | 0.0726 | 0.0340 | 0.0733 |
+| >1.25 | 0.2012 | 0.1271 | 0.2040 | 0.1283 |
+
+**Above $1.00: 34.5% of units at n=10 (both clips). Nothing lands in 0.96–1.00
+except one 50-lot** — the distribution is bimodal, θ-compliant below 0.96 or
+outright loss-making above 1.00, with almost nothing in between. That is the
+signature of a gate on one path and no gate on the other, not of a tunable
+threshold.
+
+## WHIPSAW_001 — the expensive pair is GENUINE L5 behavior plus an ACCOUNTING artifact
+Action-by-action reconstruction of 2030z at q=50 (`scripts/audit_completion_orderstate.py`),
+against the canonical corpus in `src/l5_complement_response_curve.py`. **No new
+rule, no θ selection.**
+
+UP probability on tape: 0.42 (20:36) → 0.17 (20:41:53) → **0.19 (20:42:24)** →
+0.26 → 0.35 → **0.92 (20:43:55)** → 0.99 → settled **UP**.
+
+| t | action | inv before | inv after | px | pair cost | TTE |
+|---|---|---|---|---|---|---|
+| 20:36:46 | ACQUIRE UP 50 | 0/0 | 50/0 | 0.4200 | — | 494s |
+| 20:39:49 | COMPLETE DOWN 50 | 50/0 | 0/0 | 0.5200 | **0.9400** | 311s |
+| 20:40:19 | ACQUIRE UP 50 | 0/0 | 50/0 | 0.2700 | — | 281s |
+| 20:40:21 | COMPLETE DOWN 50 | 50/0 | 0/0 | 0.592174 | **0.862174** | 279s |
+| 20:42:24 | ACQUIRE DOWN 50 | 0/0 | 0/50 | 0.7900 | — | 156s |
+| 20:44:56 | ACQUIRE UP 50 | 0/50 | 50/50 | 0.9900 | **1.7800** | **4s** |
+
+Both completions were clean (0.9400, 0.8622). The loss is the last two rows.
+
+**The 20:42:24 DOWN open is genuine L5 behavior.** Flat inventory, previous action
+a COMPLETE, and the probability had fallen 0.42→0.17 over the preceding five
+minutes — movement favoured DOWN. The corpus says
+`4_movement_decides_next_side: STRONGLY SUPPORTED` with
+`MOVEMENT_DOMINATED_SHARE = 0.780`; `LEG_PATTERN` carries an explicit first-leg
+band at **0.800** completing at 0.120 for a 0.9500 pair; and
+`RESIDUAL_PNL_PER_UNIT` makes **75–90c L5's single best residual band at
++0.1382/unit**. Our clone opened where L5 opens, on the signal L5 uses, in L5's
+most profitable band. It then lost, once.
+
+**The 20:44:56 UP buy at 0.99 is outside L5's observed repertoire but is NOT the
+loss.** All five `LEG_PATTERN` completion bands land at pair cost 0.91–0.95,
+`PROFITABLE_MEDIAN_COST = 0.9300`; no band above 1.00 appears anywhere in the
+corpus. On the response curve this state is the extreme `<=-10c` bucket (held side
+collapsed 0.81→0.01): L5 goes **same side 0.523 / complement 0.477** — a coin
+flip that slightly prefers averaging down, never a reliable completion. And TTE=4s
+has no counterpart in the corpus at all, so this is **NOT COMPARABLE rather than
+contradicted**.
+
+Economically the late buy **helped**: carrying 50 DOWN @0.79 to settlement costs
+**−$39.5000**; paying 0.99 for the complement cost **−$39.0000** and earned a
+maker rebate instead of a taker fee. **+$0.50 better.**
+
+### Verdict
+> The **first leg** is genuine L5 behavior. The **$1.78 pair cost** is a
+> translation/accounting artifact: our accounting converts an already-doomed
+> directional residual into a >$1 matched pair four seconds before expiry. L5's
+> tape never shows such a pair because L5 lets that leg settle as residual — the
+> same dollars, filed under a different heading.
+
+Two consequences, both recorded rather than acted on:
+
+1. **The >$1.10 pair-cost buckets in PAIRCOST_001 are contaminated with
+   directional residual loss.** The matched/residual split is clean in total and
+   not clean bucket by bucket.
+2. **The genuine divergence from L5 in this window is the clock, not the rule.** A
+   15-minute PMUS window forced this first leg to resolve inside 156s. L5's median
+   leg gap is **47s** with **16.7% of pairs beyond 120s** and no expiry at that
+   scale; `PROFIT_BY_GAP` shows L5's pair profit *rising* with the wait (+0.02 at
+   1–5s to +0.11 beyond 120s). Patience is the thing PMUS BTC15m cannot give us.
+
+The MATCHED_002 figure of **1.3500** and this **1.7800** are both correct and are
+not in conflict: 1.3500 is the window average-cost pair (avg UP 0.5600 over
+0.42/0.27/0.99, plus DOWN 0.7900); 1.7800 is the worst individual FIFO pair. The
+average-cost convention is what the scorer's P&L uses; the FIFO path is what makes
+the single bad pair visible.
+
+## EXPOSURE_001 — terminal residual frequency is NOT directional-exposure frequency
+Peak vs terminal one-sided inventory, q=50, n=10:
+
+| | windows |
+|---|---|
+| peak one-sided exposure ≥ 1 clip | **10 of 10** |
+| peak ≥ 2 clips | 8 of 10 |
+| **terminal** residual at expiry | **3 of 10** |
+
+The preregistered P0 statistic counts only the terminal state. 2030z carried a
+50-lot one-sided position for 152s, lost $39.00 on it, and is recorded as
+**zero residual** because it was matched at the buzzer. **Directional risk was
+taken in every window; it failed to flatten in three.** The P0 metric measures the
+flattening failure rate, not the exposure rate, and a share of the directional
+loss is booked inside matched gross.
+
+**This does not change the preregistered decision rule and no threshold was
+touched.** It is recorded so the n=25 decision is not read as "residual risk occurs
+30% of the time".
+
+## P0_RESIDUAL_001 — UPDATED to n=10
+| | q=25 | q=50 |
+|---|---|---|
+| matched gross | +4.0269 | +7.6652 |
+| taker fees | −0.9381 | −1.8241 |
+| expected maker rebate | +0.4380 | +0.8710 |
+| **= before residual** | **+3.5268** | **+6.7121** |
+| residual P&L | −3.6150 | −7.2300 |
+| **= TOTAL/window** | **−0.5262** | **−1.3889** |
+| residual events | 3 of 10 | 3 of 10 |
+| frequency / Wilson 95% | 0.3000 / **[0.1078, 0.6032]** | same |
+| mean episode severity | −12.0500 | −24.1000 |
+| break-even residual frequency | **0.2927** | **0.2785** |
+| target frequency for +$5 | **IMPOSSIBLE** | 0.0710 |
+
+Windows: 1830z UP, 1845z UP, 1900z DOWN, 1915z DOWN, 1930z UP, 1945z DOWN,
+2000z UP, 2030z UP, 2045z DOWN, 2115z DOWN (5 UP / 5 DOWN). Excluded: 1815z
+(collector started mid-window), 2015z and 2100z (no terminal row on tape).
+
+Both clips improved against n=9 (q50 total −3.6518 → −1.3889) on one good window
+(2115z, +26.31). Observed frequency 0.3000 still sits **above** break-even at both
+clips. At q=50, +$5/window is now arithmetically reachable again — it needs a
+residual frequency of **0.0710**, which is **outside the lower Wilson bound of
+0.1078**. Still n=10 of 25; no rejection is recorded from the interval
+(TARGET_001 rule).

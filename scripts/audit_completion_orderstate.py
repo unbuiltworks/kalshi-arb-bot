@@ -72,6 +72,7 @@ def walk(rows, clip, theta, variant, winner, atomic_recycle=False,
                         resting_since_before_completion[(k, v['px'])] = True
                 events.append(dict(
                     t=t, kind='COMPLETE', side=comp, qty=n,
+                    compl_px=(cost / n), held_basis=basis, fee=fee,
                     inv_before=before, inv_after=dict(q),
                     outstanding=outstanding_before_cancel,
                     cancelled=(len(outstanding_before_cancel)
