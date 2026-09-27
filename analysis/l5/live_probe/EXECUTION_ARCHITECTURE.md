@@ -106,7 +106,17 @@ that the guard makes its decision with no network, no scheduler and no sleep.
 | file | meaning | current state |
 |---|---|---|
 | `HALT` | present ⇒ `safe_shutdown`, before `armed()` is consulted | **present** |
-| `live_mandate.json` | the authorization to spend; **absence is safe** | **absent** |
+| `live_mandate.json` | the authorization to spend; **absence is safe** | **present but EXPIRED** |
+
+**State-table correction, 2026-09-27.** This table read "absent" and was stale; I
+repeated that reading. The file is **present** and carries
+`OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT`, whose `expiry` was
+**2026-09-18T00:41:20Z** — nine days ago. An expired mandate is `NO_MANDATE` at
+the wire, the identical refusal to an absent one, and `HALT` is also present and
+is consulted before `armed()`, so the committed state is safe on both counts.
+Recorded rather than deleted: an expired authorization left in place is evidence,
+and removing it is a reviewed change, not a tidy-up. It also may not be extended,
+refreshed or reinterpreted — a new authorization means a new `authorization_id`.
 
 Removing `HALT` does not authorize trading; it only un-halts the process.
 Orders additionally need a valid, unexpired mandate naming this service. Two
