@@ -47,6 +47,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 from decimal import ROUND_FLOOR, Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -586,6 +587,31 @@ def venue_order_price(row: Mapping[str, Any]) -> Optional[D]:
 UNKNOWN_PRICE_WORST_CASE = D(1)
 
 
+class UnknownMarket(RuntimeError):
+    """A market identity no financial state is allowed to accept.
+
+    LIVE 2026-09-27. Two orders adopted from the venue -- CR52P8GZ4YAQ and
+    CR52QM4S6YBY, 0.70 UP shares for $0.09700 -- were booked under the
+    market key "". Adoption read the venue row's market as `row["market"]`,
+    but this venue sends `marketSlug`, so a genuinely adopted order (one we
+    never submitted, where there is no local record to fall back to) came
+    through with market None. resolve_pending_terminal then did
+    `str(row.get("market") or "")`, and `None or ""` is a perfectly good
+    dict key.
+
+    What followed was not a rounding error. `markets_with_exposure()`
+    returned [""], `open_markets()` returned [""], and
+    MAX_CONCURRENT_MARKETS refused every subsequent window -- the executor
+    stopped trading entirely and spent 125 settlement reads asking the venue
+    about a slug it has never heard of. The $0.09700 belonged to 0115z and
+    was excluded from its settlement, which is why that market booked
+    +0.599500 against a true +0.502500.
+
+    An identity we do not have is not an identity we may invent. It is
+    QUARANTINE.
+    """
+
+
 class UnknownSide(RuntimeError):
     """A side word no layer of this system is allowed to guess at.
 
@@ -640,6 +666,59 @@ VENUE_SIDE_WORDS = {
 
 #: The keys of a venue order/fill row that state a side, most direct first.
 VENUE_ROW_SIDE_KEYS = ("outcomeSide", "outcome_side", "intent", "side")
+
+#: The keys a venue row may state its market under. `marketSlug` FIRST and
+#: by name, because that is what this venue actually sends and reading
+#: `market` alone is what produced the "" incident.
+VENUE_ROW_MARKET_KEYS = ("marketSlug", "market_slug", "market", "slug")
+
+#: A market id we will accept into financial state.
+#:
+#: THE RULE IS ONLY WHAT THE DEFECT WAS. None, "", whitespace -- an identity
+#: that is absent. It is tempting to also demand this venue's slug shape,
+#: and the first version of this did; it rejected every short market id the
+#: rest of the suite uses and broke 53 tests, because a minimum length is a
+#: rule I invented rather than an invariant the money requires. A market id
+#: is valid when it is a non-empty string with no whitespace in it. What
+#: the venue's slugs look like is the venue's business.
+MARKET_ID_RE = re.compile(r"^\S+$")
+
+
+def canonical_market(raw: Any, *, doing: str) -> str:
+    """A market id fit to key financial state, or refuse.
+
+    None, "", whitespace and anything not shaped like a slug all raise.
+    There is no default and no fallback: every caller below this line
+    writes money against the value it returns.
+    """
+    s = "" if raw is None else str(raw).strip()
+    if not s or not MARKET_ID_RE.match(s):
+        raise UnknownMarket(json.dumps({
+            "raw": None if raw is None else str(raw), "doing": doing,
+            "why": ("financial state accepts only a validated market id; "
+                    "a blank or unrecognised identity is quarantined, never "
+                    "used as a key")}))
+    return s
+
+
+def venue_row_market(row: Mapping[str, Any], *, doing: str,
+                     fallback: Any = None) -> str:
+    """The canonical market of one venue row, by name, then a local record.
+
+    The venue's own key is tried first and in order. `fallback` is what WE
+    recorded when we sent the order, which exists for an order we submitted
+    and does not for one we merely adopted -- which is exactly the case that
+    broke.
+    """
+    for key in VENUE_ROW_MARKET_KEYS:
+        v = row.get(key) if isinstance(row, Mapping) else None
+        if v is None:
+            continue
+        try:
+            return canonical_market(v, doing=doing)
+        except UnknownMarket:
+            continue
+    return canonical_market(fallback, doing=doing)
 
 
 def venue_side(raw: Any) -> Optional[str]:
@@ -987,9 +1066,14 @@ class InventoryStore:
         built `market|ORDER_SIDE_SELL` from a word the venue chose. The raw
         word is kept beside the entry for audit; the KEY is always canonical.
         """
+        # IDENTITY FIRST, before a single field moves. This is the only
+        # writer of positions and leg_cost on the fill path, so validating
+        # here is what makes "" unreachable in inventory, committed,
+        # cash_deployed, risk, settlement and retirement at once.
+        own_market = canonical_market(market, doing="booking a fill")
         own_side = canonical_side(side, doing="booking a fill")
         own = own_outcome_price(own_side, price, basis=basis)
-        k = "%s|%s" % (market, own_side)
+        k = "%s|%s" % (own_market, own_side)
         if str(side).strip().upper() != own_side:
             raw = self.state.setdefault("venue_side_raw", {})
             raw.setdefault(k, sorted(set(raw.get(k, []))
@@ -998,8 +1082,8 @@ class InventoryStore:
             D(str(self.state["positions"].get(k, 0))) + qty)
         # both of these are CASH OUT in the leg's own terms now. They used to
         # take the wire number, which credits a short instead of charging it.
-        self.state["committed"][market] = str(
-            D(str(self.state["committed"].get(market, 0))) + own * qty)
+        self.state["committed"][own_market] = str(
+            D(str(self.state["committed"].get(own_market, 0))) + own * qty)
         lc = self.state.setdefault("leg_cost", {})
         lc[k] = str(D(str(lc.get(k, 0))) + own * qty)
         # HOW MANY FILLS BUILT THIS LEG. A leg with shares and no cost is
@@ -1024,6 +1108,7 @@ class InventoryStore:
 
 
     def leg_cost(self, market: str) -> Dict[str, D]:
+        market = canonical_market(market, doing="reading leg cost")
         lc = self.state.get("leg_cost") or {}
         return {side: D(str(lc.get("%s|%s" % (market, side), 0)))
                 for side in ("UP", "DOWN")}
@@ -1139,6 +1224,7 @@ class InventoryStore:
         sound, and it is also worth SEEING, so it is reported beside the
         gate rather than folded into it.
         """
+        market = canonical_market(market, doing="reporting cash deployed")
         lc = self.leg_cost(market)
         return {
             "market": market,
@@ -1170,6 +1256,7 @@ class InventoryStore:
         An order that has not filled is priced as though it fills in full,
         which is what `extra_*` and the outstanding legs are for.
         """
+        market = canonical_market(market, doing="pricing risk")
         self.require_coherent_book(market, doing="pricing risk")
         pos = self.state.get("positions") or {}
         up_q = D(str(pos.get("%s|UP" % market, 0)))
@@ -1243,6 +1330,8 @@ class InventoryStore:
         consuming the envelope and frees the one-live-order slot; a partial
         keeps the remainder outstanding.
         """
+        # refuse before anything is recorded, not after
+        market = canonical_market(market, doing="booking order progress")
         was_live = coid in (self.state.get("live_orders") or {})
         already = self.applied_fill_qty(coid)
         cum = D(str(prog.get("cum_qty") or 0))
@@ -1364,6 +1453,41 @@ class InventoryStore:
         self.save()
         return {"closed": closed, "posted_pnl": "0", "anchor": dict(anchor)}
 
+    def quarantine_order(self, coid: str, *, reason: str, detail: str,
+                         row: Mapping[str, Any]) -> Dict[str, Any]:
+        """Hold an order whose identity we cannot establish. NO accounting.
+
+        Quarantine is not a soft failure. The order leaves live_orders and
+        pending_terminal so nothing keeps asking about it, its raw row is
+        kept verbatim for a human to resolve, and the book is marked
+        uncertain -- which refuses every submission -- because an order we
+        cannot identify may hold real inventory we cannot see.
+
+        Nothing here touches positions, leg_cost, committed or realized. An
+        unidentified order contributes exactly zero to financial state,
+        which is the whole point: the alternative is a market key of "".
+        """
+        q = self.state.setdefault("quarantine", {})
+        q[str(coid)] = {
+            "coid": str(coid), "reason": str(reason),
+            "detail": str(detail)[:500],
+            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            # verbatim, because resolving this by hand needs what the venue
+            # actually said, not our interpretation of it
+            "row": {k: (None if v is None else str(v))
+                    for k, v in dict(row).items()},
+        }
+        (self.state.get("live_orders") or {}).pop(str(coid), None)
+        (self.state.get("pending_terminal") or {}).pop(str(coid), None)
+        self.mark_uncertain(
+            "order %s quarantined: %s" % (coid, reason))
+        self.save()
+        return dict(q[str(coid)])
+
+    def quarantined(self) -> Dict[str, Dict[str, Any]]:
+        return {k: dict(v) for k, v in
+                (self.state.get("quarantine") or {}).items()}
+
     def pending_terminal(self) -> Dict[str, Dict[str, Any]]:
         """Orders that left the venue's open list still owing us a fill."""
         return {k: dict(v) for k, v in
@@ -1396,9 +1520,21 @@ class InventoryStore:
         row = dict(pend.get(coid) or {})
         if not row:
             return {"coid": coid, "resolved": False, "reason": "NOT_PENDING"}
-        market = str(row.get("market") or "")
-        side = canonical_side(row.get("side"),
-                              doing="booking a pending terminal order")
+        # THE LINE THAT MADE "". `str(row.get("market") or "")` turned a
+        # missing identity into a usable dict key; it now refuses, and the
+        # caller quarantines rather than booking against a market we cannot
+        # name.
+        try:
+            market = canonical_market(
+                row.get("market"), doing="booking a pending terminal order")
+            side = canonical_side(
+                row.get("side"), doing="booking a pending terminal order")
+        except (UnknownMarket, UnknownSide) as exc:
+            self.quarantine_order(coid, reason=type(exc).__name__,
+                                  detail=str(exc)[:300], row=row)
+            return {"coid": coid, "resolved": False,
+                    "reason": "QUARANTINED_UNIDENTIFIED",
+                    "detail": type(exc).__name__}
         # put it back on the live map just long enough for the shared
         # booking path to see it, so the delta/idempotency logic is the same
         # code that books an ordinary progress read. Nothing else reads it
@@ -1594,6 +1730,7 @@ class InventoryStore:
         # side fix removes that particular residue; this makes a repeat
         # impossible whatever the residue is, and it persists in the state
         # file so a restart cannot resurrect it either.
+        market = canonical_market(market, doing="settling a market")
         done = (self.state.get("retired_markets") or {}).get(market)
         if done:
             return {"retired": False, "market": market,
@@ -1769,6 +1906,7 @@ class InventoryStore:
         # OUR exposure, so it is adopted rather than ignored.
         ours = dict(self.state.get("live_orders") or {})
         rebuilt: Dict[str, Any] = {}
+        quarantined_now: Dict[str, Any] = {}
         for o in open_orders:
             coid = str(o.get("client_order_id") or o.get("clientOrderId")
                        or o.get("order_id") or o.get("id") or "")
@@ -1786,6 +1924,18 @@ class InventoryStore:
             except UnknownSide:
                 _adopt_side = canonical_side(
                     mine.get("side"), doing="adopting an order")
+            # MARKETSLUG BY NAME. This venue sends `marketSlug`; adoption
+            # used to read `market`, which is absent on a venue row, and for
+            # a genuinely adopted order there is no local record to fall
+            # back to -- so the market arrived None and became "".
+            try:
+                _adopt_market = venue_row_market(
+                    o, doing="adopting an order",
+                    fallback=mine.get("market"))
+            except UnknownMarket as exc:
+                quarantined_now[coid] = {"reason": "UnknownMarket",
+                                         "detail": str(exc)[:300], "row": o}
+                continue
             rebuilt[coid] = {
                 "t": mine.get("t"),
                 # THE ID poll_orders ASKS THE VENUE BY. Adoption used to omit
@@ -1798,7 +1948,7 @@ class InventoryStore:
                 "client_order_id": coid,
                 "session_id": mine.get("session_id"),
                 "adopted": coid not in ours,
-                "market": o.get("market") or mine.get("market"),
+                "market": _adopt_market,
                 # CANONICAL, always. Adoption used to copy the venue's own
                 # word straight through -- "ORDER_SIDE_SELL" -- and
                 # apply_fill then built its ledger key from it. The raw word
@@ -1886,6 +2036,9 @@ class InventoryStore:
         # would refuse its market's settlement for ever. Double-booking is
         # not the risk here -- apply_order_progress is idempotent on the
         # cumulative -- a permanently unsettleable market is.
+        for _qc, _qv in quarantined_now.items():
+            self.quarantine_order(_qc, reason=_qv["reason"],
+                                  detail=_qv["detail"], row=_qv["row"])
         returned = sorted(set(rebuilt) & set(pend))
         for coid in returned:
             pend.pop(coid, None)
@@ -1901,11 +2054,13 @@ class InventoryStore:
             if bad:
                 incoherent[m] = bad
         pending = sorted(self.state.get("pending_terminal") or {})
-        if disputed or incoherent or pending:
+        quarantine = sorted(self.state.get("quarantine") or {})
+        if disputed or incoherent or pending or quarantine:
             self.state["orders_uncertain"] = (
                 "gross/net divergence %s; incoherent book %s; "
-                "unbooked terminal orders %s"
-                % (sorted(set(disputed)), sorted(incoherent), pending))
+                "unbooked terminal orders %s; quarantined orders %s"
+                % (sorted(set(disputed)), sorted(incoherent), pending,
+                   quarantine))
         self.save()
         return {"reconciled": True, "drift": drift,
                 # stated separately and never collapsed into one another
@@ -1939,8 +2094,9 @@ class InventoryStore:
                     "An order that was never ACKed has no id to ask by and "
                     "is released instead; if it did fill, the shares arrive "
                     "without a cost basis and the book fails closed."),
+                "quarantined": quarantine,
                 "uncertainty_cleared": not (disputed or incoherent
-                                            or pending),
+                                            or pending or quarantine),
                 "authority": "VENUE"}
 
 

@@ -770,9 +770,15 @@ class Runner:
         for e in events:
             self.stats["LIFECYCLE:%s" % e.get("event", "ERROR")] += 1
             self.win["LIFECYCLE:%s" % e.get("event", "ERROR")] += 1
+            # NO FALLBACK. This used to emit `e.get("market") or
+            # transport_slug`, and `"" or slug` is the slug -- so the two
+            # orders booked under "" logged as 0115z and the defect was
+            # invisible in the one place it should have been obvious.
+            # Missing identity stays missing, and is named.
+            m = e.get("market")
             emit("L5_LIVE_LIFECYCLE", dict(
-                e, market=e.get("market") or (
-                    self.transport.market_slug if self.transport else None)))
+                e, market=(m if m else None),
+                market_identity=("PRESENT" if m else "MISSING")))
 
     def order_progress_latency_s(self, now: float) -> Dict[str, Any]:
         """How stale our knowledge of any live order is, right now.
@@ -833,11 +839,36 @@ class Runner:
             "order_progress": self.order_progress_latency_s(self.now_t),
             "preflight_attempts": self.preflight_attempts,
             "pending_terminal": sorted(self.store.pending_terminal()),
+            "quarantined": sorted(self.store.quarantined()),
+            "cooloff_remaining_s": round(self.venue_cooling(), 2),
             "retired_markets": sorted(
                 self.store.state.get("retired_markets") or {}),
             "realized": self.store.realized_lines(),
             "limits": self.limits.as_dict(), "lambda": str(self.lam),
             "frozen_rule": "030d8bf"})
+
+    def venue_cooling(self) -> float:
+        """Seconds of venue cool-off remaining, or 0.
+
+        THE P1 FIX, and it is in the CALLER rather than the limiter. The
+        limiter's contract is unchanged and still proven: shared bucket,
+        shared cool-off, raises VenueThrottled without sending. What was
+        wrong is that every path kept calling it anyway -- 2,601 refusals
+        inside one ~3s cool-off on the first occurrence, 19,420 by the end
+        of the run. None reached the venue, but each one is a caller asking
+        a question it already knows the answer to.
+
+        So the tick asks ONCE and skips the venue-touching work while the
+        answer is no. Nothing here decides an order is safe, terminal or
+        flat: skipping a read leaves every piece of state exactly as
+        unknown as it was, which is the direction that fails closed.
+        """
+        t = self.transport
+        lim = getattr(t, "limiter", None) if t is not None else None
+        if lim is None:
+            return 0.0
+        m = lim.metrics()
+        return float(m["cooloff_remaining_s"]) if m.get("in_cooloff") else 0.0
 
     def tick(self, now: float) -> None:
         self.now_t = now
@@ -846,6 +877,13 @@ class Runner:
             emit("L5_LIVE_HALT", LX.deadman(self.store, self.transport,
                                             reason="operator_halt"))
             self.transport.disarm("operator_halt")
+        # one question per tick instead of one per caller
+        cooling = self.venue_cooling()
+        if cooling > 0:
+            self.stats["ticks_skipped_in_cooloff"] += 1
+            self.win["ticks_skipped_in_cooloff"] += 1
+            self.poll(now)          # the websocket feed costs the venue nothing
+            return
         self.maybe_preflight(now)
         if self.store.live_order_count():
             self.poll_orders()
