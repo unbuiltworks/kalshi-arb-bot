@@ -15,15 +15,25 @@ No future information reaches a decision. Settlement is read once, by the
 scorer, after each walk.
 
 STATUS: UNVERIFIED. This script has never been executed or syntax-checked.
+
+Usage:
+    python3 scripts/run_economic_complete.py '{"<slug>": "up", ...}'
 """
 from __future__ import annotations
 
 import collections
 import json
+import os
 import sys
 from decimal import Decimal as D
 
-from src import pmus_completion_shadow as S
+# Make `src` importable when invoked as `python3 scripts/run_economic_complete.py`
+# from the repo root. Without this the import below raises
+# "ModuleNotFoundError: No module named 'src'" -- observed directly with the
+# sibling checkpoint runner, which needed PYTHONPATH=. to run at all.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src import pmus_completion_shadow as S  # noqa: E402
 
 TAPE = "data/pmus_btc15m_tape/pmus_btc15m_tape.jsonl"
 
