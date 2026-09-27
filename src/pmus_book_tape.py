@@ -45,6 +45,9 @@ LIVE_EVENTS = ("/v1/events?live=true&active=true&closed=false"
 #: venue-generic -- so the admission is a second slug source, not a second
 #: collector.
 SERIES_RESLATE_S = 45.0
+#: a slug re-emits at least this often even when nothing changed, so a gap in
+#: the tape distinguishes lost observation from a quiet book.
+HEARTBEAT_S = 30.0
 
 #: how far ahead of its start a window is worth polling
 LEAD_S = 60.0
@@ -219,6 +222,7 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
     reslate = SERIES_RESLATE_S if series else 300.0
     slugs, refreshed, rows, cycles = universe(), time.time(), 0, 0
     last_traded: dict = {}
+    echoed: dict = {}
 
     def put(fh, obj):
         """Write a row, and echo it to stdout when asked.
@@ -233,8 +237,24 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
         """
         line = json.dumps(obj)
         fh.write(line + "\n")
-        if echo_rows:
-            print("PMUS_TAPE_ROW %s" % line, flush=True)
+        if not echo_rows:
+            return
+        # CHANGE-ONLY ECHO. The ladder is frequently byte-identical between
+        # consecutive 2 s observations, and echoing every repeat makes the tape
+        # too large to retrieve through the only channel that can retrieve it.
+        # A state's ladder IS the last observed one, so suppressing an
+        # unchanged repeat loses nothing -- the reader carries it forward. A
+        # row is still emitted at least every HEARTBEAT_S per slug, so a gap in
+        # the tape means a real gap in observation and not merely a quiet book,
+        # which is what the completeness metric has to be able to tell apart.
+        k = "%s|%s" % (obj.get("slug"), obj.get("kind"))
+        body = {kk: vv for kk, vv in obj.items() if kk != "t"}
+        prev_body, prev_t = echoed.get(k, (None, 0.0))
+        now_s = time.time()
+        if body == prev_body and (now_s - prev_t) < HEARTBEAT_S:
+            return
+        echoed[k] = (body, now_s)
+        print("PMUS_TAPE_ROW %s" % line, flush=True)
     with path.open("a", encoding="utf-8") as fh:
         put(fh, {
             "t": datetime.now(timezone.utc).isoformat(), "kind": "tape_start",
