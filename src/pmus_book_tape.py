@@ -207,13 +207,18 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     tag = ("pmus_%s_" % series.replace("-", "")) if series else "pmus_book_"
     path = out_dir / ("%s%s.jsonl" % (tag, stamp))
-    end = time.time() + minutes * 60.0
+    # minutes <= 0 == CONTINUOUS, the convention every sibling collector in
+    # deploy/ already uses (--hours 0). Without it a long-running deployment
+    # would exit on its first loop test and the restart policy would spin.
+    forever = minutes <= 0
+    end = float("inf") if forever else (time.time() + minutes * 60.0)
 
     def universe():
         return series_slugs(series) if series else live_slugs(cap)
 
     reslate = SERIES_RESLATE_S if series else 300.0
     slugs, refreshed, rows, cycles = universe(), time.time(), 0, 0
+    last_traded: dict = {}
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({
             "t": datetime.now(timezone.utc).isoformat(), "kind": "tape_start",
@@ -238,6 +243,25 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
             for s in slugs:
                 row = snapshot(s)
                 if row:
+                    # PMUS serves NO public trade-print endpoint -- /trades,
+                    # /history, /ohlc, /candles and /price-history all 404. The
+                    # only print evidence the venue exposes is the cumulative
+                    # sharesTraded counter, so the delta between consecutive
+                    # observations is recorded and NAMED as a lower bound on
+                    # traded volume. It is never called a trade count and never
+                    # a fill.
+                    prev = last_traded.get(s)
+                    cur = row.get("shares_traded")
+                    try:
+                        d = (float(cur) - float(prev)) if (
+                            cur is not None and prev is not None) else None
+                    except (TypeError, ValueError):
+                        d = None
+                    row["shares_traded_delta_lower_bound"] = (
+                        None if d is None else round(d, 4))
+                    row["shares_traded_prev"] = prev
+                    if cur is not None:
+                        last_traded[s] = cur
                     fh.write(json.dumps(row) + "\n")
                     rows += 1
                 if with_book:
