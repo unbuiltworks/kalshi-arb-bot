@@ -236,6 +236,9 @@ class Book:
             "lock_via": getattr(self, "lock_via", None),
             "lock_inventory": getattr(self, "lock_inventory", None),
             "lock_cancels": getattr(self, "lock_cancels", 0),
+            "floor_guard_blocks": getattr(self, "floor_guard_blocks", 0),
+            "floor_guard_blocked_usd": getattr(
+                self, "floor_guard_blocked_usd", D(0)),
         }
 
 
@@ -366,7 +369,8 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                seed: int = 0,
                atomic_recycle: bool = False,
                complement_bias_c: Optional[D] = None,
-               profit_lock_usd: Optional[D] = None
+               profit_lock_usd: Optional[D] = None,
+               floor_guard: bool = False
                ) -> Dict[str, Any]:
     """Forward walk of ONE window. No settlement is consulted until settle().
 
@@ -395,6 +399,24 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
         ~0.59-0.62. This reproduces the canonical RESPONSE_CURVE from raw data.
         It is inventory-and-move conditioned and symmetric -- NOT a directional
         forecast, and not a stop.
+
+      floor_guard -- CHANNEL_A. A passive add that LOWERS the
+        settlement-independent floor is placed only when its price is BELOW the
+        current average basis on that side. The window's first add is exempt,
+        since no basis exists yet.
+
+        Why those two clauses and no others. The floor is
+        min(q_up,q_down) - cost - fees, so a clip of n at p on the DEFICIENT side
+        moves it by +n*(1-p) and the same clip on the SURPLUS or BALANCED side
+        moves it by -n*p. "Floor-decreasing" is therefore an identity of the book
+        state, not a judgement. Two independent measurements over L5's 66,949
+        BTC15m states say he does not take the version of that trade our clone
+        takes: among his 33,805 floor-decreasing adds, 64.3% are BELOW his own
+        held-side basis (median -15.1c) against 34.9% above (median +10.6c); and
+        he acts from a BALANCED book in only 627 states, 0.94%, while every one
+        of our largest floor-destroying adds comes from a balanced book.
+
+        No pair-cost cap, no theta, no directional forecast, no settlement.
 
       profit_lock_usd -- PROFIT_LOCK_5. Latch once the portfolio's WORST-CASE
         executable terminal P&L across BOTH settlement outcomes reaches this
@@ -589,6 +611,20 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                 continue
             if _rnd is not None and _rnd.random() > fill_prob:
                 continue           # this modelled fill did not happen
+            # ---- CHANNEL_A floor guard (challenger, default OFF) ---------
+            if floor_guard:
+                rr0 = bk.residual()
+                held0 = "up" if rr0 > 0 else ("down" if rr0 < 0 else None)
+                # deficient side => floor-increasing => always allowed
+                deficient0 = held0 is not None and side != held0
+                if not deficient0:
+                    basis0 = bk.avg(side)
+                    if basis0 > 0 and px >= basis0:
+                        bk.floor_guard_blocks = getattr(
+                            bk, "floor_guard_blocks", 0) + 1
+                        bk.floor_guard_blocked_usd = getattr(
+                            bk, "floor_guard_blocked_usd", D(0)) + qty * px
+                        continue
             # B' RESIDUAL_CAP_k2 / PROSPECTIVE_NET, unchanged
             rr = bk.residual()
             signed = qty if side == "up" else -qty
