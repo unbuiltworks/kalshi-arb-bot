@@ -167,3 +167,95 @@ A configuration is reported as scaling toward the target only if, on **OOS**:
 If net is positive but driven by residual exposure rather than completed-pair
 throughput, that is reported as **NOT** the scaling mechanism sought, whatever
 the P&L says.
+
+---
+
+# ADDENDUM — `ECONOMIC_COMPLETE` (promoted hypothesis)
+
+Added before implementation and before any window was scored under it.
+
+**Thresholds and the DEV/OOS structure above are UNCHANGED.** θ stays
+{0.96, 0.98, 1.00, 1.02, 1.05}; DEV is still the first 40% chronologically.
+**Nothing from the 315-state exploratory sample selects anything here** — that
+sample is exploratory only and its results live in a separate file.
+
+## The hypothesis
+
+**Separate passive ACQUIRE from economically gated active COMPLETE.**
+
+Acquisition stays passive and maker-only, exactly as B'. Completion becomes an
+active, economically gated taker action.
+
+## Marginal application of the threshold (the one refinement)
+
+θ was previously applied to the *average* completion price, all-or-nothing.
+It is now applied **per marginal contract, level by level**:
+
+Holding residual `q` at cost basis `b`, walk the contemporaneous complement
+ladder in price order. At each level price `p`:
+
+```
+marginal_pair_cost = b + p + taker_fee_per_contract(p)
+```
+
+Take from that level only while `marginal_pair_cost <= θ`. Because levels are
+in increasing price order, the first level that fails ends the walk.
+
+**The completed quantity may therefore be a strict fraction of the residual.**
+That is the point: complete only what the book actually pays for, rather than
+lifting the whole residual at a blended price that hides the bad levels.
+
+This is a refinement of *how* the existing θ is applied, not a new threshold
+and not a new grid.
+
+## Strictly no future information
+
+Every decision uses only the state at that timestamp: current inventory,
+current cost basis, current outstanding passive orders, current ladder.
+No forward scan, no best-later price, no settlement. Settlement is read once,
+by the scorer, after the walk.
+
+The exploratory study's "best pair cost reached" is an **oracle** statistic and
+is explicitly NOT a decision input anywhere in this evaluation.
+
+## Continuation variants
+
+The three already-preregistered variants only — A (continue), B (block
+same-side rebuild for a hold), C (resume only from flat/prospective-flat).
+**No fourth variant is invented from the exploratory results.**
+
+## Clip size vs throughput — reported separately
+
+Clip size `q` is the size of one passive acquisition. It is **not** the
+window's matched total: a q=25 clip that recycles six times produces 150
+matched contracts. Both are reported for every window and every q:
+
+- **max simultaneous residual** (the risk measure)
+- **cumulative matched contracts** (the throughput measure)
+
+Confusing the two would misread capacity entirely.
+
+## Per-window reporting
+
+```
+gross pair margin -> taker fees -> matched net -> residual settlement P&L
+  -> modeled maker rebate -> credited rebate (if any) -> total net/window
+```
+
+Modeled rebate is never summed into net. Credited rebate remains $0 until
+something is actually credited.
+
+Mechanism counters, per window and per q:
+
+eligible COMPLETE states · attempted · executable · contracts completed ·
+median net edge per contract · median opportunity lifetime · missed qualifying
+states (qualified on economics but not executable for want of depth).
+
+## Counterfactual
+
+**B' baseline vs B' + ECONOMIC_COMPLETE on the identical chronological tape
+with identical acquisition assumptions**, so the only difference is the
+completion policy.
+
+Primary endpoint: realized-equivalent executable **net/window**, with
+**$5/window** as the capacity target.
