@@ -886,9 +886,13 @@ class Runner:
                 "max_clip_filled": {k: str(v) for k, v in
                                     (self.store.state.get("max_clip")
                                      or {}).items()},
-                "basis": ("refuse iff |residual after fill| > k * max(largest "
-                          "filled clip, this order's qty); contracts; "
-                          "unreachable for FLAT_OPEN and REDUCE_RESIDUAL")},
+                "basis": ("PROSPECTIVE_NET: prospective = realized residual + "
+                          "outstanding orders in this market as-if-filled. "
+                          "Refuse iff the prospective book is NOT flat AND the "
+                          "order increases |prospective| AND |prospective "
+                          "after| > k * max(largest filled clip, this order's "
+                          "qty). Contracts. A leg that shrinks |prospective| "
+                          "is never refused at any depth.")},
             "frozen_rule": "030d8bf"})
 
     def venue_cooling(self) -> float:

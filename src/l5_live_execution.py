@@ -2419,36 +2419,69 @@ class FaithfulExecutor:
         if why:
             return prov.refuse("SAFETY_OVERLAY", why)
 
-        # RESIDUAL_CAP, LAST. Behind klass == INCREASE_RESIDUAL by
-        # construction, so an OPEN from flat and every repairing leg are
-        # unreachable from here; and behind every frozen check, so a
+        # RESIDUAL_CAP, LAST. Behind every frozen check, so a
         # RESIDUAL_ABOVE_CAP refusal is only ever an action the frozen
-        # executor WOULD have sent. That makes the bind count exactly "what
-        # this policy cost us" and leaves every pre-existing refusal reason
-        # reading as it did. Noted on every increasing action that got this
-        # far, bound or not, so the treatment is read off the record rather
-        # than inferred from what happened next.
-        if self.residual_cap_k is not None and klass == INCREASE_RESIDUAL:
+        # executor WOULD have sent: the bind count is exactly what this
+        # policy cost us, and every pre-existing refusal reason still reads
+        # as it did. It is EVALUATED on every action that gets this far --
+        # the guard that used to sit here (klass == INCREASE_RESIDUAL, from
+        # realized inventory) is what let the 1130z burst through, so the
+        # exemptions are now decided below from the prospective book instead
+        # of assumed from the realized one. The note is emitted either way,
+        # so the treatment is read off the record rather than inferred from
+        # what happened next.
+        if self.residual_cap_k is not None:
+            # PROSPECTIVE NET. The gate reads realized inventory PLUS every
+            # live order in this market as if it filled, because on 1130z it
+            # did not and inventory reached 3.24 against a cap of 1.80. Four
+            # DOWN orders accepted while realized residual sat inside the cap
+            # filled inside seven seconds, two of them after resting three
+            # minutes. Realized residual is what we HAVE; prospective is what
+            # we have ALREADY COMMITTED TO, and the second is the one a bound
+            # has to be written against.
+            outstanding = self.store.outstanding_residual(market)
+            prosp_before = resid_before + outstanding
+            signed = tr["qty"] if dec["side"] == "UP" else -tr["qty"]
+            prosp_after = prosp_before + signed
+            b_abs = -prosp_before if prosp_before < 0 else prosp_before
+            a_abs = -prosp_after if prosp_after < 0 else prosp_after
+            # TWO EXEMPTIONS, BOTH DECIDED ON THE PROSPECTIVE BOOK.
+            # A genuine opening leg -- nothing held AND nothing resting -- is
+            # never capped, so the first order into a market cannot be refused
+            # by a bound derived from its own size. What cannot happen any
+            # more is four of them in a row each calling itself the first.
+            exempt_open = b_abs == 0
+            # A leg that shrinks |prospective| is never refused, at any depth,
+            # whatever is outstanding. That is the repair asymmetry, and it is
+            # unchanged except that it now reads the prospective book too.
+            increases = a_abs > b_abs
             clip = self.store.max_clip(market)
             if tr["qty"] > clip:
                 clip = tr["qty"]
             cap = self.residual_cap_k * clip
-            after_abs = -resid_after if resid_after < 0 else resid_after
             prov.note("RESIDUAL_CAP", {
                 "k": str(self.residual_cap_k),
+                "basis": "PROSPECTIVE_NET",
                 "max_clip_filled": str(self.store.max_clip(market)),
                 "clip_used": str(clip),
                 "clip_basis": "max(largest filled clip, this order's qty)",
                 "cap_contracts": str(cap),
-                "residual_before": str(resid_before),
-                "residual_after_if_filled": str(resid_after),
-                "abs_residual_after": str(after_abs),
-                "binds": bool(after_abs > cap),
-                "comparison": ("refuse iff |residual after| > cap; "
-                               "equality passes"),
+                "residual_realized": str(resid_before),
+                "outstanding_residual": str(outstanding),
+                "prospective_before": str(prosp_before),
+                "prospective_after_if_filled": str(prosp_after),
+                "abs_prospective_before": str(b_abs),
+                "abs_prospective_after": str(a_abs),
+                "increases_abs_prospective": bool(increases),
+                "prospective_book_flat": bool(exempt_open),
+                "inventory_class_realized": klass,
+                "binds": bool(not exempt_open and increases and a_abs > cap),
+                "comparison": ("refuse iff the prospective book is NOT flat "
+                               "AND this increases |prospective| AND "
+                               "|prospective after| > cap; equality passes"),
                 "units": "contracts",
             })
-            if after_abs > cap:
+            if (not exempt_open) and increases and a_abs > cap:
                 return prov.refuse("SAFETY_OVERLAY", "RESIDUAL_ABOVE_CAP")
 
         coid = client_order_id(key)
