@@ -209,6 +209,7 @@ class Runner:
         self.clock = clock
         self.store = LX.InventoryStore(os.path.join(root, "inventory.json"))
         repair_orphaned_keys(self.store)
+        repair_ledger_from_venue(self.store)
         rebase_contaminated_accounting(self.store)
         self.limits = LX.SafetyLimits(**PROBE_LIMITS)
         self.lam = lam
@@ -1129,6 +1130,99 @@ ORPHAN_REPAIRS = [
         },
     },
 ]
+
+
+#: Legs whose fills are known from authoritative venue order rows but which
+#: the automatic path could not book. Applied once, at boot, and only when the
+#: ledger still holds the broken state each entry describes.
+LEDGER_REPAIRS = [
+    {
+        "id": "1300z-incoherent-resolver-zero-fill",
+        "market": "cpc-btc-updown-15m-2026-09-27-1300z",
+        "side": "UP",
+        # what the venue's own order rows say was actually bought
+        "qty": D("1.80"), "cost": D("0.54000"),
+        # what the broken book held instead, and must still hold for this
+        # repair to be the right one to apply
+        "expect_qty": D("0.9000"), "expect_cost": D("0"),
+        "evidence": {
+            "source": "/v1/order rows read by the GET-only recovery service",
+            "orders": ["CREX7ZDP2YC6", "CREWYQ75RYCA"],
+            "detail": ("CREX7ZDP2YC6 ORDER_STATE_FILLED quantity 0.9 "
+                       "cumQuantity 0.9 avgPx 0.3100 commission 0.0000; "
+                       "CREWYQ75RYCA ORDER_STATE_FILLED quantity 0.9 "
+                       "cumQuantity 0.9 avgPx 0.2900 commission 0.0000; "
+                       "both marketSlug cpc-btc-updown-15m-2026-09-27-1300z, "
+                       "OUTCOME_SIDE_YES, ORDER_INTENT_BUY_LONG"),
+            "settlement": ("/v1/markets/.../bbo settlementPx 0.0000, state "
+                           "MARKET_STATE_EXPIRED: the 1.80 UP redeemed "
+                           "nothing, so settling this leg posts -0.54000"),
+            "cash_anchor": ("60.59505 confirmed 12:52:03Z and 60.05505 "
+                            "confirmed by /v1/account/balances 14:26:31Z; "
+                            "their delta -0.54000 IS this leg's cost"),
+            "positions_at_repair": "/v1/portfolio/positions empty; openOrders 0",
+            "api_key_fingerprint": "d51b44a3fa83",
+            "what_went_wrong": ("the parked-order resolver accepted a venue "
+                                "row reading state ORDER_STATE_NEW, quantity "
+                                "0.9, cumQuantity 0, leavesQuantity 0 and "
+                                "booked a zero fill as final. order_progress "
+                                "now raises IncoherentOrderRow on a row whose "
+                                "cum + leaves != quantity"),
+            "original_bad_record": ("positions 1300z|UP = 0.9000 with "
+                                    "leg_cost 0 and fill_count 0, which "
+                                    "QUANTITY_WITHOUT_COST refused to settle "
+                                    "91+ times. It is replaced, not erased: "
+                                    "cost_reconstructions keeps the write and "
+                                    "this entry keeps what it replaced"),
+        },
+    },
+]
+
+
+def repair_ledger_from_venue(store) -> Optional[Dict[str, Any]]:
+    """Book a leg the automatic path could not, from named venue evidence.
+
+    Idempotent by id. It refuses unless the ledger still holds exactly the
+    broken state the entry describes, because a repair applied to a book that
+    has moved on is not a repair, it is a second corruption. It writes
+    quantity and cost together through reconstruct_cost_basis, which requires
+    a source and records it, and it never touches realized P&L -- the leg is
+    left for the ordinary settlement path to retire, so the loss is posted by
+    the same code that posts every other one.
+    """
+    done = store.state.setdefault("ledger_repairs_applied", [])
+    out = []
+    for r in LEDGER_REPAIRS:
+        if r["id"] in done:
+            continue
+        legs = store.leg_cost(r["market"])
+        pos = D(str((store.state.get("positions") or {}).get(
+            "%s|%s" % (r["market"], r["side"]), 0)))
+        cost = legs.get(r["side"], D(0))
+        if pos != r["expect_qty"] or cost != r["expect_cost"]:
+            emit("L5_LIVE_REPAIR_REFUSED", {
+                "id": r["id"], "market": r["market"], "side": r["side"],
+                "ledger_qty": str(pos), "ledger_cost": str(cost),
+                "expected_qty": str(r["expect_qty"]),
+                "expected_cost": str(r["expect_cost"]),
+                "why": ("the ledger does not hold the state this repair was "
+                        "written for; repairing blind is manufacturing P&L")})
+            continue
+        res = store.reconstruct_cost_basis(
+            r["market"], r["side"], qty=r["qty"], cost=r["cost"],
+            source=json.dumps(r["evidence"], sort_keys=True))
+        done.append(r["id"])
+        store.save()
+        rec = {"id": r["id"], "market": r["market"], "side": r["side"],
+               "replaced": {"qty": str(pos), "cost": str(cost)},
+               "booked": {"qty": str(r["qty"]), "cost": str(r["cost"])},
+               "evidence": r["evidence"], "result": res,
+               "note": ("realized is NOT touched here; the ordinary "
+                        "settlement sweep retires this market and posts the "
+                        "loss through the same path as every other market")}
+        emit("L5_LIVE_LEDGER_REPAIRED", rec)
+        out.append(rec)
+    return {"repairs": out} if out else None
 
 
 def repair_orphaned_keys(store) -> Optional[Dict[str, Any]]:

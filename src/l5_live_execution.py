@@ -94,6 +94,30 @@ def _money(v: Any) -> D:
         return D(0)
 
 
+class IncoherentOrderRow(ValueError):
+    """The venue's own numbers for one order do not add up.
+
+    LIVE 1300z, 2026-09-27 13:11:16Z. `/v1/order/CREX7ZDP2YC6` answered
+    state ORDER_STATE_NEW, quantity 0.9, cumQuantity 0, leavesQuantity 0 --
+    for an order that had FILLED 0.9 at 0.31 seven minutes earlier, as the
+    same endpoint later confirmed. Nothing can be unstarted, fully resolved
+    and 0.9 in size at once. `terminal = leaves <= 0` believed it, booked a
+    zero fill as final, released the order, and logged that the number came
+    from the venue's own row rather than being assumed. It had been assumed.
+    The book then held quantity with no cost and refused to settle, which is
+    the fail-closed end of the same defect 2045z was written to stop.
+
+    A row that does not add up is not truth. It parks and stays uncertain.
+    """
+
+
+#: how far cumQuantity + leavesQuantity may sit from quantity before the row
+#: is called incoherent. The venue's own grid is 0.01, so this is two orders
+#: of magnitude tighter than anything it can legitimately send, and far wider
+#: than float-to-Decimal noise.
+QUANTITY_COHERENCE_TOLERANCE = D("0.0001")
+
+
 def order_progress(row: Mapping[str, Any]) -> Dict[str, Any]:
     """What the venue says about one order, in the terms the store needs.
 
@@ -111,6 +135,32 @@ def order_progress(row: Mapping[str, Any]) -> Dict[str, Any]:
     # decides when it does not -- and it must not be allowed to override the
     # number, because "ORDER_STATE_PARTIALLY_FILLED" contains "FILLED" and a
     # substring match would retire an order that is still working.
+    # THE 1300z CONTRADICTION, AND ONLY IT. leavesQuantity 0 claims there is
+    # nothing left to work, which is how this function decides an order is
+    # finished. That claim is believable when the state agrees the order
+    # ended -- a CANCELLED order legitimately shows quantity 2.25, cum 0,
+    # leaves 0, because the rest was cancelled rather than left working. It
+    # is NOT believable when the state says the order has not started: an
+    # ORDER_STATE_NEW row with nothing filled and nothing left describes no
+    # possible order, and retiring one on it is how 1300z booked a zero fill
+    # over a real 0.9 at 0.31.
+    #
+    # Deliberately narrow. A still-working row (leaves > 0) is not retired by
+    # anything here, so it is not second-guessed; and a row whose state names
+    # a terminal state is left to the checks that already exist, including
+    # the store's backwards-cumulative guard.
+    if (has_leaves and leaves <= 0 and row.get("quantity") is not None
+            and not any(h in state.upper() for h in TERMINAL_HINTS)):
+        quantity = _money(row.get("quantity"))
+        gap = cum + leaves - quantity
+        if (gap if gap >= 0 else -gap) > QUANTITY_COHERENCE_TOLERANCE:
+            raise IncoherentOrderRow(
+                "venue order row does not add up: id=%s state=%s quantity=%s "
+                "cumQuantity=%s leavesQuantity=%s (cum+leaves-quantity=%s). "
+                "Nothing left to work, but the state does not say the order "
+                "ended. Refusing to treat it as terminal truth; the order "
+                "stays parked and the book stays uncertain."
+                % (row.get("id"), state or None, quantity, cum, leaves, gap))
     if has_leaves:
         terminal = leaves <= 0
     else:
