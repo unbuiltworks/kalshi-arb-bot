@@ -156,7 +156,25 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-27-1845z': 'up',
           'cpc-btc-updown-15m-2026-09-27-1900z': 'down',
           'cpc-btc-updown-15m-2026-09-27-1915z': 'down',
-          'cpc-btc-updown-15m-2026-09-27-1930z': 'up'}
+          'cpc-btc-updown-15m-2026-09-27-1930z': 'up',
+          'cpc-btc-updown-15m-2026-09-27-1945z': 'down',
+          'cpc-btc-updown-15m-2026-09-27-2000z': 'up'}
+
+#: excluded, with the reason, so an exclusion is never silent
+EXCLUDED = {
+    'cpc-btc-updown-15m-2026-09-27-1815z':
+        'collector started mid-window; 0 two-sided states',
+    'cpc-btc-updown-15m-2026-09-27-2015z':
+        'no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last '
+        '20:29:55; the window was never observed through a terminal state, so '
+        'it fails the preregistered completeness rule even though the venue '
+        'later reported it settled DOWN',
+    'cpc-btc-updown-15m-2026-09-27-2030z':
+        'settlement NOT finalized: settlementPx 0.9900 stably equals '
+        'lastTradePx 0.9900 on three reads. A finalized binary settlement is '
+        '1.0000 or 0.0000 and DIFFERS from lastTradePx (1830z: last 0.9900, '
+        'settlement 1.0000). Scoring it would pay a residual $0.99. Re-check.',
+}
 
 
 def main(argv):
