@@ -125,7 +125,8 @@ class Book:
     def avg(self, side: str) -> D:
         return (self.c[side] / self.q[side]) if self.q[side] > 0 else D(0)
 
-    def add(self, side: str, qty: D, cost: D, *, maker: bool) -> None:
+    def add(self, side: str, qty: D, cost: D, *, maker: bool,
+            fee: Optional[D] = None) -> None:
         if qty <= 0:
             return
         self.q[side] += qty
@@ -135,7 +136,11 @@ class Book:
             self.modeled_rebate += modeled_maker_rebate(cost / qty, qty)
         else:
             self.taker_qty += qty
-            self.fees += taker_fee(cost / qty, qty)
+            # `fee` is the PER-LEVEL fee actually incurred. Recomputing it from
+            # the blended average price understates/overstates it, because the
+            # fee is convex in price -- so the caller's per-level sum wins
+            # whenever it is supplied.
+            self.fees += taker_fee(cost / qty, qty) if fee is None else fee
         a = abs(self.residual())
         if a > self.peak_resid:
             self.peak_resid = a
@@ -274,11 +279,14 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                 bk.unknown_events += 1
             if n > 0:
                 bk.executable_states += 1
-                bk.add(comp, n, cost, maker=False)
-                lock = n * D(1) - n * basis - cost - fee
-                bk.locked += lock
+                bk.add(comp, n, cost, maker=False, fee=fee)
+                # `locked` is GROSS of the completion fee. net subtracts
+                # self.fees once, and self.fees already carries this fee, so
+                # netting it here too would charge the taker fee TWICE.
+                bk.locked += n * D(1) - n * basis - cost
                 bk.gross_margin += n * D(1) - n * basis - cost
-                bk.edges.append(lock / n)
+                # the reported edge stays the NET marginal edge per contract
+                bk.edges.append((n * D(1) - n * basis - cost - fee) / n)
                 bk.q[held] -= n
                 bk.c[held] -= n * basis
                 bk.q[comp] -= n
