@@ -52,7 +52,9 @@ held-out interval excluding zero. It fails on both counts.
 
 Window total P&L is exactly `Σ over contracts (won − price)` and is invariant
 to the pairing convention: FIFO and LIFO both total **+$2,758.58** across the
-settled corpus. Only the *allocation across actions* moves, and it moves
+settled corpus (an integer-contract check; the Decimal replay in §3 puts the
+same quantity at **+$2,740.16** — the $18 gap is contracts rounded to whole
+numbers in the invariance check and nothing else). Only the *allocation across actions* moves, and it moves
 enough to reverse the conclusion — a run-5+ extend nets **−$0.0125/contract**
 under FIFO and **+$0.0278/contract** under LIFO.
 

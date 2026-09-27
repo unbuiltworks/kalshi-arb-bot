@@ -139,6 +139,24 @@ def emit(kind: str, doc: Mapping[str, Any]) -> None:
                                       separators=(",", ":"))), flush=True)
 
 
+def residual_cap_k() -> Optional[D]:
+    """The k for RESIDUAL_CAP, read from PMUS_RESIDUAL_CAP_K. None is OFF.
+
+    Unset, blank, unparseable and non-positive all mean OFF rather than some
+    default k. This selects a policy, and a policy a typo can switch on is
+    not selectable. The value is echoed in the heartbeat, so which policy ran
+    is read off the record and never inferred from what happened.
+    """
+    raw = (os.getenv("PMUS_RESIDUAL_CAP_K") or "").strip()
+    if not raw:
+        return None
+    try:
+        k = D(raw)
+    except Exception:                                          # noqa: BLE001
+        return None
+    return k if k > 0 else None
+
+
 def now_utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
@@ -248,7 +266,11 @@ class Runner:
             # the wiring Probes 04-08 actually traded through
             maker_treatment=True, maker_only=True,
             # BASELINE: no Probe 08 treatment, no Probe 09. Native.
-            suppress_imbalance_increase=False)
+            suppress_imbalance_increase=False,
+            # RESIDUAL_CAP: OFF unless PMUS_RESIDUAL_CAP_K names a k. Absent
+            # or unreadable is OFF, so a typo cannot silently half-enable a
+            # policy, and OFF is byte-for-byte the frozen behaviour.
+            residual_cap_k=residual_cap_k())
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
         self.preflight_attempts = 0
@@ -846,6 +868,27 @@ class Runner:
                 self.store.state.get("retired_markets") or {}),
             "realized": self.store.realized_lines(),
             "limits": self.limits.as_dict(), "lambda": str(self.lam),
+            # WHICH POLICY RAN. k is echoed from the executor that is
+            # actually wired, not from the environment, so a heartbeat can
+            # never claim a treatment the decision path is not applying.
+            "policy": {
+                "name": ("L5_NATIVE" if getattr(self.executor,
+                                                "residual_cap_k", None) is None
+                         else "RESIDUAL_CAP_k%s" % getattr(
+                             self.executor, "residual_cap_k")),
+                "residual_cap_k": (None if getattr(
+                    self.executor, "residual_cap_k", None) is None
+                    else str(self.executor.residual_cap_k)),
+                "residual_cap_binds_session": int(self.stats.get(
+                    "SAFETY_OVERLAY:RESIDUAL_ABOVE_CAP", 0)),
+                "residual_cap_binds_this_market": int(self.win.get(
+                    "SAFETY_OVERLAY:RESIDUAL_ABOVE_CAP", 0)),
+                "max_clip_filled": {k: str(v) for k, v in
+                                    (self.store.state.get("max_clip")
+                                     or {}).items()},
+                "basis": ("refuse iff |residual after fill| > k * max(largest "
+                          "filled clip, this order's qty); contracts; "
+                          "unreachable for FLAT_OPEN and REDUCE_RESIDUAL")},
             "frozen_rule": "030d8bf"})
 
     def venue_cooling(self) -> float:

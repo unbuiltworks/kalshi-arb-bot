@@ -39,7 +39,9 @@ evaluation and never a rule.
 | 7 | 401 | 14.81 | 0.3111 | 93.3% | −0.0375 |
 | 8+ | 1,864 | 14.31 | 0.2309 | 95.9% | −0.0574 |
 
-He de-escalates continuously — clip −38%, maker share +32pp — and never stops.
+He de-escalates continuously — clip −38% (22.93 → 14.31; an earlier
+whole-corpus figure of 17.00 → 8.50 used a different sample and is not the
+registered one), maker share +32pp — and never stops.
 5.4% of DEV extends are at run ≥ 12. **There is no breakpoint in his own
 behaviour**, so any threshold is ours, not his, and is registered as such.
 

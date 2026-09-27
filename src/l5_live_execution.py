@@ -1093,6 +1093,15 @@ class InventoryStore:
         # this to tell the two apart instead of guessing.
         fc = self.state.setdefault("fill_count", {})
         fc[k] = int(fc.get(k, 0)) + 1
+        # THE LARGEST CLIP THIS MARKET HAS ACTUALLY FILLED. RESIDUAL_CAP
+        # states its bound in units of the session's own clip rather than as
+        # a constant, so a market that trades in ones and a market that
+        # trades in fifties get a bound of the same SHAPE. It is recorded on
+        # every fill whether or not any policy reads it, so turning the cap
+        # on later cannot find an empty history.
+        mc = self.state.setdefault("max_clip", {})
+        if D(str(qty)) > D(str(mc.get(own_market, 0))):
+            mc[own_market] = str(D(str(qty)))
         # A fill converts outstanding exposure into committed exposure. Not
         # decrementing here would double-count the same shares in both.
         live = self.state.setdefault("live_orders", {})
@@ -1112,6 +1121,18 @@ class InventoryStore:
         lc = self.state.get("leg_cost") or {}
         return {side: D(str(lc.get("%s|%s" % (market, side), 0)))
                 for side in ("UP", "DOWN")}
+
+    def max_clip(self, market: str) -> D:
+        """Largest single filled quantity in this market; 0 before any fill.
+
+        Reads only what apply_fill wrote, so a market whose inventory was
+        ADOPTED from the venue rather than filled through us reports 0 and a
+        cap derived from it falls back to the candidate's own size. That is
+        the conservative direction: a smaller clip is a tighter bound.
+        """
+        market = canonical_market(market, doing="reading max clip")
+        mc = self.state.get("max_clip") or {}
+        return D(str(mc.get(market, 0)))
 
     def fill_count(self, market: str, side: str) -> int:
         """How many fills built this leg. 0 means nothing we saw did."""
@@ -2187,7 +2208,8 @@ class FaithfulExecutor:
                  lam: D = D("1"), now_fn=None,
                  maker_treatment: bool = False,
                  maker_only: bool = False,
-                 suppress_imbalance_increase: bool = False) -> None:
+                 suppress_imbalance_increase: bool = False,
+                 residual_cap_k: Optional[D] = None) -> None:
         self.store = store
         self.limits = limits
         self.transport = transport or NullTransport()
@@ -2210,6 +2232,19 @@ class FaithfulExecutor:
         #: only ever decline, it cannot raise exposure above what the
         #: untreated path would have reached.
         self.suppress_imbalance_increase = suppress_imbalance_increase
+        #: RESIDUAL_CAP. None is OFF and is the default, so an executor that
+        #: does not ask for this is byte-for-byte the frozen one. When set to
+        #: k, an acquisition that would carry |residual| ABOVE
+        #: k * max(largest clip this market has filled, this order's own qty)
+        #: is refused. Like the Probe 08 treatment above it can only ever
+        #: DECLINE: it never invents a trade, never crosses, never re-prices,
+        #: and it is unreachable for an opening leg from flat or for any leg
+        #: that reduces the imbalance, because both of those are classified
+        #: FLAT_OPEN / REDUCE_RESIDUAL and the check sits behind
+        #: klass == INCREASE_RESIDUAL. Registered in
+        #: analysis/pmus/NEXT_PROFIT_POLICY_PREREG.md; L5_NATIVE is untouched.
+        self.residual_cap_k = (None if residual_cap_k is None
+                               else D(str(residual_cap_k)))
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
 
     def _age_s(self, row: Mapping[str, Any]) -> Optional[float]:
@@ -2341,6 +2376,8 @@ class FaithfulExecutor:
             "residual_before": str(resid_before),
             "side": dec["side"],
             "treatment_active": bool(self.suppress_imbalance_increase),
+            "residual_cap_k": (None if self.residual_cap_k is None
+                               else str(self.residual_cap_k)),
             "basis": "REALIZED residual; outstanding orders are not counted"})
         if self.suppress_imbalance_increase and klass == INCREASE_RESIDUAL:
             return prov.refuse("SAFETY_OVERLAY", "IMBALANCE_INCREASE_SUPPRESSED")
@@ -2381,6 +2418,38 @@ class FaithfulExecutor:
                      "behaviour or PMUS capability")})
         if why:
             return prov.refuse("SAFETY_OVERLAY", why)
+
+        # RESIDUAL_CAP, LAST. Behind klass == INCREASE_RESIDUAL by
+        # construction, so an OPEN from flat and every repairing leg are
+        # unreachable from here; and behind every frozen check, so a
+        # RESIDUAL_ABOVE_CAP refusal is only ever an action the frozen
+        # executor WOULD have sent. That makes the bind count exactly "what
+        # this policy cost us" and leaves every pre-existing refusal reason
+        # reading as it did. Noted on every increasing action that got this
+        # far, bound or not, so the treatment is read off the record rather
+        # than inferred from what happened next.
+        if self.residual_cap_k is not None and klass == INCREASE_RESIDUAL:
+            clip = self.store.max_clip(market)
+            if tr["qty"] > clip:
+                clip = tr["qty"]
+            cap = self.residual_cap_k * clip
+            after_abs = -resid_after if resid_after < 0 else resid_after
+            prov.note("RESIDUAL_CAP", {
+                "k": str(self.residual_cap_k),
+                "max_clip_filled": str(self.store.max_clip(market)),
+                "clip_used": str(clip),
+                "clip_basis": "max(largest filled clip, this order's qty)",
+                "cap_contracts": str(cap),
+                "residual_before": str(resid_before),
+                "residual_after_if_filled": str(resid_after),
+                "abs_residual_after": str(after_abs),
+                "binds": bool(after_abs > cap),
+                "comparison": ("refuse iff |residual after| > cap; "
+                               "equality passes"),
+                "units": "contracts",
+            })
+            if after_abs > cap:
+                return prov.refuse("SAFETY_OVERLAY", "RESIDUAL_ABOVE_CAP")
 
         coid = client_order_id(key)
         if self.store.already_submitted(coid):

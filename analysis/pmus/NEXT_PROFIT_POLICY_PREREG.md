@@ -62,8 +62,8 @@ Falsifiable, and measurable inside a $5 envelope:
    refused.
 3. The cap binds at least once across the probe. If it never binds, the probe
    is uninformative rather than successful, and says so.
-4. Matched contracts per market are not materially below the frozen
-   `L5_NATIVE` probe's observed rate.
+4. **Superseded — see the correction below.** ~~Matched contracts per market
+   are not materially below the frozen `L5_NATIVE` probe's observed rate.~~
 
 **Not** testable here, and not claimed: that P&L improves. Every out-of-sample
 interval in the findings spans zero across 2,216 windows; five markets at $5
@@ -80,3 +80,64 @@ may be scored as profitable on accrued-but-uncredited rebates.
 
 Arming still requires `PMUS_Q1_LIVE=YES`, a matching `PMUS_Q1_ARM`, an
 authoritative preflight PASS, and explicit authorization.
+
+
+---
+
+## Correction, 2026-09-27, before any live result
+
+**Criterion 4 as first written was wrong and is replaced.** "Matched contracts
+per market are not materially below the frozen `L5_NATIVE` rate" is
+inconsistent with the policy it was meant to test: a cap that binds removes
+acquisitions, and some of those acquisitions would later have matched. It
+cannot mean zero matched-volume loss, and read that way it would fail by
+construction on the first bind. Read the other way — "not materially below" —
+it is undefined, which is worse: an undefined bar is one that gets defined
+after the result is in.
+
+Nothing live has run under this policy. The executor has never been armed with
+it. This is a logical defect fixed before any data exists, not a bar moved
+after seeing one.
+
+### Replacement: a predeclared retention floor from the OOS replay
+
+The replay's retention numbers for `RESIDUAL_CAP_k2`, which are what the
+floors are set from:
+
+| | DEV | OOS | whole corpus |
+|---|---|---|---|
+| actions retained | 83.4% | 84.1% | 83.7% |
+| contracts retained | — | — | 78.5% |
+| matched contracts retained | 83.9% | 83.7% | — |
+| maker fills retained | 83.8% | 83.9% | — |
+| matched **P&L** retained | 78.6% | **45.6%** | — |
+
+Matched *volume* is stable across halves; matched *P&L* is not (78.6% → 45.6%),
+which is a direct consequence of the cap removing the tail of the exposure
+distribution in both directions. So the floor is set on volume, where the
+estimate is stable, and no floor is set on matched P&L, where it is not.
+
+**Predeclared, now:**
+
+- **action retention ≥ 0.75** — submitted ÷ (submitted + RESIDUAL_ABOVE_CAP),
+  counted over the probe.
+- **contract retention ≥ 0.70** — the same ratio weighted by order quantity.
+
+Both floors sit below both halves' point estimates. Both are measured
+**inside the probe as a paired ratio**, not against a historical rate: because
+the cap is evaluated last, behind every frozen check, a `RESIDUAL_ABOVE_CAP`
+refusal is by construction an action the frozen executor *would have
+submitted*. The denominator is therefore the counterfactual NATIVE action
+count on the very same market, and no cross-sample comparison is involved.
+
+### What these floors can and cannot decide
+
+At the authorized envelope — one market, $5, a handful of orders — the probe
+will produce on the order of tens of decisions. That is enough to compute the
+ratio exactly, and **not** enough to distinguish 0.84 from 0.70. Breaching a
+floor is therefore informative (the cap is binding far harder live than in
+replay, and the probe stops); clearing one is not evidence that retention
+matches the replay.
+
+The only criterion this probe can actually decide is the invariant in item 1,
+which is a property of every single decision rather than an average over them.
