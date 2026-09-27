@@ -688,3 +688,44 @@ Enforced per window and at every rolling checkpoint by
 the scorer rather than from the file, rejects a negative fee, and fails any row
 named "realized" or "credited". Reporting only: scorer, θ, fill model, q grid,
 decision rule and the n=25 preregistration are unchanged and no number moved.
+
+## COLLECTOR_001 — the missing terminal rows are a RACE, and it was destroying 31% of windows
+Not bad luck and not venue behaviour. `series_slugs()` in `src/pmus_book_tape.py`
+excludes events the venue marks `closed`, so a window **leaves the polling
+universe at the first reslate after its boundary** — 0 to `SERIES_RESLATE_S`=45s
+later, at random — while the venue publishes the terminal bbo state **6s to 30s+
+after** that boundary. Whichever lands first decides whether the close is ever
+recorded, and the preregistered completeness rule excludes any window whose last
+tape state is still OPEN. A lost race therefore **silently destroys a window of
+evidence**.
+
+Measured 2026-09-27 across 16 observed windows:
+
+| window | last bbo | terminal row | reslate that dropped it |
+|---|---|---|---|
+| 2115z | 21:30:30 | **21:30:30 EXPIRED** | 21:30:35 — **5s to spare** |
+| 2130z | 21:44:52 | **none** | 21:45:19 |
+| 2145z | 21:59:44 | **none** | 22:00:21 |
+| 2200z | 22:14:33 | **none** | 22:15:14 |
+
+**5 of 16 windows lost (31%): 2015z, 2100z, 2130z, 2145z, 2200z — the last three
+consecutively.** Every captured window's last bbo row falls *after* its close;
+every lost window's falls 5–8s *before* it. At a 31% loss rate, reaching n=25
+needs ~36 windows, and the run of three shows the rate is not stationary.
+
+**Fix (`DRAIN_S`=240s): a slug that leaves the universe starts a drain instead of
+ending coverage** — it keeps being polled until its terminal state is recorded or
+the bounded deadline passes, and a `drain_end` row states which happened, so a
+genuinely unobservable close is visible on the tape rather than inferred from an
+absence. `tests/test_pmus_tape_terminal_drain.py` (8 tests) drives the loop on a
+fake clock with no network, and **its negative control reproduces the measured
+loss at `DRAIN_S`=0** — so the test is known to have teeth. Also pinned: the drain
+is bounded, the live window is not starved, and a slug is never polled twice in a
+cycle.
+
+**NOT DEPLOYED.** The fix is committed and tested; the running collector still
+carries the race. Deploying it is a redeploy of `pmus-btc15m-tape`, which is an
+owner decision — and until it ships, roughly a third of windows will keep being
+lost. **This, not the arithmetic, is the binding constraint on reaching n=25.**
+No window already in `USABLE` or `EXCLUDED` changes: the fix cannot recover a
+close that was never observed.

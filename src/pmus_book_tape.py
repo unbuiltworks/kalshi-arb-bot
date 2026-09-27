@@ -45,6 +45,21 @@ LIVE_EVENTS = ("/v1/events?live=true&active=true&closed=false"
 #: venue-generic -- so the admission is a second slug source, not a second
 #: collector.
 SERIES_RESLATE_S = 45.0
+
+#: A slug that has just left the universe is POLLED ON, not dropped, until a
+#: terminal row for it is on the tape or this many seconds have passed.
+#:
+#: WHY. `series_slugs()` excludes `closed` events, so a window leaves the
+#: universe at the first reslate after its boundary -- 0 to SERIES_RESLATE_S
+#: seconds later, at random. The venue publishes the terminal bbo state some
+#: seconds AFTER the boundary (6s to 30s+ observed). Whichever lands first
+#: decides whether the close is ever recorded, and the preregistered
+#: completeness rule excludes any window whose last tape state is still OPEN --
+#: so a lost race silently destroys a window of evidence. Measured 2026-09-27:
+#: 2115z's terminal row arrived at 21:30:30 and its reslate at 21:30:35, 5s to
+#: spare; 2130z's reslate came at 21:45:19 and the close was never seen. Five of
+#: sixteen windows were lost this way, including three consecutively.
+DRAIN_S = 240.0
 #: a slug re-emits at least this often even when nothing changed, so a gap in
 #: the tape distinguishes lost observation from a quiet book.
 HEARTBEAT_S = 30.0
@@ -221,6 +236,10 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
 
     reslate = SERIES_RESLATE_S if series else 300.0
     slugs, refreshed, rows, cycles = universe(), time.time(), 0, 0
+    # slug -> deadline. A slug that leaves the universe keeps being polled until
+    # its terminal state is recorded or its deadline passes. See DRAIN_S.
+    draining: dict = {}
+    terminal_seen: set = set()
     last_traded: dict = {}
     echoed: dict = {}
 
@@ -274,9 +293,27 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
                             "t": datetime.now(timezone.utc).isoformat(),
                             "kind": "reslate", "series": series,
                             "was": list(slugs), "now": list(fresh)})
+                    # KEEP POLLING WHAT JUST LEFT. A window drops out of the
+                    # universe before the venue publishes its close, so the
+                    # departure starts a drain rather than ending the coverage.
+                    for gone in set(slugs) - set(fresh):
+                        if gone not in terminal_seen:
+                            draining.setdefault(gone, time.time() + DRAIN_S)
                     slugs = fresh
                 refreshed = time.time()
-            for s in slugs:
+            now_m = time.time()
+            for s in list(draining):
+                if s in terminal_seen or now_m > draining[s]:
+                    put(fh, {
+                        "t": datetime.now(timezone.utc).isoformat(),
+                        "kind": "drain_end", "slug": s,
+                        "terminal_recorded": s in terminal_seen,
+                        "labels": ("terminal_recorded false means the close was "
+                                   "never observed and the window fails the "
+                                   "completeness rule"),
+                    })
+                    draining.pop(s, None)
+            for s in list(slugs) + [x for x in draining if x not in slugs]:
                 row = snapshot(s)
                 if row:
                     # PMUS serves NO public trade-print endpoint -- /trades,
@@ -298,6 +335,12 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
                     row["shares_traded_prev"] = prev
                     if cur is not None:
                         last_traded[s] = cur
+                    # A terminal state is what the completeness rule needs. Note
+                    # it BEFORE the dedup in put(): the drain ends on the state
+                    # having been observed, not on the row having been new.
+                    st = row.get("state")
+                    if st and st != "MARKET_STATE_OPEN":
+                        terminal_seen.add(s)
                     put(fh, row)
                     rows += 1
                 if with_book:
