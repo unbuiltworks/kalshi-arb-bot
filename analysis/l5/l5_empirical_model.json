@@ -1,0 +1,301 @@
+{
+  "schema": "l5_empirical_model/1",
+  "created_at_commit": "0bf8f0ee",
+  "note": "Canonical ECONOMIC findings. Behavioural source of truth stays L5_OPERATING_MODEL.md. This file authorises no cap, threshold, model or lane change.",
+  "label_discipline": [
+    "EXPECTED",
+    "ELIGIBLE",
+    "CREDITED",
+    "REALIZED"
+  ],
+  "label_rule": "never interchanged; modeled rebate is never added into net",
+  "sources": {
+    "l5_full_history_ledger": {
+      "path": "docs/L5_FULL_HISTORY_LEDGER_20260831.md",
+      "population": "complete Polymarket history of l5zn1bwom8etsk 2026-03-19..2026-08-31",
+      "rows": {
+        "TRADE": 742964,
+        "REDEEM": 15243,
+        "MAKER_REBATE": 109,
+        "TAKER_REBATE": 72,
+        "REWARD": 19
+      },
+      "windows": 16501,
+      "turnover_usd": 7423850,
+      "reconciliation": "per-market vs venue cashPnl over 1459 settled markets; median abs diff $0.49; 74.8% within $1",
+      "precision_caveat": "reconstructed grand total +$81.9k does not exactly match profile ~$70.3k P/L + ~$3.0k open"
+    },
+    "l5_complement_response_curve": {
+      "path": "src/l5_complement_response_curve.py",
+      "population": "canonical L5 sequence, systematic regime onward (>=1774569600)",
+      "response_rows": 71354,
+      "pair_records": 61774,
+      "matched_units": 647805,
+      "residual_units": 224688,
+      "maker_fills": 30414,
+      "taker_fills": 6510
+    },
+    "pmus_tape": {
+      "path": "data/pmus_btc15m_tape/pmus_btc15m_tape.jsonl",
+      "commit": "19955307",
+      "usable_windows": {
+        "cpc-btc-updown-15m-2026-09-27-1830z": "up",
+        "cpc-btc-updown-15m-2026-09-27-1845z": "up",
+        "cpc-btc-updown-15m-2026-09-27-1900z": "down",
+        "cpc-btc-updown-15m-2026-09-27-1915z": "down",
+        "cpc-btc-updown-15m-2026-09-27-1930z": "up"
+      },
+      "excluded": {
+        "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states"
+      },
+      "completeness_rule": "observed first open -> terminal state, no bbo gap > 32s (HEARTBEAT_S 30 + one 2s poll)"
+    },
+    "prereg": {
+      "path": "analysis/pmus/CLIP_CAPACITY_PREREG.md",
+      "addendum": "ECONOMIC_COMPLETE, marginal per-level threshold application"
+    },
+    "decomposition": {
+      "path": "analysis/pmus/L5_ADVANTAGE_DECOMPOSITION.md",
+      "commit": "0bf8f0ee"
+    },
+    "audit": {
+      "path": "analysis/pmus/ECONOMIC_COMPLETE_AUDIT.md",
+      "harness": "scripts/audit_economic_complete.py",
+      "reconciled_configs": 630,
+      "mismatches": 0
+    }
+  },
+  "l5_waterfall_usd": {
+    "gross_matched_economics": 155076,
+    "directional_residual_and_timing": -141390,
+    "net_trading_cash": 13686,
+    "fees": 0,
+    "maker_rebates_credited": 33929,
+    "liquidity_rewards_credited": 26956,
+    "taker_rebates_credited": 7323,
+    "incentive_income_credited": 68208,
+    "realized_trading_economics": 81895
+  },
+  "l5_per_window_usd": {
+    "gross_matched": 9.398,
+    "residual": -8.5686,
+    "net_trading": 0.8294,
+    "fees": 0.0,
+    "incentives": 4.1336,
+    "realized": 4.963,
+    "turnover": 449.9
+  },
+  "l5_per_dollar_turnover_cents": {
+    "matched": 2.0889,
+    "residual": -1.9045,
+    "net_trading": 0.1844,
+    "incentives": 0.9188,
+    "total_take": 1.1031,
+    "net_trading_ci95": [
+      -0.08,
+      0.55
+    ],
+    "net_trading_p_le_zero": 0.084,
+    "total_take_ci95": [
+      0.83,
+      1.31
+    ]
+  },
+  "findings": [
+    {
+      "id": "L5_ECON_001",
+      "status": "SUPPORTED",
+      "claim": "L5 historical realized economics are incentive-dominated: 68208/81895 = 83.3% of total profit from CREDITED incentives.",
+      "source": "l5_full_history_ledger"
+    },
+    {
+      "id": "L5_ECON_002",
+      "status": "SUPPORTED",
+      "claim": "Matched economics +155076 strongly positive; directional residual/timing -141390 removes 91.17%, leaving +13686 net trading cash.",
+      "source": "l5_full_history_ledger",
+      "residual_share_of_matched": 0.9117
+    },
+    {
+      "id": "L5_ECON_003",
+      "status": "SUPPORTED",
+      "claim": "Trading-only expectancy weak relative to incentives: +0.1844 c/$ with weekly-block bootstrap 95% CI spanning zero.",
+      "source": "l5_full_history_ledger",
+      "ci95_cents_per_dollar": [
+        -0.08,
+        0.55
+      ],
+      "p_le_zero": 0.084
+    },
+    {
+      "id": "PMUS_ECON_001",
+      "status": "SUPPORTED_PRELIMINARY",
+      "claim": "Frozen queue-aware theta=0.96 variant B, n=5 windows.",
+      "q25": {
+        "matched": 4.2825,
+        "residual": -4.05,
+        "fees": -0.8007,
+        "net": -0.5682
+      },
+      "q50": {
+        "matched": 7.9507,
+        "residual": -8.1,
+        "fees": -1.5153,
+        "net": -1.6646
+      },
+      "n_windows": 5,
+      "preregistered_checkpoint": 25,
+      "caveat": "PRELIMINARY. n=5 against a checkpoint of 25. Not an economic result; do not size, tune or promote from it."
+    },
+    {
+      "id": "PMUS_ECON_002",
+      "status": "SUPPORTED_PRELIMINARY",
+      "claim": "Largest measured PMUS-vs-L5 gaps are missing credited incentives and trading fees, jointly 89.2% of the q25 gap in this comparison.",
+      "q25_gap_usd_per_window": 5.5312,
+      "q25_attribution": {
+        "gross_trading": 0.5969,
+        "fees": 0.8007,
+        "incentives": 4.1336
+      },
+      "q25_shares": {
+        "gross_trading": 0.108,
+        "fees": 0.145,
+        "incentives": 0.747
+      },
+      "q50_gap_usd_per_window": 6.6276,
+      "q50_shares": {
+        "gross_trading": 0.148,
+        "fees": 0.229,
+        "incentives": 0.624
+      },
+      "caveat": "L5 population is 16501 windows over 5.5 months on Polymarket; PMUS is 5 windows on one day on PMUS. Not matched samples; this is a decomposition, not a controlled test."
+    },
+    {
+      "id": "PMUS_ECON_003",
+      "status": "SUPPORTED",
+      "claim": "Authoritative observed PMUS CREDITED incentives remain $0, confirmed zero three independent ways. Do not substitute modeled or raw rebates for credited rebates.",
+      "credited_usd": 0,
+      "modeled_maker_theta": 0.0125,
+      "enforcement": "src/pmus_completion_shadow.py credited_rebate hard-wired to D(0); modeled rebate never added into net"
+    },
+    {
+      "id": "RESIDUAL_001",
+      "status": "SUPPORTED",
+      "claim": "Residual losses are structural to L5 behaviour rather than evidence by themselves of clone failure.",
+      "l5_residual_share_of_matched": 0.9117,
+      "pmus_residual_share_of_matched": {
+        "q25": 0.9457,
+        "q50": 1.0188
+      },
+      "l5_never_sells_sell_proceeds_usd": 2.18,
+      "l5_residual_frequency": "~1.00 (holds every unpaired contract to settlement)",
+      "supporting": "complement-response corpus: after held side rises +2..+10c L5 takes complement 63.5-67.7%, so PMUS post-completion complement acquisition is L5-faithful; inventory imbalance is weakest predictor and OOS hurts (-0.28%)"
+    },
+    {
+      "id": "RESIDUAL_002",
+      "status": "UNCERTAIN_IMPORTANT",
+      "claim": "PMUS residual loss per unit is substantially worse than L5's historical residual distribution; mechanism not yet identified.",
+      "pmus_residual_usd_per_unit": -0.405,
+      "pmus_band_concentration": {
+        "25-45c": 1.0
+      },
+      "l5_weighted_residual_usd_per_unit": -0.0889,
+      "l5_same_band_25_45c": -0.2487,
+      "pmus_worse_same_band_x": 1.63,
+      "pmus_worse_overall_x": 4.56,
+      "l5_positive_band_unit_share": 0.362,
+      "open_questions": [
+        "band composition",
+        "clip sizing",
+        "15m vs L5 5m era",
+        "venue microstructure",
+        "n=1 terminal residual episode"
+      ],
+      "priority": "highest-value open diagnostic; NOT explained"
+    },
+    {
+      "id": "THETA_001",
+      "status": "FROZEN",
+      "claim": "theta=0.96 remains preregistered; the favourable theta=1.02 n=5 observation must not cause selection or tuning.",
+      "sweep_n5_queue_aware_variant_B_per_window": {
+        "0.96": {
+          "q25": -0.5682,
+          "q50": -1.6646
+        },
+        "0.98": {
+          "q25": 2.4305,
+          "q50": 4.3303
+        },
+        "1.00": {
+          "q25": 0.8916,
+          "q50": 2.0167
+        },
+        "1.02": {
+          "q25": 4.3304,
+          "q50": 7.6877
+        },
+        "1.05": {
+          "q25": 3.562,
+          "q50": 6.6714
+        }
+      },
+      "grounds_against_loosening": [
+        "sign flip between n=2 and n=5 is a noise signature, not a better threshold",
+        "L5's >$1 pair tolerance (30-45% of matched pairs, median 0.975) is a purchase of INCENTIVES with guaranteed trading losses; PMUS credited incentives are $0 (PMUS_ECON_003)"
+      ]
+    }
+  ],
+  "superseded": [
+    {
+      "conclusion": "ECONOMIC_COMPLETE vs B' by pre-audit numbers (EC q25 net +3.6830/window)",
+      "superseded_by_commit": "1ea8760e",
+      "reason": "completion taker fee subtracted twice in net; sign of the B'-vs-EC delta reversed after the fix"
+    },
+    {
+      "conclusion": "EC carries zero residual so it is not directionally exposed at settlement",
+      "superseded_by_commit": "3a92c583",
+      "reason": "true only under the optimistic fill model; under queue-aware fills 1830z ends 50 net DOWN and loses the residual outright. EC does not guarantee a flat book."
+    },
+    {
+      "conclusion": "queue-ahead = whole-ladder bid_shares/ask_shares",
+      "superseded_by_commit": "3a92c583",
+      "reason": "whole-ladder sum ~20000 is not queue-ahead; touch level holds ~100-1600. Replaced by exact-price-level displayed quantity."
+    },
+    {
+      "conclusion": "pooled median completion edge ~13.67c",
+      "superseded_by_commit": "1ea8760e",
+      "reason": "was a median-of-medians; pooled median over all 24 completion events is 8.57c"
+    },
+    {
+      "conclusion": "the completion edge is fee-safe pair economics",
+      "superseded_by_commit": "1ea8760e",
+      "reason": "paying n*(1-bid) and collecting n*$1 is identically n*(bid-basis): EC is selling the aged leg into the bid. Fresh two-sided pair cost 1.01-1.03 at every completion instant, never below $1. The edge is directional carry."
+    },
+    {
+      "conclusion": "ATOMIC_RECYCLE as a candidate state-consistency fix",
+      "superseded_by_commit": "7c11bc23",
+      "reason": "falsified and no-op; no stale passive orders exist to cancel, residual is 100% from new post-completion decisions"
+    },
+    {
+      "conclusion": "queue-aware q25 -6.9442 / q50 -13.9588 (n=2)",
+      "superseded_by_commit": "19955307",
+      "reason": "n=2, both windows UP; at n=5 (3 UP / 2 DOWN) the figures are -0.5682 / -1.6646"
+    },
+    {
+      "conclusion": "theta=0.96 is the only positive point of the sweep (n=2)",
+      "superseded_by_commit": "19955307",
+      "reason": "reversed at n=5; neither reading is acted on, theta stays frozen per THETA_001"
+    }
+  ],
+  "commit_lineage": [
+    "5edd2fab",
+    "b62acf3e",
+    "1ea8760e",
+    "3a92c583",
+    "7c11bc23",
+    "19955307",
+    "0bf8f0ee"
+  ],
+  "authorises_model_change": false,
+  "authorises_parameter_change": false,
+  "authorises_live_order": false
+}
