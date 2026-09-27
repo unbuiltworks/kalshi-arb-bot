@@ -158,3 +158,26 @@ figure is modeled. Design deferred; no orders, no deposit.
 | Treating q25/q50 as demonstrated executable capacity | **FALSE** | max live fill is 5.31 contracts; q25 is 4.71×, q50 9.42×. CAPACITY_001. |
 | Quoting matched gross without its convention band | **INCOMPLETE** | ±$0.80/window at q50 between average-cost and FIFO. MATCHED_001. |
 | q=25 as a route to $5 | **effectively excluded** | needs residual frequency 0.0615, below the Wilson lower bound 0.1582. P0_RESIDUAL_001. |
+
+### EXP-010 — bounded live capacity/economics probe (PROBE-CAP-02)
+**Status: AUTHORIZED, NOT STARTED. $0.00 of $5.00 spent.**
+Ledger: `analysis/pmus/PROBE_AUTHORIZATION_LEDGER.md`.
+
+Budget PROBE-CAP-02 ($5.00 realized-loss cap) is separate from RESEARCH-LOSS-01
+($0.49320, untouched). Hard stop −$5.00, never raised to finish a sequence.
+
+Blocked on three findings, all established read-only before any arming:
+1. No PMUS credentials in this container **or** on the `pmus-q1-executor` service
+   (only Railway's 8 built-ins; no sealed variables), so "no orphan orders or
+   positions" **could not be verified** — the mandatory precondition.
+2. Arming is dual-key operator-only by design; the module says Claude never arms it.
+3. **The existing executor is hard-capped at q=1**, $1.00 campaign risk, 1-contract
+   residual, $1.00 daily realized-loss stop — constants, not knobs. It cannot
+   express a q5→q10→q25 ladder, and its $1.00 stop conflicts with the $5.00
+   envelope.
+
+Also: the deployed executor builds from `feature/l5-transfer-backtest` and last
+deployed 2026-09-06, predating `1ea8760e` (double-fee fix) and `3a92c583` (queue
+model). Any live run should be rebuilt from current HEAD first.
+
+Nothing was armed, no variable was set, no order was placed.
