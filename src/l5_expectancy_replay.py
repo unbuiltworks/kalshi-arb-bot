@@ -469,3 +469,60 @@ class PairCostCap:
         if cost / qty > self.c:
             return False, "PAIR_COST_ABOVE_CAP"
         return True, None
+
+
+class RunLength:
+    """Refuse a heavy-side add once the same-side run reaches `k`.
+
+    The run is the number of consecutive acquisitions on the side already
+    long; it resets the moment a repairing leg arrives. `k` is registered in
+    `analysis/l5/RUN_LENGTH_PREREGISTRATION.md` from L5's own clip and maker
+    decay, BEFORE any P&L was scored -- L5 himself never stops, so every
+    threshold here is ours and has to be declared rather than discovered.
+
+    Repairing is always allowed; the policy declines to deepen, never to fix.
+    """
+
+    def __init__(self, k: int) -> None:
+        self.k = int(k)
+        self.name = "RUN_SUPPRESS_%d" % self.k
+        self.params = {"max_same_side_run": self.k}
+        self._run = 0
+        self._market: Optional[str] = None
+
+    def allows(self, walk: "InventoryWalk", cand: Fill,
+               state: Mapping[str, Any]) -> Tuple[bool, Optional[str]]:
+        if walk.market != self._market:          # a new window starts fresh
+            self._market, self._run = walk.market, 0
+        if walk.residual() == 0 or not _increases_imbalance(walk, cand):
+            self._run = 0
+            return True, None
+        if self._run >= self.k:
+            return False, "SAME_SIDE_RUN_AT_LIMIT"
+        self._run += 1
+        return True, None
+
+
+class LateNoExtend:
+    """Refuse to deepen an imbalance inside the last `seconds` of a window.
+
+    Registered from the one regime where L5's own behaviour changes shape
+    rather than drifting: inside the last minute his clip goes UP (22.51 from
+    17.61 in the calm part of the window) and his maker share falls to 58.4%.
+    Whatever he is doing there, it is not the patient liquidity provision the
+    rest of the tape shows.
+    """
+
+    def __init__(self, seconds: float) -> None:
+        self.seconds = float(seconds)
+        self.name = "LATE_NO_EXTEND_%gs" % self.seconds
+        self.params = {"no_deepen_within_s": self.seconds}
+
+    def allows(self, walk: "InventoryWalk", cand: Fill,
+               state: Mapping[str, Any]) -> Tuple[bool, Optional[str]]:
+        if walk.residual() == 0 or not _increases_imbalance(walk, cand):
+            return True, None
+        rem = state.get("time_remaining_s")
+        if rem is not None and rem < self.seconds:
+            return False, "TOO_LATE_TO_DEEPEN"
+        return True, None
