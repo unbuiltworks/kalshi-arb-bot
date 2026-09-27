@@ -181,3 +181,20 @@ deployed 2026-09-06, predating `1ea8760e` (double-fee fix) and `3a92c583` (queue
 model). Any live run should be rebuilt from current HEAD first.
 
 Nothing was armed, no variable was set, no order was placed.
+
+### EXP-011 — read-only live-architecture engineering
+**Status: COMPLETE.** `analysis/pmus/EXP010_ENGINEERING_READONLY.md`.
+Established the post-breach architecture, verified GuardedTransport covers
+COMPLETE/complement by construction, confirmed both 09-16 faults are already
+pinned by existing tests (77 passed), found the taker-completion primitive already
+exists (`micro_complement_taker_*`, `post_only=False`, gated by
+`taker_completion_ok`), and labelled the 5.31 fill as tennis evidence.
+
+## DO NOT RETEST / DO NOT USE — additions
+
+| item | verdict | why |
+|---|---|---|
+| `src/pmus_l5_ramp_ladder.py` owner-rung mechanism for LIVE authorization | **DO NOT USE FOR LIVE AUTHORIZATION** | fault (1) of the 2026-09-16 breach: persisted historical rung approvals were auto-loaded by a running campaign and silently replaced live limits ($0.05→$7.50, −$1.00→−$15.00). RAMP_LADDER_001. Live authority is the immutable mandate only. |
+| PROBE-CAP-02 as an independent fresh $5.00 budget | **FALSE, CORRECTED** | one cumulative state is authoritative: −$4.50680000 of $5.00, **$0.49320 remaining**. BUDGET_001. Rung-A's $1.50 is NOT AUTHORIZED. |
+| "matched economics are positive at every clip and fill model" | **FALSE at n=9** | θ gates completions, not passive acquisitions; a whipsaw produced a 1.3500 pair cost at 2030z. MATCHED_002. |
+| Treating the 5.31 fill as BTC15m capacity evidence | **FALSE** | ATP tennis markets, 2026-09-07. Zero authenticated live BTC15m fills exist. |

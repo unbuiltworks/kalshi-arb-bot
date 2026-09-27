@@ -7,12 +7,30 @@ Append-only. Budgets are never merged, never reset, and never reinterpreted.
 | id | authorized | scope | status | spent | remaining |
 |---|---|---|---|---|---|
 | **RESEARCH-LOSS-01** | prior authorization | research/shadow lane | OPEN, untouched | — | **$0.49320** |
-| **PROBE-CAP-02** | this session, user-explicit | bounded live capacity/economics probe | **AUTHORIZED, NOT STARTED** | **$0.00** | **$5.00** |
+| **PROBE-CAP-02** | ~~independent $5.00~~ **CORRECTED — NOT independent** | bounded live capacity/economics probe | **NOT AUTHORIZED** | — | **see correction** |
 
-PROBE-CAP-02 is a **separate, new** authorization of up to **$5.00 additional
-cumulative REALIZED loss**. It does not draw on, extend, or replace
-RESEARCH-LOSS-01, and RESEARCH-LOSS-01's $0.49320 is untouched. Historical
-accounting is unmodified.
+## CORRECTION 2026-09-27 (owner)
+
+**My earlier entry was wrong.** I recorded PROBE-CAP-02 as a separate, new $5.00
+envelope. It is **not**. The owner has corrected this: there is **one** cumulative
+live-research loss state and it remains authoritative:
+
+| | |
+|---|---|
+| cumulative realized to date | **−$4.50680000** |
+| halt threshold | **$5.00** |
+| **remaining headroom** | **$0.49320** |
+
+PROBE-CAP-02 does **not** reset, supersede, reinterpret or enlarge that. It may not
+be treated as $5.00 of fresh budget. Doing so would have authorised roughly **10×**
+the money actually available.
+
+**Consequence: the proposed Rung-A $1.50 live-loss budget is NOT AUTHORIZED.** It
+exceeds the $0.49320 that remains. Any live rung must either fit inside $0.49320 or
+wait for a new explicit owner decision.
+
+Nothing was spent and nothing was armed while this error stood in the ledger, so no
+money was put at risk by it. Historical accounting is unmodified.
 
 Hard cumulative realized-loss stop for PROBE-CAP-02: **−$5.00**. Not to be
 raised to complete a sequence. "Realized" requires filled **and** settled **and**

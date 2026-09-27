@@ -392,3 +392,92 @@ itself is uncertain: the three observed episodes span an order of magnitude.
 
 Ledger: `analysis/pmus/pmus_window_ledger_q25.json` / `_q50.json`, regenerated
 every firing by `scripts/pmus_window_ledger.py`.
+
+---
+
+# Amendments 2026-09-27 (n=9, breach preservation, budget correction)
+
+## BUDGET_001 — CORRECTED, CANONICAL
+There is **one** cumulative live-research loss state and it is authoritative:
+**realized to date −$4.50680000 against a $5.00 halt, leaving $0.49320.**
+
+PROBE-CAP-02 is **NOT** an independent fresh $5.00 envelope. My earlier ledger
+entry said it was; that was wrong and would have implied ~10× the available money.
+It does not reset, supersede, reinterpret or enlarge the existing state.
+**The proposed Rung-A $1.50 live-loss budget is therefore NOT AUTHORIZED.** Any
+live rung fits inside $0.49320 or waits for a new explicit owner decision.
+
+## BREACH_001 — SUPPORTED, PERMANENT
+**The 2026-09-16 live breach.** The R1 canary was authorized for **one market at
+$0.05** and traded **11+ markets**, committing **$19.3295** to one of them. Nothing
+was bypassed and no gate was defeated — the system did what it was built to do,
+and what it was built to do was wrong in two places
+(`analysis/l5/live_probe/EXECUTION_ARCHITECTURE.md`):
+
+1. **The campaign could rewrite its own limits.** The dual key only *arms*. Once
+   armed, the campaign loaded three owner rung approvals dated 2026-09-06
+   (`R2C`, `R2C2`, `R3L`) and applied them: per-market **$0.05 → $7.50**, daily
+   stop **−$1.00 → −$15.00**. Authorization to *start* was read as authorization
+   to *continue*, on someone else's ten-day-old decision.
+2. **The spend counter was an allow-list of stage names.**
+   `counts_against_market_cap()` admitted `spring_open*`/`spring_extend*` and
+   excluded `spring_complete_*`. A COMPLETE on this venue is a **BUY of the
+   complement** — cash out. The counter read **$7.4476** against its $7.50 cap
+   while real money-moving notional reached **$19.3295**. The `<=1.00` pair
+   invariant bounds the *price per pair*, never the *dollar volume*: 20.44 pairs
+   at 0.9457 honours it perfectly.
+
+## RAMP_LADDER_001 — DO NOT USE FOR LIVE AUTHORIZATION
+**`src/pmus_l5_ramp_ladder.py`'s owner-rung mechanism must never again be used to
+authorize live sizing.** It is fault (1) above: persisted historical rung
+approvals were auto-loaded by a running campaign and silently replaced live
+limits. I proposed using exactly this path for EXP-010 Rung A before finding the
+breach report; **that proposal is retracted.**
+
+Live authorization is the **immutable mandate only**
+(`analysis/l5/authorization/live_mandate.json`, `src/pmus_live_mandate.py`):
+every field required with no defaults, `frozen=True`, expiring, re-read every
+pass. The ramp ladder may still describe *shadow* rung sizing; it may not confer
+live authority.
+
+## MATCHED_002 — SUPPORTED: matched economics are NOT reliably positive
+Superseding the earlier reading that matched economics were positive at every clip
+and fill model — that held at n=5 and n=7 and was a sample artifact.
+
+**θ=0.96 gates COMPLETIONS, not passive acquisitions.** A whipsawing market
+produces passively-acquired pairs costing **more than $1.00**. Measured at 2030z,
+q=50: UP bought at 0.42, 0.27, then 0.99; DOWN at 0.79 → average UP 0.5600,
+average DOWN 0.7900, **pair cost 1.3500**, so each matched pair loses $0.35 —
+matched gross **−$29.1087** for that window alone.
+
+This is the same phenomenon the L5 ledger reports for him (30–45% of his matched
+pairs cost more than $1.00, median 0.975). It is structural, not a defect.
+
+Effect on the aggregate: q50 matched gross/window fell from **+11.6058 (n=7)** to
+**+4.9591 (n=9)** on two windows.
+
+## P0_RESIDUAL_001 — UPDATED to n=9
+| | q=25 | q=50 |
+|---|---|---|
+| matched gross | +2.6944 | +4.9591 |
+| taker fees | −0.7250 | −1.3920 |
+| = matched net | +1.9694 | +3.5671 |
+| expected maker rebate | +0.4089 | +0.8144 |
+| **= before residual** | **+2.3783** | **+4.3816** |
+| residual P&L | −4.0167 | −8.0333 |
+| **= TOTAL/window** | **−1.6384** | **−3.6518** |
+| residual events | 3 of 9 | 3 of 9 |
+| frequency / Wilson 95% | 0.3333 / **[0.1206, 0.6458]** | same |
+| mean episode severity | −12.0500 | −24.1000 |
+| break-even residual frequency | 0.1974 | 0.1818 |
+| **target frequency for +$5** | **IMPOSSIBLE** | **IMPOSSIBLE** |
+
+**New at n=9: before-residual net is now BELOW $5 at both clips ($2.38 / $4.38),
+so $5/window is unreachable even with perfect flattening — zero residual would
+still not get there.** At n=7 before-residual was $11.01 and $5 was reachable at a
+residual frequency ≤0.2495. This is a materially worse reading driven by
+MATCHED_002, not by the residual term.
+
+Observed residual frequency 0.3333 now sits **above** break-even at both clips.
+Still n=9 of 25; the Wilson interval remains wide and no rejection is recorded
+from it (TARGET_001 rule).

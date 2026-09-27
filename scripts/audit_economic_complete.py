@@ -158,7 +158,9 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-27-1915z': 'down',
           'cpc-btc-updown-15m-2026-09-27-1930z': 'up',
           'cpc-btc-updown-15m-2026-09-27-1945z': 'down',
-          'cpc-btc-updown-15m-2026-09-27-2000z': 'up'}
+          'cpc-btc-updown-15m-2026-09-27-2000z': 'up',
+          'cpc-btc-updown-15m-2026-09-27-2030z': 'up',
+          'cpc-btc-updown-15m-2026-09-27-2045z': 'down'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {
@@ -169,11 +171,10 @@ EXCLUDED = {
         '20:29:55; the window was never observed through a terminal state, so '
         'it fails the preregistered completeness rule even though the venue '
         'later reported it settled DOWN',
-    'cpc-btc-updown-15m-2026-09-27-2030z':
-        'settlement NOT finalized: settlementPx 0.9900 stably equals '
-        'lastTradePx 0.9900 on three reads. A finalized binary settlement is '
-        '1.0000 or 0.0000 and DIFFERS from lastTradePx (1830z: last 0.9900, '
-        'settlement 1.0000). Scoring it would pay a residual $0.99. Re-check.',
+    'cpc-btc-updown-15m-2026-09-27-2100z':
+        'no terminal row on tape -- 48 bbo rows all MARKET_STATE_OPEN, last '
+        '21:14:54. Venue later finalized UP, but the tape never observed the '
+        'close, so it fails the completeness rule. Same class as 2015z.',
 }
 
 
