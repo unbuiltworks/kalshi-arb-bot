@@ -21,7 +21,8 @@ def load():
     for v in by.values(): v.sort(key=lambda x: str(x['t']))
     return by
 
-def audit(rows, clip, theta, variant, winner, hold_s=60.0, cap_k=D(2), emit=True):
+def audit(rows, clip, theta, variant, winner, hold_s=60.0, cap_k=D(2), emit=True,
+          fill_model='optimistic'):
     """Mirror of run_window's control flow with independent accounting."""
     q = {'up': D(0), 'down': D(0)}
     c = {'up': D(0), 'down': D(0)}
@@ -29,7 +30,7 @@ def audit(rows, clip, theta, variant, winner, hold_s=60.0, cap_k=D(2), emit=True
     completed = D(0); completions = 0
     ledger = []
     fail = []
-    blocked_until = 0.0; need_flat = False; max_clip = D(0)
+    blocked_until = 0.0; need_flat = False; max_clip = D(0); qstate = {}
     ladder = None; ladder_t = None
     ladder_consumed = collections.defaultdict(lambda: collections.defaultdict(D))
     reuse_events = []
@@ -100,7 +101,8 @@ def audit(rows, clip, theta, variant, winner, hold_s=60.0, cap_k=D(2), emit=True
             if variant == 'B' and now < blocked_until:
                 rr = q['up'] - q['down']
                 if rr != 0 and ((rr > 0) == (side == 'up')): continue
-            qty, px = S.maker_fill(row, side, clip, queue_aware=False)
+            qty, px = S.maker_fill(row, side, clip, fill_model=fill_model,
+                                   ladder=ladder, qstate=qstate)
             if qty <= 0 or px is None: continue
             rr = q['up'] - q['down']
             signed = qty if side == 'up' else -qty

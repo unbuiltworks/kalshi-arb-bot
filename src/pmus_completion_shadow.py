@@ -71,8 +71,55 @@ def own_price(side: str, px: D) -> D:
     return px if side == "up" else (D(1) - px)
 
 
+def live_touch_own(row: Dict[str, Any], side: str) -> Optional[D]:
+    """Contemporaneous cost of BUYING `side` as a taker, in that side's terms."""
+    if side == "up":
+        return _d(row.get("ask"))
+    b = _d(row.get("bid"))
+    return (D(1) - b) if b is not None else None
+
+
 def complement(side: str) -> str:
     return "down" if side == "up" else "up"
+
+
+#: the three preregistered maker-fill treatments. All three share the causal
+#: precondition (observed trade volume AND a print at or through our price in
+#: our own terms). They differ ONLY in what stands ahead of us in the queue.
+FILL_MODELS = ("optimistic", "queue_aware", "pessimistic")
+
+
+def resting_venue_price(row: Dict[str, Any], side: str) -> Optional[D]:
+    """The venue-quoted (YES) price our passive clip would rest at.
+
+    Buying UP rests a BID at the bid. Buying DOWN is resting a SELL of YES at
+    the ask, so the venue price is the ask even though our own-terms cost is
+    1 - ask.
+    """
+    return _d(row.get("bid")) if side == "up" else _d(row.get("ask"))
+
+
+def level_displayed_qty(ladder: Optional[Dict[str, Any]], side: str,
+                        venue_px: Optional[D]) -> Optional[D]:
+    """Quantity displayed AT OUR EXACT PRICE LEVEL, in venue terms.
+
+    This is the only defensible queue-ahead measure. `bid_shares`/`ask_shares`
+    are whole-ladder sums (~20,000 against a touch of ~100-1,600 on this tape)
+    and using them as queue-ahead is simply wrong.
+
+    None means our price is not displayed at all, so queue position cannot be
+    established from the public tape -- which is treated as NO FILL, never as
+    an empty queue.
+    """
+    if ladder is None or venue_px is None:
+        return None
+    rows = (ladder.get("bids") if side == "up" else ladder.get("offers")) or []
+    for lvl in rows:
+        p = _d(lvl[0] if len(lvl) > 0 else None)
+        q = _d(lvl[1] if len(lvl) > 1 else None)
+        if p is not None and q is not None and p == venue_px:
+            return q
+    return None
 
 
 def buy_levels(row: Dict[str, Any], side: str) -> List[List[str]]:
@@ -188,40 +235,85 @@ class Book:
 
 
 def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
-               queue_aware: bool) -> Tuple[D, Optional[D]]:
+               queue_aware: bool = False,
+               fill_model: Optional[str] = None,
+               ladder: Optional[Dict[str, Any]] = None,
+               qstate: Optional[Dict[str, Any]] = None
+               ) -> Tuple[D, Optional[D]]:
     """Would a clip resting at `side`'s touch have filled on THIS observation?
 
-    Evidence required: the tape must show trade volume in this interval, and
-    `last` must be at or through our resting price in our own terms. Quantity
-    is capped by the observed volume delta, which is itself a LOWER BOUND on
-    traded volume, so the model errs toward fewer fills.
+    CAUSAL PRECONDITION, shared by all three treatments and never relaxed: the
+    tape must show trade volume in this interval AND `last` must be at or
+    through our resting price in our own terms. A price merely TOUCHING our
+    level is not a fill -- without an attributable print there is no evidence
+    anyone traded against us.
 
-    `queue_aware` additionally requires the displayed size at the touch to be
-    consumed first, since we join the BACK of that queue. It is the pessimistic
-    bound; the optimistic bound ignores queue position. Both are reported,
-    because queue position is the one thing the public tape cannot show and it
-    is the dominant assumption in this whole exercise.
+    The treatments differ only in the queue ahead of us:
+
+    optimistic  -- no queue. Our clip is at the front. The existing rule,
+                   retained unchanged so the audited result stays comparable.
+    queue_aware -- ahead is initialised from the displayed quantity AT OUR
+                   EXACT PRICE LEVEL when we join, and decremented only by
+                   volume that is attributable to our side and price. Re-quoting
+                   to a new level sends us to the back of that level's queue.
+                   If our price is not displayed, queue position is UNKNOWN and
+                   there is no fill.
+    pessimistic -- the pre-existing conservative bound: the whole displayed
+                   book must clear first. Known to be mis-specified as a queue
+                   measure; kept only as a floor.
+
+    `qstate` carries the queue across observations for queue_aware; without it
+    the model cannot persist and degrades to requiring one interval to clear
+    the level, which is reported rather than hidden.
     """
+    model = fill_model
+    if model is None:
+        model = "pessimistic" if queue_aware else "optimistic"
+    if model not in FILL_MODELS:
+        raise ValueError("unknown fill_model %r" % (model,))
+
     dlt = _d(row.get("shares_traded_delta_lower_bound"))
     if dlt is None or dlt <= 0:
         return D(0), None
-    quote = _d(row.get("bid") if side == "up" else row.get("bid"))
     if side == "up":
         px = _d(row.get("bid"))
-        ahead = _d(row.get("bid_shares")) or D(0)
     else:
         b = _d(row.get("ask"))
         px = (D(1) - b) if b is not None else None
-        ahead = _d(row.get("ask_shares")) or D(0)
     if px is None or px <= 0 or px >= 1:
         return D(0), None
     last = _d(row.get("last"))
     if last is None:
         return D(0), None
-    last_own = own_price(side, last)
-    if last_own > px:
-        return D(0), None          # nothing traded at or through our price
-    avail = dlt - ahead if queue_aware else dlt
+    if own_price(side, last) > px:
+        return D(0), None          # nothing printed at or through our price
+
+    if model == "optimistic":
+        avail = dlt
+    elif model == "pessimistic":
+        ahead = _d(row.get("bid_shares") if side == "up"
+                   else row.get("ask_shares")) or D(0)
+        avail = dlt - ahead
+    else:
+        venue_px = resting_venue_price(row, side)
+        shown = level_displayed_qty(ladder, side, venue_px)
+        if shown is None:
+            return D(0), None      # queue position not establishable
+        st = None if qstate is None else qstate.get(side)
+        if st is None or st.get("px") != venue_px:
+            ahead = shown          # we JOIN here, behind everything displayed
+        else:
+            ahead = st["ahead"]
+            if shown < ahead:
+                ahead = shown      # the level shrank; never invent queue
+        ahead = ahead - dlt        # attributable volume eats the queue
+        if ahead > 0:
+            if qstate is not None:
+                qstate[side] = {"px": venue_px, "ahead": ahead}
+            return D(0), None      # still queued behind displayed size
+        avail = -ahead             # the surplus reaches us
+        if qstate is not None:
+            qstate[side] = {"px": None, "ahead": D(0)}
     if avail <= 0:
         return D(0), None
     qty = clip if clip < avail else avail
@@ -230,8 +322,13 @@ def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
 
 def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                variant: str = "A", queue_aware: bool = False,
+               fill_model: Optional[str] = None,
                winner: Optional[str] = None,
-               residual_cap_k: D = D(2), hold_s: float = 60.0
+               residual_cap_k: D = D(2), hold_s: float = 60.0,
+               ladder_max_age_s: Optional[float] = None,
+               respect_live_bbo: bool = False,
+               fill_prob: Optional[float] = None,
+               seed: int = 0
                ) -> Dict[str, Any]:
     """Forward walk of ONE window. No settlement is consulted until settle().
 
@@ -239,8 +336,24 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
     variant B: complete, then block same-side rebuild for `hold_s`.
     variant C: complete, then resume only from a genuinely flat book.
     theta None means B' baseline: acquire only, never complete.
+
+    ANALYSIS-ONLY ladder hygiene, both default OFF so the authoritative result
+    is unchanged:
+      ladder_max_age_s -- a completion may use only a ladder at least this
+        fresh. Beyond it the ladder is treated as absent. Nothing is ever
+        interpolated.
+      respect_live_bbo -- drop ladder levels priced BETTER than the
+        contemporaneous BBO touch, so a stale favourable ladder cannot be used
+        when a newer BBO contradicts it.
     """
     bk = Book()
+    # ANALYSIS-ONLY. fill_prob thins the modelled passive acquisitions to answer
+    # "what fill rate does the result actually need?". Default None = no thinning.
+    _rnd = None
+    if fill_prob is not None:
+        import random as _random
+        _rnd = _random.Random(seed)
+    qstate: Dict[str, Any] = {}
     blocked_until = 0.0
     need_flat = False
     max_clip_seen = D(0)
@@ -267,7 +380,18 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
             comp = complement(held)
             want = abs(r)
             bk.eligible_states += 1
-            lv = buy_levels(ladder, comp) if ladder else []
+            use_ladder = ladder or None
+            if use_ladder is not None and ladder_max_age_s is not None:
+                age = now - _epoch(use_ladder.get("t"))
+                if age < 0 or age > ladder_max_age_s:
+                    use_ladder = None          # too stale to stand behind
+            lv = buy_levels(use_ladder, comp) if use_ladder else []
+            if lv and respect_live_bbo:
+                live = live_touch_own(row, comp)
+                if live is not None:
+                    # a newer BBO contradicts any better-priced stale level
+                    lv = [l for l in lv if _d(l[0]) is not None
+                          and _d(l[0]) >= live]
             if lv:
                 bk.attempted_states += 1
             basis = bk.avg(held)
@@ -308,9 +432,13 @@ def run_window(rows: Sequence[Dict[str, Any]], *, clip: D, theta: Optional[D],
                 rr = bk.residual()
                 if rr != 0 and ((rr > 0) == (side == "up")):
                     continue
-            qty, px = maker_fill(row, side, clip, queue_aware=queue_aware)
+            qty, px = maker_fill(row, side, clip, queue_aware=queue_aware,
+                                 fill_model=fill_model, ladder=ladder or None,
+                                 qstate=qstate)
             if qty <= 0 or px is None:
                 continue
+            if _rnd is not None and _rnd.random() > fill_prob:
+                continue           # this modelled fill did not happen
             # B' RESIDUAL_CAP_k2 / PROSPECTIVE_NET, unchanged
             rr = bk.residual()
             signed = qty if side == "up" else -qty

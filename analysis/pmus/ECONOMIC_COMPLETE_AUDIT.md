@@ -121,3 +121,119 @@ separate from luck.
 
 Status: **AUDITED_PRELIMINARY**. Conservation and causality hold. Not an
 economic result. Checkpoint 25 remains the preregistered economic checkpoint.
+
+---
+
+# P0: maker-fill realism (three explicit bounds)
+
+The queue-ahead defect flagged above is fixed. `ahead` is no longer
+whole-ladder `bid_shares`/`ask_shares`; it comes from the displayed quantity
+**at our exact price level**, taken from the ladder in venue terms (a UP clip
+rests a BID at the bid, so it queues behind `bids[bid]`; a DOWN clip rests a
+SELL of YES at the ask, so it queues behind `offers[ask]`).
+
+ECONOMIC_COMPLETE is byte-identical under all three treatments: θ, the q grid,
+the continuation variants and the completion gate are untouched. Only the
+acquisition fill inference differs.
+
+**Shared causal precondition, never relaxed in any treatment:** observed trade
+volume in the interval AND a print at or through our resting price in our own
+terms. A price merely touching our level is never a fill.
+
+- **OPTIMISTIC** — no queue; our clip is at the front. The pre-existing rule,
+  retained unchanged so the audited result stays comparable.
+- **QUEUE-AWARE** — `ahead` initialises from the displayed size at our exact
+  level when we join, and decrements only by volume attributable to our side and
+  price (the print test supplies the attribution; aggregate `sharesTraded`
+  alone never consumes queue). Re-quoting to a new level sends us to the back of
+  that level's queue. If our price is not displayed, queue position is UNKNOWN
+  and there is no fill — never an empty queue.
+- **PESSIMISTIC** — the pre-existing conservative bound (whole displayed book
+  clears first). Retained as a floor, though it is mis-specified as a queue
+  measure.
+
+The independent cashflow harness reconciles **90/90** configurations across all
+three models. Suites still 29/29.
+
+## Results (θ=0.96, variant B, per window, n=2)
+
+| fill model | q | acq fills | completed con | matched net | residual P&L | TOTAL net |
+|---|---|---|---|---|---|---|
+| optimistic | 25 | 21.0 | 175.0 | 8.8050 | 0.0000 | **+6.5201** |
+| optimistic | 50 | 21.0 | 350.0 | 17.3057 | 0.0000 | **+12.7336** |
+| queue_aware | 25 | 8.5 | 62.5 | 4.0000 | −10.1250 | **−6.9442** |
+| queue_aware | 50 | 8.5 | 125.0 | 7.9300 | −20.2500 | **−13.9588** |
+| pessimistic | 25 | 1.0 | 0.0 | 0.0000 | −1.3750 | **−1.3750** |
+| pessimistic | 50 | 1.0 | 0.0 | 0.0000 | −2.7500 | **−2.7500** |
+
+Full q grid in the session record; the sign is constant in q within each model,
+and the queue-aware loss scales roughly linearly with q.
+
+## Correction to an earlier claim
+
+"EC carries zero residual, so it is not directionally exposed at settlement" was
+an artifact of the optimistic fill model, **not** a property of EC. Under
+queue-aware fills, 1830z ends **50 contracts net DOWN** (125 UP acquired, 75 UP
+retired by completions, 100 DOWN acquired) and, because the window settled UP,
+that residual is a total loss of **−$20.25**.
+
+EC retires only the *held* leg, so it reduces |residual| at the moment it fires
+but cannot stop later complement acquisitions from pushing the book net the
+other way. **EC does not guarantee a flat book.**
+
+## Break-even maker-fill rate
+
+From the audited optimistic result, thinning each modelled passive acquisition
+to probability f (400 seeds, mean net/window):
+
+| f | q=25 | q=50 |
+|---|---|---|
+| 1.00 | 6.5201 | 12.7336 |
+| 0.98 | 5.7776 | 11.3377 |
+| 0.96 | 5.0928 | 10.0362 |
+| 0.95 | 4.8631 | 9.6207 |
+| 0.85 | — | 6.4377 |
+| 0.80 | — | 5.4623 |
+| 0.78 | — | 5.1678 |
+| 0.76 | — | 4.8272 |
+
+**q=25 needs f ≈ 0.96; q=50 needs f ≈ 0.77** to hold $5/window on the mean.
+
+Dispersion matters more than the mean: at f=0.96 only **54.8%** of seeds clear
+$5 at q=25 (87.8% at q=50). The $5 threshold is not robustly met once any fill
+uncertainty is admitted. Below f≈0.7 the curve is non-monotone — fewer fills
+means less residual, and with both windows settling UP thinning sometimes helps
+— so the break-even figure is only meaningful in the high-f region.
+
+Since the causally defensible queue-aware model produces roughly **8.5 fills
+against 21 modelled (f ≈ 0.40)**, the required rate is far above the supported
+one at both clip sizes.
+
+## Ladder-freshness sensitivity (analysis only, both default OFF)
+
+Collector cadence is `HEARTBEAT_S = 30.0` with 2s polling, so the justified
+bound is **32s** (one heartbeat plus one poll). Observed max staleness was 31.2s,
+so a 32s bound is **non-binding** — it changes nothing. Nothing is interpolated.
+
+`respect_live_bbo` drops ladder levels priced better than the contemporaneous
+BBO touch, so a stale favourable ladder cannot be used when a newer BBO
+contradicts it:
+
+| maxAge | respect_live_bbo | q=25 net | q=50 net |
+|---|---|---|---|
+| none | False | 6.5201 | 12.7336 |
+| 32s | False | 6.5201 | 12.7336 |
+| 32s | **True** | **5.1818** | **10.1489** |
+| 16s | False | 10.6010 | 20.8955 |
+| 8s | False | 6.3142 | 12.6283 |
+
+Applying the hygiene costs **$1.34/window at q=25** and **$2.58 at q=50**. Under
+queue-aware it stays negative throughout (32s + respect_live_bbo: q=25 −7.8599,
+q=50 −15.8222).
+
+The 16s row scores *higher*, which is path noise at n=2, not evidence that
+fresher is better. Selecting 16s because it pays more is exactly the error the
+freshness bound exists to prevent. The preregistration-justified bound is 32s.
+
+Status unchanged: **AUDITED_PRELIMINARY**, n=2, both windows settled UP.
+Checkpoint 25 remains the preregistered economic checkpoint.
