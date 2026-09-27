@@ -163,3 +163,34 @@ suppression and clock-completion studies both showed CIs covering zero at
 n≈1,000 windows, so a handful of windows will not answer this either. The tape
 needs to accumulate before the question is worth asking, and how long is itself
 a function of how often residual episodes arise.
+
+## Venue characteristic found while verifying the collector (2026-09-27 18:16Z)
+
+**PMUS opens a BTC15m book roughly 90 seconds AFTER the window's nominal
+start.** Measured directly: `cpc-btc-updown-15m-2026-09-27-1815z` returned
+HTTP 404 on `/bbo` and `/book` at 18:16:21Z and was `MARKET_STATE_OPEN` and
+two-sided (0.6700/0.6900, 19000/20000 shares) at 18:16:46Z, against a nominal
+18:15:00Z start. At the same instant the prior window `-1800z` read
+`MARKET_STATE_EXPIRED` with 204,013.77 traded, so windows are captured through
+expiry.
+
+This is the venue's behaviour, not a collector fault — `series_slugs` already
+documents that pre-created windows 404 until they open — and those polls are
+recorded honestly as `kind: "error"` rows rather than silently dropped.
+
+Two consequences for the analysis, both known in advance rather than
+discovered inside a result:
+
+1. **The earliest executable moment in a 900 s window is TTE ≈ 810 s.** No
+   completion trigger can fire before then, so the threshold sweep must not
+   propose triggers in a region where nothing is executable.
+2. **The residual-formation window is shorter than the nominal 15 minutes**, so
+   per-window residual-episode counts should be read against ~810 s of live
+   book, not 900 s.
+
+Roll behaviour verified at the same time: `series_slugs('btc-updown-15m')`
+returned exactly `['cpc-btc-updown-15m-2026-09-27-1815z']` immediately after
+the 18:15 roll, and the running collector held `slugs: 1` continuously across
+it (cycle 197, 394 rows, 2 rows/cycle, no gaps). The `reslate` provenance row
+is written to the tape file rather than stdout, so it is visible in the data
+and not in the deploy logs.
