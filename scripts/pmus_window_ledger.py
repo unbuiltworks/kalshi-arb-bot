@@ -59,16 +59,32 @@ def window_row(rows, slug, winner, clip):
             bp = e["acq_basis"]
             px = bp if e["side"] == "up" else (D(1) - bp)
             reb += F.maker_rebate(px, e["qty"], cents=True)
+    # --- the eight reported rows, in reporting order --------------------------
+    # SIGN CONVENTION, stated because it is the whole point of this shape:
+    #   `fees` is a POSITIVE COST MAGNITUDE and is SUBTRACTED.
+    #   `residual_pnl` carries its own sign and is ADDED.
+    # so the two identities hold literally as written:
+    #   matched_gross - fees + residual_pnl        = shadow_trading_net
+    #   shadow_trading_net + expected_maker_rebate = shadow_modeled_net
+    ec = r["gross_margin"]                 # theta-gated completion economics
+    passive = r["matched_pnl"] - ec        # ungated oscillator matching
+    fees = r["fees"]                       # positive cost magnitude
+    shadow_trading_net = r["matched_pnl"] - fees + rp
     return {
         "window": slug[-5:], "settlement": winner,
         "terminal_residual_occurred": bool(rq),
         "residual_contracts": str(rq), "residual_basis": str(b.quantize(D("0.0001"))),
-        "residual_side": side or "-", "residual_pnl": str(rp),
+        "residual_side": side or "-",
         "matched_contracts": str(r["completed_qty"]),
-        "matched_gross": str(r["matched_pnl"]), "fees": str(-r["fees"]),
+        # SHADOW only. Nothing on this row is credited and nothing is realized.
+        "ec_matched_gross": str(ec),
+        "passive_matched_gross": str(passive),
+        "matched_gross": str(r["matched_pnl"]),
+        "fees": str(fees),
+        "residual_pnl": str(rp),
+        "shadow_trading_net": str(shadow_trading_net),
         "expected_maker_rebate": str(reb),
-        "total_net": str(r["net"]),
-        "realized_equivalent": str(r["net"] + reb),
+        "shadow_modeled_net_including_expected_rebate": str(shadow_trading_net + reb),
     }
 
 
@@ -83,12 +99,16 @@ def rolling(ledger, ks=(5, 10, 15, 20, 25)):
         ev = sum(1 for x in w if x["terminal_residual_occurred"])
         lo, hi = wilson(ev, k)
         out["n=%d" % k] = {
+            # same eight rows, same two identities, averaged per window
+            "ec_matched_gross": str(g("ec_matched_gross").quantize(D("0.0001"))),
+            "passive_matched_gross": str(g("passive_matched_gross").quantize(D("0.0001"))),
             "matched_gross": str(g("matched_gross").quantize(D("0.0001"))),
             "fees": str(g("fees").quantize(D("0.0001"))),
             "residual_pnl": str(g("residual_pnl").quantize(D("0.0001"))),
+            "shadow_trading_net": str(g("shadow_trading_net").quantize(D("0.0001"))),
             "expected_maker_rebate": str(g("expected_maker_rebate").quantize(D("0.0001"))),
-            "total_net": str(g("total_net").quantize(D("0.0001"))),
-            "realized_equivalent": str(g("realized_equivalent").quantize(D("0.0001"))),
+            "shadow_modeled_net_including_expected_rebate": str(
+                g("shadow_modeled_net_including_expected_rebate").quantize(D("0.0001"))),
             "residual_events": "%d of %d" % (ev, k),
             "residual_frequency": round(ev / k, 4),
             "wilson95": [round(lo, 4), round(hi, 4)],
@@ -109,11 +129,35 @@ def main(argv):
         rb = sum(D(x["expected_maker_rebate"]) for x in led) / n
         losses = [D(x["residual_pnl"]) for x in led if x["terminal_residual_occurred"]]
         # break-even and target residual frequency, given the non-residual lines
-        before = mg + fe + rb
+        before = mg - fe + rb
         sev = (sum(losses) / len(losses)) if losses else D(0)
         be = (before / -sev) if sev else None
         tgt = ((before - D(5)) / -sev) if sev else None
         doc = {
+            "accounting": {
+                "labels": "SHADOW / MODELED only. Nothing here is CREDITED or REALIZED.",
+                "reporting_order": [
+                    "ec_matched_gross", "passive_matched_gross", "matched_gross",
+                    "fees", "residual_pnl", "shadow_trading_net",
+                    "expected_maker_rebate",
+                    "shadow_modeled_net_including_expected_rebate"],
+                "sign_convention": ("`fees` is a POSITIVE COST MAGNITUDE and is "
+                                    "SUBTRACTED; `residual_pnl` carries its own "
+                                    "sign and is ADDED"),
+                "identities": [
+                    "ec_matched_gross + passive_matched_gross = matched_gross",
+                    "matched_gross - fees + residual_pnl = shadow_trading_net",
+                    ("shadow_trading_net + expected_maker_rebate = "
+                     "shadow_modeled_net_including_expected_rebate")],
+                "expected_vs_credited": (
+                    "expected_maker_rebate is EXPECTED: modeled from the "
+                    "published maker schedule against modeled maker fills. It is "
+                    "not ELIGIBLE, not CREDITED and not REALIZED. Credited PMUS "
+                    "liquidity rewards are $0 and BTC15m is in no liquidity "
+                    "program. shadow_trading_net is the line that contains no "
+                    "incentive term at all, and it is the line to read first."),
+                "enforced_by": "tests/test_pmus_shadow_net_identity.py",
+            },
             "policy": {"theta": str(THETA), "variant": VARIANT,
                        "fill_model": FILL_MODEL, "clip": str(clip),
                        "frozen": True, "selects_nothing": True},

@@ -1,4 +1,25 @@
 {
+  "accounting": {
+    "labels": "SHADOW / MODELED only. Nothing here is CREDITED or REALIZED.",
+    "reporting_order": [
+      "ec_matched_gross",
+      "passive_matched_gross",
+      "matched_gross",
+      "fees",
+      "residual_pnl",
+      "shadow_trading_net",
+      "expected_maker_rebate",
+      "shadow_modeled_net_including_expected_rebate"
+    ],
+    "sign_convention": "`fees` is a POSITIVE COST MAGNITUDE and is SUBTRACTED; `residual_pnl` carries its own sign and is ADDED",
+    "identities": [
+      "ec_matched_gross + passive_matched_gross = matched_gross",
+      "matched_gross - fees + residual_pnl = shadow_trading_net",
+      "shadow_trading_net + expected_maker_rebate = shadow_modeled_net_including_expected_rebate"
+    ],
+    "expected_vs_credited": "expected_maker_rebate is EXPECTED: modeled from the published maker schedule against modeled maker fills. It is not ELIGIBLE, not CREDITED and not REALIZED. Credited PMUS liquidity rewards are $0 and BTC15m is in no liquidity program. shadow_trading_net is the line that contains no incentive term at all, and it is the line to read first.",
+    "enforced_by": "tests/test_pmus_shadow_net_identity.py"
+  },
   "policy": {
     "theta": "0.96",
     "variant": "B",
@@ -27,13 +48,15 @@
       "residual_contracts": "100",
       "residual_basis": "0.4050",
       "residual_side": "down",
-      "residual_pnl": "-40.5000",
       "matched_contracts": "150",
+      "ec_matched_gross": "16.18518518518518518518518518",
+      "passive_matched_gross": "2.31481481481481481481481482",
       "matched_gross": "18.50000000000000000000000000",
-      "fees": "-2.379332500000",
+      "fees": "2.379332500000",
+      "residual_pnl": "-40.5000",
+      "shadow_trading_net": "-24.37933250000000000000000000",
       "expected_maker_rebate": "1.35",
-      "total_net": "-24.37933250000000000000000000",
-      "realized_equivalent": "-23.02933250000000000000000000"
+      "shadow_modeled_net_including_expected_rebate": "-23.02933250000000000000000000"
     },
     {
       "window": "1845z",
@@ -42,13 +65,15 @@
       "residual_contracts": "0",
       "residual_basis": "0.0000",
       "residual_side": "-",
-      "residual_pnl": "0",
       "matched_contracts": "100.0000",
+      "ec_matched_gross": "18.61000000",
+      "passive_matched_gross": "-21.2500000000000000000000000",
       "matched_gross": "-2.6400000000000000000000000",
-      "fees": "-0.8982736000000000",
+      "fees": "0.8982736000000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "-3.5382736000000000000000000",
       "expected_maker_rebate": "0.92",
-      "total_net": "-3.5382736000000000000000000",
-      "realized_equivalent": "-2.6182736000000000000000000"
+      "shadow_modeled_net_including_expected_rebate": "-2.6182736000000000000000000"
     },
     {
       "window": "1900z",
@@ -57,13 +82,15 @@
       "residual_contracts": "0",
       "residual_basis": "0.0000",
       "residual_side": "-",
-      "residual_pnl": "0",
       "matched_contracts": "190.9600",
+      "ec_matched_gross": "16.52543276752556264237403648",
+      "passive_matched_gross": "9.63696723247443735762596352",
       "matched_gross": "26.16240000000000000000000000",
-      "fees": "-2.1983989800000000",
+      "fees": "2.1983989800000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "23.96400102000000000000000000",
       "expected_maker_rebate": "0.78",
-      "total_net": "23.96400102000000000000000000",
-      "realized_equivalent": "24.74400102000000000000000000"
+      "shadow_modeled_net_including_expected_rebate": "24.74400102000000000000000000"
     },
     {
       "window": "1915z",
@@ -72,13 +99,15 @@
       "residual_contracts": "0",
       "residual_basis": "0.0000",
       "residual_side": "-",
-      "residual_pnl": "0",
       "matched_contracts": "250.0000",
+      "ec_matched_gross": "38.53984197530864197530864192",
+      "passive_matched_gross": "-40.80864197530864197530864200",
       "matched_gross": "-2.26880000000000000000000008",
-      "fees": "-2.0315911960000000",
+      "fees": "2.0315911960000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "-4.30039119600000000000000008",
       "expected_maker_rebate": "0.89",
-      "total_net": "-4.30039119600000000000000008",
-      "realized_equivalent": "-3.41039119600000000000000008"
+      "shadow_modeled_net_including_expected_rebate": "-3.41039119600000000000000008"
     },
     {
       "window": "1930z",
@@ -87,13 +116,15 @@
       "residual_contracts": "0",
       "residual_basis": "0.0000",
       "residual_side": "-",
-      "residual_pnl": "0",
       "matched_contracts": "100",
+      "ec_matched_gross": "24.13888888888888888888888888",
+      "passive_matched_gross": "-24.13888888888888888888888900",
       "matched_gross": "-1.2E-25",
-      "fees": "-0.068805000000",
+      "fees": "0.068805000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "-0.06880500000000000000000012",
       "expected_maker_rebate": "1.07",
-      "total_net": "-0.06880500000000000000000012",
-      "realized_equivalent": "1.00119499999999999999999988"
+      "shadow_modeled_net_including_expected_rebate": "1.00119499999999999999999988"
     },
     {
       "window": "1945z",
@@ -102,13 +133,15 @@
       "residual_contracts": "100",
       "residual_basis": "0.3080",
       "residual_side": "up",
-      "residual_pnl": "-30.8000",
       "matched_contracts": "100",
+      "ec_matched_gross": "9.0000",
+      "passive_matched_gross": "19.3000000000000000000000000",
       "matched_gross": "28.3000000000000000000000000",
-      "fees": "-1.693020000000",
+      "fees": "1.693020000000",
+      "residual_pnl": "-30.8000",
+      "shadow_trading_net": "-4.1930200000000000000000000",
       "expected_maker_rebate": "1.17",
-      "total_net": "-4.1930200000000000000000000",
-      "realized_equivalent": "-3.0230200000000000000000000"
+      "shadow_modeled_net_including_expected_rebate": "-3.0230200000000000000000000"
     },
     {
       "window": "2000z",
@@ -117,13 +150,15 @@
       "residual_contracts": "50.0000",
       "residual_basis": "0.0200",
       "residual_side": "down",
-      "residual_pnl": "-1.00000000",
       "matched_contracts": "156.8700",
+      "ec_matched_gross": "13.18700000",
+      "passive_matched_gross": "0E-8",
       "matched_gross": "13.18700000",
-      "fees": "-1.4155846875000000",
+      "fees": "1.4155846875000000",
+      "residual_pnl": "-1.00000000",
+      "shadow_trading_net": "10.7714153125000000",
       "expected_maker_rebate": "0.35",
-      "total_net": "10.7714153125000000",
-      "realized_equivalent": "11.1214153125000000"
+      "shadow_modeled_net_including_expected_rebate": "11.1214153125000000"
     },
     {
       "window": "2030z",
@@ -132,13 +167,15 @@
       "residual_contracts": "0",
       "residual_basis": "0.0000",
       "residual_side": "-",
-      "residual_pnl": "0",
       "matched_contracts": "100.0000",
+      "ec_matched_gross": "9.89130000",
+      "passive_matched_gross": "-39.00000000",
       "matched_gross": "-29.10870000",
-      "fees": "-1.7065271165000000",
+      "fees": "1.7065271165000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "-30.8152271165000000",
       "expected_maker_rebate": "0.38",
-      "total_net": "-30.8152271165000000",
-      "realized_equivalent": "-30.4352271165000000"
+      "shadow_modeled_net_including_expected_rebate": "-30.4352271165000000"
     },
     {
       "window": "2045z",
@@ -147,13 +184,15 @@
       "residual_contracts": "0",
       "residual_basis": "0.0000",
       "residual_side": "-",
-      "residual_pnl": "0",
       "matched_contracts": "100",
+      "ec_matched_gross": "5.2500",
+      "passive_matched_gross": "-12.7500",
       "matched_gross": "-7.5000",
-      "fees": "-0.136220000000",
+      "fees": "0.136220000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "-7.636220000000",
       "expected_maker_rebate": "0.42",
-      "total_net": "-7.636220000000",
-      "realized_equivalent": "-7.216220000000"
+      "shadow_modeled_net_including_expected_rebate": "-7.216220000000"
     },
     {
       "window": "2115z",
@@ -162,23 +201,27 @@
       "residual_contracts": "0",
       "residual_basis": "0.0000",
       "residual_side": "-",
-      "residual_pnl": "0",
       "matched_contracts": "350.0000",
+      "ec_matched_gross": "36.7387500000",
+      "passive_matched_gross": "-4.71875000000",
       "matched_gross": "32.02000000000",
-      "fees": "-5.7135255000000000",
+      "fees": "5.7135255000000000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "26.3064745000000000",
       "expected_maker_rebate": "1.38",
-      "total_net": "26.3064745000000000",
-      "realized_equivalent": "27.6864745000000000"
+      "shadow_modeled_net_including_expected_rebate": "27.6864745000000000"
     }
   ],
   "rolling": {
     "n=5": {
+      "ec_matched_gross": "22.7999",
+      "passive_matched_gross": "-14.8491",
       "matched_gross": "7.9507",
-      "fees": "-1.5153",
+      "fees": "1.5153",
       "residual_pnl": "-8.1000",
+      "shadow_trading_net": "-1.6646",
       "expected_maker_rebate": "1.0020",
-      "total_net": "-1.6646",
-      "realized_equivalent": "-0.6626",
+      "shadow_modeled_net_including_expected_rebate": "-0.6626",
       "residual_events": "1 of 5",
       "residual_frequency": 0.2,
       "wilson95": [
@@ -187,12 +230,14 @@
       ]
     },
     "n=10": {
+      "ec_matched_gross": "18.8066",
+      "passive_matched_gross": "-11.1414",
       "matched_gross": "7.6652",
-      "fees": "-1.8241",
+      "fees": "1.8241",
       "residual_pnl": "-7.2300",
+      "shadow_trading_net": "-1.3889",
       "expected_maker_rebate": "0.8710",
-      "total_net": "-1.3889",
-      "realized_equivalent": "-0.5179",
+      "shadow_modeled_net_including_expected_rebate": "-0.5179",
       "residual_events": "3 of 10",
       "residual_frequency": 0.3,
       "wilson95": [

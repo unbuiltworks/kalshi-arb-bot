@@ -650,3 +650,41 @@ clips. At q=50, +$5/window is now arithmetically reachable again — it needs a
 residual frequency of **0.0710**, which is **outside the lower Wilson bound of
 0.1078**. Still n=10 of 25; no rejection is recorded from the interval
 (TARGET_001 rule).
+
+## ACCOUNTING_001 — the checkpoint's eight rows, and the line to read first
+`total_net` and `realized_equivalent` are **retired** (EXP-013). The second was
+the first plus a MODELED maker rebate while being named "realized", and no
+published line was free of an incentive term. Replaced by:
+
+| per window | q=25 n=10 | q=50 n=10 |
+|---|---|---|
+| EC matched gross | +9.6741 | +18.8066 |
+| PASSIVE matched gross | −5.6472 | −11.1414 |
+| **TOTAL matched gross** | **+4.0269** | **+7.6652** |
+| fees | 0.9381 | 1.8241 |
+| residual P&L | −3.6150 | −7.2300 |
+| **SHADOW TRADING NET** | **−0.5262** | **−1.3889** |
+| expected maker rebate | +0.4380 | +0.8710 |
+| **SHADOW MODELED NET incl. EXPECTED rebate** | **−0.0882** | **−0.5179** |
+
+n=5 for comparison: shadow trading net −0.5682 / −1.6646, shadow modeled net
+−0.0662 / −0.6626.
+
+`fees` is a **positive cost magnitude** and is subtracted; `residual_pnl` carries
+its own sign and is added, so:
+
+    ec_matched_gross + passive_matched_gross    = matched_gross
+    matched_gross - fees + residual_pnl         = shadow_trading_net
+    shadow_trading_net + expected_maker_rebate  = shadow_modeled_net_...
+
+**Read `SHADOW TRADING NET` first: it is the only line with no incentive term in
+it.** Both clips are negative on it at n=5 and n=10. The rebate is **EXPECTED** —
+modeled from the published maker schedule against modeled maker fills, never
+ELIGIBLE, CREDITED or REALIZED; credited PMUS liquidity rewards are $0 and BTC15m
+is in no liquidity program. Even including it, both clips stay negative.
+
+Enforced per window and at every rolling checkpoint by
+`tests/test_pmus_shadow_net_identity.py`, which recomputes the trading line from
+the scorer rather than from the file, rejects a negative fee, and fails any row
+named "realized" or "credited". Reporting only: scorer, θ, fill model, q grid,
+decision rule and the n=25 preregistration are unchanged and no number moved.

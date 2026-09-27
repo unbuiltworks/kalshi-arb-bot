@@ -225,3 +225,72 @@ convention delta is printed and persisted per window.
 | "L5 would not have opened DOWN at 0.79 there" | **FALSE** | movement-driven side selection is STRONGLY SUPPORTED, `LEG_PATTERN` has an explicit 0.800 first-leg band, and 75–90c is L5's **best** residual band (+0.1382/unit). WHIPSAW_001. |
 | reading residual frequency 0.30 as "directional risk occurs 30% of the time" | **FALSE** | peak one-sided exposure occurred in **10 of 10** windows; 0.30 is the rate at which it failed to flatten by expiry. EXPOSURE_001. |
 | the FIFO passive matched figure as a P&L number | **DO NOT USE** | it is path pricing; per-window convention delta reaches −25.3611 at q=50. Use `passive_matched_gross_avg_cost`. MATCHED_003. |
+
+### REPO_TESTS_001 — base and HEAD have IDENTICAL failures
+Measured, not inferred, on 2026-09-27. Full suite excluding five files whose
+imports are missing optional deps (`dotenv`, `httpx`; collection is otherwise
+clean at 9434 tests):
+
+| | base `119360b0` | HEAD |
+|---|---|---|
+| failed | 40 | **40 — the same 40 ids** |
+| errors | 23 | **23 — the same 2 files** |
+| passed | 9343 | 9343 |
+| skipped / xfailed | 27 / 1 | 27 / 1 |
+
+The two `FAILED` id sets diff to **zero only-at-HEAD and zero only-at-base**, so
+nothing in the n=10 checkpoint work caused any of them — including the `analysis/`
+artifacts written this session, which `test_r1_source_lineage`,
+`test_window_forensics_stream` and `test_lane_a_probe_v0` read.
+
+Failures: `test_gemini_terms_gate` 17, `test_orderbook` 5,
+`test_r1_source_lineage` 4, `test_deploy_fallthrough_guard` 3,
+`test_lane_a_probe_v0` 2, `test_gemini_settlement_observability` 2, and one each
+in `test_window_forensics_stream`, `test_pmus_ws_evidence_recorder`,
+`test_pmus_q1_executor`, `test_l5_live_oneshot`,
+`test_gemini_write_path_isolation`, `test_gemini_payload_schema`,
+`test_chain_ca_fallback`. Errors: `test_pmus_status_live_handoff` 14,
+`test_gemini_request_transport` 9.
+
+**Not diagnosed now, by instruction — collection is P0.**
+
+#### BLOCKING CONDITION ON ANY FUTURE LIVE AUTHORIZATION
+**Before any live authorization, the EXP-010 execution-path failures must be
+RESOLVED or EXPLICITLY PROVEN IRRELEVANT to the authorized artifact**, per owner
+instruction 2026-09-27. Named, so the list cannot be quietly narrowed later:
+
+`test_pmus_q1_executor` · `test_deploy_fallthrough_guard` ·
+`test_lane_a_probe_v0` · `test_l5_live_oneshot` · `test_r1_source_lineage` ·
+`test_pmus_status_live_handoff` (14 errors) · `test_pmus_ws_evidence_recorder`
+
+"Proven irrelevant" means the artifact that would run does not execute the code
+under test, demonstrated against that artifact — **not** an argument that the
+failure looks unrelated. The live-safety suites are green today
+(`test_live_mandate_{deployment,adversarial,ledger_invariant}`,
+`test_pmus_capacity_rung_manifest`: 58 passed) and that is **not** a substitute:
+they bound what a spend may do, these cover whether the executor behaves.
+
+### EXP-013 — checkpoint accounting shape (reporting only)
+**Status: COMPLETE.** `scripts/pmus_window_ledger.py`,
+`tests/test_pmus_shadow_net_identity.py` (20 tests).
+
+`total_net` and `realized_equivalent` are **retired**. The second was
+`total_net` plus a MODELED maker rebate while being named "realized", and no
+published line was free of an incentive term at all. Replaced by the eight rows
+below, with `fees` as a **positive cost magnitude** so both identities hold
+literally, and an `accounting` block in each ledger JSON carrying the sign
+convention, the identities and the EXPECTED-vs-CREDITED statement.
+
+Identities enforced per window **and** at every rolling checkpoint:
+
+    ec_matched_gross + passive_matched_gross    = matched_gross
+    matched_gross - fees + residual_pnl         = shadow_trading_net
+    shadow_trading_net + expected_maker_rebate  = shadow_modeled_net_...
+
+`shadow_trading_net` is recomputed **from the scorer** in the test, so the suite
+cannot pass by reading back its own arithmetic, and two negative controls confirm
+teeth: folding the rebate into the trading line fails 3 tests, flipping the fee
+sign fails 2. A row whose name contains "realized" or "credited" now fails.
+
+Scorer, θ, fill model, q grid, decision rule and the n=25 preregistration are
+**unchanged**; no number moved.
