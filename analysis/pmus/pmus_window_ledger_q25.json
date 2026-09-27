@@ -1,0 +1,170 @@
+{
+  "policy": {
+    "theta": "0.96",
+    "variant": "B",
+    "fill_model": "queue_aware",
+    "clip": "25",
+    "frozen": true,
+    "selects_nothing": true
+  },
+  "capacity": {
+    "demonstrated_live_clip_contracts": "5.31",
+    "source": "analysis/l5/r4_orders.jsonl max filled_qty",
+    "clip_is_modeled_extrapolation": true,
+    "extrapolation_multiple": "4.71"
+  },
+  "n_usable": 7,
+  "excluded": {
+    "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states",
+    "cpc-btc-updown-15m-2026-09-27-2015z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 20:29:55; the window was never observed through a terminal state, so it fails the preregistered completeness rule even though the venue later reported it settled DOWN",
+    "cpc-btc-updown-15m-2026-09-27-2030z": "settlement NOT finalized: settlementPx 0.9900 stably equals lastTradePx 0.9900 on three reads. A finalized binary settlement is 1.0000 or 0.0000 and DIFFERS from lastTradePx (1830z: last 0.9900, settlement 1.0000). Scoring it would pay a residual $0.99. Re-check."
+  },
+  "per_window": [
+    {
+      "window": "1830z",
+      "settlement": "up",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "50",
+      "residual_basis": "0.4050",
+      "residual_side": "down",
+      "residual_pnl": "-20.2500",
+      "matched_contracts": "75",
+      "matched_gross": "9.25000000000000000000000000",
+      "fees": "-1.189666250000",
+      "expected_maker_rebate": "0.68",
+      "total_net": "-12.18966625000000000000000000",
+      "realized_equivalent": "-11.50966625000000000000000000"
+    },
+    {
+      "window": "1845z",
+      "settlement": "up",
+      "terminal_residual_occurred": false,
+      "residual_contracts": "0",
+      "residual_basis": "0.0000",
+      "residual_side": "-",
+      "residual_pnl": "0",
+      "matched_contracts": "50",
+      "matched_gross": "-1.25000000000000000000000002",
+      "fees": "-0.448796250000",
+      "expected_maker_rebate": "0.47",
+      "total_net": "-1.69879625000000000000000002",
+      "realized_equivalent": "-1.22879625000000000000000002"
+    },
+    {
+      "window": "1900z",
+      "settlement": "down",
+      "terminal_residual_occurred": false,
+      "residual_contracts": "0",
+      "residual_basis": "0.0000",
+      "residual_side": "-",
+      "residual_pnl": "0",
+      "matched_contracts": "115.9600",
+      "matched_gross": "14.41240000000000000000000000",
+      "fees": "-1.3166177300000000",
+      "expected_maker_rebate": "0.39",
+      "total_net": "13.09578227000000000000000000",
+      "realized_equivalent": "13.48578227000000000000000000"
+    },
+    {
+      "window": "1915z",
+      "settlement": "down",
+      "terminal_residual_occurred": false,
+      "residual_contracts": "0",
+      "residual_basis": "0.0000",
+      "residual_side": "-",
+      "residual_pnl": "0",
+      "matched_contracts": "125",
+      "matched_gross": "-1.00000000000000000000000001",
+      "fees": "-1.014005000000",
+      "expected_maker_rebate": "0.44",
+      "total_net": "-2.01400500000000000000000001",
+      "realized_equivalent": "-1.57400500000000000000000001"
+    },
+    {
+      "window": "1930z",
+      "settlement": "up",
+      "terminal_residual_occurred": false,
+      "residual_contracts": "0",
+      "residual_basis": "0.0000",
+      "residual_side": "-",
+      "residual_pnl": "0",
+      "matched_contracts": "50",
+      "matched_gross": "5E-26",
+      "fees": "-0.034402500000",
+      "expected_maker_rebate": "0.53",
+      "total_net": "-0.03440249999999999999999995",
+      "realized_equivalent": "0.49559750000000000000000005"
+    },
+    {
+      "window": "1945z",
+      "settlement": "down",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "50",
+      "residual_basis": "0.3080",
+      "residual_side": "up",
+      "residual_pnl": "-15.4000",
+      "matched_contracts": "50",
+      "matched_gross": "14.15000000000000000000000000",
+      "fees": "-0.846510000000",
+      "expected_maker_rebate": "0.59",
+      "total_net": "-2.09651000000000000000000000",
+      "realized_equivalent": "-1.50651000000000000000000000"
+    },
+    {
+      "window": "2000z",
+      "settlement": "up",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "25.0000",
+      "residual_basis": "0.0200",
+      "residual_side": "down",
+      "residual_pnl": "-0.50000000",
+      "matched_contracts": "81.8700",
+      "matched_gross": "6.93700000",
+      "fees": "-0.7525546875000000",
+      "expected_maker_rebate": "0.19",
+      "total_net": "5.6844453125000000",
+      "realized_equivalent": "5.8744453125000000"
+    }
+  ],
+  "rolling": {
+    "n=5": {
+      "matched_gross": "4.2825",
+      "fees": "-0.8007",
+      "residual_pnl": "-4.0500",
+      "expected_maker_rebate": "0.5020",
+      "total_net": "-0.5682",
+      "realized_equivalent": "-0.0662",
+      "residual_events": "1 of 5",
+      "residual_frequency": 0.2,
+      "wilson95": [
+        0.0362,
+        0.6245
+      ]
+    },
+    "n=10": "NOT YET AVAILABLE (7 of 10 windows)",
+    "n=15": "NOT YET AVAILABLE (7 of 15 windows)",
+    "n=20": "NOT YET AVAILABLE (7 of 20 windows)",
+    "n=25": "NOT YET AVAILABLE (7 of 25 windows)"
+  },
+  "residual_statistics": {
+    "events": "3 of 7",
+    "frequency": 0.4286,
+    "wilson95": [
+      0.1582,
+      0.7495
+    ],
+    "per_episode_losses": [
+      "-20.2500",
+      "-15.4000",
+      "-0.50000000"
+    ],
+    "mean_episode_loss": "-12.0500",
+    "loss_per_window": "-5.1643"
+  },
+  "p0_thresholds": {
+    "net_before_residual": "5.7410",
+    "break_even_residual_frequency": "0.4764",
+    "target_frequency_for_plus_5": "0.0615",
+    "note": "break-even and target use the OBSERVED mean episode severity; severity itself is uncertain at this n"
+  }
+}

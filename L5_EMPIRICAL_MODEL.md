@@ -305,3 +305,90 @@ Reaching $5 on the projected path needs **5.3× scale at q25 / 3.7× at q50**
 (~q=185), against a remaining research-loss budget of **$0.49320** and an
 observed single-episode residual loss of $20.25 at q25 — 41× that budget.
 Capital is not the constraint; the loss budget and the absent liquidity program are.
+
+---
+
+# Amendments from the adversarial audit (commit `a26269a8`+)
+
+**NEW LEARNING: n=5 does not establish the terminal-residual frequency. The
+earlier rejection was premature.** BTC15m remains the primary lane until
+checkpoint 25 resolves this.
+
+## TARGET_001 — AMENDED: NOT ESTABLISHED OR EXCLUDED
+Prior text claimed "no executable path to ≥$5/window exists on current
+evidence." **That was overstated.** The claim rested on treating −$8.10/window
+residual (q50, n=5) as an expectation when 100% of it came from one window. The
+Wilson 95% CI on a 1-of-5 frequency is [0.0362, 0.6245], which propagated through
+q50 gives net from **+$5.97 to −$17.85** — the interval **spans the target**.
+
+Corrected status: **$5/window is NEITHER DEMONSTRATED NOR EXCLUDED. Blocked on
+terminal-residual frequency and severity estimation.** This is now the sole P0
+for BTC15m.
+
+At n=7 the instability is confirmed empirically: q25 moved from −0.5682 to
+**+0.1067** and q50 from −1.6646 to **−0.2492** on two windows of new data.
+
+## MATCHED_001 — NEW: allocation-convention uncertainty must be disclosed
+Matched gross is **not a convention-free quantity.** The scorer allocates cost
+between the matched and residual pools by **average cost**. Under FIFO the split
+moves: at 1830z q50, average cost gives matched +18.5000 / residual −40.5000,
+FIFO gives **+14.5000 / −36.5000** — **$4.00 of P&L moves between buckets** on
+convention alone. Matched gross/window at q50 (n=5) is +7.9507 average-cost vs
+**+7.1507 FIFO**, a **±$0.80/window** band.
+
+Total net is invariant under the choice. Every matched-economics figure in this
+programme is average-cost and carries that band. The *character* of matched
+economics is still non-directional: a held matched pair pays exactly $1 whatever
+settles.
+
+## CAPACITY_001 — NEW: q above 5.31 contracts is modeled, not demonstrated
+**Largest clip ever FILLED on an authenticated live PMUS order: 5.31 contracts**
+(`analysis/l5/r4_orders.jsonl`, max `filled_qty`; max posted 5.60; capped by
+`executed_safe_size` $2.4957). 10 of 64 posted orders filled; 41 hit deadline
+unfilled, 12 were rejected zero-fill.
+
+| clip | status |
+|---|---|
+| q ≤ 5 | within demonstrated live capacity |
+| q=10 | 1.88× — **modeled** |
+| q=25 | **4.71× — modeled** |
+| q=50 | **9.42× — modeled** |
+
+Separately, the queue-aware model **never truncates** below q=100 (0% of fills
+capped by available volume) and fills/window is q-invariant at ~8.4, so the model
+scales **exactly linearly** in q. Every q above 5.31 is therefore **modeled
+clip-size extrapolation, not demonstrated executable capacity**, and a capacity
+experiment is required before any q>5 figure is treated as achievable.
+
+The earlier "historical mean fill was 3.98 contracts, so q=25 is 6.3× unachieved"
+framing was wrong in its reasoning: 3.98 was the *mean* under our own $2.50
+action cap. The correct bound is the *maximum ever filled*, 5.31, which is still
+far below q=25.
+
+## P0_RESIDUAL_001 — the sole P0
+At n=7, queue-aware θ=0.96 variant B:
+
+| | q=25 | q=50 |
+|---|---|---|
+| residual events | 3 of 7 | 3 of 7 |
+| frequency | 0.4286 | 0.4286 |
+| **Wilson 95% CI** | **[0.1582, 0.7495]** | **[0.1582, 0.7495]** |
+| per-episode losses | −20.25, −15.40, −0.50 | −40.50, −30.80, −1.00 |
+| mean episode severity | −12.0500 | −24.1000 |
+| residual loss/window | −5.1643 | −10.3286 |
+| net before residual | +5.7410 | +11.0122 |
+| **break-even frequency for $0** | **0.4764** | **0.4569** |
+| **target frequency for +$5** | **0.0615** | **0.2495** |
+
+Observed 0.4286 sits just **inside** break-even at both clips, which is why both
+are marginally positive at n=7 (realized-equivalent q25 **+0.5767**, q50
+**+0.6837**).
+
+**The decisive asymmetry:** q50's target frequency for $5 (0.2495) lies **inside**
+the current Wilson interval, so $5/window at q50 is **not excluded**. q25's target
+(0.0615) lies **below** the interval's lower bound (0.1582), so q25 reaching $5 is
+**effectively excluded** — but q25 is also the smaller extrapolation. Severity
+itself is uncertain: the three observed episodes span an order of magnitude.
+
+Ledger: `analysis/pmus/pmus_window_ledger_q25.json` / `_q50.json`, regenerated
+every firing by `scripts/pmus_window_ledger.py`.

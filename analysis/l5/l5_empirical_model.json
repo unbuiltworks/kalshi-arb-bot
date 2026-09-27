@@ -328,8 +328,8 @@
     },
     {
       "id": "TARGET_001",
-      "status": "SUPPORTED_PRELIMINARY",
-      "claim": "No executable path to >=$5/window exists on current evidence.",
+      "status": "NOT_ESTABLISHED_OR_EXCLUDED",
+      "claim": "$5/window is NEITHER demonstrated NOR excluded. Blocked on terminal-residual frequency and severity estimation, which is now the sole P0 for BTC15m.",
       "waterfall_per_window": {
         "q25": {
           "matched_gross": 4.2825,
@@ -361,7 +361,102 @@
       "blocking_constraints": [
         "research-loss budget $0.49320 vs observed $20.25 single-episode residual loss at q25 (41x)",
         "BTC15m absent from any liquidity program"
-      ]
+      ],
+      "superseded_claim": "no executable path to >=$5/window exists on current evidence",
+      "why_overstated": "rested on treating -8.10/window (q50, n=5) as an expectation when 100% came from one window; Wilson 95% CI on 1-of-5 is [0.0362,0.6245], propagating to q50 net of +5.97 to -17.85, an interval that spans the target",
+      "n7_movement": {
+        "q25": {
+          "n5": -0.5682,
+          "n7": 0.1067
+        },
+        "q50": {
+          "n5": -1.6646,
+          "n7": -0.2492
+        }
+      }
+    },
+    {
+      "id": "MATCHED_001",
+      "status": "SUPPORTED",
+      "claim": "Matched gross is allocation-convention dependent and must be disclosed as such.",
+      "convention_used": "average cost",
+      "fifo_vs_average_1830z_q50": {
+        "average": {
+          "matched": 18.5,
+          "residual": -40.5
+        },
+        "fifo": {
+          "matched": 14.5,
+          "residual": -36.5
+        },
+        "pnl_moved_between_buckets": 4.0
+      },
+      "matched_gross_per_window_q50_n5": {
+        "average_cost": 7.9507,
+        "fifo": 7.1507,
+        "band": 0.8
+      },
+      "total_net_invariant": true,
+      "character": "still non-directional: a held matched pair pays exactly $1 whatever settles"
+    },
+    {
+      "id": "CAPACITY_001",
+      "status": "SUPPORTED",
+      "claim": "Clip sizes above 5.31 contracts are MODELED extrapolation, not demonstrated executable capacity.",
+      "demonstrated_live_max_filled_contracts": 5.31,
+      "max_posted_contracts": 5.6,
+      "posted_size_cap": "executed_safe_size $2.4957",
+      "source": "analysis/l5/r4_orders.jsonl",
+      "live_fill_rate": "10 of 64 posted orders filled; 41 deadline-unfilled, 12 rejected zero-fill",
+      "extrapolation_multiple": {
+        "q10": 1.88,
+        "q25": 4.71,
+        "q50": 9.42
+      },
+      "model_linearity": "queue-aware model never truncates below q=100; fills/window q-invariant at ~8.4, so it scales exactly linearly",
+      "corrects": "the earlier '3.98 mean fill' framing -- 3.98 was the mean under our own $2.50 cap; the correct bound is the MAXIMUM ever filled, 5.31",
+      "requires": "a capacity experiment before any q>5 figure is treated as achievable"
+    },
+    {
+      "id": "P0_RESIDUAL_001",
+      "status": "OPEN_SOLE_P0",
+      "claim": "Terminal-residual frequency and severity estimation is the sole P0 for BTC15m.",
+      "n": 7,
+      "residual_events": "3 of 7",
+      "frequency": 0.4286,
+      "wilson95": [
+        0.1582,
+        0.7495
+      ],
+      "q25": {
+        "per_episode_losses": [
+          -20.25,
+          -15.4,
+          -0.5
+        ],
+        "mean_severity": -12.05,
+        "loss_per_window": -5.1643,
+        "net_before_residual": 5.741,
+        "break_even_frequency": 0.4764,
+        "target_frequency_for_plus5": 0.0615,
+        "realized_equivalent": 0.5767
+      },
+      "q50": {
+        "per_episode_losses": [
+          -40.5,
+          -30.8,
+          -1.0
+        ],
+        "mean_severity": -24.1,
+        "loss_per_window": -10.3286,
+        "net_before_residual": 11.0122,
+        "break_even_frequency": 0.4569,
+        "target_frequency_for_plus5": 0.2495,
+        "realized_equivalent": 0.6837
+      },
+      "decisive_asymmetry": "q50's target 0.2495 lies INSIDE the Wilson interval so $5 at q50 is NOT excluded; q25's target 0.0615 lies BELOW the lower bound 0.1582 so q25 reaching $5 is effectively excluded",
+      "severity_caveat": "three observed episodes span an order of magnitude; severity is itself uncertain",
+      "ledger": "analysis/pmus/pmus_window_ledger_q25.json / _q50.json"
     }
   ],
   "superseded": [
@@ -418,12 +513,28 @@
   "authorises_model_change": false,
   "authorises_parameter_change": false,
   "authorises_live_order": false,
-  "updated_at_commit": "8bc089b4+",
+  "updated_at_commit": "a26269a8+",
   "rolling_estimates": {
     "n5": "available",
+    "n7": "available",
     "n10": "NOT YET AVAILABLE",
+    "n15": "NOT YET AVAILABLE",
+    "n20": "NOT YET AVAILABLE",
     "n25": "NOT YET AVAILABLE",
-    "n50": "NOT YET AVAILABLE",
-    "note": "only 5 usable windows exist; checkpoint 25 not reached"
+    "note": "7 usable windows; collection continues to n=25 minimum regardless of intermediate readings"
+  },
+  "new_learning": "n=5 does not establish the terminal-residual frequency; the earlier rejection was premature. BTC15m remains the primary lane until checkpoint 25 resolves it.",
+  "checkpoint_25_decision": {
+    "options": [
+      "ADVANCE_TO_BOUNDED_LIVE_CAPACITY_TEST",
+      "BTC15M_ECONOMICS_REJECTED"
+    ],
+    "advancement_requires": [
+      "credible path to >=$5/window",
+      "no directional prediction",
+      "no theta tuning",
+      "no hypothetical liquidity rewards",
+      "no unsupported linear scaling"
+    ]
   }
 }

@@ -107,3 +107,54 @@ winning leg). No rule added.
 matched net → terminal residual → credited incentives → REALIZED-equivalent.
 Rolling n=5 available; **n=10/25/50 not yet available** (only 5 usable windows
 exist). Hourly routine continues under the frozen policy. No action until n≥25.
+
+---
+
+## AMENDMENT: the premature-rejection lesson
+
+EXP-003/EXP-004 concluded "no executable path to ≥$5/window." The adversarial
+reanalysis (EXP-008) showed that conclusion was **overstated at n=5** because the
+residual term was a single observation whose CI spans the target. Two windows of
+new data moved q25 from −0.5682 to +0.1067. **The rejection is withdrawn.**
+
+Registry rule added: **a rejection may not be recorded from a term whose
+confidence interval spans the decision threshold.** State "not established"
+instead.
+
+### EXP-008 — adversarial reanalysis
+**Status: COMPLETE.** Amended TARGET_001 to NOT ESTABLISHED OR EXCLUDED; added
+MATCHED_001 (allocation-convention band ±$0.80/window at q50) and CAPACITY_001
+(q>5.31 is modeled). Confirmed no double counting arithmetically. Found and fixed
+a reporting-helper defect that overstated REALIZED-equivalent by the fee term
+(`a26269a8`).
+
+### EXP-009 — P0: terminal-residual frequency and severity (SOLE P0)
+**Status: OPEN.** Collect and score to **n=25 minimum** under the frozen policy.
+Ledger regenerated every firing by `scripts/pmus_window_ledger.py` into
+`analysis/pmus/pmus_window_ledger_q{25,50}.json`.
+
+Per-window preserved: terminal residual occurrence · residual contracts ·
+residual basis · side · settlement · residual P&L · matched contracts ·
+matched gross · fees · expected maker rebate · total net.
+
+Rolling n=5/10/15/20/25 maintained. **Collection does not stop because an
+intermediate checkpoint looks good or bad.**
+
+At n=25: **ADVANCE TO BOUNDED LIVE CAPACITY TEST** or **BTC15M ECONOMICS
+REJECTED**. Advancement requires a credible path to ≥$5/window with no
+directional prediction, no θ tuning, no hypothetical liquidity rewards and no
+unsupported linear scaling.
+
+### EXP-010 — capacity experiment (NOT STARTED, required eventually)
+q=50 is **9.42×** the largest clip ever filled live (5.31 contracts). Until a
+capacity experiment demonstrates fills above ~5 contracts, every q>5 economic
+figure is modeled. Design deferred; no orders, no deposit.
+
+## DO NOT RETEST — additions
+
+| idea | verdict | why |
+|---|---|---|
+| "BTC15m economics are rejected" (as of n=5) | **WITHDRAWN — premature** | residual CI spanned the target; n=7 moved q25 positive. TARGET_001. |
+| Treating q25/q50 as demonstrated executable capacity | **FALSE** | max live fill is 5.31 contracts; q25 is 4.71×, q50 9.42×. CAPACITY_001. |
+| Quoting matched gross without its convention band | **INCOMPLETE** | ±$0.80/window at q50 between average-cost and FIFO. MATCHED_001. |
+| q=25 as a route to $5 | **effectively excluded** | needs residual frequency 0.0615, below the Wilson lower bound 0.1582. P0_RESIDUAL_001. |
