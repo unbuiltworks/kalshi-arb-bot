@@ -117,3 +117,49 @@ Plus: every added fill needs contemporaneous executable price **and** depth,
 else **UNKNOWN**. DEV selects thresholds, untouched OOS decides, bootstrap by
 window. No predetermined $1.00 pair ceiling. No Gemini book substituted for
 PMUS/Polymarket evidence.
+
+## Analysis design (not yet built, not yet run)
+
+The last study stalled on a mismatch: the L5 corpus has **actions but no book**,
+and our book evidence has **no matching actions**. Cross-venue substitution was
+refused, so the completion question could only be asked against traded-price
+proxies.
+
+The collector resolves this without arming anything.
+
+**Read-only completion shadow.** Take the collected PMUS BTC15m book tape.
+Simulate B' acquisitions against it in shadow — maker-first, at the prices the
+tape says were actually resting, with a fill treated as EXECUTABLE only where
+the ladder supports it. That produces **residual episodes with a real
+contemporaneous book attached at every subsequent state**, which is precisely
+what price-triggered completion needs and what nothing we had could supply.
+
+Then test: from each residual state, walk forward through the tape and ask at
+every subsequent state whether completing *at that instant's executable price
+and depth* beats carrying, sweeping price/pair-cost thresholds rather than a
+clock.
+
+Properties that make this admissible:
+
+- **No money, no arming, no order path.** Pure replay over a recorded tape.
+- **No fill is invented.** A simulated fill requires contemporaneous executable
+  price AND depth in the tape; otherwise UNKNOWN.
+- **No hindsight sizing.** Completion is sized to the residual held at the
+  trigger, never the end-of-window residual.
+- **No hindsight side selection.** The residual side is whatever the forward
+  walk actually holds, never the side that turns out to be residual at
+  settlement.
+- **Post-completion behaviour is modelled**, not assumed flat: the three
+  variants required — continue normal B'; continue but block immediate same-side
+  rebuild; resume acquisition only from genuine flat/prospective-flat.
+
+Scoring stays as specified: incremental net $/window vs B', with matched P&L,
+residual P&L, completion cost, maker volume retained, evidence-supported
+rebates (still $0), completion frequency, contracts completed, capacity, and a
+bootstrap CI by window. DEV selects thresholds; untouched OOS decides.
+
+**Prerequisite: enough tape.** One 15-minute window is one settlement draw. The
+suppression and clock-completion studies both showed CIs covering zero at
+n≈1,000 windows, so a handful of windows will not answer this either. The tape
+needs to accumulate before the question is worth asking, and how long is itself
+a function of how often residual episodes arise.
