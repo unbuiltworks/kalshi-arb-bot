@@ -161,7 +161,8 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2000z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2030z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2045z': 'down',
-          'cpc-btc-updown-15m-2026-09-27-2115z': 'down'}
+          'cpc-btc-updown-15m-2026-09-27-2115z': 'down',
+          'cpc-btc-updown-15m-2026-09-27-2215z': 'up'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {
@@ -176,6 +177,22 @@ EXCLUDED = {
         'no terminal row on tape -- 48 bbo rows all MARKET_STATE_OPEN, last '
         '21:14:54. Venue later finalized UP, but the tape never observed the '
         'close, so it fails the completeness rule. Same class as 2015z.',
+    'cpc-btc-updown-15m-2026-09-27-2130z':
+        'no terminal row on tape -- 46 bbo rows all MARKET_STATE_OPEN, last '
+        '21:44:52. COLLECTOR_001: the reslate at 21:45:19 dropped the slug '
+        'before the venue published the close. Same class as 2015z.',
+    'cpc-btc-updown-15m-2026-09-27-2145z':
+        'no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last '
+        '21:59:44. COLLECTOR_001. Same class as 2015z.',
+    'cpc-btc-updown-15m-2026-09-27-2200z':
+        'no terminal row on tape -- 40 bbo rows all MARKET_STATE_OPEN, last '
+        '22:14:33. COLLECTOR_001. Same class as 2015z.',
+    'cpc-btc-updown-15m-2026-09-27-2230z':
+        'no terminal row on tape -- last 22:45:02, still MARKET_STATE_OPEN. '
+        'The LAST pre-fix loss: this window closed at 22:45:00 and the '
+        'bounded-drain image only began serving at 22:46:30. Excluded on the '
+        'same contemporaneous-capture rule as every other, and NOT '
+        'rehabilitated.',
 }
 
 

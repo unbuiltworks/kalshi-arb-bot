@@ -729,3 +729,40 @@ owner decision — and until it ships, roughly a third of windows will keep bein
 lost. **This, not the arithmetic, is the binding constraint on reaching n=25.**
 No window already in `USABLE` or `EXCLUDED` changes: the fix cannot recover a
 close that was never observed.
+
+## RESIDUAL_004 — the first WINNING residual, and a label it broke (n=11)
+2215z carried a terminal residual that **won**: 100 UP at basis **0.9775** into an
+**UP** settlement, so it paid $1/unit for **+2.25** at q=50. Three of four residual
+episodes have now lost and one has won.
+
+This falsifies nothing about the policy and changes no decision, but it broke two
+field names that had quietly assumed a residual is always a loss.
+`per_episode_losses` → **`per_episode_pnl`**, `mean_episode_loss` →
+**`mean_episode_pnl`**, `loss_per_window` → **`episode_pnl_per_window`**, plus
+explicit `episodes_that_lost` / `episodes_that_won` counts. **The arithmetic is
+byte-identical and was already correctly signed** — only the labels were wrong.
+
+The consequence matters for reading the P0 line: a winning episode **raises** the
+signed mean and therefore **raises break-even frequency**, so break-even moved
+from 0.2785 (n=10) to **0.4278** (n=11, q=50) partly because one episode won
+rather than because the policy improved. `mean_episode_pnl` must never be read as
+a severity.
+
+### P0_RESIDUAL_001 — UPDATED to n=11 (2215z UP added)
+| | q=25 | q=50 |
+|---|---|---|
+| EC matched gross | — | — |
+| **= before residual** | **+3.9138** | **+7.4919** |
+| residual episodes | 4 of 11 | 4 of 11 |
+| frequency / Wilson 95% | 0.3636 / **[0.1517, 0.6462]** | same |
+| signed mean episode P&L | −17.5125 | −17.5125 |
+| episode P&L per window | — | −6.3682 |
+| break-even residual frequency | 0.4470 | **0.4278** |
+| frequency needed for +$5 | **IMPOSSIBLE** | 0.1423 |
+
+Observed 0.3636 now sits **below** break-even at both clips — the first time that
+has been true — and the +$5 target frequency of 0.1423 at q=50 is **inside** the
+Wilson interval [0.1517, 0.6462]… but only just, and in fact 0.1423 < 0.1517, so
+it remains **outside** the lower bound. No rejection and no establishment is
+recorded either way (TARGET_001). n=11 of 25; both clips remain modeled
+extrapolation at 4.71× and 9.42× the 5.31-contract largest live fill.

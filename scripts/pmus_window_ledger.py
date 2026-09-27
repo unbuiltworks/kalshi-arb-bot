@@ -172,16 +172,27 @@ def main(argv):
             "residual_statistics": {
                 "events": "%d of %d" % (ev, n),
                 "frequency": round(ev / n, 4), "wilson95": [round(lo, 4), round(hi, 4)],
-                "per_episode_losses": [str(x) for x in losses],
-                "mean_episode_loss": str(sev.quantize(D("0.0001"))),
-                "loss_per_window": str((sum(losses) / n).quantize(D("0.0001"))),
+                # NAMES CORRECTED at n=11: 2215z carried a residual that WON
+                # (+2.25 -- UP at basis 0.9775 into an UP settlement), so this
+                # set is no longer all losses and a mean over it is not a
+                # "severity". The arithmetic is unchanged and still signed,
+                # which is what break-even needs; only the labels were wrong.
+                "per_episode_pnl": [str(x) for x in losses],
+                "mean_episode_pnl": str(sev.quantize(D("0.0001"))),
+                "episode_pnl_per_window": str((sum(losses) / n).quantize(D("0.0001"))),
+                "episodes_that_lost": sum(1 for x in losses if x < 0),
+                "episodes_that_won": sum(1 for x in losses if x > 0),
             },
             "p0_thresholds": {
                 "net_before_residual": str(before.quantize(D("0.0001"))),
                 "break_even_residual_frequency": (str(round(be, 4)) if be else None),
                 "target_frequency_for_plus_5": (str(round(tgt, 4)) if tgt is not None else None),
-                "note": ("break-even and target use the OBSERVED mean episode "
-                         "severity; severity itself is uncertain at this n"),
+                "note": ("break-even and target use the OBSERVED SIGNED mean "
+                         "episode P&L, which from n=11 includes one winning "
+                         "residual (2215z, +2.25). A winner raises the mean and "
+                         "therefore RAISES break-even frequency, so this number "
+                         "must not be read as a severity. The mean itself is "
+                         "uncertain at this n."),
             },
         }
         p = OUT.replace(".json", "_q%s.json" % int(clip))
