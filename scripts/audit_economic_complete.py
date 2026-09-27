@@ -147,8 +147,16 @@ def audit(rows, clip, theta, variant, winner, hold_s=60.0, cap_k=D(2), emit=True
                 med_edge=(sorted(edges)[len(edges)//2] if edges else None))
 
 
+#: usable windows and their AUTHORITATIVE settlement (gateway settlementPx +
+#: terminal state). A window is usable only if it was observed from first open
+#: through a terminal state with no bbo gap above 32s (HEARTBEAT_S=30 + one 2s
+#: poll). 1815z is excluded: the collector started mid-window and it has 0
+#: two-sided states.
 USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
-          'cpc-btc-updown-15m-2026-09-27-1845z': 'up'}
+          'cpc-btc-updown-15m-2026-09-27-1845z': 'up',
+          'cpc-btc-updown-15m-2026-09-27-1900z': 'down',
+          'cpc-btc-updown-15m-2026-09-27-1915z': 'down',
+          'cpc-btc-updown-15m-2026-09-27-1930z': 'up'}
 
 
 def main(argv):
