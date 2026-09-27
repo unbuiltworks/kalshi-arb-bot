@@ -202,7 +202,7 @@ def snapshot(slug: str) -> Optional[dict]:
 
 def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
         cap: int = 60, series: Optional[str] = None,
-        with_book: bool = False) -> int:
+        with_book: bool = False, echo_rows: bool = False) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     tag = ("pmus_%s_" % series.replace("-", "")) if series else "pmus_book_"
@@ -219,8 +219,24 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
     reslate = SERIES_RESLATE_S if series else 300.0
     slugs, refreshed, rows, cycles = universe(), time.time(), 0, 0
     last_traded: dict = {}
+
+    def put(fh, obj):
+        """Write a row, and echo it to stdout when asked.
+
+        RETRIEVABILITY. Rows land on the container filesystem, which nothing
+        outside the container can read: there is no shell and, where no volume
+        is attached, nothing survives a restart either. A tape nobody can read
+        back is not evidence. stdout IS retrievable -- it is how the 1615z and
+        1630z decision states were rescued -- so echoing each row makes the
+        tape scrapeable into git, which is durable and outside Railway
+        entirely.
+        """
+        line = json.dumps(obj)
+        fh.write(line + "\n")
+        if echo_rows:
+            print("PMUS_TAPE_ROW %s" % line, flush=True)
     with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps({
+        put(fh, {
             "t": datetime.now(timezone.utc).isoformat(), "kind": "tape_start",
             "gateway": GATEWAY, "interval_s": interval_s, "cap": cap,
             "series": series, "with_book": with_book,
@@ -228,16 +244,16 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
             "slugs": len(slugs), "slug_list": list(slugs),
             "minutes": minutes,
             "provenance": "public PMUS gateway, read-only, no credentials",
-        }) + "\n")
+        })
         while time.time() < end:
             if time.time() - refreshed > reslate:
                 fresh = universe()
                 if fresh:
                     if series and set(fresh) != set(slugs):
-                        fh.write(json.dumps({
+                        put(fh, {
                             "t": datetime.now(timezone.utc).isoformat(),
                             "kind": "reslate", "series": series,
-                            "was": list(slugs), "now": list(fresh)}) + "\n")
+                            "was": list(slugs), "now": list(fresh)})
                     slugs = fresh
                 refreshed = time.time()
             for s in slugs:
@@ -262,12 +278,12 @@ def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
                     row["shares_traded_prev"] = prev
                     if cur is not None:
                         last_traded[s] = cur
-                    fh.write(json.dumps(row) + "\n")
+                    put(fh, row)
                     rows += 1
                 if with_book:
                     brow = book_snapshot(s)
                     if brow:
-                        fh.write(json.dumps(brow) + "\n")
+                        put(fh, brow)
                         rows += 1
             fh.flush()
             cycles += 1
@@ -291,9 +307,13 @@ def main() -> int:
                          "Default None keeps the sports live slate.")
     ap.add_argument("--with-book", action="store_true",
                     help="also record the full ladder, for depth")
+    ap.add_argument("--echo-rows", action="store_true",
+                    help="also print every row to stdout as PMUS_TAPE_ROW, so "
+                         "the tape can be retrieved where no volume exists")
     a = ap.parse_args()
     return run(Path(a.out_dir), a.minutes, a.interval, a.cap,
-               series=a.series, with_book=a.with_book)
+               series=a.series, with_book=a.with_book,
+               echo_rows=a.echo_rows)
 
 
 if __name__ == "__main__":
