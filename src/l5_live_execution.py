@@ -1453,6 +1453,50 @@ class InventoryStore:
         self.save()
         return {"closed": closed, "posted_pnl": "0", "anchor": dict(anchor)}
 
+    def repair_orphaned_market_key(self, *, key: str, to_market: str,
+                                   qty: D, cost: D, side: str,
+                                   settlement_pnl: D, evidence: Mapping[str, Any]
+                                   ) -> Dict[str, Any]:
+        """Retire one corrupt ledger key against authoritative venue evidence.
+
+        NOT a generic cleanup and not a plug. The caller states which key,
+        which market it authoritatively belonged to, what the venue says it
+        cost, and what it settled for -- and every one of those must come
+        from a /v1/order row or an authoritative balance, never from the
+        corrupt ledger itself.
+
+        The P&L is booked ATTRIBUTED because it is attributable: two venue
+        fill rows at venue prices. It is removed from the book entirely,
+        because the market it belonged to has already settled and cannot
+        settle again.
+        """
+        if not str(evidence.get("source") or "").strip():
+            raise ValueError("repair requires stated authoritative evidence")
+        canonical_market(to_market, doing="repairing an orphaned key")
+        removed: Dict[str, Any] = {}
+        for name in ("positions", "leg_cost", "fill_count", "committed",
+                     "venue_side_raw"):
+            d = self.state.get(name)
+            if not isinstance(d, dict):
+                continue
+            for k in [x for x in d
+                      if str(x) == key or str(x).rsplit("|", 1)[0] == key]:
+                removed["%s:%s" % (name, k)] = d.pop(k)
+        self.state["realized_attributed"] = str(
+            D(str(self.state.get("realized_attributed") or 0))
+            + D(str(settlement_pnl)))
+        rec = {"t": dt.datetime.now(dt.timezone.utc).isoformat(),
+               "bad_key": key, "authoritative_market": to_market,
+               "side": side, "qty": str(qty), "cost": str(cost),
+               "settlement_pnl": str(settlement_pnl),
+               "removed": {k: str(v) for k, v in removed.items()},
+               "evidence": dict(evidence),
+               "labels": ("the original ledger did not know this market. "
+                          "The bad key is preserved here, not rewritten.")}
+        self.state.setdefault("orphan_repairs", []).append(rec)
+        self.save()
+        return dict(rec, realized_total=str(self.realized_today()))
+
     def quarantine_order(self, coid: str, *, reason: str, detail: str,
                          row: Mapping[str, Any]) -> Dict[str, Any]:
         """Hold an order whose identity we cannot establish. NO accounting.
@@ -1658,6 +1702,30 @@ class InventoryStore:
                      "residual": D(0), "net": D(0), "uncanonical": D(0)})
         return {k: str(v) for k, v in g.items()}
 
+    def corrupt_market_keys(self) -> List[str]:
+        """Stored keys whose market part is not a valid identity.
+
+        Enumeration must never raise. A guard that refuses to BOOK against
+        a bad key is correct; a guard that refuses to LIST one leaves the
+        process unable to say what is wrong with it. Deployed 2026-09-27,
+        the "" key from the adopted-order incident was still on the volume
+        and every reconcile died reading it -- fail-closed, and wedged.
+        """
+        bad: set = set()
+        for name in ("positions", "leg_cost", "fill_count", "committed",
+                     "venue_side_raw"):
+            d = self.state.get(name)
+            if not isinstance(d, dict):
+                continue
+            for key in d:
+                head = (str(key).rsplit("|", 1)[0] if "|" in str(key)
+                        else str(key))
+                try:
+                    canonical_market(head, doing="enumerating markets")
+                except UnknownMarket:
+                    bad.add(str(key))
+        return sorted(bad)
+
     def markets_with_exposure(self) -> List[str]:
         """Every market this book still has anything in.
 
@@ -1668,11 +1736,22 @@ class InventoryStore:
         through reconciliation therefore has positions and no committed, and
         sweeping only committed would leave it in the book forever.
         """
-        out = {m for m, v in self.committed().items() if v != 0}
+        def _ok(m: str) -> bool:
+            try:
+                canonical_market(m, doing="enumerating markets")
+                return True
+            except UnknownMarket:
+                return False       # named by corrupt_market_keys(), not here
+
+        out = {m for m, v in self.committed().items() if v != 0 and _ok(m)}
         for key in (self.state.get("positions") or {}):
-            out.add(str(key).rsplit("|", 1)[0])
+            m = str(key).rsplit("|", 1)[0]
+            if _ok(m):
+                out.add(m)
         for key in (self.state.get("leg_cost") or {}):
-            out.add(str(key).rsplit("|", 1)[0])
+            m = str(key).rsplit("|", 1)[0]
+            if _ok(m):
+                out.add(m)
         # AN OUTSTANDING ORDER IS SOMETHING THE BOOK HAS IN A MARKET, even
         # before it fills. A market whose only trace is a live or parked
         # order was invisible here, so the settlement sweep never looked at

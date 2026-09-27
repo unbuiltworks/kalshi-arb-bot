@@ -190,6 +190,7 @@ class Runner:
         self.feed = feed
         self.clock = clock
         self.store = LX.InventoryStore(os.path.join(root, "inventory.json"))
+        repair_orphaned_keys(self.store)
         rebase_contaminated_accounting(self.store)
         self.limits = LX.SafetyLimits(**PROBE_LIMITS)
         self.lam = lam
@@ -1051,6 +1052,73 @@ ACCOUNTING_REBASES = [
         },
     },
 ]
+
+
+#: The one orphaned key this deployment must repair, and the authoritative
+#: evidence for it. Matched on CONTENTS, so a store that never carried the
+#: defect is untouched and one already repaired cannot be repaired twice.
+ORPHAN_REPAIRS = [
+    {
+        "id": "blank-market-key-0115z",
+        "key": "",
+        "to_market": "cpc-btc-updown-15m-2026-09-27-0115z",
+        "side": "UP", "qty": D("0.7"), "cost": D("0.09700"),
+        # DOWN won 0115z, so these UP shares redeemed nothing.
+        "settlement_pnl": D("-0.09700"),
+        "matches_cost": D("0.09700"),
+        "evidence": {
+            "source": "/v1/order rows read by the GET-only recovery service",
+            "orders": ["CR52P8GZ4YAQ", "CR52QM4S6YBY"],
+            "detail": ("CR52P8GZ4YAQ 0.10 UP avgPx 0.1300 commission 0.0000; "
+                       "CR52QM4S6YBY 0.60 UP avgPx 0.1400 commission 0.0000; "
+                       "both marketSlug cpc-btc-updown-15m-2026-09-27-0115z"),
+            "cash_anchor": ("59.18945 confirmed 01:03:02Z and 59.69195 "
+                            "confirmed 02:01:19Z span this; their delta "
+                            "+0.50250 = 0115z booked +0.599500 less 0.097000"),
+            "api_key_fingerprint": "d51b44a3fa83",
+            "why_not_folded_into_0115z": ("0115z is already retired and a "
+                                          "settled market cannot settle "
+                                          "again; this is its own line"),
+        },
+    },
+]
+
+
+def repair_orphaned_keys(store) -> Optional[Dict[str, Any]]:
+    """Retire known corrupt ledger keys against authoritative evidence, once.
+
+    The identity guard stops new corruption; it cannot clean up what is
+    already on the volume, and on 2026-09-27 that left every reconcile
+    dying on `leg_cost("")` -- correctly refusing, and wedged.
+    """
+    done = {r.get("id") for r in (store.state.get("orphan_repairs") or [])}
+    for spec in ORPHAN_REPAIRS:
+        if spec["id"] in done:
+            continue
+        if spec["key"] not in store.corrupt_market_keys() and not any(
+                str(k).rsplit("|", 1)[0] == spec["key"]
+                for k in (store.state.get("leg_cost") or {})):
+            continue
+        held = sum(D(str(v)) for k, v in
+                   (store.state.get("leg_cost") or {}).items()
+                   if str(k).rsplit("|", 1)[0] == spec["key"])
+        if held != spec["matches_cost"]:
+            emit("L5_LIVE_ORPHAN_REPAIR_REFUSED",
+                 {"id": spec["id"], "expected": str(spec["matches_cost"]),
+                  "found": str(held),
+                  "why": ("the ledger does not hold what the evidence "
+                          "describes; refusing to repair it blind")})
+            continue
+        out = store.repair_orphaned_market_key(
+            key=spec["key"], to_market=spec["to_market"], qty=spec["qty"],
+            cost=spec["cost"], side=spec["side"],
+            settlement_pnl=spec["settlement_pnl"], evidence=spec["evidence"])
+        log = store.state.setdefault("orphan_repairs", [])
+        log[-1]["id"] = spec["id"]
+        store.save()
+        emit("L5_LIVE_ORPHAN_REPAIRED", dict(out, repair_id=spec["id"]))
+        return out
+    return None
 
 
 def rebase_contaminated_accounting(store) -> Optional[Dict[str, Any]]:

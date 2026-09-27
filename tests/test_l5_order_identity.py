@@ -230,3 +230,145 @@ def test_0115z_settles_on_the_full_gross_including_the_adopted_fills(store):
     out = store.retire_settled_market(M, yes_value=D("0.0000"))
     assert D(out["settlement_pnl"]) == D("0.502500")   # not 0.599500
     assert D(out["up_qty"]) == D("4.47")
+
+
+# =====================================================================
+# the corruption already on the volume
+# =====================================================================
+
+def orphaned(store):
+    """The volume as the incident left it: 0.7 UP / $0.097 under ""."""
+    store.state["positions"] = {"|UP": "0.7"}
+    store.state["leg_cost"] = {"|UP": "0.09700"}
+    store.state["fill_count"] = {"|UP": 2}
+    store.state["committed"] = {"": "0.09700"}
+    store.state["realized_attributed"] = "0.71760000"
+    store.state["realized_unattributed"] = "-2.62630"
+    store.save()
+
+
+def test_enumeration_names_a_corrupt_key_instead_of_raising(store):
+    """A guard that refuses to BOOK against a bad key is right. One that
+    refuses to LIST it leaves the process unable to say what is wrong --
+    which is what wedged every reconcile on 2026-09-27."""
+    orphaned(store)
+    assert store.corrupt_market_keys() == ["", "|UP"]
+    # enumeration skips it rather than dying on it
+    assert store.markets_with_exposure() == []
+
+
+def test_the_orphan_is_repaired_once_against_venue_evidence(store):
+    from src import l5_pmus_live_runner as R
+    orphaned(store)
+    before = store.realized_today()
+    assert before == D("-1.90870000")
+
+    out = R.repair_orphaned_keys(store)
+    assert out is not None
+    # the -0.097 is ATTRIBUTED: two venue fill rows at venue prices
+    assert D(store.realized_lines()["realized_attributed"]) == D("0.62060000")
+    assert D(store.realized_lines()["realized_unattributed"]) == D("-2.62630")
+    assert store.realized_today() == D("-2.00570000")   # the authoritative cash
+    assert store.corrupt_market_keys() == []
+    assert store.markets_with_exposure() == []
+
+    rec = store.state["orphan_repairs"][-1]
+    assert rec["bad_key"] == ""                       # preserved, not rewritten
+    assert rec["authoritative_market"] == (
+        "cpc-btc-updown-15m-2026-09-27-0115z")
+    assert rec["evidence"]["orders"] == ["CR52P8GZ4YAQ", "CR52QM4S6YBY"]
+
+    # once only, and a fresh process repeats nothing
+    assert R.repair_orphaned_keys(store) is None
+    again = LX.InventoryStore(store.path)
+    assert R.repair_orphaned_keys(again) is None
+    assert again.realized_today() == D("-2.00570000")
+
+
+def test_a_clean_store_is_never_touched(store):
+    from src import l5_pmus_live_runner as R
+    store.apply_fill(M, "UP", D("1"), D("0.5"), basis=LX.WIRE)
+    before = dict(store.state["leg_cost"])
+    assert R.repair_orphaned_keys(store) is None
+    assert store.state["leg_cost"] == before
+
+
+def test_the_repair_refuses_when_the_ledger_disagrees_with_the_evidence(store):
+    """If the volume does not hold what the venue evidence describes, the
+    evidence is not about this ledger. Repairing it blind would be
+    manufacturing P&L."""
+    from src import l5_pmus_live_runner as R
+    orphaned(store)
+    store.state["leg_cost"] = {"|UP": "0.5000"}       # not 0.09700
+    store.save()
+    assert R.repair_orphaned_keys(store) is None
+    assert store.corrupt_market_keys() != []          # left alone, still bad
+    assert store.realized_today() == D("-1.90870000")
+
+
+def test_repair_requires_stated_evidence(store):
+    orphaned(store)
+    with pytest.raises(ValueError):
+        store.repair_orphaned_market_key(
+            key="", to_market=M, qty=D("0.7"), cost=D("0.097"), side="UP",
+            settlement_pnl=D("-0.097"), evidence={})
+
+
+def test_the_orphan_repair_is_idempotent_across_restarts(store):
+    """EXPLICIT RESTART IDEMPOTENCY.
+
+    The repair runs at boot, and the executor has restarted five times in
+    this incident alone. Every one of these must hold on the second boot and
+    the tenth: the -0.09700 is attributed ONCE, realized cannot move again,
+    the corruption stays gone, and the audit record survives -- because a
+    repair that re-applies is just a slower way of manufacturing P&L.
+    """
+    from src import l5_pmus_live_runner as R
+    orphaned(store)
+    path = store.path
+
+    first = R.repair_orphaned_keys(store)
+    assert first is not None
+    attributed_after = store.realized_lines()["realized_attributed"]
+    total_after = store.realized_today()
+    audit_after = list(store.state["orphan_repairs"])
+    assert total_after == D("-2.00570000")
+    assert len(audit_after) == 1
+
+    # ten cold boots off the same file, exactly as the runner does it
+    for boot in range(10):
+        s2 = LX.InventoryStore(path)
+        assert R.repair_orphaned_keys(s2) is None, "re-applied on boot %d" % boot
+
+        # 1. attributed exactly once
+        assert s2.realized_lines()["realized_attributed"] == attributed_after
+        # 2. realized cannot move again
+        assert s2.realized_today() == total_after == D("-2.00570000")
+        # 3. the corruption stays gone
+        assert s2.corrupt_market_keys() == []
+        assert s2.markets_with_exposure() == []
+        # 4. the audit record remains, unchanged
+        assert s2.state["orphan_repairs"] == audit_after
+        assert s2.state["orphan_repairs"][0]["bad_key"] == ""
+        assert s2.state["orphan_repairs"][0]["id"] == "blank-market-key-0115z"
+
+    # and the unattributed line never absorbed any of it
+    assert D(s2.realized_lines()["realized_unattributed"]) == D("-2.62630")
+
+
+def test_a_second_orphan_of_the_same_shape_is_not_swept_up_by_the_done_flag(store):
+    """The id guard must not become a blanket amnesty. If a NEW corrupt key
+    appears after the repair has run, it is still corruption and must still
+    be named -- not silently tolerated because a repair with that id is
+    already logged."""
+    from src import l5_pmus_live_runner as R
+    orphaned(store)
+    R.repair_orphaned_keys(store)
+    assert store.corrupt_market_keys() == []
+
+    store.state["leg_cost"]["  |DOWN"] = "0.25"       # a fresh bad key
+    store.save()
+    s2 = LX.InventoryStore(store.path)
+    assert s2.corrupt_market_keys() == ["  |DOWN"]    # named, not ignored
+    assert R.repair_orphaned_keys(s2) is None         # and NOT auto-repaired
+    assert s2.realized_today() == D("-2.00570000")    # accounting untouched
