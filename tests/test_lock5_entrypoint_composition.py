@@ -235,6 +235,16 @@ class _Journal:
         self.rows.append((kind, dict(payload)))
 
 
+class _Mandate:
+    """A Rung-A shaped mandate: the ONLY monetary authority the probe may use."""
+    max_spend_per_market = D("1.00")
+    max_total_spend = D("1.00")
+    max_residual = D("1.00")
+    max_daily_realized_loss = D("1.00")
+    max_markets = 1
+    max_total_markets = 1
+
+
 def _probe(tmp_path):
     p = ONESHOT.Probe.__new__(ONESHOT.Probe)
     p.market, p.tp, p.store = MKT, _Tp(), _Store()
@@ -251,7 +261,7 @@ def wired(tmp_path, monkeypatch):
     bk = SHADOW.Book()
     bk.add("up", D(100), D(100) * D("0.40"), maker=True)
     bk.add("down", D(100), D(100) * D("0.55"), maker=True)
-    p.build_lock5(book=bk, mandate=object(), state_dir=tmp_path)
+    p.build_lock5(book=bk, mandate=_Mandate(), state_dir=tmp_path)
     return p
 
 
@@ -311,7 +321,7 @@ def test_the_entrypoint_path_goes_through_mandate_admission(tmp_path,
         return {"admitted": False, "reason": "PER_MARKET_CAP"}
     monkeypatch.setattr(LOCK5.MANDATE, "admit", admit)
     p = _probe(tmp_path)
-    p.build_lock5(book=SHADOW.Book(), mandate=object(), state_dir=tmp_path)
+    p.build_lock5(book=SHADOW.Book(), mandate=_Mandate(), state_dir=tmp_path)
     with pytest.raises(LOCK5.SafetyRefusal):
         p.lock5_complete(outcome_side="OUTCOME_SIDE_NO", ask=D("0.23"),
                          qty=D(5), first_cost=D("0.44"))
@@ -380,7 +390,7 @@ def test_negative_control_disconnecting_the_paired_log_fails_pair_intent(
     # the disconnection is caught at COMPOSITION time -- build_lock5 journals
     # the paired log's path, so a probe cannot finish composing without one.
     with pytest.raises(AttributeError):
-        p.build_lock5(book=bk, mandate=object(), state_dir=tmp_path)
+        p.build_lock5(book=bk, mandate=_Mandate(), state_dir=tmp_path)
     assert p.paired is None
     # and a probe that somehow got past that still cannot open a paired row
     with pytest.raises(Exception):

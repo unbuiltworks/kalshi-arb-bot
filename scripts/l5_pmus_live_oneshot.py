@@ -131,7 +131,12 @@ class Probe:
         self.clock = clock
         self.sleep = sleep
         self.activity = activity
-        self.limits = PM.probe_limits()
+        #: ONE MONETARY AUTHORITY. No dollars exist until a mandate is loaded;
+        #: until then every monetary bound is ZERO rather than a static default.
+        #: probe_limits() hardcoded $5 and is deliberately NOT called here -- a
+        #: structural test fails if it reappears on this path.
+        self.limits = EX.SafetyLimits.no_monetary_authority(
+            **PM.operational_controls())
         #: where the probe got to, so an exception can name its stage
         #: instead of disappearing into the volume.
         self.stage = "constructed"
@@ -214,6 +219,12 @@ class Probe:
             mandate=mandate, state_dir=state_dir, monitor=self.monitor,
             realized_today=(realized_today
                             or (lambda: self.store.realized_today())))
+        # THE monetary authority, derived from the mandate and nothing else.
+        self.limits = EX.SafetyLimits.from_mandate(
+            mandate, **PM.operational_controls())
+        self.journal.write("monetary_authority", {
+            "source": self.limits.monetary_authority,
+            "limits": self.limits.as_dict()})
         self.paired = PAIRED.PairedLog(
             market=self.market, # the BTC15m slug carries the window boundary, so it is the binding
             window=str(window or self.market),
@@ -565,7 +576,9 @@ class Probe:
             "stage_reached": self.stage,
             "close_out": dict(close),
             "live_limits": self.limits.as_dict(),
-            "worst_case": PM.worst_case(),
+            "monetary_authority": self.limits.monetary_authority,
+            # worst case from THESE limits, never from a static manifest default
+            "worst_case_usd": str(self.limits.worst_case_loss_usd()),
             "settlement": "NOT_OBSERVED_IN_THIS_PROCESS",
             "realized": "NOT_REALIZED",
             "labels": ("submitted, filled and settled are distinct. Nothing "
@@ -1200,7 +1213,8 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
     feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
     # the production DISARMED transport. No credential, no HTTP, no POST.
     tp = transport if transport is not None else EX.NullTransport()
-    limits = PM.probe_limits()
+    # an observe run holds no authorization, so it holds no dollars
+    limits = EX.SafetyLimits.no_monetary_authority(**PM.operational_controls())
     health = WA.FeedHealth()
     seen: Set[str] = set()
     records: List[dict] = []

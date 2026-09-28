@@ -334,6 +334,63 @@ class SafetyLimits:
         #: None by default: a price band is a BEHAVIOURAL preference, not
         #: account protection, and the faithful engine does not impose one.
         self.band = band
+        #: where these dollars came from. Set by the factories; a direct
+        #: construction is legacy and says so.
+        self._monetary_authority = "DIRECT_CONSTRUCTION"
+
+    #: ONE MONETARY AUTHORITY (OWNER 2026-09-28). Every monetary bound on the
+    #: Rung-A path comes from the mandate and nowhere else.
+    #:
+    #: The probe reported `max_usd_per_market 5` out of its own observe run while
+    #: the approved envelope was $1.00, because `l5_probe_manifest.probe_limits()`
+    #: hardcoded $5 and the entrypoint built its limits from it. That is a second
+    #: sizing authority. It was not the RAMP_LADDER_001 failure -- static, not a
+    #: rung table reloading stale owner state -- which is exactly why the
+    #: structural test aimed at dynamic rung caps did not catch it. A tighter
+    #: mandate in front of a looser static ceiling is still two authorities, and
+    #: the looser one becomes operative the moment the tighter one is absent.
+    #:
+    #: The fix is derivation, not retuning: these numbers are not changed to $1,
+    #: they are taken from the mandate, so they are whatever the mandate says.
+    @classmethod
+    def from_mandate(cls, mandate: Any, *, max_live_orders: int,
+                     band: Optional[tuple] = None) -> "SafetyLimits":
+        if mandate is None:
+            raise ValueError("no mandate: there is no monetary authority to "
+                             "derive limits from, and none may be assumed")
+        return cls(
+            max_usd_per_market=D(str(mandate.max_spend_per_market)),
+            max_total_exposure_usd=D(str(mandate.max_total_spend)),
+            max_abs_residual=D(str(mandate.max_residual)),
+            max_concurrent_markets=int(mandate.max_markets),
+            daily_realized_loss_halt_usd=D(str(mandate.max_daily_realized_loss)),
+            max_live_orders=int(max_live_orders),
+            band=band,
+        )._tag("PMUS_LIVE_MANDATE")
+
+    @classmethod
+    def no_monetary_authority(cls, *, max_live_orders: int,
+                              band: Optional[tuple] = None) -> "SafetyLimits":
+        """Every monetary bound ZERO. For a run that holds no mandate.
+
+        An observe run has no authorization, so it has no dollars -- not "the
+        default five". Zero refuses every order on the money path, which is what
+        an unauthorised process should do, and it makes the reported envelope
+        honest instead of quoting a ceiling nobody granted.
+        """
+        return cls(max_usd_per_market=D(0), max_total_exposure_usd=D(0),
+                   max_abs_residual=D(0), max_concurrent_markets=0,
+                   daily_realized_loss_halt_usd=D(0),
+                   max_live_orders=int(max_live_orders),
+                   band=band)._tag("NONE_NO_MANDATE")
+
+    def _tag(self, who: str) -> "SafetyLimits":
+        self._monetary_authority = who
+        return self
+
+    @property
+    def monetary_authority(self) -> str:
+        return self._monetary_authority
 
     def as_dict(self) -> Dict[str, Any]:
         return {"max_usd_per_market": str(self.max_usd_per_market),
@@ -343,7 +400,8 @@ class SafetyLimits:
                 "max_live_orders": self.max_live_orders,
                 "daily_realized_loss_halt_usd":
                     str(self.daily_realized_loss_halt_usd),
-                "band": [str(x) for x in self.band] if self.band else None}
+                "band": [str(x) for x in self.band] if self.band else None,
+                "monetary_authority": self._monetary_authority}
 
     def worst_case_loss_usd(self) -> D:
         """The most this configuration can lose, before any trade happens.
