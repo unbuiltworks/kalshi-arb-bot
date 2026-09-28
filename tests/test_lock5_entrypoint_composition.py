@@ -465,3 +465,62 @@ def test_polymarket_l5_config_is_reachable_and_copied(closure):
     """The specific file whose absence crashed the probe at 04:15:07Z."""
     assert "src/polymarket_l5/config.py" in closure
     assert "src/polymarket_l5/config.py" in _dockerfile_pyfiles()
+
+
+# ==================================== ONE CLOSURE IMPLEMENTATION, NOT THREE
+# The local `_closure` above predates src/l5_import_closure and is kept only so
+# these tests keep their own independent reading of the graph. These tests pin the
+# two to each other: if they ever disagree, one of them has a blind spot, which is
+# exactly the condition that shipped an unrunnable image.
+
+def test_the_local_helper_and_the_shared_module_agree(closure):
+    from src import l5_import_closure as C
+    assert set(closure) == C.closure(ENTRY), (
+        "closure implementations disagree: %s"
+        % sorted(set(closure) ^ C.closure(ENTRY)))
+
+
+def test_the_shared_closure_knows_the_package_markers_carry_no_behaviour():
+    from src import l5_import_closure as C
+    pkg = C.closure(ENTRY)
+    markers = sorted(f for f in pkg if not C.behaviour_bearing(f))
+    assert markers == ["src/__init__.py", "src/polymarket_l5/__init__.py"]
+    # src/__init__.py is 0 bytes. It must be PACKAGED, and it can never be the
+    # reason a test is called artifact-relevant.
+    assert os.path.getsize("src/__init__.py") == 0
+    assert "src/__init__.py" in pkg
+
+
+def test_overinclusion_is_classified_with_a_path_proof():
+    """A test reaching the closure ONLY through an empty package marker is
+    repository debt, not a Rung-A blocker -- and the claim must show its path."""
+    from src import l5_import_closure as C
+    pkg = C.closure(ENTRY)
+    verdict, proof = C.classify("tests/test_deploy_fallthrough_guard.py", pkg)
+    assert verdict == "TEST_GRAPH_OVERINCLUSION"
+    assert proof and proof[-1] == "src", proof
+
+
+def test_a_genuinely_packaged_module_classifies_as_artifact_behaviour():
+    """Negative control: the classifier must not call everything overinclusion."""
+    from src import l5_import_closure as C
+    pkg = C.closure(ENTRY)
+    verdict, proof = C.classify("tests/test_pmus_lock5_translation.py", pkg)
+    assert verdict == "ARTIFACT_BEHAVIOUR"
+    assert proof and proof[-1].startswith("src.pmus_"), proof
+
+
+def test_the_failing_forensics_behaviour_is_unreachable_from_the_entrypoint():
+    """The one artifact-behaviour-set failure, pinned as unreachable.
+
+    tests/test_window_forensics_stream.py enters the set through
+    src.polymarket_l5.transfer_backtest, but the behaviour its failing assertion
+    exercises lives in analysis.l5.window_forensics.eligibility, which the
+    packaged entrypoint cannot reach at all. Recorded as a test so the exclusion
+    stops holding the moment that stops being true.
+    """
+    from src import l5_import_closure as C
+    for unreachable in ("analysis.l5.window_forensics.eligibility",
+                        "src.l5_window_forensics",
+                        "src.l5_research_supervisor"):
+        assert C.reaches(ENTRY, {unreachable}) is None, unreachable

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "ONE-SHOT BTC15M PROFIT_LOCK_5 CAPACITY PROBE (Rung A). Can send a real order, so it is DISARMED by construction: this manifest sets no PMUS_Q1_LIVE/_ARM/_SESSION_ID and no PMUS_LIVE_MANDATE, so pmus_auth.armed() is False and pmus_live_mandate.load_mandate() returns no_mandate on a fresh service. One market, one window, one authorization spent on use. Runs once and exits; never restarts. The mandate/GuardedTransport boundary is the only monetary authority.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_pmus_lock5_probe/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_pmus_lock5_probe/ENABLE_RUN_BY_OWNER_ONLY/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m scripts.l5_pmus_live_oneshot",
+    "restartPolicyType": "NEVER"
+  },
+  "_live_service_note": "The production service l5-live-probe-oneshot is configured through the Railway API and pinned to an exact commitSha, which supersedes watchPatterns: a push cannot deploy it at all. Its live watchPatterns are empty because this pattern -- pointing at a directory that does not exist -- caused deployment 65b1a618 to be SKIPPED, i.e. to skip its own build. The pattern is kept HERE so that applying this manifest to a fresh service is owner-gated by default; anyone applying it must clear the pattern for the first build, exactly as was done on 2026-09-28.",
+  "_source_watch_reference": [
+    "scripts/l5_pmus_live_oneshot.py",
+    "src/pmus_lock5_translation.py",
+    "src/pmus_completion_shadow.py",
+    "src/pmus_live_mandate.py",
+    "src/pmus_probe_observability.py",
+    "src/pmus_paired_log.py",
+    "src/pmus_arm_retry.py",
+    "src/pmus_q1_executor.py",
+    "src/l5_order_body.py",
+    "src/polymarket_l5/**"
+  ]
+}
