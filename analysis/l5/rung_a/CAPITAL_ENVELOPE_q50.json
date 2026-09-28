@@ -1,5 +1,6 @@
 {
-  "arm": "frozen q50 PROFIT_LOCK_5, clip=50 theta=0.96 variant=B hold_s=60 residual_cap_k=2 profit_lock_usd=5",
+  "arm": "frozen PROFIT_LOCK_5 policy at clip=50; theta=0.96 variant=B hold_s=60 residual_cap_k=2 profit_lock_usd=5 are FIXED and identical at every clip",
+  "clip": "50",
   "n_windows": 25,
   "units": "USD of principal, own-outcome terms, fees excluded",
   "max_committed_principal_usd": "353.3333333333333333333333333",

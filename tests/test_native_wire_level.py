@@ -259,3 +259,149 @@ def test_native_work_window_drives_the_full_chain(monkeypatch, tmp_path):
     kinds = [json.loads(l)["kind"] for l in
              open(str(tmp_path / "j.jsonl")).read().splitlines() if l.strip()]
     assert "native_tick" in kinds and "native_window_done" in kinds, kinds
+
+
+# ------------------------------------------------- L5_NATIVE_CLIP: capacity only
+#
+# The seat exists so a capacity rung is a variable change, not a rebuild. It
+# sets HOW MUCH and nothing else.
+
+def test_unset_clip_is_exactly_the_frozen_fifty(monkeypatch):
+    monkeypatch.delenv(MP.CLIP_ENV, raising=False)
+    assert MP.configured_clip() == D(50) == E.CLIP
+    monkeypatch.setenv(MP.CLIP_ENV, "")
+    assert MP.configured_clip() == D(50), "empty must mean the frozen default"
+    mp = MP.build(market=MARKET, transport=TP(), venue=Venue())
+    assert mp.eng.clip == D(50)
+
+
+@pytest.mark.parametrize("raw,want", [("10", D(10)), ("25", D(25)),
+                                      ("50", D(50)), (" 10 ", D(10)),
+                                      ("0.5", D("0.5"))])
+def test_a_valid_clip_is_taken_verbatim(monkeypatch, raw, want):
+    monkeypatch.setenv(MP.CLIP_ENV, raw)
+    assert MP.configured_clip() == want
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "-0.0001", "nan", "NaN", "inf",
+                                 "-inf", "Infinity", "abc", "1,000", "1e",
+                                 "None", "5%"])
+def test_an_unusable_clip_fails_closed(monkeypatch, raw):
+    monkeypatch.setenv(MP.CLIP_ENV, raw)
+    with pytest.raises(E.BadClip):
+        MP.configured_clip()
+    with pytest.raises(E.BadClip):
+        MP.build(market=MARKET, transport=TP(), venue=Venue())
+
+
+def test_clip_changes_sizing_only_not_decisions():
+    """Same book, same ladder, two clips: identical decisions, different size."""
+    out = {}
+    for clip in (D(10), D(50)):
+        eng = E.NativeEngine(clip=clip)
+        row = {"state": "MARKET_STATE_OPEN", "t": "2026-09-28T16:00:10Z",
+               "bid": "0.40", "ask": "0.60"}
+        its = eng.on_book(row)
+        out[clip] = [(i.kind, i["side"], str(i.get("price")),
+                      str(i.get("qty"))) for i in its]
+    a, b = out[D(10)], out[D(50)]
+    assert [(k, s, p) for k, s, p, _ in a] == [(k, s, p) for k, s, p, _ in b], (
+        "clip changed the decision or the price, not just the size")
+    assert [q for *_x, q in a] == ["10", "10"]
+    assert [q for *_x, q in b] == ["50", "50"]
+
+
+def test_clip_changes_no_threshold_or_completion_rule():
+    for clip in (D(1), D(10), D(50), D(500)):
+        eng = E.NativeEngine(clip=clip)
+        assert eng.theta == D("0.96")
+        assert eng.profit_lock_usd == D(5)
+        assert eng.residual_cap_k == D(2)
+        assert eng.hold_s == 60.0 and eng.variant == "B"
+
+
+def test_completion_eligibility_is_independent_of_clip():
+    """Same residual and ladder -> same admitted qty and limit, any clip."""
+    got = set()
+    for clip in (D(10), D(50)):
+        eng = E.NativeEngine(clip=clip)
+        eng.on_fill("up", D(10), D("4.00"), maker=True)
+        its = eng.on_book({"state": "MARKET_STATE_OPEN",
+                           "t": "2026-09-28T16:00:10Z",
+                           "bid": "0.40", "ask": "0.60"},
+                          {"t": "2026-09-28T16:00:10Z",
+                           "bids": [["0.80", "10"]], "offers": []})
+        c = [i for i in its if i.kind == E.COMPLETE]
+        assert c, "no completion at clip %s" % clip
+        got.add((str(c[0]["qty"]), str(c[0]["limit_price"])))
+    assert len(got) == 1, "clip changed completion eligibility: %s" % got
+
+
+def test_the_mandate_still_bounds_every_clip():
+    """Capacity is not authority. A bigger clip is refused, not allowed."""
+    for clip in (D(10), D(50)):
+        tp = TP()
+
+        class Bounded(TP):
+            def request(self, method, path, body=None, **kw):
+                notional = (D(str(body["price"]["value"]))
+                            * D(str(body["quantity"])))
+                if notional > D("1.00"):
+                    raise RuntimeError("MANDATE_REFUSED:%s" % notional)
+                return super().request(method, path, body, **kw)
+
+        b = Bounded()
+        mp = MP.build(market=MARKET, transport=b, venue=Venue(), clip=clip)
+        with pytest.raises(RuntimeError, match="MANDATE_REFUSED"):
+            mp.on_book_state({"state": "MARKET_STATE_OPEN",
+                              "t": "2026-09-28T16:00:10Z",
+                              "bid": "0.40", "ask": "0.60"})
+        assert b.posts == []
+
+
+def test_ioc_and_remainder_behaviour_survive_a_clip_change():
+    for clip in (D(10), D(50)):
+        it = E.Intent(E.COMPLETE, side="down", qty=clip, cost=D("2.00"),
+                      fee=D("0.05"), limit_price=D("0.20"))
+        body = MP.body_for(it, MARKET)
+        assert body["tif"] == OB.TIF_IOC
+        assert body["participateDontInitiate"] is False
+    v = Venue(fill=(D(6), D("1.20"), D("0.03")), open_after=["o1"])
+    mp = MP.build(market=MARKET, transport=TP(), venue=v, clip=D(10))
+    assert mp._execute_taker(_intent()) is None
+    assert mp.remainders[-1]["why"] == "REMAINDER_STILL_LIVE"
+
+
+def test_the_real_entrypoint_honours_the_clip(monkeypatch, tmp_path):
+    from src import l5_session_journal as JN
+
+    class Feed:
+        ladder = None
+
+        def fresh(self):
+            return True
+
+        def age_s(self):
+            return 0.1
+
+        def latest(self):
+            return {"state": "MARKET_STATE_OPEN", "t": "2026-09-28T16:00:10Z",
+                    "bid": "0.40", "ask": "0.60"}
+
+    class Probe:
+        market = MARKET
+
+        def __init__(self, tp):
+            self.tp = tp
+
+    for raw, want in (("10", "10.0"), ("50", "50.0")):
+        monkeypatch.setenv(MP.CLIP_ENV, raw)
+        tp = TP()
+        t = {"now": 0.0}
+        mp = EP.native_work_window(
+            Probe(tp), Feed(), 2.0, journal=JN.Journal(str(tmp_path / "j.jsonl")),
+            clock=lambda: t.__setitem__("now", t["now"] + 1.0) or t["now"],
+            sleep=lambda *_a, **_k: None, venue=Venue())
+        assert tp.posts, "no order at clip %s" % raw
+        assert all(str(b["quantity"]) == want for b in tp.posts), (
+            [b["quantity"] for b in tp.posts])

@@ -187,9 +187,23 @@ class NativeMoneyPath:
                 pass
 
 
+CLIP_ENV = "L5_NATIVE_CLIP"
+
+
+def configured_clip(env=None) -> D:
+    """The capacity control, read once. Fails closed on anything unusable."""
+    import os
+    src = os.environ if env is None else env
+    return E.parse_clip(src.get(CLIP_ENV))
+
+
 def build(*, market: str, transport, feed=None, venue=None, journal=None,
-          clip: D = E.CLIP) -> "NativeMoneyPath":
-    """The only constructor. The lock gate is always installed live."""
+          clip: Optional[D] = None) -> "NativeMoneyPath":
+    """The only constructor. The lock gate is always installed live.
+
+    `clip` unset reads L5_NATIVE_CLIP, which unset is the frozen 50.
+    """
+    clip = configured_clip() if clip is None else E.parse_clip(clip)
     E.assert_no_translate_fallback()
     eng = E.NativeEngine(clip=clip, lock_gate=OV.lock_gate_for(venue,
                                                                journal=journal))

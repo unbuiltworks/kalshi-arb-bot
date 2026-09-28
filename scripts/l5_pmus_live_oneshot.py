@@ -724,6 +724,11 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
                                            journal=journal)
     mp = money_path or NMP.build(market=probe.market, transport=probe.tp,
                                  feed=feed, venue=venue, journal=journal)
+    journal.write("native_clip", {
+        "clip": str(mp.eng.clip), "env": NMP.CLIP_ENV,
+        "default_when_unset": str(NMP.E.CLIP),
+        "note": "capacity control only: theta, variant, hold_s, "
+                "residual_cap_k and profit_lock_usd are fixed"})
     probe.native = mp
     seen_t = None
     ticks = 0
@@ -947,8 +952,9 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         if native_engine_enabled():
             journal.write("money_lane", {
                 "lane": "NATIVE_FROZEN_Q50",
-                "policy": "clip=50 theta=0.96 variant=B hold_s=60 "
+                "policy": "theta=0.96 variant=B hold_s=60 "
                           "residual_cap_k=2 profit_lock_usd=5",
+                "clip": os.getenv("L5_NATIVE_CLIP", "").strip() or "50",
                 "note": "the L5-action translator is not on this path"})
             native_work_window(probe, feed, deadline, journal=journal,
                                clock=clock, sleep=sleep)

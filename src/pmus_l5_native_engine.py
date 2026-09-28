@@ -28,12 +28,18 @@ FROZEN PARAMETERS, fixed here so a caller cannot tune them:
 """
 from __future__ import annotations
 
-from decimal import Decimal as D
+from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_completion_shadow as S
 
 #: THE FROZEN ARM. `p1_profit_lock.py` calls run_window with exactly these.
+#:
+#: CLIP IS THE ONE CAPACITY CONTROL. It sets HOW MUCH each passive quote is
+#: for and nothing else: no threshold, no eligibility test, no timing, no side
+#: selection and no completion rule reads it. theta, variant, hold_s,
+#: residual_cap_k and profit_lock_usd stay fixed here and are not settable.
+#: Default 50, which is the frozen arm; unset means exactly clip-50 behaviour.
 CLIP = D(50)
 THETA = D("0.96")
 VARIANT = "B"
@@ -57,6 +63,36 @@ class Intent(dict):
     @property
     def kind(self) -> str:
         return str(self["kind"])
+
+
+class BadClip(ValueError):
+    """A size we cannot stand behind. There is no default to fall back to --
+    a probe that cannot read its own size does not trade."""
+
+
+def parse_clip(raw, *, default: D = CLIP) -> D:
+    """`L5_NATIVE_CLIP` -> a usable clip, or FAIL CLOSED.
+
+    Unset or empty is the frozen default. Anything present must be a finite,
+    strictly positive number; zero, negative, NaN, Infinity and junk all raise
+    rather than silently becoming 50, because quietly trading a different size
+    than the operator asked for is the failure this seat could most easily
+    introduce.
+    """
+    if raw is None:
+        return D(str(default))
+    txt = str(raw).strip()
+    if txt == "":
+        return D(str(default))
+    try:
+        val = D(txt)
+    except (InvalidOperation, ValueError, TypeError):
+        raise BadClip("clip is not a number: %r" % (txt,))
+    if not val.is_finite():
+        raise BadClip("clip is not finite: %r" % (txt,))
+    if val <= 0:
+        raise BadClip("clip must be strictly positive: %r" % (txt,))
+    return val
 
 
 class StaleBook(RuntimeError):

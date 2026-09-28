@@ -41,6 +41,16 @@ from src import pmus_native_parity as P                        # noqa: E402
 OUT = "analysis/l5/rung_a/CAPITAL_ENVELOPE_q50.json"
 
 
+def clip_from_argv(argv) -> D:
+    """`--clip N`. The capacity rung being measured, nothing else."""
+    for i, a in enumerate(argv):
+        if a == "--clip" and i + 1 < len(argv):
+            return E.parse_clip(argv[i + 1])
+        if a.startswith("--clip="):
+            return E.parse_clip(a.split("=", 1)[1])
+    return E.CLIP
+
+
 def walk(rows, winner):
     """Replay with the parity engine, sampling capital at every decision."""
     eng = E.NativeEngine(clip=E.CLIP, prospective_cap=False)
@@ -115,7 +125,24 @@ def walk(rows, winner):
     return peak
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    clip = clip_from_argv(argv)
+    # normalize 10 / 10.0 / 1E+1 to "10" WITHOUT rstrip -- "10".rstrip("0")
+    # is "1", which silently named the clip-10 envelope q1.
+    tag = format(clip.normalize(), "f")
+    if "." in tag:
+        tag = tag.rstrip("0").rstrip(".")
+    globals()["OUT"] = "analysis/l5/rung_a/CAPITAL_ENVELOPE_q%s.json" % (tag,)
+    old = E.CLIP
+    E.CLIP = clip
+    try:
+        return _main_inner(clip)
+    finally:
+        E.CLIP = old
+
+
+def _main_inner(clip) -> int:
     by = load()
     rows, agg = [], {"committed": D(0), "outstanding": D(0),
                      "directional": D(0), "combined": D(0),
@@ -127,8 +154,10 @@ def main() -> int:
             if v > agg[k]:
                 agg[k] = v
     doc = {
-        "arm": "frozen q50 PROFIT_LOCK_5, clip=50 theta=0.96 variant=B "
-               "hold_s=60 residual_cap_k=2 profit_lock_usd=5",
+        "arm": ("frozen PROFIT_LOCK_5 policy at clip=%s; theta=0.96 "
+                "variant=B hold_s=60 residual_cap_k=2 profit_lock_usd=5 "
+                "are FIXED and identical at every clip" % clip),
+        "clip": str(clip),
         "n_windows": len(rows),
         "units": "USD of principal, own-outcome terms, fees excluded",
         "max_committed_principal_usd": str(agg["committed"]),

@@ -1,0 +1,267 @@
+{
+  "arm": "frozen PROFIT_LOCK_5 policy at clip=10; theta=0.96 variant=B hold_s=60 residual_cap_k=2 profit_lock_usd=5 are FIXED and identical at every clip",
+  "clip": "10",
+  "n_windows": 25,
+  "units": "USD of principal, own-outcome terms, fees excluded",
+  "max_committed_principal_usd": "70.66666666666666666666666667",
+  "max_outstanding_order_principal_usd": "10.6000",
+  "max_directional_principal_usd": "19.66666666666666666666666667",
+  "max_combined_worst_case_capital_usd": "80.66666666666666666666666667",
+  "max_taker_fees_incurred_usd": "1.019773500000",
+  "max_in_flight_cash_requirement_usd": "80.66666666666666666666666667",
+  "max_worst_case_loss_usd": "19.869213500000",
+  "cash_vs_loss": "committed/in-flight are CASH USED, recoverable at settlement; worst_case_loss is the unmatched leg plus fees. They are different quantities and are never summed.",
+  "per_window": [
+    {
+      "window": "1830z",
+      "committed": "27.63703703703703703703703703",
+      "outstanding": "10.0000",
+      "directional": "9.533333333333333333333333334",
+      "combined": "37.63703703703703703703703703",
+      "fees": "0.475866500000",
+      "in_flight": "39.35555555555555555555555555",
+      "worst_case_loss": "9.533333333333333333333333334"
+    },
+    {
+      "window": "1845z",
+      "committed": "41.6500",
+      "outstanding": "10.0000",
+      "directional": "8.3000",
+      "combined": "51.6500",
+      "fees": "0.179518500000",
+      "in_flight": "51.7500",
+      "worst_case_loss": "8.3000"
+    },
+    {
+      "window": "1900z",
+      "committed": "31.73333333333333333333333333",
+      "outstanding": "9.9000",
+      "directional": "16.4000",
+      "combined": "41.63333333333333333333333333",
+      "fees": "0.431317000000",
+      "in_flight": "45.63333333333333333333333333",
+      "worst_case_loss": "16.4000"
+    },
+    {
+      "window": "1915z",
+      "committed": "36.59259259259259259259259259",
+      "outstanding": "10.1000",
+      "directional": "8.430864197530864197530864197",
+      "combined": "46.69259259259259259259259259",
+      "fees": "0.405602000000",
+      "in_flight": "46.79259259259259259259259259",
+      "worst_case_loss": "8.829585697530864197530864197"
+    },
+    {
+      "window": "1930z",
+      "committed": "62.53333333333333333333333333",
+      "outstanding": "10.1000",
+      "directional": "10.3000",
+      "combined": "72.53333333333333333333333333",
+      "fees": "0.013761000000",
+      "in_flight": "72.63333333333333333333333333",
+      "worst_case_loss": "10.3000"
+    },
+    {
+      "window": "1945z",
+      "committed": "32.3000",
+      "outstanding": "10.0000",
+      "directional": "7.5000",
+      "combined": "42.3000",
+      "fees": "0.338604000000",
+      "in_flight": "42.3000",
+      "worst_case_loss": "7.838604000000"
+    },
+    {
+      "window": "2000z",
+      "committed": "13.70000000",
+      "outstanding": "10.0000",
+      "directional": "13.70000000",
+      "combined": "23.60000000",
+      "fees": "0.3547366875000000",
+      "in_flight": "28.00000000",
+      "worst_case_loss": "13.7895246875000000"
+    },
+    {
+      "window": "2030z",
+      "committed": "17.8000",
+      "outstanding": "10.6000",
+      "directional": "7.9000",
+      "combined": "28.4000",
+      "fees": "0.341592500000",
+      "in_flight": "28.4000",
+      "worst_case_loss": "8.241592500000"
+    },
+    {
+      "window": "2045z",
+      "committed": "41.9000",
+      "outstanding": "10.0000",
+      "directional": "9.3500",
+      "combined": "51.8000",
+      "fees": "0.027244000000",
+      "in_flight": "52.0000",
+      "worst_case_loss": "9.363622000000"
+    },
+    {
+      "window": "2115z",
+      "committed": "18.06250",
+      "outstanding": "9.9000",
+      "directional": "9.3000",
+      "combined": "27.96250",
+      "fees": "1.019773500000",
+      "in_flight": "36.76250",
+      "worst_case_loss": "9.452277500000"
+    },
+    {
+      "window": "2215z",
+      "committed": "39.4000",
+      "outstanding": "10.0000",
+      "directional": "19.5500",
+      "combined": "49.4000",
+      "fees": "0.319213500000",
+      "in_flight": "49.4000",
+      "worst_case_loss": "19.869213500000"
+    },
+    {
+      "window": "2245z",
+      "committed": "42.83333333333333333333333333",
+      "outstanding": "10.0000",
+      "directional": "7.958333333333333333333333332",
+      "combined": "52.73333333333333333333333333",
+      "fees": "0.1393475000000000",
+      "in_flight": "52.97333333333333333333333333",
+      "worst_case_loss": "8.081417833333333333333333332"
+    },
+    {
+      "window": "2300z",
+      "committed": "18.8000",
+      "outstanding": "9.9000",
+      "directional": "8.8000",
+      "combined": "28.7000",
+      "fees": "0.196476500000",
+      "in_flight": "29.3000",
+      "worst_case_loss": "8.943100500000"
+    },
+    {
+      "window": "2315z",
+      "committed": "30.0000",
+      "outstanding": "10.0000",
+      "directional": "4.0000",
+      "combined": "40.0000",
+      "fees": "0",
+      "in_flight": "40.0000",
+      "worst_case_loss": "4.0000"
+    },
+    {
+      "window": "2330z",
+      "committed": "8.1000",
+      "outstanding": "9.9000",
+      "directional": "8.1000",
+      "combined": "18.0000",
+      "fees": "1.011642000000",
+      "in_flight": "19.3000",
+      "worst_case_loss": "9.078629500000"
+    },
+    {
+      "window": "2345z",
+      "committed": "70.66666666666666666666666667",
+      "outstanding": "10.0000",
+      "directional": "9.638095238095238095238095239",
+      "combined": "80.66666666666666666666666667",
+      "fees": "0.0228099000000000",
+      "in_flight": "80.66666666666666666666666667",
+      "worst_case_loss": "9.660905138095238095238095239"
+    },
+    {
+      "window": "0000z",
+      "committed": "7.5000",
+      "outstanding": "9.9000",
+      "directional": "7.5000",
+      "combined": "17.3000",
+      "fees": "0.563089000000",
+      "in_flight": "19.0000",
+      "worst_case_loss": "7.965024500000"
+    },
+    {
+      "window": "0030z",
+      "committed": "49.4000",
+      "outstanding": "10.0000",
+      "directional": "19.6000",
+      "combined": "59.4000",
+      "fees": "0",
+      "in_flight": "59.4000",
+      "worst_case_loss": "19.6000"
+    },
+    {
+      "window": "0045z",
+      "committed": "41.2000",
+      "outstanding": "10.1000",
+      "directional": "11.7200",
+      "combined": "51.3000",
+      "fees": "0",
+      "in_flight": "51.3000",
+      "worst_case_loss": "11.7200"
+    },
+    {
+      "window": "0100z",
+      "committed": "44.76666666666666666666666667",
+      "outstanding": "10.2000",
+      "directional": "6.483333333333333333333333336",
+      "combined": "54.96666666666666666666666667",
+      "fees": "0.804462500000",
+      "in_flight": "54.96666666666666666666666667",
+      "worst_case_loss": "7.287795833333333333333333336"
+    },
+    {
+      "window": "0115z",
+      "committed": "29.6000",
+      "outstanding": "10.0000",
+      "directional": "19.66666666666666666666666667",
+      "combined": "39.6000",
+      "fees": "0.145950000000",
+      "in_flight": "39.6000",
+      "worst_case_loss": "19.81261666666666666666666667"
+    },
+    {
+      "window": "0130z",
+      "committed": "30.14840000",
+      "outstanding": "10.1000",
+      "directional": "19.0000",
+      "combined": "40.24840000",
+      "fees": "0.145950000000",
+      "in_flight": "40.24840000",
+      "worst_case_loss": "19.145950000000"
+    },
+    {
+      "window": "0200z",
+      "committed": "45.94166666666666666666666667",
+      "outstanding": "10.0000",
+      "directional": "15.1000",
+      "combined": "55.94166666666666666666666667",
+      "fees": "0.270563500000",
+      "in_flight": "56.04166666666666666666666667",
+      "worst_case_loss": "15.1000"
+    },
+    {
+      "window": "0215z",
+      "committed": "8.8000",
+      "outstanding": "10.2000",
+      "directional": "6.8000",
+      "combined": "19.0000",
+      "fees": "0.307537500000",
+      "in_flight": "28.3000",
+      "worst_case_loss": "6.8000"
+    },
+    {
+      "window": "0230z",
+      "committed": "40.3000",
+      "outstanding": "10.2000",
+      "directional": "9.1500",
+      "combined": "50.2000",
+      "fees": "0.190360500000",
+      "in_flight": "50.6000",
+      "worst_case_loss": "9.313672500000"
+    }
+  ],
+  "labels": "peaks across every decision point in each window, then the max across windows. NOT an estimate from a contract count."
+}
