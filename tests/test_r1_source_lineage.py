@@ -29,12 +29,14 @@ def test_the_gate_still_forbids_sizing_and_the_prior_review_is_preserved():
     # A3 advanced the chain; no earlier review may be erased by doing so.
     assert L.PREVIOUS_REVIEWED == "03f881ca"
     assert L.REVIEWED != L.PREVIOUS_REVIEWED
-    assert L.REVIEWED_CHAIN == ("6adcc4c4", "03f881ca", "04cf5295", "8039c416")
+    assert L.REVIEWED_CHAIN == ("6adcc4c4", "03f881ca", "04cf5295",
+                                "8039c416", "e48960f7")
     assert L.REVIEWED == L.REVIEWED_CHAIN[-1]
     assert "6adcc4c4" in L.REVIEWED_CHAIN, "the A1 review must stay on record"
     assert "03f881ca" in L.REVIEWED_CHAIN, "the A2 review must stay on record"
     assert "04cf5295" in L.REVIEWED_CHAIN, "the B3 review must stay on record"
-    assert L.REVIEWED == "8039c416", "the LOCK5 probe artifact is the baseline"
+    assert "8039c416" in L.REVIEWED_CHAIN, "the LOCK5 wiring review must stay on record"
+    assert L.REVIEWED == "e48960f7", "the paired-log probe artifact is the baseline"
     # every delta accepted under the old baseline is still on the record
     assert set(L.PRIOR_DELTAS) >= {
         "src/pmus_l5_continuous_session.py", "src/pmus_live_mandate.py",

@@ -270,7 +270,17 @@ LABEL = "R1_SOURCE_LINEAGE"
 #:
 #: FORBIDDEN_CLASSES remains UNCHANGED. The EXECUTION-class deltas were admitted on
 #: evidence, not by relabelling them or by removing a class from the gate.
-REVIEWED = "8039c416"
+#:
+#: ADVANCED AGAIN TO e48960f7 (2026-09-28): the paired shadow-vs-live record.
+#: One new in-closure file, `src/pmus_paired_log.py`, plus its composition on the
+#: entrypoint (`pair_intent`, and `build_lock5` now building the log). Class:
+#: RECORDING, not forbidden -- it decides nothing, sizes nothing and submits
+#: nothing; it observes. It is nevertheless in-closure and therefore reviewed,
+#: because the first live window will be written up from it: a record that could
+#: default a row's live side to the shadow side would report a parity that never
+#: happened. Closure is 44 files; the Dockerfile COPY list was regenerated from it
+#: and is byte-identical.
+REVIEWED = "e48960f7"
 
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
@@ -288,7 +298,8 @@ PREVIOUS_REVIEWED = "03f881ca"
 
 #: THE WHOLE CHAIN, so advancing a baseline can never erase an earlier review.
 #: PREVIOUS_REVIEWED is only the immediate predecessor; this is the record.
-REVIEWED_CHAIN = ("6adcc4c4", "03f881ca", "04cf5295", "8039c416")
+REVIEWED_CHAIN = ("6adcc4c4", "03f881ca", "04cf5295", "8039c416",
+                  "e48960f7")
 DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 
 # Each entry: why this file may differ, the class it must fall in, and the
