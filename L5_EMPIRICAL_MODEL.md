@@ -1095,3 +1095,65 @@ achievement.
 
 Protocol frozen per `analysis/pmus/CHECKPOINT25_FREEZE.md`. No parameter moved, no
 challenger started, nothing selected.
+
+## LEDGER_SORT_001 — the midnight defect, and the invariance PROVEN not asserted
+`scripts/pmus_window_ledger.py` sorted per-window rows by the 5-character window
+label, so `"0030z" < "1830z"` placed the 2026-09-28 00:00–01:15 windows **before** the
+2026-09-27 18:30–23:45 ones. Every rolling n=5/10/15/20 checkpoint was therefore built
+from the first k windows **lexicographically**, reaching backwards across the date
+boundary. It became reachable only when the first post-midnight window was admitted.
+
+Caught by two symptoms: a `best_window_share_of_total_pnl` of **1.7792** (a share above
+1 is arithmetically possible but implausible here), and the n=15 mean apparently
+collapsing +5.3076 → +1.2527 when four unremarkable windows were added.
+
+**Fixed** by sorting on the full slug, which carries the date; the slug is now kept on
+each row because a 5-character label cannot order windows across midnight.
+
+### The invariance is a PROOF, because it is what makes this reporting-only
+`tests/test_pmus_ledger_order_invariance.py` — **20 tests** — regenerates the whole
+ledger with `USABLE` iterated in **reversed** order and requires every full-sample
+section to come back **identical**: `n_usable`, `residual_statistics`,
+`p0_thresholds`, `policy`, `capacity`, `accounting`, `excluded`, at **both** clips. It
+further pins that the per-window rows are the same set in the same canonical order,
+that the rolling checkpoints are stable once sorted, and — the part that stops the test
+proving nothing — that **for a sample spanning midnight the chronological order MUST
+differ from the lexicographic one**, so the defect would have been detected.
+
+So the claim "full-sample scoring is invariant, only the rolling subsets moved" is
+demonstrated end to end rather than argued. That is the entire basis on which the fix
+counts as reporting-only and leaves the frozen checkpoint undisturbed.
+
+## 3c — RESOLVED with a dependency, and ZERO change to signing semantics
+The two documented signing tests aborted with
+`ModuleNotFoundError: No module named '_cffi_backend'` raised inside
+`/usr/lib/python3/dist-packages/cryptography` (Debian 41.0.7). The container's
+`python3` is 3.11.15 at `/usr/local/bin/python3`, which could not load the system
+package's CFFI backend, so Ed25519 signing could not be constructed at all.
+
+`pip install cffi` (2.1.1). **No source file was touched.** Ed25519 now constructs and
+signs (64-byte signature verified), and
+`tests/test_pmus_q1_executor.py` + `tests/test_pmus_ws_evidence_recorder.py` are
+**43 passed**, including `test_signed_headers_match_documented_scheme` and
+`test_auth_headers_match_documented_scheme`. The signing scheme is now **verified**
+rather than merely unbroken.
+
+**Two caveats that must travel with this.** (1) The install is in an **ephemeral
+container** and does not persist; any future session must repeat it, and
+`requirements.txt` already pins `cryptography>=42.0`, which pulls a working `cffi` —
+the local container was simply running the older Debian build instead. (2) The probe
+image is unaffected either way: `deploy/*/Dockerfile` already does
+`pip install --no-cache-dir "websockets>=12" "cryptography>=42"`, so the deployed
+signing path was never the thing at risk. What was at risk was our **ability to
+verify** it, which is exactly why this was a hard gate.
+
+## OPEN REQUIREMENT — arm-retry, kept red on purpose
+`tests/test_l5_arm_retry.py` is now **8 xfailed** rather than a collection error. The
+`AttributeError` was raised at **import** time, which aborted collection for the whole
+suite; it is now raised at test time behind an explicit `_require_try_arm()` guard, with
+`pytestmark = xfail(raises=AttributeError, strict=True)`.
+
+Deleting it would be the "merely weaken the test" move that was ruled out, and skipping
+it would make the gap invisible. **The requirement is unsatisfied and stays counted:**
+the one-shot calls `probe.arm()` once and aborts on refusal, so the 1545z lesson is
+implemented nowhere until the retry is ported under the owner's ten conditions.

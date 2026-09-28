@@ -1,5 +1,21 @@
 """1545z: arming must be retried after a PASSED preflight, not attempted once.
 
+STATUS 2026-09-28 -- OPEN REQUIREMENT, DELIBERATELY RED. `Runner.try_arm` was
+removed by 3a: the continuous runner is no longer permitted to arm, because exactly
+one reviewed path -- `scripts/l5_pmus_live_oneshot.py` -- may own the arming
+transition. That does NOT retire the requirement below. The one-shot currently calls
+`probe.arm()` exactly once and aborts on refusal, so the 1545z lesson is implemented
+NOWHERE, and this file stays as the standing record of that gap until the retry is
+ported into the one-shot under the owner's ten conditions (same unspent unexpired
+authorization, same market, no order submitted, transient refusal only, all
+gates re-read per attempt, bounded deadline, consume exactly once).
+
+It is marked xfail rather than deleted or skipped: deleting it would be the "merely
+weaken the test" move that was ruled out, and skipping it would make the gap
+invisible. xfail keeps it counted and reported while letting the rest of the suite
+collect -- the AttributeError was at IMPORT time, which aborted collection for every
+other file.
+
 The live failure this pins down. On 2026-09-27 the executor was ARMED, the
 owner arm token matched, preflight PASSED, and the 1545z window still ran
 start to finish with `armed: false` and zero orders submitted.
@@ -17,7 +33,17 @@ from __future__ import annotations
 
 import collections
 
+import pytest
+
 from src import l5_pmus_live_runner as R
+
+pytestmark = pytest.mark.xfail(
+    reason="3a removed Runner.try_arm; the arm-retry requirement is OPEN and must "
+           "be ported into scripts/l5_pmus_live_oneshot.py",
+    raises=AttributeError, strict=True)
+
+#: resolved at TEST time, not import time, so collection is never aborted
+_MISSING = object()
 
 
 class _Transport:
@@ -48,8 +74,14 @@ class _Runner:
     `maybe_preflight` and `try_arm` code objects, not to boot a venue client.
     """
 
-    maybe_preflight = R.Runner.maybe_preflight
-    try_arm = R.Runner.try_arm
+    maybe_preflight = getattr(R.Runner, "maybe_preflight", _MISSING)
+    try_arm = getattr(R.Runner, "try_arm", _MISSING)
+
+    def _require_try_arm(self):
+        if self.try_arm is _MISSING:
+            raise AttributeError(
+                "Runner.try_arm was removed by 3a; the arm-retry requirement is "
+                "OPEN and belongs in the one-shot probe")
 
     def __init__(self, *, uncertain=None) -> None:
         self.transport = _Transport()
@@ -72,6 +104,7 @@ class _Runner:
 
 
 def test_a_passed_preflight_still_retries_the_arm():
+    _Runner(uncertain=None)._require_try_arm()
     """The defect itself: PASSED used to return before reaching try_arm."""
     r = _Runner()
     r.maybe_preflight(100.0)
@@ -80,6 +113,7 @@ def test_a_passed_preflight_still_retries_the_arm():
 
 
 def test_an_uncertainty_that_clears_does_not_cost_the_window():
+    _Runner(uncertain=None)._require_try_arm()
     """The exact 1545z sequence, and what should have happened."""
     r = _Runner(uncertain="one terminal order is not yet booked")
     r.maybe_preflight(100.0)
@@ -95,6 +129,7 @@ def test_an_uncertainty_that_clears_does_not_cost_the_window():
 
 
 def test_a_refusal_is_logged_once_however_long_it_lasts():
+    _Runner(uncertain=None)._require_try_arm()
     r = _Runner(uncertain="still unbooked")
     emitted = []
     orig, R.emit = R.emit, lambda k, p: emitted.append((k, p))
@@ -110,6 +145,7 @@ def test_a_refusal_is_logged_once_however_long_it_lasts():
 
 
 def test_an_unreconciled_book_is_retried_on_the_same_terms():
+    _Runner(uncertain=None)._require_try_arm()
     r = _Runner()
     r.reconciled = False
     r.maybe_preflight(100.0)
@@ -121,6 +157,7 @@ def test_an_unreconciled_book_is_retried_on_the_same_terms():
 
 
 def test_the_retry_never_re_runs_a_passed_preflight():
+    _Runner(uncertain=None)._require_try_arm()
     """Preflight is a fact about the market. Only arming is retried."""
     r = _Runner()
     before = r.preflight_attempts
@@ -131,6 +168,7 @@ def test_the_retry_never_re_runs_a_passed_preflight():
 
 
 def test_the_retry_costs_nothing_once_armed():
+    _Runner(uncertain=None)._require_try_arm()
     """try_arm returns at the first line when already armed: no reconcile,
     no second arm, nothing that could touch the venue."""
     r = _Runner()
@@ -143,6 +181,7 @@ def test_the_retry_costs_nothing_once_armed():
 
 
 def test_a_halted_runner_is_never_armed_by_the_retry():
+    _Runner(uncertain=None)._require_try_arm()
     r = _Runner()
     r.halted = lambda: True
     for i in range(10):
@@ -152,6 +191,7 @@ def test_a_halted_runner_is_never_armed_by_the_retry():
 
 
 def test_a_failed_preflight_still_takes_the_preflight_path():
+    _Runner(uncertain=None)._require_try_arm()
     """The guard is additive: NOT_RUN/FAILED behaviour is untouched."""
     r = _Runner()
     r.preflight_status = "NOT_RUN"
