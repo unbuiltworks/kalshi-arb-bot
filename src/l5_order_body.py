@@ -108,12 +108,25 @@ def venue_price(outcome_side_str: str, price: D) -> D:
     return ONE - px if str(outcome_side_str).upper().endswith("NO") else px
 
 
+#: proven against this venue by `pmus_migration_close_live.submit_marketable`,
+#: which has run marketable reduce-only buys on PMUS with exactly this value.
+TIF_GTC = "TIME_IN_FORCE_GOOD_TILL_CANCEL"
+TIF_IOC = "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL"
+
+
 def build(*, slug: str, side: str, price: Any, qty: Any,
-          post_only: bool) -> Dict[str, Any]:
+          post_only: bool, tif: str = TIF_GTC) -> Dict[str, Any]:
     """The venue-accepted order body. Proven representation, verbatim.
 
     Callers supply WHAT to trade -- market, outcome, price in that outcome's
     own terms, quantity, maker/taker. This decides HOW to say it.
+
+    PRICE IS IN THE OUTCOME'S OWN TERMS. `venue_price` below performs the NO
+    inversion, so a caller that inverts first inverts twice and sends a wildly
+    wrong price. No caller should ever pre-convert.
+
+    `tif` defaults to GTC, which is what every existing caller gets, unchanged.
+    IOC is for a marketable leg that must not leave a resting remainder.
     """
     q = D(str(qty))
     if q <= 0:
@@ -124,7 +137,7 @@ def build(*, slug: str, side: str, price: Any, qty: Any,
         "type": "ORDER_TYPE_LIMIT",
         "price": {"value": str(venue_price(os_, price)), "currency": "USD"},
         "quantity": float(q),
-        "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
+        "tif": str(tif),
         "participateDontInitiate": bool(post_only),
         "outcomeSide": os_,
         "action": "ORDER_ACTION_BUY",

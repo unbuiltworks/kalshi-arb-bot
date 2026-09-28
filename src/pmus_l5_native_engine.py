@@ -218,6 +218,8 @@ class NativeEngine:
                 it = Intent(COMPLETE, side=comp, held=held, comp=comp,
                             qty=n, cost=cost, fee=fee, basis=basis,
                             now=now, taker=True,
+                            limit_price=worst_admitted_price(
+                                lv, want, basis, self.theta),
                             reason="THETA_MARGINAL_%s" % self.theta)
                 out.append(it)
                 if execute_taker is None:
@@ -249,6 +251,9 @@ class NativeEngine:
                     # only because it actually secures the floor.
                     it2 = Intent(SECURE, side=comp2, qty=n2, cost=cost2,
                                  fee=fee2, now=now, taker=True,
+                                 limit_price=worst_walked_price(
+                                     S.buy_levels(self.ladder, comp2),
+                                     abs(r2)),
                                  floor_before=fh, floor_after=new_floor,
                                  reason="FLOOR_SECURING_NO_THETA")
                     out.append(it2)
@@ -374,6 +379,58 @@ class NativeEngine:
         out["peak_floor_seen"] = (max(f["floor"] for f in self.floor_trace)
                                   if self.floor_trace else None)
         return out
+
+
+def worst_admitted_price(levels, want: D, basis: D, theta: D) -> Optional[D]:
+    """The WORST own-terms price the frozen theta walk actually admitted.
+
+    `marginal_complete` returns a cost, and cost/qty is a VWAP. A limit set at
+    the VWAP cannot reach the deepest level the decision admitted: 5 @ 0.30 plus
+    5 @ 0.40 averages 0.35, and a 0.35 limit buys five contracts, not ten. The
+    executable limit must be the worst ADMITTED level and no worse, so the order
+    can take exactly what the frozen rule said yes to and nothing it said no to.
+
+    This mirrors `marginal_complete`'s walk exactly -- same level order, same
+    marginal test, same break -- and returns None when nothing was admitted.
+    """
+    qty, worst = D(0), None
+    for lvl in levels or []:
+        if qty >= want:
+            break
+        px = S._d(lvl[0] if len(lvl) > 0 else None)
+        avail = S._d(lvl[1] if len(lvl) > 1 else None)
+        if px is None or avail is None or avail <= 0:
+            continue
+        if not (D(0) < px < D(1)):
+            continue
+        unit_fee = S.THETA_TAKER * px * (D(1) - px)
+        if basis + px + unit_fee > theta:
+            break
+        take = want - qty
+        if take > avail:
+            take = avail
+        qty += take
+        worst = px if worst is None or px > worst else worst
+    return worst
+
+
+def worst_walked_price(levels, want: D) -> Optional[D]:
+    """The worst own-terms price `walk_ladder` consumes for the floor-securing
+    completion, which has NO theta gate. Mirrors that walk exactly."""
+    filled, worst = D(0), None
+    for lvl in levels or []:
+        if filled >= want:
+            break
+        px = S._d(lvl[0] if len(lvl) > 0 else None)
+        qty = S._d(lvl[1] if len(lvl) > 1 else None)
+        if px is None or qty is None or qty <= 0:
+            continue
+        take = want - filled
+        if take > qty:
+            take = qty
+        filled += take
+        worst = px if worst is None or px > worst else worst
+    return worst
 
 
 def assert_no_translate_fallback() -> None:

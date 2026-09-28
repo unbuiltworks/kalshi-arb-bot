@@ -707,6 +707,49 @@ class Probe:
 _LAST_PROBE: Optional["Probe"] = None
 
 
+def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
+                       sleep=time.sleep, venue=None, money_path=None):
+    """Work one window with the FROZEN q50 policy, driven by the book feed.
+
+    This is the money lane. It never calls `new_l5_actions` and never reaches
+    `pmus_translate`: the decisions come from `pmus_l5_native_engine`, whose
+    rules reconcile 25/25 to the frozen q50 PROFIT_LOCK_5 ledger, and every
+    order still traverses the SAME certified transport -- paired record, LOCK5
+    gate, mandate -- that the comparison lane uses.
+    """
+    from src import pmus_native_money_path as NMP
+    from src import pmus_native_venue as NV
+
+    venue = venue or NV.AuthenticatedVenue(probe.tp, market=probe.market,
+                                           journal=journal)
+    mp = money_path or NMP.build(market=probe.market, transport=probe.tp,
+                                 feed=feed, venue=venue, journal=journal)
+    probe.native = mp
+    seen_t = None
+    ticks = 0
+    while clock() < deadline:
+        book = feed.latest()
+        if book is None or book.get("t") == seen_t:
+            sleep(POLL_S)
+            continue
+        seen_t = book.get("t")
+        ticks += 1
+        res = mp.on_book_state(book, getattr(feed, "ladder", None))
+        journal.write("native_tick", {"t": seen_t, **{
+            k: v for k, v in res.items() if k != "submitted"}})
+        if mp.eng.locked_at is not None:
+            journal.write("native_locked", {"t": str(mp.eng.locked_at),
+                                            "via": mp.eng.lock_via,
+                                            "floor": str(mp.eng.lock_floor)})
+            break
+    journal.write("native_window_done", {
+        "ticks": ticks, "submitted": len(mp.submitted),
+        "locked": mp.eng.locked_at is not None,
+        "lock_transactions": len(mp.lock_transactions),
+        "remainders": mp.remainders})
+    return mp
+
+
 def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         activity=None, state_path=None, journal_path=None,
         ledger_path=None, book_feed=None) -> Dict[str, Any]:
@@ -900,8 +943,18 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
             window_target=lambda: (os.getenv(AUTH.MARKET_ENV, "").strip()
                                    or None),
             clock=clock), sleep=sleep)
-        # 5. work exactly this window
-        probe.work_window(deadline)
+        # 5. work exactly this window, in the selected lane
+        if native_engine_enabled():
+            journal.write("money_lane", {
+                "lane": "NATIVE_FROZEN_Q50",
+                "policy": "clip=50 theta=0.96 variant=B hold_s=60 "
+                          "residual_cap_k=2 profit_lock_usd=5",
+                "note": "the L5-action translator is not on this path"})
+            native_work_window(probe, feed, deadline, journal=journal,
+                               clock=clock, sleep=sleep)
+        else:
+            journal.write("money_lane", {"lane": "L5_ACTION_COMPARISON"})
+            probe.work_window(deadline)
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
@@ -1182,6 +1235,11 @@ MAKER_ONLY_ENV = "L5_MAKER_ONLY"
 #: Probe 08's single treatment switch, likewise default OFF. With it unset,
 #: Probe 07 is reproduced exactly, which is what makes Probe 07 the control.
 IMBALANCE_SUPPRESS_ENV = "L5_IMBALANCE_SUPPRESS"
+#: THE MONEY LANE. Unset, the probe runs the L5-action comparison lane
+#: (new_l5_actions -> pmus_translate), preserved for behavioural research. Set,
+#: the money path is the venue-native port of the frozen q50 arm, which is the
+#: only policy with a parity result behind it.
+NATIVE_ENGINE_ENV = "L5_NATIVE_ENGINE"
 
 
 def maker_treatment_enabled() -> bool:
@@ -1192,6 +1250,11 @@ def maker_treatment_enabled() -> bool:
 def maker_only_enabled() -> bool:
     return os.getenv(MAKER_ONLY_ENV, "").strip().upper() in ("1", "YES",
                                                              "TRUE")
+
+
+def native_engine_enabled() -> bool:
+    return os.getenv(NATIVE_ENGINE_ENV, "").strip().upper() in ("1", "YES",
+                                                                "TRUE")
 
 
 def imbalance_suppress_enabled() -> bool:

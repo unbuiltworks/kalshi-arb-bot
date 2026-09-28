@@ -26,26 +26,32 @@ ORDER_PATH = "/v1/orders"
 SIDE_WIRE = {"up": "OUTCOME_SIDE_YES", "down": "OUTCOME_SIDE_NO"}
 
 
-def wire_price(side: str, own_px: D) -> D:
-    """Own-outcome price -> the venue's YES-terms wire price."""
-    own_px = D(str(own_px))
-    return own_px if side == "up" else (D(1) - own_px)
-
-
 def body_for(intent: "E.Intent", market: str) -> Dict[str, Any]:
-    """One intent -> one order body, through the certified builder."""
+    """One intent -> one order body, through the certified builder.
+
+    THE PRICE IS PASSED IN THE OUTCOME'S OWN TERMS AND IS NOT PRE-CONVERTED.
+    `OB.build` calls `venue_price`, which performs the NO inversion itself;
+    an earlier version of this function inverted first, so every DOWN order
+    was inverted TWICE and went out at the wrong price. The builder's contract
+    is the authority and there is no second serializer here.
+
+    A taker leg carries the WORST ADMITTED LEVEL price, never the VWAP, and
+    goes IOC so it cannot leave a resting remainder behind.
+    """
     side = str(intent["side"])
     if intent.kind == E.REST:
         return OB.build(slug=market, side=SIDE_WIRE[side],
-                        price=wire_price(side, intent["price"]),
+                        price=D(str(intent["price"])),
                         qty=D(str(intent["qty"])), post_only=True)
     if intent.kind in (E.COMPLETE, E.SECURE):
         qty = D(str(intent["qty"]))
-        # the per-level walked cost is what the frozen rule priced; the order
-        # is marketable and carries the level-average as its limit.
-        px = D(str(intent["cost"])) / qty if qty > 0 else D(0)
+        limit = intent.get("limit_price")
+        if limit is None:
+            raise ValueError("%s intent carries no executable limit price"
+                             % intent.kind)
         return OB.build(slug=market, side=SIDE_WIRE[side],
-                        price=wire_price(side, px), qty=qty, post_only=False)
+                        price=D(str(limit)), qty=qty, post_only=False,
+                        tif=OB.TIF_IOC)
     raise ValueError("intent %r builds no order" % (intent.kind,))
 
 
@@ -64,6 +70,7 @@ class NativeMoneyPath:
         self.journal = journal
         self.submitted: List[dict] = []
         self.lock_transactions: List[dict] = []
+        self.remainders: List[dict] = []
 
     # ------------------------------------------------------------ the tick
 
@@ -112,16 +119,72 @@ class NativeMoneyPath:
         return rec
 
     def _execute_taker(self, intent: "E.Intent"):
-        """A completion leg. Submitted, then resolved from AUTHENTICATED fill
-        state -- an ACK is not a fill, so nothing is booked from the ACK."""
-        self._post(intent)
+        """A completion leg, resolved from AUTHENTICATED fill state.
+
+        AN ACK IS NEVER A FILL. The order goes out IOC so the venue itself
+        cancels any unfilled remainder, but IOC is not a guarantee we may
+        assume: the remainder is CHECKED, and while an unaccounted completion
+        remainder is still live nothing downstream may proceed. Returning None
+        stops the engine's pass, which is the fail-closed answer.
+        """
+        rec = self._post(intent)
         if self.venue is None:
             return None
+        oid = str((rec.get("ack") or {}).get("orderId")
+                  or (rec.get("ack") or {}).get("id") or "")
+
         got = self.venue.completion_fill(intent)
         if got is None:
-            return None            # unconfirmed: the engine stops the pass
-        n, cost, fee = got
-        return D(str(n)), D(str(cost)), D(str(fee))
+            self._remainder_uncertain(intent, oid, "FILL_STATE_UNKNOWN")
+            return None
+        n, cost, fee = (D(str(got[0])), D(str(got[1])), D(str(got[2])))
+
+        want = D(str(intent["qty"]))
+        if n < want:
+            # PARTIAL. The remainder must be provably gone before any dependent
+            # decision. IOC should have cancelled it; we verify rather than
+            # trust, and an unverifiable remainder fails closed.
+            if not self._remainder_resolved(intent, oid, want - n):
+                return None
+        if n <= 0:
+            return None
+        return n, cost, fee
+
+    def _remainder_resolved(self, intent, oid: str, remainder: D) -> bool:
+        """Cancel, CONFIRM, reconcile race fills. Only then may we continue."""
+        cancel = getattr(self.venue, "cancel_order", None)
+        if cancel is not None and oid:
+            try:
+                cancel(oid)
+            except BaseException:                              # noqa: BLE001
+                self._remainder_uncertain(intent, oid, "CANCEL_FAILED")
+                return False
+        try:
+            still = self.venue.open_orders()
+        except BaseException:                                  # noqa: BLE001
+            self._remainder_uncertain(intent, oid, "OPEN_ORDERS_UNREADABLE")
+            return False
+        if still is None:
+            self._remainder_uncertain(intent, oid, "OPEN_ORDERS_NO_ANSWER")
+            return False
+        if still:
+            self._remainder_uncertain(intent, oid, "REMAINDER_STILL_LIVE")
+            return False
+        self._note_remainder({"resolved": True, "remainder": str(remainder),
+                              "order": oid})
+        return True
+
+    def _remainder_uncertain(self, intent, oid: str, why: str) -> None:
+        self._note_remainder({"resolved": False, "why": why, "order": oid,
+                              "intent": intent.kind})
+
+    def _note_remainder(self, row: Dict[str, Any]) -> None:
+        self.remainders.append(row)
+        if self.journal is not None:
+            try:
+                self.journal.write("completion_remainder", row)
+            except BaseException:                              # noqa: BLE001
+                pass
 
 
 def build(*, market: str, transport, feed=None, venue=None, journal=None,
