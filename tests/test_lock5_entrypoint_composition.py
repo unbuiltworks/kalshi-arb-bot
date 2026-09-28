@@ -298,7 +298,8 @@ def test_the_entrypoint_exercises_observability(wired):
 def test_the_entrypoint_exercises_a_permitted_taker_completion(wired):
     out = wired.lock5_complete(outcome_side="OUTCOME_SIDE_NO", ask=D("0.23"),
                                qty=D(5), first_cost=D("0.44"))
-    body = wired.tp.posts[0][2]["request"]
+    # the BARE body -- see test_pmus_lock5_translation for why
+    body = wired.tp.posts[0][2]
     assert body == OB.build(slug=MKT, side="OUTCOME_SIDE_NO", price=D("0.23"),
                             qty=D(5), post_only=False)
     assert Q1.taker_completion_ok(D("0.44"), D("0.23")) is True

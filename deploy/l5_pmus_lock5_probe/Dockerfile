@@ -60,6 +60,7 @@ COPY src/pmus_l5_multi_shadow.py src/pmus_l5_multi_shadow.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
 COPY src/pmus_live_mandate.py src/pmus_live_mandate.py
 COPY src/pmus_lock5_translation.py src/pmus_lock5_translation.py
+COPY src/pmus_lock5_live_adapter.py src/pmus_lock5_live_adapter.py
 COPY src/pmus_paired_log.py src/pmus_paired_log.py
 COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
 COPY src/pmus_probe_observability.py src/pmus_probe_observability.py
@@ -70,6 +71,7 @@ COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
+COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY src/polymarket_l5/action_model_v2.py src/polymarket_l5/action_model_v2.py
 COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.py

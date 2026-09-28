@@ -23,10 +23,31 @@ MARKET = "cpc-btc-updown-15m-2026-09-23-1615z"
 START = P.window_start(MARKET)
 
 
-def authorize(monkeypatch, sid="sess-001"):
+#: TEST DATA, not a default. `rung_a_mandate()` requires an explicit
+#: PMUS_LIVE_MANDATE naming THIS service and strategy, and validates its expiry, so
+#: conftest's autouse $1,000,000 "test-suite" mandate is correctly rejected here.
+#: These tests exercise the probe's behaviour UNDER authority, so they must supply
+#: valid authority; the headroom matches what this file has always assumed so the
+#: behavioural assertions keep their original meaning.
+TEST_MANDATE = {
+    "authorization_id": "TEST-RUNG-A-MANDATE",
+    "authorized_at": "2026-09-28T00:00:00Z",
+    "service": "l5-live-probe-oneshot",
+    "strategy": "BTC15M_PROFIT_LOCK_5_CAPACITY_PROBE",
+    "strategy_version": "test",
+    "max_markets": 1, "max_total_markets": 1,
+    "max_spend_per_market": "5.00", "max_total_spend": "5.00",
+    "max_residual": "10.00", "max_daily_realized_loss": "5.00",
+    "expiry": "2099-01-01T00:00:00Z",
+}
+
+
+def authorize(monkeypatch, sid="sess-001", mandate=None):
     monkeypatch.setenv(Q1.LIVE_ENV, "YES")
     monkeypatch.setenv(Q1.SID_ENV, sid)
     monkeypatch.setenv(Q1.ARM_ENV, sid)
+    monkeypatch.setenv("PMUS_LIVE_MANDATE",
+                       json.dumps(mandate or TEST_MANDATE))
 
 
 def deauthorize(monkeypatch):
@@ -341,19 +362,57 @@ def test_a_partial_fill_keeps_consuming_the_envelope(tmp_path, monkeypatch):
     assert len(rep["close_out"]["cancelled"]) == 3
 
 
-def test_the_five_dollar_envelope_is_the_probe_envelope(tmp_path, monkeypatch):
+def test_the_envelope_is_exactly_the_mandate_and_nothing_else(
+        tmp_path, monkeypatch):
+    """The envelope is DERIVED, not declared (owner, 2026-09-28).
+
+    This test used to assert a static $5 envelope that
+    `l5_probe_manifest.probe_limits()` hardcoded. That was a second monetary
+    authority: the probe reported a $5 per-market ceiling out of its own run while
+    the approved envelope was $1.00. The numbers were not retuned to $1 -- they are
+    taken from PMUS_LIVE_MANDATE, so they are whatever it says, and this test
+    asserts that correspondence rather than any particular figure.
+
+    `worst_case` is likewise gone: `PM.worst_case()` defaulted to `probe_limits()`
+    and so smuggled those dollars back through the report. The report now derives
+    `worst_case_usd` from the live limits themselves.
+    """
     authorize(monkeypatch)
+    raw = {
+        "authorization_id": "OWNER-ENVELOPE-TEST",
+        "authorized_at": "2026-09-28T00:00:00Z",
+        "service": P.RUNG_A_SERVICE, "strategy": P.RUNG_A_STRATEGY,
+        "strategy_version": "envelope-test",
+        "max_markets": 1, "max_total_markets": 1,
+        "max_spend_per_market": "1.00", "max_total_spend": "1.00",
+        "max_residual": "1.00", "max_daily_realized_loss": "1.00",
+        "expiry": "2099-01-01T00:00:00Z",
+    }
+    monkeypatch.setenv("PMUS_LIVE_MANDATE", json.dumps(raw))
     rep, _ = drive(tmp_path, monkeypatch, actions=[l5row(size=2.0)])
+
     lim = rep["live_limits"]
-    assert lim["max_usd_per_market"] == "5"
-    assert lim["max_total_exposure_usd"] == "5"
-    assert lim["max_abs_residual"] == "10"
-    assert lim["max_concurrent_markets"] == 1
-    # a CONCURRENCY bound, not a money bound: every dollar limit above is
-    # unchanged and the worst case below is still 5.1738
+    assert lim["monetary_authority"] == "PMUS_LIVE_MANDATE"
+    # every monetary bound is the mandate's, field for field
+    assert lim["max_usd_per_market"] == raw["max_spend_per_market"]
+    assert lim["max_total_exposure_usd"] == raw["max_total_spend"]
+    assert lim["max_abs_residual"] == raw["max_residual"]
+    assert lim["daily_realized_loss_halt_usd"] == raw["max_daily_realized_loss"]
+    assert lim["max_concurrent_markets"] == raw["max_markets"]
+    # and NOT the retired static ceiling
+    assert lim["max_usd_per_market"] != "5"
+    assert lim["max_total_exposure_usd"] != "5"
+
+    # max_live_orders is the one NON-monetary control, and still comes from the
+    # manifest: over 12 clean windows 143 of 217 maker intents were lost to the
+    # count and ZERO to money, so the dollar engine is the hard boundary.
     assert lim["max_live_orders"] == 8
-    assert lim["daily_realized_loss_halt_usd"] == "5"
-    assert rep["worst_case"]["worst_case_total_usd"] == "5.1738"
+    assert lim["band"] is None
+
+    # the worst case is computed from THESE limits, not a manifest default
+    assert "worst_case" not in rep, (
+        "PM.worst_case() is back in the report, and it defaults to probe_limits()")
+    assert rep["worst_case_usd"] == raw["max_total_spend"]
 
 
 # 6 -------------------------------------- uncertain submit blocks what follows

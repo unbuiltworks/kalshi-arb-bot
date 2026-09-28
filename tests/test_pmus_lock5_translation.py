@@ -183,7 +183,10 @@ def test_a_permitted_completion_uses_the_existing_primitive_body(tmp_path):
     s = _sess(tmp_path)
     out = s.submit_taker_completion(outcome_side="OUTCOME_SIDE_NO",
                                     ask=D("0.23"), qty=D(5), first_cost=D("0.44"))
-    body = s.transport.posts[0][2]["request"]
+    # the BARE body: /v1/orders takes the order itself, only /v1/order/preview
+    # takes {"request": body}. Sending the preview envelope made admit() report
+    # order_unpriceable:order_quantity_unreadable on every order.
+    body = s.transport.posts[0][2]
     from src import pmus_micro_executor as MICRO
     assert body == MICRO._body(MKT, "OUTCOME_SIDE_NO", D("0.23"), D(5), False)
     assert body["participateDontInitiate"] is False, "a completion is a taker"
