@@ -1023,3 +1023,75 @@ the mixed signs in the episode population, not an improvement in the policy.
 **Protocol frozen through n=25 per `analysis/pmus/CHECKPOINT25_FREEZE.md`. No
 challenger was started, no parameter moved, and nothing was selected from these
 numbers.**
+
+## COLLECTOR_004 — a drain that EXPIRED, and the tape says so
+0015z: the reslate at 00:30:30 started the bounded drain, it polled for the full
+`DRAIN_S`=240s, and it emitted **`drain_end` at 00:34:31 with
+`terminal_recorded: FALSE`**. The venue had still not published a terminal state.
+
+**This is the opposite of the old failure.** Before the fix, a lost close was a
+silent absence; now the tape records that the collector waited and gave up, so the
+exclusion rests on evidence instead of an inference. 0015z is **excluded
+permanently**. The venue later reported `settlementPx` 1.0000 vs `lastTradePx`
+0.9900 (UP) and that is deliberately **not** used — reconstructing a missing
+terminal observation from later venue data is forbidden.
+
+Data point on `DRAIN_S` sufficiency, recorded and **not acted on**: 2315z needed
+**124s** after its reslate and was caught; 0015z needed **more than 241s** and was
+not. 240s is therefore not always enough. `DRAIN_S` is a frozen parameter and
+changing it would require a deployment that is not authorized, so this is a
+finding, not a change.
+
+## n=17 — 0000z admitted (+33.4325); 8 windows remain
+476 configs, 0 failures. 0000z is a **third** large winner (DOWN, shadow trading
+net **+33.4325**, zero terminal residual), after 2300z (+53.48) and 2330z (+35.05).
+
+### Rolling n=15, frozen arm (P0) — mean above $5, median still below zero
+| | q=25 | q=50 |
+|---|---|---|
+| EC matched gross | +11.5727 | +23.0398 |
+| PASSIVE matched gross | −5.1124 | −10.3946 |
+| TOTAL matched gross | +6.4603 | +12.6452 |
+| fees | 0.8887 | 1.6942 |
+| residual P&L | −2.8217 | −5.6433 |
+| **SHADOW TRADING NET** | **+2.7499** | **+5.3076** |
+| expected maker rebate | +0.4093 | +0.8127 |
+| SHADOW MODELED NET | +3.1593 | +6.1203 |
+
+q=50 distribution: median **−0.0688**, trimmed mean +4.3805, **6 of 15 positive**,
+best window **67.2%** of total P&L, mean excluding best **+1.8665**.
+
+### PROFIT_LOCK_5 at n=17 (threshold frozen at $5)
+| | q=25 | q=50 |
+|---|---|---|
+| EC matched gross | +7.5281 | +13.6537 |
+| PASSIVE matched gross | −3.3708 | −5.7448 |
+| TOTAL matched gross | +4.1572 | +7.9089 |
+| fees | 0.6544 | 1.1216 |
+| residual P&L | −0.3762 | +0.1064 |
+| **SHADOW TRADING NET** | **+3.1267** | **+6.8937** |
+| median | +5.4898 | +5.8911 |
+| **trimmed mean** | +2.7666 | **+4.9219** |
+| lock-hit rate | 10 of 17 | 12 of 17 |
+| positive-window rate | 10 of 17 | 12 of 17 |
+| worst window | 2030z, −15.3540 | 2245z, −10.6526 |
+| best window | 2300z, +27.0088 | 2300z, +54.0176 |
+| best window's share of total | 0.5081 | **0.4609** |
+| mean excluding best window | +1.6340 | **+3.9485** |
+| max peak directional | **50, unchanged** | **100, unchanged** |
+
+Concentration is **easing as n grows**: the best window's share of total P&L has
+fallen 0.5464 (n=14) → 0.5216 (n=16) → **0.4609** (n=17), and the mean excluding it
+has risen +3.4489 → +3.3027 → **+3.9485**. The trimmed mean has risen to **+4.9219**,
+now a hair under $5. Still **TARGET CROSSED — NOT ESTABLISHED**; nothing is
+selected, and the trend is reported, not extrapolated.
+
+Residual episodes 7 of 17 (frequency 0.4118, Wilson [0.2161, 0.6399]), 4 lost and
+3 won. Break-even frequency is now **1.0513**, i.e. above 1.0 and therefore not a
+meaningful bound any more: with before-residual at +12.2908 and a signed mean
+episode P&L of only −11.6915, no attainable frequency of episodes would eliminate
+the profit. Recorded as an artefact of the mixed-sign episode population, not as an
+achievement.
+
+Protocol frozen per `analysis/pmus/CHECKPOINT25_FREEZE.md`. No parameter moved, no
+challenger started, nothing selected.

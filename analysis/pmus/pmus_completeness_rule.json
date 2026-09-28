@@ -562,7 +562,7 @@
         "1_observed_through_close": true,
         "2_final_preclose_within_32s": true,
         "3_no_preclose_gap_over_32s": true,
-        "4_terminal_captured_by_same_process": false,
+        "4_terminal_captured_by_same_process": true,
         "5_settlement_finalized": null,
         "6_no_postclose_info_in_decisions": true
       },
@@ -571,12 +571,60 @@
       },
       "max_preclose_gap_s": 29.9,
       "final_preclose_to_close_s": 16.6,
+      "postclose_gap_s": 26.6,
+      "terminal_t": "2026-09-28T00:15:09.994749+00:00",
+      "terminal_state": "MARKET_STATE_CLOSED",
+      "terminal_after_close": true,
+      "preclose_bbo_rows": 58,
+      "two_sided_states": 52,
+      "tape_test_passes": true
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0015z",
+      "window": "0015z",
+      "elements": {
+        "1_observed_through_close": true,
+        "2_final_preclose_within_32s": true,
+        "3_no_preclose_gap_over_32s": true,
+        "4_terminal_captured_by_same_process": false,
+        "5_settlement_finalized": null,
+        "6_no_postclose_info_in_decisions": true
+      },
+      "also": {
+        "has_two_sided_state": true
+      },
+      "max_preclose_gap_s": 29.2,
+      "final_preclose_to_close_s": 15.5,
+      "postclose_gap_s": null,
+      "terminal_t": null,
+      "terminal_state": null,
+      "terminal_after_close": false,
+      "preclose_bbo_rows": 60,
+      "two_sided_states": 44,
+      "tape_test_passes": false
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0030z",
+      "window": "0030z",
+      "elements": {
+        "1_observed_through_close": true,
+        "2_final_preclose_within_32s": true,
+        "3_no_preclose_gap_over_32s": true,
+        "4_terminal_captured_by_same_process": false,
+        "5_settlement_finalized": null,
+        "6_no_postclose_info_in_decisions": true
+      },
+      "also": {
+        "has_two_sided_state": true
+      },
+      "max_preclose_gap_s": 29.6,
+      "final_preclose_to_close_s": 0.5,
       "postclose_gap_s": null,
       "terminal_t": null,
       "terminal_state": null,
       "terminal_after_close": false,
       "preclose_bbo_rows": 58,
-      "two_sided_states": 52,
+      "two_sided_states": 38,
       "tape_test_passes": false
     }
   ]

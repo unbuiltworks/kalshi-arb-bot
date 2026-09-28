@@ -176,7 +176,8 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           # EVERY window mechanically and admits none by hand.
           'cpc-btc-updown-15m-2026-09-27-2315z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2330z': 'down',
-          'cpc-btc-updown-15m-2026-09-27-2345z': 'up'}
+          'cpc-btc-updown-15m-2026-09-27-2345z': 'up',
+          'cpc-btc-updown-15m-2026-09-28-0000z': 'down'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {
@@ -207,6 +208,18 @@ EXCLUDED = {
         'bounded-drain image only began serving at 22:46:30. Excluded on the '
         'same contemporaneous-capture rule as every other, and NOT '
         'rehabilitated.',
+    'cpc-btc-updown-15m-2026-09-28-0015z':
+        'DRAIN EXPIRED WITHOUT A CLOSE -- and the tape SAYS SO. The reslate at '
+        '00:30:30 started the bounded drain; it polled for the full DRAIN_S=240s '
+        'and emitted drain_end at 00:34:31 with terminal_recorded: FALSE. The '
+        'venue had still not published a terminal state. This is NOT the old '
+        'silent race: the absence is recorded rather than inferred. The venue '
+        'later reported settlementPx 1.0000 vs lastTradePx 0.9900 (UP), and that '
+        'is deliberately NOT used -- reconstructing a missing terminal '
+        'observation from later venue data is forbidden. Data point on DRAIN_S '
+        'sufficiency: 2315z needed 124s after its reslate and was caught; this '
+        'one needed more than 241s. NOT acted on -- DRAIN_S is frozen and '
+        'changing it would need a deployment that is not authorized.',
 }
 
 
