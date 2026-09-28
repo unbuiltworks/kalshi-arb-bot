@@ -45,9 +45,15 @@ class CancelUncertain(RuntimeError):
 class LockTransaction:
     """One attempt to turn a lock CANDIDATE into a latched LOCK5."""
 
-    def __init__(self, engine: "E.NativeEngine", venue, *, journal=None) -> None:
+    def __init__(self, engine: "E.NativeEngine", venue, *, journal=None,
+                 cancel_all=None) -> None:
         self.eng = engine
         self.venue = venue
+        #: how to cancel EVERY nonterminal session order. The money path owns
+        #: the session registry, so it supplies this; cancelling via the venue's
+        #: per-side handle alone left replaced-but-unconfirmed orders live
+        #: through a latch, which is exposure a latched lock is supposed to end.
+        self.cancel_all_fn = cancel_all
         self.journal = journal
         self.state = CANDIDATE
         self.steps: List[dict] = []
@@ -81,6 +87,10 @@ class LockTransaction:
 
     def _cancel_all(self) -> None:
         self.state = CANCELLING
+        if self.cancel_all_fn is not None:
+            res = self.cancel_all_fn()
+            self._note("cancel_requested", via="session_registry", result=res)
+            return
         asked = [s for s in ("up", "down") if self.eng.resting.get(s)]
         self._note("cancel_requested", sides=asked)
         for side in asked:

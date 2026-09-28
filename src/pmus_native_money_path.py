@@ -26,6 +26,101 @@ from src import pmus_native_live_overlay as OV
 ORDER_PATH = "/v1/orders"
 SIDE_WIRE = {"up": "OUTCOME_SIDE_YES", "down": "OUTCOME_SIDE_NO"}
 
+LIVE, TERMINAL, UNKNOWN = "LIVE", "TERMINAL", "UNKNOWN"
+
+
+class OrderStateUnknown(RuntimeError):
+    """We cannot say what one of our own orders is doing. Fail closed."""
+
+
+class SessionOrderRegistry:
+    """EVERY order this session submitted, by venue id, with its own money.
+
+    One tracked quote per side was not enough: an order replaced without a
+    confirmed cancel left the registry and became an orphan that could still
+    fill. So every ACK is recorded here and nothing leaves until the venue says
+    it is terminal.
+
+    THE THREE NUMBERS ARE SEPARATE AND NEVER CONFLATED:
+
+      filled_commitment   cash for quantity that actually filled. PERMANENT.
+      open_reserved       cash reserved for orders still live or still unknown.
+                          Released only on a venue-confirmed terminal status,
+                          and only for the part that did not fill.
+      cumulative_submitted  every dollar ever proposed. Diagnostic only -- it
+                          is NOT exposure, and it may exceed the mandate
+                          precisely because reservations get released.
+
+    Live economic exposure is `filled_commitment + open_reserved`. Cancelling
+    can only lower `open_reserved`; it can never raise headroom above what the
+    mandate already allows, because a fill's commitment never leaves.
+    """
+
+    def __init__(self) -> None:
+        self.orders: Dict[str, dict] = {}
+        self.cumulative_submitted = D(0)
+
+    def record(self, oid: str, *, side: str, price: D, qty: D,
+               kind: str) -> dict:
+        row = {"oid": str(oid), "side": str(side), "price": D(str(price)),
+               "qty": D(str(qty)), "kind": str(kind), "state": LIVE,
+               "filled": D(0), "reserved": D(str(price)) * D(str(qty))}
+        self.orders[str(oid)] = row
+        self.cumulative_submitted += row["reserved"]
+        return row
+
+    def mark_terminal(self, oid: str, filled: D) -> dict:
+        row = self.orders.get(str(oid))
+        if row is None:
+            return {}
+        filled = D(str(filled))
+        if filled > row["qty"]:
+            filled = row["qty"]
+        row["filled"] = filled
+        row["state"] = TERMINAL
+        return row
+
+    def mark_unknown(self, oid: str, why: str) -> None:
+        row = self.orders.get(str(oid))
+        if row is not None:
+            row["state"] = UNKNOWN
+            row["unknown_why"] = str(why)
+
+    def nonterminal(self) -> List[dict]:
+        return [r for r in self.orders.values() if r["state"] != TERMINAL]
+
+    def live_for(self, side: str) -> List[dict]:
+        return [r for r in self.nonterminal()
+                if r["side"] == side and r["kind"] == E.REST]
+
+    @property
+    def filled_commitment(self) -> D:
+        return sum((r["price"] * r["filled"] for r in self.orders.values()),
+                   D(0))
+
+    @property
+    def open_reserved(self) -> D:
+        """Unfilled cash still reserved. An UNKNOWN order is charged in FULL --
+        an outcome we never learned can never quietly free budget."""
+        tot = D(0)
+        for r in self.orders.values():
+            if r["state"] == TERMINAL:
+                continue
+            tot += r["reserved"] - (r["price"] * r["filled"])
+        return tot
+
+    @property
+    def exposure(self) -> D:
+        return self.filled_commitment + self.open_reserved
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {"filled_commitment": str(self.filled_commitment),
+                "open_reserved": str(self.open_reserved),
+                "exposure": str(self.exposure),
+                "cumulative_submitted": str(self.cumulative_submitted),
+                "orders": len(self.orders),
+                "nonterminal": len(self.nonterminal())}
+
 
 def body_for(intent: "E.Intent", market: str) -> Dict[str, Any]:
     """One intent -> one order body, through the certified builder.
@@ -76,6 +171,8 @@ class NativeMoneyPath:
         #: `cancel_resting` had no id to cancel and silently cancelled nothing,
         #: so re-quotes stacked at the venue instead of replacing.
         self.live_orders: Dict[str, Optional[dict]] = {"up": None, "down": None}
+        #: every order this session submitted, and the three separate numbers
+        self.registry = SessionOrderRegistry()
         self.terminals: List[dict] = []
         self.booked_fills: List[dict] = []
 
@@ -110,10 +207,20 @@ class NativeMoneyPath:
             if it.kind == E.CANCEL:
                 out["cancelled"].append(self.cancel_side(it["side"]))
             elif it.kind == E.REST:
+                # REPLACEMENT IS ORDERED, NOT CONCURRENT:
+                #   cancel old -> venue confirms TERMINAL -> reconcile fill
+                #   -> submit replacement.
+                # Submitting first would stack two live quotes on one side, and
+                # both could fill.
+                gate = self._ensure_side_clear(it["side"])
+                if not gate["clear"]:
+                    out.setdefault("replacement_blocked", []).append(gate)
+                    continue
                 out["submitted"].append(self._post(it))
             elif it.kind == E.LOCK_CANDIDATE:
                 txn = OV.LockTransaction(self.eng, self.venue,
-                                         journal=self.journal)
+                                         journal=self.journal,
+                                         cancel_all=self.cancel_nonterminal)
                 verdict = txn.run(it)
                 self.lock_transactions.append(verdict)
                 out["lock"] = verdict["verdict"]
@@ -196,7 +303,24 @@ class NativeMoneyPath:
             except BaseException:                              # noqa: BLE001
                 pass
 
-    def cancel_side(self, side: str) -> Dict[str, Any]:
+    def _ensure_side_clear(self, side: str) -> Dict[str, Any]:
+        """No replacement while anything of ours on this side is nonterminal."""
+        pending = self.registry.live_for(side)
+        if not pending:
+            return {"clear": True, "side": side}
+        for row in list(pending):
+            res = self.cancel_side(side, oid=row["oid"])
+            if res.get("state") != "CONFIRMED_CANCELLED":
+                return {"clear": False, "side": side, "oid": row["oid"],
+                        "reason": res.get("state")}
+        still = self.registry.live_for(side)
+        if still:
+            return {"clear": False, "side": side,
+                    "reason": "STILL_NONTERMINAL",
+                    "oids": [r["oid"] for r in still]}
+        return {"clear": True, "side": side}
+
+    def cancel_side(self, side: str, *, oid: Optional[str] = None) -> Dict[str, Any]:
         """Cancel our resting quote, CONFIRM it is gone, then release budget.
 
         A cancel request is not a cancellation. Nothing is released and nothing
@@ -204,10 +328,12 @@ class NativeMoneyPath:
         live; if it cannot be established, the order stays tracked and stays
         charged, which is the conservative direction.
         """
-        st = self.live_orders.get(side)
-        if not st:
-            return {"side": side, "state": "NOTHING_RESTING"}
-        oid = str(st.get("oid") or "")
+        if oid is None:
+            st = self.live_orders.get(side)
+            if not st:
+                return {"side": side, "state": "NOTHING_RESTING"}
+            oid = str(st.get("oid") or "")
+        oid = str(oid or "")
         if self.venue is None:
             return {"side": side, "state": "NO_VENUE"}
         try:
@@ -216,33 +342,70 @@ class NativeMoneyPath:
             else:
                 self.venue.cancel_resting(side)
         except BaseException:                                  # noqa: BLE001
+            self.registry.mark_unknown(oid, "CANCEL_FAILED")
             return {"side": side, "oid": oid, "state": "CANCEL_FAILED"}
         # book anything that filled in the cancel race BEFORE concluding
         self._book_authenticated_fills()
         try:
             still = self.venue.open_orders()
         except BaseException:                                  # noqa: BLE001
+            self.registry.mark_unknown(oid, "CONFIRM_UNREADABLE")
             return {"side": side, "oid": oid, "state": "CONFIRM_UNREADABLE"}
         if still is None:
+            self.registry.mark_unknown(oid, "CONFIRM_NO_ANSWER")
             return {"side": side, "oid": oid, "state": "CONFIRM_NO_ANSWER"}
         ids = {str((r or {}).get("orderId") or (r or {}).get("id") or "")
                for r in still}
         if oid and oid in ids:
             return {"side": side, "oid": oid, "state": "STILL_LIVE"}
-        filled = D(0)
+        # TERMINAL at the venue. Its filled quantity must be READ, not assumed:
+        # an unreadable answer is UNKNOWN and keeps its full reservation.
         try:
-            got = self.venue.filled_qty(oid) if hasattr(
-                self.venue, "filled_qty") else None
-            if got is not None:
-                filled = D(str(got))
+            got = (self.venue.filled_qty(oid)
+                   if hasattr(self.venue, "filled_qty") else None)
         except BaseException:                                  # noqa: BLE001
-            filled = D(0)
+            got = None
+        if got is None:
+            self.registry.mark_unknown(oid, "FILLED_QTY_UNREADABLE")
+            return {"side": side, "oid": oid, "state": "FILL_QTY_UNKNOWN"}
+        filled = D(str(got))
+        self.registry.mark_terminal(oid, filled)
         self.release_terminal(oid, filled)
-        self.live_orders[side] = None
+        cur = self.live_orders.get(side) or {}
+        if str(cur.get("oid") or "") == oid:
+            self.live_orders[side] = None
         if hasattr(self.venue, "resting_ids"):
             self.venue.resting_ids[side] = None
         return {"side": side, "oid": oid, "state": "CONFIRMED_CANCELLED",
                 "filled_qty": str(filled)}
+
+    def cancel_nonterminal(self) -> List[dict]:
+        """Cancel EVERY nonterminal session order, by venue id.
+
+        Used by the LOCK transaction and by close-out. A latch whose cancel
+        step only touched the per-side handle left replaced-but-unconfirmed
+        orders live, which is precisely the exposure a latch exists to end.
+        """
+        out = []
+        for row in list(self.registry.nonterminal()):
+            out.append(self.cancel_side(row["side"], oid=row["oid"]))
+        # AND the engine's own per-side handle. An ACK that carried no id has no
+        # registry key, so the handle is the only trace that something may be
+        # resting; cancelling both covers either being the live one. Belt and
+        # braces is correct here -- the cost of a redundant cancel is nothing,
+        # the cost of a missed one is an order filling unmanaged.
+        for side in ("up", "down"):
+            if not self.eng.resting.get(side):
+                continue
+            if any(r["side"] == side for r in self.registry.nonterminal()):
+                continue
+            try:
+                if self.venue is not None:
+                    self.venue.cancel_resting(side)
+                out.append({"side": side, "state": "CANCEL_REQUESTED_BY_HANDLE"})
+            except BaseException:                              # noqa: BLE001
+                out.append({"side": side, "state": "CANCEL_FAILED"})
+        return out
 
     def sweep_all(self, *, rounds: int = 3) -> Dict[str, Any]:
         """End of window: cancel EVERYTHING the venue still lists.
@@ -257,9 +420,11 @@ class NativeMoneyPath:
         """
         out = {"cancelled": [], "fills_booked": self._book_authenticated_fills(),
                "orphans_cancelled": []}
-        for side in ("up", "down"):
-            if self.live_orders.get(side):
-                out["cancelled"].append(self.cancel_side(side))
+        # EVERY NONTERMINAL SESSION ORDER, from the registry -- not just the one
+        # we happen to be tracking per side.
+        for row in list(self.registry.nonterminal()):
+            out["cancelled"].append(self.cancel_side(row["side"],
+                                                     oid=row["oid"]))
         for _ in range(max(1, rounds)):
             try:
                 rows = self.venue.open_orders() if self.venue else None
@@ -293,7 +458,10 @@ class NativeMoneyPath:
         except BaseException:                                  # noqa: BLE001
             still = None
         out["open_orders_after"] = (None if still is None else len(still))
-        out["clean"] = (still is not None and len(still) == 0)
+        out["nonterminal_after"] = len(self.registry.nonterminal())
+        out["exposure"] = self.registry.as_dict()
+        out["clean"] = (still is not None and len(still) == 0
+                        and not self.registry.nonterminal())
         if self.journal is not None:
             try:
                 self.journal.write("native_sweep", out)
@@ -308,6 +476,10 @@ class NativeMoneyPath:
         rec = {"kind": intent.kind, "side": intent["side"], "body": body,
                "ack": ack, "oid": oid}
         self.submitted.append(rec)
+        self.registry.record(oid, side=str(intent["side"]),
+                             price=D(str(intent.get("price")
+                                         or intent.get("limit_price") or 0)),
+                             qty=D(str(intent["qty"])), kind=intent.kind)
         if intent.kind == E.REST:
             # TRACK THE ID. Without it `cancel_resting` had nothing to cancel.
             self.live_orders[str(intent["side"])] = {
