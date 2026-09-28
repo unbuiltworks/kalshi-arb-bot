@@ -257,7 +257,20 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: to label the order-body change SUBMISSION and drop SUBMISSION from the gate, or to
 #: relabel it and skip the proof. Advancing the baseline on evidence keeps the gate's
 #: strength intact for every future delta.
-REVIEWED = "04cf5295"
+#:
+#: BASELINE ADVANCED TO 8039c416 (LOCK5 CAPACITY-PROBE ARTIFACT, 2026-09-28).
+#: The predecessor comment above says the probe's own wiring "does not exist yet
+#: and will need its own review." It now exists and has had that review:
+#: analysis/pmus/PROBE_ARTIFACT_REVIEW_8039c416.md. Five in-closure files changed,
+#: each classified there against FORBIDDEN_CLASSES, with blob SHAs pinned and two
+#: structural proofs recorded: the entrypoint actually composes the reviewed
+#: translation (closure + negative controls), and pmus_l5_ramp_ladder is absent
+#: from the 43-file reachable capability graph, so the mandate/GuardedTransport
+#: boundary is the artifact's only risk/sizing authority.
+#:
+#: FORBIDDEN_CLASSES remains UNCHANGED. The EXECUTION-class deltas were admitted on
+#: evidence, not by relabelling them or by removing a class from the gate.
+REVIEWED = "8039c416"
 
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
@@ -275,7 +288,7 @@ PREVIOUS_REVIEWED = "03f881ca"
 
 #: THE WHOLE CHAIN, so advancing a baseline can never erase an earlier review.
 #: PREVIOUS_REVIEWED is only the immediate predecessor; this is the record.
-REVIEWED_CHAIN = ("6adcc4c4", "03f881ca", "04cf5295")
+REVIEWED_CHAIN = ("6adcc4c4", "03f881ca", "04cf5295", "8039c416")
 DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 
 # Each entry: why this file may differ, the class it must fall in, and the
