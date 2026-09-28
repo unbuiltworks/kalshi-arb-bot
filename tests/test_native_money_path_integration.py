@@ -38,6 +38,11 @@ class Venue:
         self.cancelled = []
         self._open_orders = []
         self._unbooked = []
+        #: a TRUE race: the venue does not reveal the fill until we have asked
+        #: for a cancel. Fills are now booked every tick, so a fill that is
+        #: visible beforehand is not a race -- it is just inventory.
+        self.reveal_after_cancel = False
+        self._pending_reveal = []
         self.completion = None
         self.open_orders_raises = False
         self.fills_raise = False
@@ -45,6 +50,18 @@ class Venue:
 
     def cancel_resting(self, side):
         self.cancelled.append(side)
+        if self.reveal_after_cancel:
+            self._unbooked.extend(self._pending_reveal)
+            self._pending_reveal = []
+
+    def cancel_order(self, oid):
+        self.cancelled.append(oid)
+        if self.reveal_after_cancel:
+            self._unbooked.extend(self._pending_reveal)
+            self._pending_reveal = []
+
+    def filled_qty(self, oid):
+        return D(0)
 
     def open_orders(self):
         if self.open_orders_raises:
@@ -165,8 +182,10 @@ def test_a_cancel_race_fill_is_booked_before_the_lock_is_evaluated():
     v = Venue()
     p = path(venue=v)
     _at_lock(p)
-    # a maker fill landed while we were cancelling
-    v._unbooked = [{"side": "up", "qty": "50", "cost": "20.00", "maker": True}]
+    # a maker fill landed while we were cancelling -- revealed only then
+    v.reveal_after_cancel = True
+    v._pending_reveal = [{"side": "up", "qty": "50", "cost": "20.00",
+                          "maker": True}]
     out = p.on_book_state(OPEN)
     assert p.eng.bk.q["up"] == D(150), "the race fill was not applied"
     txn = p.lock_transactions[-1]
@@ -184,7 +203,9 @@ def test_a_race_fill_that_breaks_the_floor_prevents_the_latch():
     p.eng.on_fill("down", D(100), D("47.50"), maker=True)
     p.eng.resting["up"] = {"px": D("0.40"), "qty": D(50)}
     # the race fill adds cost without adding to min(), so the floor breaks
-    v._unbooked = [{"side": "up", "qty": "50", "cost": "10.00", "maker": True}]
+    v.reveal_after_cancel = True
+    v._pending_reveal = [{"side": "up", "qty": "50", "cost": "10.00",
+                          "maker": True}]
     out = p.on_book_state(OPEN)
     assert out["lock"] == OV.FAILED_CLOSED, out
     assert p.eng.locked_at is None

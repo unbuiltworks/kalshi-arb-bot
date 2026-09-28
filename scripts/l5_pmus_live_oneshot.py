@@ -747,7 +747,12 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
                                             "via": mp.eng.lock_via,
                                             "floor": str(mp.eng.lock_floor)})
             break
+    # END OF WINDOW: cancel every tracked quote, confirm it is gone, release
+    # the unfilled budget. A quote left resting outlives the window and can
+    # fill later, unmanaged, on a market nothing is watching.
+    sweep = mp.sweep_all()
     journal.write("native_window_done", {
+        "sweep": sweep,
         "ticks": ticks, "submitted": len(mp.submitted),
         "locked": mp.eng.locked_at is not None,
         "lock_transactions": len(mp.lock_transactions),

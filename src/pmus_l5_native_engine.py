@@ -31,6 +31,7 @@ from __future__ import annotations
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src import l5_authenticated_observation as OBS
 from src import pmus_completion_shadow as S
 
 #: THE FROZEN ARM. `p1_profit_lock.py` calls run_window with exactly these.
@@ -63,6 +64,28 @@ class Intent(dict):
     @property
     def kind(self) -> str:
         return str(self["kind"])
+
+
+def usable_book(row: Mapping[str, Any]) -> bool:
+    """Is this book state one a decision may be taken against?
+
+    Accepts the tape's `state` and the live feed's `status`, which are two
+    spellings of the same fact. Requires one of them to say so affirmatively:
+    a row carrying neither is not usable, so a new row shape fails closed
+    instead of being waved through.
+    """
+    st = str(row.get("state") or "").strip()
+    if st:
+        return st == "MARKET_STATE_OPEN"
+    status = str(row.get("status") or "").strip()
+    if status:
+        # USABLE and ONE_SIDED both proceed; the per-side price check below
+        # declines the side that is not quoted. Refusing ONE_SIDED outright
+        # would re-break the per-side property parity already paid for --
+        # 0045z lost a real 50-clip of DOWN at 0.99 to exactly that mistake.
+        # NO_BOOK, and anything unrecognised, fail closed.
+        return status in (str(OBS.USABLE), "ONE_SIDED")
+    return False
 
 
 class BadClip(ValueError):
@@ -219,8 +242,19 @@ class NativeEngine:
         """
         if ladder is not None:
             self.ladder = ladder
-        if str(row.get("state") or "") != "MARKET_STATE_OPEN":
-            raise StaleBook("book state is not MARKET_STATE_OPEN")
+        # TWO ROW SHAPES, ONE CONTRACT. The frozen tape rows carry
+        # `state: MARKET_STATE_OPEN`; the LIVE feed's rows come from
+        # `l5_window_actions.book_row`, which carries `status` with the
+        # vocabulary USABLE / ONE_SIDED / NO_BOOK and no `state` key at all.
+        #
+        # Requiring `state` meant every live tick raised StaleBook: the 1830z
+        # probe submitted nothing, refused nothing and proved nothing. The gate
+        # was not too strict, it was reading a field the feed never sets. Both
+        # shapes are accepted here and neither is weakened -- a row that states
+        # neither is still refused.
+        if not usable_book(row):
+            raise StaleBook("book is not usable: state=%r status=%r"
+                            % (row.get("state"), row.get("status")))
         bid, ask = S._d(row.get("bid")), S._d(row.get("ask"))
         if bid is None and ask is None:
             raise StaleBook("unreadable book: neither side quoted")

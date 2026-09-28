@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from src import l5_order_body as OB
 from src import pmus_l5_native_engine as E
+from src import pmus_live_mandate as MANDATE
 from src import pmus_native_live_overlay as OV
 
 ORDER_PATH = "/v1/orders"
@@ -71,6 +72,12 @@ class NativeMoneyPath:
         self.submitted: List[dict] = []
         self.lock_transactions: List[dict] = []
         self.remainders: List[dict] = []
+        #: OUR live acquisition orders by side, with the venue id. Without this
+        #: `cancel_resting` had no id to cancel and silently cancelled nothing,
+        #: so re-quotes stacked at the venue instead of replacing.
+        self.live_orders: Dict[str, Optional[dict]] = {"up": None, "down": None}
+        self.terminals: List[dict] = []
+        self.booked_fills: List[dict] = []
 
     # ------------------------------------------------------------ the tick
 
@@ -82,21 +89,26 @@ class NativeMoneyPath:
             return {"acted": False, "refused": "BOOK_NOT_FRESH",
                     "age_s": (None if self.feed.age_s() is None
                               else round(self.feed.age_s(), 3))}
+        # AUTHENTICATED FILLS FIRST, every tick. Previously fills were booked
+        # only inside a LOCK transaction, so a maker fill during ordinary
+        # operation never reached the book: inventory stayed at zero, no
+        # completion or lock could ever trigger, and the engine re-quoted
+        # forever. Inventory must be current BEFORE the engine decides.
+        booked = self._book_authenticated_fills()
+
         try:
             intents = self.eng.on_book(row, ladder,
                                        execute_taker=self._execute_taker)
         except E.StaleBook as exc:
             return {"acted": False, "refused": "STALE_BOOK",
-                    "detail": str(exc)}
+                    "detail": str(exc), "fills_booked": booked}
 
         out: Dict[str, Any] = {"acted": True, "intents": len(intents),
                                "submitted": [], "cancelled": [],
-                               "lock": None}
+                               "lock": None, "fills_booked": booked}
         for it in intents:
             if it.kind == E.CANCEL:
-                if self.venue is not None:
-                    self.venue.cancel_resting(it["side"])
-                out["cancelled"].append(it["side"])
+                out["cancelled"].append(self.cancel_side(it["side"]))
             elif it.kind == E.REST:
                 out["submitted"].append(self._post(it))
             elif it.kind == E.LOCK_CANDIDATE:
@@ -110,12 +122,199 @@ class NativeMoneyPath:
 
     # ------------------------------------------------------------- the wire
 
+    def _book_authenticated_fills(self) -> List[dict]:
+        """Apply every fill the venue reports and our book has not applied.
+
+        Returns the rows applied. An unreadable answer is NOT "no fills": it
+        returns None from the venue and we book nothing, leaving inventory as
+        it was, which keeps the engine conservative rather than optimistic.
+        """
+        if self.venue is None:
+            return []
+        try:
+            fills = self.venue.unbooked_fills()
+        except BaseException:                                  # noqa: BLE001
+            return []
+        if not fills:
+            return []
+        applied = []
+        for f in fills:
+            self.eng.on_fill(str(f["side"]), D(str(f["qty"])),
+                             D(str(f["cost"])),
+                             maker=bool(f.get("maker", True)),
+                             fee=(None if f.get("fee") is None
+                                  else D(str(f["fee"]))))
+            applied.append({"side": str(f["side"]), "qty": str(f["qty"]),
+                            "cost": str(f["cost"])})
+        self.booked_fills.extend(applied)
+        if self.journal is not None:
+            try:
+                self.journal.write("authenticated_fills", {"fills": applied})
+            except BaseException:                              # noqa: BLE001
+                pass
+        return applied
+
+    def _order_id(self, ack: Any) -> str:
+        if not isinstance(ack, Mapping):
+            return ""
+        return str(ack.get("orderId") or ack.get("id")
+                   or (ack.get("order") or {}).get("id") or "")
+
+    def _state_dir(self):
+        """The mandate's ledger dir, found on the guard we submit through."""
+        t = self.tp
+        for _ in range(6):
+            d = getattr(t, "_state_dir", None)
+            if d is not None:
+                return d
+            t = getattr(t, "_inner", None)
+            if t is None:
+                break
+        return None
+
+    def release_terminal(self, oid: str, filled_qty) -> None:
+        """Write the terminal row that releases an order's UNFILLED remainder.
+
+        `admit()` charges every submission in full "until a terminal row proves
+        a smaller fill". Nothing in this lane wrote that row, so a cancelled
+        quote kept consuming the envelope forever and a re-quoting engine
+        exhausted the mandate on quotes rather than on inventory. A FILLED
+        amount is never released -- only the part that did not fill.
+        """
+        d = self._state_dir()
+        if d is None or not oid:
+            return
+        row = {"kind": "order_terminal", "order_id": str(oid),
+               "filled_qty": str(filled_qty),
+               "labels": ("releases only the UNFILLED remainder of this "
+                          "order's own reservation; a fill is permanent")}
+        MANDATE._append(d, row)
+        self.terminals.append(row)
+        if self.journal is not None:
+            try:
+                self.journal.write("order_terminal", row)
+            except BaseException:                              # noqa: BLE001
+                pass
+
+    def cancel_side(self, side: str) -> Dict[str, Any]:
+        """Cancel our resting quote, CONFIRM it is gone, then release budget.
+
+        A cancel request is not a cancellation. Nothing is released and nothing
+        is forgotten until an authenticated read agrees the order is no longer
+        live; if it cannot be established, the order stays tracked and stays
+        charged, which is the conservative direction.
+        """
+        st = self.live_orders.get(side)
+        if not st:
+            return {"side": side, "state": "NOTHING_RESTING"}
+        oid = str(st.get("oid") or "")
+        if self.venue is None:
+            return {"side": side, "state": "NO_VENUE"}
+        try:
+            if oid and hasattr(self.venue, "cancel_order"):
+                self.venue.cancel_order(oid)
+            else:
+                self.venue.cancel_resting(side)
+        except BaseException:                                  # noqa: BLE001
+            return {"side": side, "oid": oid, "state": "CANCEL_FAILED"}
+        # book anything that filled in the cancel race BEFORE concluding
+        self._book_authenticated_fills()
+        try:
+            still = self.venue.open_orders()
+        except BaseException:                                  # noqa: BLE001
+            return {"side": side, "oid": oid, "state": "CONFIRM_UNREADABLE"}
+        if still is None:
+            return {"side": side, "oid": oid, "state": "CONFIRM_NO_ANSWER"}
+        ids = {str((r or {}).get("orderId") or (r or {}).get("id") or "")
+               for r in still}
+        if oid and oid in ids:
+            return {"side": side, "oid": oid, "state": "STILL_LIVE"}
+        filled = D(0)
+        try:
+            got = self.venue.filled_qty(oid) if hasattr(
+                self.venue, "filled_qty") else None
+            if got is not None:
+                filled = D(str(got))
+        except BaseException:                                  # noqa: BLE001
+            filled = D(0)
+        self.release_terminal(oid, filled)
+        self.live_orders[side] = None
+        if hasattr(self.venue, "resting_ids"):
+            self.venue.resting_ids[side] = None
+        return {"side": side, "oid": oid, "state": "CONFIRMED_CANCELLED",
+                "filled_qty": str(filled)}
+
+    def sweep_all(self, *, rounds: int = 3) -> Dict[str, Any]:
+        """End of window: cancel EVERYTHING the venue still lists.
+
+        ORPHAN SWEEP, not a tracked-order sweep. We track one quote per side,
+        so any order that was replaced without a confirmed cancel, or that
+        partially filled and stayed live, is no longer in `live_orders` -- and
+        a sweep that only cancels what it remembers leaves those resting past
+        the window, where they can fill on a market nothing is watching. The
+        venue's own open-orders list is the authority, and it is re-read after
+        each round because cancelling can reveal a fill.
+        """
+        out = {"cancelled": [], "fills_booked": self._book_authenticated_fills(),
+               "orphans_cancelled": []}
+        for side in ("up", "down"):
+            if self.live_orders.get(side):
+                out["cancelled"].append(self.cancel_side(side))
+        for _ in range(max(1, rounds)):
+            try:
+                rows = self.venue.open_orders() if self.venue else None
+            except BaseException:                              # noqa: BLE001
+                rows = None
+            if not rows:
+                break
+            for r in rows:
+                oid = str((r or {}).get("orderId") or (r or {}).get("id") or "")
+                if not oid:
+                    continue
+                try:
+                    self.venue.cancel_order(oid)
+                except BaseException:                          # noqa: BLE001
+                    continue
+                # a cancel can reveal a fill; book it before releasing anything
+                self._book_authenticated_fills()
+                filled = D(0)
+                try:
+                    got = (self.venue.filled_qty(oid)
+                           if hasattr(self.venue, "filled_qty") else None)
+                    if got is not None:
+                        filled = D(str(got))
+                except BaseException:                          # noqa: BLE001
+                    filled = D(0)
+                self.release_terminal(oid, filled)
+                out["orphans_cancelled"].append({"oid": oid,
+                                                 "filled_qty": str(filled)})
+        try:
+            still = self.venue.open_orders() if self.venue else None
+        except BaseException:                                  # noqa: BLE001
+            still = None
+        out["open_orders_after"] = (None if still is None else len(still))
+        out["clean"] = (still is not None and len(still) == 0)
+        if self.journal is not None:
+            try:
+                self.journal.write("native_sweep", out)
+            except BaseException:                              # noqa: BLE001
+                pass
+        return out
+
     def _post(self, intent: "E.Intent") -> Dict[str, Any]:
         body = body_for(intent, self.market)
         ack = self.tp.request("POST", ORDER_PATH, body)
+        oid = self._order_id(ack)
         rec = {"kind": intent.kind, "side": intent["side"], "body": body,
-               "ack": ack}
+               "ack": ack, "oid": oid}
         self.submitted.append(rec)
+        if intent.kind == E.REST:
+            # TRACK THE ID. Without it `cancel_resting` had nothing to cancel.
+            self.live_orders[str(intent["side"])] = {
+                "oid": oid, "px": str(intent["price"]),
+                "qty": str(intent["qty"])}
+            if self.venue is not None and hasattr(self.venue, "resting_ids"):
+                self.venue.resting_ids[str(intent["side"])] = oid
         return rec
 
     def _execute_taker(self, intent: "E.Intent"):

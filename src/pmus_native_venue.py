@@ -90,6 +90,24 @@ class AuthenticatedVenue:
                                 else D(str((r or {}).get("commission"))))})
         return out
 
+    def filled_qty(self, oid: str) -> Optional[D]:
+        """Authenticated cumulative filled quantity for one order, or None.
+
+        None means UNREADABLE, never zero: the caller must not release budget
+        or forget an order on the strength of a read that did not happen.
+        """
+        if not oid:
+            return None
+        row = self.tp.order(str(oid))
+        if not row:
+            return None
+        v = row.get("cumQty")
+        if v is None:
+            v = row.get("cumQuantity")
+        if v is None:
+            return None
+        return D(str(v))
+
     def completion_fill(self, intent) -> Optional[tuple]:
         """What the marketable leg ACTUALLY filled, from /v1/order.
 
