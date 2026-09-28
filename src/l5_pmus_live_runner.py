@@ -284,26 +284,25 @@ class Runner:
         if t is None:
             return
         if self.preflight_status == "PASSED":
-            # ARMING IS RETRIED; PREFLIGHT IS NOT. A PASSED preflight is a
-            # fact about this market and is never re-run, but try_arm can
-            # refuse for reasons that clear on their own a few seconds
-            # later -- an unconfirmed book, or an order in an UNCERTAIN
-            # state. Reaching try_arm only through the not-yet-PASSED branch
-            # gave arming exactly ONE attempt per market window.
+            # THIS RUNNER CANNOT ARM. 3a, 2026-09-28: `try_arm()` and both of
+            # its call sites are gone from this file.
             #
-            # 1545z was lost to precisely that: the one attempt at 15:45:23
-            # hit a terminal order that was not yet booked, the uncertainty
-            # cleared at 15:45:35, and nothing in the process ever asked
-            # again. The whole window ran disarmed with owner_arm_token true
-            # and preflight PASSED.
+            # WHY IT WAS HERE. def9b8e1 (2026-09-26) merged two lines that had
+            # diverged at c668665 -- the P39 harness, which grew a runner loop
+            # with its own arming retry, and the canonical execution core. The
+            # arming path is residue of the harness half, not a designed
+            # feature of this service. The one-shot probe's own docstring
+            # states the invariant it broke: the 24/7 observer must keep "no
+            # path that can POST, and no caller of `PmusTransport.arm()`".
             #
-            # Retrying costs nothing: try_arm returns at once when already
-            # armed or halted, reconcile_if_needed returns at once on a
-            # confirmed book, and transport.arm() is a local gate check that
-            # touches no venue. The refusal is still logged only on its
-            # first occurrence in the window, so a long refusal does not
-            # spam; its duration shows in the window counters.
-            self.try_arm()
+            # A continuously running process that can arm itself is the exact
+            # shape of the 2026-09-16 breach, where authorization to START was
+            # read as authorization to CONTINUE. Exactly one reviewed path may
+            # arm, and it is `scripts/l5_pmus_live_oneshot.py`, which is bounded
+            # to one market and spends its authorization when used.
+            #
+            # Removing capability cannot fail open, which is why this is the
+            # smallest safe change rather than a flag.
             return
         # escalating while it keeps failing: 3, 6, 12, then 24 seconds.
         # The common failure is simply that the venue has not listed the
@@ -336,7 +335,7 @@ class Runner:
             # and is never defaulted. The executor asks the transport.
             if t.tick_size is None:
                 emit("L5_LIVE_TICK_UNKNOWN", {"market": t.market_slug})
-            self.try_arm()
+            # no arming here either -- see maybe_preflight (3a)
 
     def sweep_settlements(self) -> None:
         """Retire every market the venue has finished with.
@@ -570,31 +569,6 @@ class Runner:
                                   if (lim := getattr(t, "limiter", None))
                                   is not None else None),
                   realized_today=str(self.store.realized_today())))
-
-    def try_arm(self) -> None:
-        t = self.transport
-        if t is None or t.armed or self.halted():
-            return
-        # never arm on a book the venue has not confirmed
-        self.reconcile_if_needed(self.now_t)
-        if not self.reconciled:
-            self.win["arm_refused_unreconciled"] += 1
-            return
-        if self.store.orders_uncertain():
-            self.win["arm_refused_orders_uncertain"] += 1
-            if self.win["arm_refused_orders_uncertain"] == 1:
-                emit("L5_LIVE_DISARMED",
-                     {"market": t.market_slug,
-                      "why": "orders in an UNCERTAIN state; refusing to arm"})
-            return
-        try:
-            res = t.arm()
-            emit("L5_LIVE_ARMED", res)
-        except LX.NotArmed as exc:
-            self.win["arm_refused"] += 1
-            if self.win["arm_refused"] == 1:
-                emit("L5_LIVE_DISARMED", {"market": t.market_slug,
-                                          "why": str(exc)[:300]})
 
     def close_window(self) -> None:
         t = self.transport
