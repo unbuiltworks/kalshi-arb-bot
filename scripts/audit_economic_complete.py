@@ -184,7 +184,10 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-28-0030z': 'down',
           'cpc-btc-updown-15m-2026-09-28-0045z': 'down',
           'cpc-btc-updown-15m-2026-09-28-0100z': 'down',
-          'cpc-btc-updown-15m-2026-09-28-0115z': 'up'}
+          'cpc-btc-updown-15m-2026-09-28-0115z': 'up',
+          'cpc-btc-updown-15m-2026-09-28-0130z': 'down',
+          'cpc-btc-updown-15m-2026-09-28-0200z': 'up',
+          'cpc-btc-updown-15m-2026-09-28-0215z': 'down'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {
@@ -215,6 +218,12 @@ EXCLUDED = {
         'bounded-drain image only began serving at 22:46:30. Excluded on the '
         'same contemporaneous-capture rule as every other, and NOT '
         'rehabilitated.',
+    'cpc-btc-updown-15m-2026-09-28-0145z':
+        'DRAIN EXPIRED WITHOUT A CLOSE -- the second such case after 0015z, and '
+        'again the tape SAYS SO: drain_end at 02:04:26 with terminal_recorded '
+        'FALSE. Not the old silent race; the absence is recorded. Its later '
+        'venue settlement is deliberately NOT used. DRAIN_S=240 is frozen and '
+        'two expiries in 26 windows is now a measured rate, not a one-off.',
     'cpc-btc-updown-15m-2026-09-28-0015z':
         'DRAIN EXPIRED WITHOUT A CLOSE -- and the tape SAYS SO. The reslate at '
         '00:30:30 started the bounded drain; it polled for the full DRAIN_S=240s '

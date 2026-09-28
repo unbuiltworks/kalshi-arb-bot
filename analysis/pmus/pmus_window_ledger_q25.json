@@ -34,7 +34,7 @@
     "clip_is_modeled_extrapolation": true,
     "extrapolation_multiple": "4.71"
   },
-  "n_usable": 21,
+  "n_usable": 24,
   "excluded": {
     "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states",
     "cpc-btc-updown-15m-2026-09-27-2015z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 20:29:55; the window was never observed through a terminal state, so it fails the preregistered completeness rule even though the venue later reported it settled DOWN",
@@ -43,6 +43,7 @@
     "cpc-btc-updown-15m-2026-09-27-2145z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 21:59:44. COLLECTOR_001. Same class as 2015z.",
     "cpc-btc-updown-15m-2026-09-27-2200z": "no terminal row on tape -- 40 bbo rows all MARKET_STATE_OPEN, last 22:14:33. COLLECTOR_001. Same class as 2015z.",
     "cpc-btc-updown-15m-2026-09-27-2230z": "no terminal row on tape -- last 22:45:02, still MARKET_STATE_OPEN. The LAST pre-fix loss: this window closed at 22:45:00 and the bounded-drain image only began serving at 22:46:30. Excluded on the same contemporaneous-capture rule as every other, and NOT rehabilitated.",
+    "cpc-btc-updown-15m-2026-09-28-0145z": "DRAIN EXPIRED WITHOUT A CLOSE -- the second such case after 0015z, and again the tape SAYS SO: drain_end at 02:04:26 with terminal_recorded FALSE. Not the old silent race; the absence is recorded. Its later venue settlement is deliberately NOT used. DRAIN_S=240 is frozen and two expiries in 26 windows is now a measured rate, not a one-off.",
     "cpc-btc-updown-15m-2026-09-28-0015z": "DRAIN EXPIRED WITHOUT A CLOSE -- and the tape SAYS SO. The reslate at 00:30:30 started the bounded drain; it polled for the full DRAIN_S=240s and emitted drain_end at 00:34:31 with terminal_recorded: FALSE. The venue had still not published a terminal state. This is NOT the old silent race: the absence is recorded rather than inferred. The venue later reported settlementPx 1.0000 vs lastTradePx 0.9900 (UP), and that is deliberately NOT used -- reconstructing a missing terminal observation from later venue data is forbidden. Data point on DRAIN_S sufficiency: 2315z needed 124s after its reslate and was caught; this one needed more than 241s. NOT acted on -- DRAIN_S is frozen and changing it would need a deployment that is not authorized."
   },
   "per_window": [
@@ -423,6 +424,60 @@
       "shadow_trading_net": "2.88512500000000000000000001",
       "expected_maker_rebate": "0.07",
       "shadow_modeled_net_including_expected_rebate": "2.95512500000000000000000001"
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0130z",
+      "window": "0130z",
+      "settlement": "down",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "26.1600",
+      "residual_basis": "0.9506",
+      "residual_side": "down",
+      "matched_contracts": "50",
+      "ec_matched_gross": "3.0000",
+      "passive_matched_gross": "1.21953781512605042016806722",
+      "matched_gross": "4.21953781512605042016806722",
+      "fees": "0.364875000000",
+      "residual_pnl": "1.29206218487394957983193277",
+      "shadow_trading_net": "5.14672499999999999999999999",
+      "expected_maker_rebate": "0.15",
+      "shadow_modeled_net_including_expected_rebate": "5.29672499999999999999999999"
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0200z",
+      "window": "0200z",
+      "settlement": "up",
+      "terminal_residual_occurred": false,
+      "residual_contracts": "0",
+      "residual_basis": "0.0000",
+      "residual_side": "-",
+      "matched_contracts": "100",
+      "ec_matched_gross": "23.05729166666666666666666667",
+      "passive_matched_gross": "-21.80729166666666666666666668",
+      "matched_gross": "1.24999999999999999999999999",
+      "fees": "0.676408750000",
+      "residual_pnl": "0",
+      "shadow_trading_net": "0.57359124999999999999999999",
+      "expected_maker_rebate": "0.41",
+      "shadow_modeled_net_including_expected_rebate": "0.98359124999999999999999999"
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0215z",
+      "window": "0215z",
+      "settlement": "down",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "25",
+      "residual_basis": "0.0550",
+      "residual_side": "up",
+      "matched_contracts": "75",
+      "ec_matched_gross": "5.7500",
+      "passive_matched_gross": "4.3750",
+      "matched_gross": "10.1250",
+      "fees": "0.768843750000",
+      "residual_pnl": "-1.3750",
+      "shadow_trading_net": "7.981156250000",
+      "expected_maker_rebate": "0.20",
+      "shadow_modeled_net_including_expected_rebate": "8.181156250000"
     }
   ],
   "rolling": {
@@ -616,14 +671,14 @@
         0.6579
       ]
     },
-    "n=25": "NOT YET AVAILABLE (21 of 25 windows)"
+    "n=25": "NOT YET AVAILABLE (24 of 25 windows)"
   },
   "residual_statistics": {
-    "events": "10 of 21",
-    "frequency": 0.4762,
+    "events": "12 of 24",
+    "frequency": 0.5,
     "wilson95": [
-      0.2834,
-      0.6763
+      0.3143,
+      0.6857
     ],
     "per_episode_pnl": [
       "-20.2500",
@@ -635,17 +690,19 @@
       "0.90476190476190476190476190",
       "1.0000",
       "-14.6500",
-      "0.83333333333333333333333334"
+      "0.83333333333333333333333334",
+      "1.29206218487394957983193277",
+      "-1.3750"
     ],
-    "mean_episode_pnl": "-5.3737",
-    "episode_pnl_per_window": "-2.5589",
-    "episodes_that_lost": 5,
-    "episodes_that_won": 5
+    "mean_episode_pnl": "-4.4850",
+    "episode_pnl_per_window": "-2.2425",
+    "episodes_that_lost": 6,
+    "episodes_that_won": 6
   },
   "p0_thresholds": {
-    "net_before_residual": "5.6853",
-    "break_even_residual_frequency": "1.0580",
-    "target_frequency_for_plus_5": "0.1275",
+    "net_before_residual": "5.5807",
+    "break_even_residual_frequency": "1.2443",
+    "target_frequency_for_plus_5": "0.1295",
     "note": "break-even and target use the OBSERVED SIGNED mean episode P&L, which from n=11 includes one winning residual (2215z, +2.25). A winner raises the mean and therefore RAISES break-even frequency, so this number must not be read as a severity. The mean itself is uncertain at this n."
   }
 }
