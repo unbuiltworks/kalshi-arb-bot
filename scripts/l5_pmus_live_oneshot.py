@@ -53,6 +53,7 @@ from src import l5_session_journal as JN
 from src import l5_window_actions as WA
 from src import pmus_arm_retry as AR
 from src import pmus_lock5_translation as LOCK5
+from src import pmus_paired_log as PAIRED
 from src import pmus_probe_observability as OBS
 from src import pmus_auth as Q1
 
@@ -148,6 +149,10 @@ class Probe:
         #: and threshold decision belongs to the frozen module.
         self.lock5: Optional[LOCK5.Lock5Session] = None
         self.monitor: Optional[OBS.ProbeMonitor] = None
+        #: the shadow-vs-live paired record. Composed with LOCK5 so no money path
+        #: exists without it; see pmus_paired_log for why the live side of a row
+        #: can never be derived from the shadow side.
+        self.paired: Optional[PAIRED.PairedLog] = None
 
     # ------------------------------------------------------------- arming
 
@@ -194,7 +199,7 @@ class Probe:
         return out
 
     def build_lock5(self, *, book, mandate, state_dir,
-                    realized_today=None) -> "LOCK5.Lock5Session":
+                    realized_today=None, window=None) -> "LOCK5.Lock5Session":
         """Compose the reviewed LOCK5 session onto THIS probe's transport.
 
         The transport passed in is already the mandate-guarded one, so there is
@@ -209,11 +214,37 @@ class Probe:
             mandate=mandate, state_dir=state_dir, monitor=self.monitor,
             realized_today=(realized_today
                             or (lambda: self.store.realized_today())))
+        self.paired = PAIRED.PairedLog(
+            market=self.market, # the BTC15m slug carries the window boundary, so it is the binding
+            window=str(window or self.market),
+            path=str(state_dir) + "/paired_shadow_live.json")
         self.journal.write("lock5_composed", {
             "market": self.market, "threshold": str(LOCK5.LOCK_USD),
             "floor_impl": LOCK5.settlement_independent_floor.__module__,
-            "journal": self.monitor.path})
+            "journal": self.monitor.path,
+            "paired_log": self.paired.path,
+            "shadow_fill_treatment": self.paired.shadow_treatment})
         return self.lock5
+
+    def pair_intent(self, *, action: str, side: str, shadow_price, shadow_qty,
+                    shadow_filled: bool):
+        """Open the paired row for an intended action, BEFORE submitting it.
+
+        Opened first on purpose: a row that only appears once a fill arrives
+        cannot record a non-fill, and the non-fill is the finding the experiment
+        is most likely to produce.
+        """
+        if self.paired is None:
+            raise AUTH.Refused("PAIRED_LOG_NOT_COMPOSED", {"market": self.market})
+        floor = locked = None
+        if self.lock5 is not None:
+            floor, locked = self.lock5.floor_now(), self.lock5.locked
+        return self.paired.intend(action=action, side=side,
+                                  shadow_price=shadow_price,
+                                  shadow_qty=shadow_qty,
+                                  shadow_filled=bool(shadow_filled),
+                                  shadow_floor=floor,
+                                  shadow_locked=bool(locked))
 
     def lock5_may_open_risk(self, action: str):
         """Ask the reviewed session. Never decide it here."""

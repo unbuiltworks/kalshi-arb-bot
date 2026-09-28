@@ -86,6 +86,7 @@ def closure():
     "src/l5_order_body.py",
     "src/pmus_q1_executor.py",
     "src/pmus_arm_retry.py",
+    "src/pmus_paired_log.py",
 ])
 def test_every_required_component_is_reachable_from_the_entrypoint(closure, mod):
     assert mod in closure, sorted(closure)
@@ -318,3 +319,69 @@ def test_the_entrypoint_does_not_reimplement_lock5(closure):
     assert "settlement_independent_floor(" not in body
     assert "5.00" not in body and 'D("5")' not in body
     assert "LOCK5.LOCK_USD" in body, "the threshold must be READ, not restated"
+
+
+# ===================================================================== PAIRED
+# The shadow-vs-live paired log is part of the money path, so it gets the same
+# treatment LOCK5 got after BLOCKER 1: proven reachable from the ENTRYPOINT's
+# closure, and proven to fail when disconnected. A paired log that exists in the
+# repository but not in the artifact would let the first live window be written
+# up against a record that was never kept.
+
+def test_the_entrypoint_module_actually_binds_the_paired_log():
+    assert getattr(ONESHOT, "PAIRED", None) is not None
+    assert ONESHOT.PAIRED.__name__ == "src.pmus_paired_log"
+    assert hasattr(ONESHOT.PAIRED, "PairedLog")
+
+
+def test_build_lock5_composes_a_paired_log_and_pair_intent_uses_it(wired):
+    assert isinstance(wired.paired, ONESHOT.PAIRED.PairedLog)
+    row = wired.pair_intent(action="OPEN", side="up", shadow_price="0.48",
+                            shadow_qty="50", shadow_filled=True)
+    assert wired.paired.rows == [row]
+    # the live side is UNKNOWN even though the shadow model counted a fill
+    assert row.shadow_filled is True and row.live_filled is False
+    # and the frozen floor came from LOCK5, not a second implementation here
+    assert row.shadow_floor == wired.lock5.floor_now()
+
+
+def test_the_window_binding_is_recorded_on_the_paired_log(wired):
+    assert wired.paired.window == MKT
+    assert wired.paired.market == MKT
+
+
+def test_negative_control_disconnecting_the_paired_log_fails_pair_intent(
+        tmp_path, monkeypatch):
+    """Deliberate disconnection. If this passes, the test above is vacuous."""
+    monkeypatch.setattr(LOCK5.MANDATE, "admit",
+                        lambda body, **k: {"admitted": True, "reason": "OK"})
+    monkeypatch.setattr(ONESHOT.PAIRED, "PairedLog", lambda **kw: None)
+    p = _probe(tmp_path)
+    bk = SHADOW.Book()
+    bk.add("up", D(100), D(100) * D("0.40"), maker=True)
+    # the disconnection is caught at COMPOSITION time -- build_lock5 journals
+    # the paired log's path, so a probe cannot finish composing without one.
+    with pytest.raises(AttributeError):
+        p.build_lock5(book=bk, mandate=object(), state_dir=tmp_path)
+    assert p.paired is None
+    # and a probe that somehow got past that still cannot open a paired row
+    with pytest.raises(Exception):
+        p.pair_intent(action="OPEN", side="up", shadow_price="0.48",
+                      shadow_qty="50", shadow_filled=True)
+
+
+def test_negative_control_the_paired_log_cannot_promote_a_shadow_fill(wired):
+    row = wired.pair_intent(action="OPEN", side="up", shadow_price="0.48",
+                            shadow_qty="50", shadow_filled=True)
+    with pytest.raises(ONESHOT.PAIRED.PromotionRefused):
+        row.venue_fill(price="0.48", qty="50", source="SHADOW")
+    assert row.live_state == "UNKNOWN"
+
+
+def test_negative_control_removing_the_paired_log_breaks_reachability(tmp_path):
+    """Strip the import and the reachability assertion must fail."""
+    src = open(ENTRY).read().replace(
+        "from src import pmus_paired_log as PAIRED", "")
+    stub = tmp_path / "no_paired.py"
+    stub.write_text(src)
+    assert "src/pmus_paired_log.py" not in _closure(str(stub))

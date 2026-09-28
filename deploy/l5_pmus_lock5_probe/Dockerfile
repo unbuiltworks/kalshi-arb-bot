@@ -60,6 +60,7 @@ COPY src/pmus_l5_multi_shadow.py src/pmus_l5_multi_shadow.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
 COPY src/pmus_live_mandate.py src/pmus_live_mandate.py
 COPY src/pmus_lock5_translation.py src/pmus_lock5_translation.py
+COPY src/pmus_paired_log.py src/pmus_paired_log.py
 COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
 COPY src/pmus_probe_observability.py src/pmus_probe_observability.py
 COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
