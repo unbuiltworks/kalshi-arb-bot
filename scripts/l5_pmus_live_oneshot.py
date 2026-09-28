@@ -202,6 +202,10 @@ class Probe:
         self.l5_health = WA.FeedHealth()
         self.records: List[dict] = []
         self.preflight: Optional[Dict[str, Any]] = None
+        #: the immutable market row pinned before the window, or its refusal.
+        #: Reported so "we traded on a row resolved at 21:46, not at 22:15"
+        #: is in the record rather than inferred.
+        self.metadata_pin: Optional[Dict[str, Any]] = None
         self.armed = False
         self.seen: Set[str] = set()
         #: BLOCKER 1 (2026-09-28). The reviewed LOCK5 composition is built HERE,
@@ -642,6 +646,7 @@ class Probe:
             # with the word FAILED and three gates consistent with it.
             "preflight_failing_check": (self.preflight
                                         or {}).get("failing_check"),
+            "market_metadata_pin": self.metadata_pin,
             # the account this actually ran against. Previously the whole
             # preflight collapsed to one word here and the fingerprint went
             # only to the journal, on a volume no one can read once a
@@ -764,13 +769,77 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
     return mp
 
 
+#: the series the probe trades. Used for venue discovery, never to build a
+#: slug: the slug always comes back from the venue.
+BTC15M_SERIES = "btc-updown-15m"
+
+#: how much of a window must remain for it to be worth entering at all.
+MIN_REMAINING_S = 240.0
+
+
+def select_venue_window(*, now: float, series: str = BTC15M_SERIES,
+                        windows=None,
+                        min_remaining_s: float = MIN_REMAINING_S
+                        ) -> Dict[str, Any]:
+    """The EXACT slug the venue serves for the current/upcoming window.
+
+    NOT MANUFACTURED FROM THE CLOCK. `l5_window_actions.current_slug` builds
+    a slug arithmetically from the wall clock, and on 2026-09-28 that put a
+    live probe on `cpc-btc-updown-15m-2026-09-28-2215z` with no venue
+    confirmation of any kind; the authorization was then spent on a slug
+    whose metadata the venue would not serve for the next sixteen minutes.
+    Selection now returns a slug the venue itself listed, or nothing.
+
+    The venue's `closed` flag cannot be used to pick: every PRE-CREATED
+    future window is `closed: true, active: true` and only the window
+    trading right now is `closed: false` (639 events measured
+    2026-09-28T22:52Z). So the choice is made on the venue's own
+    `startTime`: the window in progress if enough of it remains, otherwise
+    the next one to start.
+
+    Returns {} when the venue confirmed nothing. A caller must then refuse:
+    no venue-confirmed slug is not an invitation to compute one.
+    """
+    rows = windows
+    if rows is None:
+        from src import pmus_book_tape as BT
+        rows = BT.series_windows(series)
+    if not rows:
+        return {}
+    cut = dt.datetime.fromtimestamp(now, dt.timezone.utc)
+    best = None
+    for w in rows:
+        start = w["start"]
+        end = start + dt.timedelta(seconds=WINDOW_S)
+        if end <= cut:
+            continue                       # already over
+        if start <= cut and (end - cut).total_seconds() < min_remaining_s:
+            continue                       # in progress but too little left
+        best = w
+        break
+    if best is None:
+        return {}
+    return {"slug": best["slug"],
+            "start_epoch": best["start"].timestamp(),
+            "start_utc": best["start"].isoformat(),
+            "event_slug": best["event_slug"],
+            "in_progress": best["start"] <= cut,
+            "source": "VENUE_SERIES_LISTING"}
+
+
 def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         activity=None, state_path=None, journal_path=None,
         ledger_path=None, book_feed=None) -> Dict[str, Any]:
     """The whole probe. Returns its report; never runs a second market."""
     now = clock()
-    market = (os.getenv(AUTH.MARKET_ENV, "").strip()
-              or current_slug(now))
+    # 0. THE MARKET, from the venue or not at all. An owner pin still wins --
+    #    it is an explicit instruction -- but the unpinned path no longer
+    #    computes a slug from the clock; it asks the venue which window it is
+    #    serving. `selection` is reported so the provenance of the slug is
+    #    part of the record rather than an assumption.
+    pinned = os.getenv(AUTH.MARKET_ENV, "").strip()
+    selection = {} if pinned else select_venue_window(now=now)
+    market = pinned or str(selection.get("slug") or "")
     store = EX.InventoryStore(
         state_path or os.getenv("L5_PROBE_STATE",
                                 "/state/pmus-ws/l5_probe_inventory.json"))
@@ -778,6 +847,24 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         journal_path or os.getenv("L5_SESSION_JOURNAL",
                                   "/state/pmus-ws/l5_session_journal.jsonl"))
     auth = AUTH.Authorization(ledger_path)
+
+    # 0b. no venue-confirmed window, no probe -- and the refusal happens
+    #     BEFORE the authorization is claimed, so a discovery failure costs
+    #     nothing. Spending a single-use authorization on a slug the venue
+    #     never confirmed is exactly what happened on 2026-09-28.
+    if not market:
+        out = {"LABEL": "LIVE_BOUNDED_PROBE", "market": None,
+               "refused": "NO_VENUE_CONFIRMED_WINDOW",
+               "detail": {"series": BTC15M_SERIES,
+                          "note": "the venue listed no current or upcoming "
+                                  "window; a slug is never computed from "
+                                  "the clock"},
+               "armed": False, "submitted": 0,
+               "authorization_claimed": False,
+               "note": "no transport capable of POST was constructed"}
+        journal.write("no_venue_confirmed_window", out)
+        print("L5_NO_WINDOW " + json.dumps(out, default=str), flush=True)
+        return out
 
     # 1. authorization FIRST. Without it nothing that can POST is built.
     try:
@@ -917,6 +1004,34 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
                       "refused": "WINDOW_NOT_ESTABLISHED"})
         return out
     deadline = start + WINDOW_S
+
+    # 1e. PIN THE IMMUTABLE METADATA BEFORE THE WINDOW'S FAILURE DOMAIN.
+    #     The 2215z row had existed since 10:40:01Z that morning; the only
+    #     reason the probe could not read it was that it first asked at
+    #     22:15:54Z, inside a transient gateway 404 that lasted about
+    #     sixteen minutes. Resolving here -- at process start, before the
+    #     wait for the window -- means a later transient failure degrades
+    #     instead of killing.
+    #
+    #     BEST EFFORT, NOT A NEW GATE. If this fails, preflight still tries
+    #     and still fails closed: a slug never successfully resolved cannot
+    #     trade. Nothing here establishes tradability or price, which stay
+    #     with preflight's fresh row and the order-time authenticated book.
+    try:
+        pin = probe.tp.pin_market_metadata(market)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        pin = {"slug": market, "pinned": False,
+               "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
+               "note": ("preflight will retry and fail closed if the venue "
+                        "still will not serve this exact slug")}
+        print("L5_METADATA_PIN_FAILED " + json.dumps(pin, default=str),
+              flush=True)
+    probe.metadata_pin = pin
+    journal.write("market_metadata_pin", pin)
+    print("L5_METADATA_PIN " + json.dumps(pin, default=str), flush=True)
+
     close: Dict[str, Any] = {}
     try:
         # 2. preflight, read-only, retried within its own bounds

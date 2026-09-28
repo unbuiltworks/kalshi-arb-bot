@@ -294,3 +294,66 @@ sign fails 2. A row whose name contains "realized" or "credited" now fails.
 
 Scorer, θ, fill model, q grid, decision rule and the n=25 preregistration are
 **unchanged**; no number moved.
+
+### EXP-014 — PMUS market resolution: two implementations, one venue route
+**Status: COMPLETE (code consolidated, not yet deployed).** Evidence:
+`analysis/l5/rung_a/PMUS_ENDPOINT_DISCOVERY_001.md`,
+`tests/test_market_resolution_2215z_regression.py` (18 tests).
+
+Written so this is never rediscovered.
+
+**THE OLD WORKING PATH.** `pmus_micro_executor.market_micro_spec`, used by
+`pmus_spring_l5_session` and `pmus_micro_executor` — the code that has
+placed and settled real PMUS orders — resolves a market with **one call**:
+
+    GET https://gateway.polymarket.us/v1/market/slug/{market_slug}
+    -> resp["market"]["minimumTradeQty"], ["orderPriceMinTickSize"]
+
+`pmus_q1_executor`, the original live executor, resolves **no** metadata: it
+reads `/v1/markets/{slug}/bbo` for the book (`fresh_bbo`) and uses
+`POST /v1/order/preview` as the pre-trade validator, exposing
+`tick_for_market` over the same `orderPriceMinTickSize` field.
+
+**THE LOCK5 PATH.** `l5_pmus_transport.resolve_market` was a SECOND
+implementation: api host first, then `/v1/market/slug/`, then
+`/v1/events/slug/{event}`, per host. Its 2026-09-24 docstring records that
+it was adopted because `/v1/market/slug/` answered "not found" for BTC15m on
+35 consecutive windows while `/bbo` served the same slug.
+
+**WHAT IT COST.** 2026-09-28: the 2000z probe failed preflight with a null
+fingerprint and no other evidence — three gates were consistent with it and
+the `checks` list was only on an unreadable volume. The 2215z probe then
+failed `market_readable` for a full window. The row it could not read had
+been created by the venue at **10:40:01Z**, eleven hours earlier. Measured
+at 22:34:59Z, `/v1/market/slug/` on the gateway served **every** BTC15m
+window tested. The failure was a transient gateway 404 for 2200z/2215z
+lasting roughly 22:15Z–22:31Z, inside the window, with no pre-window read to
+fall back on.
+
+**RESOLUTION.** One implementation, `src/pmus_market_row.py`, used by both.
+Gateway only; the api host does not serve these public routes.
+`/v1/events/slug/` demoted to `series_provenance`, non-raising, outside the
+execution chain — it carries only `seriesSlug`, and
+`market_series_is_btc15m` is satisfied from the slug. `/bbo` is **not** an
+existence oracle: it 404s for every pre-open window and 404ed for 2215z
+after that window had opened and closed.
+
+**RESIDUAL RISK, STATED.** The 2026-09-24 evidence for the old route is not
+disproved — it may be that `/v1/market/slug/` genuinely did not serve BTC15m
+then. If it stops serving again, the single-route resolver has no fallback
+and the probe **refuses the window** rather than trading on unproven
+constraints. That is fail-closed and deliberate; the pre-window pin is what
+converts a transient outage from fatal to survivable, and it cannot help a
+slug that was never resolvable at all.
+
+**Selection.** Slugs are no longer computed from the clock.
+`pmus_book_tape.series_windows` (extracted from `series_slugs`, whose
+behaviour is unchanged) returns the venue's own listing, and
+`select_venue_window` picks the current window if ≥240 s remain, else the
+next. The venue's `closed` flag cannot be used to choose: 639 events
+measured 2026-09-28T22:52Z, reaching 2026-09-29T10:45Z, and exactly one had
+`closed: false` — the window trading at that moment.
+
+Scorer, θ, variant, clip, hold, residual cap, LOCK5 threshold, floor guard,
+complement bias and the n=25 preregistration are **unchanged**; q50 parity
+remains 25/25 exact at 6.1167.

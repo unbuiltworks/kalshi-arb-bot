@@ -1301,3 +1301,34 @@ therefore not a bound.
 `DRAIN_S`=240 produced **2 expiries in 27 observed windows** (0015z, 0145z), each with
 `drain_end terminal_recorded: false`. A measured rate, not a one-off. **Not acted on**
 and not to be acted on before review.
+
+## Venue contract: BTC15m market listing and resolution (measured 2026-09-28)
+
+Not model, but the empirical venue facts the execution path depends on.
+Full matrix in `analysis/l5/rung_a/PMUS_ENDPOINT_DISCOVERY_001.md`.
+
+* **Windows are created ~11.6–11.7 h ahead**, in batches ~64 min apart, read
+  from the venue's own `createdAt`: 2215z created 10:40:01Z, 2026-09-29-0000z
+  at 12:16:00Z, 0800z at 20:16:02Z; 1600z absent. Lead time is not the
+  constraint on window selection.
+* **`GET gateway/v1/market/slug/{slug}` is the canonical row and the
+  existence oracle.** It carries slug identity, `status`, `active`/`closed`/
+  `archived`, `outcomes`, `orderPriceMinTickSize` (0.01),
+  `minimumTradeQty` (0.01), `createdAt`. Unauthenticated.
+* **`/v1/markets/{slug}/bbo` is NOT an existence oracle.** It 404s for every
+  pre-open window (`MARKET_STATUS_CLOSED`) and 404ed for 2215z after that
+  window had opened and closed. It carries top-of-book and `settlementPx`
+  and proves no execution constraint.
+* **`/v1/events/slug/{event}` adds only `seriesSlug`.** Provenance, not
+  execution.
+* **The api host does not serve these public routes.**
+* **`outcomes` is `["Yes","No"]`** — the venue never labels them Up/Down, so
+  the mapping is not discoverable from any endpoint and remains established
+  by `l5_order_body.STATIC_CONTRACT` plus the observed
+  `OUTCOME_SIDE_YES == ORDER_INTENT_BUY_LONG` preview.
+* **A pre-created window is `closed: true, active: true`;** only the window
+  trading now is `closed: false`. 639 events measured at 22:52Z.
+* **Transient whole-route 404s happen.** 2200z and 2215z were unserved on
+  all three routes for roughly sixteen minutes inside their own windows on
+  2026-09-28, then served again. Immutable metadata is therefore resolved
+  and pinned before the window; tradability and price are never pinned.

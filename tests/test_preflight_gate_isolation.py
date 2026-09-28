@@ -77,8 +77,21 @@ def creds(monkeypatch):
     monkeypatch.setenv(Q1.SECRET_ENV, "secret-bbbbbbbbbbbb")
 
 
+def mk(http, slug=SLUG):
+    """A transport with a PRIVATE limiter.
+
+    The 429 test below extends the PROCESS-WIDE cool-off, which is the
+    correct production behaviour and poisons every later test in the same
+    interpreter. Run after this file, test_l5_pmus_transport failed 27 tests
+    with VenueThrottled; alphabetical ordering hid it in the full suite.
+    """
+    t = T.PmusTransport(market_slug=slug, http=http, now_fn=NOW)
+    t.limiter = T.RateLimiter(rps=1e6, burst=1e6)
+    return t
+
+
 def run(http):
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     try:
         return t, t.preflight(), None
     except T.PreflightFailed as exc:
@@ -131,17 +144,19 @@ def test_market_identity_failure_blocks_when_never_established(creds, capsys):
     assert rep["failing_check"] == "market_readable"
     row = printed(capsys)[0]
     assert row["check"] == "market_readable"
-    assert EVENT in row["where"]
-    # resolve_market raises LookupError after exhausting both hosts, so the
-    # status is genuinely absent rather than zero.
-    assert row["exception"] == "LookupError"
+    # the canonical route, named exactly, on the gateway
+    assert row["where"] == ("GET https://gateway.polymarket.us"
+                            "/v1/market/slug/%s" % SLUG)
+    # MarketRowUnavailable IS a LookupError; the venue served no HTTP answer
+    # that carried a status, so None is the honest value rather than zero.
+    assert row["exception"] == "MarketRowUnavailable"
     assert row["http_status"] is None
 
 
 def test_market_metadata_is_not_re_resolved_once_proven(creds, capsys):
     """Immutable metadata, established once, is not a per-attempt gate."""
     http = FailingHTTP()
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     assert t.preflight()["preflight"] == "PASSED"
     http.fail = {MARKET, EVENTP}
     rep = t.preflight()                       # second attempt, 60s later
@@ -161,7 +176,7 @@ def test_proven_metadata_is_still_re_read_every_attempt(creds):
     mid-window would keep passing `market_open_tradable` off a stale row.
     """
     http = FailingHTTP()
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     t.preflight()
     n = http.calls.count(("GET", MARKET))
     assert n >= 1
@@ -172,7 +187,7 @@ def test_proven_metadata_is_still_re_read_every_attempt(creds):
 
 def test_a_closed_market_still_blocks_even_after_metadata_was_proven(creds):
     http = FailingHTTP()
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     assert t.preflight()["preflight"] == "PASSED"
     http.data[MARKET]["market"]["closed"] = True
     http.data[MARKET]["market"]["active"] = False
@@ -182,7 +197,7 @@ def test_a_closed_market_still_blocks_even_after_metadata_was_proven(creds):
 
 def test_a_different_slug_never_borrows_proven_metadata(creds):
     http = FailingHTTP()
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     t.preflight()
     other = "cpc-btc-updown-15m-2026-09-28-2015z"
     t.market_slug = other
@@ -208,7 +223,7 @@ def test_open_orders_read_failure_blocks(creds, capsys):
 
 def test_position_drift_blocks(creds):
     http = FailingHTTP(positions=[{"market": SLUG, "side": "UP", "qty": "3"}])
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     with pytest.raises(T.PreflightFailed):
         t.preflight(known_positions={"%s|UP" % SLUG: "0"})
 
@@ -216,7 +231,7 @@ def test_position_drift_blocks(creds):
 def test_positions_read_failure_blocks_when_reconciliation_is_asked_for(
         creds, capsys):
     http = FailingHTTP(fail=[POSITIONS])
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     with pytest.raises(T.PreflightFailed):
         t.preflight(known_positions={"%s|UP" % SLUG: "0"})
     assert printed(capsys)[0]["check"] == "positions_readable"
@@ -226,7 +241,7 @@ def test_positions_is_not_read_when_there_is_nothing_to_reconcile(creds):
     """A read whose answer nothing consumes cannot be allowed to kill a
     window. Previously it was fetched every attempt and discarded."""
     http = FailingHTTP(fail=[POSITIONS])
-    t = T.PmusTransport(market_slug=SLUG, http=http, now_fn=NOW)
+    t = mk(http)
     assert t.preflight()["preflight"] == "PASSED"
     assert (("GET", POSITIONS) not in http.calls)
 

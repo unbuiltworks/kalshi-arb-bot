@@ -403,89 +403,73 @@ def resolve_market(http: Any, slug: str,
                    base: str = Q1.GATEWAY) -> Dict[str, Any]:
     """The market's authoritative metadata row, verified to BE that market.
 
-    Two resources, and which one answers depends on the market:
+    ONE resource, ONE host, and it is the one the working execution stack
+    has always used: GET {GATEWAY}/v1/market/slug/{slug}. See
+    `src/pmus_market_row.py` for the measurements and for why this replaced
+    a three-route fallback chain.
 
-    `/v1/market/slug/{slug}` (singular) serves SPORTS. It was adopted here
-    because this recorder's enriched module reads it -- for sports -- and it
-    404s "Market not found" for a BTC15m window even when that window has
-    traded and settled. Probed side by side on
-    cpc-btc-updown-15m-2026-09-24-0945z, which traded 49,678 shares: the
-    singular resource 404s while `/v1/markets/{slug}/bbo` answers 200 for
-    the same slug. That mismatch failed `market_readable` on 35 consecutive
-    windows, and because the gate aborts the preflight, every metadata gate
-    after it went unevaluated rather than passing.
+    Two things this deliberately no longer does:
 
-    `/v1/events/slug/{event}` is the resource that does carry it, and its
-    response embeds `markets[]` with exactly what the gates read: outcomes,
-    orderPriceMinTickSize, minimumTradeQty, active/closed/archived, status,
-    slug. The event slug is derived by stripping the `cpc-` product prefix,
-    so no numeric id has to be resolved first.
+    IT NO LONGER TRIES THE ACCOUNT-SCOPED api HOST FIRST. The venue's own
+    schemas declare these endpoints under servers: [gateway.polymarket.us]
+    with security: [], and the api host does not serve them. Trying it
+    first cost a request per attempt and produced the failure that then had
+    to be recovered from by falling through.
 
-    The `/v1/markets` CATALOGUE is deliberately not used. It is not a
-    shortlist: paged properly it runs past 40,000 rows ordered by ascending
-    id, so a continuously created 15m window sits at the far end and a
-    bounded walk can never reach it. An earlier version walked 8 pages and
-    concluded the series was "absent from the catalogue"; it had only
-    reached the oldest 4,000 markets, and its stop condition -- a page
-    shorter than the limit -- was itself wrong, because this listing returns
-    499 rows on some full pages.
+    IT NO LONGER FALLS BACK TO /v1/events/slug/{event} FOR EXECUTION FACTS.
+    That event row carries `seriesSlug`, which the market row does not --
+    and nothing the execution path consumes. Series identity is satisfied
+    from the slug itself (`market_series_is_btc15m` reads
+    `seriesSlug or slug`, and the slug contains the series), so the event
+    resource is PROVENANCE ONLY and lives in `series_provenance` below,
+    where its failure cannot end a window.
 
-    The match is made HERE, on the exact slug, never by a query parameter.
-    The gateway silently IGNORES filters it does not know -- `?slug=`,
-    `?seriesId=` and `?seriesSlug=` all answer 200 with the unfiltered
-    default page -- so trusting one would hand preflight some unrelated NFL
-    market's tick and outcomes while looking like a successful read.
+    The `/v1/markets` CATALOGUE is still deliberately not used: paged
+    properly it runs past 40,000 rows ordered by ascending id, so a
+    continuously created 15m window sits at the far end and a bounded walk
+    can never reach it.
 
-    Raises LookupError when no host serves the market, so `market_readable`
-    fails closed rather than proceeding on a market the venue is not
-    serving. Metadata and the executable book stay separate concerns: the
-    contemporaneous book still comes from the authenticated WS feed.
+    Raises LookupError (MarketRowUnavailable) when the venue does not serve
+    this exact slug, so `market_readable` fails closed rather than
+    proceeding on a market the venue is not serving.
     """
-    # Hosts in order. The venue's own OpenAPI schemas (events-schema.json,
-    # markets-schema.json) declare every endpoint used here under
-    # servers: [gateway.polymarket.us] with security: [] -- they are public
-    # and unauthenticated, so the gateway, not the account-scoped api host,
-    # is where this metadata is meant to live. The api host is still tried
-    # first because it costs one request and is the only cell not yet
-    # disproved empirically: production has shown /v1/market/slug/ failing
-    # there, but not /v1/events/slug/. The transport signs only for the api
-    # host, so each is addressed the way it expects.
-    hosts = [base] if base != Q1.GATEWAY else [Q1.API, Q1.GATEWAY]
+    from src import pmus_market_row as MR
+    if base != Q1.GATEWAY:
+        # a caller that names a host is honoured, but the row is still
+        # matched on the slug and the default is never the api host.
+        def get(path: str) -> Any:
+            return http.request("GET", path, None, base)
+    else:
+        def get(path: str) -> Any:
+            return http.request("GET", path, None, Q1.GATEWAY)
+    return MR.market_row(slug, get=get)
 
-    # One host failing must never stop the other being tried, and the
-    # failure is caught as BaseException on purpose: an unloadable crypto
-    # backend raises a pyo3 PanicException, which is NOT an Exception, so
-    # `except Exception` would let a signing failure on the api host
-    # propagate and lose the gateway answer that was available all along.
-    # KeyboardInterrupt and SystemExit are never swallowed.
-    for host in hosts:
-        try:
-            r = http.request("GET", "/v1/market/slug/%s" % slug, None,
-                             host) or {}
-            mk = r.get("market") or r
-            if isinstance(mk, Mapping) and mk.get("slug") == slug:
-                return dict(mk)
-        except (KeyboardInterrupt, SystemExit):
+
+def series_provenance(http: Any, slug: str) -> Dict[str, Any]:
+    """`seriesSlug` and the event's own identity, for the record only.
+
+    NOT part of the execution-critical chain: nothing the order path
+    consumes comes from here, and every failure is returned rather than
+    raised. `/v1/events/slug/` 404ed for 2245z at 22:31Z on 2026-09-28 and
+    answered 200 for it minutes later; a window must not turn on that.
+    """
+    ev_slug = event_slug_for(slug)
+    try:
+        r = http.request("GET", "/v1/events/slug/%s" % ev_slug, None,
+                         Q1.GATEWAY) or {}
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
-        except BaseException:                                  # noqa: BLE001
-            pass                        # the event below is the real answer
-
-        try:
-            r = http.request("GET", "/v1/events/slug/%s"
-                             % event_slug_for(slug), None, host) or {}
-            ev = r.get("event") or r
-            for mk in (ev.get("markets") or []):
-                if isinstance(mk, Mapping) and mk.get("slug") == slug:
-                    return dict(mk)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except BaseException:                                  # noqa: BLE001
-            pass                            # try the next host, then fail
-
-    raise LookupError(
-        "market metadata not served for %s on %s: neither /v1/market/slug/ "
-        "nor /v1/events/slug/%s returned it"
-        % (slug, ", ".join(hosts), event_slug_for(slug)))
+        return {"event_slug": ev_slug, "readable": False,
+                "error": "%s: %s" % (type(exc).__name__, redact(exc))}
+    ev = r.get("event") or r
+    if not isinstance(ev, Mapping):
+        return {"event_slug": ev_slug, "readable": False,
+                "error": "event row not a mapping"}
+    return {"event_slug": ev_slug, "readable": True,
+            "series_slug": ev.get("seriesSlug"),
+            "event_start": ev.get("startTime"),
+            "event_id": ev.get("id")}
 
 
 def rows_of(resp: Any, key: str) -> List[dict]:
@@ -577,6 +561,46 @@ class PmusTransport:
         which resource answers and why.
         """
         return resolve_market(self.http, slug)
+
+    def pin_market_metadata(self, slug: Optional[str] = None
+                            ) -> Dict[str, Any]:
+        """Resolve the exact market row and PIN it, before the window.
+
+        The 2215z window died on a transient gateway 404 that lasted about
+        sixteen minutes and began after the window had opened. The row it
+        could not read had been created by the venue at 10:40:01Z that
+        morning -- eleven hours earlier -- so there was never a moment
+        before the window when it was unavailable.
+
+        So the invariant is not lead time, it is ORDER: the row is resolved
+        and pinned OUTSIDE the trading-window failure domain, and a later
+        transient failure then degrades instead of killing. Only the
+        immutable facts are pinned -- slug identity, series, tick, minimum
+        quantity. Tradability is NOT pinned: `market_open_tradable` is
+        re-evaluated from a fresh row on every preflight, and executable
+        price stays with the authenticated book at order time.
+
+        Raises whatever `resolve_market` raises. A slug never successfully
+        resolved has no pin, and preflight then fails closed on it.
+        """
+        slug = slug or self.market_slug
+        row = resolve_market(self.http, slug)
+        self._market_meta[slug] = dict(row)
+        self.tick_size = _as_decimal(row.get(Q1.TICK_FIELD)
+                                     or row.get("tickSize"))
+        self.quantity_increment = _as_decimal(
+            row.get("orderMinQuantity") or row.get("minimumTradeQty")
+            or row.get("minOrderSize"))
+        return {"slug": slug, "pinned": True,
+                "tick_size": (str(self.tick_size)
+                              if self.tick_size is not None else None),
+                "quantity_increment": (str(self.quantity_increment)
+                                       if self.quantity_increment is not None
+                                       else None),
+                "status_at_pin": row.get("status") or row.get("state"),
+                "created_at": row.get("createdAt"),
+                "labels": ("immutable metadata only; tradability and price "
+                           "are established contemporaneously")}
 
     def book(self, slug: str) -> Dict[str, Any]:
         r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}
@@ -909,11 +933,10 @@ class PmusTransport:
                 # the row, the failure is still printed and recorded, and a
                 # slug never resolved still fails closed.
                 if cached is None:
-                    return self._fail(checks, gate, "market_readable", exc,
-                                      where="GET %s|%s /v1/events/slug/%s"
-                                            % (Q1.API, Q1.GATEWAY,
-                                               event_slug_for(
-                                                   self.market_slug)))
+                    return self._fail(
+                        checks, gate, "market_readable", exc,
+                        where="GET %s/v1/market/slug/%s"
+                              % (Q1.GATEWAY, self.market_slug))
                 mk = dict(cached)
                 line = preflight_failure_line(
                     "market_metadata_refresh", "resolve_market", exc)

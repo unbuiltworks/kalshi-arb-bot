@@ -84,6 +84,7 @@ COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/pmus_market_row.py src/pmus_market_row.py
 # The order serializer and the preview gate. Both are pure: no transport, no
 # endpoint, no credential, and no import of any executor. The preflight needs
 # the contract data in l5_order_body, and submit() needs the gate if this

@@ -54,6 +54,7 @@ COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/pmus_market_row.py src/pmus_market_row.py
 COPY src/l5_preview_gate.py src/l5_preview_gate.py
 COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py

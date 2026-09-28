@@ -378,12 +378,21 @@ def test_the_minimum_quantity_field_of_this_resource_is_read(creds):
 # ------------------------------------------------- market metadata resolution
 
 class VenueHTTP:
-    """The venue as probed on 2026-09-24, with 1245z live.
+    """The venue as measured on 2026-09-28T22:34:59Z.
 
-    The public gateway hides this series: /v1/market/slug/ and /v1/market/id/
-    both answer "not found" for a BTC15m window that is trading, while
-    /bbo and /book serve it. The event resource is what carries the metadata,
-    under the slug WITHOUT the cpc- prefix.
+    REVISED. The earlier version of this double encoded the 2026-09-24
+    belief that the gateway hides this series -- that /v1/market/slug/
+    answers "not found" for a BTC15m window while /bbo and /book serve it,
+    so the EVENT resource had to carry the metadata. Measured again on
+    2026-09-28, /v1/market/slug/ on the gateway answered 200 with a matching
+    slug for every BTC15m window tested, past, trading and future, carrying
+    orderPriceMinTickSize and minimumTradeQty; and it is the route the
+    execution stack that has actually settled PMUS orders has always used
+    (pmus_micro_executor.market_micro_spec).
+
+    So `singular` is now the primary surface and `events` is provenance
+    only. `api_events` and the api-host machinery are kept solely to prove
+    that the api host is NEVER consulted for a market row.
     """
 
     def __init__(self, *, events=None, singular=None, api_events=None,
@@ -444,75 +453,61 @@ def test_a_slug_without_the_prefix_is_left_alone():
 
 # ------------------------------------------------------------- resolution
 
-def test_the_event_resource_supplies_what_the_gates_read():
-    mk = tx(VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))})
-            ).market(SLUG)
+def test_the_market_row_supplies_what_the_gates_read():
+    mk = tx(VenueHTTP(singular=row(SLUG))).market(SLUG)
     assert mk["slug"] == SLUG
     assert mk["orderPriceMinTickSize"] == "0.01"
     assert mk["minimumTradeQty"] == "0.01"
     assert "Up" in mk["outcomes"] and "Down" in mk["outcomes"]
 
 
-def test_the_right_market_is_picked_out_of_a_multi_market_event():
-    """An event carries several markets; taking the first would hand
-    preflight another market's tick and outcomes."""
-    ev = event(row("cpc-other-market"), row(SLUG, orderPriceMinTickSize="0.05"),
-               slug=T.event_slug_for(SLUG))
-    mk = tx(VenueHTTP(events={T.event_slug_for(SLUG): ev})).market(SLUG)
-    assert mk["slug"] == SLUG and mk["orderPriceMinTickSize"] == "0.05"
-
-
-def test_an_event_that_does_not_contain_our_market_fails_closed():
-    ev = event(row("cpc-some-other-window"), slug=T.event_slug_for(SLUG))
+def test_a_row_that_is_not_our_market_fails_closed():
+    """The gateway ignores query filters it does not know and answers 200
+    with an unrelated default page, so a status code is not a match."""
     with pytest.raises(LookupError):
-        tx(VenueHTTP(events={T.event_slug_for(SLUG): ev})).market(SLUG)
+        tx(VenueHTTP(singular=row("cpc-some-other-window"))).market(SLUG)
 
 
-def test_the_singular_resource_still_serves_sports_first():
-    """Sports resolve in one request; the event route is the fallback."""
-    http = VenueHTTP(singular=row(SLUG, seriesSlug="btc-updown-15m"))
-    assert tx(http).market(SLUG)["seriesSlug"] == "btc-updown-15m"
-    # the host that answered did so from the singular resource; it never had
-    # to fall through to the event route
-    assert not any(b == Q1.GATEWAY and "/v1/events/" in p
-                   for b, p in http.calls)
-
-
-def test_the_authenticated_host_is_tried_before_the_gateway():
-    http = VenueHTTP(api_events={T.event_slug_for(SLUG): event(row(SLUG))})
+def test_the_api_host_is_never_consulted_for_a_market_row():
+    """It does not serve these public routes. Trying it first spent a
+    request per attempt and produced the failure that then had to be
+    recovered from by falling through."""
+    http = VenueHTTP(singular=row(SLUG))
     assert tx(http).market(SLUG)["slug"] == SLUG
-    assert http.calls[0][0] == Q1.API
+    assert [b for b, _ in http.calls] == [Q1.GATEWAY]
+    assert not any(b == Q1.API for b, _ in http.calls)
 
 
-def test_an_api_host_that_refuses_does_not_prevent_the_gateway_resolving():
-    http = VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))},
-                     api_raises=RuntimeError)
-    assert tx(http).market(SLUG)["slug"] == SLUG
-
-
-def test_a_crypto_backend_panic_on_one_host_does_not_lose_the_other():
-    """Signing imports the Ed25519 backend, and an unloadable one raises a
-    pyo3 PanicException -- a BaseException, not an Exception. Caught live in
-    this container: it propagated and lost the gateway answer."""
-    class Panic(BaseException):
-        pass
-
-    http = VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))},
-                     api_raises=Panic)
+def test_an_api_host_that_would_refuse_is_irrelevant():
+    http = VenueHTTP(singular=row(SLUG), api_raises=RuntimeError)
     assert tx(http).market(SLUG)["slug"] == SLUG
 
 
 def test_keyboard_interrupt_is_never_swallowed():
-    http = VenueHTTP(api_raises=KeyboardInterrupt)
+    class Boom(VenueHTTP):
+        def request(self, method, path, body=None, base=None):
+            raise KeyboardInterrupt
+
     with pytest.raises(KeyboardInterrupt):
-        tx(http).market(SLUG)
+        tx(Boom()).market(SLUG)
 
 
-def test_neither_host_serving_it_fails_closed_naming_both():
+def test_the_row_not_being_served_fails_closed_naming_the_host_and_slug():
     with pytest.raises(LookupError) as e:
         tx(VenueHTTP()).market(SLUG)
-    assert Q1.API in str(e.value) and Q1.GATEWAY in str(e.value)
-    assert T.event_slug_for(SLUG) in str(e.value)
+    assert Q1.GATEWAY in str(e.value) and SLUG in str(e.value)
+
+
+def test_the_event_resource_is_provenance_only_and_never_raises():
+    """It carries `seriesSlug`, which the market row does not -- and
+    nothing the execution path consumes. /v1/events/slug/ 404ed for 2245z
+    at 22:31Z on 2026-09-28 and answered 200 minutes later; a window must
+    not turn on that."""
+    ok = T.series_provenance(
+        VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))}), SLUG)
+    assert ok["readable"] is True and ok["series_slug"] == "btc-updown-15m"
+    bad = T.series_provenance(VenueHTTP(), SLUG)
+    assert bad["readable"] is False and "error" in bad
 
 
 def test_the_catalogue_listing_is_never_walked():
@@ -520,7 +515,7 @@ def test_the_catalogue_listing_is_never_walked():
     bounded walk can never reach a continuously created 15m window -- and an
     earlier version concluded the series was absent after seeing the oldest
     4,000. It must not come back."""
-    http = VenueHTTP(events={T.event_slug_for(SLUG): event(row(SLUG))})
+    http = VenueHTTP(singular=row(SLUG))
     tx(http).market(SLUG)
     assert not any("/v1/markets?" in p for _, p in http.calls)
 

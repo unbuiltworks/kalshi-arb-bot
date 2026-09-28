@@ -68,6 +68,11 @@ COPY src/pmus_paired_log.py src/pmus_paired_log.py
 COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
 COPY src/pmus_probe_observability.py src/pmus_probe_observability.py
 COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
+# the canonical market row, shared with pmus_micro_executor rather than
+# duplicated beside it, and the venue's own series listing -- selection
+# never manufactures a slug from the clock.
+COPY src/pmus_market_row.py src/pmus_market_row.py
+COPY src/pmus_book_tape.py src/pmus_book_tape.py
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 COPY src/pmus_status_report.py src/pmus_status_report.py

@@ -302,10 +302,20 @@ def test_main_always_prints_a_verdict_and_exits_nonzero(monkeypatch, capsys):
 
 # ------------------------------- the credential-side read resolves BTC15m too
 
-class CatalogueHTTP(FakeHTTP):
-    """The gateway for a BTC15m window: it hides this series from
-    /v1/market/slug/ and serves the metadata only under the EVENT slug,
-    which is the market slug without its cpc- product prefix."""
+class EventOnlyHTTP(FakeHTTP):
+    """A venue that serves ONLY the event row and not the market row.
+
+    REVISED, and the reversal is the point. This double used to assert the
+    2026-09-24 belief that the gateway hides this series from
+    /v1/market/slug/ and serves the metadata only under the event slug, so
+    resolution HAD to fall through to the event resource. Measured again on
+    2026-09-28T22:34:59Z, /v1/market/slug/ answered 200 with a matching slug
+    for every BTC15m window tested, and it is the route the execution stack
+    that has settled real PMUS orders has always used. The market row is now
+    canonical and the event resource is provenance only -- so a venue in
+    THIS shape no longer resolves, and must fail closed rather than trade on
+    constraints read from somewhere else.
+    """
 
     def __init__(self, **over):
         super().__init__(**over)
@@ -316,12 +326,21 @@ class CatalogueHTTP(FakeHTTP):
                       "markets": [{"slug": "cpc-unrelated"}, row]}}
 
 
-def test_the_credential_side_preflight_resolves_a_btc15m_market(creds):
-    """It runs where the keys are, so it must not be the one still reading
-    the resource that 404s for this series."""
-    rep = P.preflight(SLUG, P.GetOnly(CatalogueHTTP()), now=NOW)
+def test_the_credential_side_preflight_resolves_from_the_market_row(creds):
+    """It runs where the keys are, and it reads the same one route the
+    execution path reads -- not a second implementation of resolution."""
+    rep = P.preflight(SLUG, P.GetOnly(FakeHTTP()), now=NOW)
     assert rep["preflight"] == "PASSED"
     assert failed(rep) == []
+
+
+def test_an_event_only_venue_no_longer_resolves_and_fails_closed(creds):
+    """The event row carries seriesSlug and nothing the execution path
+    consumes. Resolving from it would mean trading on a tick and a minimum
+    quantity the canonical route never confirmed."""
+    rep = P.preflight(SLUG, P.GetOnly(EventOnlyHTTP()), now=NOW)
+    assert rep["preflight"] == "FAILED"
+    assert "market_readable" in failed(rep)
 
 
 def test_an_unserved_market_still_fails_market_readable_here(creds):

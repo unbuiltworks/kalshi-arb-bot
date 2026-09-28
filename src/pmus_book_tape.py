@@ -95,17 +95,37 @@ def live_slugs(cap: int = 60) -> list:
     return out[:cap]
 
 
-def series_slugs(series_slug: str, *, get=None, now=None) -> list:
-    """Every market of a recurring series that is open or about to open.
+def series_windows(series_slug: str, *, get=None) -> list:
+    """Every NOT-YET-CLOSED window of a recurring series, as the VENUE names
+    it: a list of (start_datetime, market_slug), earliest first.
 
-    A 15-minute window is created well in advance and expires on a hard clock,
-    so "the one trading right now" is a property of the wall clock, not of a
-    `live=true` flag the venue only sets for sports. Markets that have already
-    closed are excluded; the current window and the next two are kept, so a
-    rollover is never missed between re-slates.
+    EXTRACTED from `series_slugs`, which is the filter over this that the
+    tape collector wants. The primitive is separate because the live probe
+    needs the same venue-provided slugs with a different horizon: the tape
+    only ever wants what is trading now, while a probe must know the
+    UPCOMING window early enough to resolve its metadata before the window
+    opens. Manufacturing that slug from the clock instead is what put a
+    probe on cpc-btc-updown-15m-2026-09-28-2215z with no venue confirmation.
+
+    A 15-minute window is created about 11.7 hours in advance and expires on
+    a hard clock, so "the one trading right now" is a property of the wall
+    clock, not of a `live=true` flag the venue only sets for sports.
+
+    Each row is {"start", "slug", "event_slug", "event_closed",
+    "event_active"}. The flags are carried rather than applied: measured on
+    2026-09-28T22:52Z, this listing returned 639 events for the series,
+    reaching 2026-09-29T10:45Z, and EXACTLY ONE had `closed: false` -- the
+    window trading at that moment. Every pre-created future window is
+    `closed: true, active: true`. So `closed` says "not trading now", which
+    is what the tape wants and the opposite of what a probe selecting the
+    NEXT window needs. Filtering it here would have hidden every upcoming
+    window from the caller that needs them.
+
+    Returns [] rather than raising: a caller with no venue-confirmed window
+    must refuse on its own terms, and [] is unambiguously "I learned
+    nothing" -- never "there is no window".
     """
     get = _get if get is None else get
-    now = datetime.now(timezone.utc) if now is None else now
     try:
         sid = None
         off = 0
@@ -123,7 +143,8 @@ def series_slugs(series_slug: str, *, get=None, now=None) -> list:
             return []
         evs, off = [], 0
         while off < 4000:
-            d = get("/v1/events?series_id=%s&limit=100&offset=%d" % (sid, off)) or {}
+            d = get("/v1/events?series_id=%s&limit=100&offset=%d"
+                    % (sid, off)) or {}
             rows = d.get("events") or []
             if not rows:
                 break
@@ -133,29 +154,42 @@ def series_slugs(series_slug: str, *, get=None, now=None) -> list:
                 break
     except Exception:                                    # noqa: BLE001
         return []
-    live = []
+    out = []
     for e in evs:
-        if e.get("closed"):
-            continue
         try:
             start = datetime.fromisoformat(
                 str(e.get("startTime")).replace("Z", "+00:00"))
         except (TypeError, ValueError):
             continue
-        live.append((start, e))
-    live.sort(key=lambda r: r[0])
+        for m in (e.get("markets") or []):
+            if m.get("slug"):
+                out.append({"start": start, "slug": str(m["slug"]),
+                            "event_slug": str(e.get("slug") or ""),
+                            "event_closed": bool(e.get("closed")),
+                            "event_active": bool(e.get("active"))})
+    out.sort(key=lambda r: r["start"])
+    return out
+
+
+def series_slugs(series_slug: str, *, get=None, now=None) -> list:
+    """Every market of a recurring series that is open or about to open.
+
+    Markets that have already closed are excluded; behaviour is unchanged --
+    the discovery itself now lives in `series_windows`.
+    """
+    now = datetime.now(timezone.utc) if now is None else now
     # ONLY WHAT IS ACTUALLY TRADING. The venue pre-creates windows hours
     # ahead, and their book/bbo endpoints 404 until the window opens. Polling
     # them spends two thirds of the call budget on 404s and fills the tape
     # with errors that are not errors, so the universe is bounded to the
     # window in progress plus the one about to start.
     out = []
-    for start, e in live:
-        if start > now + timedelta(seconds=LEAD_S):
+    for w in series_windows(series_slug, get=get):
+        if w["event_closed"]:
+            continue
+        if w["start"] > now + timedelta(seconds=LEAD_S):
             break
-        for m in (e.get("markets") or []):
-            if m.get("slug"):
-                out.append(str(m["slug"]))
+        out.append(w["slug"])
     return out
 
 
