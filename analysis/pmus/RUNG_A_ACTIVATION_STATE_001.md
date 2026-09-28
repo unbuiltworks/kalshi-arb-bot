@@ -128,3 +128,35 @@ before arming. It is bound at activation, to a window that has not yet opened.
 * **Mandate install + verification**, at activation.
 * **Window binding**, at activation, to a future BTC15m window.
 * **Clean preflight** on the newly built image.
+
+## 7. Build and known-disarmed verification — EVIDENCE
+
+Build: deployment `a64ecf5a-fe8d-4438-9ce0-e497da884d9c`, **SUCCESS**,
+2026-09-28T04:12:58Z, commit `e48960f709e3aaef9a6193b584e8d5b5b75fe345`, branch
+`claude/l5-pmus-economic-results-7c116e`, region `us-east4-eqdc4a`.
+
+A first attempt (`65b1a618`) came back **SKIPPED**: the watch-pattern guard I had
+just set blocked its own build. Recorded because the fix matters — the guard was
+removed rather than worked around, on the reasoning that a `commitSha` pin already
+prevents branch pushes from deploying this service and is therefore the stronger
+control. Two documentation pushes have landed on the branch since; the serving
+artifact is unchanged, which is the pin doing its job.
+
+**The artifact's own first line, from the running container** — not inferred from
+variables I cannot read:
+
+```json
+L5_MODE {"mode": "OBSERVE_ONLY", "observe_only": "1", "recover_only": "",
+         "market_pin": "", "recover_market": "", "maker_treatment": false,
+         "maker_only": true, "imbalance_suppress": false, "treatment": "NONE",
+         "session": "", "armed": "", "live": ""}
+```
+
+`session`, `armed` and `live` all empty: `pmus_auth.armed()` requires all three
+and a token match, so this is **DISARMED, demonstrated by the artifact itself**.
+`recover_only` empty confirms the stale-recovery hazard is cleared, and
+`mode OBSERVE_ONLY` means this run holds a NullTransport and cannot submit at all.
+
+The OBSERVE_ONLY report (`L5_OBSERVE_ONLY …`) had **not yet been emitted** when
+this was written — the run observes until the window closes. It is a confirmation
+of preflight health on the new image, and it is outstanding, not passed.
