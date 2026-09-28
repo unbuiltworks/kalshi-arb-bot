@@ -629,8 +629,12 @@ def test_the_probe_refuses_to_arm_without_an_authenticated_book(
     monkeypatch.setenv(AUTH.MARKET_ENV, MARKET)
     monkeypatch.setattr(P, "new_l5_actions",
                         lambda slug, seen, act=None, health=None: ([], True))
+    # **kw so the double tracks the production constructor rather than pinning
+    # an old signature: run() now also passes `deadline` (reconnect must not
+    # outlive the window). A double that rejects a new kwarg fails the test for
+    # a reason that has nothing to do with what it is testing.
     monkeypatch.setattr(P.FEED, "AuthenticatedBookFeed",
-                        lambda market, clock=None: Dead(lambda: t["now"]))
+                        lambda market, clock=None, **kw: Dead(lambda: t["now"]))
     rep = P.run(clock=lambda: t["now"],
                 sleep=lambda s: t.__setitem__("now", t["now"] + s),
                 transport_factory=lambda slug: venue,

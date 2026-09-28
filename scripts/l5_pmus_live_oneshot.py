@@ -765,7 +765,13 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         def transport_factory(slug):                           # noqa: E306
             from src import l5_pmus_transport as TP
             return TP.PmusTransport(market_slug=slug)
-    feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
+    # the feed reconnects after a venue-side close (RUNG A 1600z took a 1001
+    # and never came back), but it must not outlive the window it serves, so
+    # recovery is bounded by the window end as well as by MAX_RECONNECTS.
+    _w_start = window_start(market)
+    feed = book_feed or FEED.AuthenticatedBookFeed(
+        market, clock=clock,
+        deadline=(None if _w_start is None else _w_start + WINDOW_S))
     state_dir = os.path.dirname(os.path.abspath(store.path)) or "."
     # 1c. the mandate guard goes on the transport BEFORE the probe can hold it,
     #     so no code path exists that reaches the wire without admission.
@@ -786,7 +792,21 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
     #     it is computed over THIS session's inventory; reconstructing an
     #     inherited position's cash would be a guess, and a guessed floor is
     #     worse than no floor. Fresh state paths make this the normal case.
-    pre = {sd: store.position(market, sd) for sd in ("up", "down")}
+    # CANONICAL SIDES, not the lowercase words. `InventoryStore.position`
+    # formats "<market>|<side>" with no canonicalisation, while the SOLE writer
+    # of positions (`apply_fill`) canonicalises through `canonical_side` and so
+    # only ever creates "<market>|UP" / "<market>|DOWN". Asking for "up"/"down"
+    # read two keys that cannot exist, so this guard concluded "flat" over a
+    # store holding inventory and could never fire --
+    # DEFECT_PREEXISTING_INVENTORY_CASE_001, measured by booking a fill through
+    # the real writer and watching residual() report 1 while this test said
+    # False. Both legs are checked rather than the net, because a matched pair
+    # nets to zero residual and is still inherited inventory.
+    pre = {sd: store.position(market,
+                              EX.canonical_side(sd, doing="checking the "
+                                                "selected market for "
+                                                "inherited inventory"))
+           for sd in ("up", "down")}
     if any(D(str(v)) != 0 for v in pre.values()):
         out = {"LABEL": "LIVE_BOUNDED_PROBE", "market": market,
                "refused": "PREEXISTING_INVENTORY",
