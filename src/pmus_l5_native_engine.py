@@ -44,6 +44,7 @@ FLOOR_GUARD = False
 COMPLEMENT_BIAS_C = None
 
 REST, CANCEL, COMPLETE, SECURE = "REST", "CANCEL", "COMPLETE", "SECURE"
+LOCK_CANDIDATE = "LOCK_CANDIDATE"
 
 
 class Intent(dict):
@@ -71,7 +72,8 @@ class NativeEngine:
                  residual_cap_k: D = RESIDUAL_CAP_K,
                  profit_lock_usd: D = PROFIT_LOCK_USD,
                  charge_resting: bool = False,
-                 prospective_cap: bool = True) -> None:
+                 prospective_cap: bool = True,
+                 lock_gate=None) -> None:
         self.clip, self.theta = D(str(clip)), D(str(theta))
         self.variant, self.hold_s = variant, float(hold_s)
         self.residual_cap_k = D(str(residual_cap_k))
@@ -88,6 +90,17 @@ class NativeEngine:
         #: also runs against the clip we intend to rest -- strictly tighter.
         #: Parity replay sets this False and applies the cap at the frozen point.
         self.prospective_cap = bool(prospective_cap)
+        #: LIVE SAFETY OVERLAY SEAT. None -- the default, and what the parity
+        #: replay uses -- latches immediately, exactly as frozen. Live, the
+        #: overlay installs a gate that must run the cancel/reconcile
+        #: transaction and re-derive the floor from AUTHENTICATED state before
+        #: the latch is real. The gate can only DELAY or REFUSE a latch; it can
+        #: never create one, so live can do LESS than the simulated arm when
+        #: venue state is uncertain and never silently more.
+        self.lock_gate = lock_gate
+        #: true between a lock CANDIDATE and its confirmation or abort. No new
+        #: acquisition risk is placed while this is open.
+        self.lock_pending = False
 
         self.bk = S.Book()
         self.locked_at = None
@@ -252,6 +265,16 @@ class NativeEngine:
                 "floor_after_securing_action": new_floor,
                 "locked": secured_by is not None, "via": secured_by})
             if secured_by is not None:
+                if self.lock_gate is not None:
+                    # A CANDIDATE, not a latch. The overlay must cancel, confirm,
+                    # reconcile any race fill and re-derive the floor from
+                    # authenticated state before this becomes real.
+                    self.lock_pending = True
+                    out.append(Intent(LOCK_CANDIDATE, via=secured_by,
+                                      floor_modelled=new_floor, now=now,
+                                      t=row.get("t"),
+                                      reason="AWAITING_CONFIRMED_CANCELLATION"))
+                    return out
                 self.locked_at = row.get("t")
                 self.lock_via = secured_by
                 self.lock_floor = S.settlement_independent_floor(self.bk)
@@ -265,6 +288,10 @@ class NativeEngine:
 
         # ---- 3. locked: no OPEN, no ACQUIRE, no EXTEND for the rest
         if self.locked_at is not None:
+            return out
+        if self.lock_pending:
+            # mid-transaction. Exposure may still be resting at the venue and
+            # a race fill may still be in flight, so no new risk goes out.
             return out
 
         # ---- 4. acquisition: two-sided resting, one clip per side, OUR touch
@@ -319,6 +346,24 @@ class NativeEngine:
             if abs(after) > self.residual_cap_k * mc:
                 return False
         return True
+
+    def confirm_lock(self, *, via: str, t: Any, floor: D) -> None:
+        """The overlay proved it: cancellations confirmed, race fills booked,
+        floor re-derived from authenticated state and still >= the threshold."""
+        self.locked_at = t
+        self.lock_via = via
+        self.lock_floor = D(str(floor))
+        self.lock_pending = False
+        for side in ("up", "down"):
+            if self.resting.get(side):
+                self.lock_cancels += 1
+                self.resting[side] = None
+
+    def abort_lock(self, reason: str) -> None:
+        """The transaction could not be established. NOT locked, and the
+        resting book is whatever the venue says it is -- not what we hoped."""
+        self.lock_pending = False
+        self.lock_abort_reason = reason
 
     def settle(self, winner: Optional[str]) -> Dict[str, Any]:
         out = self.bk.settle(winner)
