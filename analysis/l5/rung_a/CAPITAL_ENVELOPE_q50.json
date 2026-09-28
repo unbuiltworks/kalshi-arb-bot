@@ -1,0 +1,187 @@
+{
+  "arm": "frozen q50 PROFIT_LOCK_5, clip=50 theta=0.96 variant=B hold_s=60 residual_cap_k=2 profit_lock_usd=5",
+  "n_windows": 25,
+  "units": "USD of principal, own-outcome terms, fees excluded",
+  "max_committed_principal_usd": "353.3333333333333333333333333",
+  "max_outstanding_order_principal_usd": "51.0000",
+  "max_directional_principal_usd": "98.33333333333333333333333333",
+  "max_combined_worst_case_capital_usd": "403.3333333333333333333333333",
+  "per_window": [
+    {
+      "window": "1830z",
+      "committed": "93.5000",
+      "outstanding": "49.5000",
+      "directional": "46.5000",
+      "combined": "117.5000"
+    },
+    {
+      "window": "1845z",
+      "committed": "99.25000000",
+      "outstanding": "49.5000",
+      "directional": "41.5000",
+      "combined": "120.5000"
+    },
+    {
+      "window": "1900z",
+      "committed": "127.5710898085237801111797406",
+      "outstanding": "49.5000",
+      "directional": "82.0000",
+      "combined": "162.0710898085237801111797406"
+    },
+    {
+      "window": "1915z",
+      "committed": "182.9629629629629629629629630",
+      "outstanding": "50.5000",
+      "directional": "42.15432098765432098765432100",
+      "combined": "233.4629629629629629629629630"
+    },
+    {
+      "window": "1930z",
+      "committed": "312.6666666666666666666666667",
+      "outstanding": "50.5000",
+      "directional": "51.5000",
+      "combined": "362.6666666666666666666666667"
+    },
+    {
+      "window": "1945z",
+      "committed": "60.5000",
+      "outstanding": "49.5000",
+      "directional": "30.5000",
+      "combined": "110.0000"
+    },
+    {
+      "window": "2000z",
+      "committed": "68.50000000",
+      "outstanding": "49.5000",
+      "directional": "68.50000000",
+      "combined": "118.00000000"
+    },
+    {
+      "window": "2030z",
+      "committed": "21.0000",
+      "outstanding": "49.5000",
+      "directional": "21.0000",
+      "combined": "70.5000"
+    },
+    {
+      "window": "2045z",
+      "committed": "209.5000",
+      "outstanding": "50.0000",
+      "directional": "46.7500",
+      "combined": "259.0000"
+    },
+    {
+      "window": "2115z",
+      "committed": "79.1250",
+      "outstanding": "49.5000",
+      "directional": "46.5000",
+      "combined": "128.6250"
+    },
+    {
+      "window": "2215z",
+      "committed": "8.5000",
+      "outstanding": "49.5000",
+      "directional": "8.5000",
+      "combined": "58.0000"
+    },
+    {
+      "window": "2245z",
+      "committed": "214.1666666666666666666666667",
+      "outstanding": "50.0000",
+      "directional": "39.79166666666666666666666668",
+      "combined": "263.6666666666666666666666667"
+    },
+    {
+      "window": "2300z",
+      "committed": "94.0000",
+      "outstanding": "49.5000",
+      "directional": "44.0000",
+      "combined": "143.5000"
+    },
+    {
+      "window": "2315z",
+      "committed": "93.0000",
+      "outstanding": "49.5000",
+      "directional": "20.0000",
+      "combined": "103.0000"
+    },
+    {
+      "window": "2330z",
+      "committed": "24.5000",
+      "outstanding": "49.5000",
+      "directional": "24.5000",
+      "combined": "74.0000"
+    },
+    {
+      "window": "2345z",
+      "committed": "353.3333333333333333333333333",
+      "outstanding": "50.0000",
+      "directional": "48.19047619047619047619047618",
+      "combined": "403.3333333333333333333333333"
+    },
+    {
+      "window": "0000z",
+      "committed": "12.0000",
+      "outstanding": "49.5000",
+      "directional": "12.0000",
+      "combined": "61.5000"
+    },
+    {
+      "window": "0030z",
+      "committed": "247.0000",
+      "outstanding": "50.0000",
+      "directional": "98.0000",
+      "combined": "297.0000"
+    },
+    {
+      "window": "0045z",
+      "committed": "206.0000",
+      "outstanding": "50.5000",
+      "directional": "58.6000",
+      "combined": "256.5000"
+    },
+    {
+      "window": "0100z",
+      "committed": "26.5000",
+      "outstanding": "49.5000",
+      "directional": "26.5000",
+      "combined": "76.0000"
+    },
+    {
+      "window": "0115z",
+      "committed": "148.0000",
+      "outstanding": "50.0000",
+      "directional": "98.33333333333333333333333333",
+      "combined": "198.0000"
+    },
+    {
+      "window": "0130z",
+      "committed": "45.5000",
+      "outstanding": "49.5000",
+      "directional": "45.5000",
+      "combined": "95.0000"
+    },
+    {
+      "window": "0200z",
+      "committed": "140.5000",
+      "outstanding": "49.5000",
+      "directional": "75.5000",
+      "combined": "190.0000"
+    },
+    {
+      "window": "0215z",
+      "committed": "34.0000",
+      "outstanding": "49.5000",
+      "directional": "34.0000",
+      "combined": "83.5000"
+    },
+    {
+      "window": "0230z",
+      "committed": "201.5000",
+      "outstanding": "51.0000",
+      "directional": "45.7500",
+      "combined": "251.0000"
+    }
+  ],
+  "labels": "peaks across every decision point in each window, then the max across windows. NOT an estimate from a contract count."
+}

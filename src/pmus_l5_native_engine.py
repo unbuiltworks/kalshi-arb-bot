@@ -1,0 +1,365 @@
+"""The frozen n=25 q50 PROFIT_LOCK_5 policy, as a LIVE decision module.
+
+WHAT THIS IS. A port -- not a reinterpretation -- of the decision rules in
+`pmus_completion_shadow.run_window`, the function that produced the frozen q50
+PROFIT_LOCK_5 result of +6.1167/window SHADOW TRADING NET. Every rule below
+names the frozen line it comes from, and the parity suite replays this module
+against the same 25-window tape and reconciles to the frozen ledger.
+
+WHAT IT IS NOT. It is not `new_l5_actions -> pmus_translate`. That executor
+copies published L5 actions one at a time and rests at L5's translated price,
+and its taker branch crosses at OUR touch with no basis, no theta and no
+per-level test. It is preserved as the action-by-action behavioural comparison
+lane and is PROHIBITED from this money path; `assert_no_translate_fallback()`
+states that structurally.
+
+THE ONE STRUCTURAL DIFFERENCE, stated up front. The frozen scorer decides and
+fills in the same breath: `maker_fill` returns `(qty, px)` and the book is
+updated immediately. Live, we can only ASK. So this module emits INTENTS and
+its book moves only in `on_fill`, from authenticated venue fills. The frozen
+`queue_aware` fill model is therefore NOT ported into the engine: it is a FILL
+MODEL, not a decision rule, and live the venue answers that question. In replay
+the simulated adapter supplies exactly `maker_fill(..., queue_aware)` so the
+two are comparable rule-for-rule.
+
+FROZEN PARAMETERS, fixed here so a caller cannot tune them:
+    clip=50  theta=0.96  variant=B  hold_s=60  residual_cap_k=2
+    profit_lock_usd=5  floor_guard=False  complement_bias=None
+"""
+from __future__ import annotations
+
+from decimal import Decimal as D
+from typing import Any, Dict, List, Mapping, Optional, Sequence
+
+from src import pmus_completion_shadow as S
+
+#: THE FROZEN ARM. `p1_profit_lock.py` calls run_window with exactly these.
+CLIP = D(50)
+THETA = D("0.96")
+VARIANT = "B"
+HOLD_S = 60.0
+RESIDUAL_CAP_K = D(2)
+PROFIT_LOCK_USD = D(5)
+FLOOR_GUARD = False
+COMPLEMENT_BIAS_C = None
+
+REST, CANCEL, COMPLETE, SECURE = "REST", "CANCEL", "COMPLETE", "SECURE"
+
+
+class Intent(dict):
+    """One decision. Carries the state it was decided against, so the fill can
+    be applied on the SAME basis the decision used."""
+
+    def __init__(self, kind: str, **kw: Any) -> None:
+        super().__init__(kind=kind, **kw)
+
+    @property
+    def kind(self) -> str:
+        return str(self["kind"])
+
+
+class StaleBook(RuntimeError):
+    """Fail closed. A decision was asked for against a book we cannot stand
+    behind, so no intent is produced at all."""
+
+
+class NativeEngine:
+    """The frozen policy, driven by authenticated book state."""
+
+    def __init__(self, *, clip: D = CLIP, theta: D = THETA,
+                 variant: str = VARIANT, hold_s: float = HOLD_S,
+                 residual_cap_k: D = RESIDUAL_CAP_K,
+                 profit_lock_usd: D = PROFIT_LOCK_USD,
+                 charge_resting: bool = False,
+                 prospective_cap: bool = True) -> None:
+        self.clip, self.theta = D(str(clip)), D(str(theta))
+        self.variant, self.hold_s = variant, float(hold_s)
+        self.residual_cap_k = D(str(residual_cap_k))
+        self.profit_lock_usd = D(str(profit_lock_usd))
+        #: FROZEN BEHAVIOUR, and it is a no-op there. run_window passes
+        #: `resting=qstate`, whose entries are {"px":..., "ahead":...} with NO
+        #: "qty" key, so `settlement_independent_floor`'s resting charge never
+        #: fires in the frozen arm. Defaulting False ports what the frozen code
+        #: DOES; True applies the charge the docstring describes. Live this is
+        #: a real decision and is escalated, never chosen silently.
+        self.charge_resting = bool(charge_resting)
+        #: frozen applies RESIDUAL_CAP_k2 to the qty that FILLED, because there
+        #: decision and fill are one step. Live must decide first, so the cap
+        #: also runs against the clip we intend to rest -- strictly tighter.
+        #: Parity replay sets this False and applies the cap at the frozen point.
+        self.prospective_cap = bool(prospective_cap)
+
+        self.bk = S.Book()
+        self.locked_at = None
+        self.lock_floor = None
+        self.lock_via = None
+        self.lock_cancels = 0
+        self.floor_trace: List[dict] = []
+        self.blocked_until = 0.0
+        self.need_flat = False
+        self.max_clip_seen = D(0)
+        #: our OWN resting orders, by side: {"px":..., "qty":...}. Live this is
+        #: venue truth, not a queue model.
+        self.resting: Dict[str, Optional[dict]] = {"up": None, "down": None}
+        self.ladder: Optional[Mapping[str, Any]] = None
+
+    # ------------------------------------------------- inventory, from FILLS
+
+    def on_fill(self, side: str, qty: D, cost: D, *, maker: bool,
+                fee: Optional[D] = None) -> None:
+        """An AUTHENTICATED fill. The only thing that moves inventory."""
+        self.bk.add(side, D(str(qty)), D(str(cost)), maker=maker, fee=fee)
+        if maker and D(str(qty)) > self.max_clip_seen:
+            self.max_clip_seen = D(str(qty))
+
+    def on_completion_fill(self, intent: Intent, n: D, cost: D, fee: D) -> None:
+        """A completion filled. Retires the matched pair EXACTLY as frozen.
+
+        Ported line-for-line from run_window's completion block, including that
+        `locked` is GROSS of the completion fee -- `settle()` subtracts
+        `self.fees` once and that already carries this fee.
+        """
+        n, cost, fee = D(str(n)), D(str(cost)), D(str(fee))
+        if n <= 0:
+            return
+        held, comp = intent["held"], intent["comp"]
+        basis = D(str(intent["basis"]))
+        bk = self.bk
+        bk.executable_states += 1
+        bk.add(comp, n, cost, maker=False, fee=fee)
+        bk.locked += n * D(1) - n * basis - cost
+        bk.gross_margin += n * D(1) - n * basis - cost
+        bk.edges.append((n * D(1) - n * basis - cost - fee) / n)
+        bk.q[held] -= n
+        bk.c[held] -= n * basis
+        bk.q[comp] -= n
+        bk.c[comp] -= cost
+        bk.completions += 1
+        bk.completed_qty += n
+        bk.completion_cost += cost + fee
+        if self.variant == "B":
+            self.blocked_until = intent["now"] + self.hold_s
+        elif self.variant == "C":
+            self.need_flat = True
+
+    # ----------------------------------------------------------- the decision
+
+    def floor(self) -> D:
+        resting = self.resting if self.charge_resting else {
+            s: ({"px": (v or {}).get("px")} if v else None)
+            for s, v in self.resting.items()}
+        return S.settlement_independent_floor(self.bk, resting=resting)
+
+    def on_book(self, row: Mapping[str, Any],
+                ladder: Optional[Mapping[str, Any]] = None,
+                execute_taker=None) -> List[Intent]:
+        """One decision pass over one authenticated book state.
+
+        Rule order is the frozen order and is not rearranged:
+          1 theta-marginal ECONOMIC_COMPLETE on the residual held right now
+          2 PROFIT_LOCK: hold, or the floor-securing completion (no theta)
+          3 once locked: cancel resting, no OPEN/ACQUIRE/EXTEND
+          4 two-sided passive acquisition at OUR touch, one clip per side
+
+        `execute_taker(intent) -> (n, cost, fee) | None` confirms a taker leg
+        INLINE, which is where frozen applies it: the lock test and the
+        acquisition that follow in this same row read the POST-completion book.
+        Without it the pass stops after emitting the completion, because a
+        decision that depends on a fill we have not confirmed is exactly the
+        thing this engine must not guess -- fail closed, resume next book state.
+        """
+        if ladder is not None:
+            self.ladder = ladder
+        if str(row.get("state") or "") != "MARKET_STATE_OPEN":
+            raise StaleBook("book state is not MARKET_STATE_OPEN")
+        bid, ask = S._d(row.get("bid")), S._d(row.get("ask"))
+        if bid is None and ask is None:
+            raise StaleBook("unreadable book: neither side quoted")
+        # NOT a two-sided requirement. Frozen decides PER SIDE -- `maker_fill`
+        # reads `bid` for UP and `ask` for DOWN and independently declines the
+        # side it cannot price -- so a one-sided book still quotes the side that
+        # IS quoted. Requiring both here silently dropped whole observations
+        # (measured: 0045z 00:59:07, one clip of DOWN at 0.99) and that is a
+        # policy change, not a safety margin. Freshness and disconnect remain
+        # the FEED's job, upstream, where MAX_AGE_S already fails closed.
+        now = S._epoch(row.get("t"))
+        out: List[Intent] = []
+
+        # ---- 1. completion decision FIRST, on the residual held right now
+        r = self.bk.residual()
+        if r != 0:
+            held = "up" if r > 0 else "down"
+            comp = S.complement(held)
+            want = abs(r)
+            self.bk.eligible_states += 1
+            lv = S.buy_levels(self.ladder, comp) if self.ladder else []
+            if lv:
+                self.bk.attempted_states += 1
+            basis = self.bk.avg(held)
+            n, cost, fee, depth_limited = S.marginal_complete(
+                lv, want, basis, self.theta)
+            if depth_limited:
+                self.bk.missed_qualifying += 1
+                self.bk.unknown_events += 1
+            if n > 0:
+                it = Intent(COMPLETE, side=comp, held=held, comp=comp,
+                            qty=n, cost=cost, fee=fee, basis=basis,
+                            now=now, taker=True,
+                            reason="THETA_MARGINAL_%s" % self.theta)
+                out.append(it)
+                if execute_taker is None:
+                    return out              # unconfirmed: decide nothing more
+                got = execute_taker(it)
+                if got is None:
+                    return out
+                self.on_completion_fill(it, *got)
+
+        # ---- 2. PROFIT_LOCK. Causal, settlement-independent.
+        if self.locked_at is None:
+            fh = self.floor()
+            secured_by, new_floor = None, fh
+            if fh >= self.profit_lock_usd:
+                secured_by = "HOLD"
+            else:
+                r2 = self.bk.residual()
+                n2 = cost2 = fee2 = D(0)
+                if r2 != 0 and self.ladder:
+                    held2 = "up" if r2 > 0 else "down"
+                    comp2 = S.complement(held2)
+                    n2, cost2, _short = S.walk_ladder(
+                        S.buy_levels(self.ladder, comp2), abs(r2))
+                    if n2 > 0:
+                        fee2 = S.taker_fee(cost2 / n2, n2)
+                        new_floor = fh + n2 - cost2 - fee2
+                if new_floor >= self.profit_lock_usd and n2 > 0:
+                    # NO THETA. This is a floor-SECURING action and is taken
+                    # only because it actually secures the floor.
+                    it2 = Intent(SECURE, side=comp2, qty=n2, cost=cost2,
+                                 fee=fee2, now=now, taker=True,
+                                 floor_before=fh, floor_after=new_floor,
+                                 reason="FLOOR_SECURING_NO_THETA")
+                    out.append(it2)
+                    if execute_taker is None:
+                        return out          # unconfirmed: latch nothing
+                    got2 = execute_taker(it2)
+                    if got2 is None:
+                        return out
+                    n2f, cost2f, fee2f = got2
+                    self.bk.add(comp2, n2f, cost2f, maker=False, fee=fee2f)
+                    secured_by = "COMPLETE"
+            self.floor_trace.append({
+                "t": row.get("t"), "floor": fh,
+                "floor_after_securing_action": new_floor,
+                "locked": secured_by is not None, "via": secured_by})
+            if secured_by is not None:
+                self.locked_at = row.get("t")
+                self.lock_via = secured_by
+                self.lock_floor = S.settlement_independent_floor(self.bk)
+                for side in ("up", "down"):
+                    if self.resting.get(side):
+                        self.lock_cancels += 1
+                        out.append(Intent(CANCEL, side=side,
+                                          reason="LOCKED_NO_NEW_RISK"))
+                        self.resting[side] = None
+                return out
+
+        # ---- 3. locked: no OPEN, no ACQUIRE, no EXTEND for the rest
+        if self.locked_at is not None:
+            return out
+
+        # ---- 4. acquisition: two-sided resting, one clip per side, OUR touch
+        if self.need_flat and self.bk.residual() != 0:
+            return out
+        self.need_flat = False
+        for side in ("up", "down"):
+            if self.variant == "B" and now < self.blocked_until:
+                rr = self.bk.residual()
+                if rr != 0 and ((rr > 0) == (side == "up")):
+                    # HOLD MEANS NOT RESTING. Frozen `continue`s before
+                    # `maker_fill`, so during the hold that side cannot fill at
+                    # all. Leaving our order in the book would keep filling it
+                    # and is a different policy -- measured on 1900z and 2345z.
+                    if self.resting.get(side):
+                        out.append(Intent(CANCEL, side=side,
+                                          reason="VARIANT_B_HOLD"))
+                        self.resting[side] = None
+                    continue          # same-side rebuild held for hold_s
+            own = bid if side == "up" else ask
+            if own is None:
+                continue              # this side is not quoted; the other may be
+            px = own if side == "up" else (D(1) - own)
+            if px <= 0 or px >= 1:
+                continue
+            if self.prospective_cap and not self._cap_permits(side, self.clip):
+                continue
+            cur = self.resting.get(side)
+            if cur and D(str(cur["px"])) == px and D(str(cur["qty"])) == self.clip:
+                continue              # already resting exactly there
+            if cur:
+                out.append(Intent(CANCEL, side=side, reason="REQUOTE"))
+            out.append(Intent(REST, side=side, price=px, qty=self.clip,
+                              maker=True, reason="TWO_SIDED_OUR_TOUCH"))
+            self.resting[side] = {"px": px, "qty": self.clip}
+        return out
+
+    def _cap_permits(self, side: str, qty: D) -> bool:
+        """B' RESIDUAL_CAP_k2, applied PROSPECTIVELY.
+
+        Frozen applies this to the qty that DID fill, because there decision and
+        fill are one step. Live we must decide before the venue answers, so the
+        test runs against the clip we intend to rest. That can only refuse more
+        often than frozen, never less, and the parity suite pins the difference
+        by applying it at the frozen point in replay.
+        """
+        rr = self.bk.residual()
+        signed = qty if side == "up" else -qty
+        after = rr + signed
+        if rr != 0 and abs(after) > abs(rr):
+            mc = self.max_clip_seen if self.max_clip_seen > qty else qty
+            if abs(after) > self.residual_cap_k * mc:
+                return False
+        return True
+
+    def settle(self, winner: Optional[str]) -> Dict[str, Any]:
+        out = self.bk.settle(winner)
+        out["locked_at"] = self.locked_at
+        out["lock_floor"] = self.lock_floor
+        out["lock_via"] = self.lock_via
+        out["floor_trace"] = self.floor_trace
+        out["peak_floor_seen"] = (max(f["floor"] for f in self.floor_trace)
+                                  if self.floor_trace else None)
+        return out
+
+
+def assert_no_translate_fallback() -> None:
+    """The generic touch-crossing taker fallback is PROHIBITED here.
+
+    AST-BASED, not text. A text scan matched this module's own prose -- the
+    same false positive this repo already fixed once in the forbidden-capability
+    guard -- so the check reads the IMPORT GRAPH and the NAMES the code actually
+    evaluates, and a docstring naming the banned module cannot trip or satisfy it.
+    """
+    import ast
+    import pathlib
+
+    banned = {"l5_faithful_translation", "pmus_translate", "new_l5_actions",
+              "l5_window_actions"}
+    tree = ast.parse(pathlib.Path(__file__).read_text(encoding="utf-8"))
+    reached = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                reached.update(a.name.split("."))
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                reached.update(node.module.split("."))
+            for a in node.names:
+                reached.add(a.name)
+        elif isinstance(node, ast.Name):
+            reached.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            reached.add(node.attr)
+    hit = sorted(banned & reached)
+    if hit:
+        raise AssertionError(
+            "the money path reaches the L5-action translator: %s" % (hit,))
