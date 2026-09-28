@@ -610,7 +610,7 @@
         "1_observed_through_close": true,
         "2_final_preclose_within_32s": true,
         "3_no_preclose_gap_over_32s": true,
-        "4_terminal_captured_by_same_process": false,
+        "4_terminal_captured_by_same_process": true,
         "5_settlement_finalized": null,
         "6_no_postclose_info_in_decisions": true
       },
@@ -619,12 +619,108 @@
       },
       "max_preclose_gap_s": 29.6,
       "final_preclose_to_close_s": 0.5,
+      "postclose_gap_s": 26.0,
+      "terminal_t": "2026-09-28T00:45:25.551938+00:00",
+      "terminal_state": "MARKET_STATE_EXPIRED",
+      "terminal_after_close": true,
+      "preclose_bbo_rows": 58,
+      "two_sided_states": 38,
+      "tape_test_passes": true
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0045z",
+      "window": "0045z",
+      "elements": {
+        "1_observed_through_close": true,
+        "2_final_preclose_within_32s": true,
+        "3_no_preclose_gap_over_32s": true,
+        "4_terminal_captured_by_same_process": true,
+        "5_settlement_finalized": null,
+        "6_no_postclose_info_in_decisions": true
+      },
+      "also": {
+        "has_two_sided_state": true
+      },
+      "max_preclose_gap_s": 30.0,
+      "final_preclose_to_close_s": 20.8,
+      "postclose_gap_s": 28.2,
+      "terminal_t": "2026-09-28T01:00:07.486646+00:00",
+      "terminal_state": "MARKET_STATE_CLOSED",
+      "terminal_after_close": true,
+      "preclose_bbo_rows": 54,
+      "two_sided_states": 50,
+      "tape_test_passes": true
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0100z",
+      "window": "0100z",
+      "elements": {
+        "1_observed_through_close": true,
+        "2_final_preclose_within_32s": true,
+        "3_no_preclose_gap_over_32s": true,
+        "4_terminal_captured_by_same_process": true,
+        "5_settlement_finalized": null,
+        "6_no_postclose_info_in_decisions": true
+      },
+      "also": {
+        "has_two_sided_state": true
+      },
+      "max_preclose_gap_s": 30.1,
+      "final_preclose_to_close_s": 16.5,
+      "postclose_gap_s": 26.6,
+      "terminal_t": "2026-09-28T01:15:10.083013+00:00",
+      "terminal_state": "MARKET_STATE_CLOSED",
+      "terminal_after_close": true,
+      "preclose_bbo_rows": 50,
+      "two_sided_states": 42,
+      "tape_test_passes": true
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0115z",
+      "window": "0115z",
+      "elements": {
+        "1_observed_through_close": true,
+        "2_final_preclose_within_32s": true,
+        "3_no_preclose_gap_over_32s": true,
+        "4_terminal_captured_by_same_process": true,
+        "5_settlement_finalized": null,
+        "6_no_postclose_info_in_decisions": true
+      },
+      "also": {
+        "has_two_sided_state": true
+      },
+      "max_preclose_gap_s": 29.8,
+      "final_preclose_to_close_s": 6.7,
+      "postclose_gap_s": 27.0,
+      "terminal_t": "2026-09-28T01:30:20.294009+00:00",
+      "terminal_state": "MARKET_STATE_EXPIRED",
+      "terminal_after_close": true,
+      "preclose_bbo_rows": 55,
+      "two_sided_states": 49,
+      "tape_test_passes": true
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0130z",
+      "window": "0130z",
+      "elements": {
+        "1_observed_through_close": true,
+        "2_final_preclose_within_32s": true,
+        "3_no_preclose_gap_over_32s": true,
+        "4_terminal_captured_by_same_process": false,
+        "5_settlement_finalized": null,
+        "6_no_postclose_info_in_decisions": true
+      },
+      "also": {
+        "has_two_sided_state": true
+      },
+      "max_preclose_gap_s": 29.0,
+      "final_preclose_to_close_s": 15.9,
       "postclose_gap_s": null,
       "terminal_t": null,
       "terminal_state": null,
       "terminal_after_close": false,
-      "preclose_bbo_rows": 58,
-      "two_sided_states": 38,
+      "preclose_bbo_rows": 59,
+      "two_sided_states": 52,
       "tape_test_passes": false
     }
   ]

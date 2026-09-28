@@ -1863,6 +1863,338 @@
       "scorer_matched_gross_avg_cost": "18.59139999999999999999999999",
       "passive_matched_gross_fifo_path": "-7.78230000",
       "passive_convention_delta": "-1.77524365070484009149712621"
+    },
+    {
+      "window": "0030z",
+      "settlement": "down",
+      "ec_qty": "0",
+      "ec_matched_gross": "0",
+      "passive_qty": "75",
+      "passive_matched_gross": "0.5000",
+      "pair_cost_buckets_qty": {
+        "<0.96": "0",
+        "0.96-1.00": "50",
+        "1.00-1.10": "25",
+        "1.10-1.25": "0",
+        ">1.25": "0"
+      },
+      "median_gap_s": 59.30989384651184,
+      "units": [
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T00:35:54.429809+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.0200",
+          "leg2_t": "2026-09-28T00:36:53.739703+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9800",
+          "effective_pair_cost": "1.0000",
+          "matched_pnl": "0.0000",
+          "gap_s": 59.30989384651184
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T00:37:24.467150+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.0100",
+          "leg2_t": "2026-09-28T00:37:54.134734+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9800",
+          "effective_pair_cost": "0.9900",
+          "matched_pnl": "0.2500",
+          "gap_s": 29.66758394241333
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T00:38:25.552981+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.9800",
+          "leg2_t": "2026-09-28T00:39:25.886132+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.0100",
+          "effective_pair_cost": "0.9900",
+          "matched_pnl": "0.2500",
+          "gap_s": 60.33315110206604
+        }
+      ],
+      "ec_matched_gross_avg_cost": "0",
+      "passive_matched_gross_avg_cost": "0.50000000000000000000000000",
+      "scorer_matched_gross_avg_cost": "0.50000000000000000000000000",
+      "passive_matched_gross_fifo_path": "0.5000",
+      "passive_convention_delta": "0E-26"
+    },
+    {
+      "window": "0045z",
+      "settlement": "down",
+      "ec_qty": "0",
+      "ec_matched_gross": "0",
+      "passive_qty": "100",
+      "passive_matched_gross": "-2.5000",
+      "pair_cost_buckets_qty": {
+        "<0.96": "0",
+        "0.96-1.00": "25",
+        "1.00-1.10": "50",
+        "1.10-1.25": "25",
+        ">1.25": "0"
+      },
+      "median_gap_s": 150.87975907325745,
+      "units": [
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T00:47:34.824732+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.1300",
+          "leg2_t": "2026-09-28T00:51:35.136584+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.9800",
+          "effective_pair_cost": "1.1100",
+          "matched_pnl": "-2.7500",
+          "gap_s": 240.311851978302
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T00:50:04.688833+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.0300",
+          "leg2_t": "2026-09-28T00:52:35.568592+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.9700",
+          "effective_pair_cost": "1.0000",
+          "matched_pnl": "0.0000",
+          "gap_s": 150.87975907325745
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T00:53:36.069561+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.0400",
+          "leg2_t": "2026-09-28T00:54:35.593064+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.9300",
+          "effective_pair_cost": "0.9700",
+          "matched_pnl": "0.7500",
+          "gap_s": 59.52350306510925
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T00:58:06.801485+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.0300",
+          "leg2_t": "2026-09-28T00:59:07.294283+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9900",
+          "effective_pair_cost": "1.0200",
+          "matched_pnl": "-0.5000",
+          "gap_s": 60.4927978515625
+        }
+      ],
+      "ec_matched_gross_avg_cost": "0",
+      "passive_matched_gross_avg_cost": "11.6500",
+      "scorer_matched_gross_avg_cost": "11.6500",
+      "passive_matched_gross_fifo_path": "-2.5000",
+      "passive_convention_delta": "-14.1500"
+    },
+    {
+      "window": "0100z",
+      "settlement": "down",
+      "ec_qty": "125",
+      "ec_matched_gross": "12.16666666666666666666666667",
+      "passive_qty": "100",
+      "passive_matched_gross": "-15.5000",
+      "pair_cost_buckets_qty": {
+        "<0.96": "125",
+        "0.96-1.00": "0",
+        "1.00-1.10": "25",
+        "1.10-1.25": "75",
+        ">1.25": "0"
+      },
+      "median_gap_s": 60.53024983406067,
+      "units": [
+        {
+          "mechanism": "EC",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:03:06.291759+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.5300",
+          "leg1_avg_basis_used": "0.5300",
+          "leg2_t": "2026-09-28T01:04:06.801331+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.4100",
+          "effective_pair_cost": "0.9400",
+          "matched_pnl": "1.5000",
+          "gap_s": 60.50957202911377
+        },
+        {
+          "mechanism": "EC",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:04:06.801331+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.3400",
+          "leg1_avg_basis_used": "0.3400",
+          "leg2_t": "2026-09-28T01:04:39.009058+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.6000",
+          "effective_pair_cost": "0.9400",
+          "matched_pnl": "1.5000",
+          "gap_s": 32.20772695541382
+        },
+        {
+          "mechanism": "EC",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:04:39.009058+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.3900",
+          "leg1_avg_basis_used": "0.3900",
+          "leg2_t": "2026-09-28T01:05:07.703345+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.5200",
+          "effective_pair_cost": "0.9100",
+          "matched_pnl": "2.2500",
+          "gap_s": 28.694287061691284
+        },
+        {
+          "mechanism": "EC",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:06:08.187143+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.1900",
+          "leg1_avg_basis_used": "0.5033333333333333333333333333",
+          "leg2_t": "2026-09-28T01:08:40.184226+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.3400",
+          "effective_pair_cost": "0.8433333333333333333333333333",
+          "matched_pnl": "3.916666666666666666666666668",
+          "gap_s": 151.9970829486847
+        },
+        {
+          "mechanism": "EC",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:06:38.186889+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.7700",
+          "leg1_avg_basis_used": "0.6000",
+          "leg2_t": "2026-09-28T01:10:08.624891+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.2800",
+          "effective_pair_cost": "0.8800",
+          "matched_pnl": "3.0000",
+          "gap_s": 210.4380021095276
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:07:38.818239+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.5000",
+          "leg2_t": "2026-09-28T01:08:08.424781+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.6600",
+          "effective_pair_cost": "1.1600",
+          "matched_pnl": "-4.0000",
+          "gap_s": 29.606542110443115
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:08:38.137834+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.6600",
+          "leg2_t": "2026-09-28T01:09:38.668084+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.5300",
+          "effective_pair_cost": "1.1900",
+          "matched_pnl": "-4.7500",
+          "gap_s": 60.53024983406067
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:11:08.938191+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.2200",
+          "leg2_t": "2026-09-28T01:13:40.073852+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9900",
+          "effective_pair_cost": "1.2100",
+          "matched_pnl": "-5.2500",
+          "gap_s": 151.1356611251831
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:12:09.383875+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.0700",
+          "leg2_t": "2026-09-28T01:14:09.864452+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9900",
+          "effective_pair_cost": "1.0600",
+          "matched_pnl": "-1.5000",
+          "gap_s": 120.48057699203491
+        }
+      ],
+      "ec_matched_gross_avg_cost": "12.16666666666666666666666667",
+      "passive_matched_gross_avg_cost": "-11.91666666666666666666666670",
+      "scorer_matched_gross_avg_cost": "0.24999999999999999999999997",
+      "passive_matched_gross_fifo_path": "-15.5000",
+      "passive_convention_delta": "-3.58333333333333333333333330"
+    },
+    {
+      "window": "0115z",
+      "settlement": "up",
+      "ec_qty": "25",
+      "ec_matched_gross": "2.2500",
+      "passive_qty": "25",
+      "passive_matched_gross": "0.2500",
+      "pair_cost_buckets_qty": {
+        "<0.96": "25",
+        "0.96-1.00": "25",
+        "1.00-1.10": "0",
+        "1.10-1.25": "0",
+        ">1.25": "0"
+      },
+      "median_gap_s": 60.50800013542175,
+      "units": [
+        {
+          "mechanism": "EC",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:23:48.944517+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.2100",
+          "leg1_avg_basis_used": "0.2100",
+          "leg2_t": "2026-09-28T01:24:18.901110+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.7000",
+          "effective_pair_cost": "0.9100",
+          "matched_pnl": "2.2500",
+          "gap_s": 29.95659303665161
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "25",
+          "leg1_t": "2026-09-28T01:27:19.454306+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.0100",
+          "leg2_t": "2026-09-28T01:28:19.962306+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.9800",
+          "effective_pair_cost": "0.9900",
+          "matched_pnl": "0.2500",
+          "gap_s": 60.50800013542175
+        }
+      ],
+      "ec_matched_gross_avg_cost": "2.2500",
+      "passive_matched_gross_avg_cost": "0.16666666666666666666666667",
+      "scorer_matched_gross_avg_cost": "2.41666666666666666666666667",
+      "passive_matched_gross_fifo_path": "0.2500",
+      "passive_convention_delta": "0.08333333333333333333333333"
     }
   ],
   "rolling": {
@@ -1929,7 +2261,27 @@
       "passive_matched_gross_per_window_avg_cost": "-4.7119",
       "matched_gross_per_window_total": "6.5375"
     },
-    "n=20": "NOT YET AVAILABLE (17 of 20)",
-    "n=25": "NOT YET AVAILABLE (17 of 25)"
+    "n=20": {
+      "ec_matched_gross_per_window": "10.3367",
+      "passive_matched_gross_per_window": "-8.0563",
+      "pair_cost_distribution_share": {
+        "<0.96": "0.5894",
+        "0.96-1.00": "0.0522",
+        "1.00-1.10": "0.1827",
+        "1.10-1.25": "0.0870",
+        ">1.25": "0.0886"
+      },
+      "pair_cost_qty": {
+        "<0.96": "1693.2100",
+        "0.96-1.00": "150",
+        "1.00-1.10": "525",
+        "1.10-1.25": "250",
+        ">1.25": "254.5700"
+      },
+      "ec_matched_gross_per_window_avg_cost": "10.3367",
+      "passive_matched_gross_per_window_avg_cost": "-3.9512",
+      "matched_gross_per_window_total": "6.3855"
+    },
+    "n=25": "NOT YET AVAILABLE (21 of 25)"
   }
 }

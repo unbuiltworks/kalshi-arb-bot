@@ -72,6 +72,9 @@ def window_row(rows, slug, winner, clip):
     fees = r["fees"]                       # positive cost magnitude
     shadow_trading_net = r["matched_pnl"] - fees + rp
     return {
+        # the full slug is kept because the 5-char label cannot order windows
+        # across a date boundary -- see the sort in main()
+        "slug": slug,
         "window": slug[-5:], "settlement": winner,
         "terminal_residual_occurred": bool(rq),
         "residual_contracts": str(rq), "residual_basis": str(b.quantize(D("0.0001"))),
@@ -126,7 +129,20 @@ def main(argv):
     by = load()
     for clip in (D(25), D(50)):
         led = [window_row(by[s], s, w, clip) for s, w in USABLE.items()]
-        led.sort(key=lambda x: x["window"])
+        # CHRONOLOGICAL, by the full slug, which carries the DATE.
+        #
+        # DEFECT FIXED 2026-09-28: this sorted on the 5-character `window`
+        # label, so the 2026-09-28 00:00-01:15 windows sorted BEFORE the
+        # 2026-09-27 18:30-23:45 ones ("0030z" < "1830z"). Every rolling
+        # n=5/10/15/20 checkpoint was therefore built from the first k windows
+        # LEXICOGRAPHICALLY rather than chronologically, silently reaching
+        # across the date boundary backwards. Full-sample figures -- residual
+        # statistics, the P0 thresholds and the challenger arms, which iterate
+        # USABLE directly -- were never affected; only the rolling subsets and
+        # their distributions were, and only once a window past midnight
+        # existed. Reporting-layer only: no policy, threshold or scorer input
+        # changes, and the n=21 full-sample numbers are identical either way.
+        led.sort(key=lambda x: x["slug"])
         n = len(led)
         ev = sum(1 for x in led if x["terminal_residual_occurred"])
         lo, hi = wilson(ev, n)

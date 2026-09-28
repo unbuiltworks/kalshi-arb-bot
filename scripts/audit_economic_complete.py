@@ -177,7 +177,14 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2315z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2330z': 'down',
           'cpc-btc-updown-15m-2026-09-27-2345z': 'up',
-          'cpc-btc-updown-15m-2026-09-28-0000z': 'down'}
+          'cpc-btc-updown-15m-2026-09-28-0000z': 'down',
+          # all four admitted mechanically by pmus_completeness_rule.py;
+          # 0030z, 0045z and 0115z each had their close captured by the
+          # bounded drain (drain_end terminal_recorded: true)
+          'cpc-btc-updown-15m-2026-09-28-0030z': 'down',
+          'cpc-btc-updown-15m-2026-09-28-0045z': 'down',
+          'cpc-btc-updown-15m-2026-09-28-0100z': 'down',
+          'cpc-btc-updown-15m-2026-09-28-0115z': 'up'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {
