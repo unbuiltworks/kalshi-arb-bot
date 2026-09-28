@@ -12,10 +12,15 @@ from __future__ import annotations
 
 import ast
 import base64
+import importlib
+import pathlib
+import subprocess
 import sys
 import types
 
 import pytest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 from src import pmus_auth as A
 from src import pmus_q1_executor as Q1
@@ -56,7 +61,33 @@ def fake_ed(monkeypatch):
     mod.Ed25519PrivateKey = type(
         "Ed25519PrivateKey", (),
         {"from_private_bytes": staticmethod(Key)})
+
+    # BOTH BINDINGS, OR THE STUB IS INERT (2026-09-28).
+    #
+    # `pmus_auth.signed_headers` reaches the primitive with
+    #
+    #     from cryptography.hazmat.primitives.asymmetric import ed25519
+    #
+    # and `from P import C` prefers the ATTRIBUTE `P.C` over `sys.modules["P.C"]`.
+    # Patching sys.modules alone therefore works only while P has no such
+    # attribute. Anything that imports the real submodule first sets it, and from
+    # then on this fixture silently hands the production code the REAL backend:
+    # `mine == theirs` still passes, `signed` stays empty, and the drift guard
+    # reports green while measuring nothing.
+    #
+    # Measured trigger: `from src import main` (-> src.auth ->
+    # cryptography.hazmat.primitives.asymmetric.padding) puts the parent in
+    # sys.modules AND gives it a real `ed25519` attribute. pytest imports every
+    # selected module during collection, so in a large run that happens before the
+    # first test executes -- which is why this guard passed alone and failed in the
+    # 385-file run, in the four signing parametrisations only.
+    #
+    # So patch the parent attribute too. monkeypatch restores both, and
+    # `raising=False` covers the case where the parent is not imported yet.
     monkeypatch.setitem(sys.modules, ED_MOD, mod)
+    parent_name, _, child = ED_MOD.rpartition(".")
+    importlib.import_module(parent_name)          # make the binding exist to patch
+    monkeypatch.setattr(sys.modules[parent_name], child, mod, raising=False)
     return signed
 
 
@@ -170,3 +201,108 @@ def test_signing_needs_no_network_and_leaks_nothing_into_the_path(creds,
     assert SEED not in h["X-PM-Signature"]
     assert set(h) == {"X-PM-Access-Key", "X-PM-Timestamp", "X-PM-Signature",
                       "Content-Type"}
+
+
+# ============================================ ORDER INDEPENDENCE OF THE GUARD
+# The signing drift guard must prove its property in EITHER import order. It
+# previously could not: in a 385-file run something imported the real Ed25519
+# backend during collection, the fixture's sys.modules stub went inert, and the
+# guard passed `mine == theirs` while its instrumentation recorded nothing.
+#
+# Production signing was measured INVARIANT across that pollution -- byte-identical
+# headers and mine == theirs before and after, on the real backend -- so nothing in
+# `pmus_auth` changed. Only the fixture's isolation was repaired.
+
+POLLUTER_IMPORT = "src.main"        # -> src.auth -> ...asymmetric.padding
+
+
+def _pollute():
+    """Reproduce the measured mutation: parent imported, real child attribute."""
+    importlib.import_module(POLLUTER_IMPORT)
+    parent = sys.modules["cryptography.hazmat.primitives.asymmetric"]
+    assert hasattr(parent, "ed25519")          # the mutation that broke the stub
+    return parent
+
+
+def _assert_guard_holds(creds_unused, fake_ed, method="GET", path="/v1/account"):
+    """BOTH substantive properties, in whatever order this is called."""
+    ts = 1_800_000_000_000
+    mine = A.signed_headers(method, path, ts)
+    theirs = Q1.signed_headers(method, path, ts)
+    assert mine == theirs, "signers drifted"
+    # and the instrumentation was actually exercised by BOTH implementations
+    assert len(fake_ed) == 2, (
+        "stub recorded %d of 2 signer calls -- the guard is not measuring"
+        % len(fake_ed))
+    assert fake_ed[0] == fake_ed[1], "same seed and same bytes required"
+    return mine
+
+
+SIGNING = ("tests/test_pmus_auth.py::"
+           "test_the_signature_is_byte_identical_to_the_executors")
+POLLUTER_TEST = ("tests/test_deploy_fallthrough_guard.py::"
+                 "test_src_main_still_runs_when_explicitly_opted_in")
+
+
+def _pytest(*selectors):
+    """Run pytest in a FRESH interpreter, so the order is a real import order.
+
+    In-process ordering cannot express this: the fixture installs the stub before
+    the test body runs, so polluting inside the body imports the real backend
+    while the stub is in place and cryptography's own internals then resolve
+    Ed25519PublicKey off the stub. The orders have to be separate sessions.
+    """
+    return subprocess.run([sys.executable, "-m", "pytest", "-q", *selectors],
+                          cwd=ROOT, capture_output=True, text=True, timeout=300)
+
+
+def test_the_guard_holds_in_the_canonical_order():
+    """Order 1: signing first, in a clean interpreter."""
+    out = _pytest(SIGNING)
+    assert out.returncode == 0, out.stdout[-3000:]
+
+
+def test_the_guard_holds_with_the_polluter_first():
+    """Order 2: polluter -> signing. The order that used to defeat the guard.
+
+    Before the fixture patched the parent attribute this produced exactly
+    `assert (0 == 2)` on len(fake_ed), four times -- green on `mine == theirs`
+    while measuring nothing.
+    """
+    out = _pytest(POLLUTER_TEST, SIGNING)
+    assert "FAILED tests/test_pmus_auth.py" not in out.stdout, out.stdout[-3000:]
+
+
+def test_the_guard_holds_with_signing_on_both_sides_of_the_polluter():
+    """Order 3: signing -> polluter -> signing, as one session."""
+    out = _pytest(SIGNING, POLLUTER_TEST, SIGNING)
+    assert "FAILED tests/test_pmus_auth.py" not in out.stdout, out.stdout[-3000:]
+
+
+def test_the_polluter_really_does_defeat_a_sys_modules_only_stub(monkeypatch):
+    """Negative control. Without this, the two tests above prove nothing.
+
+    Patch ONLY sys.modules -- the old fixture -- after the mutation, and the real
+    backend must still be what production reaches, recording nothing.
+    """
+    _pollute()
+    monkeypatch.setenv(A.KEY_ENV, "key-aaaaaaaaaaaa")
+    monkeypatch.setenv(A.SECRET_ENV, SEED)
+    seen = []
+
+    class Key:
+        def __init__(self, seed):
+            self.seed = seed
+
+        def sign(self, msg):
+            seen.append((self.seed, msg))
+            return b"SIG" + msg
+
+    mod = types.ModuleType(ED_MOD)
+    mod.Ed25519PrivateKey = type("Ed25519PrivateKey", (),
+                                 {"from_private_bytes": staticmethod(Key)})
+    monkeypatch.setitem(sys.modules, ED_MOD, mod)      # the INCOMPLETE patch
+    A.signed_headers("GET", "/v1/account", 1_800_000_000_000)
+    assert seen == [], (
+        "sys.modules-only stub was effective here, so the parent-attribute "
+        "patch in fake_ed would be untested -- re-derive the mechanism")
