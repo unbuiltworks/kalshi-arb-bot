@@ -2468,6 +2468,110 @@
       "scorer_matched_gross_avg_cost": "20.2500",
       "passive_matched_gross_fifo_path": "7.5000",
       "passive_convention_delta": "-1.2500"
+    },
+    {
+      "window": "0230z",
+      "settlement": "down",
+      "ec_qty": "150",
+      "ec_matched_gross": "7.7500",
+      "passive_qty": "150",
+      "passive_matched_gross": "-10.5000",
+      "pair_cost_buckets_qty": {
+        "<0.96": "150",
+        "0.96-1.00": "0",
+        "1.00-1.10": "100",
+        "1.10-1.25": "50",
+        ">1.25": "0"
+      },
+      "median_gap_s": 150.31204986572266,
+      "units": [
+        {
+          "mechanism": "EC",
+          "qty": "50",
+          "leg1_t": "2026-09-28T02:35:50.851238+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.2000",
+          "leg1_avg_basis_used": "0.2100",
+          "leg2_t": "2026-09-28T02:36:22.334702+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.7300",
+          "effective_pair_cost": "0.9400",
+          "matched_pnl": "3.0000",
+          "gap_s": 31.483464002609253
+        },
+        {
+          "mechanism": "EC",
+          "qty": "50",
+          "leg1_t": "2026-09-28T02:35:20.155389+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.8000",
+          "leg1_avg_basis_used": "0.9100",
+          "leg2_t": "2026-09-28T02:40:24.337596+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.0400",
+          "effective_pair_cost": "0.9500",
+          "matched_pnl": "2.5000",
+          "gap_s": 304.18220686912537
+        },
+        {
+          "mechanism": "EC",
+          "qty": "50",
+          "leg1_t": "2026-09-28T02:39:20.637321+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.9400",
+          "leg1_avg_basis_used": "0.9150",
+          "leg2_t": "2026-09-28T02:40:53.213168+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.0400",
+          "effective_pair_cost": "0.9550",
+          "matched_pnl": "2.2500",
+          "gap_s": 92.57584691047668
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "50",
+          "leg1_t": "2026-09-28T02:36:20.279457+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.2200",
+          "leg2_t": "2026-09-28T02:39:51.254760+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9400",
+          "effective_pair_cost": "1.1600",
+          "matched_pnl": "-8.0000",
+          "gap_s": 210.9753029346466
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "50",
+          "leg1_t": "2026-09-28T02:37:52.232352+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.0900",
+          "leg2_t": "2026-09-28T02:40:22.291585+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9600",
+          "effective_pair_cost": "1.0500",
+          "matched_pnl": "-2.5000",
+          "gap_s": 150.05923295021057
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "50",
+          "leg1_t": "2026-09-28T02:38:20.856331+00:00",
+          "leg1_side": "up",
+          "leg1_px": "0.0700",
+          "leg2_t": "2026-09-28T02:40:51.168381+00:00",
+          "leg2_side": "down",
+          "counterpart_basis": "0.9300",
+          "effective_pair_cost": "1.0000",
+          "matched_pnl": "0.0000",
+          "gap_s": 150.31204986572266
+        }
+      ],
+      "ec_matched_gross_avg_cost": "7.7500",
+      "passive_matched_gross_avg_cost": "-2.2500",
+      "scorer_matched_gross_avg_cost": "5.5000",
+      "passive_matched_gross_fifo_path": "-10.5000",
+      "passive_convention_delta": "-8.2500"
     }
   ],
   "rolling": {
@@ -2555,6 +2659,26 @@
       "passive_matched_gross_per_window_avg_cost": "-8.0297",
       "matched_gross_per_window_total": "12.5614"
     },
-    "n=25": "NOT YET AVAILABLE (24 of 25)"
+    "n=25": {
+      "ec_matched_gross_per_window": "19.5075",
+      "passive_matched_gross_per_window": "-16.4750",
+      "pair_cost_distribution_share": {
+        "<0.96": "0.5868",
+        "0.96-1.00": "0.0657",
+        "1.00-1.10": "0.1679",
+        "1.10-1.25": "0.0876",
+        ">1.25": "0.0919"
+      },
+      "pair_cost_qty": {
+        "<0.96": "4018.2100",
+        "0.96-1.00": "450",
+        "1.00-1.10": "1150",
+        "1.10-1.25": "600",
+        ">1.25": "629.5700"
+      },
+      "ec_matched_gross_per_window_avg_cost": "19.5075",
+      "passive_matched_gross_per_window_avg_cost": "-7.7963",
+      "matched_gross_per_window_total": "11.7113"
+    }
   }
 }

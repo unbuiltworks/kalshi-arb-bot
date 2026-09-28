@@ -34,7 +34,7 @@
     "clip_is_modeled_extrapolation": true,
     "extrapolation_multiple": "4.71"
   },
-  "n_usable": 24,
+  "n_usable": 25,
   "excluded": {
     "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states",
     "cpc-btc-updown-15m-2026-09-27-2015z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 20:29:55; the window was never observed through a terminal state, so it fails the preregistered completeness rule even though the venue later reported it settled DOWN",
@@ -478,6 +478,24 @@
       "shadow_trading_net": "7.981156250000",
       "expected_maker_rebate": "0.20",
       "shadow_modeled_net_including_expected_rebate": "8.181156250000"
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0230z",
+      "window": "0230z",
+      "settlement": "down",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "25",
+      "residual_basis": "0.1000",
+      "residual_side": "up",
+      "matched_contracts": "75",
+      "ec_matched_gross": "3.8750",
+      "passive_matched_gross": "-1.1250",
+      "matched_gross": "2.7500",
+      "fees": "0.475901250000",
+      "residual_pnl": "-2.5000",
+      "shadow_trading_net": "-0.225901250000",
+      "expected_maker_rebate": "0.28",
+      "shadow_modeled_net_including_expected_rebate": "0.054098750000"
     }
   ],
   "rolling": {
@@ -671,14 +689,73 @@
         0.6579
       ]
     },
-    "n=25": "NOT YET AVAILABLE (24 of 25 windows)"
+    "n=25": {
+      "ec_matched_gross": "9.7866",
+      "passive_matched_gross": "-3.8478",
+      "matched_gross": "5.9388",
+      "fees": "0.8312",
+      "residual_pnl": "-2.2528",
+      "shadow_trading_net": "2.8548",
+      "expected_maker_rebate": "0.3520",
+      "shadow_modeled_net_including_expected_rebate": "3.2068",
+      "distribution_shadow_trading_net": {
+        "n": 25,
+        "mean": "2.8548",
+        "median": "0.0000",
+        "trimmed_mean_drop_1_each_end": "2.6079",
+        "positive_window_rate": "12 of 25",
+        "worst_window": {
+          "window": "2030z",
+          "value": "-15.3540"
+        },
+        "best_window": {
+          "window": "2300z",
+          "value": "26.7416"
+        },
+        "best_window_share_of_total_pnl": "0.3747",
+        "mean_excluding_best_window": "1.8595",
+        "all_values_sorted": [
+          "-15.3540",
+          "-12.1897",
+          "-5.2943",
+          "-3.8181",
+          "-3.0000",
+          "-2.0965",
+          "-2.0140",
+          "-1.7612",
+          "-1.6988",
+          "-0.5028",
+          "-0.2259",
+          "-0.0344",
+          "0.0000",
+          "0.5736",
+          "1.5000",
+          "2.8851",
+          "5.1467",
+          "5.6844",
+          "7.9812",
+          "8.7683",
+          "13.0958",
+          "13.1636",
+          "16.2949",
+          "17.5244",
+          "26.7416"
+        ]
+      },
+      "residual_events": "13 of 25",
+      "residual_frequency": 0.52,
+      "wilson95": [
+        0.335,
+        0.6997
+      ]
+    }
   },
   "residual_statistics": {
-    "events": "12 of 24",
-    "frequency": 0.5,
+    "events": "13 of 25",
+    "frequency": 0.52,
     "wilson95": [
-      0.3143,
-      0.6857
+      0.335,
+      0.6997
     ],
     "per_episode_pnl": [
       "-20.2500",
@@ -692,17 +769,18 @@
       "-14.6500",
       "0.83333333333333333333333334",
       "1.29206218487394957983193277",
-      "-1.3750"
+      "-1.3750",
+      "-2.5000"
     ],
-    "mean_episode_pnl": "-4.4850",
-    "episode_pnl_per_window": "-2.2425",
-    "episodes_that_lost": 6,
+    "mean_episode_pnl": "-4.3323",
+    "episode_pnl_per_window": "-2.2528",
+    "episodes_that_lost": 7,
     "episodes_that_won": 6
   },
   "p0_thresholds": {
-    "net_before_residual": "5.5807",
-    "break_even_residual_frequency": "1.2443",
-    "target_frequency_for_plus_5": "0.1295",
+    "net_before_residual": "5.4596",
+    "break_even_residual_frequency": "1.2602",
+    "target_frequency_for_plus_5": "0.1061",
     "note": "break-even and target use the OBSERVED SIGNED mean episode P&L, which from n=11 includes one winning residual (2215z, +2.25). A winner raises the mean and therefore RAISES break-even frequency, so this number must not be read as a severity. The mean itself is uncertain at this n."
   }
 }

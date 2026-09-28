@@ -187,7 +187,13 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-28-0115z': 'up',
           'cpc-btc-updown-15m-2026-09-28-0130z': 'down',
           'cpc-btc-updown-15m-2026-09-28-0200z': 'up',
-          'cpc-btc-updown-15m-2026-09-28-0215z': 'down'}
+          'cpc-btc-updown-15m-2026-09-28-0215z': 'down',
+          # THE 25TH WINDOW. Closed 02:45:00, terminal EXPIRED captured
+          # 02:45:24 -- 7s before the reslate at 02:45:31 -- max pre-close
+          # gap 29.6s, final pre-close observation 4.5s before the
+          # boundary, settlementPx 0.0000 vs lastTradePx 0.0100. Admitted
+          # mechanically by scripts/pmus_completeness_rule.py.
+          'cpc-btc-updown-15m-2026-09-28-0230z': 'down'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {

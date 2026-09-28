@@ -802,7 +802,7 @@
         "1_observed_through_close": true,
         "2_final_preclose_within_32s": true,
         "3_no_preclose_gap_over_32s": true,
-        "4_terminal_captured_by_same_process": false,
+        "4_terminal_captured_by_same_process": true,
         "5_settlement_finalized": null,
         "6_no_postclose_info_in_decisions": true
       },
@@ -811,13 +811,18 @@
       },
       "max_preclose_gap_s": 29.6,
       "final_preclose_to_close_s": 4.5,
-      "postclose_gap_s": null,
-      "terminal_t": null,
-      "terminal_state": null,
-      "terminal_after_close": false,
+      "postclose_gap_s": 28.6,
+      "terminal_t": "2026-09-28T02:45:24.132478+00:00",
+      "terminal_state": "MARKET_STATE_EXPIRED",
+      "terminal_after_close": true,
       "preclose_bbo_rows": 48,
       "two_sided_states": 36,
-      "tape_test_passes": false
+      "tape_test_passes": true
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-09-28-0245z",
+      "usable": false,
+      "why": "no bbo rows at all"
     }
   ]
 }

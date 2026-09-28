@@ -1214,3 +1214,90 @@ Remaining failures are the unrelated baseline: Gemini (`terms_gate`,
 `settlement_observability`, `payload_schema`, `write_path_isolation`), `orderbook`,
 `chain_ca_fallback`, `window_forensics_stream` and the conditional
 `deploy_fallthrough_guard`.
+
+# CHECKPOINT 25 — the preregistered frozen report
+
+**n=25 reached 2026-09-28T02:45:24Z. 700 configs, 0 failures. Protocol frozen
+throughout per `analysis/pmus/CHECKPOINT25_FREEZE.md`.**
+
+## The frozen criterion, and the verdict
+
+> mean q50 PROFIT_LOCK_5 SHADOW TRADING NET, after fees, before rebates ≥ $5.00/window
+
+**Measured: +6.1167.**
+
+# ADVANCE
+
+Stated exactly as the preregistered criterion requires, on that single number and
+nothing else. **No live authorization follows from this.** The report stops here for
+owner review; any advance is additionally gated on REPO_TESTS_001 and on candidate
+`8039c416` being reviewed against baseline `04cf5295`.
+
+## The 25th window, reported separately
+**0230z, settled DOWN.** Closed 02:45:00; terminal `MARKET_STATE_EXPIRED` captured
+**02:45:24, seven seconds before the reslate at 02:45:31**; max pre-close gap 29.6s;
+final pre-close observation 4.5s before the boundary; `settlementPx` 0.0000 vs
+`lastTradePx` 0.0100. Admitted mechanically.
+
+Its own economics: **q50 −0.4518, q25 −0.2259, and it never locked** — identical under
+both arms, delta 0.0000. **The observation that closed the checkpoint was a small
+loss that the lock could not help**, which is worth stating plainly: the criterion was
+not carried over the line by its own final window.
+
+## Accounting waterfalls
+
+| per window | q=25 P0 | q=25 LOCK5 | q=50 P0 | **q=50 LOCK5** |
+|---|---|---|---|---|
+| EC matched gross | +9.7866 | +6.4974 | +19.5075 | +11.4879 |
+| PASSIVE matched gross | −3.8478 | −2.0091 | −7.7963 | −3.1445 |
+| TOTAL matched gross | +5.9388 | +4.4884 | +11.7113 | +8.3434 |
+| fees | 0.8312 | 0.6499 | 1.6127 | 1.0737 |
+| residual P&L | −2.2528 | −0.8168 | −4.5073 | −1.1530 |
+| **SHADOW TRADING NET** | **+2.8548** | **+3.0217** | **+5.5912** | **+6.1167** |
+| expected maker rebate | +0.3520 | +0.3520 | +0.7004 | +0.7004 |
+| SHADOW MODELED NET | +3.2068 | +3.3737 | +6.2916 | +6.8171 |
+
+## Descriptive diagnostics — REPORTING ONLY, no pass/fail derived from any of them
+
+| | q=25 P0 | q=25 LOCK5 | q=50 P0 | q=50 LOCK5 |
+|---|---|---|---|---|
+| mean | 2.8548 | 3.0217 | 5.5912 | **6.1167** |
+| median | 0.0000 | 5.1467 | 0.0000 | 5.7750 |
+| trimmed mean | 2.6079 | 2.7777 | 5.0919 | 4.7632 |
+| lock-hit rate | 0 of 25 | 13 of 25 | 0 of 25 | 16 of 25 |
+| positive-window rate | 12 of 25 | 16 of 25 | 12 of 25 | 18 of 25 |
+| worst window | −15.3540 | −15.3540 | −30.8152 | −10.6526 |
+| best window | +26.7416 | +27.0088 | +53.4832 | +54.0176 |
+| best window share of total | 0.3747 | 0.3575 | 0.3826 | 0.3532 |
+| mean excluding best | 1.8595 | 2.0222 | 3.5958 | 4.1209 |
+| max peak directional | 50 | **50** | 100 | **100** |
+
+Exposure is **unchanged** between arms at both clips. Three facts a reader should weigh
+themselves, none of them a criterion: the q50 LOCK5 **trimmed mean is +4.7632, below
+$5**; the **mean excluding the best window is +4.1209**; and the best window is **35.3%
+of total P&L**. A-only windows (marked $5 that was never lockable): none at q50, two at
+q25 (1945z, 0100z).
+
+## Full per-window distribution, q50 (sorted)
+`−10.6526, −7.6362, −6.0000, −4.3004, −1.0696, −0.4518, −0.0688, 3.0000, 5.1496,
+5.2702, 5.6326, 5.7703, 5.7750, 5.8911, 6.4235, 6.9699, 7.9580, 8.1848, 8.9049,
+9.6535, 9.9623, 10.2160, 10.6838, 13.6344, 54.0176`
+
+## Residual statistics
+13 of 25 episodes, frequency 0.5200, Wilson 95% [0.3350, 0.6997], **7 lost and 6 won**,
+signed mean episode P&L −8.6678. Break-even frequency reads 1.2459 — above 1.0 and
+therefore not a bound.
+
+## What ADVANCE does NOT establish
+* q=50 remains **9.42× modeled extrapolation** on the 5.31-contract largest clip ever
+  filled live, and **zero authenticated live BTC15m fills exist**.
+* The expected maker rebate is **EXPECTED, never credited**; credited PMUS liquidity
+  rewards are $0 and BTC15m is in no liquidity program.
+* CHANNEL_A remains **unresolved**.
+* L5's own trading-only economics were **+$0.83/window**, with 83.3% of his $4.96 from
+  an incentive stream this venue does not offer here.
+
+## Recorded for post-checkpoint review only
+`DRAIN_S`=240 produced **2 expiries in 27 observed windows** (0015z, 0145z), each with
+`drain_end terminal_recorded: false`. A measured rate, not a one-off. **Not acted on**
+and not to be acted on before review.
