@@ -172,7 +172,14 @@ class Lock5Session:
             self.mon.record("DECISION", {"stage": stage, "mandate": verdict,
                                          "outcome": "REFUSED_BY_MANDATE"})
             raise SafetyRefusal(verdict)
-        ack = self.transport.request("POST", "/v1/orders", {"request": body})
+        # THE BARE BODY (2026-09-28). `/v1/orders` takes the order body itself;
+        # only `/v1/order/preview` takes {"request": body}. This line previously
+        # sent the preview envelope, so `pmus_live_mandate.admit` could not read
+        # the quantity and refused `order_unpriceable:order_quantity_unreadable`
+        # on every order -- fail-closed, and non-functional. Canonical shape from
+        # pmus_micro_executor (`t.request("POST", "/v1/orders", body)`) and
+        # l5_pmus_transport.order, which both send it bare.
+        ack = self.transport.request("POST", "/v1/orders", body)
         self.submitted += 1
         # ACK IS NOT FILL: no inventory or cash moves here.
         self.mon.record("ACK", {"stage": stage, "ack": ack,

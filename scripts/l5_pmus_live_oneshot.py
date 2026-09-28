@@ -52,6 +52,9 @@ from src import l5_probe_manifest as PM
 from src import l5_session_journal as JN
 from src import l5_window_actions as WA
 from src import pmus_arm_retry as AR
+from src import pmus_completion_shadow as SHADOW
+from src import pmus_live_mandate as MANDATE
+from src import pmus_lock5_live_adapter as ADAPT
 from src import pmus_lock5_translation as LOCK5
 from src import pmus_paired_log as PAIRED
 from src import pmus_probe_observability as OBS
@@ -88,6 +91,20 @@ PREFLIGHT_UNTIL_S = 780.0
 #: and the cancel/reconcile tail is not racing the window end.
 NO_NEW_ORDERS_AFTER_S = 810.0
 
+
+
+def mandate_fingerprint() -> Optional[str]:
+    """A stable digest of the CURRENT mandate text, or None when there is none.
+
+    Re-read from source on every call rather than cached, so a mandate swapped
+    or deleted between arm attempts is detected instead of assumed unchanged.
+    """
+    import hashlib
+    m, _ = MANDATE.load_mandate()
+    if m is None:
+        return None
+    fields = "|".join(str(getattr(m, f)) for f in MANDATE.REQUIRED_FIELDS)
+    return hashlib.sha256(fields.encode()).hexdigest()[:16]
 
 
 def expected_account() -> Optional[str]:
@@ -158,6 +175,9 @@ class Probe:
         #: exists without it; see pmus_paired_log for why the live side of a row
         #: can never be derived from the shadow side.
         self.paired: Optional[PAIRED.PairedLog] = None
+        #: the paired/LOCK5 transport decorator, set by run() once the mandate
+        #: has been loaded. The ONLY route from venue fill evidence to inventory.
+        self.adapter = None
 
     # ------------------------------------------------------------- arming
 
@@ -347,7 +367,32 @@ class Probe:
                     res[k] = str(prog.get(k))
             out.append(res)
             self.journal.write("order_progress", res)
+            # AUTHORITATIVE FILL EVIDENCE. `res` came from a venue GET on this
+            # order, so a positive delta is a fill and not an ACK's self-report.
+            # This is the only place inventory reaches LOCK5 and the paired row.
+            if self.adapter is not None:
+                try:
+                    self.adapter.note_venue_progress(
+                        res, side=str(o.get("side") or ""))
+                except BaseException as exc:                    # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    # a bookkeeping failure must not silently drop the fill
+                    self.store.mark_uncertain(
+                        "paired/LOCK5 booking raised %s for %s"
+                        % (type(exc).__name__, coid))
+                    self.journal.write("paired_booking_failed", {
+                        "coid": coid, "error": type(exc).__name__})
         return out
+
+    def submitted_count(self) -> int:
+        """Orders this probe has SUBMITTED. Not acked, not filled -- submitted.
+
+        The arm gate uses it to refuse a retry after anything has gone out, so it
+        must count intents that reached the wire, whatever the venue then said.
+        """
+        return sum(1 for r in self.records
+                   if (r.get("ORDER") or {}).get("submitted") is True)
 
     def work_window(self, deadline: float) -> None:
         """Handle actions as they are observed, until the window closes."""
@@ -512,6 +557,30 @@ class Probe:
         book = self.store.state.get(key) or {}
         return {k: str(v) for k, v in book.items() if k in mine}
 
+    def record_reconciliation(self, close: Mapping[str, Any]) -> None:
+        """Carry the venue reconciliation and terminal state onto every row.
+
+        Settlement and authoritative cash P&L are NOT written here: this process
+        ends at window close, before the venue resolves the market. A row whose
+        settlement is absent is UNSETTLED, and saying so is the point -- filling
+        it in from a mark would be exactly the mislabelling the accounting rules
+        forbid.
+        """
+        if self.paired is None:
+            return
+        pos = {sd: str(self.store.position(self.market, sd))
+               for sd in ("up", "down")}
+        for row in self.paired.rows:
+            row.reconciled(venue_position_up=pos["up"],
+                           venue_position_down=pos["down"],
+                           residual=str(self.store.residual(self.market)),
+                           orders_uncertain=str(self.store.orders_uncertain()),
+                           close_out=str(close.get("close_out") or ""),
+                           source="RECONCILIATION")
+            if not row.resolved:
+                row.nonfill("window_closed_without_authoritative_fill")
+        self.paired.flush()
+
     def report(self, close: Mapping[str, Any]) -> Dict[str, Any]:
         submitted = [r for r in self.records
                      if (r.get("ORDER") or {}).get("submitted") is True]
@@ -581,10 +650,19 @@ class Probe:
             "worst_case_usd": str(self.limits.worst_case_loss_usd()),
             "settlement": "NOT_OBSERVED_IN_THIS_PROCESS",
             "realized": "NOT_REALIZED",
+            "paired": (self.paired.summary() if self.paired is not None
+                       else "NOT_COMPOSED"),
             "labels": ("submitted, filled and settled are distinct. Nothing "
                        "here is realized: realization requires a settlement "
                        "value from the venue after the market resolves."),
         }
+
+
+#: the probe the last run() built, for tests that must inspect the REAL money
+#: path rather than a reconstruction of it. Written once per run and never read
+#: by production code; the alternative is a test that builds its own probe, which
+#: is precisely the vacuity that let an unwired run() through review.
+_LAST_PROBE: Optional["Probe"] = None
 
 
 def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
@@ -614,14 +692,93 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         return out
     journal.write("authorization_claimed", claim)
 
+    # 1b. THE MONETARY AUTHORITY. Loaded and validated HERE, in run(), before any
+    #     transport capable of POST exists. There is no fallback: no static
+    #     manifest envelope, no rung table, no previous mandate. "We could not
+    #     read today's authorization, so we used yesterday's" is the entire
+    #     2026-09-16 incident in one sentence.
+    mandate, mandate_err = MANDATE.load_mandate()
+    if mandate is None:
+        out = {"LABEL": "LIVE_BOUNDED_PROBE", "market": market,
+               "refused": "NO_MONETARY_AUTHORITY", "detail": mandate_err,
+               "armed": False, "submitted": 0,
+               "monetary_authority": "NONE_NO_MANDATE",
+               "effective_limits_usd": "0",
+               "note": ("no valid PMUS_LIVE_MANDATE, so the effective monetary "
+                        "authority is $0 and the probe fails closed. No "
+                        "transport capable of POST was constructed.")}
+        journal.write("no_monetary_authority", out)
+        print("L5_NO_MANDATE " + json.dumps(out, default=str), flush=True)
+        auth.consume({"armed": False, "submitted": 0,
+                      "refused": "NO_MONETARY_AUTHORITY"})
+        return out
+    journal.write("mandate_loaded", {
+        "authorization_id": mandate.authorization_id,
+        "strategy_version": mandate.strategy_version,
+        "max_spend_per_market": str(mandate.max_spend_per_market),
+        "max_total_spend": str(mandate.max_total_spend),
+        "expiry": str(mandate.expiry)})
+
     if transport_factory is None:
         def transport_factory(slug):                           # noqa: E306
             from src import l5_pmus_transport as TP
             return TP.PmusTransport(market_slug=slug)
     feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
+    state_dir = os.path.dirname(os.path.abspath(store.path)) or "."
+    # 1c. the mandate guard goes on the transport BEFORE the probe can hold it,
+    #     so no code path exists that reaches the wire without admission.
+    guarded = MANDATE.guard(transport_factory(market), mandate, state_dir,
+                            realized_today=store.realized_today,
+                            # GuardedTransport._emit calls log(kind, **verdict);
+                            # Journal.write takes (kind, payload). Without this
+                            # adapter every admitted order raised TypeError --
+                            # found by executing the real path, not by reading it.
+                            log=lambda kind, **kw: journal.write(kind, kw))
     probe = Probe(market=market, store=store, journal=journal, auth=auth,
-                  transport=transport_factory(market), book_feed=feed,
+                  transport=guarded, book_feed=feed,
                   clock=clock, sleep=sleep, activity=activity)
+    global _LAST_PROBE
+    _LAST_PROBE = probe
+
+    # 1d. a flat book is required. The floor is settlement-independent only if
+    #     it is computed over THIS session's inventory; reconstructing an
+    #     inherited position's cash would be a guess, and a guessed floor is
+    #     worse than no floor. Fresh state paths make this the normal case.
+    pre = {sd: store.position(market, sd) for sd in ("up", "down")}
+    if any(D(str(v)) != 0 for v in pre.values()):
+        out = {"LABEL": "LIVE_BOUNDED_PROBE", "market": market,
+               "refused": "PREEXISTING_INVENTORY",
+               "detail": {k: str(v) for k, v in pre.items()},
+               "armed": False, "submitted": 0,
+               "note": ("this market already holds inventory in the probe "
+                        "store; a settlement-independent floor cannot be "
+                        "computed from a position whose cash basis this "
+                        "session did not observe")}
+        journal.write("preexisting_inventory", out)
+        auth.consume({"armed": False, "submitted": 0,
+                      "refused": "PREEXISTING_INVENTORY"})
+        return out
+
+    # 1e. THE REVIEWED COMPONENTS, composed onto the executing path. build_lock5
+    #     derives the monetary limits from the mandate and opens the paired log.
+    probe.build_lock5(book=SHADOW.Book(), mandate=mandate,
+                      state_dir=state_dir, window=market)
+    # and the paired-record + LOCK5 gate go in FRONT of the guard, so every
+    # order the frozen executor sends traverses
+    #     pair_intent -> LOCK5 -> mandate.admit -> wire
+    paired_tp = ADAPT.PairedLockTransport(guarded, lock5=probe.lock5,
+                                          paired=probe.paired, journal=journal)
+    probe.tp = paired_tp
+    probe.adapter = paired_tp
+    journal.write("money_path_composed", {
+        "transport": type(paired_tp).__name__,
+        "guarded": MANDATE.is_guarded(guarded),
+        "monetary_authority": probe.limits.monetary_authority,
+        "limits": probe.limits.as_dict(),
+        "lock5_threshold": str(LOCK5.LOCK_USD),
+        "paired_log": probe.paired.path,
+        "session": os.getenv("PMUS_Q1_SESSION_ID", ""),
+        "market_window": market})
 
     start = window_start(market)
     if start is None:
@@ -659,8 +816,24 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
                      "note": "no authenticated book arrived; nothing is "
                              "decided against a book we do not have"})
         journal.write("book_feed", feed.health())
-        # 4. arm, needing preflight AND the owner token
-        probe.arm()
+        # 4. arm, needing preflight AND the owner token. BOUNDED RETRY, which
+        #    retries a transient pre-arm safety check and is not authorization
+        #    renewal: it stops the moment anything has been submitted.
+        #
+        #    `halted` is the mandate itself, re-read on every attempt: if the
+        #    authorization is removed, replaced or expires mid-retry, arming
+        #    aborts. That is a REAL stop for this artifact. L5_LIVE_HALT is not
+        #    used, because no file in the reviewed capability graph reads it, and
+        #    a control nothing consults is not a control.
+        probe.arm_with_bounded_retry(AR.ArmRetryGate(
+            market=market,
+            authorization=auth,
+            halted=lambda: MANDATE.load_mandate()[0] is None,
+            mandate_fingerprint=lambda: mandate_fingerprint(),
+            submitted_count=lambda: probe.submitted_count(),
+            window_target=lambda: (os.getenv(AUTH.MARKET_ENV, "").strip()
+                                   or None),
+            clock=clock), sleep=sleep)
         # 5. work exactly this window
         probe.work_window(deadline)
     except BaseException as exc:                               # noqa: BLE001
@@ -693,6 +866,10 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
                           1 for r in probe.records
                           if (r.get("ORDER") or {}).get("submitted") is True),
                       "orders_uncertain": store.orders_uncertain()})
+        try:
+            probe.record_reconciliation(close)
+        except BaseException:                                  # noqa: BLE001
+            journal.write("paired_reconciliation_failed", {"market": market})
         rep = probe.report(close)
         journal.write("probe_report", rep)
         if book_feed is None:
