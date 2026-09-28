@@ -44,7 +44,7 @@ def _sess(tmp_path, *, admit=True, reason="OK", book=None):
                            clock=lambda: 1000.0)
     s = T.Lock5Session(market=MKT, book=book or SHADOW.Book(), transport=_Tp(),
                        mandate=_Mandate(), state_dir=tmp_path, monitor=mon)
-    s._verdict = {"admitted": admit, "reason": reason}
+    s._verdict = {"admits": admit, "reason": reason}
     return s
 
 
@@ -53,7 +53,7 @@ def _stub_admit(monkeypatch):
     """Default: admit. Individual tests override to prove fail-closed."""
     def admit(body, *, state_dir, mandate, slug=None, now=None,
               realized_today=None):
-        return dict(getattr(admit, "verdict", {"admitted": True,
+        return dict(getattr(admit, "verdict", {"admits": True,
                                                "reason": "OK"}))
     monkeypatch.setattr(T.MANDATE, "admit", admit)
     return admit
@@ -225,7 +225,7 @@ def test_every_submission_passes_the_mandate_first(tmp_path, monkeypatch):
     def admit(body, *, state_dir, mandate, slug=None, now=None,
               realized_today=None):
         seen["called"] = True
-        return {"admitted": True, "reason": "OK"}
+        return {"admits": True, "reason": "OK"}
     monkeypatch.setattr(T.MANDATE, "admit", admit)
     s = _sess(tmp_path)
     s.submit({"marketSlug": MKT}, stage="x")
@@ -238,7 +238,7 @@ def test_every_submission_passes_the_mandate_first(tmp_path, monkeypatch):
     "MANDATE_EXPIRED", "HALT_PRESENT", "NO_MANDATE"])
 def test_every_safety_refusal_fails_closed(tmp_path, monkeypatch, reason):
     def admit(body, **k):
-        return {"admitted": False, "reason": reason}
+        return {"admits": False, "reason": reason}
     monkeypatch.setattr(T.MANDATE, "admit", admit)
     s = _sess(tmp_path)
     with pytest.raises(T.SafetyRefusal) as e:
@@ -251,7 +251,7 @@ def test_every_safety_refusal_fails_closed(tmp_path, monkeypatch, reason):
 def test_lock5_cannot_override_a_safety_refusal(tmp_path, monkeypatch):
     """LOCK is not an authorization. A locked session still cannot spend."""
     def admit(body, **k):
-        return {"admitted": False, "reason": "PER_MARKET_CAP"}
+        return {"admits": False, "reason": "PER_MARKET_CAP"}
     monkeypatch.setattr(T.MANDATE, "admit", admit)
     bk = SHADOW.Book()
     bk.add("up", D(200), D(200) * D("0.30"), maker=True)

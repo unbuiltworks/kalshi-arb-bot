@@ -256,7 +256,7 @@ def _probe(tmp_path):
 @pytest.fixture
 def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(LOCK5.MANDATE, "admit",
-                        lambda body, **k: {"admitted": True, "reason": "OK"})
+                        lambda body, **k: {"admits": True, "reason": "OK"})
     p = _probe(tmp_path)
     bk = SHADOW.Book()
     bk.add("up", D(100), D(100) * D("0.40"), maker=True)
@@ -318,7 +318,7 @@ def test_the_entrypoint_path_goes_through_mandate_admission(tmp_path,
 
     def admit(body, **k):
         seen["hit"] = True
-        return {"admitted": False, "reason": "PER_MARKET_CAP"}
+        return {"admits": False, "reason": "PER_MARKET_CAP"}
     monkeypatch.setattr(LOCK5.MANDATE, "admit", admit)
     p = _probe(tmp_path)
     p.build_lock5(book=SHADOW.Book(), mandate=_Mandate(), state_dir=tmp_path)
@@ -382,7 +382,7 @@ def test_negative_control_disconnecting_the_paired_log_fails_pair_intent(
         tmp_path, monkeypatch):
     """Deliberate disconnection. If this passes, the test above is vacuous."""
     monkeypatch.setattr(LOCK5.MANDATE, "admit",
-                        lambda body, **k: {"admitted": True, "reason": "OK"})
+                        lambda body, **k: {"admits": True, "reason": "OK"})
     monkeypatch.setattr(ONESHOT.PAIRED, "PairedLog", lambda **kw: None)
     p = _probe(tmp_path)
     bk = SHADOW.Book()

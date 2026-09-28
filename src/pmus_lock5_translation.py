@@ -155,7 +155,20 @@ class Lock5Session:
         verdict = MANDATE.admit(body, state_dir=self.state_dir,
                                 mandate=self.mandate, slug=self.market,
                                 realized_today=self.realized_today())
-        if not verdict.get("admitted"):
+        # THE KEY IS `admits` (2026-09-28). `admit()` returns
+        # {"admits": bool, "reason": ...}; "admitted" is only ever the REASON
+        # STRING on a success, never a key. This line previously read
+        # `verdict.get("admitted")`, which is always None, so EVERY submission
+        # raised SafetyRefusal -- including admitted ones. Fail-closed, so no
+        # money was ever at risk, but the reviewed translation could not submit
+        # at all.
+        #
+        # It survived 39 green tests because those tests monkeypatched
+        # MANDATE.admit to return {"admitted": True}: the fake was written from
+        # the same wrong assumption as the code, so it confirmed the bug instead
+        # of catching it. test_mandate_verdict_contract.py now asserts the real
+        # function's keys, and the money-path tests use the real admit().
+        if not verdict.get("admits"):
             self.mon.record("DECISION", {"stage": stage, "mandate": verdict,
                                          "outcome": "REFUSED_BY_MANDATE"})
             raise SafetyRefusal(verdict)
