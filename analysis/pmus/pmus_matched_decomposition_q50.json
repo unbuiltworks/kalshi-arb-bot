@@ -1334,6 +1334,68 @@
       "scorer_matched_gross_avg_cost": "54.49999999999999999999999999",
       "passive_matched_gross_fifo_path": "-40.5000",
       "passive_convention_delta": "-21.11111111111111111111111110"
+    },
+    {
+      "window": "2315z",
+      "settlement": "up",
+      "ec_qty": "0",
+      "ec_matched_gross": "0",
+      "passive_qty": "150",
+      "passive_matched_gross": "3.0000",
+      "pair_cost_buckets_qty": {
+        "<0.96": "50",
+        "0.96-1.00": "50",
+        "1.00-1.10": "50",
+        "1.10-1.25": "0",
+        ">1.25": "0"
+      },
+      "median_gap_s": 61.64226794242859,
+      "units": [
+        {
+          "mechanism": "PASSIVE",
+          "qty": "50",
+          "leg1_t": "2026-09-27T23:17:06.658098+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.4000",
+          "leg2_t": "2026-09-27T23:18:08.300366+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.5200",
+          "effective_pair_cost": "0.9200",
+          "matched_pnl": "4.0000",
+          "gap_s": 61.64226794242859
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "50",
+          "leg1_t": "2026-09-27T23:20:38.482976+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.1500",
+          "leg2_t": "2026-09-27T23:21:09.447453+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.8300",
+          "effective_pair_cost": "0.9800",
+          "matched_pnl": "1.0000",
+          "gap_s": 30.964477062225342
+        },
+        {
+          "mechanism": "PASSIVE",
+          "qty": "50",
+          "leg1_t": "2026-09-27T23:22:15.232617+00:00",
+          "leg1_side": "down",
+          "leg1_px": "0.1200",
+          "leg2_t": "2026-09-27T23:24:10.558744+00:00",
+          "leg2_side": "up",
+          "counterpart_basis": "0.9200",
+          "effective_pair_cost": "1.0400",
+          "matched_pnl": "-2.0000",
+          "gap_s": 115.32612705230713
+        }
+      ],
+      "ec_matched_gross_avg_cost": "0",
+      "passive_matched_gross_avg_cost": "14.6000000000000000000000000",
+      "scorer_matched_gross_avg_cost": "14.6000000000000000000000000",
+      "passive_matched_gross_fifo_path": "3.0000",
+      "passive_convention_delta": "-11.6000000000000000000000000"
     }
   ],
   "rolling": {
@@ -1379,8 +1441,8 @@
       "passive_matched_gross_per_window_avg_cost": "-11.1414",
       "matched_gross_per_window_total": "7.6652"
     },
-    "n=15": "NOT YET AVAILABLE (13 of 15)",
-    "n=20": "NOT YET AVAILABLE (13 of 20)",
-    "n=25": "NOT YET AVAILABLE (13 of 25)"
+    "n=15": "NOT YET AVAILABLE (14 of 15)",
+    "n=20": "NOT YET AVAILABLE (14 of 20)",
+    "n=25": "NOT YET AVAILABLE (14 of 25)"
   }
 }

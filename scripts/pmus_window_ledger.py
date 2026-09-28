@@ -15,6 +15,7 @@ from decimal import Decimal as D
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src import pmus_completion_shadow as S           # noqa: E402
 from src import pmus_fees as F                        # noqa: E402
+from src.pmus_distribution import describe            # noqa: E402
 from scripts.audit_economic_complete import load, USABLE, EXCLUDED, audit  # noqa: E402
 
 THETA = D("0.96")
@@ -109,6 +110,11 @@ def rolling(ledger, ks=(5, 10, 15, 20, 25)):
             "expected_maker_rebate": str(g("expected_maker_rebate").quantize(D("0.0001"))),
             "shadow_modeled_net_including_expected_rebate": str(
                 g("shadow_modeled_net_including_expected_rebate").quantize(D("0.0001"))),
+            # the full shape behind the mean, from n=14 onward. Report-only:
+            # it selects nothing and no decision reads it.
+            "distribution_shadow_trading_net": describe(
+                [D(x["shadow_trading_net"]) for x in w],
+                labels=[x["window"] for x in w]),
             "residual_events": "%d of %d" % (ev, k),
             "residual_frequency": round(ev / k, 4),
             "wilson95": [round(lo, 4), round(hi, 4)],

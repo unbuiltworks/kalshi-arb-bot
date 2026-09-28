@@ -6,34 +6,102 @@
   "clips": {
     "25": {
       "frozen_arm_waterfall": {
-        "ec_matched_gross": "11.4609",
-        "passive_matched_gross": "-5.9984",
-        "matched_gross": "5.4625",
-        "fees": "0.8488",
-        "residual_pnl": "-2.6942",
-        "shadow_trading_net": "1.9195",
-        "expected_maker_rebate": "0.4069",
-        "shadow_modeled_net_including_expected_rebate": "2.3265"
+        "ec_matched_gross": "10.6423",
+        "passive_matched_gross": "-5.0485",
+        "matched_gross": "5.5938",
+        "fees": "0.7881",
+        "residual_pnl": "-3.0232",
+        "shadow_trading_net": "1.7824",
+        "expected_maker_rebate": "0.4000",
+        "shadow_modeled_net_including_expected_rebate": "2.1824"
+      },
+      "frozen_arm_distribution": {
+        "n": 14,
+        "mean": "1.7824",
+        "median": "-0.8666",
+        "trimmed_mean_drop_1_each_end": "1.1305",
+        "positive_window_rate": "5 of 14",
+        "worst_window": {
+          "window": "2030z",
+          "value": "-15.3540"
+        },
+        "best_window": {
+          "window": "2300z",
+          "value": "26.7416"
+        },
+        "best_window_share_of_total_pnl": "1.0716",
+        "mean_excluding_best_window": "-0.1375",
+        "all_values_sorted": [
+          "-15.3540",
+          "-12.1897",
+          "-5.2943",
+          "-3.8181",
+          "-2.0965",
+          "-2.0140",
+          "-1.6988",
+          "-0.0344",
+          "0.0000",
+          "5.6844",
+          "8.7683",
+          "13.0958",
+          "13.1636",
+          "26.7416"
+        ],
+        "lock_hit_rate": "0 of 14"
       },
       "profit_lock_5_waterfall": {
-        "ec_matched_gross": "8.5577",
-        "passive_matched_gross": "-4.7718",
-        "matched_gross": "3.7860",
-        "fees": "0.6850",
-        "residual_pnl": "0.0000",
-        "shadow_trading_net": "3.1010",
-        "expected_maker_rebate": "0.4069",
-        "shadow_modeled_net_including_expected_rebate": "3.5079"
+        "ec_matched_gross": "7.9465",
+        "passive_matched_gross": "-3.9095",
+        "matched_gross": "4.0370",
+        "fees": "0.6360",
+        "residual_pnl": "-0.5214",
+        "shadow_trading_net": "2.8795",
+        "expected_maker_rebate": "0.4000",
+        "shadow_modeled_net_including_expected_rebate": "3.2795"
+      },
+      "profit_lock_5_distribution": {
+        "n": 14,
+        "mean": "2.8795",
+        "median": "5.4226",
+        "trimmed_mean_drop_1_each_end": "2.3882",
+        "positive_window_rate": "8 of 14",
+        "worst_window": {
+          "window": "2030z",
+          "value": "-15.3540"
+        },
+        "best_window": {
+          "window": "2300z",
+          "value": "27.0088"
+        },
+        "best_window_share_of_total_pnl": "0.6700",
+        "mean_excluding_best_window": "1.0234",
+        "all_values_sorted": [
+          "-15.3540",
+          "-5.2943",
+          "-3.8181",
+          "-2.0140",
+          "-0.0344",
+          "0.0000",
+          "5.3553",
+          "5.4898",
+          "5.5719",
+          "5.6532",
+          "5.8068",
+          "5.8738",
+          "6.0684",
+          "27.0088"
+        ],
+        "lock_hit_rate": "8 of 14"
       },
       "complement_bias_2c_waterfall": {
-        "ec_matched_gross": "11.3256",
-        "passive_matched_gross": "-5.9784",
-        "matched_gross": "5.3471",
-        "fees": "0.8158",
-        "residual_pnl": "-2.6942",
-        "shadow_trading_net": "1.8371",
-        "expected_maker_rebate": "0.4069",
-        "shadow_modeled_net_including_expected_rebate": "2.2440"
+        "ec_matched_gross": "10.5166",
+        "passive_matched_gross": "-5.0300",
+        "matched_gross": "5.4866",
+        "fees": "0.7576",
+        "residual_pnl": "-3.0232",
+        "shadow_trading_net": "1.7059",
+        "expected_maker_rebate": "0.4000",
+        "shadow_modeled_net_including_expected_rebate": "2.1059"
       },
       "exposure": {
         "frozen_max_peak_contracts": "50",
@@ -285,160 +353,483 @@
           "A_peak_mark_to_market": "27.1338",
           "A_marked_5_but_NOT_lockable": false,
           "peak_directional_contracts": "50"
+        },
+        {
+          "window": "2315z",
+          "lock_became_executable": false,
+          "first_lock_t": null,
+          "tte_at_lock_s": null,
+          "inventory_at_lock": null,
+          "lock_via": null,
+          "orders_cancelled_at_lock": 0,
+          "guaranteed_net_at_lock": null,
+          "final_net_frozen_arm": "0.0000",
+          "final_net_profit_lock_5": "0.0000",
+          "delta_vs_frozen": "0.0000",
+          "B_peak_executable_floor": "2.5000",
+          "A_peak_mark_to_market": "3.1250",
+          "A_marked_5_but_NOT_lockable": false,
+          "peak_directional_contracts": "50"
         }
       ],
       "thresholds": {
         "2": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "10 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "7.3670",
-            "passive_matched_gross": "-3.6739",
-            "matched_gross": "3.6931",
-            "fees": "0.4563",
+            "ec_matched_gross": "6.8407",
+            "passive_matched_gross": "-3.2686",
+            "matched_gross": "3.5722",
+            "fees": "0.4237",
             "residual_pnl": "0.0000",
-            "shadow_trading_net": "3.2368",
-            "expected_maker_rebate": "0.4069",
-            "shadow_modeled_net_including_expected_rebate": "3.6437"
+            "shadow_trading_net": "3.1484",
+            "expected_maker_rebate": "0.4000",
+            "shadow_modeled_net_including_expected_rebate": "3.5484"
           },
-          "usd_per_locked_window": "5.9154",
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "3.1484",
+            "median": "2.2262",
+            "trimmed_mean_drop_1_each_end": "1.8636",
+            "positive_window_rate": "10 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-5.2943"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "27.0088"
+            },
+            "best_window_share_of_total_pnl": "0.6127",
+            "mean_excluding_best_window": "1.3130",
+            "all_values_sorted": [
+              "-5.2943",
+              "-3.8181",
+              "-2.0140",
+              "-0.0344",
+              "2.0000",
+              "2.0060",
+              "2.1283",
+              "2.3241",
+              "2.5684",
+              "2.8163",
+              "4.1460",
+              "4.7512",
+              "5.4898",
+              "27.0088"
+            ],
+            "lock_hit_rate": "10 of 14"
+          },
+          "usd_per_locked_window": "5.5239",
           "worst_window": "-5.2943",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "85.14"
+          "mean_matched_throughput_contracts": "80.85"
         },
         "3": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "10 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "8.1475",
-            "passive_matched_gross": "-3.6500",
-            "matched_gross": "4.4975",
-            "fees": "0.6015",
+            "ec_matched_gross": "7.5655",
+            "passive_matched_gross": "-3.1392",
+            "matched_gross": "4.4263",
+            "fees": "0.5791",
             "residual_pnl": "0.0000",
-            "shadow_trading_net": "3.8960",
-            "expected_maker_rebate": "0.4069",
-            "shadow_modeled_net_including_expected_rebate": "4.3029"
+            "shadow_trading_net": "3.8471",
+            "expected_maker_rebate": "0.4000",
+            "shadow_modeled_net_including_expected_rebate": "4.2471"
           },
-          "usd_per_locked_window": "6.8677",
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "3.8471",
+            "median": "3.8155",
+            "trimmed_mean_drop_1_each_end": "2.6788",
+            "positive_window_rate": "10 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-5.2943"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "27.0088"
+            },
+            "best_window_share_of_total_pnl": "0.5015",
+            "mean_excluding_best_window": "2.0655",
+            "all_values_sorted": [
+              "-5.2943",
+              "-3.8181",
+              "-2.0140",
+              "-0.0344",
+              "3.1518",
+              "3.2117",
+              "3.4849",
+              "4.1460",
+              "4.3158",
+              "4.6340",
+              "4.7512",
+              "4.8267",
+              "5.4898",
+              "27.0088"
+            ],
+            "lock_hit_rate": "10 of 14"
+          },
+          "usd_per_locked_window": "6.5021",
           "worst_window": "-5.2943",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "96.33"
+          "mean_matched_throughput_contracts": "93.02"
         },
         "4": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "9 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "8.2821",
-            "passive_matched_gross": "-3.4769",
-            "matched_gross": "4.8052",
-            "fees": "0.6608",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "4.1444",
-            "expected_maker_rebate": "0.4069",
-            "shadow_modeled_net_including_expected_rebate": "4.5514"
+            "ec_matched_gross": "7.6905",
+            "passive_matched_gross": "-2.7071",
+            "matched_gross": "4.9834",
+            "fees": "0.6136",
+            "residual_pnl": "-0.5214",
+            "shadow_trading_net": "3.8484",
+            "expected_maker_rebate": "0.4000",
+            "shadow_modeled_net_including_expected_rebate": "4.2484"
+          },
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "3.8484",
+            "median": "4.2309",
+            "trimmed_mean_drop_1_each_end": "2.6803",
+            "positive_window_rate": "9 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-5.2943"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "27.0088"
+            },
+            "best_window_share_of_total_pnl": "0.5013",
+            "mean_excluding_best_window": "2.0668",
+            "all_values_sorted": [
+              "-5.2943",
+              "-3.8181",
+              "-2.0140",
+              "-0.0344",
+              "0.0000",
+              "4.0593",
+              "4.1460",
+              "4.3158",
+              "4.6340",
+              "4.7512",
+              "4.8267",
+              "5.4898",
+              "5.8068",
+              "27.0088"
+            ],
+            "lock_hit_rate": "9 of 14"
           },
           "usd_per_locked_window": "7.2265",
           "worst_window": "-5.2943",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "100.18"
+          "mean_matched_throughput_contracts": "98.38"
         },
         "5": {
-          "lock_hit_rate": "8 of 13",
+          "lock_hit_rate": "8 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "8.5577",
-            "passive_matched_gross": "-4.7718",
-            "matched_gross": "3.7860",
-            "fees": "0.6850",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "3.1010",
-            "expected_maker_rebate": "0.4069",
-            "shadow_modeled_net_including_expected_rebate": "3.5079"
+            "ec_matched_gross": "7.9465",
+            "passive_matched_gross": "-3.9095",
+            "matched_gross": "4.0370",
+            "fees": "0.6360",
+            "residual_pnl": "-0.5214",
+            "shadow_trading_net": "2.8795",
+            "expected_maker_rebate": "0.4000",
+            "shadow_modeled_net_including_expected_rebate": "3.2795"
+          },
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "2.8795",
+            "median": "5.4226",
+            "trimmed_mean_drop_1_each_end": "2.3882",
+            "positive_window_rate": "8 of 14",
+            "worst_window": {
+              "window": "2030z",
+              "value": "-15.3540"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "27.0088"
+            },
+            "best_window_share_of_total_pnl": "0.6700",
+            "mean_excluding_best_window": "1.0234",
+            "all_values_sorted": [
+              "-15.3540",
+              "-5.2943",
+              "-3.8181",
+              "-2.0140",
+              "-0.0344",
+              "0.0000",
+              "5.3553",
+              "5.4898",
+              "5.5719",
+              "5.6532",
+              "5.8068",
+              "5.8738",
+              "6.0684",
+              "27.0088"
+            ],
+            "lock_hit_rate": "8 of 14"
           },
           "usd_per_locked_window": "8.3535",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "109.80"
+          "mean_matched_throughput_contracts": "107.31"
         },
         "6": {
-          "lock_hit_rate": "7 of 13",
+          "lock_hit_rate": "7 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "9.7685",
-            "passive_matched_gross": "-4.4685",
-            "matched_gross": "5.3000",
-            "fees": "0.7896",
-            "residual_pnl": "-1.1846",
-            "shadow_trading_net": "3.3258",
-            "expected_maker_rebate": "0.4069",
-            "shadow_modeled_net_including_expected_rebate": "3.7327"
+            "ec_matched_gross": "9.0708",
+            "passive_matched_gross": "-3.6279",
+            "matched_gross": "5.4429",
+            "fees": "0.7332",
+            "residual_pnl": "-1.6214",
+            "shadow_trading_net": "3.0883",
+            "expected_maker_rebate": "0.4000",
+            "shadow_modeled_net_including_expected_rebate": "3.4883"
+          },
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "3.0883",
+            "median": "3.0302",
+            "trimmed_mean_drop_1_each_end": "2.6317",
+            "positive_window_rate": "7 of 14",
+            "worst_window": {
+              "window": "2030z",
+              "value": "-15.3540"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "27.0088"
+            },
+            "best_window_share_of_total_pnl": "0.6247",
+            "mean_excluding_best_window": "1.2482",
+            "all_values_sorted": [
+              "-15.3540",
+              "-5.2943",
+              "-3.8181",
+              "-2.0965",
+              "-2.0140",
+              "-0.0344",
+              "0.0000",
+              "6.0603",
+              "6.0684",
+              "6.1608",
+              "6.1844",
+              "7.2683",
+              "13.0958",
+              "27.0088"
+            ],
+            "lock_hit_rate": "7 of 14"
           },
           "usd_per_locked_window": "10.2638",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "119.41"
+          "mean_matched_throughput_contracts": "116.24"
         },
         "7.5": {
-          "lock_hit_rate": "5 of 13",
+          "lock_hit_rate": "5 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "9.7685",
-            "passive_matched_gross": "-3.8556",
-            "matched_gross": "5.9129",
-            "fees": "0.8613",
-            "residual_pnl": "-2.7808",
-            "shadow_trading_net": "2.2709",
-            "expected_maker_rebate": "0.4069",
-            "shadow_modeled_net_including_expected_rebate": "2.6778"
+            "ec_matched_gross": "9.0708",
+            "passive_matched_gross": "-3.0588",
+            "matched_gross": "6.0120",
+            "fees": "0.7997",
+            "residual_pnl": "-3.1036",
+            "shadow_trading_net": "2.1087",
+            "expected_maker_rebate": "0.4000",
+            "shadow_modeled_net_including_expected_rebate": "2.5087"
+          },
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "2.1087",
+            "median": "-0.0172",
+            "trimmed_mean_drop_1_each_end": "1.4889",
+            "positive_window_rate": "6 of 14",
+            "worst_window": {
+              "window": "2030z",
+              "value": "-15.3540"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "27.0088"
+            },
+            "best_window_share_of_total_pnl": "0.9149",
+            "mean_excluding_best_window": "0.1933",
+            "all_values_sorted": [
+              "-15.3540",
+              "-12.1897",
+              "-5.2943",
+              "-3.8181",
+              "-2.0965",
+              "-2.0140",
+              "-0.0344",
+              "0.0000",
+              "5.6844",
+              "7.7016",
+              "8.1936",
+              "8.6384",
+              "13.0958",
+              "27.0088"
+            ],
+            "lock_hit_rate": "5 of 14"
           },
           "usd_per_locked_window": "12.9276",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "125.18"
+          "mean_matched_throughput_contracts": "121.60"
         },
         "10": {
-          "lock_hit_rate": "3 of 13",
+          "lock_hit_rate": "3 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "10.7156",
-            "passive_matched_gross": "-5.2546",
-            "matched_gross": "5.4610",
-            "fees": "0.8238",
-            "residual_pnl": "-2.6942",
-            "shadow_trading_net": "1.9429",
-            "expected_maker_rebate": "0.4069",
-            "shadow_modeled_net_including_expected_rebate": "2.3499"
+            "ec_matched_gross": "9.9502",
+            "passive_matched_gross": "-4.3579",
+            "matched_gross": "5.5924",
+            "fees": "0.7650",
+            "residual_pnl": "-3.0232",
+            "shadow_trading_net": "1.8042",
+            "expected_maker_rebate": "0.4000",
+            "shadow_modeled_net_including_expected_rebate": "2.2042"
+          },
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "1.8042",
+            "median": "-0.8666",
+            "trimmed_mean_drop_1_each_end": "1.1336",
+            "positive_window_rate": "5 of 14",
+            "worst_window": {
+              "window": "2030z",
+              "value": "-15.3540"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "27.0088"
+            },
+            "best_window_share_of_total_pnl": "1.0693",
+            "mean_excluding_best_window": "-0.1347",
+            "all_values_sorted": [
+              "-15.3540",
+              "-12.1897",
+              "-5.2943",
+              "-3.8181",
+              "-2.0965",
+              "-2.0140",
+              "-1.6988",
+              "-0.0344",
+              "0.0000",
+              "5.6844",
+              "8.7683",
+              "13.0958",
+              "13.2006",
+              "27.0088"
+            ],
+            "lock_hit_rate": "3 of 14"
           },
           "usd_per_locked_window": "17.7684",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "129.03"
+          "mean_matched_throughput_contracts": "125.17"
         }
       }
     },
     "50": {
       "frozen_arm_waterfall": {
-        "ec_matched_gross": "22.4768",
-        "passive_matched_gross": "-11.8791",
-        "matched_gross": "10.5977",
-        "fees": "1.6568",
-        "residual_pnl": "-5.3885",
-        "shadow_trading_net": "3.5525",
-        "expected_maker_rebate": "0.8077",
-        "shadow_modeled_net_including_expected_rebate": "4.3602"
+        "ec_matched_gross": "20.8713",
+        "passive_matched_gross": "-9.9877",
+        "matched_gross": "10.8836",
+        "fees": "1.5385",
+        "residual_pnl": "-6.0464",
+        "shadow_trading_net": "3.2987",
+        "expected_maker_rebate": "0.7957",
+        "shadow_modeled_net_including_expected_rebate": "4.0944"
+      },
+      "frozen_arm_distribution": {
+        "n": 14,
+        "mean": "3.2987",
+        "median": "-1.8035",
+        "trimmed_mean_drop_1_each_end": "1.9595",
+        "positive_window_rate": "5 of 14",
+        "worst_window": {
+          "window": "2030z",
+          "value": "-30.8152"
+        },
+        "best_window": {
+          "window": "2300z",
+          "value": "53.4832"
+        },
+        "best_window_share_of_total_pnl": "1.1581",
+        "mean_excluding_best_window": "-0.5616",
+        "all_values_sorted": [
+          "-30.8152",
+          "-24.3793",
+          "-10.6526",
+          "-7.6362",
+          "-4.3004",
+          "-4.1930",
+          "-3.5383",
+          "-0.0688",
+          "0.0000",
+          "10.7714",
+          "17.2408",
+          "23.9640",
+          "26.3065",
+          "53.4832"
+        ],
+        "lock_hit_rate": "0 of 14"
       },
       "profit_lock_5_waterfall": {
-        "ec_matched_gross": "15.9785",
-        "passive_matched_gross": "-7.6553",
-        "matched_gross": "8.3231",
-        "fees": "1.2131",
+        "ec_matched_gross": "14.8371",
+        "passive_matched_gross": "-6.6085",
+        "matched_gross": "8.2286",
+        "fees": "1.1677",
         "residual_pnl": "0.0000",
-        "shadow_trading_net": "7.1100",
-        "expected_maker_rebate": "0.8077",
-        "shadow_modeled_net_including_expected_rebate": "7.9177"
+        "shadow_trading_net": "7.0609",
+        "expected_maker_rebate": "0.7957",
+        "shadow_modeled_net_including_expected_rebate": "7.8567"
+      },
+      "profit_lock_5_distribution": {
+        "n": 14,
+        "mean": "7.0609",
+        "median": "6.1573",
+        "trimmed_mean_drop_1_each_end": "4.6240",
+        "positive_window_rate": "10 of 14",
+        "worst_window": {
+          "window": "2245z",
+          "value": "-10.6526"
+        },
+        "best_window": {
+          "window": "2300z",
+          "value": "54.0176"
+        },
+        "best_window_share_of_total_pnl": "0.5464",
+        "mean_excluding_best_window": "3.4489",
+        "all_values_sorted": [
+          "-10.6526",
+          "-7.6362",
+          "-4.3004",
+          "-0.0688",
+          "5.1496",
+          "5.6326",
+          "5.8911",
+          "6.4235",
+          "6.9699",
+          "8.1848",
+          "8.9049",
+          "9.6535",
+          "10.6838",
+          "54.0176"
+        ],
+        "lock_hit_rate": "10 of 14"
       },
       "complement_bias_2c_waterfall": {
-        "ec_matched_gross": "22.2062",
-        "passive_matched_gross": "-11.8392",
-        "matched_gross": "10.3670",
-        "fees": "1.5909",
-        "residual_pnl": "-5.3885",
-        "shadow_trading_net": "3.3876",
-        "expected_maker_rebate": "0.8077",
-        "shadow_modeled_net_including_expected_rebate": "4.1953"
+        "ec_matched_gross": "20.6200",
+        "passive_matched_gross": "-9.9507",
+        "matched_gross": "10.6693",
+        "fees": "1.4773",
+        "residual_pnl": "-6.0464",
+        "shadow_trading_net": "3.1456",
+        "expected_maker_rebate": "0.7957",
+        "shadow_modeled_net_including_expected_rebate": "3.9413"
       },
       "exposure": {
         "frozen_max_peak_contracts": "100",
@@ -693,127 +1084,385 @@
           "A_peak_mark_to_market": "54.2676",
           "A_marked_5_but_NOT_lockable": false,
           "peak_directional_contracts": "100"
+        },
+        {
+          "window": "2315z",
+          "lock_became_executable": true,
+          "first_lock_t": "2026-09-27T23:20:40.532967+00:00",
+          "tte_at_lock_s": 559.5,
+          "inventory_at_lock": {
+            "up": "100",
+            "down": "100"
+          },
+          "lock_via": "COMPLETE",
+          "orders_cancelled_at_lock": 0,
+          "guaranteed_net_at_lock": "6.4235",
+          "final_net_frozen_arm": "0.0000",
+          "final_net_profit_lock_5": "6.4235",
+          "delta_vs_frozen": "6.4235",
+          "B_peak_executable_floor": "5.0000",
+          "A_peak_mark_to_market": "6.2500",
+          "A_marked_5_but_NOT_lockable": false,
+          "peak_directional_contracts": "100"
         }
       ],
       "thresholds": {
         "2": {
-          "lock_hit_rate": "11 of 13",
+          "lock_hit_rate": "12 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "7.8488",
-            "passive_matched_gross": "-3.6883",
-            "matched_gross": "4.1605",
-            "fees": "0.7031",
+            "ec_matched_gross": "7.2882",
+            "passive_matched_gross": "-3.1391",
+            "matched_gross": "4.1490",
+            "fees": "0.6529",
             "residual_pnl": "0.0000",
-            "shadow_trading_net": "3.4574",
-            "expected_maker_rebate": "0.8077",
-            "shadow_modeled_net_including_expected_rebate": "4.2651"
+            "shadow_trading_net": "3.4962",
+            "expected_maker_rebate": "0.7957",
+            "shadow_modeled_net_including_expected_rebate": "4.2919"
           },
-          "usd_per_locked_window": "4.4833",
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "3.4962",
+            "median": "2.7665",
+            "trimmed_mean_drop_1_each_end": "3.5469",
+            "positive_window_rate": "12 of 14",
+            "worst_window": {
+              "window": "1915z",
+              "value": "-4.3004"
+            },
+            "best_window": {
+              "window": "2215z",
+              "value": "10.6838"
+            },
+            "best_window_share_of_total_pnl": "0.2183",
+            "mean_excluding_best_window": "2.9433",
+            "all_values_sorted": [
+              "-4.3004",
+              "-0.0688",
+              "2.0000",
+              "2.1326",
+              "2.2845",
+              "2.5000",
+              "2.5330",
+              "3.0000",
+              "4.0000",
+              "4.6483",
+              "4.9961",
+              "5.6326",
+              "8.9049",
+              "10.6838"
+            ],
+            "lock_hit_rate": "12 of 14"
+          },
+          "usd_per_locked_window": "4.4430",
           "worst_window": "-4.3004",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "119.76"
+          "mean_matched_throughput_contracts": "114.78"
         },
         "3": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "10 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "9.9325",
-            "passive_matched_gross": "-6.6831",
-            "matched_gross": "3.2494",
-            "fees": "0.8952",
+            "ec_matched_gross": "9.2230",
+            "passive_matched_gross": "-5.9200",
+            "matched_gross": "3.3031",
+            "fees": "0.8312",
             "residual_pnl": "0.0000",
-            "shadow_trading_net": "2.3543",
-            "expected_maker_rebate": "0.8077",
-            "shadow_modeled_net_including_expected_rebate": "3.1620"
+            "shadow_trading_net": "2.4718",
+            "expected_maker_rebate": "0.7957",
+            "shadow_modeled_net_including_expected_rebate": "3.2675"
           },
-          "usd_per_locked_window": "5.9182",
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "2.4718",
+            "median": "3.8984",
+            "trimmed_mean_drop_1_each_end": "2.8812",
+            "positive_window_rate": "10 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-10.6526"
+            },
+            "best_window": {
+              "window": "2215z",
+              "value": "10.6838"
+            },
+            "best_window_share_of_total_pnl": "0.3087",
+            "mean_excluding_best_window": "1.8401",
+            "all_values_sorted": [
+              "-10.6526",
+              "-7.6362",
+              "-4.3004",
+              "-0.0688",
+              "3.0000",
+              "3.4161",
+              "3.7967",
+              "4.0000",
+              "4.6483",
+              "4.9961",
+              "5.6326",
+              "8.1848",
+              "8.9049",
+              "10.6838"
+            ],
+            "lock_hit_rate": "10 of 14"
+          },
+          "usd_per_locked_window": "5.7263",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "158.22"
+          "mean_matched_throughput_contracts": "150.49"
         },
         "4": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "10 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "14.9736",
-            "passive_matched_gross": "-7.6505",
-            "matched_gross": "7.3231",
-            "fees": "0.9583",
+            "ec_matched_gross": "13.9041",
+            "passive_matched_gross": "-6.8184",
+            "matched_gross": "7.0857",
+            "fees": "0.8898",
             "residual_pnl": "0.0000",
-            "shadow_trading_net": "6.3648",
-            "expected_maker_rebate": "0.8077",
-            "shadow_modeled_net_including_expected_rebate": "7.1725"
+            "shadow_trading_net": "6.1959",
+            "expected_maker_rebate": "0.7957",
+            "shadow_modeled_net_including_expected_rebate": "6.9916"
           },
-          "usd_per_locked_window": "11.7112",
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "6.1959",
+            "median": "4.4525",
+            "trimmed_mean_drop_1_each_end": "3.6148",
+            "positive_window_rate": "10 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-10.6526"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "54.0176"
+            },
+            "best_window_share_of_total_pnl": "0.6227",
+            "mean_excluding_best_window": "2.5173",
+            "all_values_sorted": [
+              "-10.6526",
+              "-7.6362",
+              "-4.3004",
+              "-0.0688",
+              "4.0000",
+              "4.0760",
+              "4.2567",
+              "4.6483",
+              "4.9961",
+              "5.6326",
+              "8.1848",
+              "8.9049",
+              "10.6838",
+              "54.0176"
+            ],
+            "lock_hit_rate": "10 of 14"
+          },
+          "usd_per_locked_window": "10.9401",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "175.18"
+          "mean_matched_throughput_contracts": "166.24"
         },
         "5": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "10 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "15.9785",
-            "passive_matched_gross": "-7.6553",
-            "matched_gross": "8.3231",
-            "fees": "1.2131",
+            "ec_matched_gross": "14.8371",
+            "passive_matched_gross": "-6.6085",
+            "matched_gross": "8.2286",
+            "fees": "1.1677",
             "residual_pnl": "0.0000",
-            "shadow_trading_net": "7.1100",
-            "expected_maker_rebate": "0.8077",
-            "shadow_modeled_net_including_expected_rebate": "7.9177"
+            "shadow_trading_net": "7.0609",
+            "expected_maker_rebate": "0.7957",
+            "shadow_modeled_net_including_expected_rebate": "7.8567"
           },
-          "usd_per_locked_window": "12.7875",
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "7.0609",
+            "median": "6.1573",
+            "trimmed_mean_drop_1_each_end": "4.6240",
+            "positive_window_rate": "10 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-10.6526"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "54.0176"
+            },
+            "best_window_share_of_total_pnl": "0.5464",
+            "mean_excluding_best_window": "3.4489",
+            "all_values_sorted": [
+              "-10.6526",
+              "-7.6362",
+              "-4.3004",
+              "-0.0688",
+              "5.1496",
+              "5.6326",
+              "5.8911",
+              "6.4235",
+              "6.9699",
+              "8.1848",
+              "8.9049",
+              "9.6535",
+              "10.6838",
+              "54.0176"
+            ],
+            "lock_hit_rate": "10 of 14"
+          },
+          "usd_per_locked_window": "12.1511",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "190.57"
+          "mean_matched_throughput_contracts": "184.10"
         },
         "6": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "10 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "15.9785",
-            "passive_matched_gross": "-6.8477",
-            "matched_gross": "9.1308",
-            "fees": "1.2050",
+            "ec_matched_gross": "14.8371",
+            "passive_matched_gross": "-5.8585",
+            "matched_gross": "8.9786",
+            "fees": "1.1601",
             "residual_pnl": "0.0000",
-            "shadow_trading_net": "7.9258",
-            "expected_maker_rebate": "0.8077",
-            "shadow_modeled_net_including_expected_rebate": "8.7335"
+            "shadow_trading_net": "7.8185",
+            "expected_maker_rebate": "0.7957",
+            "shadow_modeled_net_including_expected_rebate": "8.6142"
           },
-          "usd_per_locked_window": "13.9659",
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "7.8185",
+            "median": "8.4082",
+            "trimmed_mean_drop_1_each_end": "5.5078",
+            "positive_window_rate": "10 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-10.6526"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "54.0176"
+            },
+            "best_window_share_of_total_pnl": "0.4935",
+            "mean_excluding_best_window": "4.2647",
+            "all_values_sorted": [
+              "-10.6526",
+              "-7.6362",
+              "-4.3004",
+              "-0.0688",
+              "6.4235",
+              "6.9699",
+              "8.1848",
+              "8.6316",
+              "8.9049",
+              "9.1274",
+              "9.5200",
+              "9.6535",
+              "10.6838",
+              "54.0176"
+            ],
+            "lock_hit_rate": "10 of 14"
+          },
+          "usd_per_locked_window": "13.2117",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "194.41"
+          "mean_matched_throughput_contracts": "187.67"
         },
         "7.5": {
-          "lock_hit_rate": "9 of 13",
+          "lock_hit_rate": "9 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "16.2477",
-            "passive_matched_gross": "-6.6938",
-            "matched_gross": "9.5539",
-            "fees": "1.2709",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "8.2830",
-            "expected_maker_rebate": "0.8077",
-            "shadow_modeled_net_including_expected_rebate": "9.0907"
+            "ec_matched_gross": "15.0871",
+            "passive_matched_gross": "-5.1728",
+            "matched_gross": "9.9143",
+            "fees": "1.1801",
+            "residual_pnl": "-1.0429",
+            "shadow_trading_net": "7.6914",
+            "expected_maker_rebate": "0.7957",
+            "shadow_modeled_net_including_expected_rebate": "8.4871"
+          },
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "7.6914",
+            "median": "8.7682",
+            "trimmed_mean_drop_1_each_end": "5.3595",
+            "positive_window_rate": "9 of 14",
+            "worst_window": {
+              "window": "2245z",
+              "value": "-10.6526"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "54.0176"
+            },
+            "best_window_share_of_total_pnl": "0.5017",
+            "mean_excluding_best_window": "4.1278",
+            "all_values_sorted": [
+              "-10.6526",
+              "-7.6362",
+              "-4.3004",
+              "-0.0688",
+              "0.0000",
+              "8.1848",
+              "8.6316",
+              "8.9049",
+              "9.1274",
+              "9.5200",
+              "9.6535",
+              "10.6838",
+              "11.6136",
+              "54.0176"
+            ],
+            "lock_hit_rate": "9 of 14"
           },
           "usd_per_locked_window": "14.4819",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "198.26"
+          "mean_matched_throughput_contracts": "194.81"
         },
         "10": {
-          "lock_hit_rate": "8 of 13",
+          "lock_hit_rate": "8 of 14",
           "waterfall_per_window": {
-            "ec_matched_gross": "17.6307",
-            "passive_matched_gross": "-9.2306",
-            "matched_gross": "8.4000",
-            "fees": "1.3719",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "7.0281",
-            "expected_maker_rebate": "0.8077",
-            "shadow_modeled_net_including_expected_rebate": "7.8358"
+            "ec_matched_gross": "16.3713",
+            "passive_matched_gross": "-7.5284",
+            "matched_gross": "8.8429",
+            "fees": "1.2739",
+            "residual_pnl": "-1.0429",
+            "shadow_trading_net": "6.5261",
+            "expected_maker_rebate": "0.7957",
+            "shadow_modeled_net_including_expected_rebate": "7.3218"
+          },
+          "distribution_shadow_trading_net": {
+            "n": 14,
+            "mean": "6.5261",
+            "median": "10.6964",
+            "trimmed_mean_drop_1_each_end": "5.6802",
+            "positive_window_rate": "8 of 14",
+            "worst_window": {
+              "window": "2030z",
+              "value": "-30.8152"
+            },
+            "best_window": {
+              "window": "2300z",
+              "value": "54.0176"
+            },
+            "best_window_share_of_total_pnl": "0.5912",
+            "mean_excluding_best_window": "2.8729",
+            "all_values_sorted": [
+              "-30.8152",
+              "-10.6526",
+              "-7.6362",
+              "-4.3004",
+              "-0.0688",
+              "0.0000",
+              "10.6838",
+              "10.7089",
+              "10.7107",
+              "11.1438",
+              "11.6136",
+              "11.9961",
+              "23.9640",
+              "54.0176"
+            ],
+            "lock_hit_rate": "8 of 14"
           },
           "usd_per_locked_window": "18.1048",
           "worst_window": "-30.8152",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "221.33"
+          "mean_matched_throughput_contracts": "216.24"
         }
       }
     }

@@ -882,3 +882,75 @@ Unchanged: q=25 and q=50 remain 4.71× and 9.42× modeled extrapolation on the
 5.31-contract largest live fill; the rebate is EXPECTED, never credited; and
 CHANNEL_A remains unresolved (`analysis/l5/p1/P1_CHANNEL_A.md`). A-vs-B split at
 n=13: zero A-only windows at q=50, one at q=25 (1945z).
+
+## COMPLETENESS_RULE_AMENDMENT_001 — applied, and it changed exactly one window
+Owner-authorized prospective clarification, recorded **2026-09-27T23:57:12Z in
+commit `fea39051` BEFORE any window was scored under it**, with the previous rule,
+the rationale and the expected effect on every excluded window all written down in
+advance (`analysis/pmus/COMPLETENESS_RULE_AMENDMENT_001.md`).
+
+`scripts/pmus_completeness_rule.py` is now the only place the rule lives and it
+applies all six elements **mechanically to every window**; nothing is admitted by
+hand. Result, against the prediction made before running:
+
+| window | e1 | e2 | e3 | e4 | e6 | 2-sided | max PRE gap | post-close gap | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 1815z | Y | Y | Y | Y | Y | **n** | 2.9s | 16.8s | fail (two-sided, unchanged) |
+| **2315z** | Y | Y | Y | Y | Y | Y | **29.1s** | **194.7s** | **PASS → ADMITTED** |
+| 2015z, 2100z, 2130z, 2145z, 2200z, 2230z | Y | Y | Y | **n** | Y | Y | ≤30.4s | **none** | fail (no terminal row, unchanged) |
+| the 13 already-usable windows | Y | Y | Y | Y | Y | Y | ≤31.5s | 26.6–30.8s | PASS |
+
+**The prediction held exactly: element 4 keeps all six no-terminal-row windows
+excluded, 1815z still fails on two-sided states, and 2315z is the only change.** No
+terminal observation was reconstructed from later venue data anywhere. Note the
+already-usable windows all carry post-close gaps of 26.6–30.8s, so the amendment
+regularises what was already being tolerated at the margin rather than carving out
+a special case.
+
+## P0_RESIDUAL_001 — UPDATED to n=14 (2315z UP admitted)
+| | q=25 | q=50 |
+|---|---|---|
+| **= before residual** | — | **+10.1409** |
+| residual episodes | 5 of 14 | 5 of 14 |
+| frequency / Wilson 95% | 0.3571 / **[0.1634, 0.6124]** | same |
+| signed mean episode P&L | −16.9300 | −16.9300 |
+| break-even residual frequency | — | **0.5990** |
+| frequency needed for +$5 | — | **0.3037** |
+
+2315z contributed a shadow trading net of **exactly 0.0000** with a terminal
+residual, so it moves the episode count without moving the P&L. 392 configs,
+0 failures.
+
+## TARGET_001 — TARGET CROSSED — NOT ESTABLISHED
+Owner-directed label, and the n=14 numbers make it plainer than n=13 did.
+PROFIT_LOCK_5, q=50, SHADOW TRADING NET before rebates:
+
+| statistic | value |
+|---|---|
+| mean | **+7.0609** |
+| median | +6.1573 |
+| **trimmed mean (drop 1 each end)** | **+4.6240** |
+| lock-hit rate | 10 of 14 |
+| positive-window rate | 10 of 14 |
+| worst window | 2245z, **−10.6526** |
+| best window | 2300z, **+54.0176** |
+| **best window's share of total P&L** | **0.5464** |
+| **mean excluding best window** | **+3.4489** |
+| max peak directional exposure | **100, unchanged from the frozen arm** |
+
+**One window supplies 54.6% of all P&L, and removing it drops the mean from
++7.0609 to +3.4489. The trimmed mean, +4.6240, is below $5 on its own.** The target
+is crossed on the mean and is **NOT ESTABLISHED**. q=25 is weaker still: mean
++2.8795, trimmed +2.3882, mean excluding best +1.0234, best window 67.0% of total.
+
+From now on every mean is published with median, trimmed mean, lock-hit rate,
+positive-window rate, worst, best, the best window's share of total P&L and the mean
+excluding the best window — computed by `src/pmus_distribution.py`, pinned by
+`tests/test_pmus_distribution.py` (7 tests, one of which is the n=13 case that
+motivated the module). **No new cutoff for "not dependent on one observation" has
+been invented: the complete distribution is reported and the reader judges.**
+
+Unchanged: the $5 lock threshold is frozen, θ untouched, q grid untouched, no
+rebate in the criterion, CHANNEL_A unresolved and `floor_guard` untuned, and both
+clips remain 4.71× and 9.42× modeled extrapolation on the 5.31-contract largest
+live fill. n=14 of 25.

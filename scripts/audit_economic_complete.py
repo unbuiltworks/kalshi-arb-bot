@@ -164,7 +164,17 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2115z': 'down',
           'cpc-btc-updown-15m-2026-09-27-2215z': 'up',
           'cpc-btc-updown-15m-2026-09-27-2245z': 'up',
-          'cpc-btc-updown-15m-2026-09-27-2300z': 'up'}
+          'cpc-btc-updown-15m-2026-09-27-2300z': 'up',
+          # 2315z is admitted under COMPLETENESS_RULE_AMENDMENT_001, recorded
+          # 2026-09-27T23:57:12Z in commit fea39051 BEFORE this window was
+          # scored. Its only gap above 32s is the 194.7s POST-close stretch
+          # the bounded drain creates by design: max PRE-close gap 29.1s,
+          # final pre-close observation 16.0s before the boundary, terminal
+          # EXPIRED captured 23:32:58 by the same process, settlementPx
+          # 1.0000 != lastTradePx 0.9900. Verified by
+          # scripts/pmus_completeness_rule.py, which applies the rule to
+          # EVERY window mechanically and admits none by hand.
+          'cpc-btc-updown-15m-2026-09-27-2315z': 'up'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {
@@ -195,18 +205,6 @@ EXCLUDED = {
         'bounded-drain image only began serving at 22:46:30. Excluded on the '
         'same contemporaneous-capture rule as every other, and NOT '
         'rehabilitated.',
-    'cpc-btc-updown-15m-2026-09-27-2315z':
-        'FAILS THE 32s GAP RULE AS WRITTEN -- 194.7s between the last OPEN row '
-        '23:29:44 and the terminal row 23:32:58. Every other gap is <=29.1s, so '
-        'the TRADING period is densely observed and the single long gap lies '
-        'ENTIRELY AFTER the 23:30:00 close. This is the bounded drain working as '
-        'designed: it captured a close the venue published 2m58s late, 2m04s '
-        'after the reslate had dropped the slug, and the old code would have '
-        'lost this window outright. Excluded anyway, because admitting it means '
-        'reinterpreting a preregistered rule to include a window -- an OWNER '
-        'DECISION, not mine. Settlement was UP (1.0000 vs lastTradePx 0.9900). '
-        'The drain will create a post-close gap on every future window, so this '
-        'question recurs until the rule is amended or reaffirmed.',
 }
 
 

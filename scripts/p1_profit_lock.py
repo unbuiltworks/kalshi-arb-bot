@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src import pmus_completion_shadow as S                       # noqa: E402
 from src import pmus_fees as F                                    # noqa: E402
+from src.pmus_distribution import describe                        # noqa: E402
 from scripts.audit_economic_complete import load, USABLE, audit   # noqa: E402
 
 THETA, VARIANT, FILL = D("0.96"), "B", "queue_aware"
@@ -58,6 +59,12 @@ def rebate_for(rows, clip, variant, winner, **kw):
             px = bp if e["side"] == "up" else (D(1) - bp)
             reb += F.maker_rebate(px, e["qty"], cents=True)
     return reb
+
+
+def distribution(rows_out):
+    return describe([x["shadow_trading_net"] for x in rows_out],
+                    labels=[x["window"] for x in rows_out],
+                    locked=[bool(x.get("locked_at")) for x in rows_out])
 
 
 def waterfall(rows_out):
@@ -140,6 +147,7 @@ def main(argv):
             per_threshold[str(th)] = {
                 "lock_hit_rate": "%d of %d" % (len(hits), len(arm)),
                 "waterfall_per_window": waterfall(arm),
+                "distribution_shadow_trading_net": distribution(arm),
                 "usd_per_locked_window": str(
                     (sum(lw) / D(len(lw))).quantize(D("0.0001"))) if lw else None,
                 "worst_window": str(min(x["shadow_trading_net"] for x in arm)
@@ -188,7 +196,9 @@ def main(argv):
             })
         doc["clips"][str(clip)] = {
             "frozen_arm_waterfall": waterfall(base),
+            "frozen_arm_distribution": distribution(base),
             "profit_lock_5_waterfall": waterfall(arm5),
+            "profit_lock_5_distribution": distribution(arm5),
             "complement_bias_2c_waterfall": waterfall(bias),
             "exposure": {
                 "frozen_max_peak_contracts": str(max(x["peak_resid"] for x in base)),

@@ -1,7 +1,7 @@
 # COMPLETENESS_RULE_AMENDMENT_001 — prospective clarification
 
-**Authorized by:** owner, 2026-09-28.
-**Recorded at:** 2026-09-28T00:02Z, **before 2315z was scored under it** — the
+**Authorized by:** owner, 2026-09-27.
+**Recorded at:** 2026-09-27T23:57:12Z (commit `fea39051`), **before 2315z was scored under it** — the
 amendment is written down first so the sequence cannot later be read as an
 economics-driven exception fitted to one window.
 **Status:** PROSPECTIVE CLARIFICATION, not a retroactive exception.

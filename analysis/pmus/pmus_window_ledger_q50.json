@@ -34,7 +34,7 @@
     "clip_is_modeled_extrapolation": true,
     "extrapolation_multiple": "9.42"
   },
-  "n_usable": 13,
+  "n_usable": 14,
   "excluded": {
     "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states",
     "cpc-btc-updown-15m-2026-09-27-2015z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 20:29:55; the window was never observed through a terminal state, so it fails the preregistered completeness rule even though the venue later reported it settled DOWN",
@@ -42,8 +42,7 @@
     "cpc-btc-updown-15m-2026-09-27-2130z": "no terminal row on tape -- 46 bbo rows all MARKET_STATE_OPEN, last 21:44:52. COLLECTOR_001: the reslate at 21:45:19 dropped the slug before the venue published the close. Same class as 2015z.",
     "cpc-btc-updown-15m-2026-09-27-2145z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 21:59:44. COLLECTOR_001. Same class as 2015z.",
     "cpc-btc-updown-15m-2026-09-27-2200z": "no terminal row on tape -- 40 bbo rows all MARKET_STATE_OPEN, last 22:14:33. COLLECTOR_001. Same class as 2015z.",
-    "cpc-btc-updown-15m-2026-09-27-2230z": "no terminal row on tape -- last 22:45:02, still MARKET_STATE_OPEN. The LAST pre-fix loss: this window closed at 22:45:00 and the bounded-drain image only began serving at 22:46:30. Excluded on the same contemporaneous-capture rule as every other, and NOT rehabilitated.",
-    "cpc-btc-updown-15m-2026-09-27-2315z": "FAILS THE 32s GAP RULE AS WRITTEN -- 194.7s between the last OPEN row 23:29:44 and the terminal row 23:32:58. Every other gap is <=29.1s, so the TRADING period is densely observed and the single long gap lies ENTIRELY AFTER the 23:30:00 close. This is the bounded drain working as designed: it captured a close the venue published 2m58s late, 2m04s after the reslate had dropped the slug, and the old code would have lost this window outright. Excluded anyway, because admitting it means reinterpreting a preregistered rule to include a window -- an OWNER DECISION, not mine. Settlement was UP (1.0000 vs lastTradePx 0.9900). The drain will create a post-close gap on every future window, so this question recurs until the rule is amended or reaffirmed."
+    "cpc-btc-updown-15m-2026-09-27-2230z": "no terminal row on tape -- last 22:45:02, still MARKET_STATE_OPEN. The LAST pre-fix loss: this window closed at 22:45:00 and the bounded-drain image only began serving at 22:46:30. Excluded on the same contemporaneous-capture rule as every other, and NOT rehabilitated."
   },
   "per_window": [
     {
@@ -266,6 +265,23 @@
       "shadow_trading_net": "53.48321499999999999999999999",
       "expected_maker_rebate": "0.64",
       "shadow_modeled_net_including_expected_rebate": "54.12321499999999999999999999"
+    },
+    {
+      "window": "2315z",
+      "settlement": "up",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "100",
+      "residual_basis": "0.1460",
+      "residual_side": "down",
+      "matched_contracts": "0",
+      "ec_matched_gross": "0",
+      "passive_matched_gross": "14.6000000000000000000000000",
+      "matched_gross": "14.6000000000000000000000000",
+      "fees": "0",
+      "residual_pnl": "-14.6000",
+      "shadow_trading_net": "0E-25",
+      "expected_maker_rebate": "0.64",
+      "shadow_modeled_net_including_expected_rebate": "0.6400000000000000000000000"
     }
   ],
   "rolling": {
@@ -278,6 +294,30 @@
       "shadow_trading_net": "-1.6646",
       "expected_maker_rebate": "1.0020",
       "shadow_modeled_net_including_expected_rebate": "-0.6626",
+      "distribution_shadow_trading_net": {
+        "n": 5,
+        "mean": "-1.6646",
+        "median": "-3.5383",
+        "trimmed_mean_drop_1_each_end": "-2.6358",
+        "positive_window_rate": "1 of 5",
+        "worst_window": {
+          "window": "1830z",
+          "value": "-24.3793"
+        },
+        "best_window": {
+          "window": "1900z",
+          "value": "23.9640"
+        },
+        "best_window_share_of_total_pnl": null,
+        "mean_excluding_best_window": "-8.0717",
+        "all_values_sorted": [
+          "-24.3793",
+          "-4.3004",
+          "-3.5383",
+          "-0.0688",
+          "23.9640"
+        ]
+      },
       "residual_events": "1 of 5",
       "residual_frequency": 0.2,
       "wilson95": [
@@ -294,6 +334,35 @@
       "shadow_trading_net": "-1.3889",
       "expected_maker_rebate": "0.8710",
       "shadow_modeled_net_including_expected_rebate": "-0.5179",
+      "distribution_shadow_trading_net": {
+        "n": 10,
+        "mean": "-1.3889",
+        "median": "-3.8656",
+        "trimmed_mean_drop_1_each_end": "-1.1726",
+        "positive_window_rate": "3 of 10",
+        "worst_window": {
+          "window": "2030z",
+          "value": "-30.8152"
+        },
+        "best_window": {
+          "window": "2115z",
+          "value": "26.3065"
+        },
+        "best_window_share_of_total_pnl": null,
+        "mean_excluding_best_window": "-4.4662",
+        "all_values_sorted": [
+          "-30.8152",
+          "-24.3793",
+          "-7.6362",
+          "-4.3004",
+          "-4.1930",
+          "-3.5383",
+          "-0.0688",
+          "10.7714",
+          "23.9640",
+          "26.3065"
+        ]
+      },
       "residual_events": "3 of 10",
       "residual_frequency": 0.3,
       "wilson95": [
@@ -301,32 +370,33 @@
         0.6032
       ]
     },
-    "n=15": "NOT YET AVAILABLE (13 of 15 windows)",
-    "n=20": "NOT YET AVAILABLE (13 of 20 windows)",
-    "n=25": "NOT YET AVAILABLE (13 of 25 windows)"
+    "n=15": "NOT YET AVAILABLE (14 of 15 windows)",
+    "n=20": "NOT YET AVAILABLE (14 of 20 windows)",
+    "n=25": "NOT YET AVAILABLE (14 of 25 windows)"
   },
   "residual_statistics": {
-    "events": "4 of 13",
-    "frequency": 0.3077,
+    "events": "5 of 14",
+    "frequency": 0.3571,
     "wilson95": [
-      0.1268,
-      0.5763
+      0.1634,
+      0.6124
     ],
     "per_episode_pnl": [
       "-40.5000",
       "-30.8000",
       "-1.00000000",
-      "2.25000000"
+      "2.25000000",
+      "-14.6000"
     ],
-    "mean_episode_pnl": "-17.5125",
-    "episode_pnl_per_window": "-5.3885",
-    "episodes_that_lost": 3,
+    "mean_episode_pnl": "-16.9300",
+    "episode_pnl_per_window": "-6.0464",
+    "episodes_that_lost": 4,
     "episodes_that_won": 1
   },
   "p0_thresholds": {
-    "net_before_residual": "9.7486",
-    "break_even_residual_frequency": "0.5567",
-    "target_frequency_for_plus_5": "0.2712",
+    "net_before_residual": "10.1409",
+    "break_even_residual_frequency": "0.5990",
+    "target_frequency_for_plus_5": "0.3037",
     "note": "break-even and target use the OBSERVED SIGNED mean episode P&L, which from n=11 includes one winning residual (2215z, +2.25). A winner raises the mean and therefore RAISES break-even frequency, so this number must not be read as a severity. The mean itself is uncertain at this n."
   }
 }
