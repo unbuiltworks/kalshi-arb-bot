@@ -954,3 +954,72 @@ Unchanged: the $5 lock threshold is frozen, θ untouched, q grid untouched, no
 rebate in the criterion, CHANNEL_A unresolved and `floor_guard` untuned, and both
 clips remain 4.71× and 9.42× modeled extrapolation on the 5.31-contract largest
 live fill. n=14 of 25.
+
+## n=16 — the frozen arm's mean crosses $5 while its MEDIAN is NEGATIVE
+2330z (DOWN, +35.0488) and 2345z (UP, −1.0696) admitted mechanically under
+COMPLETENESS_RULE_AMENDMENT_001; both PASS all six elements with post-close gaps of
+26.9s. 448 configs, 0 failures. **n=16 of 25, 9 remaining.** Rolling **n=15 is now
+available** for the first time.
+
+### Rolling n=15, frozen arm (P0)
+| | q=25 | q=50 |
+|---|---|---|
+| EC matched gross | +11.2494 | +22.1133 |
+| PASSIVE matched gross | −4.7119 | −9.3219 |
+| TOTAL matched gross | +6.5375 | +12.7914 |
+| fees | 0.9173 | 1.7993 |
+| residual P&L | −2.7883 | −5.5767 |
+| **SHADOW TRADING NET** | **+2.8319** | **+5.4154** |
+| expected maker rebate | +0.4060 | +0.8047 |
+| SHADOW MODELED NET | +3.2379 | +6.2201 |
+
+**Distribution behind that q=50 mean of +5.4154 — this is why the diagnostics were
+built:**
+
+| statistic | value |
+|---|---|
+| mean | **+5.4154** |
+| **median** | **−0.0688** |
+| trimmed mean (drop 1 each end) | +4.5048 |
+| **positive-window rate** | **6 of 15** |
+| worst window | 2030z, −30.8152 |
+| best window | 2300z, +53.4832 |
+| best window's share of total P&L | **0.6584** |
+| mean excluding best window | **+1.9820** |
+
+**The frozen arm's mean clears $5 while its median is below zero and only 40% of
+windows are profitable.** A mean and a median on opposite sides of zero is the
+sharpest illustration yet that the mean alone cannot carry this decision. Nothing
+is selected or changed from it.
+
+### PROFIT_LOCK_5 at n=16 (threshold frozen at $5)
+| | q=25 | q=50 |
+|---|---|---|
+| EC matched gross | +7.5455 | +13.6008 |
+| PASSIVE matched gross | −3.5815 | −6.1039 |
+| TOTAL matched gross | +3.9639 | +7.4969 |
+| fees | 0.6682 | 1.1376 |
+| residual P&L | −0.3997 | +0.1131 |
+| **SHADOW TRADING NET** | **+2.8960** | **+6.4724** |
+| median | +5.4226 | +5.8330 |
+| trimmed mean | +2.4772 | +4.2995 |
+| lock-hit rate | 9 of 16 | 11 of 16 |
+| positive-window rate | 9 of 16 | 11 of 16 |
+| worst window | 2030z, −15.3540 | 2245z, −10.6526 |
+| best window | 2300z, +27.0088 | 2300z, +54.0176 |
+| best window's share of total | 0.5829 | **0.5216** |
+| mean excluding best window | +1.2885 | **+3.3027** |
+| max peak directional | **50, unchanged** | **100, unchanged** |
+
+Still **TARGET CROSSED — NOT ESTABLISHED**: q=50 mean +6.4724 with one window at
+52.2% of total P&L and the mean dropping to +3.3027 without it. The trimmed mean,
++4.2995, remains below $5.
+
+Residual episodes are now **7 of 16** (frequency 0.4375, Wilson [0.2310, 0.6682])
+with **3 winners among them**, which lifts the signed mean episode P&L to −11.6915
+and therefore lifts break-even frequency to 0.9326. That movement is a property of
+the mixed signs in the episode population, not an improvement in the policy.
+
+**Protocol frozen through n=25 per `analysis/pmus/CHECKPOINT25_FREEZE.md`. No
+challenger was started, no parameter moved, and nothing was selected from these
+numbers.**

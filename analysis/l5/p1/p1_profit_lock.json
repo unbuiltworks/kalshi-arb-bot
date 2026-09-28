@@ -6,21 +6,21 @@
   "clips": {
     "25": {
       "frozen_arm_waterfall": {
-        "ec_matched_gross": "10.6423",
-        "passive_matched_gross": "-5.0485",
-        "matched_gross": "5.5938",
-        "fees": "0.7881",
-        "residual_pnl": "-3.0232",
-        "shadow_trading_net": "1.7824",
-        "expected_maker_rebate": "0.4000",
-        "shadow_modeled_net_including_expected_rebate": "2.1824"
+        "ec_matched_gross": "10.6230",
+        "passive_matched_gross": "-4.5781",
+        "matched_gross": "6.0449",
+        "fees": "0.8639",
+        "residual_pnl": "-2.5575",
+        "shadow_trading_net": "2.6235",
+        "expected_maker_rebate": "0.3919",
+        "shadow_modeled_net_including_expected_rebate": "3.0153"
       },
       "frozen_arm_distribution": {
-        "n": 14,
-        "mean": "1.7824",
-        "median": "-0.8666",
-        "trimmed_mean_drop_1_each_end": "1.1305",
-        "positive_window_rate": "5 of 14",
+        "n": 16,
+        "mean": "2.6235",
+        "median": "-0.2686",
+        "trimmed_mean_drop_1_each_end": "2.1849",
+        "positive_window_rate": "6 of 16",
         "worst_window": {
           "window": "2030z",
           "value": "-15.3540"
@@ -29,8 +29,8 @@
           "window": "2300z",
           "value": "26.7416"
         },
-        "best_window_share_of_total_pnl": "1.0716",
-        "mean_excluding_best_window": "-0.1375",
+        "best_window_share_of_total_pnl": "0.6371",
+        "mean_excluding_best_window": "1.0156",
         "all_values_sorted": [
           "-15.3540",
           "-12.1897",
@@ -39,32 +39,34 @@
           "-2.0965",
           "-2.0140",
           "-1.6988",
+          "-0.5028",
           "-0.0344",
           "0.0000",
           "5.6844",
           "8.7683",
           "13.0958",
           "13.1636",
+          "17.5244",
           "26.7416"
         ],
-        "lock_hit_rate": "0 of 14"
+        "lock_hit_rate": "0 of 16"
       },
       "profit_lock_5_waterfall": {
-        "ec_matched_gross": "7.9465",
-        "passive_matched_gross": "-3.9095",
-        "matched_gross": "4.0370",
-        "fees": "0.6360",
-        "residual_pnl": "-0.5214",
-        "shadow_trading_net": "2.8795",
-        "expected_maker_rebate": "0.4000",
-        "shadow_modeled_net_including_expected_rebate": "3.2795"
+        "ec_matched_gross": "7.5455",
+        "passive_matched_gross": "-3.5815",
+        "matched_gross": "3.9639",
+        "fees": "0.6682",
+        "residual_pnl": "-0.3997",
+        "shadow_trading_net": "2.8960",
+        "expected_maker_rebate": "0.3919",
+        "shadow_modeled_net_including_expected_rebate": "3.2879"
       },
       "profit_lock_5_distribution": {
-        "n": 14,
-        "mean": "2.8795",
+        "n": 16,
+        "mean": "2.8960",
         "median": "5.4226",
-        "trimmed_mean_drop_1_each_end": "2.3882",
-        "positive_window_rate": "8 of 14",
+        "trimmed_mean_drop_1_each_end": "2.4772",
+        "positive_window_rate": "9 of 16",
         "worst_window": {
           "window": "2030z",
           "value": "-15.3540"
@@ -73,13 +75,14 @@
           "window": "2300z",
           "value": "27.0088"
         },
-        "best_window_share_of_total_pnl": "0.6700",
-        "mean_excluding_best_window": "1.0234",
+        "best_window_share_of_total_pnl": "0.5829",
+        "mean_excluding_best_window": "1.2885",
         "all_values_sorted": [
           "-15.3540",
           "-5.2943",
           "-3.8181",
           "-2.0140",
+          "-0.5028",
           "-0.0344",
           "0.0000",
           "5.3553",
@@ -89,19 +92,20 @@
           "5.8068",
           "5.8738",
           "6.0684",
+          "6.5259",
           "27.0088"
         ],
-        "lock_hit_rate": "8 of 14"
+        "lock_hit_rate": "9 of 16"
       },
       "complement_bias_2c_waterfall": {
-        "ec_matched_gross": "10.5166",
-        "passive_matched_gross": "-5.0300",
-        "matched_gross": "5.4866",
-        "fees": "0.7576",
-        "residual_pnl": "-3.0232",
-        "shadow_trading_net": "1.7059",
-        "expected_maker_rebate": "0.4000",
-        "shadow_modeled_net_including_expected_rebate": "2.1059"
+        "ec_matched_gross": "10.5966",
+        "passive_matched_gross": "-4.5086",
+        "matched_gross": "6.0879",
+        "fees": "0.8415",
+        "residual_pnl": "-2.5730",
+        "shadow_trading_net": "2.6733",
+        "expected_maker_rebate": "0.3919",
+        "shadow_modeled_net_including_expected_rebate": "3.0652"
       },
       "exposure": {
         "frozen_max_peak_contracts": "50",
@@ -370,27 +374,64 @@
           "A_peak_mark_to_market": "3.1250",
           "A_marked_5_but_NOT_lockable": false,
           "peak_directional_contracts": "50"
+        },
+        {
+          "window": "2330z",
+          "lock_became_executable": true,
+          "first_lock_t": "2026-09-27T23:38:42.495608+00:00",
+          "tte_at_lock_s": 377.5,
+          "inventory_at_lock": {
+            "up": "0",
+            "down": "0"
+          },
+          "lock_via": "HOLD",
+          "orders_cancelled_at_lock": 0,
+          "guaranteed_net_at_lock": "6.5259",
+          "final_net_frozen_arm": "17.5244",
+          "final_net_profit_lock_5": "6.5259",
+          "delta_vs_frozen": "-10.9985",
+          "B_peak_executable_floor": "17.0244",
+          "A_peak_mark_to_market": "17.2744",
+          "A_marked_5_but_NOT_lockable": false,
+          "peak_directional_contracts": "25"
+        },
+        {
+          "window": "2345z",
+          "lock_became_executable": false,
+          "first_lock_t": null,
+          "tte_at_lock_s": null,
+          "inventory_at_lock": null,
+          "lock_via": null,
+          "orders_cancelled_at_lock": 0,
+          "guaranteed_net_at_lock": null,
+          "final_net_frozen_arm": "-0.5028",
+          "final_net_profit_lock_5": "-0.5028",
+          "delta_vs_frozen": "0.0000",
+          "B_peak_executable_floor": "0.0000",
+          "A_peak_mark_to_market": "0.5000",
+          "A_marked_5_but_NOT_lockable": false,
+          "peak_directional_contracts": "50"
         }
       ],
       "thresholds": {
         "2": {
-          "lock_hit_rate": "10 of 14",
+          "lock_hit_rate": "11 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "6.8407",
-            "passive_matched_gross": "-3.2686",
-            "matched_gross": "3.5722",
-            "fees": "0.4237",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "3.1484",
-            "expected_maker_rebate": "0.4000",
-            "shadow_modeled_net_including_expected_rebate": "3.5484"
+            "ec_matched_gross": "6.2967",
+            "passive_matched_gross": "-3.0207",
+            "matched_gross": "3.2760",
+            "fees": "0.4286",
+            "residual_pnl": "0.0565",
+            "shadow_trading_net": "2.9039",
+            "expected_maker_rebate": "0.3919",
+            "shadow_modeled_net_including_expected_rebate": "3.2958"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "3.1484",
+            "n": 16,
+            "mean": "2.9039",
             "median": "2.2262",
-            "trimmed_mean_drop_1_each_end": "1.8636",
-            "positive_window_rate": "10 of 14",
+            "trimmed_mean_drop_1_each_end": "1.7677",
+            "positive_window_rate": "11 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-5.2943"
@@ -399,12 +440,13 @@
               "window": "2300z",
               "value": "27.0088"
             },
-            "best_window_share_of_total_pnl": "0.6127",
-            "mean_excluding_best_window": "1.3130",
+            "best_window_share_of_total_pnl": "0.5813",
+            "mean_excluding_best_window": "1.2969",
             "all_values_sorted": [
               "-5.2943",
               "-3.8181",
               "-2.0140",
+              "-0.5028",
               "-0.0344",
               "2.0000",
               "2.0060",
@@ -412,36 +454,37 @@
               "2.3241",
               "2.5684",
               "2.8163",
+              "2.8875",
               "4.1460",
               "4.7512",
               "5.4898",
               "27.0088"
             ],
-            "lock_hit_rate": "10 of 14"
+            "lock_hit_rate": "11 of 16"
           },
-          "usd_per_locked_window": "5.5239",
+          "usd_per_locked_window": "5.2842",
           "worst_window": "-5.2943",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "80.85"
+          "mean_matched_throughput_contracts": "84.80"
         },
         "3": {
-          "lock_hit_rate": "10 of 14",
+          "lock_hit_rate": "11 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "7.5655",
-            "passive_matched_gross": "-3.1392",
-            "matched_gross": "4.4263",
-            "fees": "0.5791",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "3.8471",
-            "expected_maker_rebate": "0.4000",
-            "shadow_modeled_net_including_expected_rebate": "4.2471"
+            "ec_matched_gross": "7.0871",
+            "passive_matched_gross": "-2.9076",
+            "matched_gross": "4.1796",
+            "fees": "0.5915",
+            "residual_pnl": "0.0565",
+            "shadow_trading_net": "3.6446",
+            "expected_maker_rebate": "0.3919",
+            "shadow_modeled_net_including_expected_rebate": "4.0364"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "3.8471",
+            "n": 16,
+            "mean": "3.6446",
             "median": "3.8155",
-            "trimmed_mean_drop_1_each_end": "2.6788",
-            "positive_window_rate": "10 of 14",
+            "trimmed_mean_drop_1_each_end": "2.6142",
+            "positive_window_rate": "11 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-5.2943"
@@ -450,12 +493,13 @@
               "window": "2300z",
               "value": "27.0088"
             },
-            "best_window_share_of_total_pnl": "0.5015",
-            "mean_excluding_best_window": "2.0655",
+            "best_window_share_of_total_pnl": "0.4632",
+            "mean_excluding_best_window": "2.0870",
             "all_values_sorted": [
               "-5.2943",
               "-3.8181",
               "-2.0140",
+              "-0.5028",
               "-0.0344",
               "3.1518",
               "3.2117",
@@ -465,34 +509,35 @@
               "4.6340",
               "4.7512",
               "4.8267",
+              "4.9559",
               "5.4898",
               "27.0088"
             ],
-            "lock_hit_rate": "10 of 14"
+            "lock_hit_rate": "11 of 16"
           },
-          "usd_per_locked_window": "6.5021",
+          "usd_per_locked_window": "6.3615",
           "worst_window": "-5.2943",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "93.02"
+          "mean_matched_throughput_contracts": "97.02"
         },
         "4": {
-          "lock_hit_rate": "9 of 14",
+          "lock_hit_rate": "10 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "7.6905",
-            "passive_matched_gross": "-2.7071",
-            "matched_gross": "4.9834",
-            "fees": "0.6136",
-            "residual_pnl": "-0.5214",
-            "shadow_trading_net": "3.8484",
-            "expected_maker_rebate": "0.4000",
-            "shadow_modeled_net_including_expected_rebate": "4.2484"
+            "ec_matched_gross": "7.1965",
+            "passive_matched_gross": "-2.5294",
+            "matched_gross": "4.6671",
+            "fees": "0.6217",
+            "residual_pnl": "-0.3997",
+            "shadow_trading_net": "3.6457",
+            "expected_maker_rebate": "0.3919",
+            "shadow_modeled_net_including_expected_rebate": "4.0375"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "3.8484",
+            "n": 16,
+            "mean": "3.6457",
             "median": "4.2309",
-            "trimmed_mean_drop_1_each_end": "2.6803",
-            "positive_window_rate": "9 of 14",
+            "trimmed_mean_drop_1_each_end": "2.6154",
+            "positive_window_rate": "10 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-5.2943"
@@ -501,12 +546,13 @@
               "window": "2300z",
               "value": "27.0088"
             },
-            "best_window_share_of_total_pnl": "0.5013",
-            "mean_excluding_best_window": "2.0668",
+            "best_window_share_of_total_pnl": "0.4630",
+            "mean_excluding_best_window": "2.0881",
             "all_values_sorted": [
               "-5.2943",
               "-3.8181",
               "-2.0140",
+              "-0.5028",
               "-0.0344",
               "0.0000",
               "4.0593",
@@ -515,35 +561,36 @@
               "4.6340",
               "4.7512",
               "4.8267",
+              "4.9559",
               "5.4898",
               "5.8068",
               "27.0088"
             ],
-            "lock_hit_rate": "9 of 14"
+            "lock_hit_rate": "10 of 16"
           },
-          "usd_per_locked_window": "7.2265",
+          "usd_per_locked_window": "6.9994",
           "worst_window": "-5.2943",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "98.38"
+          "mean_matched_throughput_contracts": "101.71"
         },
         "5": {
-          "lock_hit_rate": "8 of 14",
+          "lock_hit_rate": "9 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "7.9465",
-            "passive_matched_gross": "-3.9095",
-            "matched_gross": "4.0370",
-            "fees": "0.6360",
-            "residual_pnl": "-0.5214",
-            "shadow_trading_net": "2.8795",
-            "expected_maker_rebate": "0.4000",
-            "shadow_modeled_net_including_expected_rebate": "3.2795"
+            "ec_matched_gross": "7.5455",
+            "passive_matched_gross": "-3.5815",
+            "matched_gross": "3.9639",
+            "fees": "0.6682",
+            "residual_pnl": "-0.3997",
+            "shadow_trading_net": "2.8960",
+            "expected_maker_rebate": "0.3919",
+            "shadow_modeled_net_including_expected_rebate": "3.2879"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "2.8795",
+            "n": 16,
+            "mean": "2.8960",
             "median": "5.4226",
-            "trimmed_mean_drop_1_each_end": "2.3882",
-            "positive_window_rate": "8 of 14",
+            "trimmed_mean_drop_1_each_end": "2.4772",
+            "positive_window_rate": "9 of 16",
             "worst_window": {
               "window": "2030z",
               "value": "-15.3540"
@@ -552,13 +599,14 @@
               "window": "2300z",
               "value": "27.0088"
             },
-            "best_window_share_of_total_pnl": "0.6700",
-            "mean_excluding_best_window": "1.0234",
+            "best_window_share_of_total_pnl": "0.5829",
+            "mean_excluding_best_window": "1.2885",
             "all_values_sorted": [
               "-15.3540",
               "-5.2943",
               "-3.8181",
               "-2.0140",
+              "-0.5028",
               "-0.0344",
               "0.0000",
               "5.3553",
@@ -568,33 +616,34 @@
               "5.8068",
               "5.8738",
               "6.0684",
+              "6.5259",
               "27.0088"
             ],
-            "lock_hit_rate": "8 of 14"
+            "lock_hit_rate": "9 of 16"
           },
-          "usd_per_locked_window": "8.3535",
+          "usd_per_locked_window": "8.1504",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "107.31"
+          "mean_matched_throughput_contracts": "111.08"
         },
         "6": {
-          "lock_hit_rate": "7 of 14",
+          "lock_hit_rate": "8 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "9.0708",
-            "passive_matched_gross": "-3.6279",
-            "matched_gross": "5.4429",
-            "fees": "0.7332",
-            "residual_pnl": "-1.6214",
-            "shadow_trading_net": "3.0883",
-            "expected_maker_rebate": "0.4000",
-            "shadow_modeled_net_including_expected_rebate": "3.4883"
+            "ec_matched_gross": "8.5292",
+            "passive_matched_gross": "-3.3351",
+            "matched_gross": "5.1941",
+            "fees": "0.7532",
+            "residual_pnl": "-1.3622",
+            "shadow_trading_net": "3.0787",
+            "expected_maker_rebate": "0.3919",
+            "shadow_modeled_net_including_expected_rebate": "3.4705"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "3.0883",
+            "n": 16,
+            "mean": "3.0787",
             "median": "3.0302",
-            "trimmed_mean_drop_1_each_end": "2.6317",
-            "positive_window_rate": "7 of 14",
+            "trimmed_mean_drop_1_each_end": "2.6860",
+            "positive_window_rate": "8 of 16",
             "worst_window": {
               "window": "2030z",
               "value": "-15.3540"
@@ -603,49 +652,51 @@
               "window": "2300z",
               "value": "27.0088"
             },
-            "best_window_share_of_total_pnl": "0.6247",
-            "mean_excluding_best_window": "1.2482",
+            "best_window_share_of_total_pnl": "0.5483",
+            "mean_excluding_best_window": "1.4833",
             "all_values_sorted": [
               "-15.3540",
               "-5.2943",
               "-3.8181",
               "-2.0965",
               "-2.0140",
+              "-0.5028",
               "-0.0344",
               "0.0000",
               "6.0603",
               "6.0684",
               "6.1608",
               "6.1844",
+              "6.5259",
               "7.2683",
               "13.0958",
               "27.0088"
             ],
-            "lock_hit_rate": "7 of 14"
+            "lock_hit_rate": "8 of 16"
           },
-          "usd_per_locked_window": "10.2638",
+          "usd_per_locked_window": "9.7966",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "116.24"
+          "mean_matched_throughput_contracts": "118.90"
         },
         "7.5": {
-          "lock_hit_rate": "5 of 14",
+          "lock_hit_rate": "6 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "9.0708",
-            "passive_matched_gross": "-3.0588",
-            "matched_gross": "6.0120",
-            "fees": "0.7997",
-            "residual_pnl": "-3.1036",
-            "shadow_trading_net": "2.1087",
-            "expected_maker_rebate": "0.4000",
-            "shadow_modeled_net_including_expected_rebate": "2.5087"
+            "ec_matched_gross": "8.6230",
+            "passive_matched_gross": "-2.8371",
+            "matched_gross": "5.7858",
+            "fees": "0.8386",
+            "residual_pnl": "-2.6591",
+            "shadow_trading_net": "2.2882",
+            "expected_maker_rebate": "0.3919",
+            "shadow_modeled_net_including_expected_rebate": "2.6800"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "2.1087",
+            "n": 16,
+            "mean": "2.2882",
             "median": "-0.0172",
-            "trimmed_mean_drop_1_each_end": "1.4889",
-            "positive_window_rate": "6 of 14",
+            "trimmed_mean_drop_1_each_end": "1.7825",
+            "positive_window_rate": "7 of 16",
             "worst_window": {
               "window": "2030z",
               "value": "-15.3540"
@@ -654,8 +705,8 @@
               "window": "2300z",
               "value": "27.0088"
             },
-            "best_window_share_of_total_pnl": "0.9149",
-            "mean_excluding_best_window": "0.1933",
+            "best_window_share_of_total_pnl": "0.7377",
+            "mean_excluding_best_window": "0.6401",
             "all_values_sorted": [
               "-15.3540",
               "-12.1897",
@@ -663,40 +714,42 @@
               "-3.8181",
               "-2.0965",
               "-2.0140",
+              "-0.5028",
               "-0.0344",
               "0.0000",
               "5.6844",
+              "7.5917",
               "7.7016",
               "8.1936",
               "8.6384",
               "13.0958",
               "27.0088"
             ],
-            "lock_hit_rate": "5 of 14"
+            "lock_hit_rate": "6 of 16"
           },
-          "usd_per_locked_window": "12.9276",
+          "usd_per_locked_window": "12.0383",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "121.60"
+          "mean_matched_throughput_contracts": "125.15"
         },
         "10": {
-          "lock_hit_rate": "3 of 14",
+          "lock_hit_rate": "4 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "9.9502",
-            "passive_matched_gross": "-4.3579",
-            "matched_gross": "5.5924",
-            "fees": "0.7650",
-            "residual_pnl": "-3.0232",
-            "shadow_trading_net": "1.8042",
-            "expected_maker_rebate": "0.4000",
-            "shadow_modeled_net_including_expected_rebate": "2.2042"
+            "ec_matched_gross": "9.6269",
+            "passive_matched_gross": "-3.9739",
+            "matched_gross": "5.6530",
+            "fees": "0.8262",
+            "residual_pnl": "-2.5888",
+            "shadow_trading_net": "2.2380",
+            "expected_maker_rebate": "0.3919",
+            "shadow_modeled_net_including_expected_rebate": "2.6299"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "1.8042",
-            "median": "-0.8666",
-            "trimmed_mean_drop_1_each_end": "1.1336",
-            "positive_window_rate": "5 of 14",
+            "n": 16,
+            "mean": "2.2380",
+            "median": "-0.2686",
+            "trimmed_mean_drop_1_each_end": "1.7253",
+            "positive_window_rate": "6 of 16",
             "worst_window": {
               "window": "2030z",
               "value": "-15.3540"
@@ -705,8 +758,8 @@
               "window": "2300z",
               "value": "27.0088"
             },
-            "best_window_share_of_total_pnl": "1.0693",
-            "mean_excluding_best_window": "-0.1347",
+            "best_window_share_of_total_pnl": "0.7543",
+            "mean_excluding_best_window": "0.5867",
             "all_values_sorted": [
               "-15.3540",
               "-12.1897",
@@ -715,40 +768,42 @@
               "-2.0965",
               "-2.0140",
               "-1.6988",
+              "-0.5028",
               "-0.0344",
               "0.0000",
               "5.6844",
               "8.7683",
+              "11.0534",
               "13.0958",
               "13.2006",
               "27.0088"
             ],
-            "lock_hit_rate": "3 of 14"
+            "lock_hit_rate": "4 of 16"
           },
-          "usd_per_locked_window": "17.7684",
+          "usd_per_locked_window": "16.0896",
           "worst_window": "-15.3540",
           "max_peak_directional_contracts": "50",
-          "mean_matched_throughput_contracts": "125.17"
+          "mean_matched_throughput_contracts": "129.83"
         }
       }
     },
     "50": {
       "frozen_arm_waterfall": {
-        "ec_matched_gross": "20.8713",
-        "passive_matched_gross": "-9.9877",
-        "matched_gross": "10.8836",
-        "fees": "1.5385",
-        "residual_pnl": "-6.0464",
-        "shadow_trading_net": "3.2987",
-        "expected_maker_rebate": "0.7957",
-        "shadow_modeled_net_including_expected_rebate": "4.0944"
+        "ec_matched_gross": "20.8808",
+        "passive_matched_gross": "-9.0607",
+        "matched_gross": "11.8201",
+        "fees": "1.6949",
+        "residual_pnl": "-5.1150",
+        "shadow_trading_net": "5.0101",
+        "expected_maker_rebate": "0.7788",
+        "shadow_modeled_net_including_expected_rebate": "5.7888"
       },
       "frozen_arm_distribution": {
-        "n": 14,
-        "mean": "3.2987",
-        "median": "-1.8035",
-        "trimmed_mean_drop_1_each_end": "1.9595",
-        "positive_window_rate": "5 of 14",
+        "n": 16,
+        "mean": "5.0101",
+        "median": "-0.5692",
+        "trimmed_mean_drop_1_each_end": "4.1067",
+        "positive_window_rate": "6 of 16",
         "worst_window": {
           "window": "2030z",
           "value": "-30.8152"
@@ -757,8 +812,8 @@
           "window": "2300z",
           "value": "53.4832"
         },
-        "best_window_share_of_total_pnl": "1.1581",
-        "mean_excluding_best_window": "-0.5616",
+        "best_window_share_of_total_pnl": "0.6672",
+        "mean_excluding_best_window": "1.7785",
         "all_values_sorted": [
           "-30.8152",
           "-24.3793",
@@ -767,32 +822,34 @@
           "-4.3004",
           "-4.1930",
           "-3.5383",
+          "-1.0696",
           "-0.0688",
           "0.0000",
           "10.7714",
           "17.2408",
           "23.9640",
           "26.3065",
+          "35.0488",
           "53.4832"
         ],
-        "lock_hit_rate": "0 of 14"
+        "lock_hit_rate": "0 of 16"
       },
       "profit_lock_5_waterfall": {
-        "ec_matched_gross": "14.8371",
-        "passive_matched_gross": "-6.6085",
-        "matched_gross": "8.2286",
-        "fees": "1.1677",
-        "residual_pnl": "0.0000",
-        "shadow_trading_net": "7.0609",
-        "expected_maker_rebate": "0.7957",
-        "shadow_modeled_net_including_expected_rebate": "7.8567"
+        "ec_matched_gross": "13.6008",
+        "passive_matched_gross": "-6.1039",
+        "matched_gross": "7.4969",
+        "fees": "1.1376",
+        "residual_pnl": "0.1131",
+        "shadow_trading_net": "6.4724",
+        "expected_maker_rebate": "0.7788",
+        "shadow_modeled_net_including_expected_rebate": "7.2512"
       },
       "profit_lock_5_distribution": {
-        "n": 14,
-        "mean": "7.0609",
-        "median": "6.1573",
-        "trimmed_mean_drop_1_each_end": "4.6240",
-        "positive_window_rate": "10 of 14",
+        "n": 16,
+        "mean": "6.4724",
+        "median": "5.8330",
+        "trimmed_mean_drop_1_each_end": "4.2995",
+        "positive_window_rate": "11 of 16",
         "worst_window": {
           "window": "2245z",
           "value": "-10.6526"
@@ -801,15 +858,17 @@
           "window": "2300z",
           "value": "54.0176"
         },
-        "best_window_share_of_total_pnl": "0.5464",
-        "mean_excluding_best_window": "3.4489",
+        "best_window_share_of_total_pnl": "0.5216",
+        "mean_excluding_best_window": "3.3027",
         "all_values_sorted": [
           "-10.6526",
           "-7.6362",
           "-4.3004",
+          "-1.0696",
           "-0.0688",
           "5.1496",
           "5.6326",
+          "5.7750",
           "5.8911",
           "6.4235",
           "6.9699",
@@ -819,17 +878,17 @@
           "10.6838",
           "54.0176"
         ],
-        "lock_hit_rate": "10 of 14"
+        "lock_hit_rate": "11 of 16"
       },
       "complement_bias_2c_waterfall": {
-        "ec_matched_gross": "20.6200",
-        "passive_matched_gross": "-9.9507",
-        "matched_gross": "10.6693",
-        "fees": "1.4773",
-        "residual_pnl": "-6.0464",
-        "shadow_trading_net": "3.1456",
-        "expected_maker_rebate": "0.7957",
-        "shadow_modeled_net_including_expected_rebate": "3.9413"
+        "ec_matched_gross": "20.8316",
+        "passive_matched_gross": "-8.9217",
+        "matched_gross": "11.9099",
+        "fees": "1.6500",
+        "residual_pnl": "-5.1461",
+        "shadow_trading_net": "5.1138",
+        "expected_maker_rebate": "0.7788",
+        "shadow_modeled_net_including_expected_rebate": "5.8926"
       },
       "exposure": {
         "frozen_max_peak_contracts": "100",
@@ -1104,27 +1163,64 @@
           "A_peak_mark_to_market": "6.2500",
           "A_marked_5_but_NOT_lockable": false,
           "peak_directional_contracts": "100"
+        },
+        {
+          "window": "2330z",
+          "lock_became_executable": true,
+          "first_lock_t": "2026-09-27T23:37:10.007368+00:00",
+          "tte_at_lock_s": 470.0,
+          "inventory_at_lock": {
+            "up": "0",
+            "down": "0"
+          },
+          "lock_via": "HOLD",
+          "orders_cancelled_at_lock": 0,
+          "guaranteed_net_at_lock": "5.7750",
+          "final_net_frozen_arm": "35.0488",
+          "final_net_profit_lock_5": "5.7750",
+          "delta_vs_frozen": "-29.2738",
+          "B_peak_executable_floor": "34.0488",
+          "A_peak_mark_to_market": "34.5488",
+          "A_marked_5_but_NOT_lockable": false,
+          "peak_directional_contracts": "50"
+        },
+        {
+          "window": "2345z",
+          "lock_became_executable": false,
+          "first_lock_t": null,
+          "tte_at_lock_s": null,
+          "inventory_at_lock": null,
+          "lock_via": null,
+          "orders_cancelled_at_lock": 0,
+          "guaranteed_net_at_lock": null,
+          "final_net_frozen_arm": "-1.0696",
+          "final_net_profit_lock_5": "-1.0696",
+          "delta_vs_frozen": "0.0000",
+          "B_peak_executable_floor": "0.0000",
+          "A_peak_mark_to_market": "1.0000",
+          "A_marked_5_but_NOT_lockable": false,
+          "peak_directional_contracts": "100"
         }
       ],
       "thresholds": {
         "2": {
-          "lock_hit_rate": "12 of 14",
+          "lock_hit_rate": "13 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "7.2882",
-            "passive_matched_gross": "-3.1391",
-            "matched_gross": "4.1490",
-            "fees": "0.6529",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "3.4962",
-            "expected_maker_rebate": "0.7957",
-            "shadow_modeled_net_including_expected_rebate": "4.2919"
+            "ec_matched_gross": "6.7767",
+            "passive_matched_gross": "-3.0681",
+            "matched_gross": "3.7086",
+            "fees": "0.6336",
+            "residual_pnl": "0.1131",
+            "shadow_trading_net": "3.1880",
+            "expected_maker_rebate": "0.7788",
+            "shadow_modeled_net_including_expected_rebate": "3.9668"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "3.4962",
+            "n": 16,
+            "mean": "3.1880",
             "median": "2.7665",
-            "trimmed_mean_drop_1_each_end": "3.5469",
-            "positive_window_rate": "12 of 14",
+            "trimmed_mean_drop_1_each_end": "3.1875",
+            "positive_window_rate": "13 of 16",
             "worst_window": {
               "window": "1915z",
               "value": "-4.3004"
@@ -1133,10 +1229,11 @@
               "window": "2215z",
               "value": "10.6838"
             },
-            "best_window_share_of_total_pnl": "0.2183",
-            "mean_excluding_best_window": "2.9433",
+            "best_window_share_of_total_pnl": "0.2095",
+            "mean_excluding_best_window": "2.6883",
             "all_values_sorted": [
               "-4.3004",
+              "-1.0696",
               "-0.0688",
               "2.0000",
               "2.1326",
@@ -1144,6 +1241,7 @@
               "2.5000",
               "2.5330",
               "3.0000",
+              "3.1312",
               "4.0000",
               "4.6483",
               "4.9961",
@@ -1151,31 +1249,31 @@
               "8.9049",
               "10.6838"
             ],
-            "lock_hit_rate": "12 of 14"
+            "lock_hit_rate": "13 of 16"
           },
-          "usd_per_locked_window": "4.4430",
+          "usd_per_locked_window": "4.3421",
           "worst_window": "-4.3004",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "114.78"
+          "mean_matched_throughput_contracts": "125.43"
         },
         "3": {
-          "lock_hit_rate": "10 of 14",
+          "lock_hit_rate": "11 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "9.2230",
-            "passive_matched_gross": "-5.9200",
-            "matched_gross": "3.3031",
-            "fees": "0.8312",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "2.4718",
-            "expected_maker_rebate": "0.7957",
-            "shadow_modeled_net_including_expected_rebate": "3.2675"
+            "ec_matched_gross": "8.4697",
+            "passive_matched_gross": "-5.5014",
+            "matched_gross": "2.9683",
+            "fees": "0.7897",
+            "residual_pnl": "0.1131",
+            "shadow_trading_net": "2.2917",
+            "expected_maker_rebate": "0.7788",
+            "shadow_modeled_net_including_expected_rebate": "3.0704"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "2.4718",
-            "median": "3.8984",
-            "trimmed_mean_drop_1_each_end": "2.8812",
-            "positive_window_rate": "10 of 14",
+            "n": 16,
+            "mean": "2.2917",
+            "median": "3.6064",
+            "trimmed_mean_drop_1_each_end": "2.6168",
+            "positive_window_rate": "11 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-10.6526"
@@ -1184,14 +1282,16 @@
               "window": "2215z",
               "value": "10.6838"
             },
-            "best_window_share_of_total_pnl": "0.3087",
-            "mean_excluding_best_window": "1.8401",
+            "best_window_share_of_total_pnl": "0.2914",
+            "mean_excluding_best_window": "1.7322",
             "all_values_sorted": [
               "-10.6526",
               "-7.6362",
               "-4.3004",
+              "-1.0696",
               "-0.0688",
               "3.0000",
+              "3.1312",
               "3.4161",
               "3.7967",
               "4.0000",
@@ -1202,31 +1302,31 @@
               "8.9049",
               "10.6838"
             ],
-            "lock_hit_rate": "10 of 14"
+            "lock_hit_rate": "11 of 16"
           },
-          "usd_per_locked_window": "5.7263",
+          "usd_per_locked_window": "5.4904",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "150.49"
+          "mean_matched_throughput_contracts": "156.68"
         },
         "4": {
-          "lock_hit_rate": "10 of 14",
+          "lock_hit_rate": "11 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "13.9041",
-            "passive_matched_gross": "-6.8184",
-            "matched_gross": "7.0857",
-            "fees": "0.8898",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "6.1959",
-            "expected_maker_rebate": "0.7957",
-            "shadow_modeled_net_including_expected_rebate": "6.9916"
+            "ec_matched_gross": "12.7844",
+            "passive_matched_gross": "-6.2875",
+            "matched_gross": "6.4969",
+            "fees": "0.8945",
+            "residual_pnl": "0.1131",
+            "shadow_trading_net": "5.7155",
+            "expected_maker_rebate": "0.7788",
+            "shadow_modeled_net_including_expected_rebate": "6.4943"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "6.1959",
+            "n": 16,
+            "mean": "5.7155",
             "median": "4.4525",
-            "trimmed_mean_drop_1_each_end": "3.6148",
-            "positive_window_rate": "10 of 14",
+            "trimmed_mean_drop_1_each_end": "3.4345",
+            "positive_window_rate": "11 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-10.6526"
@@ -1235,12 +1335,13 @@
               "window": "2300z",
               "value": "54.0176"
             },
-            "best_window_share_of_total_pnl": "0.6227",
-            "mean_excluding_best_window": "2.5173",
+            "best_window_share_of_total_pnl": "0.5907",
+            "mean_excluding_best_window": "2.4954",
             "all_values_sorted": [
               "-10.6526",
               "-7.6362",
               "-4.3004",
+              "-1.0696",
               "-0.0688",
               "4.0000",
               "4.0760",
@@ -1248,36 +1349,37 @@
               "4.6483",
               "4.9961",
               "5.6326",
+              "5.7750",
               "8.1848",
               "8.9049",
               "10.6838",
               "54.0176"
             ],
-            "lock_hit_rate": "10 of 14"
+            "lock_hit_rate": "11 of 16"
           },
-          "usd_per_locked_window": "10.9401",
+          "usd_per_locked_window": "10.4705",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "166.24"
+          "mean_matched_throughput_contracts": "173.58"
         },
         "5": {
-          "lock_hit_rate": "10 of 14",
+          "lock_hit_rate": "11 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "14.8371",
-            "passive_matched_gross": "-6.6085",
-            "matched_gross": "8.2286",
-            "fees": "1.1677",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "7.0609",
-            "expected_maker_rebate": "0.7957",
-            "shadow_modeled_net_including_expected_rebate": "7.8567"
+            "ec_matched_gross": "13.6008",
+            "passive_matched_gross": "-6.1039",
+            "matched_gross": "7.4969",
+            "fees": "1.1376",
+            "residual_pnl": "0.1131",
+            "shadow_trading_net": "6.4724",
+            "expected_maker_rebate": "0.7788",
+            "shadow_modeled_net_including_expected_rebate": "7.2512"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "7.0609",
-            "median": "6.1573",
-            "trimmed_mean_drop_1_each_end": "4.6240",
-            "positive_window_rate": "10 of 14",
+            "n": 16,
+            "mean": "6.4724",
+            "median": "5.8330",
+            "trimmed_mean_drop_1_each_end": "4.2995",
+            "positive_window_rate": "11 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-10.6526"
@@ -1286,15 +1388,17 @@
               "window": "2300z",
               "value": "54.0176"
             },
-            "best_window_share_of_total_pnl": "0.5464",
-            "mean_excluding_best_window": "3.4489",
+            "best_window_share_of_total_pnl": "0.5216",
+            "mean_excluding_best_window": "3.3027",
             "all_values_sorted": [
               "-10.6526",
               "-7.6362",
               "-4.3004",
+              "-1.0696",
               "-0.0688",
               "5.1496",
               "5.6326",
+              "5.7750",
               "5.8911",
               "6.4235",
               "6.9699",
@@ -1304,31 +1408,31 @@
               "10.6838",
               "54.0176"
             ],
-            "lock_hit_rate": "10 of 14"
+            "lock_hit_rate": "11 of 16"
           },
-          "usd_per_locked_window": "12.1511",
+          "usd_per_locked_window": "11.5715",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "184.10"
+          "mean_matched_throughput_contracts": "189.21"
         },
         "6": {
-          "lock_hit_rate": "10 of 14",
+          "lock_hit_rate": "11 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "14.8371",
-            "passive_matched_gross": "-5.8585",
-            "matched_gross": "8.9786",
-            "fees": "1.1601",
-            "residual_pnl": "0.0000",
-            "shadow_trading_net": "7.8185",
-            "expected_maker_rebate": "0.7957",
-            "shadow_modeled_net_including_expected_rebate": "8.6142"
+            "ec_matched_gross": "13.9133",
+            "passive_matched_gross": "-5.4476",
+            "matched_gross": "8.4657",
+            "fees": "1.1850",
+            "residual_pnl": "0.1131",
+            "shadow_trading_net": "7.3938",
+            "expected_maker_rebate": "0.7788",
+            "shadow_modeled_net_including_expected_rebate": "8.1726"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "7.8185",
+            "n": 16,
+            "mean": "7.3938",
             "median": "8.4082",
-            "trimmed_mean_drop_1_each_end": "5.5078",
-            "positive_window_rate": "10 of 14",
+            "trimmed_mean_drop_1_each_end": "5.3526",
+            "positive_window_rate": "11 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-10.6526"
@@ -1337,12 +1441,13 @@
               "window": "2300z",
               "value": "54.0176"
             },
-            "best_window_share_of_total_pnl": "0.4935",
-            "mean_excluding_best_window": "4.2647",
+            "best_window_share_of_total_pnl": "0.4566",
+            "mean_excluding_best_window": "4.2856",
             "all_values_sorted": [
               "-10.6526",
               "-7.6362",
               "-4.3004",
+              "-1.0696",
               "-0.0688",
               "6.4235",
               "6.9699",
@@ -1352,34 +1457,35 @@
               "9.1274",
               "9.5200",
               "9.6535",
+              "9.9118",
               "10.6838",
               "54.0176"
             ],
-            "lock_hit_rate": "10 of 14"
+            "lock_hit_rate": "11 of 16"
           },
-          "usd_per_locked_window": "13.2117",
+          "usd_per_locked_window": "12.9117",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "187.67"
+          "mean_matched_throughput_contracts": "195.46"
         },
         "7.5": {
-          "lock_hit_rate": "9 of 14",
+          "lock_hit_rate": "10 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "15.0871",
-            "passive_matched_gross": "-5.1728",
-            "matched_gross": "9.9143",
-            "fees": "1.1801",
-            "residual_pnl": "-1.0429",
-            "shadow_trading_net": "7.6914",
-            "expected_maker_rebate": "0.7957",
-            "shadow_modeled_net_including_expected_rebate": "8.4871"
+            "ec_matched_gross": "14.1321",
+            "passive_matched_gross": "-4.8476",
+            "matched_gross": "9.2844",
+            "fees": "1.2024",
+            "residual_pnl": "-0.7994",
+            "shadow_trading_net": "7.2826",
+            "expected_maker_rebate": "0.7788",
+            "shadow_modeled_net_including_expected_rebate": "8.0613"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "7.6914",
+            "n": 16,
+            "mean": "7.2826",
             "median": "8.7682",
-            "trimmed_mean_drop_1_each_end": "5.3595",
-            "positive_window_rate": "9 of 14",
+            "trimmed_mean_drop_1_each_end": "5.2255",
+            "positive_window_rate": "10 of 16",
             "worst_window": {
               "window": "2245z",
               "value": "-10.6526"
@@ -1388,12 +1494,13 @@
               "window": "2300z",
               "value": "54.0176"
             },
-            "best_window_share_of_total_pnl": "0.5017",
-            "mean_excluding_best_window": "4.1278",
+            "best_window_share_of_total_pnl": "0.4636",
+            "mean_excluding_best_window": "4.1669",
             "all_values_sorted": [
               "-10.6526",
               "-7.6362",
               "-4.3004",
+              "-1.0696",
               "-0.0688",
               "0.0000",
               "8.1848",
@@ -1402,35 +1509,36 @@
               "9.1274",
               "9.5200",
               "9.6535",
+              "9.9118",
               "10.6838",
               "11.6136",
               "54.0176"
             ],
-            "lock_hit_rate": "9 of 14"
+            "lock_hit_rate": "10 of 16"
           },
-          "usd_per_locked_window": "14.4819",
+          "usd_per_locked_window": "14.0249",
           "worst_window": "-10.6526",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "194.81"
+          "mean_matched_throughput_contracts": "201.71"
         },
         "10": {
-          "lock_hit_rate": "8 of 14",
+          "lock_hit_rate": "9 of 16",
           "waterfall_per_window": {
-            "ec_matched_gross": "16.3713",
-            "passive_matched_gross": "-7.5284",
-            "matched_gross": "8.8429",
-            "fees": "1.2739",
-            "residual_pnl": "-1.0429",
-            "shadow_trading_net": "6.5261",
-            "expected_maker_rebate": "0.7957",
-            "shadow_modeled_net_including_expected_rebate": "7.3218"
+            "ec_matched_gross": "15.5057",
+            "passive_matched_gross": "-6.9088",
+            "matched_gross": "8.5969",
+            "fees": "1.3383",
+            "residual_pnl": "-0.7994",
+            "shadow_trading_net": "6.4592",
+            "expected_maker_rebate": "0.7788",
+            "shadow_modeled_net_including_expected_rebate": "7.2380"
           },
           "distribution_shadow_trading_net": {
-            "n": 14,
-            "mean": "6.5261",
+            "n": 16,
+            "mean": "6.4592",
             "median": "10.6964",
-            "trimmed_mean_drop_1_each_end": "5.6802",
-            "positive_window_rate": "8 of 14",
+            "trimmed_mean_drop_1_each_end": "5.7246",
+            "positive_window_rate": "9 of 16",
             "worst_window": {
               "window": "2030z",
               "value": "-30.8152"
@@ -1439,13 +1547,14 @@
               "window": "2300z",
               "value": "54.0176"
             },
-            "best_window_share_of_total_pnl": "0.5912",
-            "mean_excluding_best_window": "2.8729",
+            "best_window_share_of_total_pnl": "0.5227",
+            "mean_excluding_best_window": "3.2887",
             "all_values_sorted": [
               "-30.8152",
               "-10.6526",
               "-7.6362",
               "-4.3004",
+              "-1.0696",
               "-0.0688",
               "0.0000",
               "10.6838",
@@ -1454,15 +1563,16 @@
               "11.1438",
               "11.6136",
               "11.9961",
+              "13.0518",
               "23.9640",
               "54.0176"
             ],
-            "lock_hit_rate": "8 of 14"
+            "lock_hit_rate": "9 of 16"
           },
-          "usd_per_locked_window": "18.1048",
+          "usd_per_locked_window": "17.5434",
           "worst_window": "-30.8152",
           "max_peak_directional_contracts": "100",
-          "mean_matched_throughput_contracts": "216.24"
+          "mean_matched_throughput_contracts": "223.58"
         }
       }
     }

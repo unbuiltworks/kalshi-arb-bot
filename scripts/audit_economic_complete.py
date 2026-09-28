@@ -174,7 +174,9 @@ USABLE = {'cpc-btc-updown-15m-2026-09-27-1830z': 'up',
           # 1.0000 != lastTradePx 0.9900. Verified by
           # scripts/pmus_completeness_rule.py, which applies the rule to
           # EVERY window mechanically and admits none by hand.
-          'cpc-btc-updown-15m-2026-09-27-2315z': 'up'}
+          'cpc-btc-updown-15m-2026-09-27-2315z': 'up',
+          'cpc-btc-updown-15m-2026-09-27-2330z': 'down',
+          'cpc-btc-updown-15m-2026-09-27-2345z': 'up'}
 
 #: excluded, with the reason, so an exclusion is never silent
 EXCLUDED = {

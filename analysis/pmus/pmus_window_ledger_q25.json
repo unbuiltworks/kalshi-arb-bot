@@ -34,7 +34,7 @@
     "clip_is_modeled_extrapolation": true,
     "extrapolation_multiple": "4.71"
   },
-  "n_usable": 14,
+  "n_usable": 16,
   "excluded": {
     "cpc-btc-updown-15m-2026-09-27-1815z": "collector started mid-window; 0 two-sided states",
     "cpc-btc-updown-15m-2026-09-27-2015z": "no terminal row on tape -- 54 bbo rows all MARKET_STATE_OPEN, last 20:29:55; the window was never observed through a terminal state, so it fails the preregistered completeness rule even though the venue later reported it settled DOWN",
@@ -282,6 +282,40 @@
       "shadow_trading_net": "0E-26",
       "expected_maker_rebate": "0.31",
       "shadow_modeled_net_including_expected_rebate": "0.31000000000000000000000000"
+    },
+    {
+      "window": "2330z",
+      "settlement": "down",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "25",
+      "residual_basis": "0.9800",
+      "residual_side": "down",
+      "matched_contracts": "200",
+      "ec_matched_gross": "19.7500",
+      "passive_matched_gross": "0.0000",
+      "matched_gross": "19.7500",
+      "fees": "2.725616250000",
+      "residual_pnl": "0.5000",
+      "shadow_trading_net": "17.524383750000",
+      "expected_maker_rebate": "0.49",
+      "shadow_modeled_net_including_expected_rebate": "18.014383750000"
+    },
+    {
+      "window": "2345z",
+      "settlement": "up",
+      "terminal_residual_occurred": true,
+      "residual_contracts": "25.0000",
+      "residual_basis": "0.9638",
+      "residual_side": "up",
+      "matched_contracts": "25.0000",
+      "ec_matched_gross": "1.22666666666666666666666667",
+      "passive_matched_gross": "-2.57142857142857142857142860",
+      "matched_gross": "-1.34476190476190476190476193",
+      "fees": "0.0628419000000000",
+      "residual_pnl": "0.90476190476190476190476190",
+      "shadow_trading_net": "-0.50284190000000000000000003",
+      "expected_maker_rebate": "0.18",
+      "shadow_modeled_net_including_expected_rebate": "-0.32284190000000000000000003"
     }
   ],
   "rolling": {
@@ -370,33 +404,84 @@
         0.6032
       ]
     },
-    "n=15": "NOT YET AVAILABLE (14 of 15 windows)",
-    "n=20": "NOT YET AVAILABLE (14 of 20 windows)",
-    "n=25": "NOT YET AVAILABLE (14 of 25 windows)"
+    "n=15": {
+      "ec_matched_gross": "11.2494",
+      "passive_matched_gross": "-4.7119",
+      "matched_gross": "6.5375",
+      "fees": "0.9173",
+      "residual_pnl": "-2.7883",
+      "shadow_trading_net": "2.8319",
+      "expected_maker_rebate": "0.4060",
+      "shadow_modeled_net_including_expected_rebate": "3.2379",
+      "distribution_shadow_trading_net": {
+        "n": 15,
+        "mean": "2.8319",
+        "median": "-0.0344",
+        "trimmed_mean_drop_1_each_end": "2.3916",
+        "positive_window_rate": "6 of 15",
+        "worst_window": {
+          "window": "2030z",
+          "value": "-15.3540"
+        },
+        "best_window": {
+          "window": "2300z",
+          "value": "26.7416"
+        },
+        "best_window_share_of_total_pnl": "0.6295",
+        "mean_excluding_best_window": "1.1241",
+        "all_values_sorted": [
+          "-15.3540",
+          "-12.1897",
+          "-5.2943",
+          "-3.8181",
+          "-2.0965",
+          "-2.0140",
+          "-1.6988",
+          "-0.0344",
+          "0.0000",
+          "5.6844",
+          "8.7683",
+          "13.0958",
+          "13.1636",
+          "17.5244",
+          "26.7416"
+        ]
+      },
+      "residual_events": "6 of 15",
+      "residual_frequency": 0.4,
+      "wilson95": [
+        0.1982,
+        0.6425
+      ]
+    },
+    "n=20": "NOT YET AVAILABLE (16 of 20 windows)",
+    "n=25": "NOT YET AVAILABLE (16 of 25 windows)"
   },
   "residual_statistics": {
-    "events": "5 of 14",
-    "frequency": 0.3571,
+    "events": "7 of 16",
+    "frequency": 0.4375,
     "wilson95": [
-      0.1634,
-      0.6124
+      0.231,
+      0.6682
     ],
     "per_episode_pnl": [
       "-20.2500",
       "-15.4000",
       "-0.50000000",
       "1.12500000",
-      "-7.3000"
+      "-7.3000",
+      "0.5000",
+      "0.90476190476190476190476190"
     ],
-    "mean_episode_pnl": "-8.4650",
-    "episode_pnl_per_window": "-3.0232",
+    "mean_episode_pnl": "-5.8457",
+    "episode_pnl_per_window": "-2.5575",
     "episodes_that_lost": 4,
-    "episodes_that_won": 1
+    "episodes_that_won": 3
   },
   "p0_thresholds": {
-    "net_before_residual": "5.2056",
-    "break_even_residual_frequency": "0.6150",
-    "target_frequency_for_plus_5": "0.0243",
+    "net_before_residual": "5.5729",
+    "break_even_residual_frequency": "0.9533",
+    "target_frequency_for_plus_5": "0.0980",
     "note": "break-even and target use the OBSERVED SIGNED mean episode P&L, which from n=11 includes one winning residual (2215z, +2.25). A winner raises the mean and therefore RAISES break-even frequency, so this number must not be read as a severity. The mean itself is uncertain at this n."
   }
 }
