@@ -1,0 +1,154 @@
+{
+  "envelope": {
+    "artifact_commit": "e7178999085bb7840ee26df5c1c9656e367d487e",
+    "captured_from": "Railway deploy log, service l5-live-probe-oneshot",
+    "deploymentId": "5cbadb2e-ef48-4629-a827-409cf7614dd0",
+    "environmentId": "f3642d27-26dc-4e21-9170-bc76290c076f",
+    "log_timestamp": "2026-09-28T16:13:34.621235358Z",
+    "note": "verbatim stdout report, extracted programmatically; not transcribed",
+    "project": "50fb7357-e2bc-4d04-a49e-71eb5d73b0d1",
+    "serviceId": "84aa9999-6d7a-4980-9a87-96694d8178dd"
+  },
+  "report": {
+    "LABEL": "LIVE_BOUNDED_PROBE",
+    "account_matches_expected": true,
+    "api_key_fingerprint": "d51b44a3fa83",
+    "armed": true,
+    "authorization": {
+      "claimed": true,
+      "consumed": true,
+      "ledger": "/state/pmus-ws/rungA_20260928_1600z_auth.jsonl",
+      "market": "cpc-btc-updown-15m-2026-09-28-1600z",
+      "session_id_present": true
+    },
+    "book_feed": {
+      "book_states": 2000,
+      "connected": false,
+      "errors": [
+        "ConnectionClosedOK: received 1001 (going away) server shutting down; then sent 1001 (going away) server shutting down"
+      ],
+      "frames": 11185,
+      "fresh": false,
+      "last_book_age_s": 212.662,
+      "market": "cpc-btc-updown-15m-2026-09-28-1600z",
+      "source": "AUTHENTICATED_WS",
+      "stop_reason": "exception:ConnectionClosedOK"
+    },
+    "close_out": {
+      "cancel_errors": [],
+      "cancel_skipped_terminal": [],
+      "cancelled": [],
+      "live_orders_not_this_session": [],
+      "order_progress": [],
+      "orders_uncertain": null,
+      "reconciliation": {
+        "authority": "VENUE",
+        "drift": {},
+        "gross_before": {},
+        "gross_detail_lost": [],
+        "gross_net_agrees": {},
+        "labels_inventory": "the venue reports a NET position; our book is GROSS. Where they agree the matched pair is preserved. Where they disagree the venue's net becomes the position of record and the market is named in gross_detail_lost, because a matched pair silently deleted is a locked economic result silently deleted.",
+        "labels_pending": "an order absent from the venue's open orders is terminal there, which includes FILLED. It is not released until an authoritative /v1/order read books its final cumQuantity, because releasing it unbooked is how 2.25 DOWN shares arrived at 2045z with no cost. An order that was never ACKed has no id to ask by and is released instead; if it did fill, the shares arrive without a cost basis and the book fails closed.",
+        "live_orders_adopted": [],
+        "live_orders_pending_terminal": [],
+        "live_orders_released_unacked": [],
+        "open_orders_at_venue": 0,
+        "pending_terminal_returned": [],
+        "pending_terminal_total": 0,
+        "quarantined": [],
+        "reconciled": true,
+        "uncertainty_cleared": true,
+        "venue_net": {}
+      }
+    },
+    "expected_account": "d51b44a3fa83",
+    "fees_from_venue": {},
+    "filled": 0,
+    "filled_at_ack": 0,
+    "filled_at_venue": 0,
+    "fills_excluded_prior_sessions": [],
+    "fills_from_venue": {},
+    "inventory": {
+      "committed_usd": "0",
+      "dn": "0",
+      "live_orders": 0,
+      "outstanding_usd": "0",
+      "residual": "0",
+      "up": "0"
+    },
+    "l5_actions": 92,
+    "l5_feed": {
+      "admitted_tokens": {
+        "24890945030109745134374300034847385187746273593169385158690601609867282615347": 55,
+        "99340492058248224889871267367603607758406726300628428496476220698064311201558": 37
+      },
+      "distinct_admitted": 92,
+      "distinct_identity_refused": 0,
+      "foreign_tokens_admitted": 0,
+      "healthy": false,
+      "identity_reasons": {},
+      "identity_refused": 0,
+      "last_error": "activity feed returned None",
+      "last_ok_utc": "2026-09-28T16:13:28.018330+00:00",
+      "market_binding": {
+        "condition_id": "0x1f9a5d3b9bec5ccf71a45db038b46edfd22616637704d889b33c1bc6e3b2651d",
+        "question": "Bitcoin Up or Down - September 28, 12:00PM-12:15PM ET",
+        "slug": "btc-updown-15m-1790611200",
+        "token_down": "24890945030109745134374300034847385187746273593169385158690601609867282615347",
+        "token_up": "99340492058248224889871267367603607758406726300628428496476220698064311201558",
+        "window_end": 1790612100,
+        "window_start": 1790611200
+      },
+      "new_actions": 92,
+      "polls": 151,
+      "polls_failed": 1,
+      "polls_ok": 150,
+      "raw_rows": 15000,
+      "rejected_tokens": {},
+      "rows_in_window": 5258
+    },
+    "labels": "submitted, filled and settled are distinct. Nothing here is realized: realization requires a settlement value from the venue after the market resolves.",
+    "live_limits": {
+      "band": null,
+      "daily_realized_loss_halt_usd": "1.00",
+      "max_abs_residual": "1.00",
+      "max_concurrent_markets": 1,
+      "max_live_orders": 8,
+      "max_total_exposure_usd": "1.00",
+      "max_usd_per_market": "1.00",
+      "monetary_authority": "PMUS_LIVE_MANDATE"
+    },
+    "maker_only": true,
+    "maker_treatment": false,
+    "market": "cpc-btc-updown-15m-2026-09-28-1600z",
+    "monetary_authority": "PMUS_LIVE_MANDATE",
+    "paired": {
+      "authoritative_cash_pnl": null,
+      "complete": true,
+      "intended_actions": 0,
+      "label": "SETTLED/REALIZED only where authoritative_cash_pnl is set",
+      "market": "cpc-btc-updown-15m-2026-09-28-1600z",
+      "reconciled_filled_qty": "0",
+      "shadow_fill_confirmation_rate": null,
+      "shadow_fill_treatment": "queue_aware",
+      "shadow_fills_confirmed_live": 0,
+      "shadow_fills_counted": 0,
+      "submitted_qty": "0",
+      "unresolved": [],
+      "verdicts": {},
+      "window": "cpc-btc-updown-15m-2026-09-28-1600z"
+    },
+    "preflight": "PASSED",
+    "realized": "NOT_REALIZED",
+    "refused_reason": {
+      "MAKER_ONLY_NO_TAKER": 27,
+      "STALE_OBSERVATION": 38,
+      "STRICT_NOT_EVALUABLE": 27
+    },
+    "settlement": "NOT_OBSERVED_IN_THIS_PROCESS",
+    "stage_reached": "close_out",
+    "submit_failures": [],
+    "submitted": 0,
+    "worst_case_usd": "1.00"
+  }
+}
