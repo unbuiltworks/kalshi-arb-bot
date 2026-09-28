@@ -6,6 +6,29 @@ comes from the frozen scorer, the completion economics come from the frozen
 and the money bound comes from the mandate. This module only *sequences* them and
 records what happened.
 
+EXACTLY ONE RISK/SIZING AUTHORITY: the reviewed mandate/GuardedTransport boundary.
+
+    RAMP_LADDER_001 REGRESSION RATIONALE. On 2026-09-16 the R1 canary was
+    authorized for one market at $0.05 and committed $19.3295 to one of eleven,
+    because `pmus_l5_ramp_ladder.active()` auto-loaded three ten-day-old owner
+    rungs and silently replaced the live limits -- per-market $0.05 -> $7.50,
+    daily stop -$1.00 -> -$15.00. A second, dynamic, rung-based sizing authority
+    is that incident.
+
+    `pmus_micro_executor` is therefore NOT imported here. It defines
+    `per_market_first_leg_cap()`, which lazily imports that ladder, and importing
+    the module would put a rung-based cap in this artifact's reachable capability
+    graph. Omitting it from a Dockerfile is not enough -- reachability is a
+    property of the import graph, not of a COPY list.
+
+    The primitive is composed WITHOUT it, at no cost in fidelity: `_body` in that
+    module is a one-line delegation to `l5_order_body.build`, PROVEN byte-identical
+    across 9 prices x 8 quantities x 2 sides x post_only by
+    tests/test_r1_body_delegation_equivalence.py, and the completion economics
+    (`taker_completion_ok`, `taker_fee`) live in `pmus_q1_executor`, which has no
+    ladder dependency at all. `pmus_micro_executor` is not modified, so every
+    other user of it is unaffected.
+
 THE THREE RULES THAT DEFINE IT
 
 1. THE FLOOR IS CONSUMED, NEVER RECOMPUTED.
@@ -31,9 +54,9 @@ from __future__ import annotations
 from decimal import Decimal as D
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
+from src import l5_order_body as OB
 from src import pmus_completion_shadow as SHADOW
 from src import pmus_live_mandate as MANDATE
-from src import pmus_micro_executor as MICRO
 from src import pmus_probe_observability as OBS
 from src import pmus_q1_executor as Q1
 
@@ -117,8 +140,11 @@ class Lock5Session:
             "qty": str(qty), "first_cost": str(first_cost),
             "taker_fee": str(Q1.taker_fee(D(str(ask)))),
             "admitted_by": "taker_completion_ok"})
-        body = MICRO._body(self.market, outcome_side, D(str(ask)), D(str(qty)),
-                           False)      # post_only False: the frozen primitive
+        # the SAME body the micro primitive builds -- it delegates to this exact
+        # function -- without importing the module that reaches the ramp ladder.
+        # The non-positive-quantity refusal is preserved: OB.build raises too.
+        body = OB.build(slug=self.market, side=outcome_side, price=D(str(ask)),
+                        qty=D(str(qty)), post_only=False)
         return self.submit(body, stage="micro_complement_taker_%d" % attempt)
 
     # ------------------------------------------- the boundary, and only it

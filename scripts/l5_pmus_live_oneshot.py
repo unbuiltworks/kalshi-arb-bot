@@ -52,6 +52,8 @@ from src import l5_probe_manifest as PM
 from src import l5_session_journal as JN
 from src import l5_window_actions as WA
 from src import pmus_arm_retry as AR
+from src import pmus_lock5_translation as LOCK5
+from src import pmus_probe_observability as OBS
 from src import pmus_auth as Q1
 
 #: window arithmetic and the L5 action feed come from ONE implementation,
@@ -137,6 +139,15 @@ class Probe:
         self.preflight: Optional[Dict[str, Any]] = None
         self.armed = False
         self.seen: Set[str] = set()
+        #: BLOCKER 1 (2026-09-28). The reviewed LOCK5 composition is built HERE,
+        #: on the entrypoint, so the money-moving path actually reaches it. The
+        #: previous candidate defined the translation and never imported it: the
+        #: 39 unit tests all constructed Lock5Session directly, so a green suite
+        #: proved the class worked and not that the probe used it. Nothing about
+        #: LOCK5 is reimplemented in this file -- it is composed, and every floor
+        #: and threshold decision belongs to the frozen module.
+        self.lock5: Optional[LOCK5.Lock5Session] = None
+        self.monitor: Optional[OBS.ProbeMonitor] = None
 
     # ------------------------------------------------------------- arming
 
@@ -181,6 +192,42 @@ class Probe:
         self.armed = True
         self.journal.write("armed", {"market": self.market, "detail": out})
         return out
+
+    def build_lock5(self, *, book, mandate, state_dir,
+                    realized_today=None) -> "LOCK5.Lock5Session":
+        """Compose the reviewed LOCK5 session onto THIS probe's transport.
+
+        The transport passed in is already the mandate-guarded one, so there is
+        no second path to the wire; the session adds the mandate admission in
+        front of it and the observability journal around it.
+        """
+        self.monitor = OBS.ProbeMonitor(
+            str(state_dir) + "/probe_observability.jsonl", market=self.market,
+            clock=self.clock)
+        self.lock5 = LOCK5.Lock5Session(
+            market=self.market, book=book, transport=self.tp,
+            mandate=mandate, state_dir=state_dir, monitor=self.monitor,
+            realized_today=(realized_today
+                            or (lambda: self.store.realized_today())))
+        self.journal.write("lock5_composed", {
+            "market": self.market, "threshold": str(LOCK5.LOCK_USD),
+            "floor_impl": LOCK5.settlement_independent_floor.__module__,
+            "journal": self.monitor.path})
+        return self.lock5
+
+    def lock5_may_open_risk(self, action: str):
+        """Ask the reviewed session. Never decide it here."""
+        if self.lock5 is None:
+            return False, "LOCK5_NOT_COMPOSED"
+        self.lock5.evaluate_lock()
+        return self.lock5.may_open_risk(action)
+
+    def lock5_complete(self, *, outcome_side, ask, qty, first_cost):
+        """Route a completion through the reviewed session, or refuse."""
+        if self.lock5 is None:
+            raise AUTH.Refused("LOCK5_NOT_COMPOSED", {"market": self.market})
+        return self.lock5.submit_taker_completion(
+            outcome_side=outcome_side, ask=ask, qty=qty, first_cost=first_cost)
 
     # ---- BOUNDED PRE-ARM RETRY. The 1545z lesson, and nothing more ---------
     #
