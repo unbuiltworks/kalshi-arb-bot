@@ -129,7 +129,7 @@ def test_the_superseded_baseline_still_exercises_the_same_gate():
         L.ALLOWED = drifted
         v = L.verify(reviewed=L.PREVIOUS_REVIEWED)
         assert v["ACCEPTANCE"] is False
-        assert "src/pmus_spring_l5_session.py" in \
+        assert "analysis/l5/authorization/" in \
             {d["file"] for d in v["content_drift"]}
     finally:
         L.ALLOWED = real

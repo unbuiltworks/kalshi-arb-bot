@@ -26,8 +26,13 @@ def test_the_gate_still_forbids_sizing_and_the_prior_review_is_preserved():
     assert "SIZING" in L.FORBIDDEN_CLASSES
     assert set(L.FORBIDDEN_CLASSES) == {"EXECUTION", "DECISION", "SIZING",
                                         "SUBMISSION"}
-    assert L.PREVIOUS_REVIEWED == "6adcc4c4"
+    # A3 advanced the chain; no earlier review may be erased by doing so.
+    assert L.PREVIOUS_REVIEWED == "03f881ca"
     assert L.REVIEWED != L.PREVIOUS_REVIEWED
+    assert L.REVIEWED_CHAIN == ("6adcc4c4", "03f881ca", "04cf5295")
+    assert L.REVIEWED == L.REVIEWED_CHAIN[-1]
+    assert "6adcc4c4" in L.REVIEWED_CHAIN, "the A1 review must stay on record"
+    assert "03f881ca" in L.REVIEWED_CHAIN, "the A2 review must stay on record"
     # every delta accepted under the old baseline is still on the record
     assert set(L.PRIOR_DELTAS) >= {
         "src/pmus_l5_continuous_session.py", "src/pmus_live_mandate.py",
@@ -42,16 +47,16 @@ def test_an_undisclosed_delta_fails_acceptance(monkeypatch):
     """The check must be capable of failing, or it proves nothing. Drop one
     file from the allow-list and acceptance must go False."""
     trimmed = {k: v for k, v in L.PRIOR_DELTAS.items()
-               if k != "src/pmus_spring_l5_session.py"}
+               if k != "src/pmus_micro_executor.py"}
     monkeypatch.setattr(L, "ALLOWED", trimmed)
     v = L.verify(reviewed=L.PREVIOUS_REVIEWED)
     assert v["ACCEPTANCE"] is False
-    assert "src/pmus_spring_l5_session.py" in v["undisclosed"]
+    assert "src/pmus_micro_executor.py" in v["undisclosed"]
 
 
 def test_an_execution_class_delta_fails_acceptance(monkeypatch):
     relabelled = dict(L.ALLOWED)
-    relabelled["src/pmus_spring_l5_session.py"] = {
+    relabelled["src/pmus_micro_executor.py"] = {
         "class": "EXECUTION", "why": "hypothetical"}
     monkeypatch.setattr(L, "ALLOWED", relabelled)
     assert L.verify(reviewed=L.PREVIOUS_REVIEWED)["ACCEPTANCE"] is False
@@ -99,14 +104,13 @@ def test_editing_an_allow_listed_file_again_fails_until_re_reviewed(monkeypatch)
     # exclusivity. Asserting exclusivity here would be asserting that no other
     # authorized change exists, which is a different and false claim.
     drift = {d["file"]: d["reason"] for d in v["content_drift"]}
-    assert "src/pmus_spring_l5_session.py" in drift, sorted(drift)
-    assert drift["src/pmus_spring_l5_session.py"] == \
-        "content differs from the reviewed blob"
+    assert "analysis/l5/authorization/" in drift, sorted(drift)
+    assert drift["analysis/l5/authorization/"] == "content differs from the reviewed blob"
 
 
 def test_an_unpinned_delta_fails_rather_than_defaulting_open(monkeypatch):
     unpinned = {k: dict(v) for k, v in L.PRIOR_DELTAS.items()}
-    unpinned["src/pmus_incentive_audit.py"]["sha"] = ""
+    unpinned["analysis/l5/authorization/"]["sha"] = ""
     monkeypatch.setattr(L, "ALLOWED", unpinned)
     v = L.verify(reviewed=L.PREVIOUS_REVIEWED)
     assert v["ACCEPTANCE"] is False

@@ -213,7 +213,52 @@ LABEL = "R1_SOURCE_LINEAGE"
 #: WHICH artifact the COPY set is compared against. The gate can only REFUSE
 #: candidates: it computes no price, size, side or timing, and tests assert its
 #: executed identifiers reach no trading parameter and no endDate.
-REVIEWED = "03f881ca"
+#: ---------------------------------------------------------------- A3, 2026-09-28
+#: WHY THE BASELINE ADVANCES AGAIN: the BTC15m PROFIT_LOCK_5 capacity probe pins
+#: `src/pmus_micro_executor.py` as part of its artifact, so the drift in that file
+#: could not be waived as irrelevant to the probe. Three items were outstanding
+#: against 03f881ca -- two undisclosed deltas and one file absent from REVIEWED.
+#:
+#: WHAT WAS REVIEWED, and it is EVIDENCE rather than assertion. Each delta was
+#: proven before it was classified, by reconstructing the 03f881ca implementation
+#: verbatim and differencing it:
+#:
+#:   src/pmus_micro_executor.py -- `_body` delegates to `src/l5_order_body.build`
+#:   instead of holding a second copy. `tests/test_r1_body_delegation_equivalence.py`
+#:   compares every field across 9 prices x 8 quantities x 2 sides x post_only and
+#:   finds the bodies IDENTICAL, and separately pins the NO-side 1-X wire mapping,
+#:   the MICRO_NONPOSITIVE_QTY halt code and the float quantity. De-duplication with
+#:   no behavioural delta, which is why it is DEDUPLICATION_PROVEN_EQUIVALENT and
+#:   not SUBMISSION: there is no submission behaviour to change.
+#:
+#:   src/pmus_q1_executor.py -- (a) the fee coefficients now read the one
+#:   authoritative schedule; PMUS republished the taker coefficient at 0.0695
+#:   effective 2026-09-17 and the local 0.06 never moved, understating the cost by
+#:   15.8%, which LOOSENED every fee-safe bound derived from it. (b)
+#:   `complement_bound` gained a `tick` parameter because the grid is a property of
+#:   the market, not of the module. `tests/test_r1_q1_delta_conservatism.py` proves
+#:   omitting `tick` reproduces the 03f881ca bound exactly at every price, a coarser
+#:   grid is never looser, a degenerate grid refuses instead of defaulting, and
+#:   across a 9x9 grid there is NO (first_cost, ask) pair that taker_completion_ok
+#:   admits now and would have refused under the stale coefficient. Both deltas move
+#:   bounds only in the restricting direction, hence RISK_BOUND_TIGHTENING.
+#:
+#:   src/pmus_fees.py -- was ABSENT from REVIEWED and is required, because the
+#:   executor now imports the schedule from it rather than carrying a copy. It is an
+#:   effective-dated data module with provenance, so pre-2026-09-17 analyses stay
+#:   correct. NEW_DEPENDENCY.
+#:
+#: WHAT WAS NOT BLESSED. Nothing else. The probe's own wiring -- the frozen
+#: PROFIT_LOCK_5 decision, the taker-completion primitive and the mandate guard --
+#: is NOT in this baseline; it does not exist yet and will need its own review.
+#:
+#: THIS IS NOT A WEAKENING. FORBIDDEN_CLASSES is UNCHANGED and still contains
+#: EXECUTION, DECISION, SIZING and SUBMISSION. The cheap way through would have been
+#: to label the order-body change SUBMISSION and drop SUBMISSION from the gate, or to
+#: relabel it and skip the proof. Advancing the baseline on evidence keeps the gate's
+#: strength intact for every future delta.
+REVIEWED = "04cf5295"
+
 
 #: The superseded baseline, kept so the provenance is legible HERE and not only
 #: in git history. Every delta it covered is preserved verbatim in PRIOR_DELTAS
@@ -226,7 +271,11 @@ REVIEWED = "03f881ca"
 #: self-tests meaningful: PRIOR_DELTAS still differs from it, so the drift and
 #: unpinned-delta tests still have something real to catch. Re-pointing it at
 #: each new baseline would leave them asserting against an empty delta set.
-PREVIOUS_REVIEWED = "6adcc4c4"
+PREVIOUS_REVIEWED = "03f881ca"
+
+#: THE WHOLE CHAIN, so advancing a baseline can never erase an earlier review.
+#: PREVIOUS_REVIEWED is only the immediate predecessor; this is the record.
+REVIEWED_CHAIN = ("6adcc4c4", "03f881ca", "04cf5295")
 DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 
 # Each entry: why this file may differ, the class it must fall in, and the
@@ -245,6 +294,48 @@ DOCKERFILE = "deploy/l5_r1_probe/Dockerfile"
 #: their reviewed blob ids, so the record of what was accepted and why does
 #: not vanish when the baseline moves.
 PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
+    "src/pmus_micro_executor.py": {
+        "class": "DEDUPLICATION_PROVEN_EQUIVALENT",
+        "sha": "d07cd09fd14d138ba20057d10feac78117bf189c",
+        "why": ("REVIEWED 2026-09-28 (A3). `_body` delegates to "
+                "src/l5_order_body.build instead of holding a second copy of "
+                "the order body. PROVEN, not asserted: "
+                "tests/test_r1_body_delegation_equivalence.py rebuilds the "
+                "03f881ca implementation verbatim and finds every field "
+                "identical across 9 prices x 8 quantities x 2 outcome sides x "
+                "post_only, and separately pins the NO-side 1-X wire mapping, "
+                "the MICRO_NONPOSITIVE_QTY halt code and the float quantity. "
+                "No submission behaviour changes, so this is de-duplication "
+                "rather than a SUBMISSION-class delta."),
+    },
+    "src/pmus_q1_executor.py": {
+        "class": "RISK_BOUND_TIGHTENING",
+        "sha": "c818d5091cf1a64c35f06a909ada999efd4bb46e",
+        "why": ("REVIEWED 2026-09-28 (A3). Two deltas, both restricting. "
+                "(a) taker_fee/maker_rebate read src/pmus_fees.py instead of "
+                "local coefficients: PMUS republished the taker coefficient at "
+                "0.0695 effective 2026-09-17 and the local 0.06 never moved, "
+                "understating the cost 15.8% and LOOSENING every fee-safe bound "
+                "derived from it. (b) complement_bound gained a `tick` "
+                "parameter because the grid belongs to the market, not the "
+                "module; a hardcoded TICK returned prices like 0.475 that PMUS "
+                "BTC15m does not accept. PROVEN by "
+                "tests/test_r1_q1_delta_conservatism.py: omitting `tick` "
+                "reproduces the 03f881ca bound exactly, a coarser grid is never "
+                "looser (rounding stays DOWN), a degenerate grid refuses rather "
+                "than defaulting, and across a 9x9 grid NO (first_cost, ask) "
+                "pair is admitted now that the stale coefficient refused. The "
+                "q=1/$1 canary constants are asserted untouched."),
+    },
+    "src/pmus_fees.py": {
+        "class": "NEW_DEPENDENCY",
+        "sha": "de25f9124405391bf538c67f37756b90bb54fc4f",
+        "why": ("REVIEWED 2026-09-28 (A3). Was ABSENT from 03f881ca and is "
+                "required, because the executor now imports the one "
+                "authoritative fee schedule rather than carrying a copy. An "
+                "effective-dated data module with provenance, so pre-2026-09-17 "
+                "analyses remain correct. No execution logic."),
+    },
     "src/pmus_l5_continuous_session.py": {
         "class": "RISK_BOUND_TIGHTENING",
         "sha": "758ba95b16648594760e629e018e1ac281c58a92",
