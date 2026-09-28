@@ -1157,3 +1157,60 @@ Deleting it would be the "merely weaken the test" move that was ruled out, and s
 it would make the gap invisible. **The requirement is unsatisfied and stays counted:**
 the one-shot calls `probe.arm()` once and aborts on refusal, so the 1545z lesson is
 implemented nowhere until the retry is ported under the owner's ten conditions.
+
+## 3d — RESOLVED. Minimum observability restored, and failure ABORTS the probe
+
+### Part 1: the missing handoff, restored as a mirror rather than a new mechanism
+`_LIVE_STATUS` had been removed from `src/pmus_ws_evidence_recorder.py` while its 14
+tests still referenced it, so the suite **errored at the fixture** and the recorder had
+no in-memory status line. Restored as an exact mirror of the `_LIVE_TRADES` handoff
+already in that file: `LIVE_STATUS_ENV`, `_LIVE_STATUS`, `live_status_enabled()`,
+`publish_live_status()`, `live_status_bytes()`. **OFF by default**, so merging it changes
+nothing. `write_status_doc()` now publishes the same payload it persists, so the file and
+the line cannot disagree about what the recorder saw. `status_doc_path` and
+`write_status_doc` already existed and were not rewritten — this is not a recreated
+monitoring architecture, it only removes the **disk read** from the serve path.
+
+It does **not** change the cadence: the payload is still built on
+`PMUS_WS_STATUS_EVERY_SECONDS`, and `n` is exposed precisely so **staleness is
+observable rather than assumed**. 14 errors → **14 passed**.
+
+### Part 2: `src/pmus_probe_observability.py` — the probe's own, where failure aborts
+The one design decision, and the two rules are not inconsistent — they follow from what
+is at stake. The recorder's handoff **never raises**, because a monitoring problem must
+not cost a read-only tape. This module is the opposite: **a money-moving session that
+cannot be observed must not continue**, so every failure raises `MonitorUnavailable`.
+
+Required vocabulary, one `kind` per item on the owner's 3d list: `DECISION`,
+`SUBMISSION`, `ACK` (a receipt, never a final state), `FILL` (from a venue read, never
+from an ACK), `INVENTORY`, `LOCK` (the PROFIT_LOCK_5 floor and whether it latched),
+`CANCEL`, `COMPLETION` (with the economics that admitted it), `RECONCILIATION` (the
+venue as authority), `TERMINAL`. A kind outside the vocabulary is **refused**, so a typo
+cannot quietly become an unmonitored event class.
+
+Aborts, each pinned by a test (**11 tests**, 25 with the handoff suite):
+
+* journal not writable → abort **at construction**, before anything can be armed;
+* a write failure mid-probe → abort;
+* an unserialisable payload → abort. *This caught a defect in my own first draft:* I
+  caught only `TypeError`/`ValueError`, so an object whose `__repr__` raises would have
+  propagated **its** exception instead of the documented abort — a monitoring failure
+  disguised as a crash. Now any exception becomes `MonitorUnavailable`;
+* **silence is not health** — `require_healthy()` refuses when nothing has ever been
+  recorded, rather than reading no news as good news;
+* a heartbeat older than `MAX_HEARTBEAT_AGE_S`=90s → abort;
+* `require_observed_end_to_end()` refuses unless `DECISION`, `INVENTORY`, `LOCK`,
+  `RECONCILIATION` and `TERMINAL` have all been seen. `ACK`/`FILL`/`CANCEL`/`COMPLETION`
+  are deliberately **not** required: **a probe that legitimately never filled must still
+  close cleanly and must not look like blindness.**
+
+### Suite baseline moved
+Full run: **31 failed, 9413 passed, 27 skipped, 9 xfailed, 23 errors** — against the
+recorded 40 failed / 23 errors. The 9 failures retired are 3a's arming invariant, 3b's
+six lineage/lane-A tests and 3c's two signing tests; the 9 xfailed are the arm-retry
+requirement, held open. The 23 errors in that run **predate** the 3d fix landing, so the
+next full run should show 23 → 9 (the 14 status-handoff errors are now passing).
+Remaining failures are the unrelated baseline: Gemini (`terms_gate`,
+`settlement_observability`, `payload_schema`, `write_path_isolation`), `orderbook`,
+`chain_ca_fallback`, `window_forensics_stream` and the conditional
+`deploy_fallthrough_guard`.

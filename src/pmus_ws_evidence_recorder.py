@@ -962,7 +962,11 @@ def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
 
     Never raises: a handoff-file problem must not cost the connection or
     the tape, exactly like the status print it accompanies.
+
+    ONE PAYLOAD feeds both the file and the in-memory line, so the two can
+    never disagree about what the recorder saw (3d).
     """
+    publish_live_status(status)
     try:
         path = status_doc_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -985,6 +989,54 @@ TRADES_HTTP_PATH = "/trades"
 TRADES_ENV = "PMUS_WS_TRADES_HTTP"
 TRADES_PER_MARKET = 200
 _LIVE_TRADES: dict[str, Any] = {"line": None, "utc": None, "n": 0}
+
+#: LIVE STATUS HANDOFF (3d, restored 2026-09-28). Deliberately the SMALLEST
+#: thing that gives the probe authoritative in-flight visibility, and an exact
+#: mirror of the trades handoff above rather than a second mechanism.
+#:
+#: WHY IT WENT MISSING. The symbol was removed while its 14 tests still
+#: referenced it, so the recorder lost the status handoff and the suite errored
+#: at the fixture. Restoring it is not new architecture: `write_status_doc` and
+#: `status_doc_path` already persist the document, and this only removes the
+#: DISK READ from the serve path by keeping the newest line in memory.
+#:
+#: IT DOES NOT CHANGE THE CADENCE. The payload is still built on
+#: PMUS_WS_STATUS_EVERY_SECONDS; a faster serve path does not make the payload
+#: newer, and `n` is exposed precisely so STALENESS IS OBSERVABLE rather than
+#: assumed.
+LIVE_STATUS_ENV = "PMUS_WS_LIVE_STATUS"
+_LIVE_STATUS: dict[str, Any] = {"line": None, "utc": None, "n": 0}
+
+
+def live_status_enabled() -> bool:
+    """OFF unless explicitly turned on, so merging this changes nothing."""
+    return str(os.getenv(LIVE_STATUS_ENV, "")).strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def publish_live_status(status: Mapping[str, Any]) -> None:
+    """Hand the newest status line to the serve path. NEVER raises.
+
+    A handoff problem must not cost the connection or the tape -- the same rule
+    the status print it accompanies already follows.
+    """
+    if not live_status_enabled():
+        return
+    try:
+        line = json.dumps(status, separators=(",", ":"), default=str)
+        _LIVE_STATUS["line"] = (line + "\n").encode("utf-8")
+        _LIVE_STATUS["utc"] = datetime.now(timezone.utc).isoformat()
+        _LIVE_STATUS["n"] = int(_LIVE_STATUS.get("n") or 0) + 1
+    except Exception:                                          # noqa: BLE001
+        pass
+
+
+def live_status_bytes() -> Optional[bytes]:
+    """Newest published status line, or None when unset/disabled."""
+    if not live_status_enabled():
+        return None
+    v = _LIVE_STATUS.get("line")
+    return v if isinstance(v, (bytes, bytearray)) else None
 
 
 def trades_http_enabled() -> bool:
