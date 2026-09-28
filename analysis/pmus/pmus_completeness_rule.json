@@ -800,7 +800,7 @@
       "window": "0230z",
       "elements": {
         "1_observed_through_close": true,
-        "2_final_preclose_within_32s": false,
+        "2_final_preclose_within_32s": true,
         "3_no_preclose_gap_over_32s": true,
         "4_terminal_captured_by_same_process": false,
         "5_settlement_finalized": null,
@@ -809,14 +809,14 @@
       "also": {
         "has_two_sided_state": true
       },
-      "max_preclose_gap_s": 29.5,
-      "final_preclose_to_close_s": 638.3,
+      "max_preclose_gap_s": 29.6,
+      "final_preclose_to_close_s": 4.5,
       "postclose_gap_s": null,
       "terminal_t": null,
       "terminal_state": null,
       "terminal_after_close": false,
-      "preclose_bbo_rows": 6,
-      "two_sided_states": 6,
+      "preclose_bbo_rows": 48,
+      "two_sided_states": 36,
       "tape_test_passes": false
     }
   ]
