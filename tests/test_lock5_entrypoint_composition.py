@@ -40,14 +40,32 @@ def _closure(entry: str) -> set:
             tree = ast.parse(open(path, encoding="utf-8").read())
         except Exception:                                      # noqa: BLE001
             return out
+        # RELATIVE IMPORTS COUNT (2026-09-28). This helper used to look only at
+        # `n.module`, so every `from . import x` was invisible to it. The gap was
+        # not academic: the image built from the closure it computed was missing
+        # `src/polymarket_l5/config.py`, which `polymarket_l5` submodules import
+        # as `from . import config`, and the probe died with ImportError inside
+        # the observing stage. A reachability guard that cannot see half the
+        # import syntax reports a clean closure for an artifact that cannot run.
+        pkg = os.path.dirname(path).replace(os.sep, ".")
         for n in ast.walk(tree):
             if isinstance(n, ast.Import):
                 for a in n.names:
                     if a.name.startswith(("src.", "scripts.")):
                         out.add(a.name)
             elif isinstance(n, ast.ImportFrom):
-                m = n.module or ""
+                if n.level:
+                    base = pkg.split(".")
+                    if n.level > 1:
+                        base = base[: len(base) - (n.level - 1)]
+                    m = ".".join(base + ([n.module] if n.module else []))
+                else:
+                    m = n.module or ""
                 if m in ("src", "scripts"):
+                    # the package itself too: `from src import x` needs
+                    # src/__init__.py in the image or the import fails, even
+                    # though no module is named plain `src`.
+                    out.add(m)
                     for a in n.names:
                         out.add("%s.%s" % (m, a.name))
                 elif m.startswith(("src.", "scripts.")):
@@ -385,3 +403,65 @@ def test_negative_control_removing_the_paired_log_breaks_reachability(tmp_path):
     stub = tmp_path / "no_paired.py"
     stub.write_text(src)
     assert "src/pmus_paired_log.py" not in _closure(str(stub))
+
+
+# ============================================ THE PACKAGED IMAGE, MECHANICALLY
+# 2026-09-28. The reviewed artifact e48960f7 built cleanly, reported a 44-file
+# COPY list "byte-identical to the closure", and then died at runtime with
+# ImportError: cannot import name 'config' from 'src.polymarket_l5'. Both halves
+# of that comparison were computed by the same tool with the same blind spot, so
+# they agreed with each other and disagreed with Python. Nothing compared the
+# Dockerfile to the closure mechanically inside the suite -- it was done by hand,
+# in a shell, once. These tests move that comparison into the suite.
+
+DOCKERFILE = "deploy/l5_pmus_lock5_probe/Dockerfile"
+
+
+def _dockerfile_pyfiles() -> set:
+    import re
+    out = set()
+    for line in open(DOCKERFILE, encoding="utf-8"):
+        if not line.startswith("COPY "):
+            continue
+        out.update(re.findall(r"(?:src|scripts)/[A-Za-z0-9_/]+\.py", line))
+    return out
+
+
+def test_the_dockerfile_copies_exactly_the_entrypoint_closure(closure):
+    """Set equality, both directions, with the offenders named."""
+    copied, reachable = _dockerfile_pyfiles(), set(closure)
+    missing = sorted(reachable - copied)
+    extra = sorted(copied - reachable)
+    assert not missing, "reachable but NOT in the image: %s" % (missing,)
+    assert not extra, "copied but unreachable (conceals dead capability): %s" % (extra,)
+
+
+def test_the_closure_follows_relative_imports(tmp_path):
+    """The exact blind spot that shipped an unrunnable image, pinned.
+
+    A package whose __init__ is reached and whose sibling is imported with
+    `from . import sib` must pull the sibling in. Before the fix this returned
+    only the __init__.
+    """
+    pkg = tmp_path / "src" / "relpkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from . import sib\n")
+    (pkg / "sib.py").write_text("VALUE = 1\n")
+    entry = tmp_path / "scripts"
+    entry.mkdir()
+    ep = entry / "ep.py"
+    ep.write_text("from src.relpkg import __init__ as _\nfrom src import relpkg\n")
+    cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        c = _closure("scripts/ep.py")
+    finally:
+        os.chdir(cwd)
+    assert "src/relpkg/__init__.py" in c
+    assert "src/relpkg/sib.py" in c, "relative import not followed: %s" % (sorted(c),)
+
+
+def test_polymarket_l5_config_is_reachable_and_copied(closure):
+    """The specific file whose absence crashed the probe at 04:15:07Z."""
+    assert "src/polymarket_l5/config.py" in closure
+    assert "src/polymarket_l5/config.py" in _dockerfile_pyfiles()

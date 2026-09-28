@@ -69,6 +69,7 @@ COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
+COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY src/polymarket_l5/action_model_v2.py src/polymarket_l5/action_model_v2.py
 COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.py
