@@ -93,6 +93,48 @@ NO_NEW_ORDERS_AFTER_S = 810.0
 
 
 
+#: this artifact's identity. A mandate naming another service or strategy is
+#: somebody else's authorization, however well-formed it is.
+RUNG_A_SERVICE = "l5-live-probe-oneshot"
+RUNG_A_STRATEGY = "BTC15M_PROFIT_LOCK_5_CAPACITY_PROBE"
+
+
+def rung_a_mandate(now=None):
+    """The mandate for THIS probe, or (None, why). VALIDATED, not merely parsed.
+
+    `MANDATE.load_mandate()` falls back to `analysis/l5/authorization/
+    live_mandate.json`, which is GIT-TRACKED and currently holds the EXPIRED
+    OWNER-2026-09-17-CP1-SETTLEMENT-PENDING-COHORT authorization: $5 per market,
+    $15 total, 10 markets, service `l5-r1-probe`. It parses without error, because
+    expiry and service are checked at `admit()` time rather than at load.
+
+    So "a mandate loaded" is not "authority exists". Without these checks, a probe
+    with PMUS_LIVE_MANDATE unset would arm and report $15 of authority it does not
+    have, and only fail at the first order -- which is the
+    "we could not read today's authorization, so we used yesterday's" failure that
+    `pmus_live_mandate` itself names as the whole 2026-09-16 incident.
+
+    The env var is therefore REQUIRED: this path does not accept the file
+    fallback. An authorization for a live probe is something the owner sets for
+    this run, not something the repository happens to contain.
+    """
+    raw = (os.getenv(MANDATE.MANDATE_ENV) or "").strip()
+    if not raw:
+        return None, ("mandate_env_required:%s (the git-tracked file fallback is "
+                      "not accepted as authority for this probe)"
+                      % MANDATE.MANDATE_ENV)
+    m, err = MANDATE.parse_mandate(raw)
+    if m is None:
+        return None, err
+    if m.expired(now):
+        return None, "mandate_expired:%s" % (m.expiry,)
+    if m.service != RUNG_A_SERVICE:
+        return None, "mandate_service_mismatch:%s" % (m.service,)
+    if m.strategy != RUNG_A_STRATEGY:
+        return None, "mandate_strategy_mismatch:%s" % (m.strategy,)
+    return m, None
+
+
 def mandate_fingerprint() -> Optional[str]:
     """A stable digest of the CURRENT mandate text, or None when there is none.
 
@@ -100,7 +142,7 @@ def mandate_fingerprint() -> Optional[str]:
     or deleted between arm attempts is detected instead of assumed unchanged.
     """
     import hashlib
-    m, _ = MANDATE.load_mandate()
+    m, _ = rung_a_mandate()
     if m is None:
         return None
     fields = "|".join(str(getattr(m, f)) for f in MANDATE.REQUIRED_FIELDS)
@@ -697,7 +739,7 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
     #     manifest envelope, no rung table, no previous mandate. "We could not
     #     read today's authorization, so we used yesterday's" is the entire
     #     2026-09-16 incident in one sentence.
-    mandate, mandate_err = MANDATE.load_mandate()
+    mandate, mandate_err = rung_a_mandate()
     if mandate is None:
         out = {"LABEL": "LIVE_BOUNDED_PROBE", "market": market,
                "refused": "NO_MONETARY_AUTHORITY", "detail": mandate_err,
@@ -766,8 +808,12 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
     # and the paired-record + LOCK5 gate go in FRONT of the guard, so every
     # order the frozen executor sends traverses
     #     pair_intent -> LOCK5 -> mandate.admit -> wire
+    # THE INVARIANT on the live path: a measurement envelope can never become
+    # live authority. Checked against the POST-capable transport itself.
+    EX.refuse_measurement_authority(probe.limits, guarded, where="run")
     paired_tp = ADAPT.PairedLockTransport(guarded, lock5=probe.lock5,
-                                          paired=probe.paired, journal=journal)
+                                          paired=probe.paired, journal=journal,
+                                          limits=probe.limits)
     probe.tp = paired_tp
     probe.adapter = paired_tp
     journal.write("money_path_composed", {
@@ -828,7 +874,7 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         probe.arm_with_bounded_retry(AR.ArmRetryGate(
             market=market,
             authorization=auth,
-            halted=lambda: MANDATE.load_mandate()[0] is None,
+            halted=lambda: rung_a_mandate()[0] is None,
             mandate_fingerprint=lambda: mandate_fingerprint(),
             submitted_count=lambda: probe.submitted_count(),
             window_target=lambda: (os.getenv(AUTH.MARKET_ENV, "").strip()
@@ -1390,8 +1436,20 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
     feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
     # the production DISARMED transport. No credential, no HTTP, no POST.
     tp = transport if transport is not None else EX.NullTransport()
-    # an observe run holds no authorization, so it holds no dollars
-    limits = EX.SafetyLimits.no_monetary_authority(**PM.operational_controls())
+    # OBSERVE is a COUNTERFACTUAL measurement path. With a valid mandate its
+    # envelope is that mandate's; without one it uses the explicitly labelled
+    # measurement envelope, so `would_submit` stays measurable. Zeroing it made
+    # the envelope refuse intents before the transport was consulted, which
+    # destroyed the diagnostic instead of tightening it.
+    _obs_mandate, _ = rung_a_mandate()
+    if _obs_mandate is not None:
+        limits = EX.SafetyLimits.from_mandate(_obs_mandate,
+                                              **PM.operational_controls())
+    else:
+        limits = EX.SafetyLimits.measurement_only(**PM.measurement_envelope())
+    # THE INVARIANT. This path holds NullTransport; if it ever holds one that can
+    # POST, a measurement envelope must stop the run rather than authorize it.
+    EX.refuse_measurement_authority(limits, tp, where="observe")
     health = WA.FeedHealth()
     seen: Set[str] = set()
     records: List[dict] = []

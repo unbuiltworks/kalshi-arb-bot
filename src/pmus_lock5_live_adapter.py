@@ -32,6 +32,7 @@ from __future__ import annotations
 from decimal import Decimal as D
 from typing import Any, Dict, Mapping, Optional
 
+from src import l5_live_execution as EX
 from src import l5_order_body as OB
 from src import pmus_live_mandate as MANDATE
 
@@ -82,7 +83,14 @@ class PairedLockTransport:
     """
 
     def __init__(self, inner: Any, *, lock5: Any, paired: Any,
-                 journal: Any = None) -> None:
+                 journal: Any = None, limits: Any = None) -> None:
+        # THE INVARIANT, at the boundary itself. This class only ever wraps a
+        # POST-capable transport, so a measurement-only envelope arriving here is
+        # a defect and the construction fails rather than the money moving.
+        if limits is not None:
+            EX.refuse_measurement_authority(limits, inner,
+                                            where="PairedLockTransport")
+        self._limits = limits
         self._inner = inner
         self._lock5 = lock5
         self._paired = paired

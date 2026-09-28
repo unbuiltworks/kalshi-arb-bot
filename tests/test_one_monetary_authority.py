@@ -217,3 +217,106 @@ def test_lock_cannot_raise_the_dollar():
     assert "locked" not in body.split("admit")[0][-400:], (
         "a LOCK-conditional path to admit would make LOCK an authority")
     assert refuse(price=D("0.99"), qty=D(2)) == "MAX_USD_PER_MARKET"
+
+
+# ========================= THE MEASUREMENT ENVELOPE IS NEVER LIVE AUTHORITY
+# OBSERVE is preserved as a counterfactual measurement path (owner, 2026-09-28).
+# Zeroing its envelope had silently turned `would_submit` from 1 into 0 -- it
+# destroyed the diagnostic rather than tightening it, because the envelope refused
+# intents before the NullTransport was ever consulted. So OBSERVE keeps a real
+# envelope, explicitly labelled, and these tests are the enforcement that it can
+# never be mistaken for authority.
+
+import scripts.l5_pmus_live_oneshot as EP
+
+
+class _PostCapable:
+    name = "REAL_LOOKING"
+
+    def __init__(self):
+        self.posts = []
+
+    def request(self, method, path, body=None, **kw):
+        self.posts.append((method, path, body))
+        return {}
+
+
+def measurement():
+    return EX.SafetyLimits.measurement_only(**PM.measurement_envelope())
+
+
+def test_the_measurement_envelope_is_labelled_and_not_an_authority():
+    m = measurement()
+    assert m.monetary_authority == "NONE_OBSERVE_ONLY_NO_SPEND_POSSIBLE"
+    assert m.is_measurement_only is True
+    assert m.as_dict()["monetary_authority"] == \
+        "NONE_OBSERVE_ONLY_NO_SPEND_POSSIBLE"
+    # and it is NOT the mandate authority, nor the no-authority sentinel
+    assert m.monetary_authority != "PMUS_LIVE_MANDATE"
+    assert m.monetary_authority != "NONE_NO_MANDATE"
+
+
+def test_the_measurement_envelope_keeps_the_counterfactual_measurable():
+    """Non-zero bounds, or the diagnostic measures nothing."""
+    m = measurement()
+    for f in MONEY_FIELDS:
+        assert getattr(m, f) > D(0), f
+    assert m.max_concurrent_markets >= 1
+
+
+def test_measurement_envelope_plus_post_capable_transport_fails_closed():
+    """THE INVARIANT."""
+    tp = _PostCapable()
+    with pytest.raises(EX.MeasurementEnvelopeMisuse):
+        EX.refuse_measurement_authority(measurement(), tp, where="test")
+    assert tp.posts == []
+
+
+def test_measurement_envelope_with_a_null_transport_is_permitted():
+    EX.refuse_measurement_authority(measurement(), EX.NullTransport(),
+                                    where="observe")
+
+
+def test_a_mandate_envelope_is_never_refused_by_the_invariant():
+    EX.refuse_measurement_authority(
+        EX.SafetyLimits.from_mandate(Mandate(), **PM.operational_controls()),
+        _PostCapable(), where="live")
+
+
+def test_post_capable_defaults_to_capable_for_an_undeclared_transport():
+    """Conservative direction: an unknown transport counts as able to spend."""
+    class Undeclared:
+        def request(self, *a, **k):
+            return {}
+    assert EX.post_capable(Undeclared()) is True
+    assert EX.post_capable(EX.NullTransport()) is False
+    assert EX.post_capable(None) is False
+
+
+def test_the_paired_lock_transport_refuses_a_measurement_envelope():
+    """The live boundary itself fails construction, not just a helper check."""
+    class _L5:
+        book = type("B", (), {"q": {"up": D(0), "down": D(0)}})()
+    with pytest.raises(EX.MeasurementEnvelopeMisuse):
+        EP.ADAPT.PairedLockTransport(_PostCapable(), lock5=_L5(), paired=None,
+                                     limits=measurement())
+
+
+def test_no_execution_path_converts_measurement_into_live_authority():
+    """Source-level, by AST: only the OBSERVE function may build one.
+
+    A text scan would flag the docstrings that explain the rule, which is how a
+    guard gets deleted for crying wolf -- this repository has done that once.
+    """
+    import ast
+    tree = ast.parse(open(EP.__file__, encoding="utf-8").read())
+    builders = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) \
+                    and n.func.attr == "measurement_only":
+                builders.append(fn.name)
+    assert builders == ["observe"], (
+        "measurement_only() is built outside observe(): %s" % (builders,))

@@ -57,6 +57,29 @@ OPERATIONAL_MAX_LIVE_ORDERS = 8
 OPERATIONAL_BAND = None
 
 
+#: THE OBSERVE COUNTERFACTUAL ENVELOPE. Not authority -- see
+#: l5_live_execution.SafetyLimits.measurement_only and
+#: refuse_measurement_authority, which make a POST-capable path fail closed on it.
+#:
+#: These are the values the OBSERVE diagnostic has always used, kept so the
+#: counterfactual stays comparable with every previous observe run. They are
+#: DELIBERATELY not sourced from `probe_limits()`: that function is the legacy
+#: monetary authority being retired, and a measurement envelope must not be one
+#: import away from the thing it is not.
+MEASUREMENT_ENVELOPE: Dict[str, Any] = {
+    "max_usd_per_market": D("5"),
+    "max_total_exposure_usd": D("5"),
+    "max_abs_residual": D("10"),
+    "max_concurrent_markets": 1,
+    "daily_realized_loss_halt_usd": D("5"),
+}
+
+
+def measurement_envelope() -> Dict[str, Any]:
+    """The OBSERVE counterfactual bounds plus the operational controls."""
+    return {**MEASUREMENT_ENVELOPE, **operational_controls()}
+
+
 def operational_controls() -> Dict[str, Any]:
     """The non-monetary controls, and nothing that costs money."""
     return {"max_live_orders": OPERATIONAL_MAX_LIVE_ORDERS,

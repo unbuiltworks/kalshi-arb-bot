@@ -368,6 +368,40 @@ class SafetyLimits:
             band=band,
         )._tag("PMUS_LIVE_MANDATE")
 
+    #: the label that marks an envelope as a COUNTERFACTUAL MEASUREMENT, never
+    #: an authority. A POST-capable path that is handed one must fail closed.
+    MEASUREMENT_ONLY = "NONE_OBSERVE_ONLY_NO_SPEND_POSSIBLE"
+
+    @classmethod
+    def measurement_only(cls, *, max_usd_per_market: D, max_total_exposure_usd: D,
+                         max_abs_residual: D, max_concurrent_markets: int,
+                         daily_realized_loss_halt_usd: D,
+                         max_live_orders: int,
+                         band: Optional[tuple] = None) -> "SafetyLimits":
+        """An envelope for OBSERVE ONLY: what the strategy WOULD have attempted.
+
+        OBSERVE holds a NullTransport, claims no authorization and cannot POST, so
+        it can spend nothing regardless of these numbers. They exist so the
+        counterfactual stays measurable: zeroing them made the envelope refuse
+        intents before the transport was ever consulted, which silently turned
+        `would_submit` from 1 into 0 and destroyed the diagnostic rather than
+        merely tightening it.
+
+        This is NOT a monetary authority and must never be accepted as one. See
+        `refuse_measurement_authority`, which is the enforcement.
+        """
+        return cls(max_usd_per_market=D(str(max_usd_per_market)),
+                   max_total_exposure_usd=D(str(max_total_exposure_usd)),
+                   max_abs_residual=D(str(max_abs_residual)),
+                   max_concurrent_markets=int(max_concurrent_markets),
+                   daily_realized_loss_halt_usd=D(str(daily_realized_loss_halt_usd)),
+                   max_live_orders=int(max_live_orders),
+                   band=band)._tag(cls.MEASUREMENT_ONLY)
+
+    @property
+    def is_measurement_only(self) -> bool:
+        return self._monetary_authority == self.MEASUREMENT_ONLY
+
     @classmethod
     def no_monetary_authority(cls, *, max_live_orders: int,
                               band: Optional[tuple] = None) -> "SafetyLimits":
@@ -2778,3 +2812,41 @@ def deadman(store: InventoryStore, transport: Any, *,
             out["errors"].append({"client_order_id": coid,
                                   "error": type(exc).__name__})
     return out
+
+
+def post_capable(transport: Any) -> bool:
+    """Can this transport send an order?
+
+    CONSERVATIVE BY CONSTRUCTION: capable unless it declares itself the null
+    transport. A transport added later that forgets to declare itself is treated
+    as able to spend, so the measurement-envelope invariant binds rather than
+    silently lapsing. Defaulting the other way is how a guard stops guarding.
+    """
+    if transport is None:
+        return False
+    if getattr(transport, "name", None) == "NULL":
+        return False
+    return (callable(getattr(transport, "request", None))
+            or callable(getattr(transport, "submit", None)))
+
+
+class MeasurementEnvelopeMisuse(RuntimeError):
+    """A measurement-only envelope reached a path that can spend money."""
+
+
+def refuse_measurement_authority(limits: Any, transport: Any, *,
+                                 where: str) -> None:
+    """THE INVARIANT: measurement envelope + POST-capable transport = fail closed.
+
+    The OBSERVE envelope exists to report what the strategy would have attempted.
+    It is not authority. If it ever reaches a path that can actually send an
+    order, that is a defect, and the correct response is to stop rather than to
+    spend against numbers nobody authorized.
+    """
+    if getattr(limits, "is_measurement_only", False) and post_capable(transport):
+        raise MeasurementEnvelopeMisuse(
+            "%s: a measurement-only envelope (%s) was presented to a "
+            "POST-capable transport (%r). This envelope is never monetary "
+            "authority; only PMUS_LIVE_MANDATE is."
+            % (where, getattr(limits, "monetary_authority", "?"),
+               getattr(transport, "name", type(transport).__name__)))

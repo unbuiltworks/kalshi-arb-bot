@@ -402,7 +402,10 @@ def test_the_critical_methods_are_called_from_the_run_execution_graph():
         return out
 
     reached = calls_within("run")
-    for required in ("load_mandate", "guard", "build_lock5",
+    # rung_a_mandate, NOT load_mandate: run() must VALIDATE, not merely parse.
+    # load_mandate falls back to the git-tracked live_mandate.json, which holds an
+    # expired authorization that parses without error.
+    for required in ("rung_a_mandate", "parse_mandate", "guard", "build_lock5",
                      "arm_with_bounded_retry", "PairedLockTransport",
                      "record_reconciliation", "from_mandate"):
         assert required in reached, (
@@ -410,6 +413,11 @@ def test_the_critical_methods_are_called_from_the_run_execution_graph():
             % (required, sorted(reached)))
     # and the bare arm() is no longer the arming call site in run()
     assert "ArmRetryGate" in reached
+    assert "refuse_measurement_authority" in reached, (
+        "the measurement-envelope invariant is not enforced from run()")
+    assert "load_mandate" not in reached, (
+        "run() reaches load_mandate, which accepts the git-tracked expired "
+        "mandate file as authority")
 
 
 def test_pair_intent_and_the_fill_path_are_called_from_the_adapter():
@@ -422,3 +430,65 @@ def test_pair_intent_and_the_fill_path_are_called_from_the_adapter():
                      "apply_authoritative_fill", "evaluate_lock", "venue_fill",
                      "acked", "submitted"):
         assert required in attrs, required
+
+
+# ============================== OBSERVE vs LIVE, at runtime, through the real
+# entrypoint. The distinction the measurement envelope exists to preserve.
+
+def test_observe_without_a_mandate_keeps_would_submit_measurable(tmp_path,
+                                                                 monkeypatch):
+    """OBSERVE / no mandate / NullTransport: the counterfactual still measures."""
+    monkeypatch.delenv(MANDATE.MANDATE_ENV, raising=False)
+    monkeypatch.setenv(MANDATE.MANDATE_FILE_ENV, str(tmp_path / "absent.json"))
+    monkeypatch.setenv(EP.AUTH.MARKET_ENV, SLUG)
+    lim = EP.EX.SafetyLimits.measurement_only(**EP.PM.measurement_envelope())
+    assert lim.monetary_authority == "NONE_OBSERVE_ONLY_NO_SPEND_POSSIBLE"
+    # the envelope does not refuse a $0.40 x 1 intent, so would_submit can be 1
+    assert lim.refuse(price=D("0.40"), qty=D(1), market=SLUG,
+                      committed_by_market={}, residual_after=D(0),
+                      realized_today=D(0), open_markets=[],
+                      outstanding_by_market={}, live_order_count=0) is None
+
+
+def test_observe_without_a_mandate_submits_nothing_live(tmp_path, monkeypatch):
+    """OBSERVE / no mandate: submitted live is ZERO, whatever it measured."""
+    monkeypatch.delenv(MANDATE.MANDATE_ENV, raising=False)
+    monkeypatch.setenv(MANDATE.MANDATE_FILE_ENV, str(tmp_path / "absent.json"))
+    monkeypatch.setenv(EP.AUTH.MARKET_ENV, SLUG)
+    monkeypatch.setenv("L5_OBSERVE_ONLY", "1")
+    rep = EP.observe(clock=ticking(EP.window_start(SLUG) - 5, step=30.0),
+                     sleep=lambda *_a, **_k: None,
+                     state_path=str(tmp_path / "obs_inv.json"),
+                     journal_path=str(tmp_path / "obs_journal.jsonl"),
+                     book_feed=Feed())
+    assert rep["armed"] is False
+    assert rep["submitted_live"] == 0
+    assert rep["post_capable"] is False
+    assert rep["transport"] == "NULL"
+    assert rep["live_limits"]["monetary_authority"] == \
+        "NONE_OBSERVE_ONLY_NO_SPEND_POSSIBLE"
+
+
+def test_observe_with_a_mandate_derives_its_envelope_from_it(tmp_path,
+                                                             monkeypatch):
+    monkeypatch.setenv(MANDATE.MANDATE_ENV, json.dumps(MANDATE_RAW))
+    monkeypatch.setenv(EP.AUTH.MARKET_ENV, SLUG)
+    monkeypatch.setenv("L5_OBSERVE_ONLY", "1")
+    rep = EP.observe(clock=ticking(EP.window_start(SLUG) - 5, step=30.0),
+                     sleep=lambda *_a, **_k: None,
+                     state_path=str(tmp_path / "obs_inv.json"),
+                     journal_path=str(tmp_path / "obs_journal.jsonl"),
+                     book_feed=Feed())
+    lim = rep["live_limits"]
+    assert lim["monetary_authority"] == "PMUS_LIVE_MANDATE"
+    assert lim["max_usd_per_market"] == "1.00"
+    assert rep["submitted_live"] == 0 and rep["post_capable"] is False
+
+
+def test_live_with_a_one_dollar_mandate_has_the_mandate_as_sole_authority(env):
+    venue = Venue()
+    _run(env, venue)
+    probe = EP._LAST_PROBE
+    assert probe.limits.monetary_authority == "PMUS_LIVE_MANDATE"
+    assert probe.limits.is_measurement_only is False
+    assert probe.limits.max_usd_per_market == D("1.00")
