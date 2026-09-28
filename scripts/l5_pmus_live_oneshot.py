@@ -51,6 +51,7 @@ from src import l5_pmus_live_wiring as W
 from src import l5_probe_manifest as PM
 from src import l5_session_journal as JN
 from src import l5_window_actions as WA
+from src import pmus_arm_retry as AR
 from src import pmus_auth as Q1
 
 #: window arithmetic and the L5 action feed come from ONE implementation,
@@ -180,6 +181,42 @@ class Probe:
         self.armed = True
         self.journal.write("armed", {"market": self.market, "detail": out})
         return out
+
+    # ---- BOUNDED PRE-ARM RETRY. The 1545z lesson, and nothing more ---------
+    #
+    # THIS FILE IS THE ONLY ARMING OWNER (3a), so the loop lives here and only
+    # the predicates live in `src/pmus_arm_retry.py`, which contains no arming
+    # capability at all. The distinction the design turns on:
+    #
+    #     retry a TRANSIENT PRE-ARM SAFETY CHECK  -- what this is
+    #     reacquire or renew AUTHORIZATION        -- never
+    #
+    # A retry is a second look at the SAME still-valid authorization for the
+    # SAME market before any order exists. It cannot re-claim, extend or
+    # refresh anything, and it stops the moment the envelope changes. Success
+    # remains one-shot: `arm()` sets `self.armed`, and this returns immediately
+    # ever after, so no amount of retrying can produce a second arming.
+    def arm_with_bounded_retry(self, gate: "AR.ArmRetryGate",
+                               *, sleep=time.sleep) -> Dict[str, Any]:
+        if self.armed:
+            # already armed: NOT a renewal opportunity
+            return {"armed": True, "market": self.market,
+                    "note": "already armed; retry is not renewal"}
+        gate.preconditions()
+        while True:
+            gate.note_attempt()
+            try:
+                out = self.arm()
+            except AUTH.Refused as exc:
+                refusal = getattr(exc, "reason", None) or str(exc)
+                self.journal.write("arm_refused", {
+                    "market": self.market, "refusal": str(refusal),
+                    "attempt": gate.attempts})
+                gate.may_retry(refusal)        # raises ArmAbort when it may not
+                sleep(gate.interval_s)
+                continue
+            self.journal.write("arm_retry_summary", gate.summary())
+            return out
 
     # -------------------------------------------------------------- trading
 

@@ -1,208 +1,290 @@
 """1545z: arming must be retried after a PASSED preflight, not attempted once.
 
-STATUS 2026-09-28 -- OPEN REQUIREMENT, DELIBERATELY RED. `Runner.try_arm` was
-removed by 3a: the continuous runner is no longer permitted to arm, because exactly
-one reviewed path -- `scripts/l5_pmus_live_oneshot.py` -- may own the arming
-transition. That does NOT retire the requirement below. The one-shot currently calls
-`probe.arm()` exactly once and aborts on refusal, so the 1545z lesson is implemented
-NOWHERE, and this file stays as the standing record of that gap until the retry is
-ported into the one-shot under the owner's ten conditions (same unspent unexpired
-authorization, same market, no order submitted, transient refusal only, all
-gates re-read per attempt, bounded deadline, consume exactly once).
+THE LIVE FAILURE. On 1545z the executor was arm-eligible -- owner token matched,
+preflight PASSED -- and the whole window ran `armed: false` with zero orders. The
+single attempt at 15:45:23 hit a terminal order not yet booked, `orders_uncertain()`
+was set, arming refused CORRECTLY, and by 15:45:35 the uncertainty had cleared with
+nothing left in the process to ask again. A refusal that clears on its own must not
+cost a window.
 
-It is marked xfail rather than deleted or skipped: deleting it would be the "merely
-weaken the test" move that was ruled out, and skipping it would make the gap
-invisible. xfail keeps it counted and reported while letting the rest of the suite
-collect -- the AttributeError was at IMPORT time, which aborted collection for every
-other file.
+WHERE IT NOW LIVES. `Runner.try_arm` was removed by 3a: exactly one component may own
+the arming transition, and it is `scripts/l5_pmus_live_oneshot.py`. This suite
+therefore tests the requirement WHERE IT BELONGS -- against the one-shot's
+`arm_with_bounded_retry` and the `src/pmus_arm_retry` predicates -- and the file's
+temporary xfail is removed because the requirement is now implemented, not deferred.
 
-The live failure this pins down. On 2026-09-27 the executor was ARMED, the
-owner arm token matched, preflight PASSED, and the 1545z window still ran
-start to finish with `armed: false` and zero orders submitted.
+THE DISTINCTION EVERY TEST HERE DEFENDS:
 
-Cause: `try_arm()` was reachable ONLY from inside `maybe_preflight()`, which
-returns immediately once `preflight_status == "PASSED"`. Arming therefore got
-exactly one attempt per market window. That single attempt at 15:45:23 found a
-terminal order not yet booked, `orders_uncertain()` was set, try_arm refused --
-correctly -- and by 15:45:35 the uncertainty had cleared with nothing left in
-the process to ask again.
+    retrying a TRANSIENT PRE-ARM SAFETY CHECK   -- permitted, bounded
+    reacquiring or renewing AUTHORIZATION       -- never
 
-A refusal that clears on its own must not cost a whole market window.
+so the negative cases matter more than the positive one.
 """
 from __future__ import annotations
 
-import collections
+import os
+import sys
 
 import pytest
 
-from src import l5_pmus_live_runner as R
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-pytestmark = pytest.mark.xfail(
-    reason="3a removed Runner.try_arm; the arm-retry requirement is OPEN and must "
-           "be ported into scripts/l5_pmus_live_oneshot.py",
-    raises=AttributeError, strict=True)
+from src import pmus_arm_retry as AR                            # noqa: E402
+from src import l5_live_authorization as AUTH                   # noqa: E402
 
-#: resolved at TEST time, not import time, so collection is never aborted
-_MISSING = object()
+MKT = "cpc-btc-updown-15m-2026-09-27-1545z"
+OTHER = "cpc-btc-updown-15m-2026-09-27-1600z"
 
 
-class _Transport:
-    def __init__(self) -> None:
+class _Auth:
+    def __init__(self, market=MKT, claimed=True, consumed=False):
+        self.market, self.claimed, self.consumed = market, claimed, consumed
+        self.claims = 0
+        self.consumes = 0
+
+    def claim(self, market):
+        self.claims += 1
+        self.market, self.claimed = market, True
+
+    def consume(self, outcome):
+        self.consumes += 1
+        self.consumed = True
+
+
+class _Journal:
+    def __init__(self):
+        self.rows = []
+
+    def write(self, kind, payload):
+        self.rows.append((kind, dict(payload)))
+
+
+class _Probe:
+    """Only what arm_with_bounded_retry touches. The real method is bound in."""
+    from scripts.l5_pmus_live_oneshot import Probe as _Real
+    arm_with_bounded_retry = _Real.arm_with_bounded_retry
+
+    def __init__(self, refusals, *, market=MKT):
+        self.market = market
         self.armed = False
-        self.market_slug = "cpc-btc-updown-15m-2026-09-27-1545z"
-        self.tick_size = "0.01"
-        self.arms = 0
+        self.journal = _Journal()
+        self.refusals = list(refusals)      # popped per attempt; [] means arm
+        self.arm_calls = 0
 
     def arm(self):
-        self.arms += 1
+        self.arm_calls += 1
+        if self.refusals:
+            raise AUTH.Refused(self.refusals.pop(0), {})
         self.armed = True
-        return {"armed": True, "market": self.market_slug}
+        return {"armed": True, "market": self.market}
 
 
-class _Store:
-    def __init__(self, uncertain=None) -> None:
-        self._uncertain = uncertain
-
-    def orders_uncertain(self):
-        return self._uncertain
-
-
-class _Runner:
-    """Duck-typed stand-in carrying only what these two methods touch.
-
-    Deliberately not a real Runner: the point is to drive the real
-    `maybe_preflight` and `try_arm` code objects, not to boot a venue client.
-    """
-
-    maybe_preflight = getattr(R.Runner, "maybe_preflight", _MISSING)
-    try_arm = getattr(R.Runner, "try_arm", _MISSING)
-
-    def _require_try_arm(self):
-        if self.try_arm is _MISSING:
-            raise AttributeError(
-                "Runner.try_arm was removed by 3a; the arm-retry requirement is "
-                "OPEN and belongs in the one-shot probe")
-
-    def __init__(self, *, uncertain=None) -> None:
-        self.transport = _Transport()
-        self.store = _Store(uncertain)
-        self.preflight_status = "PASSED"
-        self.preflight_attempts = 1
-        self.last_preflight_t = 0.0
-        self.last_blockers = None
-        self.reconciled = True
-        self.now_t = 0.0
-        self.win = collections.Counter()
-        self.preflights = 0
-        self.reconciles = 0
-
-    def halted(self) -> bool:
-        return False
-
-    def reconcile_if_needed(self, now: float) -> None:
-        self.reconciles += 1
+def _gate(auth=None, *, halted=False, fp="MANDATE-1", submitted=0,
+          target=None, deadline=45.0, market=MKT, clock=None):
+    now = {"t": 0.0}
+    tick = clock or (lambda: now["t"])
+    g = AR.ArmRetryGate(
+        market=market, authorization=auth or _Auth(),
+        halted=lambda: halted,
+        mandate_fingerprint=(fp if callable(fp) else (lambda: fp)),
+        submitted_count=(submitted if callable(submitted)
+                         else (lambda: submitted)),
+        window_target=(target if callable(target) else (lambda: target)),
+        deadline_s=deadline, interval_s=0.0, clock=tick)
+    g._now = now
+    return g
 
 
-def test_a_passed_preflight_still_retries_the_arm():
-    _Runner(uncertain=None)._require_try_arm()
-    """The defect itself: PASSED used to return before reaching try_arm."""
-    r = _Runner()
-    r.maybe_preflight(100.0)
-    assert r.transport.armed is True
-    assert r.transport.arms == 1
+# ------------------------------------------------- the 1545z case, positive
+
+def test_a_transient_orders_uncertain_clears_and_then_arms():
+    """THE POINT. The refusal that cost 1545z must no longer cost a window."""
+    p = _Probe(["orders_uncertain", "orders_uncertain"])
+    g = _gate()
+    out = p.arm_with_bounded_retry(g, sleep=lambda s: None)
+    assert out["armed"] is True and p.armed is True
+    assert p.arm_calls == 3 and g.attempts == 3
+    assert [k for k, _ in p.journal.rows].count("arm_refused") == 2
 
 
-def test_an_uncertainty_that_clears_does_not_cost_the_window():
-    _Runner(uncertain=None)._require_try_arm()
-    """The exact 1545z sequence, and what should have happened."""
-    r = _Runner(uncertain="one terminal order is not yet booked")
-    r.maybe_preflight(100.0)
-    assert r.transport.armed is False
-    assert r.win["arm_refused_orders_uncertain"] == 1
-
-    # ...and the venue answers twelve seconds later, as it did live.
-    r.store._uncertain = None
-    r.maybe_preflight(112.0)
-    assert r.transport.armed is True, (
-        "a transient uncertainty at the one arm attempt must not disarm the "
-        "runner for the rest of the market window")
+def test_the_same_authorization_is_reused_and_never_reclaimed():
+    a = _Auth()
+    p = _Probe(["orders_uncertain"])
+    p.arm_with_bounded_retry(_gate(a), sleep=lambda s: None)
+    assert a.claims == 0, "a retry must never re-claim an authorization"
+    assert a.consumes == 0, "arming does not consume; the probe close-out does"
 
 
-def test_a_refusal_is_logged_once_however_long_it_lasts():
-    _Runner(uncertain=None)._require_try_arm()
-    r = _Runner(uncertain="still unbooked")
-    emitted = []
-    orig, R.emit = R.emit, lambda k, p: emitted.append((k, p))
-    try:
-        for i in range(40):
-            r.maybe_preflight(100.0 + i)
-    finally:
-        R.emit = orig
-    assert r.transport.armed is False
-    assert r.win["arm_refused_orders_uncertain"] == 40
-    disarms = [e for e in emitted if e[0] == "L5_LIVE_DISARMED"]
-    assert len(disarms) == 1, "retrying must not turn one refusal into a flood"
+def test_success_stays_one_shot_and_cannot_become_renewal():
+    p = _Probe([])
+    g = _gate()
+    first = p.arm_with_bounded_retry(g, sleep=lambda s: None)
+    assert first["armed"] is True and p.arm_calls == 1
+    again = p.arm_with_bounded_retry(_gate(), sleep=lambda s: None)
+    assert again["armed"] is True
+    assert "renewal" in again["note"]
+    assert p.arm_calls == 1, "a second call must not re-arm"
 
 
-def test_an_unreconciled_book_is_retried_on_the_same_terms():
-    _Runner(uncertain=None)._require_try_arm()
-    r = _Runner()
-    r.reconciled = False
-    r.maybe_preflight(100.0)
-    assert r.transport.armed is False
-    assert r.win["arm_refused_unreconciled"] == 1
-    r.reconciled = True
-    r.maybe_preflight(101.0)
-    assert r.transport.armed is True
+# ------------------------------------------------------- the negative cases
+
+def test_a_non_transient_refusal_aborts_immediately():
+    p = _Probe(["PREFLIGHT_NOT_PASSED"])
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(_gate(), sleep=lambda s: None)
+    assert e.value.reason == "NON_TRANSIENT_REFUSAL"
+    assert p.arm_calls == 1 and p.armed is False
 
 
-def test_the_retry_never_re_runs_a_passed_preflight():
-    _Runner(uncertain=None)._require_try_arm()
-    """Preflight is a fact about the market. Only arming is retried."""
-    r = _Runner()
-    before = r.preflight_attempts
-    for i in range(10):
-        r.maybe_preflight(100.0 + 30 * i)
-    assert r.preflight_attempts == before
-    assert r.preflight_status == "PASSED"
+def test_an_unknown_refusal_is_treated_as_non_transient():
+    """Whitelist, not blacklist: a refusal we do not understand is not retried."""
+    assert AR.is_transient("orders_uncertain") is True
+    assert AR.is_transient("something_new_from_the_venue") is False
+    p = _Probe(["something_new_from_the_venue"])
+    with pytest.raises(AR.ArmAbort):
+        p.arm_with_bounded_retry(_gate(), sleep=lambda s: None)
 
 
-def test_the_retry_costs_nothing_once_armed():
-    _Runner(uncertain=None)._require_try_arm()
-    """try_arm returns at the first line when already armed: no reconcile,
-    no second arm, nothing that could touch the venue."""
-    r = _Runner()
-    r.maybe_preflight(100.0)
-    reconciles = r.reconciles
-    for i in range(50):
-        r.maybe_preflight(101.0 + i)
-    assert r.transport.arms == 1
-    assert r.reconciles == reconciles
+def test_halt_aborts_before_any_attempt():
+    p = _Probe([])
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(_gate(halted=True), sleep=lambda s: None)
+    assert e.value.reason == "HALT_PRESENT" and p.arm_calls == 0
 
 
-def test_a_halted_runner_is_never_armed_by_the_retry():
-    _Runner(uncertain=None)._require_try_arm()
-    r = _Runner()
-    r.halted = lambda: True
-    for i in range(10):
-        r.maybe_preflight(100.0 + i)
-    assert r.transport.armed is False
-    assert r.transport.arms == 0
+def test_halt_appearing_mid_retry_aborts():
+    state = {"halted": False}
+    g = AR.ArmRetryGate(market=MKT, authorization=_Auth(),
+                        halted=lambda: state["halted"],
+                        mandate_fingerprint=lambda: "M",
+                        submitted_count=lambda: 0,
+                        window_target=lambda: None,
+                        deadline_s=45.0, interval_s=0.0, clock=lambda: 0.0)
+    p = _Probe(["orders_uncertain", "orders_uncertain"])
+
+    def sleep(_):
+        state["halted"] = True
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(g, sleep=sleep)
+    assert e.value.reason == "HALT_PRESENT"
+    assert p.armed is False
 
 
-def test_a_failed_preflight_still_takes_the_preflight_path():
-    _Runner(uncertain=None)._require_try_arm()
-    """The guard is additive: NOT_RUN/FAILED behaviour is untouched."""
-    r = _Runner()
-    r.preflight_status = "NOT_RUN"
-    r.transport.preflight = lambda expect_account=None: {
-        "preflight": "FAILED", "market_slug": r.transport.market_slug}
-    r.last_preflight_t = -1e9
-    orig, R.emit = R.emit, lambda k, p: None
-    try:
-        r.maybe_preflight(100.0)
-    finally:
-        R.emit = orig
-    assert r.preflight_attempts == 2
-    assert r.preflight_status == "FAILED"
-    assert r.transport.armed is False
+def test_a_changed_mandate_aborts():
+    seq = iter(["MANDATE-1", "MANDATE-2", "MANDATE-2", "MANDATE-2"])
+    fps = [next(seq)]
+    g = _gate(fp=lambda: fps[0])
+    fps[0] = "MANDATE-2"
+    p = _Probe(["orders_uncertain"])
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(g, sleep=lambda s: None)
+    assert e.value.reason == "MANDATE_CHANGED" and p.arm_calls == 0
+
+
+def test_an_absent_mandate_aborts():
+    with pytest.raises(AR.ArmAbort) as e:
+        _Probe([]).arm_with_bounded_retry(_gate(fp=None),
+                                         sleep=lambda s: None)
+    assert e.value.reason == "NO_MANDATE"
+
+
+def test_a_window_change_aborts():
+    p = _Probe([])
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(_gate(target=OTHER), sleep=lambda s: None)
+    assert e.value.reason == "WINDOW_CHANGED" and p.arm_calls == 0
+
+
+def test_an_authorization_bound_to_another_market_aborts():
+    p = _Probe([])
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(_gate(_Auth(market=OTHER)),
+                                 sleep=lambda s: None)
+    assert e.value.reason == "AUTHORIZATION_BOUND_TO_MARKET"
+
+
+def test_a_consumed_authorization_aborts():
+    with pytest.raises(AR.ArmAbort) as e:
+        _Probe([]).arm_with_bounded_retry(_gate(_Auth(consumed=True)),
+                                          sleep=lambda s: None)
+    assert e.value.reason == "AUTHORIZATION_CONSUMED"
+
+
+def test_an_unclaimed_authorization_aborts():
+    with pytest.raises(AR.ArmAbort) as e:
+        _Probe([]).arm_with_bounded_retry(_gate(_Auth(claimed=False)),
+                                          sleep=lambda s: None)
+    assert e.value.reason == "AUTHORIZATION_NOT_CLAIMED"
+
+
+def test_any_submitted_order_aborts_retry():
+    """After partial execution there is no such thing as a pre-arm retry."""
+    p = _Probe(["orders_uncertain"])
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(_gate(submitted=1), sleep=lambda s: None)
+    assert e.value.reason == "ORDER_ALREADY_SUBMITTED" and p.arm_calls == 0
+
+
+def test_an_order_submitted_mid_retry_aborts():
+    n = {"v": 0}
+    g = AR.ArmRetryGate(market=MKT, authorization=_Auth(),
+                        halted=lambda: False,
+                        mandate_fingerprint=lambda: "M",
+                        submitted_count=lambda: n["v"],
+                        window_target=lambda: None,
+                        deadline_s=45.0, interval_s=0.0, clock=lambda: 0.0)
+    p = _Probe(["orders_uncertain", "orders_uncertain"])
+
+    def sleep(_):
+        n["v"] = 1
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(g, sleep=sleep)
+    assert e.value.reason == "ORDER_ALREADY_SUBMITTED"
+
+
+def test_the_retry_deadline_is_bounded():
+    now = {"t": 0.0}
+    g = AR.ArmRetryGate(market=MKT, authorization=_Auth(),
+                        halted=lambda: False,
+                        mandate_fingerprint=lambda: "M",
+                        submitted_count=lambda: 0,
+                        window_target=lambda: None,
+                        deadline_s=10.0, interval_s=0.0,
+                        clock=lambda: now["t"])
+    p = _Probe(["orders_uncertain"] * 50)
+
+    def sleep(_):
+        now["t"] += 4.0
+    with pytest.raises(AR.ArmAbort) as e:
+        p.arm_with_bounded_retry(g, sleep=sleep)
+    assert e.value.reason == "RETRY_DEADLINE_EXCEEDED"
+    # t=0 refuse (elapsed 0 < 10) -> t=4 refuse (4 < 10) -> t=8 refuse (8 < 10)
+    # -> t=12 refuse, 12 >= 10, abort. Four looks, then bounded out.
+    assert p.arm_calls == 4, p.arm_calls
+    assert p.armed is False
+
+
+def test_every_gate_is_re_read_on_every_attempt_not_cached():
+    calls = {"halt": 0, "fp": 0, "sub": 0, "win": 0}
+
+    def c(k, v):
+        def f():
+            calls[k] += 1
+            return v
+        return f
+    g = AR.ArmRetryGate(market=MKT, authorization=_Auth(),
+                        halted=c("halt", False), mandate_fingerprint=c("fp", "M"),
+                        submitted_count=c("sub", 0), window_target=c("win", None),
+                        deadline_s=45.0, interval_s=0.0, clock=lambda: 0.0)
+    p = _Probe(["orders_uncertain", "orders_uncertain"])
+    p.arm_with_bounded_retry(g, sleep=lambda s: None)
+    # 1 preconditions() before the loop + 1 per may_retry() = 3
+    for k in ("halt", "sub", "win"):
+        assert calls[k] >= 3, (k, calls)
+    assert calls["fp"] >= 4, calls        # pinned once at construction, then re-read
+
+
+def test_the_policy_module_holds_no_arming_capability():
+    """3a: only the one-shot may own the transition, so this file has no arm()."""
+    src = open(AR.__file__, encoding="utf-8").read()
+    assert ".arm()" not in src
