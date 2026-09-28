@@ -280,6 +280,33 @@ def redact(text: Any) -> str:
     return s[:600]
 
 
+def http_status(exc: BaseException) -> Optional[int]:
+    """The venue's HTTP status out of whatever the stdlib raised, or None.
+
+    urllib raises HTTPError, which carries `.code`; a URLError, a timeout or
+    a parse failure carries none. None is "there was no HTTP answer", which
+    is a different fact from 503 and is kept apart from it: that distinction
+    is exactly what the 2000z window could not be told afterwards.
+    """
+    code = getattr(exc, "code", None)
+    return int(code) if isinstance(code, int) else None
+
+
+def preflight_failure_line(check: str, where: Optional[str],
+                           exc: BaseException) -> Dict[str, Any]:
+    """The one sanitized record a failing preflight gate must leave behind.
+
+    Printed, not only journalled. The 2000z window ended with `preflight
+    FAILED` and nothing else, on a volume that no other service can read,
+    and three different gates were consistent with it. A line on stdout
+    costs nothing and is the difference between a cause and a guess.
+    """
+    return {"check": check, "where": where,
+            "exception": type(exc).__name__,
+            "http_status": http_status(exc),
+            "detail": redact(exc)}
+
+
 def _as_decimal(v: Any) -> Optional[D]:
     """A venue-supplied constraint as an exact Decimal, or None.
 
@@ -490,6 +517,12 @@ class PmusTransport:
         self.armed = False
         self.preflight_report: Optional[Dict[str, Any]] = None
         self.identity_probe: Dict[str, Any] = {}
+        #: market metadata proven for an exact slug, kept for the life of
+        #: this transport. A 15m window's tick, minimum quantity, outcomes
+        #: and series are immutable once the venue has served them for that
+        #: slug, so re-resolving them every 60s buys nothing and turns a
+        #: transient metadata outage into a dead window.
+        self._market_meta: Dict[str, Dict[str, Any]] = {}
         #: the venue's own execution grid, filled in by preflight(). None
         #: until then, and None is "not established" -- never a default.
         self.tick_size: Optional[D] = None
@@ -840,7 +873,9 @@ class PmusTransport:
             try:
                 acct = self.account()
             except Exception as exc:                           # noqa: BLE001
-                return self._fail(checks, gate, "account_readable", exc)
+                return self._fail(checks, gate, "account_readable", exc,
+                                  where="GET %s/v1/account/balances"
+                                        % Q1.API)
             ident = self.account_binding(acct)
             ok &= gate("account_binding_proven", bool(ident), ident)
             if expect_account is not None:
@@ -860,10 +895,35 @@ class PmusTransport:
                    self.market_slug)
         mk: Dict[str, Any] = {}
         if ok:
+            cached = self._market_meta.get(self.market_slug)
             try:
                 mk = self.market(self.market_slug)
+                if mk.get("slug") == self.market_slug:
+                    self._market_meta[self.market_slug] = dict(mk)
             except Exception as exc:                           # noqa: BLE001
-                return self._fail(checks, gate, "market_readable", exc)
+                # Identity, tick, minimum quantity, outcomes and series are
+                # immutable for an exact slug, so a metadata read that has
+                # already succeeded for THIS slug does not have to succeed
+                # again for the window to stay safe. Nothing is assumed: the
+                # fallback exists only where the venue itself already served
+                # the row, the failure is still printed and recorded, and a
+                # slug never resolved still fails closed.
+                if cached is None:
+                    return self._fail(checks, gate, "market_readable", exc,
+                                      where="GET %s|%s /v1/events/slug/%s"
+                                            % (Q1.API, Q1.GATEWAY,
+                                               event_slug_for(
+                                                   self.market_slug)))
+                mk = dict(cached)
+                line = preflight_failure_line(
+                    "market_metadata_refresh", "resolve_market", exc)
+                line["using"] = "METADATA_PROVEN_EARLIER_THIS_TRANSPORT"
+                print("PMUS_PREFLIGHT_DEGRADED " + json.dumps(line,
+                                                              default=str),
+                      flush=True)
+                checks.append({"check": "market_metadata_refresh",
+                               "passed": False, "blocking": False,
+                               "detail": line})
             ok &= gate("market_resolves", bool(mk), mk.get("slug"))
             ok &= gate("market_series_is_btc15m",
                        BTC15M_SERIES in str(mk.get("seriesSlug")
@@ -927,7 +987,26 @@ class PmusTransport:
             try:
                 bk = self.book(self.market_slug)
             except Exception as exc:                           # noqa: BLE001
-                return self._fail(checks, gate, "book_readable", exc)
+                # NON-BLOCKING, and this is the one gate here that is a
+                # duplicate rather than a control. `PmusTransport.book()`
+                # has exactly one caller in the repository -- this line.
+                # Nothing decides against it: the executable book is the
+                # authenticated WS feed, and the binding check is
+                # l5_preview_gate.require_fresh_book at order time, which
+                # refuses a stale or one-sided book on every single order.
+                # Failing the whole 15-minute window on a REST snapshot
+                # nothing trades against removes no risk and removes the
+                # window.
+                line = preflight_failure_line(
+                    "book_readable",
+                    "GET %s/v1/markets/%s/book" % (Q1.GATEWAY,
+                                                   self.market_slug), exc)
+                print("PMUS_PREFLIGHT_DEGRADED " + json.dumps(line,
+                                                              default=str),
+                      flush=True)
+                checks.append({"check": "book_readable", "passed": False,
+                               "blocking": False, "detail": line})
+                bk = {}
         # A periodic preflight runs hundreds of seconds into a window and
         # can meet a book that is already dying; that says nothing about
         # whether a LATER order, decided at a different moment, is
@@ -936,8 +1015,13 @@ class PmusTransport:
         # authenticated book before anything is transmitted. Here the check
         # is reachability of the book, reported non-blocking so a thinning
         # late-window book cannot condemn a future fresh order.
-        ok &= gate("book_readable_now", bool(bk), {"bid": bk.get("bid"),
-                                                   "ask": bk.get("ask")})
+        checks.append({"check": "book_readable_now", "passed": bool(bk),
+                       "blocking": False,
+                       "detail": {"bid": bk.get("bid"), "ask": bk.get("ask"),
+                                  "note": "informational; the binding check "
+                                          "is require_fresh_book on the "
+                                          "authenticated feed at order "
+                                          "time"}})
         checks.append({"check": "book_two_sided_at_preflight",
                        "passed": bool(bk.get("bid")) and bool(bk.get("ask")),
                        "blocking": False,
@@ -946,13 +1030,25 @@ class PmusTransport:
                                           "is at the decision point"}})
 
         # 9. venue positions / open orders reconciled
+        # Open orders is account safety and always blocks: an order we did
+        # not place, or one left behind, must stop the window. Positions is
+        # read ONLY when there is something to reconcile it against --
+        # previously it was fetched on every attempt and the rows were
+        # discarded unless `known_positions` was supplied, so a read whose
+        # answer nothing consumed could kill the window on its own.
         try:
-            pos = self.positions()
             oo = self.open_orders()
         except Exception as exc:                               # noqa: BLE001
-            return self._fail(checks, gate, "positions_readable", exc)
+            return self._fail(checks, gate, "open_orders_readable", exc,
+                              where="GET %s/v1/orders/open" % Q1.API)
         ok &= gate("no_unexpected_open_orders", len(oo) == 0, len(oo))
         if known_positions is not None:
+            try:
+                pos = self.positions()
+            except Exception as exc:                           # noqa: BLE001
+                return self._fail(checks, gate, "positions_readable", exc,
+                                  where="GET %s/v1/portfolio/positions"
+                                        % Q1.API)
             venue = {"%s|%s" % (p.get("market"), p.get("side")): str(p.get("qty"))
                      for p in pos}
             drift = {k: {"ours": str(v), "venue": venue.get(k, "0")}
@@ -981,13 +1077,31 @@ class PmusTransport:
         }
         self.preflight_report = report
         if not ok:
+            # the same rule as _fail: a FAILED preflight never leaves only
+            # the word FAILED behind. Blocking checks only -- a non-blocking
+            # observation that did not pass is not why the window stopped.
+            failing = [c["check"] for c in checks
+                       if not c.get("passed") and c.get("blocking") is not False]
+            print("PMUS_PREFLIGHT_FAIL " + json.dumps(
+                {"failing_checks": failing,
+                 "detail": {c["check"]: c.get("detail") for c in checks
+                            if c["check"] in failing}}, default=str),
+                  flush=True)
+            report["failing_check"] = failing[0] if failing else None
             raise PreflightFailed(json.dumps(report))
         return report
 
-    def _fail(self, checks, gate, name, exc) -> Dict[str, Any]:
-        gate(name, False, "%s: %s" % (type(exc).__name__, redact(exc)))
+    def _fail(self, checks, gate, name, exc,
+              where: Optional[str] = None) -> Dict[str, Any]:
+        line = preflight_failure_line(name, where, exc)
+        gate(name, False, line)
+        # stdout, every time, sanitized. See preflight_failure_line.
+        print("PMUS_PREFLIGHT_FAIL " + json.dumps(line, default=str),
+              flush=True)
         report = {"preflight": "FAILED", "checks": checks,
                   "market_slug": self.market_slug,
+                  "failing_check": name, "where": where,
+                  "identity_probe": self.identity_probe,
                   "armed_after_preflight": False}
         self.preflight_report = report
         raise PreflightFailed(json.dumps(report))

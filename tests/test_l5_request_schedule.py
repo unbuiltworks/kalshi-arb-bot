@@ -356,16 +356,25 @@ def test_preflight_caches_nothing_because_every_read_is_a_live_assertion(
     try_preflight(a)
     try_preflight(a)
     try_preflight(a)
-    # EVERY read, EVERY attempt. No staleness is possible because no state
-    # is kept.
+    # EVERY read that a gate CONSUMES, EVERY attempt. No staleness is
+    # possible, because nothing is skipped on the strength of a stored
+    # answer.
     assert http.paths["/v1/account/balances"] == 3
-    assert http.paths["/v1/portfolio/positions"] == 3
+    assert http.paths["/v1/orders/open"] == 3
+    # Positions is the exception, and NOT by caching: preflight() was asked
+    # for no `known_positions` here, so nothing reconciles the rows and the
+    # read was pure cost. It killed the window when it failed and its answer
+    # was discarded when it succeeded. Asked for reconciliation, it is read
+    # every attempt -- see test_positions_read_failure_blocks_when_
+    # reconciliation_is_asked_for in test_preflight_gate_isolation.
+    assert http.paths["/v1/portfolio/positions"] == 0
 
     b = T.PmusTransport(market_slug=MKTS[1], http=http)   # the roll
     b.limiter = a.limiter
     try_preflight(b)
     assert http.paths["/v1/account/balances"] == 4
     assert not hasattr(T, "_PREFLIGHT_CACHE")
+
 
 
 def test_the_backoff_is_what_bounds_the_preflight_cost(tmp):

@@ -638,6 +638,10 @@ class Probe:
             "market": self.market,
             "authorization": self.auth.as_dict(),
             "preflight": (self.preflight or {}).get("preflight", "NOT_RUN"),
+            # WHICH gate, not merely that one did. The 2000z window ended
+            # with the word FAILED and three gates consistent with it.
+            "preflight_failing_check": (self.preflight
+                                        or {}).get("failing_check"),
             # the account this actually ran against. Previously the whole
             # preflight collapsed to one word here and the fingerprint went
             # only to the journal, on a volume no one can read once a
