@@ -79,7 +79,8 @@ class SessionOrderRegistry:
         self.cumulative_submitted += row["reserved"]
         return row
 
-    def mark_terminal(self, oid: str, filled: D) -> dict:
+    def mark_terminal(self, oid: str, filled: D,
+                      classification: str = None) -> dict:
         row = self.orders.get(str(oid))
         if row is None:
             return {}
@@ -88,7 +89,40 @@ class SessionOrderRegistry:
             filled = row["qty"]
         row["filled"] = filled
         row["state"] = TERMINAL
+        # The venue's own classification, kept so the order census can be
+        # taken from the registry rather than recounted from a second source
+        # that could disagree with it. Absent one, it is derived from the
+        # quantity, which is the only thing we can honestly say.
+        if classification is not None:
+            row["classification"] = str(classification)
+        elif "classification" not in row:
+            row["classification"] = ("FILLED" if filled > 0
+                                     else "CANCELLED_NO_FILL")
         return row
+
+    def census(self) -> Dict[str, int]:
+        """Terminal classification counts for THIS session's orders.
+
+        One source: the registry that recorded every submission. A census
+        recounted from journal rows or from the venue could disagree with the
+        orders we actually sent, which is the whole defect this removes.
+        """
+        out = {"submitted": len(self.orders), "filled": 0, "rejected": 0,
+               "no_fill_terminal": 0, "nonterminal": 0, "unknown": 0}
+        for r in self.orders.values():
+            if r["state"] == UNKNOWN:
+                out["unknown"] += 1
+            if r["state"] != TERMINAL:
+                out["nonterminal"] += 1
+                continue
+            cls = str(r.get("classification") or "")
+            if cls in ("FILLED", "PARTIALLY_FILLED"):
+                out["filled"] += 1
+            elif cls == "REJECTED_NO_FILL":
+                out["rejected"] += 1
+            else:
+                out["no_fill_terminal"] += 1
+        return out
 
     def mark_unknown(self, oid: str, why: str) -> None:
         row = self.orders.get(str(oid))
@@ -341,7 +375,7 @@ class NativeMoneyPath:
                     # BOTH: the registry stops treating it as live, and the
                     # ledger row releases only the unfilled remainder.
                     # `release_terminal` alone left it nonterminal forever.
-                    self.registry.mark_terminal(oid, filled)
+                    self.registry.mark_terminal(oid, filled, cls)
                     self.release_terminal(oid, filled)
                     out["terminated"].append({"oid": oid, "class": cls,
                                               "filled": str(filled)})
@@ -349,7 +383,7 @@ class NativeMoneyPath:
                     row["filled"] = filled
                 continue
             if cls in (LC.REJECTED_NO_FILL, LC.CANCELLED_NO_FILL):
-                self.registry.mark_terminal(oid, D(0))
+                self.registry.mark_terminal(oid, D(0), cls)
                 self.release_terminal(oid, D(0))
                 cur = self.live_orders.get(row["side"]) or {}
                 if str(cur.get("oid") or "") == oid:
@@ -538,7 +572,8 @@ class NativeMoneyPath:
             self.registry.mark_unknown(oid, "FILLED_QTY_UNREADABLE")
             return {"side": side, "oid": oid, "state": "FILL_QTY_UNKNOWN"}
         filled = D(str(got))
-        self.registry.mark_terminal(oid, filled)
+        self.registry.mark_terminal(
+            oid, filled, "FILLED" if filled > 0 else "CANCELLED_NO_FILL")
         self.release_terminal(oid, filled)
         cur = self.live_orders.get(side) or {}
         if str(cur.get("oid") or "") == oid:

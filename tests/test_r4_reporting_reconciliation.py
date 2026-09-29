@@ -42,6 +42,11 @@ class FakeRegistry:
         return {"filled_commitment": "4.00", "open_reserved": "0",
                 "cumulative_submitted": "4.00", "exposure": "4.00"}
 
+    def census(self):
+        # R4 submitted one order and it filled.
+        return {"submitted": 1, "filled": 1, "rejected": 0,
+                "no_fill_terminal": 0, "nonterminal": 0, "unknown": 0}
+
 
 class FakeEngine:
     locked_at = None
@@ -55,6 +60,13 @@ class FakeMoneyPath:
         self.lock_transactions = []
         self.remainders = []
         self.registry = FakeRegistry()
+        # production's canonical feed: one authoritative booked fill for the
+        # one order that filled. The double carries it because production
+        # does -- a double that implements what production lacks is how
+        # three dead seams stayed green for 72 tests.
+        self.booked_fills = [{
+            "oid": "v-r4-1", "side": "up", "qty": "10",
+            "price_own": "0.40", "cost": "4.00", "commission": None}]
         self.submitted = [{
             "kind": "REST", "side": "up", "oid": "v-r4-1",
             "ack": {"id": "v-r4-1", "filled_qty": "10.0000"},

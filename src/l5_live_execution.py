@@ -2084,6 +2084,13 @@ class InventoryStore:
         for p in positions:
             row = position_row(p)          # raises UnrecognizedVenueShape
             after["%s|%s" % (row["market"], row["side"])] = row["qty"]
+        # NOT a per-key compare. R5 held gross UP 30 / DOWN 50 while the
+        # venue reported its NET, DOWN 20, and comparing our gross DOWN
+        # accumulator against that net reported a 30-share "drift" for a
+        # book that reconciled exactly. Per-side drift is therefore only
+        # reported where the venue reports that SIDE as a gross leg, and the
+        # authoritative comparison is the net identity below
+        # (`gross_net_agrees`), which is what marks the book uncertain.
         drift = {k: {"ours": before.get(k, "0"), "venue": after.get(k, "0")}
                  for k in set(before) | set(after)
                  if str(before.get(k, "0")) != str(after.get(k, "0"))}
@@ -2310,6 +2317,24 @@ class InventoryStore:
                                  for m, d in gross.items()},
                 "venue_net": {m: str(v) for m, v in net.items()},
                 "gross_net_agrees": agrees,
+                # THE AUTHORITATIVE COMPARISON, stated so no reader has to
+                # infer it from `drift`. R5 held gross UP 30 / DOWN 50 and
+                # the venue reported its net, and `drift` -- a per-side
+                # diagnostic -- showed our gross DOWN 50 against the venue's
+                # 20 as if that were a 30-share disagreement. It is not: the
+                # identity net = long - short holds exactly. `drift` is for
+                # eyes; this is what decides.
+                "net_identity": {
+                    m: {"our_net_up_terms": str(gross[m]["net"]),
+                        "venue_net_up_terms": str(net.get(m)) if m in net
+                        else None,
+                        "agrees": bool(agrees[m])}
+                    for m in gross},
+                "labels_net_identity": (
+                    "signed UP-POSITIVE. `drift` is a per-side diagnostic and "
+                    "is NOT the authority: comparing the venue's net against "
+                    "a single gross leg reports a disagreement for a book "
+                    "that reconciles exactly."),
                 "gross_detail_lost": sorted(m for m, ok in agrees.items()
                                             if not ok),
                 "labels_inventory": (

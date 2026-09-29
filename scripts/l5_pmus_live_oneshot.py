@@ -670,15 +670,95 @@ class Probe:
                 "lock_transactions": len(getattr(mp, "lock_transactions", [])),
                 "remainders": getattr(mp, "remainders", None)}
 
+    def canonical_accounts(self, close: Mapping[str, Any], *,
+                           submitted_total: int) -> Dict[str, Any]:
+        """THE single answer to what we own, what it cost and who agrees.
+
+        R5 printed `inventory.dn 20.0000` beside `drift.ours 0` beside
+        `filled 0` for one market in one report, because three accessors read
+        three different books at three different moments. There is now one
+        feed -- the native lane's authoritative booked fills -- and every
+        quantity below is derived from it.
+        """
+        from src import pmus_canonical_accounts as CA
+        mp = self.native
+        if mp is None:
+            return {"present": False,
+                    "note": "no native lane in this run"}
+        acc = CA.CanonicalAccounts.from_booked_fills(
+            getattr(mp, "booked_fills", []) or [], market=self.market)
+        recon = (close or {}).get("reconciliation") or {}
+        raw_net = (recon.get("venue_net") or {}).get(self.market)
+        # SIGN. `_net_by_market` signs the venue's net UP-POSITIVE (R5
+        # printed -20.0000 for a net long of 20 DOWN). The canonical
+        # residual is DOWN-positive, so the one conversion happens here,
+        # once, rather than at each reader.
+        net = None if raw_net is None else -D(str(raw_net))
+        census = self.order_census()
+        out = CA.reconcile(
+            acc, venue_net=net,
+            open_orders_at_venue=int(recon.get("open_orders_at_venue") or 0),
+            submitted_orders=submitted_total,
+            terminal_filled_orders=census["filled"],
+            rejected_orders=census["rejected"],
+            no_fill_terminal_orders=census["no_fill_terminal"])
+        out["present"] = True
+        out["census"] = census
+        return out
+
+    def order_census(self) -> Dict[str, int]:
+        """Terminal classification counts, from the lifecycle classifier.
+
+        Read from the registry the money path actually kept, so the census
+        cannot drift from the orders that were submitted.
+        """
+        mp = self.native
+        if mp is None:
+            return {"filled": 0, "rejected": 0, "no_fill_terminal": 0}
+        return mp.registry.census()
+
     def report(self, close: Mapping[str, Any]) -> Dict[str, Any]:
         submitted = [r for r in self.records
                      if (r.get("ORDER") or {}).get("submitted") is True]
         filled = [r for r in self.records
                   if (r.get("FILL") or {}).get("filled") is True]
         native = self.native_accounting()
+        submitted_total = len(submitted) + int(native["submitted"])
         coherent = self.coherence(
-            close, market=self.market,
-            submitted_total=len(submitted) + int(native["submitted"]))
+            close, market=self.market, submitted_total=submitted_total)
+        canonical = self.canonical_accounts(close,
+                                            submitted_total=submitted_total)
+        # the report's inventory IS the canonical gross book, never a second
+        # accumulator that could answer differently.
+        if canonical.get("present"):
+            _a = canonical["accounts"]
+            canonical_inventory = {
+                "up": _a["gross"]["UP"], "dn": _a["gross"]["DOWN"],
+                "matched": _a["matched"], "residual": _a["residual"],
+                "residual_side": _a["residual_side"],
+                "filled_cash_usd": _a["filled_cash"],
+                "cost_basis": _a["cost_basis"],
+                "live_orders": self.store.live_order_count(),
+                "source": _a["source"]}
+            # A native lane that moved money is incoherent unless the
+            # canonical identities hold too, so the two agree by construction.
+            if not canonical["coherent"]:
+                coherent = {"coherent": False,
+                            "why": {"reason": "CANONICAL_ACCOUNTS_INCOHERENT",
+                                    "failed_checks": canonical["failed_checks"],
+                                    "checks": canonical["checks"],
+                                    "prior": coherent["why"]}}
+        else:
+            canonical_inventory = {
+                "up": str(self.store.position(self.market, "UP")),
+                "dn": str(self.store.position(self.market, "DOWN")),
+                "residual": str(self.store.residual(self.market)),
+                "committed_usd": str(
+                    self.store.committed().get(self.market, D(0))),
+                "outstanding_usd": str(
+                    self.store.outstanding_by_market().get(self.market, D(0))),
+                "live_orders": self.store.live_order_count(),
+                "source": "L5_ACTION_LANE_STORE"}
         refused: Dict[str, int] = {}
         for r in self.records:
             why = r.get("refused_reason")
@@ -714,7 +794,16 @@ class Probe:
             "submitted": len(submitted),
             "native_lane": native,
             "submitted_total": len(submitted) + int(native["submitted"]),
+            # PER LANE. `filled` kept its L5-action meaning for existing
+            # evidence; `filled_orders_total` is the number that must never
+            # be 0 while the venue holds shares this session acquired.
             "filled": len(filled),
+            "filled_orders_total": (
+                canonical["accounts"]["filled_orders"]
+                if canonical.get("present") else len(filled)),
+            "filled_contracts_total": (
+                canonical["accounts"]["filled_contracts"]
+                if canonical.get("present") else "0"),
             "refused_reason": refused,
             # Probe 03 reported SUBMIT_OUTCOME_UNKNOWN as a bare count and
             # sent the cause to a volume no one could read. The cause now
@@ -733,17 +822,20 @@ class Probe:
             "filled_at_ack": len([r for r in self.records
                                   if (r.get("FILL") or {}).get("filled")
                                   is True]),
-            "filled_at_venue": len([v for v in self.scoped("filled_qty")
-                                    .values() if D(str(v)) > 0]),
-            "inventory": {
-                "up": str(self.store.position(self.market, "UP")),
-                "dn": str(self.store.position(self.market, "DOWN")),
-                "residual": str(self.store.residual(self.market)),
-                "committed_usd": str(
-                    self.store.committed().get(self.market, D(0))),
-                "outstanding_usd": str(
-                    self.store.outstanding_by_market().get(self.market, D(0))),
-                "live_orders": self.store.live_order_count()},
+            "filled_at_venue": (
+                canonical["accounts"]["filled_orders"]
+                if canonical.get("present")
+                else len([v for v in self.scoped("filled_qty").values()
+                          if D(str(v)) > 0])),
+            "fees_venue_signed": (
+                canonical["accounts"]["fees_venue_signed"]
+                if canonical.get("present") else "0"),
+            # ONE feed. These used to read `self.store`, the L5-ACTION
+            # lane's book, which the native money path never writes to: in
+            # R5 that reported 0 while 80 contracts traded. `inventory` is
+            # now the canonical gross book and carries its own provenance.
+            "canonical_accounts": canonical,
+            "inventory": canonical_inventory,
             "book_feed": self.feed.health(),
             "l5_feed": self.l5_health.as_dict(),
             "stage_reached": self.stage,
