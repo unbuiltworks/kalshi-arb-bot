@@ -1,0 +1,172 @@
+"""The persistence/frequency signature, in ONE shape for every source.
+
+WHY ONE MODULE. The question is whether our clone's action sequence now looks
+like L5's. That is only answerable if "actions per minute" means the same
+arithmetic for L5's 501-window history, for R5's live journal and for the
+shadow runner. Three implementations would guarantee three answers, so there
+is one, and every caller feeds it the same normalised action list.
+
+WHAT AN ACTION IS. One decision that produced an intent, with the state it
+was taken FROM. A tick that produced no intent is counted separately, as
+no_intent, and never as an action -- R5's defect expressed itself precisely
+as ticks that looked alive and emitted nothing.
+
+`l5_completion_behavior` measures the same quantities over L5's own fills;
+the key names here are deliberately identical so the cohorts can be compared
+without a translation layer.
+
+SHADOW ONLY where the source is the shadow runner: no field here is a
+realized economic quantity, and nothing in this module reads or writes money.
+"""
+from __future__ import annotations
+
+import statistics
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+
+#: an action's `mode`, matching l5_completion_behavior
+FLAT_OPEN, EXTEND, REBALANCE = "flat_open", "extend", "rebalance"
+
+
+def _num(v: Any) -> Optional[float]:
+    """A number, or None. Never a raise: this module only observes."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f          # NaN is not a price
+
+
+def classify(side: str, *, up: float, down: float) -> str:
+    """EXTEND adds to the heavy side; REBALANCE adds to the light one."""
+    resid = up - down
+    if resid == 0:
+        return FLAT_OPEN
+    heavy = "up" if resid > 0 else "down"
+    return EXTEND if side == heavy else REBALANCE
+
+
+def signature(actions: Sequence[Mapping[str, Any]], *,
+              no_intent_ticks: int = 0,
+              window_s: Optional[float] = None,
+              label: str = "SHADOW") -> Dict[str, Any]:
+    """The comparable signature of one window's action sequence.
+
+    `actions` each need: t (epoch seconds), side ("up"/"down"), and the
+    inventory BEFORE the action as up/down; px and qty are optional.
+    """
+    acts = [a for a in actions if a.get("t") is not None and a.get("side")]
+    acts = sorted(acts, key=lambda a: a["t"])
+    n = len(acts)
+    ticks = n + int(no_intent_ticks)
+
+    modes: List[str] = []
+    streaks: List[int] = []
+    dts: List[float] = []
+    matched: List[float] = []
+    residual: List[float] = []
+    transitions: Dict[str, int] = {}
+    streak = 0
+    prev_side = prev_mode = None
+    prev_t = None
+    prev_px_by_side: Dict[str, float] = {}
+    same_price = reprice = 0
+
+    for a in acts:
+        up = float(a.get("up") or 0.0)
+        dn = float(a.get("down") or 0.0)
+        side = str(a["side"]).lower()
+        mode = classify(side, up=up, down=dn)
+        modes.append(mode)
+        matched.append(min(up, dn))
+        residual.append(abs(up - dn))
+        streak = streak + 1 if (prev_side is not None and side == prev_side) else 1
+        streaks.append(streak)
+        if prev_t is not None:
+            dts.append(float(a["t"]) - float(prev_t))
+        if prev_mode is not None:
+            transitions["%s->%s" % (prev_mode, mode)] = transitions.get(
+                "%s->%s" % (prev_mode, mode), 0) + 1
+        # A px we cannot read is UNKNOWN: it contributes to neither
+        # same_price nor reprice, rather than being coerced. An upstream
+        # `str(None)` once reached here as the literal "None" and raised.
+        px = _num(a.get("px"))
+        if px is not None:
+            last = prev_px_by_side.get(side)
+            if last is not None:
+                if abs(px - last) < 1e-9:
+                    same_price += 1
+                else:
+                    reprice += 1
+            prev_px_by_side[side] = px
+        prev_side, prev_mode, prev_t = side, mode, a["t"]
+
+    span_s = ((acts[-1]["t"] - acts[0]["t"]) if n >= 2 else 0.0) or 0.0
+    basis_s = window_s if window_s else span_s
+
+    def med(v: Iterable[float]) -> Optional[float]:
+        v = [x for x in v if x is not None]
+        return statistics.median(v) if v else None
+
+    def frac(m: str) -> Optional[float]:
+        return (modes.count(m) / n) if n else None
+
+    return {
+        "label": label,
+        "n_actions": n,
+        "n_ticks": ticks,
+        # ---- frequency and persistence: the signature that matters
+        "actions_per_min": (n * 60.0 / basis_s) if basis_s else None,
+        "median_dt_prev": med(dts),
+        "no_intent_tick_frac": ((ticks - n) / ticks) if ticks else None,
+        "last_action_s_to_expiry": (acts[-1].get("s_to_expiry") if n else None),
+        "first_action_s_to_expiry": (acts[0].get("s_to_expiry") if n else None),
+        # ---- inventory through time
+        "median_matched": med(matched),
+        "max_matched": max(matched) if matched else None,
+        "median_residual": med(residual),
+        "max_residual": max(residual) if residual else None,
+        "matched_series": matched,
+        "residual_series": residual,
+        # ---- mode structure
+        "extend_frac": frac(EXTEND),
+        "rebalance_frac": frac(REBALANCE),
+        "flat_open_frac": frac(FLAT_OPEN),
+        "transitions": transitions,
+        "max_streak": max(streaks) if streaks else 0,
+        "median_streak": med(streaks),
+        "same_price_frac": (same_price / (same_price + reprice)
+                            if (same_price + reprice) else None),
+        "labels": ("counts and timings only; no realized economics. A tick "
+                   "that emitted no intent is no_intent, never an action."),
+    }
+
+
+def from_native_journal(rows: Iterable[Mapping[str, Any]], *,
+                        label: str = "SHADOW") -> Dict[str, Any]:
+    """Signature of a live/shadow window from its `native_tick` journal.
+
+    A native_tick row carries the decision's verdict; rows whose `submitted`
+    list is empty are the no-intent ticks that R5's defect produced in bulk.
+    Inventory is carried forward from the engine's own reported book where the
+    journal has it, so nothing is recomputed from prices.
+    """
+    acts: List[Dict[str, Any]] = []
+    no_intent = 0
+    up = dn = 0.0
+    for r in rows:
+        if r.get("kind") != "native_tick":
+            continue
+        intents = r.get("intents") or r.get("submitted") or []
+        if not intents:
+            no_intent += 1
+            continue
+        for it in intents:
+            side = str(it.get("side") or "").lower()
+            if side not in ("up", "down"):
+                continue
+            acts.append({"t": r.get("t"), "side": side, "up": up, "down": dn,
+                         "px": it.get("px"),
+                         "s_to_expiry": r.get("s_to_expiry")})
+    return signature(acts, no_intent_ticks=no_intent, label=label)
