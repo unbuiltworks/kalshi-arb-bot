@@ -155,3 +155,85 @@ def shadow_window(market: str, deadline: float, *, feed, journal,
     journal.write("shadow_window_done", out)
     print("SHADOW_WINDOW " + json.dumps(out, default=str), flush=True)
     return out
+
+
+# ---------------------------------------------------------------- continuous
+
+#: journal for the continuous runner. Its own path: this process must never
+#: write where a money-path journal lives.
+JOURNAL_ENV = "L5_SHADOW_JOURNAL"
+DEFAULT_JOURNAL = "/state/l5-shadow/shadow_journal.jsonl"
+
+
+def run_forever(*, clock=time.time, sleep=time.sleep,
+                feed_factory=None, journal=None, max_windows=None) -> None:
+    """Shadow fresh BTC-15m windows, one after another, indefinitely.
+
+    THE SLUG IS DERIVED ARITHMETICALLY, not from venue discovery, and that is
+    a deliberate trade. The armed one-shot asks the venue which window exists,
+    because a stale pin there costs a spent authorization. Here there is no
+    authorization and no money, so the slug comes from `l5_window_actions`
+    and the image can exclude the POST-capable transport ENTIRELY -- which is
+    a stronger no-POST guarantee than any flag. The cost is that a window the
+    venue has not published yields no frames; that is recorded as a window
+    with zero ticks rather than papered over.
+
+    Read-only, self-recovering: a failure in one window is journalled and the
+    next window is attempted, because a shadow collector should behave like
+    the 24/7 recorders rather than like a bounded money session.
+    """
+    from src import l5_live_book_feed as FEED
+    from src import l5_session_journal as JN
+
+    journal = journal or JN.Journal(
+        os.getenv(JOURNAL_ENV, DEFAULT_JOURNAL))
+    journal.write("shadow_runner_started", {
+        "clip": str(clip_from_env()),
+        "post_capable": False,
+        "labels": ("NO-POST: this image contains no transport, money path, "
+                   "mandate or authorization. " + SHADOW)})
+
+    done = 0
+    last_slug = None
+    while max_windows is None or done < max_windows:
+        slug = WA.current_slug(clock())
+        start = WA.window_start(slug)
+        if slug == last_slug or start is None:
+            sleep(POLL_S)
+            continue
+        remaining = (start + WA.WINDOW_S) - clock()
+        if remaining < MIN_REMAINING_S:
+            # too little of this window left to say anything about cadence
+            sleep(POLL_S)
+            continue
+        last_slug = slug
+        deadline = start + WA.WINDOW_S
+        feed = None
+        try:
+            feed = ((feed_factory(slug, deadline) if feed_factory
+                     else FEED.AuthenticatedBookFeed(slug, clock=clock,
+                                                     deadline=deadline)))
+            shadow_window(slug, deadline, feed=feed, journal=journal,
+                          clock=clock, sleep=sleep)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            journal.write("shadow_window_failed", {
+                "market": slug, "error": type(exc).__name__,
+                "detail": str(exc)[:300],
+                "labels": "the next window is still attempted; " + SHADOW})
+            print("SHADOW_WINDOW_FAILED " + json.dumps(
+                {"market": slug, "error": type(exc).__name__}), flush=True)
+        finally:
+            for closer in ("stop", "close"):
+                fn = getattr(feed, closer, None)
+                if callable(fn):
+                    try:
+                        fn()
+                    except BaseException:                      # noqa: BLE001
+                        pass
+            done += 1
+
+
+if __name__ == "__main__":
+    run_forever()

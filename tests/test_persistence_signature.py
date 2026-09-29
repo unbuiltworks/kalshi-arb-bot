@@ -191,3 +191,63 @@ def test_the_depth_used_by_decisions_is_persisted(tmp_path):
              if l.strip() and json.loads(l)["kind"] == "shadow_book_depth"]
     assert depth, "no depth persisted"
     assert depth[0]["bids"] == [["0.60", "500"], ["0.59", "250"]]
+
+
+# ------------------------------------------------- the continuous runner
+
+def test_run_forever_shadows_successive_windows_and_never_reuses_one(tmp_path):
+    """One window at a time, each visited once. A collector that re-entered
+    the same slug would double-count its cadence."""
+    from src import l5_session_journal as JN2
+
+    seen = []
+
+    class Feed:
+        ladder = {"bids": [["0.60", "500"]], "offers": [["0.62", "400"]]}
+
+        def __init__(self, slug):
+            seen.append(slug)
+            self.n = 0
+
+        def latest(self):
+            self.n += 1
+            if self.n > 3:
+                return None
+            return {"state": "MARKET_STATE_OPEN", "bid": "0.60", "ask": "0.62",
+                    "t": "x%d" % self.n}
+
+    t = {"now": 1790000000.0}
+
+    def clock():
+        t["now"] += 120.0
+        return t["now"]
+
+    SR.run_forever(clock=clock, sleep=lambda *_a, **_k: None,
+                   feed_factory=lambda slug, dl: Feed(slug),
+                   journal=JN2.Journal(str(tmp_path / "c.jsonl")),
+                   max_windows=3)
+    assert len(seen) == 3, seen
+    assert len(set(seen)) == 3, "the same window was shadowed twice: %s" % seen
+
+
+def test_a_failing_window_does_not_stop_the_collector(tmp_path):
+    """Read-only collectors must self-recover; a bounded money session must
+    not. This is the collector."""
+    from src import l5_session_journal as JN2
+
+    calls = {"n": 0}
+
+    def boom(slug, dl):
+        calls["n"] += 1
+        raise RuntimeError("ws refused")
+
+    t = {"now": 1790000000.0}
+    j = tmp_path / "c.jsonl"
+    SR.run_forever(clock=lambda: t.__setitem__("now", t["now"] + 120.0)
+                   or t["now"], sleep=lambda *_a, **_k: None,
+                   feed_factory=boom, journal=JN2.Journal(str(j)),
+                   max_windows=3)
+    assert calls["n"] == 3, "the collector stopped after a failure"
+    kinds = [json.loads(l)["kind"] for l in open(str(j)).read().splitlines()
+             if l.strip()]
+    assert kinds.count("shadow_window_failed") == 3
