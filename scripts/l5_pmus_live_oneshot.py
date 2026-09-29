@@ -979,57 +979,126 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
     probe.native = mp
     seen_t = None
     ticks = 0
-    while clock() < deadline:
-        book = feed.latest()
-        if book is None or book.get("t") == seen_t:
-            sleep(POLL_S)
-            continue
-        seen_t = book.get("t")
-        ticks += 1
-        res = mp.on_book_state(book, getattr(feed, "ladder", None))
-        # THE BOOK THE DECISION WAS TAKEN AGAINST. Without it, R4's rejection
-        # could not be diagnosed at all: the PDI-crossing hypothesis turns on
-        # the YES bid at 00:46:35.909, and `native_tick` recorded only the
-        # verdict. The WS frames are not journalled and the venue's REST book
-        # 404ed for that market throughout the window (observed independently
-        # by pmus-btc15m-tape), so no artifact anywhere carried it.
-        journal.write("native_tick", {"t": seen_t, "book": {
-            k: (None if book.get(k) is None else str(book.get(k)))
-            for k in ("bid", "ask", "bid_qty", "ask_qty", "status", "state")},
-            **{k: v for k, v in res.items() if k != "submitted"}})
-        if mp.eng.locked_at is not None:
-            journal.write("native_locked", {"t": str(mp.eng.locked_at),
-                                            "via": mp.eng.lock_via,
-                                            "floor": str(mp.eng.lock_floor)})
-            break
-    # END OF WINDOW: cancel every tracked quote, confirm it is gone, release
-    # the unfilled budget. A quote left resting outlives the window and can
-    # fill later, unmanaged, on a market nothing is watching.
-    sweep = mp.sweep_all()
-    probe.native = mp
-    # OBSERVATION ONLY: stop the private socket and journal both reports.
-    # Failures here are swallowed -- the window's accounting must not depend
-    # on observation.
-    if stream is not None:
+    # THE SWEEP RUNS ON EVERY EXIT PATH, which is what this try/finally is
+    # for and the only reason it exists.
+    #
+    # R6 (2026-09-29 1815z) proved the gap. `MandateRefusal
+    # (max_spend_per_market_exhausted)` was raised INSIDE this loop and
+    # propagated straight past `mp.sweep_all()`, which used to sit on the
+    # straight-line path below. `probe.close_out()` in run()'s own `finally`
+    # could not compensate: it cancels what it finds in
+    # `store.live_orders_for_session(...)`, and the native lane holds no
+    # InventoryStore at all, so it found nothing and cancelled nothing.
+    # `CSWG9ZB98YCA` was then re-adopted from the venue with `session_id
+    # None`, rested UNMANAGED for 12.5 minutes on a market no process was
+    # watching, and filled at the close. It happened to complete the pair
+    # and make money. The next one need not.
+    #
+    # The comment below already stated the policy correctly. Only the
+    # control flow disagreed with it.
+    try:
+        while clock() < deadline:
+            book = feed.latest()
+            if book is None or book.get("t") == seen_t:
+                sleep(POLL_S)
+                continue
+            seen_t = book.get("t")
+            ticks += 1
+            _ladder = getattr(feed, "ladder", None)
+            res = mp.on_book_state(book, _ladder)
+            # THE BOOK THE DECISION WAS TAKEN AGAINST. Without it, R4's
+            # rejection could not be diagnosed at all: the PDI-crossing
+            # hypothesis turns on the YES bid at 00:46:35.909, and
+            # `native_tick` recorded only the verdict. The venue's REST book
+            # 404ed for that market throughout the window (observed
+            # independently by pmus-btc15m-tape), so no artifact anywhere
+            # carried it.
+            journal.write("native_tick", {"t": seen_t, "book": {
+                k: (None if book.get(k) is None else str(book.get(k)))
+                for k in ("bid", "ask", "bid_qty", "ask_qty", "status",
+                          "state")},
+                **{k: v for k, v in res.items() if k != "submitted"}})
+            # OBSERVATION ONLY: the authenticated full-depth frame the
+            # decision was actually taken against. R6's 18:17:32->18:30
+            # counterfactual could not be replayed exactly because the depth
+            # was never persisted anywhere -- the probe saw it at 14ms and
+            # threw it away. Journalled AFTER the decision, read by nothing,
+            # and wrapped so a recording failure can never reach trading.
+            try:
+                if _ladder:
+                    journal.write("native_book_depth", {
+                        "t": seen_t,
+                        "bids": [[str(a), str(b)] for a, b in
+                                 (_ladder.get("bids") or [])],
+                        "offers": [[str(a), str(b)] for a, b in
+                                   (_ladder.get("offers") or [])],
+                        "labels": ("THE depth object this tick's decision "
+                                   "was taken against -- the same reference "
+                                   "passed to on_book_state, not a re-read. "
+                                   "Venue-observed, never synthesized. "
+                                   "OBSERVATIONAL: nothing reads it back.")})
+            except BaseException:                          # noqa: BLE001
+                pass
+            if mp.eng.locked_at is not None:
+                journal.write("native_locked",
+                              {"t": str(mp.eng.locked_at),
+                               "via": mp.eng.lock_via,
+                               "floor": str(mp.eng.lock_floor)})
+                break
+    finally:
+        # END OF WINDOW, AND EVERY OTHER WAY OUT. Cancel every tracked quote,
+        # confirm it is gone, release the unfilled budget. A quote left
+        # resting outlives the window and can fill later, unmanaged, on a
+        # market nothing is watching.
+        #
+        # A sweep that itself fails must NOT replace the exception that
+        # brought us here, and must NOT be mistaken for a clean shutdown, so
+        # it is caught and recorded as UNSWEPT. That is the fail-closed
+        # direction: the orders are still charged in full and the window is
+        # marked as one whose terminality the venue never confirmed.
+        sweep = None
         try:
-            stream.stop()
-            journal.write("ws_private_stream", stream.health())
+            sweep = mp.sweep_all()
+        except BaseException as _sx:                       # noqa: BLE001
+            if isinstance(_sx, (KeyboardInterrupt, SystemExit)):
+                raise
+            sweep = {"swept": False, "error": type(_sx).__name__,
+                     "detail": str(_sx)[:300],
+                     "labels": ("SWEEP FAILED. Venue terminality NOT "
+                                "confirmed: any tracked order may still be "
+                                "resting. Its commitment stays charged in "
+                                "full.")}
+            try:
+                journal.write("native_sweep_failed", sweep)
+            except BaseException:                          # noqa: BLE001
+                pass
+        probe.native = mp
+        # OBSERVATION ONLY: stop the private socket and journal both reports.
+        # Failures here are swallowed -- the window's accounting must not
+        # depend on observation.
+        if stream is not None:
+            try:
+                stream.stop()
+                journal.write("ws_private_stream", stream.health())
+            except BaseException:                          # noqa: BLE001
+                pass
+        for _nm, _o in (("ws_lifecycle_observation", obs),
+                        ("decision_shadow", shadow)):
+            if _o is None:
+                continue
+            try:
+                journal.write(_nm, _o.report())
+            except BaseException:                          # noqa: BLE001
+                pass
+        try:
+            journal.write("native_window_done", {
+                "sweep": sweep,
+                "ticks": ticks, "submitted": len(mp.submitted),
+                "locked": mp.eng.locked_at is not None,
+                "lock_transactions": len(mp.lock_transactions),
+                "remainders": mp.remainders})
         except BaseException:                              # noqa: BLE001
             pass
-    for _nm, _o in (("ws_lifecycle_observation", obs),
-                    ("decision_shadow", shadow)):
-        if _o is None:
-            continue
-        try:
-            journal.write(_nm, _o.report())
-        except BaseException:                              # noqa: BLE001
-            pass
-    journal.write("native_window_done", {
-        "sweep": sweep,
-        "ticks": ticks, "submitted": len(mp.submitted),
-        "locked": mp.eng.locked_at is not None,
-        "lock_transactions": len(mp.lock_transactions),
-        "remainders": mp.remainders})
     return mp
 
 
