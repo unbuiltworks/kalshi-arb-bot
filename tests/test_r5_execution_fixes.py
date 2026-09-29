@@ -182,6 +182,14 @@ def _path(venue, oid="CSPERKXEYYB5", side="up", qty=D(10), price=D("0.46")):
     mp.venue = venue
     mp.journal = None
     mp._cancel_failures = {}
+    # pass-scoped caches, as production initialises them. TERMINAL verdicts
+    # only, because terminal is monotonic and a WORKING verdict must never be
+    # served across a cancel attempt.
+    mp._resolved_this_pass = set()
+    mp._terminal_verdicts = {}
+    mp._status_reads = 0
+    mp._status_cache_hits = 0
+    mp.timing = {}
     mp.registry = MP.SessionOrderRegistry()
     mp.registry.record(oid, side=side, price=price, qty=qty, kind=E.REST)
     mp.release_terminal = lambda *a, **k: None

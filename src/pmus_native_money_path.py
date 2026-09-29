@@ -15,6 +15,7 @@ structurally.
 """
 from __future__ import annotations
 
+import time
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -37,6 +38,21 @@ LIVE, TERMINAL, UNKNOWN = "LIVE", "TERMINAL", "UNKNOWN"
 #: after submission. An order the venue is done with needs no cancellation.
 CLEARED_STATES = ("CONFIRMED_CANCELLED", "ALREADY_TERMINAL",
                   "NOTHING_RESTING")
+
+
+def _now_ms() -> float:
+    """Monotonic milliseconds. Used only for durations, never as a clock."""
+    return time.monotonic() * 1000.0
+
+
+def _ms(t) -> Optional[float]:
+    """A book state's own epoch timestamp in ms, or None."""
+    if t is None:
+        return None
+    try:
+        return float(t) * 1000.0
+    except (TypeError, ValueError):
+        return None
 
 
 class OrderStateUnknown(RuntimeError):
@@ -232,6 +248,11 @@ class NativeMoneyPath:
         #: that keeps failing is bounded and escalated rather than silently
         #: stranding its side for the rest of the window (R5 CSPERKXEYYB5).
         self._cancel_failures: Dict[str, int] = {}
+        #: pass-scoped: TERMINAL verdicts only (terminal is monotonic).
+        self._terminal_verdicts: Dict[str, Any] = {}
+        self.timing: Dict[str, Any] = {}
+        self._status_reads = 0
+        self._status_cache_hits = 0
 
     # ------------------------------------------------------------ the tick
 
@@ -254,7 +275,14 @@ class NativeMoneyPath:
         # THE ENGINE DOES NOT DECIDE UNTIL THIS HAS BEEN INCORPORATED. An
         # order we could not read is UNKNOWN and HALTS the window rather than
         # being treated as unfilled.
+        # ONE PASS starts here: the terminal-verdict cache and the
+        # resolved-this-pass set live exactly as long as this tick.
+        self.begin_pass()
+        self.timing = T = {"book_received_ms": _ms(row.get("t")),
+                           "decision_start_ms": _now_ms()}
+        T["status_reconciliation_start_ms"] = _now_ms()
         resolved = self.resolve_open_orders()
+        T["status_reconciliation_end_ms"] = _now_ms()
         if resolved["unknown"]:
             return {"acted": False, "refused": "ORDER_STATE_UNKNOWN",
                     "halted": True, "detail": resolved["unknown"],
@@ -263,13 +291,17 @@ class NativeMoneyPath:
                              "read may not be traded around")}
         booked = resolved["fills_booked"] + self._book_authenticated_fills()
 
+        T["lock5_start_ms"] = _now_ms()
+        T["_lock5_wall_ms"] = time.time() * 1000.0
         try:
             intents = self.eng.on_book(row, ladder,
                                        execute_taker=self._execute_taker)
         except E.StaleBook as exc:
+            T["lock5_end_ms"] = _now_ms()
             return {"acted": False, "refused": "STALE_BOOK",
                     "detail": str(exc), "fills_booked": booked}
 
+        T["lock5_end_ms"] = _now_ms()
         out: Dict[str, Any] = {"acted": True, "intents": len(intents),
                                "submitted": [], "cancelled": [],
                                "lock": None, "fills_booked": booked,
@@ -299,9 +331,125 @@ class NativeMoneyPath:
                 self.lock_transactions.append(verdict)
                 out["lock"] = verdict["verdict"]
             # COMPLETE / SECURE already went through _execute_taker
+        T["decision_end_ms"] = _now_ms()
+        out["timing"] = self.timing_report()
         return out
 
     # ------------------------------------------------------------- the wire
+
+    #: Concurrency for the independent authoritative status reads in one
+    #: pass. Each read is independent -- a different order id, no shared
+    #: mutable state until the verdicts come back -- so they may overlap.
+    #:
+    #: MEASURED CAVEAT: the transport's rate limiter is ONE SHARED TOKEN
+    #: BUCKET at rps=1.5, burst=4.0, and it sleeps inside `before()`. Tokens
+    #: are not created by concurrency, so fanning out cannot beat the bucket;
+    #: it only overlaps the network time under it. The lever that actually
+    #: reduces book age is spending FEWER tokens, which is what the terminal
+    #: verdict cache below does. This is set to 1 by default precisely so we
+    #: do not pretend otherwise.
+    STATUS_FANOUT = 1
+
+    def _status_once(self, oid: str, *, requested_qty=None, side=None):
+        """Authoritative status, read at most once per pass ONCE TERMINAL.
+
+        `_resolved_this_pass` existed but was never consulted -- written on
+        line 347 and read nowhere -- so every cancel pre-check and every
+        cancel-failure verdict spent another token on an order whose fate the
+        pass had already established. At 2.4 reads/tick against rps=1.5 that
+        is the dominant component of the 1.39-6.98 s book age R5 measured.
+
+        ONLY TERMINAL VERDICTS ARE CACHED, and that is a safety property, not
+        an optimisation detail. Terminal is monotonic: an order the venue has
+        finished with cannot go back to working, so reusing that answer inside
+        one pass cannot be stale. A WORKING verdict is NEVER cached, because a
+        cancel attempted later in the same tick may have been applied at the
+        venue even when its transport call failed -- serving a cached WORKING
+        across that would make us believe an order is live when it is not.
+
+        Booking is unaffected: the registry's recorded filled quantity is the
+        high-water mark and only the increment is handed to the engine, so a
+        cached verdict re-read by another code path books nothing twice.
+        """
+        key = str(oid)
+        hit = self._terminal_verdicts.get(key)
+        if hit is not None:
+            self._status_cache_hits += 1
+            return hit
+        v = self.venue.order_status(key, requested_qty=requested_qty,
+                                    side=side)
+        self._status_reads += 1
+        self._resolved_this_pass.add(key)
+        if v.get("terminal"):
+            self._terminal_verdicts[key] = v
+        return v
+
+    def _read_statuses(self, rows) -> Dict[str, Any]:
+        """One authoritative verdict per order id. Order-independent.
+
+        Sequential at STATUS_FANOUT=1. Above that the reads overlap in a
+        thread pool; they are independent by construction (distinct order
+        ids, no shared mutable state until the verdicts return) and every
+        verdict is applied afterwards IN REGISTRY ORDER, so the booking
+        sequence is identical either way.
+        """
+        out: Dict[str, Any] = {}
+        if not rows:
+            return out
+        if self.STATUS_FANOUT <= 1 or len(rows) == 1:
+            for row in rows:
+                out[str(row["oid"])] = self._status_once(
+                    str(row["oid"]), requested_qty=row["qty"],
+                    side=row["side"])
+            return out
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=self.STATUS_FANOUT) as ex:
+            futs = {str(row["oid"]): ex.submit(
+                self._status_once, str(row["oid"]),
+                requested_qty=row["qty"], side=row["side"])
+                for row in rows}
+        for oid, f in futs.items():
+            out[oid] = f.result()
+        return out
+
+    def timing_report(self) -> Dict[str, Any]:
+        """Per-tick segment durations plus BOOK AGE, the acceptance metric.
+
+        `book_age_ms_at_decision` is wall time between the book state's own
+        timestamp and the moment LOCK5 was handed it. That is the number the
+        four R5 PDI rejections were caused by: the engine quoted against a
+        book that had already moved.
+        """
+        T = dict(self.timing or {})
+        def span(a, b):
+            x, y = T.get(a), T.get(b)
+            return None if (x is None or y is None) else round(y - x, 3)
+        wall_now = time.time() * 1000.0
+        br = T.get("book_received_ms")
+        rep = {
+            "status_reconciliation_ms": span(
+                "status_reconciliation_start_ms",
+                "status_reconciliation_end_ms"),
+            "lock5_ms": span("lock5_start_ms", "lock5_end_ms"),
+            "mandate_ms": span("mandate_start_ms", "mandate_end_ms"),
+            "preview_ms": span("preview_start_ms", "preview_end_ms"),
+            "post_ms": span("post_start_ms", "post_end_ms"),
+            "decision_ms": span("decision_start_ms", "decision_end_ms"),
+            "status_reads": self._status_reads,
+            "status_cache_hits": self._status_cache_hits,
+            "book_age_ms_at_decision": (
+                None if br is None else round(
+                    T.get("_lock5_wall_ms", wall_now) - br, 1)),
+            "book_age_ms_at_post": (
+                None if br is None or T.get("_post_wall_ms") is None
+                else round(T["_post_wall_ms"] - br, 1)),
+        }
+        return rep
+
+    def begin_pass(self) -> None:
+        """Start of one tick. Pass-scoped caches live exactly this long."""
+        self._resolved_this_pass = set()
+        self._terminal_verdicts = {}
 
     def resolve_open_orders(self) -> Dict[str, Any]:
         """Read back every nonterminal order and INCORPORATE what it did.
@@ -332,19 +480,19 @@ class NativeMoneyPath:
         """
         out: Dict[str, Any] = {"fills_booked": [], "terminated": [],
                                "rejected": [], "working": [], "unknown": []}
-        self._resolved_this_pass = set()
         if self.venue is None or not hasattr(self.venue, "order_status"):
             return out
         from src import pmus_order_lifecycle as LC
-        for row in list(self.registry.nonterminal()):
+        pending = [r for r in list(self.registry.nonterminal())
+                   if str(r.get("oid") or "")]
+        # never ACKed with an id: there is nothing to ask by, and the registry
+        # already charges such an order in full.
+        verdicts = self._read_statuses(pending)
+        for row in pending:
             oid = str(row.get("oid") or "")
-            if not oid:
-                # never ACKed with an id: there is nothing to ask by, and the
-                # registry already charges it in full.
+            v = verdicts.get(oid)
+            if v is None:
                 continue
-            v = self.venue.order_status(oid, requested_qty=row["qty"],
-                                        side=row["side"])
-            self._resolved_this_pass.add(str(oid))
             cls = v.get("classification")
             if cls == LC.UNKNOWN:
                 self.registry.mark_unknown(oid, str(v.get("why") or "UNKNOWN"))
@@ -516,8 +664,8 @@ class NativeMoneyPath:
         row = self.registry.orders.get(str(oid)) or {}
         state, why = "UNCERTAIN", None
         try:
-            v = self.venue.order_status(oid, requested_qty=row.get("qty"),
-                                        side=row.get("side") or side)
+            v = self._status_once(oid, requested_qty=row.get("qty"),
+                                  side=row.get("side") or side)
         except BaseException as exc:                           # noqa: BLE001
             v, why = {}, "%s: %s" % (type(exc).__name__, str(exc)[:120])
         cls = str(v.get("classification") or "")
@@ -670,8 +818,8 @@ class NativeMoneyPath:
             return None
         from src import pmus_order_lifecycle as LC
         row = self.registry.orders.get(str(oid)) or {}
-        v = self.venue.order_status(oid, requested_qty=row.get("qty"),
-                                   side=row.get("side") or side)
+        v = self._status_once(oid, requested_qty=row.get("qty"),
+                              side=row.get("side") or side)
         if not v.get("terminal"):
             return None
         filled = D(str(v.get("filled_qty") or 0))
@@ -802,7 +950,16 @@ class NativeMoneyPath:
         # GuardedTransport's forwarding. `submit_body` previews the body,
         # validates the venue's echo field by field and posts THE SAME body,
         # and the guard admits against the mandate in front of it.
+        T = self.timing if isinstance(self.timing, dict) else {}
+        # mandate admission, preview/echo and the POST all happen inside the
+        # certified submit_body, so they are timed as one span here and the
+        # guard's own admission timestamp is journalled separately.
+        T["mandate_start_ms"] = T["preview_start_ms"] = _now_ms()
+        T["post_start_ms"] = _now_ms()
         ack = self.tp.submit_body(body)
+        T["post_end_ms"] = T["preview_end_ms"] = T["mandate_end_ms"] = _now_ms()
+        T["_post_wall_ms"] = time.time() * 1000.0
+        T["ack_ms"] = T["post_end_ms"]
         oid = self._order_id(ack)
         rec = {"kind": intent.kind, "side": intent["side"], "body": body,
                "ack": ack, "oid": oid}
