@@ -164,6 +164,13 @@ class NativeMoneyPath:
         self.feed = feed
         self.venue = venue
         self.journal = journal
+        #: every venue REJECTION this session saw, so a failed complement is
+        #: visible in the record instead of recoverable only by an
+        #: after-the-fact /v1/order read (R4).
+        self.rejections: List[dict] = []
+        #: whether the venue can be asked what an order did. False is a
+        #: wiring defect; see build().
+        self.lifecycle_seam = True
         self.submitted: List[dict] = []
         self.lock_transactions: List[dict] = []
         self.remainders: List[dict] = []
@@ -186,12 +193,25 @@ class NativeMoneyPath:
             return {"acted": False, "refused": "BOOK_NOT_FRESH",
                     "age_s": (None if self.feed.age_s() is None
                               else round(self.feed.age_s(), 3))}
-        # AUTHENTICATED FILLS FIRST, every tick. Previously fills were booked
-        # only inside a LOCK transaction, so a maker fill during ordinary
-        # operation never reached the book: inventory stayed at zero, no
-        # completion or lock could ever trigger, and the engine re-quoted
-        # forever. Inventory must be current BEFORE the engine decides.
-        booked = self._book_authenticated_fills()
+        # AUTHORITATIVE ORDER STATE FIRST, every tick, for every order this
+        # session has not yet seen a terminal answer for. This is the R4 fix:
+        # the previous sweep asked `tp.fills()` behind a `hasattr` guard that
+        # PmusTransport never satisfies, so nothing was ever booked, the 0045z
+        # window filled 10 UP at 0.26 and the engine ran 215 further ticks
+        # believing it was flat, and its complement's ORDER_STATE_REJECTED was
+        # never noticed.
+        #
+        # THE ENGINE DOES NOT DECIDE UNTIL THIS HAS BEEN INCORPORATED. An
+        # order we could not read is UNKNOWN and HALTS the window rather than
+        # being treated as unfilled.
+        resolved = self.resolve_open_orders()
+        if resolved["unknown"]:
+            return {"acted": False, "refused": "ORDER_STATE_UNKNOWN",
+                    "halted": True, "detail": resolved["unknown"],
+                    "fills_booked": resolved["fills_booked"],
+                    "note": ("an order whose authoritative state we could not "
+                             "read may not be traded around")}
+        booked = resolved["fills_booked"] + self._book_authenticated_fills()
 
         try:
             intents = self.eng.on_book(row, ladder,
@@ -202,7 +222,11 @@ class NativeMoneyPath:
 
         out: Dict[str, Any] = {"acted": True, "intents": len(intents),
                                "submitted": [], "cancelled": [],
-                               "lock": None, "fills_booked": booked}
+                               "lock": None, "fills_booked": booked,
+                               "terminated": resolved["terminated"],
+                               "rejected": resolved["rejected"],
+                               "residual": str(self.eng.bk.residual())
+                               if hasattr(self.eng.bk, "residual") else None}
         for it in intents:
             if it.kind == E.CANCEL:
                 out["cancelled"].append(self.cancel_side(it["side"]))
@@ -228,6 +252,107 @@ class NativeMoneyPath:
         return out
 
     # ------------------------------------------------------------- the wire
+
+    def resolve_open_orders(self) -> Dict[str, Any]:
+        """Read back every nonterminal order and INCORPORATE what it did.
+
+        One responsibility, one classifier (`pmus_order_lifecycle`, which is
+        the proven `pmus_q1_executor` set), applied to every order this
+        session submitted:
+
+          FILLED / PARTIAL   book the fill into the engine at the venue's own
+                             average price in OWN terms, with the venue's own
+                             commission, then mark the registry terminal for
+                             the filled quantity so only the UNFILLED part of
+                             the reservation is released.
+          REJECTED_NO_FILL   TERMINAL IMMEDIATELY, zero filled, the whole
+                             reservation released. R4's complement was
+                             rejected 94ms after submission and the sweep
+                             still recorded CANCEL_FAILED and left it
+                             nonterminal, which is why $7.30 stayed reserved
+                             and the side never cleared.
+          CANCELLED_NO_FILL  same, for an order the venue finished with.
+          WORKING            incorporated as "still resting, zero filled".
+                             Not terminal, and not a reason to stop: a maker
+                             quote is supposed to rest.
+          UNKNOWN            the caller HALTS. Never treated as unfilled.
+
+        A fill is booked ONCE: the registry's recorded filled quantity is the
+        high-water mark and only the increment is handed to the engine.
+        """
+        out: Dict[str, Any] = {"fills_booked": [], "terminated": [],
+                               "rejected": [], "working": [], "unknown": []}
+        if self.venue is None or not hasattr(self.venue, "order_status"):
+            return out
+        from src import pmus_order_lifecycle as LC
+        for row in list(self.registry.nonterminal()):
+            oid = str(row.get("oid") or "")
+            if not oid:
+                # never ACKed with an id: there is nothing to ask by, and the
+                # registry already charges it in full.
+                continue
+            v = self.venue.order_status(oid, requested_qty=row["qty"],
+                                        side=row["side"])
+            cls = v.get("classification")
+            if cls == LC.UNKNOWN:
+                self.registry.mark_unknown(oid, str(v.get("why") or "UNKNOWN"))
+                out["unknown"].append({"oid": oid, "why": v.get("why")})
+                continue
+            if cls in (LC.FILLED, LC.PARTIAL):
+                filled = D(str(v["filled_qty"]))
+                already = D(str(row.get("filled") or 0))
+                new = filled - already
+                if new > 0:
+                    px = D(str(v["price_own"]))
+                    fee = v.get("commission")
+                    self.eng.on_fill(row["side"], new, px * new,
+                                     maker=bool(row.get("kind") == E.REST),
+                                     fee=(None if fee is None
+                                          else D(str(fee))))
+                    booked = {"oid": oid, "side": row["side"],
+                              "qty": str(new), "price_own": str(px),
+                              "cost": str(px * new),
+                              "commission": (None if fee is None
+                                             else str(fee)),
+                              "source": "GET /v1/order/%s" % oid}
+                    out["fills_booked"].append(booked)
+                    self.booked_fills.append(booked)
+                    if self.journal is not None:
+                        try:
+                            self.journal.write("authenticated_fills",
+                                               {"fills": [booked]})
+                        except BaseException:                  # noqa: BLE001
+                            pass
+                if v.get("terminal"):
+                    # BOTH: the registry stops treating it as live, and the
+                    # ledger row releases only the unfilled remainder.
+                    # `release_terminal` alone left it nonterminal forever.
+                    self.registry.mark_terminal(oid, filled)
+                    self.release_terminal(oid, filled)
+                    out["terminated"].append({"oid": oid, "class": cls,
+                                              "filled": str(filled)})
+                else:
+                    row["filled"] = filled
+                continue
+            if cls in (LC.REJECTED_NO_FILL, LC.CANCELLED_NO_FILL):
+                self.registry.mark_terminal(oid, D(0))
+                self.release_terminal(oid, D(0))
+                cur = self.live_orders.get(row["side"]) or {}
+                if str(cur.get("oid") or "") == oid:
+                    self.live_orders[row["side"]] = None
+                rec = {"oid": oid, "side": row["side"], "class": cls,
+                       "state": v.get("state"), "filled": "0",
+                       "reservation_released": str(row.get("reserved")),
+                       "note": ("terminal at the venue; only the UNFILLED "
+                                "reservation is released and the residual "
+                                "this leg failed to complete remains")}
+                out["terminated"].append(rec)
+                if cls == LC.REJECTED_NO_FILL:
+                    out["rejected"].append(rec)
+                    self.rejections.append(rec)
+                continue
+            out["working"].append({"oid": oid, "state": v.get("state")})
+        return out
 
     def _book_authenticated_fills(self) -> List[dict]:
         """Apply every fill the venue reports and our book has not applied.
@@ -341,9 +466,22 @@ class NativeMoneyPath:
                 self.venue.cancel_order(oid)
             else:
                 self.venue.cancel_resting(side)
-        except BaseException:                                  # noqa: BLE001
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # A CANCEL THAT FAILS IS NOT AN UNKNOWN ORDER. The venue refuses
+            # to cancel an order it has already finished with, so ASK WHAT IT
+            # DID before concluding anything. R4 ended with a FILLED order and
+            # a REJECTED order both recorded CANCEL_FAILED and left
+            # nonterminal: $9.90 stayed reserved, neither side ever cleared,
+            # and `uncertainty_cleared` was false over two orders the venue
+            # had been finished with for thirteen minutes.
+            done = self._terminal_after_failed_cancel(side, oid)
+            if done is not None:
+                return done
             self.registry.mark_unknown(oid, "CANCEL_FAILED")
-            return {"side": side, "oid": oid, "state": "CANCEL_FAILED"}
+            return {"side": side, "oid": oid, "state": "CANCEL_FAILED",
+                    "error": "%s" % type(exc).__name__}
         # book anything that filled in the cancel race BEFORE concluding
         self._book_authenticated_fills()
         try:
@@ -378,6 +516,51 @@ class NativeMoneyPath:
             self.venue.resting_ids[side] = None
         return {"side": side, "oid": oid, "state": "CONFIRMED_CANCELLED",
                 "filled_qty": str(filled)}
+
+    def _terminal_after_failed_cancel(self, side: str, oid: str):
+        """Was the order already terminal? Then the cancel had nothing to do.
+
+        Returns a verdict dict when the venue says the order is finished, and
+        None when it does not or cannot say -- in which case the caller keeps
+        its UNKNOWN, which keeps the full reservation.
+        """
+        if not oid or self.venue is None \
+                or not hasattr(self.venue, "order_status"):
+            return None
+        from src import pmus_order_lifecycle as LC
+        row = self.registry.orders.get(str(oid)) or {}
+        v = self.venue.order_status(oid, requested_qty=row.get("qty"),
+                                   side=row.get("side") or side)
+        if not v.get("terminal"):
+            return None
+        filled = D(str(v.get("filled_qty") or 0))
+        if filled > 0 and v.get("price_own") is not None:
+            already = D(str(row.get("filled") or 0))
+            new = filled - already
+            if new > 0:
+                px = D(str(v["price_own"]))
+                fee = v.get("commission")
+                self.eng.on_fill(row.get("side") or side, new, px * new,
+                                 maker=bool(row.get("kind") == E.REST),
+                                 fee=(None if fee is None else D(str(fee))))
+                self.booked_fills.append(
+                    {"oid": oid, "side": row.get("side") or side,
+                     "qty": str(new), "price_own": str(px),
+                     "cost": str(px * new),
+                     "source": "GET /v1/order/%s (after failed cancel)" % oid})
+        self.registry.mark_terminal(oid, filled)
+        self.release_terminal(oid, filled)
+        cur = self.live_orders.get(side) or {}
+        if str(cur.get("oid") or "") == oid:
+            self.live_orders[side] = None
+        if hasattr(self.venue, "resting_ids"):
+            self.venue.resting_ids[side] = None
+        rec = {"side": side, "oid": oid, "state": "ALREADY_TERMINAL",
+               "classification": v.get("classification"),
+               "venue_state": v.get("state"), "filled_qty": str(filled)}
+        if v.get("classification") == LC.REJECTED_NO_FILL:
+            self.rejections.append(dict(rec, note="rejected by the venue"))
+        return rec
 
     def cancel_nonterminal(self) -> List[dict]:
         """Cancel EVERY nonterminal session order, by venue id.
@@ -510,6 +693,14 @@ class NativeMoneyPath:
             return None
         oid = str((rec.get("ack") or {}).get("orderId")
                   or (rec.get("ack") or {}).get("id") or "")
+        # THE ID MUST REACH THE CONSUMER. `completion_fill` is keyed on
+        # `intent["venue_order_id"]` and NOTHING ever set it, so it returned
+        # None for every completion, `_remainder_uncertain` fired and the
+        # engine's pass was abandoned -- every taker completion failed closed,
+        # in production and in replay. Third seam of the same kind as
+        # `tp.fills()` and `tp.request()`: a consumer reading a key no
+        # producer writes.
+        intent["venue_order_id"] = oid
 
         got = self.venue.completion_fill(intent)
         if got is None:
@@ -583,7 +774,26 @@ def build(*, market: str, transport, feed=None, venue=None, journal=None,
     """
     clip = configured_clip() if clip is None else E.parse_clip(clip)
     E.assert_no_translate_fallback()
+    # THE SEAM. `unbooked_fills` asked `tp.fills()` behind a hasattr guard
+    # PmusTransport never satisfied, so production booked no fills while every
+    # test's double did. The PRODUCTION venue is required to expose
+    # `order_status`; a double that does not is recorded rather than refused,
+    # and the structural test
+    # tests/test_r4_lifecycle_consolidation.py::
+    #   test_the_production_venue_exposes_the_lifecycle_seam
+    # is what stops production regressing to a silent skip.
+    lifecycle_seam = venue is None or hasattr(venue, "order_status")
     eng = E.NativeEngine(clip=clip, lock_gate=OV.lock_gate_for(venue,
                                                                journal=journal))
-    return NativeMoneyPath(market=market, engine=eng, transport=transport,
-                           feed=feed, venue=venue, journal=journal)
+    mp = NativeMoneyPath(market=market, engine=eng, transport=transport,
+                         feed=feed, venue=venue, journal=journal)
+    mp.lifecycle_seam = lifecycle_seam
+    if journal is not None and not lifecycle_seam:
+        try:
+            journal.write("lifecycle_seam_absent", {
+                "venue": type(venue).__name__,
+                "note": ("no order_status: no order this session submits can "
+                         "be resolved authoritatively")})
+        except BaseException:                                  # noqa: BLE001
+            pass
+    return mp

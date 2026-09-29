@@ -90,6 +90,46 @@ class AuthenticatedVenue:
                                 else D(str((r or {}).get("commission"))))})
         return out
 
+    def order_status(self, oid: str, *, requested_qty=None,
+                     side: Optional[str] = None) -> Dict[str, Any]:
+        """THE authoritative lifecycle verdict for one of our orders.
+
+        The ONLY way the native path learns what an order did. It replaces
+        `unbooked_fills`, which asked `self.tp.fills()` behind a
+        `hasattr` guard that `PmusTransport` never satisfies -- so in
+        production it always returned None and no fill was ever booked. R4
+        filled 10 UP at 0.26 and the engine ran 215 more ticks believing it
+        was flat.
+
+        Classification comes from `pmus_order_lifecycle`, which is the
+        proven `pmus_q1_executor` classifier set. An unreadable read is
+        UNKNOWN, never zero.
+        """
+        from src import pmus_order_lifecycle as LC
+        if not oid:
+            return dict(LC.classify(None), order_id="",
+                        why="no venue order id to ask by")
+        try:
+            row = self.tp.order(str(oid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return dict(LC.classify(None), order_id=str(oid),
+                        why="%s: %s" % (type(exc).__name__, str(exc)[:160]))
+        try:
+            v = LC.classify(row, requested_qty=requested_qty, side=side)
+        except LC.AmbiguousFill as exc:
+            v = dict(LC.classify(None), why=str(exc))
+        v["order_id"] = str(oid)
+        if self.journal is not None:
+            try:
+                self.journal.write("order_status", {
+                    k: (str(x) if isinstance(x, D) else x)
+                    for k, x in v.items()})
+            except BaseException:                              # noqa: BLE001
+                pass
+        return v
+
     def filled_qty(self, oid: str) -> Optional[D]:
         """Authenticated cumulative filled quantity for one order, or None.
 
