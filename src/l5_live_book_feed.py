@@ -36,6 +36,7 @@ import os
 import threading
 import time
 from collections import deque
+from decimal import Decimal as D, InvalidOperation
 from typing import Any, Deque, Dict, List, Mapping, Optional
 
 #: how many book states to keep. The decision path looks backwards a few
@@ -74,6 +75,63 @@ def _row(slug: str, s: Dict[str, Any], now: float) -> Dict[str, Any]:
     from src import l5_window_actions as WA
     return WA.book_row(t=now, bid=s.get("bid"), ask=s.get("ask"),
                        bid_qty=s.get("bid_qty"), ask_qty=s.get("ask_qty"))
+
+
+def venue_ladder(depth: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The venue's OWN depth, in the frozen {bids, offers} shape.
+
+    `SUBSCRIPTION_TYPE_MARKET_DATA` (type 1 on /v1/ws/markets) carries the
+    full book -- 24 to 29 price levels per side, measured 2026-09-29 -- and
+    `pmus_ws_evidence_recorder.apply_events` collapses it to a single top
+    level via `_level()` before anything downstream sees it. The frozen theta
+    walk in `pmus_l5_native_engine.on_book` was built to WALK depth and until
+    now has never been given any.
+
+    NOTHING HERE IS SYNTHESIZED. Every level is a px/qty pair the venue sent.
+    When no venue depth has been observed this returns None, and the engine's
+    own `if self.ladder else []` guard decides no completion -- which is the
+    behaviour that already obtained, and is the honest answer to "we have not
+    seen the book". A fabricated one-level ladder would let the walk admit a
+    completion against depth the venue never showed us.
+    """
+    if not depth:
+        return None
+    out: Dict[str, Any] = {}
+    for src, dst in (("bids", "bids"), ("asks", "offers")):
+        rows = depth.get(src)
+        if not rows:
+            continue
+        levels = []
+        for lvl in rows:
+            px, qty = _level_pair(lvl)
+            if px is None or qty is None:
+                continue
+            # a level that will not parse, or has no size, is DROPPED rather
+            # than guessed at -- the walk must never admit a phantom level.
+            try:
+                if D(str(qty)) <= 0 or not (D(0) < D(str(px)) < D(1)):
+                    continue
+            except (InvalidOperation, ValueError):
+                continue
+            levels.append([str(px), str(qty)])
+        if levels:
+            out[dst] = levels
+    return out or None
+
+
+def _level_pair(lvl: Any):
+    """One venue level -> (px, qty), or (None, None) if unreadable.
+
+    Accepts the documented shape {"px": {"value": "0.41"}, "qty": "1831.82"}
+    and the flat list form, and refuses anything else rather than guessing.
+    """
+    from src import pmus_ws_evidence_recorder as R
+    if isinstance(lvl, Mapping):
+        return R._px(lvl.get("px") if "px" in lvl else lvl.get("price")), \
+            R._px(lvl.get("qty") if "qty" in lvl else lvl.get("quantity"))
+    if isinstance(lvl, (list, tuple)) and len(lvl) >= 2:
+        return R._px(lvl[0]), R._px(lvl[1])
+    return None, None
 
 
 def touch_ladder(row: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -145,6 +203,10 @@ class AuthenticatedBookFeed:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
+        #: the venue's own last full-depth book. None until one is received.
+        self._depth: Optional[Dict[str, Any]] = None
+        self._depth_t: Optional[float] = None
+        self._depth_frames = 0
 
     # ------------------------------------------------------------- reading
 
@@ -155,8 +217,23 @@ class AuthenticatedBookFeed:
 
     @property
     def ladder(self) -> Optional[Dict[str, Any]]:
-        """What `on_book_state` passes to the engine. See `touch_ladder`."""
-        return touch_ladder(self.latest())
+        """VENUE-OBSERVED depth. Never synthesized. See `venue_ladder`."""
+        with self._lock:
+            d = dict(self._depth) if self._depth else None
+        return venue_ladder(d)
+
+    def ladder_health(self) -> Dict[str, Any]:
+        """Provenance for the ladder, so a report can never imply depth we
+        did not receive."""
+        lad = self.ladder
+        with self._lock:
+            seen, t = self._depth_frames, self._depth_t
+        return {"source": "VENUE_WS_MARKET_DATA" if lad else "NONE",
+                "depth_frames": seen,
+                "bid_levels": len((lad or {}).get("bids") or []),
+                "offer_levels": len((lad or {}).get("offers") or []),
+                "last_depth_t": t,
+                "synthesized": False}
 
     def latest(self) -> Optional[Dict[str, Any]]:
         with self._lock:
@@ -187,6 +264,20 @@ class AuthenticatedBookFeed:
         """Fold one frame, using the recorder's own event fold."""
         from src import pmus_ws_evidence_recorder as R
         now = self.clock()
+        # FULL DEPTH, captured before apply_events collapses it to one level.
+        # The recorder's fold is shared with the 24/7 collector and is not
+        # changed here; this reads the same walker output it reads.
+        evs: List[Dict[str, Any]] = []
+        R._walk_market_events(msg, evs)
+        for ev in evs:
+            if ev.get("kind") != "book" or str(ev.get("slug")) != self.market:
+                continue
+            if not (ev.get("bids") or ev.get("asks")):
+                continue
+            with self._lock:
+                self._depth = {"bids": ev.get("bids"), "asks": ev.get("asks")}
+                self._depth_t = now
+                self._depth_frames += 1
         before = dict(self.state.get(self.market) or {})
         R.apply_events(self.state, msg, now)
         after = self.state.get(self.market)

@@ -7,9 +7,12 @@ from src import l5_mode_switch as SW
 def test_it_is_not_wired_into_any_production_decision_path():
     """The whole safety property of a shadow candidate."""
     import pathlib
+    # `l5_decision_shadow` is the SHADOW CONSUMER: it logs frozen-vs-candidate
+    # and submits nothing, which is the only legitimate reader.
+    allowed = {"l5_mode_switch.py", "l5_decision_shadow.py"}
     hits = []
     for p in pathlib.Path("src").glob("*.py"):
-        if p.name == "l5_mode_switch.py":
+        if p.name in allowed:
             continue
         if "l5_mode_switch" in p.read_text():
             hits.append(p.name)
@@ -17,6 +20,19 @@ def test_it_is_not_wired_into_any_production_decision_path():
         if "l5_mode_switch" in p.read_text():
             hits.append(p.name)
     assert hits == [], "shadow candidate is referenced by: %s" % (hits,)
+
+
+def test_the_shadow_consumer_is_itself_not_wired_into_production():
+    """The candidate must not reach production THROUGH the shadow either."""
+    import pathlib
+    hits = []
+    for p in list(pathlib.Path("src").glob("*.py")) + \
+            list(pathlib.Path("scripts").glob("l5_pmus_live*.py")):
+        if p.name == "l5_decision_shadow.py":
+            continue
+        if "l5_decision_shadow" in p.read_text():
+            hits.append(p.name)
+    assert hits == [], "decision shadow is referenced by: %s" % (hits,)
 
 
 def test_shadow_flag_defaults_off(monkeypatch):
