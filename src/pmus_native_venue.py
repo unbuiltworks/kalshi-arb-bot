@@ -161,11 +161,21 @@ class AuthenticatedVenue:
         row = self.tp.order(str(oid))
         if not row:
             return None
-        cum = D(str(row.get("cumQty") or row.get("cumQuantity") or 0))
+        # THE REAL RECORD NESTS ITS MONEY FIELDS. R4's raw order carried
+        # `avgPx: {"value": "0.2600", "currency": "USD"}` and
+        # `commissionNotionalTotalCollected: {"value": "-0.0200", ...}`, and
+        # this function did `D(str(row.get("avgPx")))` -- which on the real
+        # shape raises decimal.InvalidOperation inside `_execute_taker`. Both
+        # are now read through the shared classifier, which is the only place
+        # that knows the venue's shapes and the NO -> own-terms inversion.
+        from src import pmus_order_lifecycle as LC
+        side = str(intent["side"])
+        cum = D(str(row.get("cumQty") if row.get("cumQty") is not None
+                    else row.get("cumQuantity") or 0))
         if cum <= 0:
             return D(0), D(0), D(0)
-        avg = D(str(row.get("avgPx") or row.get("avgPrice") or 0))
-        side = str(intent["side"])
-        own = avg if side == "up" else (D(1) - avg)
-        fee = D(str(row.get("commission") or 0))
-        return cum, own * cum, fee
+        own = LC.own_terms_price(row, side=side)
+        if own is None:
+            return None                     # filled and unpriceable: fail closed
+        fee = LC.commission(row)
+        return cum, own * cum, (D(0) if fee is None else D(str(fee)))

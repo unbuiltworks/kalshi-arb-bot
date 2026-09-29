@@ -733,12 +733,20 @@ class NativeMoneyPath:
             return None
         # ALREADY BOOKED INLINE. `NativeEngine.on_completion_fill` applies this
         # fill the moment we return, so the resolver must not apply it again:
-        # recording it on the registry row makes the next pass's increment
-        # zero. Without this, a taker completion is booked TWICE -- once inline
-        # and once when /v1/order reports the same order FILLED.
-        self.registry.mark_terminal(oid, n)
-        self.release_terminal(oid, n)
-        self._resolved_this_pass.add(str(oid))
+        # recording the confirmed quantity on the registry row makes the next
+        # pass's increment zero. Without this, a taker completion is booked
+        # TWICE -- once inline and once when /v1/order reports the same order
+        # FILLED.
+        #
+        # DELIBERATELY NARROW: the row is NOT marked terminal and NOTHING is
+        # released here. Doing that changed reservation accounting and dropped
+        # measured exposure in tests/test_native_high_churn_lifecycle.py, and
+        # releasing a reservation is a separate decision from not
+        # double-counting a fill. The resolver still terminalises this order
+        # when the venue says it is terminal.
+        row = self.registry.orders.get(str(oid))
+        if row is not None:
+            row["filled"] = max(D(str(row.get("filled") or 0)), n)
         return n, cost, fee
 
     def _remainder_resolved(self, intent, oid: str, remainder: D) -> bool:

@@ -1636,6 +1636,29 @@ def trade_audit(*, http=None, journal_path=None, ledger_dir=None,
                                         "native_sweep", "native_window_done",
                                         "completion_remainder",
                                         "mandate_admission", "market_metadata_pin")]
+    # THE BOOK AT A NAMED INSTANT. L5_AUDIT_TICK_AT is an epoch second; the
+    # native_tick rows within L5_AUDIT_TICK_WINDOW_S of it are returned, which
+    # is how the book that a specific order met is recovered without dumping
+    # 215 rows. Used to settle whether R4's DOWN order would have crossed.
+    at = os.getenv("L5_AUDIT_TICK_AT", "").strip()
+    span = float(os.getenv("L5_AUDIT_TICK_WINDOW_S", "3") or 3)
+    ticks: List[dict] = []
+    if at:
+        try:
+            centre = float(at)
+        except ValueError:
+            centre = None
+        if centre is not None:
+            for r in jrows:
+                if r.get("kind") != "native_tick":
+                    continue
+                try:
+                    rt = float(r.get("t"))
+                except (TypeError, ValueError):
+                    continue
+                if abs(rt - centre) <= span:
+                    ticks.append(r)
+            ticks.sort(key=lambda r: float(r.get("t") or 0))
 
     trades: List[Dict[str, Any]] = []
     for c in commits:
@@ -1765,6 +1788,7 @@ def trade_audit(*, http=None, journal_path=None, ledger_dir=None,
                         "kinds": by_kind},
             "trades": trades,
             "journal_evidence": interesting,
+            "ticks_at": ticks,
             "venue": {"positions": positions, "open_orders": open_orders,
                       "settlement": settlement},
             "mandate_consumption": consumed,
@@ -2173,6 +2197,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         rep = trade_audit()
         trades = rep.pop("trades", [])
         ev = rep.pop("journal_evidence", [])
+        ticks = rep.pop("ticks_at", [])
         print("L5_AUDIT " + json.dumps(rep, default=str), flush=True)
         for t in trades:
             print("L5_AUDIT_TRADE " + json.dumps(t, default=str), flush=True)
@@ -2181,6 +2206,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("L5_AUDIT_EVIDENCE " + json.dumps(r, default=str),
                   flush=True)
         print("L5_AUDIT_EVIDENCE_ROWS %d" % len(ev), flush=True)
+        for r in ticks:
+            print("L5_AUDIT_TICK " + json.dumps(r, default=str), flush=True)
+        print("L5_AUDIT_TICKS %d" % len(ticks), flush=True)
         return 0
     if recover_only_enabled():
         rep = recover()

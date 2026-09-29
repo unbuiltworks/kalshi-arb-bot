@@ -420,3 +420,59 @@ def test_r4_exact_chronology_two_sided_quote_then_late_fill(armed, tmp_path):
     # had when it submitted.
     assert mp.eng.bk.residual() == D(10)
     assert out.get("fills_booked") == []      # already booked on the pass above
+
+
+# ------------------------------- the taker double-book condition (P0-C)
+
+def test_a_confirmed_taker_fill_is_booked_once_and_only_once(armed, tmp_path):
+    """NEWLY DISCOVERED, and it would have inflated live inventory.
+
+    `NativeEngine.on_completion_fill` applies a taker fill the moment
+    `_execute_taker` returns. `resolve_open_orders` then read the SAME order
+    back on the next pass, saw ORDER_STATE_FILLED with the same cumulative
+    quantity, and booked it AGAIN via `on_fill`. Found by the execution-aware
+    replay: 72 completions against frozen's 44.
+    """
+    v = Venue(outcomes=[FILL_10_AT_26])
+    tp, guarded, av, mp = stack(tmp_path, v)
+
+    intent = E.Intent(E.COMPLETE, side="up", price=UP_PX, qty=CLIP,
+                      mode="TAKER", limit_price=UP_PX, now=0.0)
+    got = mp._execute_taker(intent)
+    assert got is not None
+    n, cost, fee = got
+    assert (n, cost) == (CLIP, UP_PX * CLIP)
+
+    # the confirmed quantity is recorded against the order, so the resolver's
+    # increment is zero. (It is deliberately NOT terminalised here: releasing
+    # a reservation is a separate decision from not double-counting a fill.)
+    oid = str(intent["venue_order_id"])
+    assert mp.registry.orders[oid]["filled"] == CLIP
+
+    # the engine has whatever the caller booked inline -- nothing extra
+    before = dict(mp.eng.bk.q)
+
+    # the next authoritative pass reports the SAME cumulative quantity...
+    r = mp.resolve_open_orders()
+    # ...and the delta fill is ZERO: nothing is booked a second time
+    assert r["fills_booked"] == []
+    assert dict(mp.eng.bk.q) == before
+    # the venue did say FILLED, so the order is terminal now
+    assert [x["oid"] for x in r["terminated"]] == [oid]
+
+
+def test_a_later_additional_fill_on_the_same_order_still_books_its_delta(
+        armed, tmp_path):
+    """Once-only must not become never-again: a genuine increment is booked."""
+    v = Venue(outcomes=[{"state": "OPEN", "cum": "4", "avg": "0.2600"}])
+    tp, guarded, av, mp = stack(tmp_path, v)
+    mp._post(up_rest())
+    r1 = mp.resolve_open_orders()
+    assert r1["fills_booked"][0]["qty"] == "4"
+    assert mp.eng.bk.q["up"] == D(4)
+
+    v.orders["R4-1"].update({"cumQuantity": "10", "leavesQuantity": "0",
+                             "state": "ORDER_STATE_FILLED"})
+    r2 = mp.resolve_open_orders()
+    assert r2["fills_booked"][0]["qty"] == "6"        # the DELTA only
+    assert mp.eng.bk.q["up"] == D(10)
