@@ -10,14 +10,30 @@ def test_the_acceptance_condition_holds_on_the_current_tree():
 
 
 def test_every_disclosed_delta_is_named_and_none_is_execution_class():
-    """Against the CURRENT baseline (OWNER A2, REVIEWED advanced to the CP1
-    candidate) the only legitimate mover is the authorization directory --
-    granting or revoking an authorization IS a change to it."""
+    """Against the CURRENT baseline, two files legitimately move.
+
+    The authorization directory -- granting or revoking an authorization IS a
+    change to it -- and, disclosed by owner approval on 2026-09-29,
+    `src/pmus_live_mandate.py`, which extends the existing admission/linking
+    boundary to `submit` and `submit_body` so those mutation paths can no
+    longer bypass admit(). The list is asserted EXACTLY, so a third mover
+    still fails, and each entry must still be allow-listed with a
+    non-forbidden class and pinned to the reviewed blob.
+    """
     v = L.verify()
-    assert v["differing"] == ["analysis/l5/authorization/"], v["differing"]
+    assert v["differing"] == ["analysis/l5/authorization/",
+                              "src/pmus_live_mandate.py"], v["differing"]
     for f in v["differing"]:
         assert f in L.ALLOWED, f
         assert L.ALLOWED[f]["class"] not in L.FORBIDDEN_CLASSES, f
+    # the disclosure says what it must, in the owner's terms
+    why = L.ALLOWED["src/pmus_live_mandate.py"]["why"]
+    assert "submit_body" in why and "bypassing mandate admission" in why
+    assert "DOES NOT EXPAND TRADING AUTHORITY" in why
+    assert L.ALLOWED["src/pmus_live_mandate.py"]["class"] == \
+        "RISK_BOUND_TIGHTENING"
+    assert L.ALLOWED["src/pmus_live_mandate.py"]["sha"] == \
+        "cac9745bd18d3f0f51d27790a869a4484969c4cc"
 
 
 def test_the_gate_still_forbids_sizing_and_the_prior_review_is_preserved():

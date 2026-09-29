@@ -452,6 +452,33 @@ PRIOR_DELTAS: Dict[str, Dict[str, str]] = {
 #: granting or revoking an authorization IS a change to it, by design, and the
 #: pin is re-taken each time so it cannot become a rubber stamp.
 ALLOWED: Dict[str, Dict[str, str]] = {
+    "src/pmus_live_mandate.py": {
+        "class": "RISK_BOUND_TIGHTENING",
+        "sha": "cac9745bd18d3f0f51d27790a869a4484969c4cc",
+        "why": ("DISCLOSED 2026-09-29 by owner approval. The change EXTENDS "
+                "THE EXISTING MANDATE ADMISSION/LINKING BOUNDARY to `submit` "
+                "and `submit_body`, preventing those mutation paths from "
+                "bypassing mandate admission. GuardedTransport.__getattr__ "
+                "forwards every unnamed attribute straight to the inner "
+                "transport, so both submit entry points previously reached "
+                "the wire WITHOUT admit() -- the guard only ever intercepted "
+                "`request`. Both are now named and share ONE admission rule "
+                "with request's POST branch (_admitted_mutation: admit, emit, "
+                "refuse-or-send, link_order), so a mutation path the guard "
+                "does not name no longer exists. "
+                "IT DOES NOT EXPAND TRADING AUTHORITY, RISK LIMITS, STRATEGY "
+                "BEHAVIOR OR EXECUTION SIZE: no order verb, size, price, cap, "
+                "band or admission threshold is added, loosened or computed "
+                "here, the module still holds no transport of its own and can "
+                "only REFUSE, and it remains free of any src import -- the "
+                "body for an intent-shaped submission comes from the inner "
+                "transport's own serializer via `body_for_intent`. "
+                "Surfaced by the 2026-09-28 2345z window, which armed, "
+                "decided one 10-contract intent and died with AttributeError "
+                "because pmus_native_money_path called "
+                "`transport.request(\"POST\", \"/v1/orders\", body)` and "
+                "PmusTransport exposes no public `request`."),
+    },
     "analysis/l5/authorization/": {
         "class": "DOCUMENTATION",
         "sha": "86e640e9f4042597eefc6cce69743fcc4fdf5cdd",
