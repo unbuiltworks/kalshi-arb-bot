@@ -1230,10 +1230,47 @@ class PmusTransport:
         # /v1/order/preview from a failed /v1/orders. These are read by the
         # executor when submit() raises; they change no control flow.
         self.submit_stage = "SERIALIZE"
+        return self.submit_body(self.body_for_intent(intent))
+
+    def body_for_intent(self, intent: Mapping[str, Any]) -> Dict[str, Any]:
+        """The intent's body, through the shared serializer only.
+
+        Public so the mandate guard can admit an intent-shaped submission
+        WITHOUT importing `l5_order_body` itself: `pmus_live_mandate` is
+        deliberately free of any src dependency (a structural test enforces
+        it), so the body has to come from the object that owns the
+        serializer.
+        """
+        from src import l5_order_body as OB
+        return OB.from_intent(intent, self.market_slug)
+
+    def submit_body(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """The SAME preview -> echo -> POST sequence, for an already-built body.
+
+        Extracted from `submit` so there is exactly ONE implementation of the
+        order POST in this process, and so a caller that must express
+        something `OB.from_intent` cannot -- a taker leg's IOC time in force,
+        which `from_intent` always leaves at GTC -- still goes through
+        preview and echo validation instead of around them.
+
+        `pmus_native_money_path` was that caller. It built its body with
+        `body_for` (which carries IOC and the worst admitted level price) and
+        then called `transport.request("POST", ...)`. `PmusTransport` has no
+        public `request`, so the 2345z window armed, decided a 10-contract
+        intent and died with AttributeError inside GuardedTransport's
+        forwarding, having submitted nothing.
+
+        The body is NOT rebuilt or reinterpreted here. It is previewed and
+        posted exactly as given, which is the property `require_echo`
+        checks.
+        """
+        from src import l5_order_body as OB
+        from src import l5_preview_gate as PG
+        self._require_armed()
+        body = dict(body)
         self.preview_attempted = False
         self.preview_status = None
         self.order_post_attempted = False
-        body = OB.from_intent(intent, self.market_slug)
         self.submit_stage = "PREVIEW_REQUEST"
         self.preview_attempted = True
         pv = self._request("POST", "/v1/order/preview",

@@ -140,25 +140,10 @@ def choose_micro_quantity(entry_price: D, minimum_trade_qty: D,
 
 
 def market_micro_spec(t: Transport, slug: str, entry_price: D) -> dict[str, D]:
-    # THE CANONICAL ROW, shared with the LOCK5 transport rather than
-    # duplicated beside it. This function's one call WAS the proven read;
-    # `l5_pmus_transport.resolve_market` had grown a second, divergent
-    # implementation of it (api host first, then /v1/events/slug/), and on
-    # 2026-09-28 that divergence cost a 15-minute window. Both now go
-    # through `pmus_market_row.market_row`, which makes the same single
-    # gateway request and matches the slug on the row it got back.
-    from src import pmus_market_row as MR
-    try:
-        # require_slug=False keeps this function BYTE-IDENTICAL in
-        # behaviour: it never verified the returned row's slug, and
-        # pmus_spring_l5_session / pmus_l5_continuous_session depend on
-        # that. Only the route and host are shared. The LOCK5 transport
-        # passes the default and does verify.
-        market = MR.market_row(
-            slug, require_slug=False,
-            get=lambda path: t.request("GET", path, base=q1.GATEWAY))
-    except MR.MarketRowUnavailable as exc:
-        raise Halt("MICRO_MARKET_METADATA_UNPARSEABLE:%s" % str(exc)[:120])
+    resp = t.request("GET", f"/v1/market/slug/{slug}", base=q1.GATEWAY)
+    market = resp.get("market") if isinstance(resp, Mapping) else None
+    if not isinstance(market, Mapping):
+        raise Halt("MICRO_MARKET_METADATA_UNPARSEABLE")
     minq = _d(market.get("minimumTradeQty"))
     tick = _d(market.get("orderPriceMinTickSize"))
     if minq is None or tick is None:

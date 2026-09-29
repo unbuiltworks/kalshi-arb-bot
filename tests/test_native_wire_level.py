@@ -120,6 +120,17 @@ class TP:
     def __init__(self):
         self.posts = []
 
+    def submit_body(self, body):
+        """The seam the PRODUCTION path uses.
+
+        These doubles only had `request`, which is exactly why the
+        2345z window armed and then died: `PmusTransport` has no
+        public `request`, and every test here mocked the boundary
+        instead of crossing it. Delegating keeps each subclass's
+        recorded behaviour (including refusals) in one place.
+        """
+        return self.request("POST", "/v1/orders", body)
+
     def request(self, method, path, body=None, **kw):
         self.posts.append(body)
         return {"orderId": "o%d" % len(self.posts)}

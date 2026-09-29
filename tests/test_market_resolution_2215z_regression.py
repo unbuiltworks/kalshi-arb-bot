@@ -275,10 +275,18 @@ def test_there_is_exactly_one_market_row_implementation():
                     and not line.lstrip().startswith("#"):
                 hits.append("%s:%d" % (f, n))
     assert hits == [], hits
-    # and the one that is not packaged goes through the same module
+    # `pmus_micro_executor` is NOT consolidated and is left byte-identical on
+    # purpose: it is a PINNED R1 LINEAGE ARTIFACT
+    # (tests/test_r1_source_lineage.py fails on any undisclosed delta to it),
+    # and pmus_spring_l5_session depends on its exact behaviour. It already
+    # makes the same single gateway call this module now holds -- it WAS the
+    # proven read -- so there is nothing divergent left to reconcile. The
+    # duplication that cost a window was the three-route resolver in the
+    # transport, and that is gone.
     micro = pathlib.Path("src/pmus_micro_executor.py").read_text()
-    assert "pmus_market_row" in micro
-    assert 'f"/v1/market/slug/{slug}"' not in micro
+    assert 'f"/v1/market/slug/{slug}"' in micro
+    assert "base=q1.GATEWAY" in micro
+    assert "/v1/events/slug/" not in micro
 
 
 # ----------------------------------------------------- nothing else moved

@@ -16,12 +16,7 @@ class MetaFake:
         assert method == "GET"
         assert path.startswith("/v1/market/slug/")
         assert base == q1.GATEWAY
-        # the venue's row always identifies itself, and market_row matches
-        # the slug on the row rather than trusting the status code: the
-        # gateway answers 200 with an unrelated default page for filters it
-        # does not know.
-        return {"market": {"slug": path.rsplit("/", 1)[-1],
-                           "minimumTradeQty": self.minq,
+        return {"market": {"minimumTradeQty": self.minq,
                            "orderPriceMinTickSize": self.tick}}
 
 
@@ -241,9 +236,8 @@ class CampaignFake:
                                    "bestAsk": {"value": self.bbo[1]}}}
         if path.startswith("/v1/market/slug/"):
             if self.meta is None:
-                return {"market": {"slug": path.rsplit("/", 1)[-1]}}
-            return {"market": {"slug": path.rsplit("/", 1)[-1],
-                               "minimumTradeQty": self.meta[0],
+                return {"market": {}}
+            return {"market": {"minimumTradeQty": self.meta[0],
                                "orderPriceMinTickSize": self.meta[1]}}
         raise AssertionError((method, path))
 

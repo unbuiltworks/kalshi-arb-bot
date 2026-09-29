@@ -113,6 +113,19 @@ class GuardedVenueTransport:
                                log=lambda k, **kw: None)
         self.refusals = []
 
+    def submit_body(self, body):
+
+        """The seam the PRODUCTION path uses (see
+
+        tests/test_production_composition_submit.py). These doubles
+
+        only had `request`, which is why the 2345z window armed and
+
+        then died: PmusTransport has no public `request`."""
+
+        return self.request("POST", "/v1/orders", body)
+
+
     def request(self, method, path, body=None, **kw):
         return self.venue.accept(body)
 

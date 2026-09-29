@@ -122,6 +122,39 @@ class Venue:
         return {"order_id": "v%d" % len(self.posts), "filled_qty": self._fill,
                 "fill_price": str(intent["price"])}
 
+    def body_for_intent(self, intent):
+        """What PmusTransport exposes so the mandate guard can admit an
+        intent-shaped submission without importing the serializer.
+
+        Before the guard named `submit`, `__getattr__` forwarded it straight
+        to the inner transport and the admission was skipped on this path.
+        The double has to offer the same surface as the real transport or the
+        guard cannot do its job here either.
+        """
+        from src import l5_order_body as OB
+        return OB.from_intent(intent, MARKET)
+
+    def submit_body(self, body):
+        """The body-shaped entry the native money path uses.
+
+        It cannot call `submit(intent)`: `OB.from_intent` always leaves tif
+        at GTC, and a taker completion must keep IOC. Recorded in the same
+        `posts` list so every existing assertion still counts orders the
+        same way, with the wire fields the body actually carries.
+        """
+        if not self.armed:
+            raise EX.NotArmed("DISARMED")
+        if self._reject:
+            raise self._reject
+        px = (body.get("price") or {})
+        rec = dict(body)
+        rec["price"] = px.get("value") if isinstance(px, dict) else px
+        rec["qty"] = body.get("quantity")
+        rec["side"] = body.get("outcomeSide")
+        self.posts.append(rec)
+        return {"order_id": "v%d" % len(self.posts), "filled_qty": self._fill,
+                "fill_price": str(rec["price"])}
+
     def cancel(self, order_id):
         if not self.armed:
             raise EX.NotArmed("DISARMED")
@@ -459,16 +492,39 @@ def test_a_preview_mismatch_refuses_the_order():
 
 
 def test_the_transport_previews_before_it_submits():
-    """submit() must POST the preview first and send the SAME body."""
-    import ast
+    """The preview -> echo -> POST sequence, and ONE implementation of it.
+
+    `submit(intent)` now serializes and delegates to `submit_body(body)`,
+    which holds the sequence. The split exists so a caller that must express
+    something `from_intent` cannot -- a taker leg's IOC -- still goes through
+    preview and echo instead of around them
+    (tests/test_production_composition_submit.py crosses that seam for
+    real). So the assertion follows the sequence to where it lives rather
+    than to where it used to be.
+    """
     import inspect
     from src import l5_pmus_transport as TP
 
-    src = inspect.getsource(TP.PmusTransport.submit)
-    assert "/v1/order/preview" in src
-    assert "require_echo" in src
-    # the same `body` object goes to both calls: nothing is rebuilt between
-    assert src.count("OB.from_intent") == 1
+    entry = inspect.getsource(TP.PmusTransport.submit)
+    seq = inspect.getsource(TP.PmusTransport.submit_body)
+    assert "/v1/order/preview" in seq
+    assert "require_echo" in seq
+    assert "/v1/orders" in seq
+    # the preview comes before the order post, in that order, in one function
+    assert seq.index("/v1/order/preview") < seq.index('"/v1/orders"')
+    # the same `body` goes to both calls: nothing is rebuilt between them
+    # count CALLS, not prose: the docstring names from_intent to explain why
+    # the split exists.
+    assert seq.count("OB.from_intent(") == 0
+    assert seq.count("OB.build(") == 0
+    # and the entry point serializes exactly once, then delegates
+    assert entry.count("body_for_intent(") == 1
+    assert entry.count("submit_body(") == 1
+    # no second POST implementation: the entry point makes no wire call at
+    # all. (Its docstring names /v1/orders in prose, so match on the call.)
+    assert entry.count("_request(") == 0
+    body_src = inspect.getsource(TP.PmusTransport.body_for_intent)
+    assert body_src.count("OB.from_intent(") == 1
 
 
 # 8 ------------------------------------ terminal reconciliation before exit

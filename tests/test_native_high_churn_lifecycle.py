@@ -116,6 +116,13 @@ def run(tmp_path, venue, *, clip=D(10), rows=None):
     assert m is not None, err
 
     class T:
+        def submit_body(self, body):
+            """The seam the PRODUCTION path uses (see
+            tests/test_production_composition_submit.py). These doubles
+            only had `request`, which is why the 2345z window armed and
+            then died: PmusTransport has no public `request`."""
+            return self.request("POST", "/v1/orders", body)
+
         def request(self, method, path, body=None, **kw):
             return venue.accept(body)
 
@@ -237,6 +244,13 @@ def test_lock_cancels_and_reconciles_every_session_order(tmp_path):
     m, _ = MANDATE.parse_mandate(json.dumps(MANDATE_RAW))
 
     class T:
+        def submit_body(self, body):
+            """The seam the PRODUCTION path uses (see
+            tests/test_production_composition_submit.py). These doubles
+            only had `request`, which is why the 2345z window armed and
+            then died: PmusTransport has no public `request`."""
+            return self.request("POST", "/v1/orders", body)
+
         def request(self, method, path, body=None, **kw):
             return v.accept(body)
 

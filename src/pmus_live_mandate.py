@@ -792,6 +792,56 @@ class GuardedTransport:
         link_order(self._state_dir, self._mandate, v["commit_id"], oid)
         return resp
 
+    def submit_body(self, body: Mapping[str, Any]) -> Any:
+        """The SAME admission, in front of the transport's certified submit.
+
+        `__getattr__` forwards every unknown attribute straight to the inner
+        transport, so before this existed `guarded.submit_body(...)` and
+        `guarded.submit(...)` reached the wire WITHOUT `admit()` -- the guard
+        only ever intercepted `request`. A mutation path the guard does not
+        name is a mutation path the mandate does not bound.
+
+        The admission, refusal, emission and `link_order` sequence is
+        identical to `request`'s POST branch, deliberately: there is one
+        admission rule, not two.
+        """
+        return self._admitted_mutation(
+            body, lambda: self._inner.submit_body(body))
+
+    def submit(self, intent: Mapping[str, Any]) -> Any:
+        """Same, for the intent-shaped entry point.
+
+        The body comes from the inner transport's own serializer
+        (`body_for_intent`) rather than from an import here: this module has
+        no src dependency and a structural test enforces that.
+        """
+        body = self._inner.body_for_intent(intent)
+        return self._admitted_mutation(
+            body, lambda: self._inner.submit(intent))
+
+    def _admitted_mutation(self, body: Mapping[str, Any], send) -> Any:
+        """admit -> emit -> refuse-or-send -> link. One rule, three callers."""
+        rt = None
+        if self._realized_today is not None:
+            try:
+                rt = self._realized_today()
+            except Exception:                                # noqa: BLE001
+                rt = None
+        v = admit(body or {}, state_dir=self._state_dir,
+                  mandate=self._mandate, realized_today=rt)
+        self._emit(v)
+        if not v["admits"]:
+            self.refusals.append(v)
+            raise MandateRefusal(v)
+        self.admissions.append(v)
+        resp = send()
+        oid = ""
+        if isinstance(resp, Mapping):
+            oid = str(resp.get("id") or resp.get("orderId")
+                      or (resp.get("order") or {}).get("id") or "")
+        link_order(self._state_dir, self._mandate, v["commit_id"], oid)
+        return resp
+
     def _emit(self, v: Mapping[str, Any]) -> None:
         if self._log:
             self._log("mandate_admission", **dict(v))

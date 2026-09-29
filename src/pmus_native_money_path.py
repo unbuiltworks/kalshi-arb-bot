@@ -471,7 +471,14 @@ class NativeMoneyPath:
 
     def _post(self, intent: "E.Intent") -> Dict[str, Any]:
         body = body_for(intent, self.market)
-        ack = self.tp.request("POST", ORDER_PATH, body)
+        # THE CERTIFIED SUBMIT, not a second POST implementation.
+        # `transport.request("POST", ORDER_PATH, body)` was this line, and
+        # PmusTransport has no public `request`: the 2345z window armed,
+        # decided a 10-contract intent and died with AttributeError inside
+        # GuardedTransport's forwarding. `submit_body` previews the body,
+        # validates the venue's echo field by field and posts THE SAME body,
+        # and the guard admits against the mandate in front of it.
+        ack = self.tp.submit_body(body)
         oid = self._order_id(ack)
         rec = {"kind": intent.kind, "side": intent["side"], "body": body,
                "ack": ack, "oid": oid}
