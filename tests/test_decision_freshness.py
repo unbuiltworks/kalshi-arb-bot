@@ -36,6 +36,9 @@ def path(venue):
     mp.journal = None
     mp.timing = {}
     mp._cancel_failures = {}
+    # observation hooks, as production initialises them: both None
+    mp.ws_observer = None
+    mp.decision_shadow = None
     mp._resolved_this_pass = set()
     mp._terminal_verdicts = {}
     mp._status_reads = 0

@@ -931,6 +931,46 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
     # BEFORE the loop, not after it: R4's crash-free window still reported
     # zero, and a window that dies mid-flight must not lose its orders too.
     probe.native = mp
+    # ---- OBSERVATION ONLY, wired here and nowhere else ------------------
+    # Both are constructed, attached, journalled and stopped. Neither is read
+    # back by any decision: `mp.ws_observer` is handed the AUTHORITATIVE REST
+    # verdict AFTER REST has spoken, and `mp.decision_shadow` is called AFTER
+    # `eng.on_book` has returned its intents. REST remains the sole
+    # authoritative lifecycle source and frozen LOCK5 the sole execution
+    # policy. Any failure here is journalled and the window trades on.
+    obs = stream = shadow = None
+    try:
+        from src import pmus_ws_lifecycle_observer as WSO
+        from src import l5_decision_shadow as DSH
+        from src import pmus_ws_evidence_recorder as _R
+
+        obs = WSO.LifecycleObserver(clock=clock)
+        shadow = DSH.DecisionShadow(clock=clock)
+        mp.ws_observer = obs
+        mp.decision_shadow = shadow
+        probe.ws_observer = obs
+        probe.decision_shadow = shadow
+
+        def _private_headers():
+            # the documented Ed25519 scheme signed over the PRIVATE path,
+            # reusing the recorder's signer rather than adding a method to
+            # the certified transport.
+            return _R.auth_headers(os.environ[_R.KEY_ENV],
+                                   os.environ[_R.SECRET_ENV],
+                                   path=WSO.PRIVATE_PATH)
+
+        stream = WSO.PrivateStream(obs, auth_headers=_private_headers)
+        stream.start()
+        probe.ws_private_stream = stream
+        journal.write("ws_observation_started", {
+            "private_url": WSO.PRIVATE_URL,
+            "authority": "NONE -- REST is authoritative",
+            "decision_shadow": "NON_SUBMITTING",
+            "shadow_mode_switch_enabled": False})
+    except BaseException as exc:                           # noqa: BLE001
+        journal.write("ws_observation_unavailable", {
+            "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
+            "note": "REST authority and frozen LOCK5 are unaffected"})
     journal.write("native_clip", {
         "clip": str(mp.eng.clip), "env": NMP.CLIP_ENV,
         "default_when_unset": str(NMP.E.CLIP),
@@ -967,6 +1007,23 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
     # fill later, unmanaged, on a market nothing is watching.
     sweep = mp.sweep_all()
     probe.native = mp
+    # OBSERVATION ONLY: stop the private socket and journal both reports.
+    # Failures here are swallowed -- the window's accounting must not depend
+    # on observation.
+    if stream is not None:
+        try:
+            stream.stop()
+            journal.write("ws_private_stream", stream.health())
+        except BaseException:                              # noqa: BLE001
+            pass
+    for _nm, _o in (("ws_lifecycle_observation", obs),
+                    ("decision_shadow", shadow)):
+        if _o is None:
+            continue
+        try:
+            journal.write(_nm, _o.report())
+        except BaseException:                              # noqa: BLE001
+            pass
     journal.write("native_window_done", {
         "sweep": sweep,
         "ticks": ticks, "submitted": len(mp.submitted),

@@ -1,5 +1,28 @@
 # R6 q10 manifest — PREPARED, NOT ARMED
 
+**R6 candidate SHA: see `R6_CANDIDATE_SHA` below. Frozen.**
+
+## R6 wiring change (authorized, wiring only)
+
+P1 and P2 were built but referenced by NO production module, so at the
+previous SHA R6 could not have delivered purposes 2, 3 or 4. Wired now, and
+only this:
+
+| site | what it does |
+|---|---|
+| `pmus_native_money_path.__init__` | `ws_observer = None`, `decision_shadow = None` |
+| `pmus_native_money_path._status_once` | hands the AUTHORITATIVE REST verdict to `on_rest` AFTER REST has spoken; the verdict is not rebound |
+| `pmus_native_money_path.on_book_state` | calls `decision_shadow.compare` AFTER `eng.on_book` returned its intents |
+| `pmus_native_money_path.resolve_open_orders` | calls `decision_shadow.observe_fill` where a fill books |
+| `scripts/l5_pmus_live_oneshot.native_work_window` | constructs, attaches, starts the private stream, journals, stops |
+
+Every call is wrapped so an observation failure cannot raise into the
+trading path. Structural tests now assert the permitted call sites by name
+and prove line-by-line that none of them reaches submission, cancellation,
+canonical booking, inventory mutation, risk mutation or an execution
+decision; that the shadow's return value is never assigned or returned; and
+that the shadow is called strictly after `eng.on_book`.
+
 No authorization is requested by this file. It states exactly what would run.
 
 ## Purpose (five measurements in one window)

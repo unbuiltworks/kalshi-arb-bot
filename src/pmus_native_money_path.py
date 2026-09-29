@@ -251,6 +251,13 @@ class NativeMoneyPath:
         #: pass-scoped: TERMINAL verdicts only (terminal is monotonic).
         self._terminal_verdicts: Dict[str, Any] = {}
         self.timing: Dict[str, Any] = {}
+        #: OBSERVATION ONLY, both default None and both wired by the probe.
+        #: Neither can book a fill, release a commitment, alter inventory,
+        #: cancel, replace, submit, or influence LOCK5. Every call to them is
+        #: wrapped so an observation failure cannot raise into the trading
+        #: path, and REST remains the sole authoritative lifecycle source.
+        self.ws_observer = None
+        self.decision_shadow = None
         self._last_sweep_t: Optional[float] = None
         self._last_sweep_trades = 0
         self._sweeps_done = 0
@@ -306,6 +313,18 @@ class NativeMoneyPath:
                     "detail": str(exc), "fills_booked": booked}
 
         T["lock5_end_ms"] = _now_ms()
+        # OBSERVATION ONLY, and deliberately AFTER on_book: `intents` is
+        # already decided and is not read back from here, so the shadow
+        # cannot influence the frozen decision it is logging.
+        if self.decision_shadow is not None:
+            try:
+                rr = self.eng.bk.residual()
+                self.decision_shadow.compare(
+                    frozen_intents=intents, residual=rr,
+                    matched=min(self.eng.bk.q["up"], self.eng.bk.q["down"]),
+                    book=row, t=row.get("t"))
+            except BaseException:                          # noqa: BLE001
+                pass
         out: Dict[str, Any] = {"acted": True, "intents": len(intents),
                                "submitted": [], "cancelled": [],
                                "lock": None, "fills_booked": booked,
@@ -383,6 +402,14 @@ class NativeMoneyPath:
         v = self.venue.order_status(key, requested_qty=requested_qty,
                                     side=side)
         self._status_reads += 1
+        # OBSERVATION ONLY: hand the AUTHORITATIVE verdict to the correlator
+        # so WS can be compared against it. The verdict itself is unchanged
+        # and is returned below exactly as REST gave it.
+        if self.ws_observer is not None:
+            try:
+                self.ws_observer.on_rest(key, v)
+            except BaseException:                          # noqa: BLE001
+                pass
         self._resolved_this_pass.add(key)
         if v.get("terminal"):
             self._terminal_verdicts[key] = v
@@ -590,6 +617,15 @@ class NativeMoneyPath:
                                      maker=bool(row.get("kind") == E.REST),
                                      fee=(None if fee is None
                                           else D(str(fee))))
+                    if self.decision_shadow is not None:
+                        try:
+                            rr = self.eng.bk.residual()
+                            self.decision_shadow.observe_fill(
+                                row["side"],
+                                held=("up" if rr > 0 else
+                                      ("down" if rr < 0 else None)))
+                        except BaseException:              # noqa: BLE001
+                            pass
                     booked = {"oid": oid, "side": row["side"],
                               "qty": str(new), "price_own": str(px),
                               "cost": str(px * new),

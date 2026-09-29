@@ -75,6 +75,10 @@ COPY src/pmus_market_row.py src/pmus_market_row.py
 # the single order-state classifier, reused from pmus_q1_executor
 COPY src/pmus_order_lifecycle.py src/pmus_order_lifecycle.py
 COPY src/pmus_canonical_accounts.py src/pmus_canonical_accounts.py
+COPY src/l5_mode_switch.py src/l5_mode_switch.py
+COPY src/l5_decision_shadow.py src/l5_decision_shadow.py
+COPY src/pmus_ws_lifecycle_observer.py src/pmus_ws_lifecycle_observer.py
+COPY analysis/l5/l5_switch_model.json analysis/l5/l5_switch_model.json
 COPY src/pmus_book_tape.py src/pmus_book_tape.py
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py

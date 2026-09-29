@@ -185,6 +185,9 @@ def _path(venue, oid="CSPERKXEYYB5", side="up", qty=D(10), price=D("0.46")):
     # pass-scoped caches, as production initialises them. TERMINAL verdicts
     # only, because terminal is monotonic and a WORKING verdict must never be
     # served across a cancel attempt.
+    # observation hooks, as production initialises them: both None
+    mp.ws_observer = None
+    mp.decision_shadow = None
     mp._resolved_this_pass = set()
     mp._terminal_verdicts = {}
     mp._status_reads = 0

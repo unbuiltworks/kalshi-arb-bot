@@ -177,3 +177,75 @@ def test_an_unrecognised_shape_does_not_raise():
 def test_rest_is_declared_authoritative_in_the_report():
     o = O.LifecycleObserver(clock=lambda: 100.0)
     assert o.report()["authority"] == "REST"
+
+
+# ---- R6 wiring: the observer runs in production but holds no authority --
+
+def test_the_only_production_references_are_observation_wiring():
+    import pathlib
+    allowed = {"pmus_ws_lifecycle_observer.py": "the module itself",
+               "pmus_native_money_path.py": "holds the on_rest hook",
+               "l5_pmus_live_oneshot.py": "constructs, starts, journals, stops"}
+    hits = []
+    for p in list(pathlib.Path("src").glob("*.py")) + \
+            list(pathlib.Path("scripts").glob("*.py")):
+        if p.name in allowed:
+            continue
+        if "pmus_ws_lifecycle_observer" in p.read_text():
+            hits.append(p.name)
+    assert hits == [], "unexpected production reference: %s" % (hits,)
+
+
+def test_no_observer_call_site_can_reach_execution():
+    import pathlib
+    forbidden = ("submit", "cancel", "on_fill", "mark_terminal",
+                 "release_terminal", "registry.record", "_post(")
+    for f in ("src/pmus_native_money_path.py",
+              "scripts/l5_pmus_live_oneshot.py"):
+        for i, line in enumerate(pathlib.Path(f).read_text().split("\n"), 1):
+            if "ws_observer" not in line:
+                continue
+            for bad in forbidden:
+                assert bad not in line, "%s:%d %r" % (f, i, line.strip())
+
+
+def test_the_observer_receives_the_rest_verdict_unchanged():
+    """`on_rest` is handed the authoritative verdict; the verdict returned to
+    the caller must be byte-identical to what REST gave."""
+    import inspect
+    from src import pmus_native_money_path as MP
+    src = inspect.getsource(MP.NativeMoneyPath._status_once)
+    assert "self.ws_observer.on_rest(key, v)" in src
+    # the verdict is not rebound after the observer sees it
+    after = src.split("on_rest(key, v)")[1]
+    assert "v =" not in after
+
+
+def test_observation_failure_cannot_raise_into_the_trading_path():
+    import inspect
+    from src import pmus_native_money_path as MP
+    for fn in (MP.NativeMoneyPath._status_once,
+               MP.NativeMoneyPath.on_book_state):
+        src = inspect.getsource(fn)
+        for hook in ("ws_observer.on_rest", "decision_shadow.compare"):
+            if hook not in src:
+                continue
+            seg = src.split(hook)[0]
+            assert seg.rstrip().endswith(("try:",)) or "try:" in seg[-400:], hook
+
+
+def test_the_private_stream_sends_only_subscribe_frames():
+    o = O.LifecycleObserver()
+    st = O.PrivateStream(o)
+    assert st.health()["authority"].startswith("NONE")
+    for f in O.subscribe_frames():
+        O.guard_outbound(f)
+    with pytest.raises(RuntimeError):
+        O.guard_outbound({"order": {}})
+
+
+def test_the_private_stream_holds_no_reference_to_the_money_path():
+    import inspect
+    src = inspect.getsource(O.PrivateStream)
+    for bad in ("money_path", "registry", "eng.", "submit", "mandate"):
+        assert bad not in src, bad

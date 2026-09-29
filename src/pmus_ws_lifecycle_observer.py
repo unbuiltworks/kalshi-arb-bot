@@ -284,3 +284,87 @@ class LifecycleObserver:
                        "clears an UNKNOWN. An order absent from a snapshot is "
                        "VANISHED_FROM_SNAPSHOT, which is not a fill."),
         }
+
+
+class PrivateStream:
+    """Background reader for /v1/ws/private. Feeds a LifecycleObserver.
+
+    Owns its own socket and thread so the production wiring is two lines:
+    construct, and stop. It sends only subscribe frames, holds no reference
+    to the money path, and its ONLY output is `observer.on_ws`, which
+    records. A failure here degrades observation and nothing else: the
+    thread dies, `health()["connected"]` goes False, and the trading path
+    does not notice, because REST is the authoritative source.
+    """
+
+    def __init__(self, observer: "LifecycleObserver", *,
+                 auth_headers=None, url: str = PRIVATE_URL,
+                 path: str = PRIVATE_PATH) -> None:
+        self.observer = observer
+        self.url = url
+        self.path = path
+        self._auth = auth_headers
+        self.connected = False
+        self.frames = 0
+        self.errors: List[str] = []
+        self.sessions = 0
+        self._stop = None
+        self._thread = None
+
+    def health(self) -> Dict[str, Any]:
+        return {"stream": "PMUS_WS_PRIVATE", "url": self.url,
+                "connected": self.connected, "frames": self.frames,
+                "sessions": self.sessions, "errors": self.errors[-3:],
+                "authority": "NONE -- REST is authoritative"}
+
+    def start(self) -> None:
+        import threading
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True,
+                                        name="pmus-ws-private")
+        self._thread.start()
+
+    def stop(self) -> None:
+        if self._stop is not None:
+            self._stop.set()
+
+    # -------------------------------------------------------------- thread
+    def _run(self) -> None:                                # pragma: no cover
+        import asyncio
+        while self._stop is not None and not self._stop.is_set():
+            try:
+                asyncio.run(self._session())
+            except BaseException as exc:                   # noqa: BLE001
+                self.errors.append("%s: %s" % (type(exc).__name__,
+                                               str(exc)[:200]))
+            self.connected = False
+            if self._stop is not None and not self._stop.is_set():
+                self.observer.on_reconnect()
+                time.sleep(2.0)
+
+    async def _session(self) -> None:                      # pragma: no cover
+        import asyncio
+        import websockets
+        headers = self._auth() if callable(self._auth) else (self._auth or {})
+        async with websockets.connect(self.url, additional_headers=headers,
+                                      max_size=4 * 1024 * 1024,
+                                      open_timeout=15) as ws:
+            self.connected = True
+            self.sessions += 1
+            for frame in subscribe_frames():
+                await ws.send(json.dumps(guard_outbound(frame)))
+            while self._stop is not None and not self._stop.is_set():
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    continue
+                self.frames += 1
+                try:
+                    msg = json.loads(raw)
+                except BaseException:                      # noqa: BLE001
+                    continue
+                try:
+                    self.observer.on_ws(msg)
+                except BaseException as exc:               # noqa: BLE001
+                    # observation must never raise into the trading process
+                    self.errors.append("on_ws: %s" % (str(exc)[:160],))
