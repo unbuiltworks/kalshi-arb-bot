@@ -1,0 +1,72 @@
+L5 BTC-15m BUY fills: 11331, markets 330 | with settlement: 11108, markets 304
+
+== 120-60s to settlement ==
+  all buys                    n=990   mkts=158  shares=25959.4   $12112.9    avgpx=0.4666 win=42.6%  E/sh=-0.0203  E/$=+0.014 
+  favored outcome             n=444   mkts=125  shares=12254.6   $10147.0    avgpx=0.8280 win=77.6%  E/sh=-0.0474  E/$=-0.011 
+  underdog outcome            n=546   mkts=115  shares=13704.8   $1965.9     avgpx=0.1434 win=14.9%  E/sh=0.0012   E/$=+0.143 
+  same side as residual       n=546   mkts=127  shares=13644.0   $6178.7     avgpx=0.4529 win=40.5%  E/sh=-0.0217  E/$=+0.024 
+  reduces residual            n=441   mkts=112  shares=12135.4   $5875.4     avgpx=0.4842 win=44.9%  E/sh=-0.0197  E/$=-0.001 
+
+== 60-30s to settlement ==
+  all buys                    n=382   mkts=81   shares=8764.2    $3666.9     avgpx=0.4184 win=46.5%  E/sh=0.0702   E/$=-0.010 
+  favored outcome             n=138   mkts=44   shares=3391.4    $2912.7     avgpx=0.8588 win=86.4%  E/sh=0.0243   E/$=-0.085 
+  underdog outcome            n=244   mkts=67   shares=5372.8    $754.3      avgpx=0.1404 win=24.2%  E/sh=0.0959   E/$=+0.293 
+  same side as residual       n=205   mkts=60   shares=4687.4    $1904.7     avgpx=0.4063 win=44.7%  E/sh=0.0690   E/$=+0.033 
+  reduces residual            n=176   mkts=52   shares=4071.7    $1762.2     avgpx=0.4328 win=48.8%  E/sh=0.0721   E/$=-0.056 
+
+== 30-15s to settlement ==
+  all buys                    n=62    mkts=21   shares=1756.4    $647.7      avgpx=0.3688 win=63.8%  E/sh=0.2220   E/$=+0.417 
+  favored outcome             n=24    mkts=13   shares=600.0     $512.9      avgpx=0.8550 win=95.7%  E/sh=0.1265   E/$=+0.075 
+  underdog outcome            n=38    mkts=14   shares=1156.4    $134.7      avgpx=0.1165 win=42.9%  E/sh=0.2847   E/$=+1.785 
+  same side as residual       n=39    mkts=14   shares=1169.6    $430.4      avgpx=0.3679 win=63.2%  E/sh=0.2434   E/$=+0.555 
+  reduces residual            n=23    mkts=13   shares=586.8     $217.3      avgpx=0.3704 win=65.0%  E/sh=0.1813   E/$=+0.032 
+
+== 15-5s to settlement ==
+  all buys                    n=11    mkts=3    shares=268.0     $29.9       avgpx=0.1116 win=18.2%  E/sh=-0.0491  E/$=-0.675 
+  favored outcome             n=2     mkts=1    shares=9.7       $9.0        avgpx=0.9251 win=100.0% E/sh=0.0750   E/$=+0.081 
+  underdog outcome            n=9     mkts=2    shares=258.3     $20.9       avgpx=0.0810 win=0.0%   E/sh=-0.0767  E/$=-1.000 
+  same side as residual       n=11    mkts=3    shares=268.0     $29.9       avgpx=0.1116 win=18.2%  E/sh=-0.0491  E/$=-0.675 
+  reduces residual            n=0
+
+== <5s to settlement ==
+  all buys                    n=0
+  favored outcome             n=0
+  underdog outcome            n=0
+  same side as residual       n=0
+  reduces residual            n=0
+
+== FAVORED-side buys by own-side price, LATE (<120s) ==
+  0.60-0.70                   n=80    mkts=32   shares=2116.3    $1354.6     avgpx=0.6401 win=55.4%  E/sh=-0.0870  E/$=-0.070 
+  0.70-0.80                   n=81    mkts=33   shares=1960.3    $1473.6     avgpx=0.7517 win=46.8%  E/sh=-0.2810  E/$=-0.256 
+  0.80-0.90                   n=108   mkts=41   shares=3152.5    $2672.6     avgpx=0.8478 win=78.8%  E/sh=-0.0589  E/$=-0.088 
+  0.90-0.95                   n=93    mkts=37   shares=2484.4    $2286.0     avgpx=0.9201 win=96.6%  E/sh=0.0447   E/$=+0.055 
+  0.95+                       n=187   mkts=83   shares=5247.8    $5087.2     avgpx=0.9694 win=98.9%  E/sh=0.0191   E/$=+0.024 
+
+== earlier in the window, for comparison ==
+  900-600s all                n=3361  mkts=221  shares=68471.3   $35657.7    avgpx=0.5208 win=47.2%  E/sh=-0.0212  E/$=-0.016 
+  900-600s favored            n=1662  mkts=185  shares=38757.5   $25376.5    avgpx=0.6548 win=68.1%  E/sh=0.0209   E/$=+0.040 
+  600-300s all                n=3689  mkts=281  shares=73112.9   $35424.2    avgpx=0.4845 win=42.5%  E/sh=-0.0029  E/$=+0.021 
+  600-300s favored            n=1482  mkts=234  shares=36404.8   $27455.7    avgpx=0.7542 win=79.7%  E/sh=0.0449   E/$=+0.071 
+  300-120s all                n=2836  mkts=270  shares=64617.5   $29859.7    avgpx=0.4621 win=46.2%  E/sh=0.0013   E/$=+0.014 
+  300-120s favored            n=1314  mkts=224  shares=30178.3   $24435.9    avgpx=0.8097 win=81.8%  E/sh=0.0219   E/$=+0.035 
+
+== buying INTENSITY by time bucket (per-second rate) ==
+  900-600s   fills/s=11.203  shares/s=228.2     favored share=49.4%
+  600-300s   fills/s=12.297  shares/s=243.7     favored share=40.2%
+  300-120s   fills/s=15.756  shares/s=359.0     favored share=46.3%
+  120-60s    fills/s=16.500  shares/s=432.7     favored share=44.8%
+  60-30s     fills/s=12.733  shares/s=292.1     favored share=36.1%
+  30-15s     fills/s=4.133   shares/s=117.1     favored share=38.7%
+  15-5s      fills/s=1.100   shares/s=26.8      favored share=18.2%
+  <5s        fills/s=0.000   shares/s=0.0       favored share=n/a
+
+== COUNTERFACTUAL: +1 q10 TAKER clip on the favored side ==
+   taker price = L5's observed fill + 0.01 tick (no touch fill)
+   fees = 0.0695 * px * (1-px) per share; one clip per market per bucket
+  120-60s   clips=115  cost=$974.14    fees=$8.66    net=$-42.80     per_clip=-0.3722   roc=-4.39%
+  60-30s    clips=41   cost=$356.99    fees=$2.66    net=$0.36       per_clip=0.0087    roc=+0.10%
+  30-15s    clips=12   cost=$109.20    fees=$0.56    net=$0.24       per_clip=0.0201    roc=+0.22%
+  15-5s     clips=1    cost=$9.40      fees=$0.04    net=$0.56       per_clip=0.5608    roc=+5.97%
+  <5s       clips=0    cost=$0.00      fees=$0.00    net=$0.00       per_clip=n/a       roc=n/a
+
+  ALL <120s combined: clips=124 cost=$1054.54 fees=$9.20 net=$-43.74 per_clip=-0.3527 roc=-4.15%
