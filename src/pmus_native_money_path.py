@@ -731,6 +731,14 @@ class NativeMoneyPath:
                 return None
         if n <= 0:
             return None
+        # ALREADY BOOKED INLINE. `NativeEngine.on_completion_fill` applies this
+        # fill the moment we return, so the resolver must not apply it again:
+        # recording it on the registry row makes the next pass's increment
+        # zero. Without this, a taker completion is booked TWICE -- once inline
+        # and once when /v1/order reports the same order FILLED.
+        self.registry.mark_terminal(oid, n)
+        self.release_terminal(oid, n)
+        self._resolved_this_pass.add(str(oid))
         return n, cost, fee
 
     def _remainder_resolved(self, intent, oid: str, remainder: D) -> bool:

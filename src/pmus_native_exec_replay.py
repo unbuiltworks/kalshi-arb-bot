@@ -215,7 +215,7 @@ class ExecReplayVenue:
                 # real venue cannot be declined, which is why this is an
                 # effect flag and not a fact.
                 continue
-            o = self._open_on(side)
+            o = self._open_on(side, px=D(str(st["px"])))
             if o is None:
                 # FROZEN grants a fill to whatever the ENGINE has resting, and
                 # its fill model will fill the SAME notional clip again on a
@@ -238,10 +238,20 @@ class ExecReplayVenue:
             if o.cum >= o.qty:
                 o.state = "FILLED"
 
-    def _open_on(self, side: str):
+    def _open_on(self, side: str, *, px=None):
+        """The OPEN maker order that IS the engine's current quote.
+
+        Matched on price as well as side: a stale order resting at a price the
+        engine has moved off is not the quote frozen would be filling, and
+        crediting it was how an earlier version of this harness produced 61
+        completions against frozen's 44.
+        """
         for o in self.orders.values():
-            if o.side == side and o.state == "OPEN" and o.maker:
-                return o
+            if o.side != side or o.state != "OPEN" or not o.maker:
+                continue
+            if px is not None and o.px != D(str(px)):
+                continue
+            return o
         return None
 
     def fill_ioc_now(self) -> None:
@@ -304,7 +314,11 @@ def replay_window(rows, *, winner, clip=E.CLIP, fill_model="queue_aware",
         # have granted for what was resting when the row arrived.
         venue.fill_ioc_now()
         out = mp.on_book_state(row, ladder)
-        venue.advance(mp.eng, row, ladder)
+        # FROZEN grants no maker fill on a row where it has locked and
+        # cancelled: pmus_native_parity skips the fill block entirely once
+        # `locked_at` is set.
+        if mp.eng.locked_at is None:
+            venue.advance(mp.eng, row, ladder)
         ticks += 1
         if out.get("refused") == "ORDER_STATE_UNKNOWN":
             halted = out
