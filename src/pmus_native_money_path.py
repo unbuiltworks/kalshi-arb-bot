@@ -29,6 +29,16 @@ SIDE_WIRE = {"up": "OUTCOME_SIDE_YES", "down": "OUTCOME_SIDE_NO"}
 LIVE, TERMINAL, UNKNOWN = "LIVE", "TERMINAL", "UNKNOWN"
 
 
+#: cancel outcomes that leave the side FREE TO QUOTE. `ALREADY_TERMINAL` is
+#: here because of R4: the venue refuses to cancel an order it has finished
+#: with, `_ensure_side_clear` demanded the literal string CONFIRMED_CANCELLED,
+#: and so a FILLED order and a REJECTED order each returned CANCEL_FAILED and
+#: blocked their side for the REST OF THE WINDOW -- from tick 3 onward, 200ms
+#: after submission. An order the venue is done with needs no cancellation.
+CLEARED_STATES = ("CONFIRMED_CANCELLED", "ALREADY_TERMINAL",
+                  "NOTHING_RESTING")
+
+
 class OrderStateUnknown(RuntimeError):
     """We cannot say what one of our own orders is doing. Fail closed."""
 
@@ -439,7 +449,7 @@ class NativeMoneyPath:
             return {"clear": True, "side": side}
         for row in list(pending):
             res = self.cancel_side(side, oid=row["oid"])
-            if res.get("state") != "CONFIRMED_CANCELLED":
+            if res.get("state") not in CLEARED_STATES:
                 return {"clear": False, "side": side, "oid": row["oid"],
                         "reason": res.get("state")}
         still = self.registry.live_for(side)
@@ -475,6 +485,13 @@ class NativeMoneyPath:
         oid = str(oid or "")
         if self.venue is None:
             return {"side": side, "state": "NO_VENUE"}
+        # AUTHORITATIVE STATE FIRST. R4 attempted to cancel an order the venue
+        # had REJECTED 94ms earlier and another it had FILLED, got
+        # CANCEL_FAILED for both, and never quoted again. Asking first means
+        # the failure path is not even entered for an order that is done.
+        done = self._terminal_after_failed_cancel(side, oid)
+        if done is not None:
+            return done
         try:
             if oid and hasattr(self.venue, "cancel_order"):
                 self.venue.cancel_order(oid)

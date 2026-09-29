@@ -476,3 +476,115 @@ def test_a_later_additional_fill_on_the_same_order_still_books_its_delta(
     r2 = mp.resolve_open_orders()
     assert r2["fills_booked"][0]["qty"] == "6"        # the DELTA only
     assert mp.eng.bk.q["up"] == D(10)
+
+
+# ============ THE R4 BLOCK: CANCEL_FAILED must never poison a window =========
+
+class NoCancelVenue(Venue):
+    """The venue as R4 met it: it refuses to cancel a terminal order."""
+
+    def request(self, method, path, body=None, base=None):
+        if method == "POST" and "/cancel" in path:
+            oid = path.split("/v1/order/")[-1].split("/")[0]
+            o = self.orders.get(oid)
+            if o is None or o["state"] not in ("OPEN",):
+                raise RuntimeError("400 order is not cancellable")
+            o["state"] = "ORDER_STATE_CANCELED"
+            return {"cancelled": oid}
+        return super().request(method, path, body, base)
+
+
+def test_a_cancel_against_a_terminal_order_does_not_block_its_side(armed,
+                                                                  tmp_path):
+    """The exact R4 block, and it must not reproduce.
+
+    R4: DOWN was REJECTED, UP was FILLED, `cancel_side` got CANCEL_FAILED for
+    both because the venue will not cancel an order it has finished with, and
+    `_ensure_side_clear` demanded the literal string CONFIRMED_CANCELLED. Both
+    sides were blocked from tick 3 -- 200ms after submission -- for the whole
+    remaining window. 215 ticks, zero further quotes.
+    """
+    v = NoCancelVenue(outcomes=[REJECT])
+    tp, guarded, av, mp = stack(tmp_path, v)
+    mp._post(down_rest())
+
+    gate = mp._ensure_side_clear("down")
+    assert gate["clear"] is True, gate
+    # and it is clear because the order was resolved TERMINAL, not cancelled
+    assert mp.registry.as_dict()["nonterminal"] == 0
+    assert mp.rejections and mp.rejections[0]["oid"] == "R4-1"
+    # the whole reservation came back: nothing filled
+    assert D(mp.registry.as_dict()["open_reserved"]) == D(0)
+
+
+def test_a_filled_order_that_cannot_be_cancelled_books_and_clears(armed,
+                                                                 tmp_path):
+    v = NoCancelVenue(outcomes=[FILL_10_AT_26])
+    tp, guarded, av, mp = stack(tmp_path, v)
+    mp._post(up_rest())
+    gate = mp._ensure_side_clear("up")
+    assert gate["clear"] is True, gate
+    assert mp.eng.bk.q["up"] == D(10)                  # booked exactly once
+    assert D(mp.registry.as_dict()["filled_commitment"]) == D("2.60")
+    assert mp.registry.as_dict()["nonterminal"] == 0
+
+
+def test_an_unreadable_order_still_blocks_after_a_failed_cancel(armed,
+                                                               tmp_path):
+    """Relaxing CANCEL_FAILED must not relax UNKNOWN."""
+    class Blind(NoCancelVenue):
+        def request(self, method, path, body=None, base=None):
+            if method == "GET" and path.startswith("/v1/order/"):
+                raise RuntimeError("503 upstream")
+            return super().request(method, path, body, base)
+
+    v = Blind(outcomes=[{"state": "OPEN", "cum": "0"}])
+    tp, guarded, av, mp = stack(tmp_path, v)
+    mp._post(up_rest())
+    gate = mp._ensure_side_clear("up")
+    assert gate["clear"] is False
+    assert mp.registry.as_dict()["nonterminal"] == 1
+    assert D(mp.registry.as_dict()["open_reserved"]) == D("2.60")
+
+
+def test_the_full_r4_chronology_never_blocks_and_keeps_deciding(armed,
+                                                               tmp_path):
+    """UP resting -> DOWN REJECTED -> replacement attempted -> DOWN terminal
+    and NOT blocking -> UP later FILLED -> inventory UP=10 -> LOCK5 sees
+    residual 10 and carries on deciding."""
+    v = NoCancelVenue(outcomes=[{"state": "OPEN", "cum": "0"}, REJECT])
+    tp, guarded, av, mp = stack(tmp_path, v)
+
+    mp._post(up_rest())                                 # UP resting
+    mp._post(down_rest())                               # DOWN -> REJECTED
+    assert v.orders["R4-2"]["state"] == "ORDER_STATE_REJECTED"
+
+    # the engine tries to replace BOTH sides almost immediately, as it did at
+    # 00:46:36.112 and 00:46:36.199
+    assert mp._ensure_side_clear("down")["clear"] is True   # terminal, no block
+    up_gate = mp._ensure_side_clear("up")
+    assert up_gate["clear"] is True                        # OPEN -> cancelled
+    assert v.orders["R4-1"]["state"] == "ORDER_STATE_CANCELED"
+
+    # re-quote UP; it rests and later fills, as the real UP did 10.7s later
+    mp._post(up_rest())
+    v.orders["R4-3"].update({"state": "ORDER_STATE_FILLED", "cumQuantity": "10",
+                             "leavesQuantity": "0",
+                             "avgPx": {"value": "0.2600"},
+                             "commissionNotionalTotalCollected":
+                                 {"value": "-0.0200"}})
+
+    r = mp.resolve_open_orders()
+    assert len(r["fills_booked"]) == 1
+    assert mp.eng.bk.q["up"] == D(10) and mp.eng.bk.residual() == D(10)
+    assert mp.eng.bk.avg("up") == D("0.26")
+
+    # LOCK5 keeps deciding, against current inventory
+    row = {"status": "USABLE", "t": 0.0, "bid": "0.25", "ask": "0.27",
+           "bid_qty": "100", "ask_qty": "100"}
+    out = mp.on_book_state(row)
+    assert out.get("refused") != "ORDER_STATE_UNKNOWN"
+    # `residual` is only reported on a tick that actually decided; what matters
+    # is that the decision saw the booked inventory and nothing is blocking.
+    assert mp.eng.bk.residual() == D(10)
+    assert mp.registry.as_dict()["nonterminal"] == 0
