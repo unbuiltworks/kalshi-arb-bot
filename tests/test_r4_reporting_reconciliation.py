@@ -236,3 +236,45 @@ def test_no_eligible_window_still_refuses_rather_than_computing_one():
     at = (START + dt.timedelta(seconds=94)).timestamp()
     assert ONE.select_venue_window(now=at, windows=rows,
                                    require_not_started=True) == {}
+
+
+# ------------------------------- the audit lane must RETURN, not fall through
+
+def test_the_audit_lane_is_announced_and_never_falls_through(monkeypatch):
+    """The first version of this block landed inside `selected_mode()`, which
+    the L5_MODE line calls: the audit ran, returned 0 into `{"mode": 0}`, and
+    the process carried on into run(). It was harmless only because that run
+    was disarmed. Caught by reading the deployed output, not by a test -- so
+    here is the test."""
+    monkeypatch.setenv(ONE.AUDIT_ENV, "1")
+    assert ONE.audit_only_enabled() is True
+    assert ONE.selected_mode() == "AUDIT_ONLY"
+    monkeypatch.setenv(ONE.AUDIT_ENV, "")
+    assert ONE.selected_mode() == "LIVE_PROBE"
+
+
+def test_selected_mode_only_announces_and_calls_nothing():
+    """It is called from inside a print(); it must have no side effects."""
+    import inspect
+    src = inspect.getsource(ONE.selected_mode)
+    for forbidden in ("trade_audit(", "recover(", "observe(", "run(",
+                      "print(", "journal"):
+        assert forbidden not in src, forbidden
+
+
+def test_the_audit_lane_returns_before_run(monkeypatch, capsys):
+    """Dispatched in main(), and main() returns without reaching run()."""
+    monkeypatch.setenv(ONE.AUDIT_ENV, "1")
+    calls = []
+    monkeypatch.setattr(ONE, "trade_audit",
+                        lambda: {"LABEL": "R4_TRADE_AUDIT", "trades": [],
+                                 "journal_evidence": []})
+    monkeypatch.setattr(ONE, "run",
+                        lambda **kw: calls.append("run") or {})
+    monkeypatch.setattr(ONE, "recover", lambda **kw: calls.append("recover"))
+    monkeypatch.setattr(ONE, "observe", lambda **kw: calls.append("observe"))
+    assert ONE.main([]) == 0
+    assert calls == []
+    out = capsys.readouterr().out
+    assert "L5_AUDIT " in out and "L5_AUDIT_TRADES 0" in out
+    assert "L5_LIVE_PROBE" not in out

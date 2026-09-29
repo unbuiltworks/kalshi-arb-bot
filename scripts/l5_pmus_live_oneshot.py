@@ -2099,18 +2099,7 @@ def selected_mode() -> str:
     rather than fifteen minutes later.
     """
     if audit_only_enabled():
-        rep = trade_audit()
-        trades = rep.pop("trades", [])
-        ev = rep.pop("journal_evidence", [])
-        print("L5_AUDIT " + json.dumps(rep, default=str), flush=True)
-        for t in trades:
-            print("L5_AUDIT_TRADE " + json.dumps(t, default=str), flush=True)
-        print("L5_AUDIT_TRADES %d" % len(trades), flush=True)
-        for r in ev:
-            print("L5_AUDIT_EVIDENCE " + json.dumps(r, default=str),
-                  flush=True)
-        print("L5_AUDIT_EVIDENCE_ROWS %d" % len(ev), flush=True)
-        return 0
+        return "AUDIT_ONLY"
     if recover_only_enabled():
         return "RECOVER_ONLY"
     if observe_only_enabled():
@@ -2135,6 +2124,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "armed": os.getenv("PMUS_Q1_ARM", ""),
         "live": os.getenv("PMUS_Q1_LIVE", ""),
     }), flush=True)
+    if audit_only_enabled():
+        # READ-ONLY, and it RETURNS. An earlier version of this block landed
+        # inside `selected_mode()`, which announces the mode and is called
+        # from the L5_MODE line: the audit ran, returned 0 into
+        # `{"mode": 0}`, and the process then carried on into run(). It was
+        # harmless only because that run was disarmed. A lane that does not
+        # return is not a lane.
+        rep = trade_audit()
+        trades = rep.pop("trades", [])
+        ev = rep.pop("journal_evidence", [])
+        print("L5_AUDIT " + json.dumps(rep, default=str), flush=True)
+        for t in trades:
+            print("L5_AUDIT_TRADE " + json.dumps(t, default=str), flush=True)
+        print("L5_AUDIT_TRADES %d" % len(trades), flush=True)
+        for r in ev:
+            print("L5_AUDIT_EVIDENCE " + json.dumps(r, default=str),
+                  flush=True)
+        print("L5_AUDIT_EVIDENCE_ROWS %d" % len(ev), flush=True)
+        return 0
     if recover_only_enabled():
         rep = recover()
         table = rep.pop("order_table", [])
