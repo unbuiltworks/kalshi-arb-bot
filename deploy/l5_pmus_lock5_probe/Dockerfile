@@ -28,6 +28,13 @@ ENV PYTHONUNBUFFERED=1
 # the only runtime dependencies, identical to the sibling probe images
 RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY scripts/l5_pmus_live_oneshot.py scripts/l5_pmus_live_oneshot.py
+# READ-ONLY out-of-sample settlement sweep. GET only: it holds a
+# ReadOnlyTransport, imports no engine, money path, mandate or
+# authorization, and an AST test asserts no order-path name appears in it.
+COPY scripts/pmus_oos_settlement_sweep.py scripts/pmus_oos_settlement_sweep.py
+COPY scripts/pmus_completeness_rule.py scripts/pmus_completeness_rule.py
+COPY scripts/audit_economic_complete.py scripts/audit_economic_complete.py
+COPY data/pmus_btc15m_tape_oos/oos_tape.jsonl data/pmus_btc15m_tape_oos/oos_tape.jsonl
 COPY src/__init__.py src/__init__.py
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 COPY src/l5_evidence_freeze.py src/l5_evidence_freeze.py
