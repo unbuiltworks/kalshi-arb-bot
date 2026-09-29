@@ -110,13 +110,56 @@ accounting feed · all lifecycle safety invariants.
 | frozen vs mode-switch action per decision | decision shadow |
 | full canonical accounting + settlement | canonical feed |
 
+## Decision freshness — audited, improved, and honestly short of p95
+
+Correction to the earlier model: `submit_body` does **two** writes
+(`POST /v1/order/preview` then `POST /v1/orders`), so a submitting tick
+costs **1 read + 2 writes = 3 tokens**, not 2.
+
+Critical path, fresh book -> POST, and what was done:
+
+| # | call | required synchronously? | action |
+|---|---|---|---|
+| 1 | `GET /v1/order/{id}` per nonterminal order | YES — the LOCK5 invariant | **gated on the trade tape** |
+| 2 | `GET /v1/order/{id}` in `_ensure_side_clear` | YES — ordered replacement | cached since `6685e60f` |
+| 3 | `POST /v1/order/{id}/cancel` | YES — no two live quotes per side | unchanged |
+| 4 | `POST /v1/order/preview` | YES — echo validation before money moves | unchanged |
+| 5 | `POST /v1/orders` | YES | unchanged |
+
+Only the redundant read was removed. A fill of our order is a trade in this
+market, and the trade tape is already subscribed and folded; when it has
+printed nothing since the last sweep, no fill can have occurred. Forced
+sweep on UNKNOWN, tape movement, first sweep, no tape (fail closed), or age
+>= 5.0 s. The one way a skip can be wrong — a reject/expiry prints no trade
+— leaves the order LIVE with its money charged and its side blocked, which
+is strictly less exposure than the truth.
+
+Measured on the 468-tick R5 workload, rps unchanged at 1.5:
+
+| variant | median | p95 |
+|---|---|---|
+| R5 actual, 2.38 reads + 2 writes | 1740 ms | 2440 ms |
+| `6685e60f` cache, 1.00 read | 913 ms | 1140 ms |
+| **+ sweep gate, ~0.30 read** | **413 ms** | **1100 ms** |
+| + sweep gate, ~0.15 read | 313 ms | 1047 ms |
+
+**Median target MET (413 ms < 500 ms). p95 target NOT met, and it cannot be
+met by removing reads.** Isolating the bound:
+
+| | median | p95 |
+|---|---|---|
+| 0.00 reads + 2 writes | 260 ms | **480 ms** PASS |
+| 0.30 reads + 1 write | 407 ms | 1100 ms FAIL |
+
+p95 is bounded **entirely by the blocking read**. Writes drain the bucket
+but never sleep; a read landing on an empty bucket waits 667 ms, and the
+p95 tick is precisely the tick where the tape moved and a read is therefore
+REQUIRED. Reaching p95 <1 s needs a higher rps or the WS lifecycle cutover.
+Both are out of scope, so this is reported rather than worked around.
+**Expect PDI rejections in a trending window; they are the measurement.**
+
 ## Known and unresolved — read before authorizing
 
-* **Decision freshness will still miss the <1s target.** Measured p95 is
-  **1140 ms** at 1 read/tick against rps 1.5, because 2 tokens/tick at
-  1.5 rps is a 1.333 s floor. Passing needs a higher rps (not changed) or
-  the WS lifecycle cutover (not done). Expect PDI rejections in a trending
-  window; they are the measurement, not a failure.
 * **No private-WS lifecycle event has ever been observed.** The schema in
   P1 is tolerant by design precisely because it is unknown. R6 is the first
   opportunity to see one, which is why the observer holds no authority.
