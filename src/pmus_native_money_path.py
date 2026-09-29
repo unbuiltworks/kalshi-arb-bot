@@ -251,6 +251,10 @@ class NativeMoneyPath:
         #: pass-scoped: TERMINAL verdicts only (terminal is monotonic).
         self._terminal_verdicts: Dict[str, Any] = {}
         self.timing: Dict[str, Any] = {}
+        self._last_sweep_t: Optional[float] = None
+        self._last_sweep_trades = 0
+        self._sweeps_done = 0
+        self._sweeps_skipped = 0
         self._status_reads = 0
         self._status_cache_hits = 0
 
@@ -437,6 +441,8 @@ class NativeMoneyPath:
             "decision_ms": span("decision_start_ms", "decision_end_ms"),
             "status_reads": self._status_reads,
             "status_cache_hits": self._status_cache_hits,
+            "sweeps_done": self._sweeps_done,
+            "sweeps_skipped": self._sweeps_skipped,
             "book_age_ms_at_decision": (
                 None if br is None else round(
                     T.get("_lock5_wall_ms", wall_now) - br, 1)),
@@ -445,6 +451,70 @@ class NativeMoneyPath:
                 else round(T["_post_wall_ms"] - br, 1)),
         }
         return rep
+
+    #: A status sweep is FORCED at least this often regardless of the tape,
+    #: so a non-trade terminal (reject, expire, venue-side cancel) is never
+    #: invisible for long. Well inside a 900 s window and inside the 60 s
+    #: variant-B hold, so it cannot change when frozen re-quotes.
+    STATUS_MAX_STALENESS_S = 5.0
+
+    def _status_sweep_required(self) -> Dict[str, Any]:
+        """Must this tick spend a token reading order state, or is it known?
+
+        THE ONLY THING THIS SKIPS IS A REDUNDANT READ. A fill of our order is
+        a trade in this market, so when the venue's own trade tape has
+        printed NOTHING since our last successful sweep, no fill can have
+        occurred and the canonical inventory we already hold is current.
+
+        It is not an inference from absence of our own data -- that is the
+        mistake this codebase has made before. It is positive market
+        evidence: the tape is authoritative, we already subscribe to it, and
+        `apply_events` already folds it.
+
+        Skipping is CONSERVATIVE in the one case it can be wrong. A
+        rejection, expiry or venue-side cancel prints no trade, so it may go
+        unseen until the next forced sweep. That leaves the order recorded
+        LIVE with its reservation charged in full and its side blocked from
+        replacement -- strictly less exposure and strictly fewer orders than
+        the truth, never more.
+
+        A sweep is forced when: any order is UNKNOWN; the tape moved; we have
+        never swept; or the last sweep is older than STATUS_MAX_STALENESS_S.
+        """
+        rows = [r for r in self.registry.nonterminal()
+                if str(r.get("oid") or "")]
+        if not rows:
+            return {"required": False, "why": "NO_NONTERMINAL_ORDERS",
+                    "rows": rows}
+        if any(r.get("state") == UNKNOWN for r in rows):
+            return {"required": True, "why": "ORDER_STATE_UNKNOWN",
+                    "rows": rows}
+        feed = getattr(self, "feed", None)
+        wm = None
+        if feed is not None and hasattr(feed, "trade_watermark"):
+            try:
+                wm = feed.trade_watermark()
+            except BaseException:                              # noqa: BLE001
+                wm = None
+        if wm is None:
+            # no tape to reason from: always read. Fail closed.
+            return {"required": True, "why": "NO_TRADE_TAPE", "rows": rows}
+        now = time.time()
+        if self._last_sweep_t is None:
+            return {"required": True, "why": "FIRST_SWEEP", "rows": rows,
+                    "watermark": wm}
+        if int(wm.get("count") or 0) != self._last_sweep_trades:
+            return {"required": True, "why": "TAPE_MOVED", "rows": rows,
+                    "watermark": wm,
+                    "trades_since": int(wm.get("count") or 0)
+                    - self._last_sweep_trades}
+        if (now - self._last_sweep_t) >= self.STATUS_MAX_STALENESS_S:
+            return {"required": True, "why": "STALENESS_BOUND", "rows": rows,
+                    "age_s": round(now - self._last_sweep_t, 3),
+                    "watermark": wm}
+        return {"required": False, "why": "NO_TRADE_SINCE_LAST_SWEEP",
+                "rows": rows, "watermark": wm,
+                "age_s": round(now - self._last_sweep_t, 3)}
 
     def begin_pass(self) -> None:
         """Start of one tick. Pass-scoped caches live exactly this long."""
@@ -483,11 +553,22 @@ class NativeMoneyPath:
         if self.venue is None or not hasattr(self.venue, "order_status"):
             return out
         from src import pmus_order_lifecycle as LC
-        pending = [r for r in list(self.registry.nonterminal())
-                   if str(r.get("oid") or "")]
+        gate = self._status_sweep_required()
+        out["sweep"] = {k: v for k, v in gate.items() if k != "rows"}
+        if not gate["required"]:
+            # the canonical lifecycle state we already hold is current; see
+            # `_status_sweep_required`. REST authority is unchanged -- this
+            # skips a REDUNDANT read, not a required one.
+            self._sweeps_skipped += 1
+            return out
         # never ACKed with an id: there is nothing to ask by, and the registry
         # already charges such an order in full.
+        pending = gate["rows"]
         verdicts = self._read_statuses(pending)
+        self._last_sweep_t = time.time()
+        wm = gate.get("watermark") or {}
+        self._last_sweep_trades = int(wm.get("count") or 0)
+        self._sweeps_done += 1
         for row in pending:
             oid = str(row.get("oid") or "")
             v = verdicts.get(oid)

@@ -222,6 +222,23 @@ class AuthenticatedBookFeed:
             d = dict(self._depth) if self._depth else None
         return venue_ladder(d)
 
+    def trade_watermark(self) -> Dict[str, Any]:
+        """How many trades this market has printed, and when the last was.
+
+        A FILL OF OUR ORDER IS A TRADE IN THIS MARKET. The trade tape
+        (SUBSCRIPTION_TYPE_TRADE, which this feed already subscribes to via
+        `subscribe_frames`) is therefore venue-sourced POSITIVE evidence that
+        something could have filled -- and its absence is venue-sourced
+        evidence that nothing did. That is not an inference from missing data
+        about our own orders; it is the market's own tape.
+        """
+        with self._lock:
+            st = self.state.get(self.market) or {}
+            trades = st.get("trades") or []
+            n = len(trades)
+            last = trades[-1].get("t") if n else None
+        return {"count": n, "last_t": last}
+
     def ladder_health(self) -> Dict[str, Any]:
         """Provenance for the ladder, so a report can never imply depth we
         did not receive."""

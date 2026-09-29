@@ -296,6 +296,87 @@ async def probe_private_names() -> Dict[str, Any]:
     return {"names": out}
 
 
+async def probe_depth_end_to_end(slug: str, seconds: float = 12.0) -> Dict[str, Any]:
+    """P0 PROOF: live venue depth, all the way into the FROZEN walker.
+
+    Subscribes type 1, feeds each raw frame through the REAL
+    `AuthenticatedBookFeed.ingest`, reads the REAL `feed.ladder`, and hands
+    it to the REAL `pmus_completion_shadow.buy_levels` /
+    `marginal_complete` and `pmus_l5_native_engine.worst_admitted_price`.
+    No re-implementation: if the wiring is broken anywhere, this shows zero
+    levels rather than a number someone typed.
+    """
+    import websockets
+    from src import l5_live_book_feed as LF
+    from src import pmus_completion_shadow as S
+    from src import pmus_l5_native_engine as E
+    from decimal import Decimal as D
+
+    feed = LF.AuthenticatedBookFeed(slug)
+    headers = R.auth_headers(os.environ[R.KEY_ENV], os.environ[R.SECRET_ENV],
+                             path=R.WS_PATH)
+    counts: List[Dict[str, Any]] = []
+    async with websockets.connect(R.WS_URL, additional_headers=headers,
+                                  max_size=8 * 1024 * 1024,
+                                  open_timeout=15) as ws:
+        await ws.send(json.dumps(guard({"subscribe": {
+            "request_id": "d-" + uuid.uuid4().hex[:8],
+            "subscription_type": R.SUB_MARKET_DATA,
+            "market_slugs": [slug]}})))
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < seconds:
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+            except asyncio.TimeoutError:
+                continue
+            except Exception:                                  # noqa: BLE001
+                break
+            try:
+                feed.ingest(json.loads(raw))
+            except Exception:                                  # noqa: BLE001
+                continue
+            lad = feed.ladder
+            if not lad:
+                continue
+            counts.append({"bids": len(lad.get("bids") or []),
+                           "offers": len(lad.get("offers") or [])})
+    lad = feed.ladder
+    if not lad:
+        return {"proof": "NO_DEPTH_RECEIVED", "frames_with_depth": 0}
+    # END TO END through the frozen walk, with a basis cheap enough that the
+    # criterion admits, so the number of levels consumed is visible.
+    up = S.buy_levels(lad, "up")
+    dn = S.buy_levels(lad, "down")
+    basis, theta = D("0.20"), D("0.96")
+    want = D(5000)
+    n_up, c_up, f_up, _ = S.marginal_complete(up, want, basis, theta)
+    n_dn, c_dn, f_dn, _ = S.marginal_complete(dn, want, basis, theta)
+    return {
+        "proof": "VENUE_DEPTH_REACHED_THE_FROZEN_WALK",
+        "frames_with_depth": len(counts),
+        "levels_last_frame": {"bids": len(lad["bids"]) if lad.get("bids") else 0,
+                              "offers": len(lad["offers"]) if lad.get("offers") else 0},
+        "levels_max_seen": {
+            "bids": max((c["bids"] for c in counts), default=0),
+            "offers": max((c["offers"] for c in counts), default=0)},
+        "ladder_health": feed.ladder_health(),
+        "walker_input_levels": {"up": len(up), "down": len(dn)},
+        "top_three_up": up[:3], "top_three_down": dn[:3],
+        "frozen_walk_at_basis_0.20": {
+            "theta": str(theta),
+            "up_admitted_qty": str(n_up), "up_cost": str(c_up),
+            "up_fee": str(f_up),
+            "up_worst_admitted_px": str(
+                E.worst_admitted_price(up, want, basis, theta)),
+            "down_admitted_qty": str(n_dn), "down_cost": str(c_dn),
+            "down_fee": str(f_dn),
+            "down_worst_admitted_px": str(
+                E.worst_admitted_price(dn, want, basis, theta))},
+        "labels": ("every level is the venue's own px/qty; the walker calls "
+                   "are the production functions, not a copy"),
+    }
+
+
 async def main() -> int:
     slug = (os.getenv("PMUS_WS_PROBE_SLUG", "").strip()
             or "cpc-btc-updown-15m-2026-09-29-1115z")
@@ -331,6 +412,12 @@ async def main() -> int:
     except Exception as exc:                                   # noqa: BLE001
         rep["private_schema_error"] = "%s: %s" % (type(exc).__name__,
                                                   str(exc)[:300])
+    if os.getenv("PMUS_WS_PROBE_DEPTH", "").strip() not in ("", "0"):
+        try:
+            rep["depth_end_to_end"] = await probe_depth_end_to_end(slug)
+        except Exception as exc:                               # noqa: BLE001
+            rep["depth_error"] = "%s: %s" % (type(exc).__name__,
+                                             str(exc)[:300])
     try:
         os.makedirs(os.path.dirname(REPORT), exist_ok=True)
         with open(REPORT, "w") as fh:

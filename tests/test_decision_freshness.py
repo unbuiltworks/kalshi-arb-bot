@@ -40,6 +40,11 @@ def path(venue):
     mp._terminal_verdicts = {}
     mp._status_reads = 0
     mp._status_cache_hits = 0
+    mp._last_sweep_t = None
+    mp._last_sweep_trades = 0
+    mp._sweeps_done = 0
+    mp._sweeps_skipped = 0
+    mp.feed = None
     mp.registry = MP.SessionOrderRegistry()
     mp.release_terminal = lambda *a, **k: None
     return mp
@@ -175,3 +180,126 @@ def test_frozen_parameters_are_unchanged():
     eng = E.NativeEngine(clip=D(10))
     assert eng.theta == D("0.96") and eng.variant == "B"
     assert eng.residual_cap_k == D(2)
+
+
+# ---- the status-sweep gate: skip only REDUNDANT reads -------------------
+
+class FakeFeed:
+    def __init__(self, count=0, last_t=None):
+        self._wm = {"count": count, "last_t": last_t}
+
+    def trade_watermark(self):
+        return dict(self._wm)
+
+    def bump(self, n=1):
+        self._wm["count"] += n
+
+
+def gated(venue, feed=None):
+    mp = path(venue)
+    mp.feed = feed
+    return mp
+
+
+def test_no_nonterminal_orders_needs_no_sweep():
+    mp = gated(CountingVenue(WORKING), FakeFeed())
+    assert mp._status_sweep_required()["why"] == "NO_NONTERMINAL_ORDERS"
+
+
+def test_first_sweep_is_always_required():
+    mp = gated(CountingVenue(WORKING), FakeFeed())
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    g = mp._status_sweep_required()
+    assert g["required"] is True and g["why"] == "FIRST_SWEEP"
+
+
+def test_no_trade_since_last_sweep_skips_the_read():
+    """A fill of our order IS a trade. No trade, no fill."""
+    import time as _t
+    f = FakeFeed(count=7)
+    mp = gated(CountingVenue(WORKING), f)
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    mp._last_sweep_t = _t.time()
+    mp._last_sweep_trades = 7
+    g = mp._status_sweep_required()
+    assert g["required"] is False
+    assert g["why"] == "NO_TRADE_SINCE_LAST_SWEEP"
+
+
+def test_a_trade_forces_the_read():
+    import time as _t
+    f = FakeFeed(count=7)
+    mp = gated(CountingVenue(WORKING), f)
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    mp._last_sweep_t = _t.time()
+    mp._last_sweep_trades = 7
+    f.bump(2)
+    g = mp._status_sweep_required()
+    assert g["required"] is True and g["why"] == "TAPE_MOVED"
+    assert g["trades_since"] == 2
+
+
+def test_staleness_forces_the_read_even_on_a_silent_tape():
+    """A reject or expiry prints no trade, so silence cannot last forever."""
+    import time as _t
+    f = FakeFeed(count=7)
+    mp = gated(CountingVenue(WORKING), f)
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    mp._last_sweep_trades = 7
+    mp._last_sweep_t = _t.time() - (MP.NativeMoneyPath.STATUS_MAX_STALENESS_S + 1)
+    g = mp._status_sweep_required()
+    assert g["required"] is True and g["why"] == "STALENESS_BOUND"
+
+
+def test_an_unknown_order_always_forces_the_read():
+    import time as _t
+    f = FakeFeed(count=7)
+    mp = gated(CountingVenue(WORKING), f)
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    mp.registry.mark_unknown("A", "404")
+    mp._last_sweep_t = _t.time()
+    mp._last_sweep_trades = 7
+    g = mp._status_sweep_required()
+    assert g["required"] is True and g["why"] == "ORDER_STATE_UNKNOWN"
+
+
+def test_no_tape_means_always_read_fail_closed():
+    mp = gated(CountingVenue(WORKING), feed=None)
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    mp._last_sweep_t = 1.0
+    g = mp._status_sweep_required()
+    assert g["required"] is True and g["why"] == "NO_TRADE_TAPE"
+
+
+def test_a_feed_that_raises_fails_closed_to_reading():
+    class Bad:
+        def trade_watermark(self):
+            raise RuntimeError("boom")
+    mp = gated(CountingVenue(WORKING), Bad())
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    mp._last_sweep_t = 1.0
+    assert mp._status_sweep_required()["why"] == "NO_TRADE_TAPE"
+
+
+def test_skipping_never_releases_a_reservation_or_books_a_fill():
+    """The one way a skip can be wrong is CONSERVATIVE: the order stays live
+    with its money charged, and its side stays blocked."""
+    import time as _t
+    f = FakeFeed(count=7)
+    mp = gated(CountingVenue(WORKING), f)
+    mp.registry.record("A", side="up", price=D("0.46"), qty=D(10), kind=E.REST)
+    mp._last_sweep_t = _t.time()
+    mp._last_sweep_trades = 7
+    before = mp.registry.open_reserved
+    out = mp.resolve_open_orders()
+    assert out["fills_booked"] == [] and out["terminated"] == []
+    assert mp.registry.open_reserved == before == D("4.60")
+    assert mp.registry.orders["A"]["state"] == MP.LIVE
+    assert mp._sweeps_skipped == 1
+    assert out["sweep"]["why"] == "NO_TRADE_SINCE_LAST_SWEEP"
+
+
+def test_the_staleness_bound_is_well_inside_the_variant_b_hold():
+    """It must not be able to change when frozen re-quotes."""
+    assert MP.NativeMoneyPath.STATUS_MAX_STALENESS_S < float(E.HOLD_S)
+    assert MP.NativeMoneyPath.STATUS_MAX_STALENESS_S <= 5.0

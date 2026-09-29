@@ -29,7 +29,8 @@ class VClock:
         self.t += max(0.0, float(s))
 
 
-def run(*, reads_per_tick: float, fanout: int, label: str):
+def run(*, reads_per_tick: float, fanout: int, label: str,
+        writes_per_tick: int = 2):
     """Simulate one window's decision loop against the real limiter."""
     c = VClock()
     rl = TP.RateLimiter(now_fn=c.now, sleep_fn=c.sleep)
@@ -53,8 +54,13 @@ def run(*, reads_per_tick: float, fanout: int, label: str):
                 rl.before(write=False)
             c.t += NET_MS / 1000.0 * (1.0 if n else 0.0)
         ages.append((c.t - book_t) * 1000.0)
-        rl.before(write=True)          # the order POST
-        c.t += NET_MS / 1000.0
+        # A SUBMITTING TICK COSTS TWO WRITES, not one: submit_body does
+        # POST /v1/order/preview and then POST /v1/orders. Writes do not
+        # sleep in the limiter, but they DRAIN the same bucket, so the next
+        # read waits longer. Modelling one write understated the floor.
+        for _ in range(writes_per_tick):
+            rl.before(write=True)
+            c.t += NET_MS / 1000.0
     ages.sort()
     return {
         "label": label, "ticks": TICKS,
