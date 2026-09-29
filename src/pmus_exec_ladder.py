@@ -68,6 +68,12 @@ class Obs:
         self.rejections = 0
         self.reserved = D(0)
         self.filled_commitment = D(0)
+        #: OBSERVER ONLY. One row per fill, in order, carrying the identity of
+        #: the order that filled -- which is what distinguishes a same-order
+        #: partial from a replenished quote at the same price from a reprice.
+        #: Nothing in the replay reads this; it exists so our own persistence
+        #: can be measured with the SAME method applied to L5's public fills.
+        self.fill_log: List[dict] = []
 
     # ---- submission ----
     def rest(self, side: str, px: D, qty: D, t: int) -> str:
@@ -128,8 +134,14 @@ class Obs:
         venue's record shape, which is what production reads -- so any
         round-trip loss shows up as a rung-1 delta rather than hiding.
         """
+        prior = D(o["cum"])
         o["cum"] += qty
         o["px"] = D(str(fpx))
+        self.fill_log.append({
+            "oid": o["oid"], "side": o["side"], "qty": D(str(qty)),
+            "px": D(str(fpx)), "maker": bool(o["maker"]),
+            "prior_cum": prior, "order_qty": D(o["qty"]),
+            "partial_of_same_order": prior > 0})
         if o["cum"] >= o["qty"]:
             o["state"] = "FILLED"
             if self.f["terminal_handling"]:
@@ -258,7 +270,8 @@ def replay_window(rows, *, winner, rung="R0_FROZEN_CONTROL", clip=E.CLIP,
                   "taker_fills": obs.taker_fills, "lost": obs.lost,
                   "terminals": obs.terminals,
                   "filled_commitment": str(obs.filled_commitment),
-                  "reserved": str(obs.reserved)}
+                  "reserved": str(obs.reserved),
+                  "fill_log": obs.fill_log}
     return res
 
 
