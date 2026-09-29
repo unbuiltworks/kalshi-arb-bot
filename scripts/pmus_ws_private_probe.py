@@ -168,6 +168,77 @@ async def probe_types(slug: str) -> Dict[str, Any]:
     return per
 
 
+async def probe_private_schema(slug: str) -> Dict[str, Any]:
+    """/v1/ws/private ACCEPTS an authenticated socket. What does it want?
+
+    The type probe proved there is no private lifecycle subscription_type in
+    0-12 on /v1/ws/markets, and that every other candidate path 404s. But
+    /v1/ws/private connects and answers `invalid_message` to a market-slug
+    subscribe, which means the endpoint exists and expects a DIFFERENT frame
+    shape. This enumerates plausible shapes and records the venue's own words.
+    """
+    import websockets
+    path = "/v1/ws/private"
+    url = "wss://api.polymarket.us" + path
+    headers = R.auth_headers(os.environ[R.KEY_ENV], os.environ[R.SECRET_ENV],
+                             path=path)
+    shapes: List[Dict[str, Any]] = []
+    # type-only, no market scope: a private stream is account-scoped
+    for st in range(0, 13):
+        shapes.append({"label": "type_only_%d" % st,
+                       "frame": {"subscribe": {"subscription_type": st}}})
+    # documented-style variants
+    shapes += [
+        {"label": "no_type_no_scope", "frame": {"subscribe": {}}},
+        {"label": "event_slugs",
+         "frame": {"subscribe": {"subscription_type": 4,
+                                 "event_slugs": [slug.replace("cpc-", "")]}}},
+        {"label": "orders_string",
+         "frame": {"subscribe": {"subscription_type": "SUBSCRIPTION_TYPE_ORDER"}}},
+        {"label": "fills_string",
+         "frame": {"subscribe": {"subscription_type": "SUBSCRIPTION_TYPE_FILL"}}},
+        {"label": "channel_orders",
+         "frame": {"subscribe": {"channel": "orders"}}},
+        {"label": "channels_list",
+         "frame": {"subscribe": {"channels": ["orders", "fills"]}}},
+        {"label": "market_scoped_type1",
+         "frame": {"subscribe": {"subscription_type": 1,
+                                 "market_slugs": [slug]}}},
+    ]
+    out: List[Dict[str, Any]] = []
+    try:
+        async with websockets.connect(url, additional_headers=headers,
+                                      max_size=4 * 1024 * 1024,
+                                      open_timeout=15) as ws:
+            for sh in shapes:
+                rid = "s-" + uuid.uuid4().hex[:8]
+                frame = dict(sh["frame"])
+                if "subscribe" in frame and isinstance(frame["subscribe"], dict):
+                    frame["subscribe"] = dict(frame["subscribe"],
+                                              request_id=rid)
+                await ws.send(json.dumps(guard(frame)))
+                got = []
+                t0 = time.monotonic()
+                while time.monotonic() - t0 < 1.2 and len(got) < 2:
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        break
+                    except Exception as exc:                   # noqa: BLE001
+                        got.append({"recv_error": str(exc)[:200]})
+                        break
+                    try:
+                        got.append(json.loads(raw))
+                    except Exception:                          # noqa: BLE001
+                        got.append({"raw": str(raw)[:300]})
+                out.append({"label": sh["label"], "sent": frame,
+                            "responses": got})
+    except Exception as exc:                                   # noqa: BLE001
+        return {"error": "%s: %s" % (type(exc).__name__, str(exc)[:300]),
+                "tried": out}
+    return {"shapes": out}
+
+
 async def main() -> int:
     slug = (os.getenv("PMUS_WS_PROBE_SLUG", "").strip()
             or "cpc-btc-updown-15m-2026-09-29-1115z")
@@ -197,6 +268,11 @@ async def main() -> int:
             paths.append({"path": p, "error": "%s: %s"
                           % (type(exc).__name__, str(exc)[:200])})
     rep["paths"] = paths
+    try:
+        rep["private_schema"] = await probe_private_schema(slug)
+    except Exception as exc:                                   # noqa: BLE001
+        rep["private_schema_error"] = "%s: %s" % (type(exc).__name__,
+                                                  str(exc)[:300])
     try:
         os.makedirs(os.path.dirname(REPORT), exist_ok=True)
         with open(REPORT, "w") as fh:
