@@ -239,6 +239,63 @@ async def probe_private_schema(slug: str) -> Dict[str, Any]:
     return {"shapes": out}
 
 
+#: Candidate enum NAMES for the private socket. v2 proved the string form is
+#: honoured there: "SUBSCRIPTION_TYPE_ORDER" came back "slugs already
+#: subscribed" (recognised) while "SUBSCRIPTION_TYPE_FILL" came back
+#: "invalid_message" (not a name). Each name gets its OWN connection so a
+#: previous subscribe cannot mask the answer.
+PRIVATE_NAMES = [
+    "SUBSCRIPTION_TYPE_ORDER", "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT",
+    "SUBSCRIPTION_TYPE_ORDER_UPDATE", "SUBSCRIPTION_TYPE_ORDER_EVENT",
+    "SUBSCRIPTION_TYPE_EXECUTION", "SUBSCRIPTION_TYPE_TRADE",
+    "SUBSCRIPTION_TYPE_POSITION", "SUBSCRIPTION_TYPE_POSITION_SNAPSHOT",
+    "SUBSCRIPTION_TYPE_BALANCE", "SUBSCRIPTION_TYPE_ACCOUNT",
+    "SUBSCRIPTION_TYPE_PORTFOLIO", "SUBSCRIPTION_TYPE_RFQ",
+    "SUBSCRIPTION_TYPE_SETTLEMENT", "SUBSCRIPTION_TYPE_USER_TRADE",
+]
+
+
+async def probe_private_names() -> Dict[str, Any]:
+    """Map the private enum by NAME, one fresh socket per candidate."""
+    import websockets
+    path = "/v1/ws/private"
+    url = "wss://api.polymarket.us" + path
+    out: List[Dict[str, Any]] = []
+    for name in PRIVATE_NAMES:
+        rec: Dict[str, Any] = {"name": name}
+        try:
+            headers = R.auth_headers(os.environ[R.KEY_ENV],
+                                     os.environ[R.SECRET_ENV], path=path)
+            async with websockets.connect(url, additional_headers=headers,
+                                          max_size=2 * 1024 * 1024,
+                                          open_timeout=10) as ws:
+                rid = "n-" + uuid.uuid4().hex[:8]
+                await ws.send(json.dumps(guard({"subscribe": {
+                    "request_id": rid, "subscription_type": name}})))
+                got = []
+                t0 = time.monotonic()
+                while time.monotonic() - t0 < 2.5 and len(got) < 3:
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        break
+                    except Exception as exc:                   # noqa: BLE001
+                        got.append({"recv_error": str(exc)[:160]})
+                        break
+                    try:
+                        got.append(json.loads(raw))
+                    except Exception:                          # noqa: BLE001
+                        got.append({"raw": str(raw)[:300]})
+                rec["responses"] = got
+                rec["recognised"] = not (
+                    len(got) == 1 and isinstance(got[0], dict)
+                    and got[0].get("error") == "invalid_message")
+        except Exception as exc:                               # noqa: BLE001
+            rec["error"] = "%s: %s" % (type(exc).__name__, str(exc)[:200])
+        out.append(rec)
+    return {"names": out}
+
+
 async def main() -> int:
     slug = (os.getenv("PMUS_WS_PROBE_SLUG", "").strip()
             or "cpc-btc-updown-15m-2026-09-29-1115z")
@@ -270,6 +327,7 @@ async def main() -> int:
     rep["paths"] = paths
     try:
         rep["private_schema"] = await probe_private_schema(slug)
+        rep["private_names"] = await probe_private_names()
     except Exception as exc:                                   # noqa: BLE001
         rep["private_schema_error"] = "%s: %s" % (type(exc).__name__,
                                                   str(exc)[:300])
