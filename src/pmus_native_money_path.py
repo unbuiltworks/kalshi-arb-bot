@@ -171,6 +171,8 @@ class NativeMoneyPath:
         #: whether the venue can be asked what an order did. False is a
         #: wiring defect; see build().
         self.lifecycle_seam = True
+        #: order ids whose authoritative state was read on the current pass.
+        self._resolved_this_pass: set = set()
         self.submitted: List[dict] = []
         self.lock_transactions: List[dict] = []
         self.remainders: List[dict] = []
@@ -282,6 +284,7 @@ class NativeMoneyPath:
         """
         out: Dict[str, Any] = {"fills_booked": [], "terminated": [],
                                "rejected": [], "working": [], "unknown": []}
+        self._resolved_this_pass = set()
         if self.venue is None or not hasattr(self.venue, "order_status"):
             return out
         from src import pmus_order_lifecycle as LC
@@ -293,6 +296,7 @@ class NativeMoneyPath:
                 continue
             v = self.venue.order_status(oid, requested_qty=row["qty"],
                                         side=row["side"])
+            self._resolved_this_pass.add(str(oid))
             cls = v.get("classification")
             if cls == LC.UNKNOWN:
                 self.registry.mark_unknown(oid, str(v.get("why") or "UNKNOWN"))
@@ -440,6 +444,16 @@ class NativeMoneyPath:
                         "reason": res.get("state")}
         still = self.registry.live_for(side)
         if still:
+            # The previous quote was cancelled and confirmed above, so anything
+            # still here is an order we could not establish the state of.
+            #
+            # NOT a terminality-before-submission rule: the replacement path is
+            # cancel-then-replace, which is what the frozen policy does when
+            # the touch moves, so this does not change LOCK5's behaviour. It
+            # refuses only when an order's authoritative state is unknown --
+            # measured on the 25-window replay, relaxing it changes nothing,
+            # because a missing order comes from the engine's quote outliving
+            # its FILLED order, not from this gate.
             return {"clear": False, "side": side,
                     "reason": "STILL_NONTERMINAL",
                     "oids": [r["oid"] for r in still]}

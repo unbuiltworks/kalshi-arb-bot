@@ -173,7 +173,15 @@ def test_the_engine_cannot_decide_before_order_state_is_incorporated():
 
 # --------------------------------------------------------- THE R4 SEQUENCE
 
-def test_r4_up_fills_then_complement_is_rejected(armed, tmp_path):
+def test_lifecycle_fill_then_reject_is_handled(armed, tmp_path):
+    """LIFECYCLE CORRECTNESS, not the R4 event order.
+
+    R4's real sequence was UP submitted -> DOWN submitted 234ms later -> DOWN
+    REJECTED 94ms after that -> UP FILLED 10.7s later, i.e. the rejection
+    PRECEDED the fill by 10.373s (analysis/l5/rung_a/R4_CHRONOLOGY.md). This
+    fixture drives fill-then-reject, which is a different and also necessary
+    ordering; the exact chronology is the next test.
+    """
     v = Venue(outcomes=[FILL_10_AT_26, REJECT])
     tp, guarded, av, mp = stack(tmp_path, v)
 
@@ -339,3 +347,76 @@ def test_the_frozen_parameters_are_untouched():
             str(E.RESIDUAL_CAP_K), str(E.PROFIT_LOCK_USD),
             E.FLOOR_GUARD, E.COMPLEMENT_BIAS_C) == \
         ("0.96", "B", 60.0, "50", "2", "5", False, None)
+
+
+def test_r4_exact_chronology_two_sided_quote_then_late_fill(armed, tmp_path):
+    """THE ACTUAL R4 SEQUENCE.
+
+    UP accepted and RESTING -> DOWN submitted -> DOWN terminal REJECTED while
+    the book is still FLAT -> UP still live -> later UP FILLED -> authoritative
+    polling books UP=10 -> LOCK5 sees residual UP=10 on its next decision.
+
+    Both legs are the frozen policy's two-sided acquisition at our touch, 234ms
+    apart; the rejection is not a failed completion of a held residual.
+    """
+    v = Venue(outcomes=[{"state": "OPEN", "cum": "0"}, REJECT])
+    tp, guarded, av, mp = stack(tmp_path, v)
+
+    # 1. UP submitted and ACCEPTED, resting
+    up = mp._post(up_rest())
+    assert up["oid"] == "R4-1"
+    assert v.orders["R4-1"]["state"] == "OPEN"
+
+    # 2. DOWN submitted 234ms later -- while FLAT
+    assert mp.eng.bk.q["up"] == D(0) and mp.eng.bk.q["down"] == D(0)
+    dn = mp._post(down_rest())
+    assert dn["oid"] == "R4-2"
+
+    # 3. first pass: DOWN is terminal REJECTED, UP is still WORKING
+    r1 = mp.resolve_open_orders()
+    assert [x["oid"] for x in r1["rejected"]] == ["R4-2"]
+    assert [x["oid"] for x in r1["working"]] == ["R4-1"]
+    assert r1["fills_booked"] == []
+    # the rejection released its whole reservation; UP's is still held
+    ex = mp.registry.as_dict()
+    assert D(ex["filled_commitment"]) == D(0)
+    assert D(ex["open_reserved"]) == D("2.60")      # UP only; DOWN's 7.30 gone
+    assert ex["nonterminal"] == 1
+    # and the book is STILL FLAT: a rejection moves no inventory
+    assert mp.eng.bk.residual() == D(0)
+
+    # 4. 10.7s later the UP maker quote fills
+    v.orders["R4-1"].update({"state": "ORDER_STATE_FILLED", "cumQuantity": "10",
+                             "leavesQuantity": "0",
+                             "avgPx": {"value": "0.2600"},
+                             "commissionNotionalTotalCollected":
+                                 {"value": "-0.0200"}})
+
+    # 5. the next pass incorporates it BEFORE any decision
+    r2 = mp.resolve_open_orders()
+    assert len(r2["fills_booked"]) == 1
+    assert r2["fills_booked"][0]["price_own"] == "0.2600"
+    assert [x["oid"] for x in r2["terminated"]] == ["R4-1"]
+
+    # 6. LOCK5 now sees residual UP=10 with a real basis
+    bk = mp.eng.bk
+    assert bk.q["up"] == D(10) and bk.q["down"] == D(0)
+    assert bk.residual() == D(10)
+    assert bk.avg("up") == D("0.26")
+    ex = mp.registry.as_dict()
+    assert D(ex["filled_commitment"]) == D("2.60")
+    assert D(ex["open_reserved"]) == D(0) and ex["nonterminal"] == 0
+
+    # 7. and the next decision is taken against CURRENT inventory and the
+    #    CURRENT book -- not against the state at submission time.
+    row = {"status": "USABLE", "t": 0.0, "bid": "0.25", "ask": "0.27",
+           "bid_qty": "100", "ask_qty": "100"}
+    out = mp.on_book_state(row)
+    assert out.get("refused") != "ORDER_STATE_UNKNOWN"
+    # whether the engine ACTS on this synthetic row is the frozen policy's
+    # business and is not asserted here. What is asserted is that it was not
+    # blocked by unresolved state and that it decided against the CURRENT
+    # inventory -- residual 10, booked from the venue, not the flat book it
+    # had when it submitted.
+    assert mp.eng.bk.residual() == D(10)
+    assert out.get("fills_booked") == []      # already booked on the pass above

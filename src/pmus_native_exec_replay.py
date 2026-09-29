@@ -93,16 +93,27 @@ class ExecReplayVenue:
     """A venue that must be ASKED what happened, driven by the frozen model."""
 
     def __init__(self, *, fill_model: str = "queue_aware",
-                 reject_rule: Optional[Callable[[_Order], bool]] = None
-                 ) -> None:
+                 reject_rule: Optional[Callable[[_Order], bool]] = None,
+                 cap_at_fill: bool = True, ioc_semantics: bool = False,
+                 ioc_available: Optional[Callable[[_Order], Any]] = None,
+                 control_completion: bool = True,
+                 require_order: bool = False) -> None:
         self.fill_model = fill_model
         self.reject_rule = reject_rule
+        #: FROZEN placements, on by default so the control is the default.
+        self.cap_at_fill = cap_at_fill
+        self.ioc_semantics = ioc_semantics
+        self.ioc_available = ioc_available
+        self.control_completion = control_completion
+        self.require_order = require_order
         self.qstate: Dict[str, Any] = {}
         self.orders: Dict[str, _Order] = {}
         self.resting_ids: Dict[str, Any] = {"up": None, "down": None}
         self.n = 0
         self.rejected = 0
         self.status_reads = 0
+        self.fills_without_order = 0
+        self.granted = 0
 
     # ---- submission ----
     def accept(self, body: Mapping[str, Any]) -> Dict[str, Any]:
@@ -152,7 +163,17 @@ class ExecReplayVenue:
         return None if o is None else o.cum
 
     def completion_fill(self, intent) -> Optional[tuple]:
-        """The IOC leg's ACTUAL fill, read back from the order record."""
+        """What the marketable leg filled.
+
+        CONTROL: exactly what frozen assumes -- the whole walked quantity at
+        the cost and fee the engine computed from the ladder
+        (`pmus_native_parity._execute_taker` returns the same triple). With
+        the control off, the order record is read back instead, which is the
+        live behaviour and one rung of the attribution ladder.
+        """
+        if self.control_completion:
+            return (D(str(intent["qty"])), D(str(intent["cost"])),
+                    D(str(intent["fee"])))
         oid = intent.get("venue_order_id") if hasattr(intent, "get") else None
         o = self.orders.get(str(oid or ""))
         if o is None:
@@ -161,33 +182,103 @@ class ExecReplayVenue:
             return D(0), D(0), D(0)
         return o.cum, o.px * o.cum, D(0)
 
-    # ---- the frozen fill model, applied to what is actually resting ----
-    def advance(self, row: Mapping[str, Any], ladder) -> None:
-        for o in list(self.orders.values()):
-            if o.state != "OPEN" or not o.maker:
+    # ---- the frozen fill model, in FROZEN'S OWN PLACEMENT ----
+    def advance(self, eng, row: Mapping[str, Any], ladder) -> None:
+        """Fill what is RESTING, once per side per observation.
+
+        THE NULL CONTROL. `pmus_native_parity.replay_window` -- which is
+        25/25 exact -- asks `maker_fill` ONCE per side per bbo row, for the
+        clip the engine has resting, and applies `_cap_permits` at the fill.
+        An earlier version of this method looped over ORDERS and asked for
+        the REMAINING quantity with a shared qstate, so a partially filled
+        order was offered a fill again on the next observation: the harness
+        double-counted and reported an execution-aware mean ABOVE frozen,
+        which cannot be true.
+
+        `eng.resting` is the source of truth for what is quoted, exactly as
+        in the parity replay; the matching OPEN order is then credited so the
+        lifecycle has something authoritative to read back.
+        """
+        for side in ("up", "down"):
+            st = eng.resting.get(side)
+            if not st:
                 continue
-            qty, fpx = S.maker_fill(row, o.side, o.qty - o.cum,
-                                    queue_aware=True,
-                                    fill_model=self.fill_model,
-                                    ladder=ladder, qstate=self.qstate)
-            if qty and qty > 0 and fpx is not None:
-                o.cum += D(str(qty))
-                o.px = D(str(fpx))
-                if o.cum >= o.qty:
-                    o.state = "FILLED"
+            got = S.maker_fill(row, side, D(str(st["qty"])), queue_aware=True,
+                               fill_model=self.fill_model, ladder=ladder,
+                               qstate=self.qstate)
+            qty, fpx = got if got else (None, None)
+            if not qty or qty <= 0 or fpx is None:
+                continue
+            qty = D(str(qty))
+            if self.cap_at_fill and not eng._cap_permits(side, qty):
+                # FROZEN'S PLACEMENT: it declines a fill the cap forbids. A
+                # real venue cannot be declined, which is why this is an
+                # effect flag and not a fact.
+                continue
+            o = self._open_on(side)
+            if o is None:
+                # FROZEN grants a fill to whatever the ENGINE has resting, and
+                # its fill model will fill the SAME notional clip again on a
+                # later observation. A real order fills once and is then
+                # terminal, so there is nothing left to fill.
+                #
+                # THE CONTROL reproduces frozen: the fill is booked directly,
+                # exactly as pmus_native_parity does. `require_order` turns
+                # that off and is the FIRST rung of the attribution ladder --
+                # its delta IS the cost of fills having to belong to a live
+                # order.
+                self.fills_without_order += 1
+                if not self.require_order:
+                    self.granted += 1
+                    eng.on_fill(side, qty, qty * D(str(fpx)), maker=True)
+                continue
+            self.granted += 1
+            o.cum += qty
+            o.px = D(str(fpx))
+            if o.cum >= o.qty:
+                o.state = "FILLED"
+
+    def _open_on(self, side: str):
+        for o in self.orders.values():
+            if o.side == side and o.state == "OPEN" and o.maker:
+                return o
+        return None
 
     def fill_ioc_now(self) -> None:
-        """An IOC leg either fills at submission or the venue kills it."""
+        """A marketable leg's outcome at submission.
+
+        Control: it fills in full at the walked cost the engine computed,
+        which is exactly what frozen assumes. With `ioc_semantics` on, only
+        the immediately executable quantity fills.
+        """
         for o in self.orders.values():
-            if o.state == "OPEN" and not o.maker:
+            if o.state != "OPEN" or o.maker:
+                continue
+            if self.ioc_semantics and self.ioc_available is not None:
+                got = D(str(self.ioc_available(o)))
+                o.cum = min(o.qty, got)
+                o.state = "FILLED" if o.cum >= o.qty else (
+                    "FILLED" if o.cum > 0 else "CANCELLED")
+            else:
                 o.cum = o.qty
                 o.state = "FILLED"
 
 
 def replay_window(rows, *, winner, clip=E.CLIP, fill_model="queue_aware",
-                  reject_rule=None) -> Dict[str, Any]:
-    """One window, through the money path's own state machine."""
-    venue = ExecReplayVenue(fill_model=fill_model, reject_rule=reject_rule)
+                  reject_rule=None, cap_at_fill=True, ioc_semantics=False,
+                  ioc_available=None, control_completion=True,
+                  require_order=False, latency_s=0.0) -> Dict[str, Any]:
+    """One window, through the money path's own state machine.
+
+    Every argument after `clip` is an EXECUTION EFFECT, and every default is
+    the frozen placement, so the default call IS the null control.
+    """
+    venue = ExecReplayVenue(fill_model=fill_model, reject_rule=reject_rule,
+                            cap_at_fill=cap_at_fill,
+                            ioc_semantics=ioc_semantics,
+                            ioc_available=ioc_available,
+                            control_completion=control_completion,
+                            require_order=require_order)
     tp = ExecReplayTransport(venue)
     mp = NMP.build(market="replay", transport=tp, feed=None, venue=venue,
                    journal=None, clip=D(str(clip)))
@@ -208,15 +299,20 @@ def replay_window(rows, *, winner, clip=E.CLIP, fill_model="queue_aware",
             continue
         # fills accrue on the venue between observations, exactly as the
         # frozen model says they would
-        venue.advance(row, ladder)
+        # ORDER OF OPERATIONS, as frozen walks it: the engine decides against
+        # THIS row, and the fills the adapter grants are the ones frozen would
+        # have granted for what was resting when the row arrived.
         venue.fill_ioc_now()
         out = mp.on_book_state(row, ladder)
+        venue.advance(mp.eng, row, ladder)
         ticks += 1
         if out.get("refused") == "ORDER_STATE_UNKNOWN":
             halted = out
             break
     res = mp.eng.settle(winner)
     res["exec"] = {"ticks": ticks, "orders": venue.n,
+                   "fills_without_order": venue.fills_without_order,
+                   "fills_granted": venue.granted,
                    "status_reads": venue.status_reads,
                    "rejected": venue.rejected,
                    "halted": halted is not None,
@@ -229,14 +325,13 @@ def net_of(r: Mapping[str, Any]) -> D:
     return r["matched_pnl"] - r["fees"] + r["resid_pnl"]
 
 
-def compare(by, usable, *, clip=E.CLIP, reject_rule=None) -> Dict[str, Any]:
+def compare(by, usable, *, clip=E.CLIP, **effects) -> Dict[str, Any]:
     """Execution-aware net per window, beside the frozen scorer's own."""
     from src import pmus_native_parity as P
     rows_out = []
     for slug, winner in usable.items():
         fr = P.frozen_window(by[slug], winner=winner, clip=clip)
-        ex = replay_window(by[slug], winner=winner, clip=clip,
-                           reject_rule=reject_rule)
+        ex = replay_window(by[slug], winner=winner, clip=clip, **effects)
         rows_out.append({
             "window": slug[-5:],
             "frozen_net": net_of(fr), "exec_net": net_of(ex),

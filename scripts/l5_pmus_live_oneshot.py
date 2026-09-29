@@ -1655,6 +1655,27 @@ def trade_audit(*, http=None, journal_path=None, ledger_dir=None,
             "linked": bool(oid),
         }
         if oid:
+            # THE RAW RECORD, VERBATIM. A rejection reason, if this venue
+            # exposes one at all, is a field we have never looked at; a
+            # summarised record cannot tell us whether it is there.
+            try:
+                row["venue_order_raw"] = tp.order(oid) or {}
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                row["venue_order_raw"] = {"error": "%s: %s" % (
+                    type(exc).__name__, str(exc)[:200])}
+            for probe_path in ("/v1/order/%s/status", "/v1/order/%s/fills",
+                               "/v1/order/%s/events"):
+                try:
+                    row.setdefault("venue_order_probes", {})[probe_path % ""] \
+                        = ro.request("GET", probe_path % oid, None, Q1.API)
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    row.setdefault("venue_order_probes", {})[
+                        probe_path % ""] = "%s: %s" % (type(exc).__name__,
+                                                       str(exc)[:80])
             try:
                 o = tp.order(oid) or {}
                 row["venue_order"] = {
@@ -1716,7 +1737,25 @@ def trade_audit(*, http=None, journal_path=None, ledger_dir=None,
             raise
         consumed = {"error": type(exc).__name__}
 
+    try:
+        balances = tp.account()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        balances = {"error": type(exc).__name__}
+    try:
+        mk = tp.market(market) if market else {}
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        mk = {"error": type(exc).__name__}
+    grid = {k: mk.get(k) for k in ("status", "orderPriceMinTickSize",
+                                   "minimumTradeQty", "outcomes",
+                                   "marketSides", "feeCoefficient")} \
+        if isinstance(mk, Mapping) else {}
+
     return {"LABEL": "R4_TRADE_AUDIT", "post_capable": post_capable,
+            "balances_now": balances, "market_grid": grid,
             "authorization_id": auth_id or "UNKNOWN",
             "market": market or "UNKNOWN",
             "ledger": {"dir": str(ld), "readable": readable,
