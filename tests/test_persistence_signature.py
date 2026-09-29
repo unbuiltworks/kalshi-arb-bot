@@ -251,3 +251,51 @@ def test_a_failing_window_does_not_stop_the_collector(tmp_path):
     kinds = [json.loads(l)["kind"] for l in open(str(j)).read().splitlines()
              if l.strip()]
     assert kinds.count("shadow_window_failed") == 3
+
+
+# ------------------------------------------------- schema vintages
+
+def test_an_integer_submitted_count_does_not_raise_and_is_not_given_a_side():
+    """R5's live journal carries `submitted` as an INT COUNT, not a list.
+
+    An earlier version of from_native_journal iterated it and raised
+    TypeError against the real file on the volume. A count says an action
+    happened but not which side, so the side metrics must report None
+    rather than a fabricated value.
+    """
+    rows = [{"kind": "native_tick", "t": 1.0, "submitted": 0},
+            {"kind": "native_tick", "t": 2.0, "submitted": 2},
+            {"kind": "native_tick", "t": 3.0, "submitted": 0}]
+    s = SIG.from_native_journal(rows, label="R5")
+    assert s["n_actions"] == 2, "the count was dropped"
+    assert s["n_ticks"] == 4
+    assert s["actions_without_side"] == 2
+    for k in ("extend_frac", "rebalance_frac", "max_streak", "transitions",
+              "same_price_frac"):
+        assert s[k] is None, "%s was invented for sideless actions" % k
+    assert "not reported" in s["side_metrics_unavailable"].replace(
+        "NOT reported", "not reported")
+
+
+def test_a_boolean_submitted_is_not_counted_as_one_action():
+    """`submitted: True` is a flag, not a quantity."""
+    rows = [{"kind": "native_tick", "t": 1.0, "submitted": True}]
+    assert SIG.from_native_journal(rows)["n_actions"] == 0
+
+
+def test_sided_and_sideless_actions_mix_without_corrupting_mode_fractions():
+    """The mode denominator must be SIDED actions; including sideless ones
+    would understate every fraction."""
+    acts = [A(0, "up", 0, 0), A(1, None, 10, 0), A(2, "up", 10, 0)]
+    s = SIG.signature(acts)
+    assert s["n_actions"] == 3
+    assert s["flat_open_frac"] == pytest.approx(0.5)
+    assert s["extend_frac"] == pytest.approx(0.5)
+
+
+def test_a_sideless_action_still_counts_toward_cadence():
+    acts = [A(0, None, 0, 0), A(30, None, 0, 0)]
+    s = SIG.signature(acts, window_s=900.0)
+    assert s["n_actions"] == 2
+    assert s["actions_per_min"] == pytest.approx(2 * 60.0 / 900.0)
+    assert s["median_dt_prev"] == 30

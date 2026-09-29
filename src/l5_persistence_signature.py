@@ -56,7 +56,10 @@ def signature(actions: Sequence[Mapping[str, Any]], *,
     `actions` each need: t (epoch seconds), side ("up"/"down"), and the
     inventory BEFORE the action as up/down; px and qty are optional.
     """
-    acts = [a for a in actions if a.get("t") is not None and a.get("side")]
+    # An action with no readable side is still an ACTION: it happened, at a
+    # time, and cadence is the thing being measured. It is kept for counts
+    # and timings and skipped only where a side is genuinely required.
+    acts = [a for a in actions if a.get("t") is not None]
     acts = sorted(acts, key=lambda a: a["t"])
     n = len(acts)
     ticks = n + int(no_intent_ticks)
@@ -76,15 +79,20 @@ def signature(actions: Sequence[Mapping[str, Any]], *,
     for a in acts:
         up = float(a.get("up") or 0.0)
         dn = float(a.get("down") or 0.0)
-        side = str(a["side"]).lower()
-        mode = classify(side, up=up, down=dn)
-        modes.append(mode)
         matched.append(min(up, dn))
         residual.append(abs(up - dn))
-        streak = streak + 1 if (prev_side is not None and side == prev_side) else 1
-        streaks.append(streak)
         if prev_t is not None:
             dts.append(float(a["t"]) - float(prev_t))
+        raw_side = a.get("side")
+        if not raw_side:
+            # cadence counted, side metrics left alone
+            prev_t = a["t"]
+            continue
+        side = str(raw_side).lower()
+        mode = classify(side, up=up, down=dn)
+        modes.append(mode)
+        streak = streak + 1 if (prev_side is not None and side == prev_side) else 1
+        streaks.append(streak)
         if prev_mode is not None:
             transitions["%s->%s" % (prev_mode, mode)] = transitions.get(
                 "%s->%s" % (prev_mode, mode), 0) + 1
@@ -110,7 +118,9 @@ def signature(actions: Sequence[Mapping[str, Any]], *,
         return statistics.median(v) if v else None
 
     def frac(m: str) -> Optional[float]:
-        return (modes.count(m) / n) if n else None
+        # denominator is SIDED actions, not all actions: a fraction over a
+        # denominator that includes sideless actions understates every mode.
+        return (modes.count(m) / len(modes)) if modes else None
 
     return {
         "label": label,
@@ -154,11 +164,32 @@ def from_native_journal(rows: Iterable[Mapping[str, Any]], *,
     """
     acts: List[Dict[str, Any]] = []
     no_intent = 0
+    unsided = 0
     up = dn = 0.0
     for r in rows:
         if r.get("kind") != "native_tick":
             continue
-        intents = r.get("intents") or r.get("submitted") or []
+        # SCHEMA VARIES ACROSS VINTAGES, and getting this wrong is silent.
+        # R5's journal carries `submitted` as an INT COUNT, not a list, which
+        # made an earlier version of this loop raise TypeError on the live
+        # file. A count tells us an action happened but not its side, so it
+        # is recorded as UNSIDED rather than being invented a side: the
+        # side-dependent metrics then report None instead of a wrong number.
+        raw = r.get("intents")
+        if not isinstance(raw, (list, tuple)):
+            raw = r.get("submitted")
+        if isinstance(raw, (list, tuple)):
+            intents = list(raw)
+        elif isinstance(raw, bool):
+            intents = []
+        elif isinstance(raw, (int, float)) and raw > 0:
+            unsided += int(raw)
+            acts.extend({"t": r.get("t"), "side": None, "up": up, "down": dn,
+                         "px": None, "s_to_expiry": r.get("s_to_expiry")}
+                        for _ in range(int(raw)))
+            continue
+        else:
+            intents = []
         if not intents:
             no_intent += 1
             continue
@@ -169,4 +200,16 @@ def from_native_journal(rows: Iterable[Mapping[str, Any]], *,
             acts.append({"t": r.get("t"), "side": side, "up": up, "down": dn,
                          "px": it.get("px"),
                          "s_to_expiry": r.get("s_to_expiry")})
-    return signature(acts, no_intent_ticks=no_intent, label=label)
+    out = signature(acts, no_intent_ticks=no_intent, label=label)
+    out["actions_without_side"] = unsided
+    if unsided:
+        out["side_metrics_unavailable"] = (
+            "%d action(s) came from an integer `submitted` count carrying no "
+            "side, so extend/rebalance fractions, streaks and transitions "
+            "are NOT reported for this source rather than being guessed."
+            % unsided)
+        for k in ("extend_frac", "rebalance_frac", "flat_open_frac",
+                  "max_streak", "median_streak", "transitions",
+                  "same_price_frac"):
+            out[k] = None
+    return out

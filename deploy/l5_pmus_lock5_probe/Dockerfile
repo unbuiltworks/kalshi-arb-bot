@@ -36,6 +36,10 @@ COPY scripts/pmus_oos_settlement_sweep.py scripts/pmus_oos_settlement_sweep.py
 # volume and prints; it contains no writer and re-hashes the file before
 # and after so `unmutated` is measured rather than claimed.
 COPY scripts/r5_signature_extract.py scripts/r5_signature_extract.py
+# PREVIEW-ONLY balance-admission probe. Calls /v1/order/preview and
+# nothing else; an AST test asserts the order-creation endpoint appears
+# in no string constant and that submit/cancel/arm are never named.
+COPY scripts/pmus_balance_admission_probe.py scripts/pmus_balance_admission_probe.py
 COPY src/l5_persistence_signature.py src/l5_persistence_signature.py
 COPY scripts/pmus_completeness_rule.py scripts/pmus_completeness_rule.py
 COPY scripts/audit_economic_complete.py scripts/audit_economic_complete.py
