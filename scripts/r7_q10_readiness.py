@@ -200,8 +200,15 @@ def run(clip) -> Dict[str, Any]:
     }
 
 
+#: the capital frontier. Clip is the ONLY thing that varies; every other
+#: parameter is read from the frozen engine module. Each clip is REPLAYED --
+#: nothing is interpolated between them, because the frontier turns out not
+#: to be linear (the median jumps from $0.46 at q20 to $5.15 at q25).
+FRONTIER_CLIPS = (10, 15, 20, 25, 30, 35, 40, 50)
+
+
 if __name__ == "__main__":
     out = {}
-    for clip in (D(10), D(50)):
-        out[str(clip)] = run(clip)
+    for clip in FRONTIER_CLIPS:
+        out[str(clip)] = run(D(clip))
     print(json.dumps(out, indent=2, default=str))
