@@ -36,7 +36,7 @@ import os
 import threading
 import time
 from collections import deque
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Deque, Dict, List, Mapping, Optional
 
 #: how many book states to keep. The decision path looks backwards a few
 #: seconds at most; this is generous against a busy market.
@@ -74,6 +74,44 @@ def _row(slug: str, s: Dict[str, Any], now: float) -> Dict[str, Any]:
     from src import l5_window_actions as WA
     return WA.book_row(t=now, bid=s.get("bid"), ask=s.get("ask"),
                        bid_qty=s.get("bid_qty"), ask_qty=s.get("ask_qty"))
+
+
+def touch_ladder(row: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The authenticated TOUCH as a frozen-shaped depth ladder.
+
+    THE FOURTH DEAD SEAM. `pmus_l5_native_engine.on_book` decides completion
+    FIRST, on the residual held right now, through the certified theta walk
+    -- and it reads its levels from `self.ladder`. Production passed
+    `getattr(feed, "ladder", None)`, and this feed has never had a `ladder`
+    attribute, so the ladder was ALWAYS None, `buy_levels` always returned
+    [], `marginal_complete` always returned n=0, and the certified taker
+    completion path could not fire even once. Every complement therefore
+    degraded to a passive PDI maker quote, which is why R5 #13 -- whose
+    all-in economics the frozen criterion admits -- went out as a crossing
+    post-only order and was rejected.
+
+    This supplies the ladder the frozen rule already expects, from the only
+    depth the venue actually quotes us: ONE level per side, the touch, with
+    the quantity resting there. It is deliberately conservative -- nothing
+    below the touch is invented, so the walk can never admit depth the venue
+    did not show us. No threshold, theta, fee or sizing rule is changed; the
+    walk is the frozen walk, now with levels to walk.
+
+    Returns None when the row cannot supply a usable touch, which leaves the
+    engine exactly where it was: no completion decided.
+    """
+    if not row:
+        return None
+    out: Dict[str, Any] = {}
+    bid, bid_qty = row.get("bid"), row.get("bid_qty")
+    ask, ask_qty = row.get("ask"), row.get("ask_qty")
+    if bid is not None and bid_qty is not None:
+        # buying DOWN sells YES into the bid; buy_levels applies the 1-p
+        # inversion itself, so the bid goes in as a YES price.
+        out["bids"] = [[str(bid), str(bid_qty)]]
+    if ask is not None and ask_qty is not None:
+        out["offers"] = [[str(ask), str(ask_qty)]]
+    return out or None
 
 
 class AuthenticatedBookFeed:
@@ -114,6 +152,11 @@ class AuthenticatedBookFeed:
         """Book states oldest first, in the shape the wiring expects."""
         with self._lock:
             return list(self.history)
+
+    @property
+    def ladder(self) -> Optional[Dict[str, Any]]:
+        """What `on_book_state` passes to the engine. See `touch_ladder`."""
+        return touch_ladder(self.latest())
 
     def latest(self) -> Optional[Dict[str, Any]]:
         with self._lock:

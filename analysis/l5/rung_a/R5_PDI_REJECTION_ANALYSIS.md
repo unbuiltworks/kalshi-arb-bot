@@ -83,24 +83,38 @@ the mapping reproduces each order's mandate cash_at_risk exactly.
 
 ## MAKER vs TAKER classification
 
-These four intents were economically valid completions that LOCK5 issued as
-passive maker quotes, and post-only then refused the only price at which
-they were available:
+**CORRECTED 2026-09-29.** An earlier revision of this file described #7, #9
+and #13 as DOWN completions against held UP inventory, and put #13's pair
+cost at 0.9267. That was wrong for #13: it evaluated the order against a UP
+basis that was no longer the held side. Replaying the engine's own residual
+through the tape gives the true picture.
 
-* #7, #9, #13 are DOWN completions against held UP inventory. At own 0.54 /
-  0.53 / 0.48 against a UP average of 0.4467, pair cost would have been
-  0.9867 / 0.9767 / 0.9267. #13 at 0.9267 is comfortably inside the <= 0.96
-  spring target; #7 and #9 are not.
-* #5 is a UP first leg, not a completion, and a maker quote is the right
-  shape for it. Its rejection cost nothing but the queue slot.
+| order | residual at submission | held | complement | is a completion? |
+|---|---|---|---|---|
+| #5 | +10 (net long UP) | up | down | no — same-side UP extend |
+| #7 | +20 (net long UP) | up | down | **yes** |
+| #9 | +10 (net long UP) | up | down | **yes** |
+| #13 | -10 (net long DOWN) | down | up | no — same-side DOWN extend |
 
-So the actionable finding is narrower than "enable taker": a completion that
-is inside the pair-cost target and has become marketable at arrival is a
-valid TAKER action, and the current path has no way to express it — it can
-only re-quote passively and be refused again. **PDI is not disabled
-globally, and nothing here changes LOCK5's parameters.** This records what a
-future change would have to distinguish; one window of n=4 does not
-authorise making it.
+So only #7 and #9 were completions, and the frozen criterion refuses both:
+
+* #7, comp=down at own 0.54 on a 0.44667 UP basis -> all-in **1.00393** > 0.96.
+* #9, comp=down at own 0.52 on a 0.44667 UP basis -> all-in **0.98401** > 0.96.
+
+Neither should be crossed to reduce residual, and neither is.
+
+#5 and #13 are same-side acquisitions. The completion branch only ever emits
+the COMPLEMENT of the held side, so an acquisition order on the held side
+cannot be upgraded at all — a structural guarantee, stronger than an
+economic one, and it is what preserves passive/PDI execution for normal
+inventory acquisition. (For completeness, #13 evaluated against the side
+that actually was held gives comp=up at the 0.55 ask on a 0.498 DOWN basis,
+an all-in of 1.0652 — refused on economics too.)
+
+**Conclusion: no order in the R5 window satisfies the frozen completion
+criterion.** The correct execution mode for all four rejected orders was the
+passive maker quote they were given. The rejections were caused by book
+movement between decision and arrival, not by misclassification.
 
 ## Secondary finding: the UP side was locked out
 

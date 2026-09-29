@@ -228,6 +228,10 @@ class NativeMoneyPath:
         self.registry = SessionOrderRegistry()
         self.terminals: List[dict] = []
         self.booked_fills: List[dict] = []
+        #: consecutive cancel-transport failures per order id, so a cancel
+        #: that keeps failing is bounded and escalated rather than silently
+        #: stranding its side for the rest of the window (R5 CSPERKXEYYB5).
+        self._cancel_failures: Dict[str, int] = {}
 
     # ------------------------------------------------------------ the tick
 
@@ -476,6 +480,76 @@ class NativeMoneyPath:
             except BaseException:                              # noqa: BLE001
                 pass
 
+    #: How many consecutive cancel-transport failures on ONE order id are
+    #: retried before the side is escalated. R5's CSPERKXEYYB5 took an
+    #: HTTPError on every cancel from 11:16:54 to the 11:30 close and its side
+    #: was never re-quoted again -- ~13 minutes, 3 UP fills against 5 DOWN,
+    #: and a 20-share directional residual that was an execution artifact
+    #: rather than a decision. The bound does NOT unblock replacement: while
+    #: the order may still be live, submitting a replacement would stack two
+    #: live quotes on one side and both could fill. It bounds how long we go
+    #: on believing a cancel will work, and it separates the two cases the
+    #: old code merged.
+    CANCEL_RETRY_BUDGET = 3
+
+    def _cancel_failure_verdict(self, side: str, oid: str,
+                                res: Mapping[str, Any]) -> Dict[str, Any]:
+        """Why is this side occupied, and is our ownership actually uncertain?
+
+        R5 treated every non-cleared cancel identically. Two cases are not the
+        same thing:
+
+          KNOWN_LIVE  -- the venue answers authoritatively that the order is
+                         WORKING. Ownership is NOT uncertain: we know exactly
+                         what is resting and for how much. The side is
+                         legitimately occupied by our own working quote.
+          UNCERTAIN   -- the venue will not or cannot say. Ownership IS
+                         uncertain and this must stay fail-closed.
+
+        Replacement is refused in both cases. The distinction is what lets the
+        first one be retried and escalated instead of silently stranded, and
+        it is recorded so the window's evidence says which one happened.
+        """
+        from src import pmus_order_lifecycle as LC
+        n = self._cancel_failures.get(oid, 0) + 1
+        self._cancel_failures[oid] = n
+        row = self.registry.orders.get(str(oid)) or {}
+        state, why = "UNCERTAIN", None
+        try:
+            v = self.venue.order_status(oid, requested_qty=row.get("qty"),
+                                        side=row.get("side") or side)
+        except BaseException as exc:                           # noqa: BLE001
+            v, why = {}, "%s: %s" % (type(exc).__name__, str(exc)[:120])
+        cls = str(v.get("classification") or "")
+        if v.get("terminal"):
+            # Established terminal while we were failing to cancel it. Book it
+            # and unblock IMMEDIATELY -- this is the whole point of asking.
+            filled = D(str(v.get("filled_qty") or 0))
+            self.registry.mark_terminal(oid, filled, cls or None)
+            self.release_terminal(oid, filled)
+            self._cancel_failures.pop(oid, None)
+            return {"clear": True, "side": side, "oid": oid,
+                    "reason": "TERMINAL_ESTABLISHED_DURING_CANCEL_RETRY",
+                    "venue_state": v.get("state"),
+                    "classification": cls, "filled_qty": str(filled)}
+        if cls == LC.WORKING:
+            state = "KNOWN_LIVE"
+        elif cls == LC.UNKNOWN:
+            self.registry.mark_unknown(oid, str(v.get("why") or why
+                                               or "CANCEL_STATUS_UNREADABLE"))
+        return {"clear": False, "side": side, "oid": oid,
+                "reason": res.get("state"), "ownership": state,
+                "venue_state": v.get("state") or None,
+                "classification": cls or None,
+                "cancel_failures": n,
+                "retry_budget": self.CANCEL_RETRY_BUDGET,
+                "escalated": n > self.CANCEL_RETRY_BUDGET,
+                "why": why,
+                "note": ("replacement stays refused while this order may be "
+                         "live; KNOWN_LIVE means the venue confirms what is "
+                         "resting, UNCERTAIN means it will not say and the "
+                         "full reservation keeps being charged")}
+
     def _ensure_side_clear(self, side: str) -> Dict[str, Any]:
         """No replacement while anything of ours on this side is nonterminal."""
         pending = self.registry.live_for(side)
@@ -484,8 +558,9 @@ class NativeMoneyPath:
         for row in list(pending):
             res = self.cancel_side(side, oid=row["oid"])
             if res.get("state") not in CLEARED_STATES:
-                return {"clear": False, "side": side, "oid": row["oid"],
-                        "reason": res.get("state")}
+                verdict = self._cancel_failure_verdict(side, row["oid"], res)
+                if not verdict.get("clear"):
+                    return verdict
         still = self.registry.live_for(side)
         if still:
             # The previous quote was cancelled and confirmed above, so anything
