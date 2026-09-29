@@ -855,8 +855,16 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
         seen_t = book.get("t")
         ticks += 1
         res = mp.on_book_state(book, getattr(feed, "ladder", None))
-        journal.write("native_tick", {"t": seen_t, **{
-            k: v for k, v in res.items() if k != "submitted"}})
+        # THE BOOK THE DECISION WAS TAKEN AGAINST. Without it, R4's rejection
+        # could not be diagnosed at all: the PDI-crossing hypothesis turns on
+        # the YES bid at 00:46:35.909, and `native_tick` recorded only the
+        # verdict. The WS frames are not journalled and the venue's REST book
+        # 404ed for that market throughout the window (observed independently
+        # by pmus-btc15m-tape), so no artifact anywhere carried it.
+        journal.write("native_tick", {"t": seen_t, "book": {
+            k: (None if book.get(k) is None else str(book.get(k)))
+            for k in ("bid", "ask", "bid_qty", "ask_qty", "status", "state")},
+            **{k: v for k, v in res.items() if k != "submitted"}})
         if mp.eng.locked_at is not None:
             journal.write("native_locked", {"t": str(mp.eng.locked_at),
                                             "via": mp.eng.lock_via,
