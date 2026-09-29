@@ -304,6 +304,13 @@ class NativeMoneyPath:
 
         T["lock5_start_ms"] = _now_ms()
         T["_lock5_wall_ms"] = time.time() * 1000.0
+        # OWNERSHIP BOUNDARY. `live_orders` is populated only by a submit
+        # that returned a venue order id and cleared when the venue says
+        # that order is terminal, so it is the only record that reflects
+        # orders which actually exist. The engine adopts it instead of
+        # recording its own intents as resting. R5: 271 of 416 dead-period
+        # ticks emitted NO INTENT against a quote that was never placed.
+        self.eng.sync_resting(self.live_orders)
         try:
             intents = self.eng.on_book(row, ladder,
                                        execute_taker=self._execute_taker)
@@ -646,6 +653,13 @@ class NativeMoneyPath:
                     # `release_terminal` alone left it nonterminal forever.
                     self.registry.mark_terminal(oid, filled, cls)
                     self.release_terminal(oid, filled)
+                    # and it is no longer RESTING. A filled order left in
+                    # `live_orders` is the same phantom in a different
+                    # costume: the engine would suppress a re-quote at a
+                    # price nothing is sitting at any more.
+                    _cur = self.live_orders.get(row["side"]) or {}
+                    if str(_cur.get("oid") or "") == oid:
+                        self.live_orders[row["side"]] = None
                     out["terminated"].append({"oid": oid, "class": cls,
                                               "filled": str(filled)})
                 else:

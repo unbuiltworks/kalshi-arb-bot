@@ -168,6 +168,10 @@ class NativeEngine:
         self.lock_cancels = 0
         self.floor_trace: List[dict] = []
         self.blocked_until = 0.0
+        #: False until an execution layer calls `sync_resting`. While False
+        #: the engine keeps its own (optimistic) resting model, which is what
+        #: the frozen replay harness -- which has no money path -- requires.
+        self._resting_owned_by_execution = False
         self.need_flat = False
         self.max_clip_seen = D(0)
         #: our OWN resting orders, by side: {"px":..., "qty":...}. Live this is
@@ -401,8 +405,48 @@ class NativeEngine:
                 out.append(Intent(CANCEL, side=side, reason="REQUOTE"))
             out.append(Intent(REST, side=side, price=px, qty=self.clip,
                               maker=True, reason="TWO_SIDED_OUR_TOUCH"))
-            self.resting[side] = {"px": px, "qty": self.clip}
+            if not self._resting_owned_by_execution:
+                # NO EXECUTION LAYER IS PRESENT. The frozen replay harness
+                # drives this engine directly with no money path and no
+                # `live_orders` to adopt, so the engine must keep its own
+                # model there or frozen parity changes -- and frozen parity
+                # is the reference, not a thing to renegotiate. Ownership
+                # transfers only when something actually takes it.
+                self.resting[side] = {"px": px, "qty": self.clip}
+            # OTHERWISE NOT HERE. Creating an Intent is a
+            # REQUEST, not an order. This line used to record the quote as
+            # resting before the money path had established that anything
+            # existed, so a blocked, rejected or never-submitted intent left
+            # the engine believing in a quote that was never placed. R5
+            # measured the cost: of 416 ticks after its last fill, 271
+            # (65.1%) emitted NO INTENT because `cur["px"] == px` matched a
+            # phantom. `resting` is now owned by the execution layer and
+            # adopted through `sync_resting`.
         return out
+
+    def sync_resting(self, live: Mapping[str, Any]) -> None:   # noqa: D401
+        """Adopt the EXECUTION layer's authoritative view of what rests.
+
+        `live` is the money path's `live_orders`: populated only from a
+        successful submit that returned a venue order id, and cleared when
+        the venue says that order is terminal. An order that was blocked
+        before submit, refused by preview, rejected by the venue, cancelled
+        or expired is absent from it, and is therefore absent here.
+
+        This does NOT weaken duplicate protection. A genuinely live order
+        still appears, still suppresses a same-price re-quote, and the money
+        path's own `_ensure_side_clear` remains the authoritative gate that
+        refuses a second same-side order. UNKNOWN ownership never reaches
+        this point: `on_book_state` halts the tick before the engine is
+        consulted, so an uncertain order is never treated as absent.
+        """
+        # THE TRANSFER. From the first call on, this engine no longer
+        # records its own intents as resting: the caller owns that state.
+        self._resting_owned_by_execution = True
+        for side in ("up", "down"):
+            v = (live or {}).get(side)
+            self.resting[side] = (None if not v else
+                                  {"px": v["px"], "qty": v["qty"]})
 
     def _cap_permits(self, side: str, qty: D) -> bool:
         """B' RESIDUAL_CAP_k2, applied PROSPECTIVELY.

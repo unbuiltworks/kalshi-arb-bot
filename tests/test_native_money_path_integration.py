@@ -164,6 +164,17 @@ def _at_lock(p):
     """Inventory whose floor is already >= $5 by holding."""
     p.eng.on_fill("up", D(100), D("10.00"), maker=True)
     p.eng.on_fill("down", D(100), D("10.00"), maker=True)
+    # `resting` is now owned by the EXECUTION layer: the money path syncs
+    # the engine from `live_orders` before every decision, so a resting
+    # order is staged there. Writing eng.resting directly would be wiped by
+    # that sync -- which is the point of the ownership boundary.
+    # A REAL resting order exists in BOTH places: the registry (so the
+    # cancel machinery can find and terminate it) and `live_orders` (the
+    # authoritative view the engine now adopts). Staging only one of them
+    # models an order that cannot be cancelled, which is a different test.
+    p.registry.record("staged-up", side="up", price=D("0.40"), qty=D(50),
+                      kind=E.REST)
+    p.live_orders["up"] = {"oid": "staged-up", "px": "0.40", "qty": "50"}
     p.eng.resting["up"] = {"px": D("0.40"), "qty": D(50)}
 
 
@@ -212,6 +223,17 @@ def test_a_race_fill_that_breaks_the_floor_prevents_the_latch():
     # a floor sitting exactly AT the threshold: 100 - (47.50 + 47.50) = 5.00
     p.eng.on_fill("up", D(100), D("47.50"), maker=True)
     p.eng.on_fill("down", D(100), D("47.50"), maker=True)
+    # `resting` is now owned by the EXECUTION layer: the money path syncs
+    # the engine from `live_orders` before every decision, so a resting
+    # order is staged there. Writing eng.resting directly would be wiped by
+    # that sync -- which is the point of the ownership boundary.
+    # A REAL resting order exists in BOTH places: the registry (so the
+    # cancel machinery can find and terminate it) and `live_orders` (the
+    # authoritative view the engine now adopts). Staging only one of them
+    # models an order that cannot be cancelled, which is a different test.
+    p.registry.record("staged-up", side="up", price=D("0.40"), qty=D(50),
+                      kind=E.REST)
+    p.live_orders["up"] = {"oid": "staged-up", "px": "0.40", "qty": "50"}
     p.eng.resting["up"] = {"px": D("0.40"), "qty": D(50)}
     # the race fill adds cost without adding to min(), so the floor breaks
     v.reveal_after_cancel = True

@@ -101,6 +101,22 @@ class Obs:
                     self.terminals += 1
                     self.reserved -= (o["qty"] - o["cum"]) * o["px"]
 
+    def live_orders(self) -> Dict[str, Any]:
+        """What is ACTUALLY resting, in `live_orders` shape.
+
+        Obs is this replay's execution layer, so it -- not the engine's
+        intent stream -- owns `resting`. The engine adopts this through
+        `sync_resting`, which is the same ownership boundary production now
+        uses. An order Obs has marked CANCELLED, FILLED or REJECTED is
+        absent, so it cannot suppress a re-quote.
+        """
+        out: Dict[str, Any] = {"up": None, "down": None}
+        for o in self.orders.values():
+            if o["state"] != "OPEN" or not o["maker"]:
+                continue
+            out[o["side"]] = {"px": o["px"], "qty": o["qty"]}
+        return out
+
     def live_maker(self, side: str, px: D):
         """The OPEN maker order that IS this quote, matched on side and price."""
         for o in self.orders.values():
@@ -222,6 +238,12 @@ def replay_window(rows, *, winner, rung="R0_FROZEN_CONTROL", clip=E.CLIP,
                 obs.cancel(it["side"])
             elif it.kind == E.REST:
                 obs.rest(it["side"], D(str(it["price"])), D(str(it["qty"])), t)
+
+        # OWNERSHIP BOUNDARY, the same one production uses: the engine
+        # adopts what the execution layer says exists. Obs has just recorded
+        # this tick's REST intents as real orders and dropped anything it
+        # cancelled, so this is the authoritative view.
+        eng.sync_resting(obs.live_orders())
 
         if eng.locked_at is not None:
             continue
