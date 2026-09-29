@@ -1,0 +1,182 @@
+{
+  "10": {
+    "clip": 10,
+    "windows": 49,
+    "windows_that_traded": 46,
+    "completion_rate_mean": 0.8303194920118935,
+    "fully_completed": 27,
+    "unmatched_frac_median": 0.50315,
+    "peak_cash_median": 29.5,
+    "peak_cash_max": 65.06666666666666,
+    "matched_pnl_mean": 1.6146519664115646,
+    "net_mean_bracket": [
+      0.14880039245918375,
+      0.7626779434795918
+    ],
+    "net_median_bracket": [
+      1.4252455,
+      1.4252455
+    ],
+    "resid_pnl_bracket": [
+      -1.1416091092687075,
+      -0.5277315582482993
+    ],
+    "by_period": {
+      "02-06z": {
+        "n": 11,
+        "completion_rate": 0.9035353535353536,
+        "fully_completed": 7,
+        "unmatched_frac_median": 0.4342
+      },
+      "06-10z": {
+        "n": 16,
+        "completion_rate": 0.8909879839786383,
+        "fully_completed": 10,
+        "unmatched_frac_median": 0.53975
+      },
+      "10-15z": {
+        "n": 19,
+        "completion_rate": 0.7368421052631579,
+        "fully_completed": 10,
+        "unmatched_frac_median": 0.5018
+      }
+    },
+    "labels": "net and resid are BRACKETS over both outcomes, not realized; everything else is settlement-independent",
+    "rebates_assumed": "NONE"
+  },
+  "20": {
+    "clip": 20,
+    "windows": 49,
+    "windows_that_traded": 40,
+    "completion_rate_mean": 0.8409415505649133,
+    "fully_completed": 24,
+    "unmatched_frac_median": 0.4423,
+    "peak_cash_median": 50.3208,
+    "peak_cash_max": 130.13333333333333,
+    "matched_pnl_mean": 2.282593048469388,
+    "net_mean_bracket": [
+      -0.5313513316224487,
+      1.3070160153163266
+    ],
+    "net_median_bracket": [
+      4.055613,
+      5.032644
+    ],
+    "resid_pnl_bracket": [
+      -2.2672726403061225,
+      -0.42890529336734695
+    ],
+    "by_period": {
+      "02-06z": {
+        "n": 10,
+        "completion_rate": 0.893888888888889,
+        "fully_completed": 6,
+        "unmatched_frac_median": 0.41769999999999996
+      },
+      "06-10z": {
+        "n": 13,
+        "completion_rate": 0.8742646000287922,
+        "fully_completed": 8,
+        "unmatched_frac_median": 0.5832
+      },
+      "10-15z": {
+        "n": 17,
+        "completion_rate": 0.784313725490196,
+        "fully_completed": 10,
+        "unmatched_frac_median": 0.4277
+      }
+    },
+    "labels": "net and resid are BRACKETS over both outcomes, not realized; everything else is settlement-independent",
+    "rebates_assumed": "NONE"
+  },
+  "25": {
+    "clip": 25,
+    "windows": 49,
+    "windows_that_traded": 37,
+    "completion_rate_mean": 0.8342593281520054,
+    "fully_completed": 22,
+    "unmatched_frac_median": 0.4277,
+    "peak_cash_median": 54.25,
+    "peak_cash_max": 162.66666666666666,
+    "matched_pnl_mean": 2.5707901201105443,
+    "net_mean_bracket": [
+      0.07847698304254704,
+      1.4066402483486693
+    ],
+    "net_median_bracket": [
+      5.1751825,
+      5.290805
+    ],
+    "resid_pnl_bracket": [
+      -1.8556146099064625,
+      -0.5274513446003402
+    ],
+    "by_period": {
+      "02-06z": {
+        "n": 10,
+        "completion_rate": 0.918888888888889,
+        "fully_completed": 7,
+        "unmatched_frac_median": 0.39844999999999997
+      },
+      "06-10z": {
+        "n": 11,
+        "completion_rate": 0.8495793563092704,
+        "fully_completed": 6,
+        "unmatched_frac_median": 0.6058
+      },
+      "10-15z": {
+        "n": 16,
+        "completion_rate": 0.7708333333333333,
+        "fully_completed": 9,
+        "unmatched_frac_median": 0.4181
+      }
+    },
+    "labels": "net and resid are BRACKETS over both outcomes, not realized; everything else is settlement-independent",
+    "rebates_assumed": "NONE"
+  },
+  "30": {
+    "clip": 30,
+    "windows": 49,
+    "windows_that_traded": 38,
+    "completion_rate_mean": 0.8851877797712558,
+    "fully_completed": 27,
+    "unmatched_frac_median": 0.39575,
+    "peak_cash_median": 65.1,
+    "peak_cash_max": 195.2,
+    "matched_pnl_mean": 2.2364790284863947,
+    "net_mean_bracket": [
+      -0.9264026504577415,
+      -0.5166067320903945
+    ],
+    "net_median_bracket": [
+      5.168742,
+      5.208774
+    ],
+    "resid_pnl_bracket": [
+      -2.3866096407312924,
+      -1.9768137223639455
+    ],
+    "by_period": {
+      "02-06z": {
+        "n": 11,
+        "completion_rate": 0.9262626262626263,
+        "fully_completed": 8,
+        "unmatched_frac_median": 0.3882
+      },
+      "06-10z": {
+        "n": 10,
+        "completion_rate": 0.9531580075752162,
+        "fully_completed": 7,
+        "unmatched_frac_median": 0.54085
+      },
+      "10-15z": {
+        "n": 17,
+        "completion_rate": 0.8186274509803921,
+        "fully_completed": 12,
+        "unmatched_frac_median": 0.3452
+      }
+    },
+    "labels": "net and resid are BRACKETS over both outcomes, not realized; everything else is settlement-independent",
+    "rebates_assumed": "NONE"
+  }
+}
