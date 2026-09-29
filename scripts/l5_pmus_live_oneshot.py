@@ -39,6 +39,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import pathlib
 import time
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
@@ -206,6 +207,11 @@ class Probe:
         #: Reported so "we traded on a row resolved at 21:46, not at 22:15"
         #: is in the record rather than inferred.
         self.metadata_pin: Optional[Dict[str, Any]] = None
+        #: the native money path, once the native lane builds one. The R4
+        #: window submitted and filled through it and the report said
+        #: `submitted: 0`, because `report()` only ever counted
+        #: `self.records`, which ONLY the L5-action lane writes.
+        self.native = None
         self.armed = False
         self.seen: Set[str] = set()
         #: BLOCKER 1 (2026-09-28). The reviewed LOCK5 composition is built HERE,
@@ -627,11 +633,52 @@ class Probe:
                 row.nonfill("window_closed_without_authoritative_fill")
         self.paired.flush()
 
+    def native_accounting(self) -> Dict[str, Any]:
+        """What the NATIVE lane did, from the object that did it.
+
+        R4 (2026-09-29 0045z) left 10 UP contracts at the venue under a
+        report that said `submitted: 0`, `filled: 0`, `committed_usd: 0`.
+        None of those were lies about the L5-action lane -- it did nothing --
+        and all of them were useless, because the native lane is where the
+        money moved and `report()` could not see it.
+        """
+        mp = self.native
+        if mp is None:
+            return {"lane": "NATIVE", "present": False, "submitted": 0,
+                    "orders": [], "exposure": None}
+        orders = []
+        for rec in getattr(mp, "submitted", []):
+            body = rec.get("body") or {}
+            px = body.get("price")
+            orders.append({
+                "kind": rec.get("kind"), "side": rec.get("side"),
+                "order_id": rec.get("oid") or "UNKNOWN",
+                "qty": body.get("quantity"),
+                "price_wire": (px.get("value") if isinstance(px, Mapping)
+                               else px),
+                "tif": body.get("tif"),
+                "post_only": body.get("participateDontInitiate"),
+                "ack": rec.get("ack")})
+        try:
+            exposure = mp.registry.as_dict()
+        except BaseException:                                  # noqa: BLE001
+            exposure = None
+        return {"lane": "NATIVE", "present": True,
+                "submitted": len(orders), "orders": orders,
+                "exposure": exposure,
+                "locked": getattr(mp.eng, "locked_at", None) is not None,
+                "lock_transactions": len(getattr(mp, "lock_transactions", [])),
+                "remainders": getattr(mp, "remainders", None)}
+
     def report(self, close: Mapping[str, Any]) -> Dict[str, Any]:
         submitted = [r for r in self.records
                      if (r.get("ORDER") or {}).get("submitted") is True]
         filled = [r for r in self.records
                   if (r.get("FILL") or {}).get("filled") is True]
+        native = self.native_accounting()
+        coherent = self.coherence(
+            close, market=self.market,
+            submitted_total=len(submitted) + int(native["submitted"]))
         refused: Dict[str, int] = {}
         for r in self.records:
             why = r.get("refused_reason")
@@ -660,7 +707,13 @@ class Probe:
             "maker_treatment": maker_treatment_enabled(),
             "maker_only": maker_only_enabled(),
             "l5_actions": len(self.records),
+            # PER LANE, and a total. `submitted` keeps its meaning -- the
+            # L5-action lane -- because existing evidence is read against it;
+            # `submitted_total` is the number that must never be 0 while the
+            # venue holds a position this session acquired.
             "submitted": len(submitted),
+            "native_lane": native,
+            "submitted_total": len(submitted) + int(native["submitted"]),
             "filled": len(filled),
             "refused_reason": refused,
             # Probe 03 reported SUBMIT_OUTCOME_UNKNOWN as a bare count and
@@ -706,7 +759,57 @@ class Probe:
             "labels": ("submitted, filled and settled are distinct. Nothing "
                        "here is realized: realization requires a settlement "
                        "value from the venue after the market resolves."),
+            # THE R4 INVARIANT. A report that says nothing was submitted while
+            # the venue holds a position for this market is not a report, it
+            # is a contradiction, and it must say so in its own output rather
+            # than leave the reader to notice.
+            "accounting_coherent": coherent["coherent"],
+            "accounting_incoherence": coherent["why"],
         }
+
+    @staticmethod
+    def coherence(close: Mapping[str, Any], *, market: str,
+                  submitted_total: int) -> Dict[str, Any]:
+        """Does the venue's own view agree that this session did nothing?
+
+        Reads the close-out's reconciliation, which is authoritative
+        (`authority: VENUE`). Any venue position or drift on THIS market with
+        zero submissions across BOTH lanes is incoherent, and the R4 window is
+        exactly that shape: venue_net 10.0000, submitted 0.
+        """
+        recon = (close or {}).get("reconciliation") or {}
+        net = recon.get("venue_net") or {}
+        drift = recon.get("drift") or {}
+        held = None
+        for k, v in net.items():
+            if market and str(k) != str(market):
+                continue
+            try:
+                if D(str(v)) != 0:
+                    held = str(v)
+            except BaseException:                              # noqa: BLE001
+                held = str(v)
+        drifted = [k for k in drift
+                   if not market or str(k).startswith(str(market))]
+        if submitted_total == 0 and (held is not None or drifted):
+            return {"coherent": False,
+                    "why": {"reason": "VENUE_POSITION_WITH_ZERO_SUBMISSIONS",
+                            "market": market, "venue_net": held,
+                            "drift_keys": drifted,
+                            "submitted_total": submitted_total,
+                            "note": ("the venue holds inventory this report "
+                                     "cannot account for; the cost basis is "
+                                     "not in this process and must be "
+                                     "recovered from the mandate ledger and "
+                                     "the journal before anything is called "
+                                     "realized")}}
+        if not recon.get("uncertainty_cleared", True):
+            return {"coherent": False,
+                    "why": {"reason": "RECONCILIATION_UNCERTAIN",
+                            "orders_uncertain": (close or {}).get(
+                                "orders_uncertain"),
+                            "submitted_total": submitted_total}}
+        return {"coherent": True, "why": None}
 
 
 #: the probe the last run() built, for tests that must inspect the REAL money
@@ -733,6 +836,9 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
                                            journal=journal)
     mp = money_path or NMP.build(market=probe.market, transport=probe.tp,
                                  feed=feed, venue=venue, journal=journal)
+    # BEFORE the loop, not after it: R4's crash-free window still reported
+    # zero, and a window that dies mid-flight must not lose its orders too.
+    probe.native = mp
     journal.write("native_clip", {
         "clip": str(mp.eng.clip), "env": NMP.CLIP_ENV,
         "default_when_unset": str(NMP.E.CLIP),
@@ -760,6 +866,7 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
     # the unfilled budget. A quote left resting outlives the window and can
     # fill later, unmanaged, on a market nothing is watching.
     sweep = mp.sweep_all()
+    probe.native = mp
     journal.write("native_window_done", {
         "sweep": sweep,
         "ticks": ticks, "submitted": len(mp.submitted),
@@ -777,9 +884,27 @@ BTC15M_SERIES = "btc-updown-15m"
 MIN_REMAINING_S = 240.0
 
 
+#: when set, only a window that has NOT YET STARTED is eligible.
+#:
+#: R4 was activated by timing a redeploy into the last four minutes of a
+#: quarter hour so that discovery would land on the next full window. The
+#: redeploy then took five minutes instead of the thirty seconds the previous
+#: two had taken, and the probe entered a window already 94 seconds old. An
+#: eligibility rule that depends on how long a platform takes to boot a
+#: container is not an eligibility rule. This one is decided from the venue's
+#: own window state at the moment the process is actually running.
+FULL_WINDOW_ENV = "L5_REQUIRE_FULL_WINDOW"
+
+
+def require_full_window() -> bool:
+    return os.getenv(FULL_WINDOW_ENV, "").strip().lower() in ("1", "true",
+                                                              "yes")
+
+
 def select_venue_window(*, now: float, series: str = BTC15M_SERIES,
                         windows=None,
-                        min_remaining_s: float = MIN_REMAINING_S
+                        min_remaining_s: float = MIN_REMAINING_S,
+                        require_not_started: Optional[bool] = None
                         ) -> Dict[str, Any]:
     """The EXACT slug the venue serves for the current/upcoming window.
 
@@ -800,6 +925,8 @@ def select_venue_window(*, now: float, series: str = BTC15M_SERIES,
     Returns {} when the venue confirmed nothing. A caller must then refuse:
     no venue-confirmed slug is not an invitation to compute one.
     """
+    if require_not_started is None:
+        require_not_started = require_full_window()
     rows = windows
     if rows is None:
         from src import pmus_book_tape as BT
@@ -813,17 +940,29 @@ def select_venue_window(*, now: float, series: str = BTC15M_SERIES,
         end = start + dt.timedelta(seconds=WINDOW_S)
         if end <= cut:
             continue                       # already over
-        if start <= cut and (end - cut).total_seconds() < min_remaining_s:
-            continue                       # in progress but too little left
+        if start <= cut:
+            # IN PROGRESS. Eligibility is decided HERE, from the venue's own
+            # start time against the clock in this running process -- never
+            # from an expectation about how long the deploy took.
+            if require_not_started:
+                continue
+            if (end - cut).total_seconds() < min_remaining_s:
+                continue
         best = w
         break
     if best is None:
         return {}
+    remaining = (best["start"] + dt.timedelta(seconds=WINDOW_S)
+                 - cut).total_seconds()
     return {"slug": best["slug"],
             "start_epoch": best["start"].timestamp(),
             "start_utc": best["start"].isoformat(),
             "event_slug": best["event_slug"],
             "in_progress": best["start"] <= cut,
+            "remaining_s": round(remaining, 1),
+            "lead_s": round(-min(0.0, (cut - best["start"]).total_seconds()), 1),
+            "require_not_started": bool(require_not_started),
+            "decided_at_utc": cut.isoformat(),
             "source": "VENUE_SERIES_LISTING"}
 
 
@@ -840,6 +979,9 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
     pinned = os.getenv(AUTH.MARKET_ENV, "").strip()
     selection = {} if pinned else select_venue_window(now=now)
     market = pinned or str(selection.get("slug") or "")
+    if selection:
+        print("L5_WINDOW_SELECTED " + json.dumps(selection, default=str),
+              flush=True)
     store = EX.InventoryStore(
         state_path or os.getenv("L5_PROBE_STATE",
                                 "/state/pmus-ws/l5_probe_inventory.json"))
@@ -1423,6 +1565,176 @@ def recovery_read_path(journal) -> str:
             or str(journal.path))
 
 
+AUDIT_ENV = "L5_AUDIT_ONLY"
+
+
+def audit_only_enabled() -> bool:
+    return os.getenv(AUDIT_ENV, "").strip().lower() in ("1", "true", "yes")
+
+
+def trade_audit(*, http=None, journal_path=None, ledger_dir=None,
+                authorization_id=None, market=None) -> Dict[str, Any]:
+    """Everything persisted about one authorization's orders. GET ONLY.
+
+    Written because the R4 window (2026-09-29 0045z) left 10 UP contracts at
+    the venue and a printed report saying `submitted: 0`. Nothing about a
+    native-lane submission was journalled at all: `_post` records into
+    `mp.submitted` in memory and the wrapper writes only counts. The durable
+    evidence therefore lives in TWO files, and this reads both:
+
+      <ledger_dir>/ledger.jsonl   mandate_commit  -> cash_at_risk, quantity,
+                                                     price_wire, side, action
+                                  mandate_order   -> the venue order id
+      <journal>                   authenticated_fills, order_terminal,
+                                  native_tick, native_sweep, ...
+
+    and then asks the VENUE about every order id it found, plus positions,
+    open orders and settlement. Nothing is inferred: a field the records do
+    not carry is reported as UNKNOWN, and every venue answer is labelled with
+    the route it came from.
+
+    Writes nothing. Mutates nothing. Constructs no object able to POST.
+    """
+    from src import l5_pmus_transport as TP
+    from src import pmus_live_mandate as PLM
+    jp = (journal_path or os.getenv("L5_AUDIT_JOURNAL", "").strip()
+          or os.getenv("L5_SESSION_JOURNAL", "").strip())
+    ld = (ledger_dir or os.getenv("L5_AUDIT_LEDGER_DIR", "").strip()
+          or (os.path.dirname(os.path.abspath(
+              os.getenv("L5_PROBE_STATE", "") or ".")) or "."))
+    auth_id = (authorization_id
+               or os.getenv("L5_AUDIT_AUTHORIZATION", "").strip())
+    market = (market or os.getenv("L5_AUDIT_MARKET", "").strip()
+              or os.getenv(AUTH.MARKET_ENV, "").strip())
+
+    ro = http or Q1.ReadOnlyTransport()
+    tp = TP.PmusTransport(market_slug=market, http=ro)
+
+    # prove the incapability rather than assert it
+    try:
+        ro.request("POST", "/v1/orders", {}, Q1.API)
+        post_capable = True
+    except PermissionError:
+        post_capable = False
+    except BaseException:                                      # noqa: BLE001
+        post_capable = True
+
+    rows, readable = PLM._read_rows(pathlib.Path(ld))
+    commits = [r for r in rows if r.get("kind") == PLM.COMMIT_KIND
+               and (not auth_id or r.get("authorization_id") == auth_id)]
+    links = [r for r in rows if r.get("kind") == PLM.LINK_KIND
+             and (not auth_id or r.get("authorization_id") == auth_id)]
+    link_by_commit = {str(r.get("commit_id")): str(r.get("order_id") or "")
+                      for r in links}
+
+    jrows = journal_rows(jp) if jp else [{"unreadable": "NO_JOURNAL_NAMED"}]
+    by_kind: Dict[str, int] = {}
+    for r in jrows:
+        by_kind[str(r.get("kind"))] = by_kind.get(str(r.get("kind")), 0) + 1
+    interesting = [r for r in jrows
+                   if r.get("kind") in ("authenticated_fills", "order_terminal",
+                                        "native_sweep", "native_window_done",
+                                        "completion_remainder",
+                                        "mandate_admission", "market_metadata_pin")]
+
+    trades: List[Dict[str, Any]] = []
+    for c in commits:
+        cid = str(c.get("commit_id"))
+        oid = link_by_commit.get(cid, "")
+        row: Dict[str, Any] = {
+            "commit_id": cid,
+            "authorization_id": c.get("authorization_id"),
+            "market": c.get("slug"),
+            "side_wire": c.get("side") or "UNKNOWN",
+            "action": c.get("action") or "UNKNOWN",
+            "intended_quantity": c.get("quantity") or "UNKNOWN",
+            "intended_price_wire": c.get("price_wire") or "UNKNOWN",
+            "mandate_cash_at_risk": c.get("cash_at_risk") or "UNKNOWN",
+            "committed_utc": c.get("t") or "UNKNOWN",
+            "order_id": oid or "UNKNOWN_NO_LINK_ROW",
+            "linked": bool(oid),
+        }
+        if oid:
+            try:
+                o = tp.order(oid) or {}
+                row["venue_order"] = {
+                    "state": o.get("state") or "UNKNOWN",
+                    "quantity": o.get("quantity") or "UNKNOWN",
+                    "cum_quantity": (o.get("cumQuantity")
+                                     if o.get("cumQuantity") is not None
+                                     else "UNKNOWN"),
+                    "leaves_quantity": (o.get("leavesQuantity")
+                                        if o.get("leavesQuantity") is not None
+                                        else "UNKNOWN"),
+                    "avg_px": ((o.get("avgPx") or {}).get("value")
+                               if isinstance(o.get("avgPx"), Mapping)
+                               else (o.get("avgPx") or "UNKNOWN")),
+                    "commission": (
+                        (o.get("commissionNotionalTotalCollected") or {})
+                        .get("value")
+                        if isinstance(
+                            o.get("commissionNotionalTotalCollected"), Mapping)
+                        else "UNKNOWN"),
+                    "last_transact_time": o.get("lastTransactTime") or "UNKNOWN",
+                    "source": "GET /v1/order/%s" % oid}
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                row["venue_order"] = {"error": "%s: %s" % (
+                    type(exc).__name__, str(exc)[:160]),
+                    "source": "GET /v1/order/%s" % oid}
+        else:
+            row["venue_order"] = {"note": "no mandate_order row, so no id to "
+                                          "ask by", "state": "UNKNOWN"}
+        trades.append(row)
+
+    try:
+        positions = tp.positions()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        positions = [{"error": type(exc).__name__}]
+    try:
+        open_orders = tp.open_orders()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        open_orders = [{"error": type(exc).__name__}]
+    try:
+        settlement = tp.settlement(market) if market else {"note": "NO_MARKET"}
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        settlement = {"error": type(exc).__name__}
+
+    consumed: Any
+    try:
+        consumed = PLM.consumption(pathlib.Path(ld), auth_id) if auth_id \
+            else {"note": "NO_AUTHORIZATION_NAMED"}
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        consumed = {"error": type(exc).__name__}
+
+    return {"LABEL": "R4_TRADE_AUDIT", "post_capable": post_capable,
+            "authorization_id": auth_id or "UNKNOWN",
+            "market": market or "UNKNOWN",
+            "ledger": {"dir": str(ld), "readable": readable,
+                       "rows_total": len(rows),
+                       "commits": len(commits), "links": len(links)},
+            "journal": {"path": jp, "records": len(jrows),
+                        "kinds": by_kind},
+            "trades": trades,
+            "journal_evidence": interesting,
+            "venue": {"positions": positions, "open_orders": open_orders,
+                      "settlement": settlement},
+            "mandate_consumption": consumed,
+            "labels": ("GET only; nothing written. A field the records do not "
+                       "carry is UNKNOWN and is never inferred. REALIZED "
+                       "requires settlement evidence, which is reported here "
+                       "as the venue gave it.")}
+
+
 def recover(*, http=None, state_path=None, journal_path=None,
             read_path=None, state_source=None,
             market: Optional[str] = None) -> Dict[str, Any]:
@@ -1786,6 +2098,19 @@ def selected_mode() -> str:
     printed before anything else so the wrong one is obvious immediately
     rather than fifteen minutes later.
     """
+    if audit_only_enabled():
+        rep = trade_audit()
+        trades = rep.pop("trades", [])
+        ev = rep.pop("journal_evidence", [])
+        print("L5_AUDIT " + json.dumps(rep, default=str), flush=True)
+        for t in trades:
+            print("L5_AUDIT_TRADE " + json.dumps(t, default=str), flush=True)
+        print("L5_AUDIT_TRADES %d" % len(trades), flush=True)
+        for r in ev:
+            print("L5_AUDIT_EVIDENCE " + json.dumps(r, default=str),
+                  flush=True)
+        print("L5_AUDIT_EVIDENCE_ROWS %d" % len(ev), flush=True)
+        return 0
     if recover_only_enabled():
         return "RECOVER_ONLY"
     if observe_only_enabled():
@@ -1798,6 +2123,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "mode": selected_mode(),
         "observe_only": os.getenv(OBSERVE_ENV, ""),
         "recover_only": os.getenv(RECOVER_ENV, ""),
+        "audit_only": os.getenv(AUDIT_ENV, ""),
         "market_pin": os.getenv(AUTH.MARKET_ENV, ""),
         "recover_market": os.getenv("L5_RECOVER_MARKET", ""),
         "maker_treatment": maker_treatment_enabled(),
