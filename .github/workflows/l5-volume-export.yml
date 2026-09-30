@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_SSH_PRIVATE_KEY_B64: ${{ secrets.RAILWAY_SSH_PRIVATE_KEY_B64 }}
       PROJECT_ID: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
       ENVIRONMENT_ID: f3642d27-26dc-4e21-9170-bc76290c076f
@@ -68,8 +68,8 @@ jobs:
       - name: Fail closed if required CI secrets are absent
         run: |
           set -euo pipefail
-          if [ -z "${RAILWAY_API_TOKEN:-}" ]; then
-            echo "::error::RAILWAY_API_TOKEN secret is not set."
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_TOKEN secret is not set."
             exit 1
           fi
           if [ -z "${RAILWAY_SSH_PRIVATE_KEY_B64:-}" ]; then
@@ -104,18 +104,14 @@ jobs:
           echo "SSH identity prepared; public fingerprint:"
           ssh-keygen -lf ~/.ssh/l5_volume_export.pub | awk '{print $2, $4}'
 
-      - name: Confirm workspace-token project access (read-only)
+      - name: Confirm project-token access (read-only)
         run: |
           set -euo pipefail
-          railway service status \
-            --service "$SERVICE_ID" \
-            --environment "$ENVIRONMENT_ID" \
-            --project "$PROJECT_ID" \
-            --json > /tmp/railway-status.json
+          railway status --json > /tmp/railway-status.json
           python3 - <<'PY'
           import json
           p = json.load(open("/tmp/railway-status.json"))
-          print("workspace token can read target service:", p.get("name") or p.get("id") or "ok")
+          print("project token can read target project:", p.get("name") or p.get("project") or "ok")
           PY
 
       - name: Inventory the raw directory (read-only)
