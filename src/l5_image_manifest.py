@@ -32,6 +32,77 @@ DIST_PROVIDES: Dict[str, Tuple[str, ...]] = {
 
 _REQ = re.compile(r"^([A-Za-z0-9._-]+)")
 
+#: shell operators that separate simple commands inside one RUN
+_SPLIT = re.compile(r"&&|\|\||;|\|")
+
+
+def simple_commands(run_args: str):
+    """Split one RUN's shell line into simple commands, as token lists.
+
+    Deliberately shallow: we are not writing a shell. Anything this cannot
+    tokenise, or any command whose program is not a package installer, is
+    refused by `installed_dists` rather than interpreted.
+    """
+    out = []
+    for chunk in _SPLIT.split(run_args):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            toks = shlex.split(chunk)
+        except ValueError as exc:
+            raise UnsupportedRun("cannot tokenise %r: %s" % (chunk, exc))
+        # strip leading VAR=value assignments
+        while toks and "=" in toks[0] and not toks[0].startswith("-") \
+                and "/" not in toks[0].split("=")[0]:
+            toks = toks[1:]
+        if toks:
+            out.append(toks)
+    return out
+
+
+def _install_dists(toks) -> Set[str]:
+    """Distributions a single simple command installs, or refuse.
+
+    STRUCTURAL, never a substring match. `echo pip install websockets` has the
+    program `echo` and installs nothing; a gate that grepped for the text
+    "pip install" credited it anyway.
+    """
+    prog = os.path.basename(toks[0])
+    args = toks[1:]
+    if prog in ("python", "python3"):
+        if args[:2] != ["-m", "pip"]:
+            raise UnsupportedRun("only `python -m pip install` is modelled: %s"
+                                 % " ".join(toks))
+        prog, args = "pip", args[2:]
+    if prog in ("pip", "pip3", "uv"):
+        if prog == "uv":
+            if args[:1] != ["pip"]:
+                raise UnsupportedRun("only `uv pip install` is modelled: %s"
+                                     % " ".join(toks))
+            args = args[1:]
+        if args[:1] != ["install"]:
+            raise UnsupportedRun(
+                "a pip subcommand other than install changes the image in ways "
+                "this does not model: %s" % " ".join(toks))
+        got: Set[str] = set()
+        for tok in args[1:]:
+            if tok.startswith("-"):
+                if tok.lstrip("-").split("=")[0] in ("r", "requirement"):
+                    raise UnsupportedRun(
+                        "a requirements file is not read: %s" % " ".join(toks))
+                continue
+            m = _REQ.match(tok)
+            if m:
+                got.add(m.group(1).lower())
+        if not got:
+            raise UnsupportedRun("pip install with no distribution: %s"
+                                 % " ".join(toks))
+        return got
+    raise UnsupportedRun(
+        "RUN commands other than a package install are not modelled, and this "
+        "one could change the image closure: %s" % " ".join(toks))
+
 
 def _lines(path: str) -> List[str]:
     out, buf = [], ""
@@ -47,6 +118,18 @@ def _lines(path: str) -> List[str]:
     if buf.strip():
         out.append(buf.strip())
     return [x for x in out if x]
+
+
+class UnsupportedRun(Exception):
+    """A RUN whose effect on the image we refuse to guess.
+
+    We do not model arbitrary shell. Two adversarial attacks got through a gate
+    that ignored RUN entirely: `RUN cp /opt/stash/q.py /app/src/...` put the
+    order path in the image importable, and `RUN pip uninstall -y websockets`
+    removed a dependency the gate still credited. So exactly one RUN shape is
+    understood -- a package install, parsed from the instruction's own tokens --
+    and every other RUN fails closed.
+    """
 
 
 class UnsupportedCopy(Exception):
@@ -202,6 +285,41 @@ def _place(placed: str, roots: List[str], workdir: str) -> Set[str]:
     return got
 
 
+def introduced_sources(dockerfile: str) -> Set[str]:
+    """Every REPOSITORY file the image is given, wherever it lands.
+
+    THE SECOND ROOT CAUSE THIS CLOSES. `image_paths` answers "what is
+    importable", and a destination outside every import root correctly
+    contributes nothing to that. But the no-POST property is about a file being
+    PRESENT, not importable -- so
+    `COPY src/pmus_q1_executor.py /opt/stash/q.py` made the order path vanish
+    from the gate's model entirely while shipping it in the image. Two different
+    questions; conflating them was fail-open on the safety property.
+
+    Keyed on the SOURCE, so neither a rename nor a destination outside the root
+    can hide anything.
+    """
+    out: Set[str] = set()
+    for src, _dst in copy_specs(dockerfile):
+        if os.path.isdir(src):
+            for dirpath, _dirs, files in os.walk(src):
+                for fn in files:
+                    out.add(os.path.normpath(os.path.join(dirpath, fn)))
+        else:
+            out.add(os.path.normpath(src))
+    return out
+
+
+def module_file_candidates(module: str) -> Tuple[str, ...]:
+    rel = module.replace(".", os.sep)
+    return (rel + ".py", os.path.join(rel, "__init__.py"))
+
+
+def module_is_present(module: str, introduced: Set[str]) -> bool:
+    """Is this module's FILE in the image at all, importable or not?"""
+    return any(c in introduced for c in module_file_candidates(module))
+
+
 def copied_paths(dockerfile: str) -> Set[str]:
     """Deprecated name kept for callers that only need the source list.
 
@@ -212,18 +330,20 @@ def copied_paths(dockerfile: str) -> Set[str]:
 
 
 def installed_dists(dockerfile: str) -> Set[str]:
-    """Distributions named on a `pip install` line."""
+    """Distributions the image installs, parsed from the RUN instructions.
+
+    Every RUN must be a package install and nothing else. That is strict on
+    purpose: this Dockerfile is narrow and controlled, and the alternative --
+    guessing at arbitrary shell -- is what let `RUN rm`, `RUN cp` and
+    `RUN pip uninstall` through.
+    """
     got: Set[str] = set()
     for line in _lines(dockerfile):
-        if "pip install" not in line:
+        if _instruction(line) != "RUN":
             continue
-        tail = line.split("pip install", 1)[1]
-        for tok in shlex.split(tail):
-            if tok.startswith("-"):
-                continue
-            m = _REQ.match(tok)
-            if m:
-                got.add(m.group(1).lower())
+        rest = line.split(None, 1)
+        for toks in simple_commands(rest[1] if len(rest) > 1 else ""):
+            got.update(_install_dists(toks))
     return got
 
 

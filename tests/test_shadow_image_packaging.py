@@ -407,6 +407,15 @@ def test_the_lazy_import_sites_execute_inside_the_image(sandbox):
 # ------------------------------------------------------------------- layer 5
 
 def test_the_order_path_is_absent_from_the_image():
+    """PRESENCE, not importability. A destination outside every import root
+    contributes nothing to `image_paths`, so asking only that question let
+    `COPY src/pmus_q1_executor.py /opt/stash/q.py` ship the order path with the
+    gate green. The safety property is that the file is not THERE."""
+    introduced = M.introduced_sources(DOCKERFILE)
+    for mod in EXCLUDED:
+        assert not M.module_is_present(mod, introduced), (
+            "%s is in the image (wherever it lands); the no-POST guarantee is "
+            "that the code to place an order does not exist there" % mod)
     copied = M.image_paths(DOCKERFILE)
     for mod in EXCLUDED:
         assert not M.module_is_covered(mod, copied), (
@@ -460,3 +469,137 @@ def test_the_built_image_contains_the_whole_closure():
     assert run.returncode == 0 and "OK" in run.stdout, (
         "the built image cannot import its own closure:\n%s\n%s"
         % (run.stdout[-2000:], run.stderr[-3000:]))
+
+
+# ===================================================================== ATTACKS
+# The five mutations an adversarial review used to defeat this gate, kept as
+# permanent regressions. Each one was GREEN before the fix. If any of these
+# stops failing, the gate is defeated again.
+
+ATTACKS = {
+    "stash the order path outside every import root":
+        "COPY src/pmus_q1_executor.py /opt/stash/q.py\n",
+    "stash it, then RUN copy it into the import root":
+        "COPY src/pmus_q1_executor.py /opt/stash/q.py\n"
+        "RUN cp /opt/stash/q.py /app/src/pmus_q1_executor.py\n",
+    "RUN uninstall a required dependency":
+        "RUN pip uninstall -y websockets\n",
+    "RUN delete a required local module":
+        "RUN rm /app/src/pmus_ws_evidence_recorder.py\n",
+}
+
+
+def _attack_dockerfile(extra: str = "", replace=None) -> str:
+    base = open(DOCKERFILE, encoding="utf-8").read()
+    if replace is not None:
+        old, new = replace
+        assert old in base, "the anchor line moved: %r" % old
+        base = base.replace(old, new)
+    import tempfile as _tf
+    with _tf.NamedTemporaryFile("w", suffix=".Dockerfile", delete=False) as fh:
+        fh.write(base + extra)
+        return fh.name
+
+
+def _gate_rejects(path: str) -> str:
+    """Run the gate's checks against `path`; return why it failed, or "" if it
+    did not fail -- which for an attack Dockerfile means the gate is defeated."""
+    try:
+        introduced = M.introduced_sources(path)
+    except (M.UnsupportedCopy, M.UnsupportedRun) as exc:
+        return "copy/run refused: %s" % exc
+    for mod in EXCLUDED:
+        if M.module_is_present(mod, introduced):
+            return "forbidden module present: %s" % mod
+    try:
+        placed = M.image_paths(path)
+    except (M.UnsupportedCopy, M.UnsupportedRun) as exc:
+        return "copy/run refused: %s" % exc
+    for mod in EXCLUDED:
+        if M.module_is_covered(mod, placed):
+            return "forbidden module importable: %s" % mod
+    c = _closure()
+    missing = [m for m in _required(c) if not M.module_is_covered(m, placed)]
+    if missing:
+        return "required module missing: %s" % missing[:3]
+    try:
+        provided, unknown = M.provided_modules(path)
+    except (M.UnsupportedCopy, M.UnsupportedRun) as exc:
+        return "copy/run refused: %s" % exc
+    if unknown:
+        return "unknown distribution: %s" % sorted(unknown)
+    short = sorted(t for t in c.third_party if t not in provided)
+    if short:
+        return "third-party not installed: %s" % short
+    return ""
+
+
+@pytest.mark.parametrize("name", sorted(ATTACKS))
+def test_the_known_attacks_are_all_refused(name):
+    path = _attack_dockerfile(ATTACKS[name])
+    try:
+        why = _gate_rejects(path)
+        assert why, "GATE DEFEATED by: %s" % name
+    finally:
+        os.unlink(path)
+
+
+def test_a_fake_pip_install_line_credits_nothing():
+    """`RUN echo pip install websockets cryptography` installs nothing. A gate
+    that substring-matched the text credited both distributions from it."""
+    path = _attack_dockerfile(replace=(
+        'RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"',
+        "RUN echo pip install websockets cryptography"))
+    try:
+        why = _gate_rejects(path)
+        assert why, "GATE DEFEATED by a fake pip install line"
+    finally:
+        os.unlink(path)
+
+
+def test_package_installs_are_parsed_from_the_instruction_not_the_text():
+    assert M.installed_dists(DOCKERFILE) == {"websockets", "cryptography"}
+    # an echo has the program `echo` and installs nothing
+    path = _attack_dockerfile(replace=(
+        'RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"',
+        "RUN echo pip install websockets"))
+    try:
+        with pytest.raises(M.UnsupportedRun):
+            M.installed_dists(path)
+    finally:
+        os.unlink(path)
+
+
+def test_every_run_that_is_not_a_package_install_is_refused():
+    for cmd in ("RUN cp /opt/x.py /app/src/x.py",
+                "RUN rm -f /app/src/pmus_fees.py",
+                "RUN mv /opt/x.py /app/src/x.py",
+                "RUN ln -s /opt/x.py /app/src/x.py",
+                "RUN pip uninstall -y websockets",
+                "RUN pip download websockets",
+                "RUN apt-get install -y curl",
+                "RUN echo 'x' > /app/src/x.py",
+                "RUN pip install -r requirements.txt",
+                "RUN true && rm /app/src/pmus_fees.py"):
+        path = _attack_dockerfile(cmd + "\n")
+        try:
+            with pytest.raises(M.UnsupportedRun):
+                M.installed_dists(path)
+        finally:
+            os.unlink(path)
+
+
+def test_presence_is_tracked_by_source_so_a_rename_cannot_hide_a_file():
+    for dst in ("/opt/stash/q.py", "src/harmless_name.py", "/tmp/x.py", "./"):
+        path = _attack_dockerfile(
+            "COPY src/pmus_q1_executor.py %s\n" % dst)
+        try:
+            introduced = M.introduced_sources(path)
+            assert M.module_is_present("src.pmus_q1_executor", introduced), (
+                "destination %r hid the order path" % dst)
+        finally:
+            os.unlink(path)
+
+
+def test_the_real_dockerfile_passes_the_same_gate_used_on_the_attacks():
+    assert _gate_rejects(DOCKERFILE) == ""
