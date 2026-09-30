@@ -153,3 +153,20 @@ place to keep it.
 - **The defect is upstream of completion.** By the time the engine is choosing whether to pay $1.34 for a pair, both options are already losing. What produced that state is the *first leg*: the engine opens and extends at the touch in states where the market then trends away from its inventory, with no notion of whether the state it is quoting into is one where a second leg will still be cheap. The candidate interventions are therefore at OPEN/EXTEND — state admission, an inventory-aware requote that does not chase the touch on the side it is already short of, or a trend/adverse-selection guard — not a price gate at the end.
 - One caveat, stated because it cuts against the conclusion: suppression *improves* the median at q10 OOS (+1.091 → +1.425) and at q30 (+5.126 → +5.222), and lifts the ≥$5 count. It hurts the mean because it hurts the tail hardest. If a later mandate is ever written against median rather than mean, this diagnosis would have to be re-read, and that would be a change of objective, not a finding.
 
+## Cadence reference from the recorded tape
+
+Measured while the live shadow was coming up, as a bound the live numbers can be
+read against. The frozen engine over the 49 corrected OOS windows at q10:
+
+| unit | median | mean | p10 | p90 |
+|---|---|---|---|---|
+| intents/min (incl. CANCEL+REST pairs) | 5.40 | 5.51 | 3.73 | 7.13 |
+| **REST intents/min** (new or re-quoted parent orders — the unit comparable to an L5 quote episode) | **2.73** | 2.71 | — | — |
+
+Book updates on the tape: median 53 per 15-minute window ≈ 3.5/min. **The
+observation rate, not the policy, is what bounds cadence here** — the engine
+cannot quote more often than it sees the book, so a tape-derived cadence is a
+floor for the live figure rather than a measurement of the policy's appetite.
+Against L5's normalized episode rates this puts the clone at LOW (2.47/min) and
+roughly 3× below HIGH (8.33/min).
+
