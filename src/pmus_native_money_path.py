@@ -1072,8 +1072,55 @@ class NativeMoneyPath:
                 pass
         return out
 
+    #: the balance question. displayedCash was $50.07425 while buyingPower
+    #: read $250.07425, split by a $200 deposit reservation, and NOTHING
+    #: read-only settles which the venue admits against: /v1/order/preview
+    #: accepted $251.50 against $250.07, so it does not check funds at all.
+    #:
+    #: R7's OWN sequence crosses that threshold naturally -- R5 committed
+    #: $62.70 cumulative -- so the answer is observable at no extra risk and
+    #: with no artificial order. This records, per submission, the cumulative
+    #: committed notional BEFORE the call and the venue's verdict after it.
+    #:
+    #: Balances are NOT re-read every submission: a GET per tick would spend
+    #: the 1.5 rps budget that decision freshness already loses p95 to. They
+    #: are read once at the first submission whose pre-submit cumulative
+    #: notional exceeds the threshold -- the one moment that discriminates --
+    #: and the crossing is journalled with the venue's answer beside it.
+    BALANCE_EVIDENCE_THRESHOLD_USD = D("50.07425")
+
+    def _balance_evidence(self, *, committed_before: D,
+                          notional: D) -> Optional[Dict[str, Any]]:
+        """A balance snapshot at the crossing, or None. Never raises."""
+        if getattr(self, "_balance_evidence_taken", False):
+            return None
+        if (committed_before + notional) <= self.BALANCE_EVIDENCE_THRESHOLD_USD:
+            return None
+        self._balance_evidence_taken = True
+        try:
+            raw = self.tp.account()
+            rows = (raw or {}).get("balances") or []
+            r = rows[0] if rows else {}
+            return {k: r.get(k) for k in
+                    ("currentBalance", "buyingPower", "displayedCash",
+                     "availableToWithdraw", "balanceReservation",
+                     "depositReservation", "openOrders")}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": "%s: %s" % (type(exc).__name__, str(exc)[:160])}
+
     def _post(self, intent: "E.Intent") -> Dict[str, Any]:
         body = body_for(intent, self.market)
+        # committed notional BEFORE this call, from the registry's own
+        # accounting rather than a counter kept here.
+        _exp = self.registry.as_dict() or {}
+        _committed_before = D(str(_exp.get("cumulative_submitted") or 0))
+        _px = D(str(intent.get("price") or intent.get("limit_price") or 0))
+        _qty = D(str(intent.get("qty") or intent.get("quantity") or 0))
+        _notional = _px * _qty
+        _bal = self._balance_evidence(committed_before=_committed_before,
+                                      notional=_notional)
         # THE CERTIFIED SUBMIT, not a second POST implementation.
         # `transport.request("POST", ORDER_PATH, body)` was this line, and
         # PmusTransport has no public `request`: the 2345z window armed,
@@ -1092,6 +1139,29 @@ class NativeMoneyPath:
         T["_post_wall_ms"] = time.time() * 1000.0
         T["ack_ms"] = T["post_end_ms"]
         oid = self._order_id(ack)
+        if self.journal is not None:
+            try:
+                self.journal.write("balance_admission_evidence", {
+                    "oid": oid,
+                    "committed_before_usd": str(_committed_before),
+                    "this_notional_usd": str(_notional),
+                    "committed_after_usd": str(_committed_before + _notional),
+                    "crosses_displayed_cash": bool(
+                        _committed_before + _notional
+                        > self.BALANCE_EVIDENCE_THRESHOLD_USD),
+                    "balances_at_crossing": _bal,
+                    "venue_accepted": bool(oid),
+                    "ack_state": str((ack or {}).get("state")
+                                     or ((ack or {}).get("order") or {}
+                                         ).get("state") or ""),
+                    "labels": ("an ACCEPTED order whose committed_before_usd "
+                               "already exceeds displayedCash is direct live "
+                               "evidence that the deposit reservation does "
+                               "not bind trading. A rejection is NOT "
+                               "evidence: this venue's reject reason is "
+                               "uninformative (48/48).")})
+            except BaseException:                              # noqa: BLE001
+                pass
         rec = {"kind": intent.kind, "side": intent["side"], "body": body,
                "ack": ack, "oid": oid}
         self.submitted.append(rec)
