@@ -28,6 +28,26 @@ from src import pmus_probe_observability as OBS                 # noqa: E402
 from src import pmus_q1_executor as Q1                          # noqa: E402
 
 ENTRY = "scripts/l5_pmus_live_oneshot.py"
+
+#: EVERY module the image is allowed to be STARTED from. The closure guard is
+#: set equality against the union of these, which is what makes it a real
+#: guard in both directions: nothing reachable may be missing from the image,
+#: and nothing may be copied in that no declared entrypoint can reach.
+#:
+#: It used to walk `ENTRY` alone, so the six read-only auxiliary scripts the
+#: image also carries were permanently reported as "copied but unreachable"
+#: -- a red guard that everyone learned to ignore, which is worse than no
+#: guard. They are entrypoints; they are declared as such here.
+ENTRYPOINTS = [
+    ENTRY,
+    #: the bounded q1 HOLD_OPEN_EXTEND canary -- the probe's start command
+    "src/pmus_q1_canary.py",
+    "scripts/pmus_oos_settlement_sweep.py",
+    "scripts/r5_signature_extract.py",
+    "scripts/pmus_balance_admission_probe.py",
+    "scripts/pmus_completeness_rule.py",
+    "scripts/audit_economic_complete.py",
+]
 MKT = "cpc-btc-updown-15m-2026-09-28-0215z"
 
 
@@ -93,7 +113,11 @@ def _closure(entry: str) -> set:
 
 @pytest.fixture(scope="module")
 def closure():
-    return _closure(ENTRY)
+    out = set()
+    for entry in ENTRYPOINTS:
+        out |= _closure(entry)
+        out.add(entry)
+    return out
 
 
 @pytest.mark.parametrize("mod", [
@@ -439,7 +463,12 @@ def _dockerfile_pyfiles() -> set:
 
 
 def test_the_dockerfile_copies_exactly_the_entrypoint_closure(closure):
-    """Set equality, both directions, with the offenders named."""
+    """Set equality, both directions, with the offenders named.
+
+    `closure` is the union over EVERY declared entrypoint (see ENTRYPOINTS),
+    so a module reachable from any start command must be present, and a
+    module no start command can reach must not be.
+    """
     copied, reachable = _dockerfile_pyfiles(), set(closure)
     missing = sorted(reachable - copied)
     extra = sorted(copied - reachable)
@@ -484,11 +513,15 @@ def test_polymarket_l5_config_is_reachable_and_copied(closure):
 # two to each other: if they ever disagree, one of them has a blind spot, which is
 # exactly the condition that shipped an unrunnable image.
 
-def test_the_local_helper_and_the_shared_module_agree(closure):
+def test_the_local_helper_and_the_shared_module_agree():
+    """Per entrypoint, so a union in the fixture cannot hide a disagreement."""
     from src import l5_import_closure as C
-    assert set(closure) == C.closure(ENTRY), (
-        "closure implementations disagree: %s"
-        % sorted(set(closure) ^ C.closure(ENTRY)))
+    for entry in ENTRYPOINTS:
+        mine = _closure(entry) | {entry}
+        theirs = C.closure(entry) | {entry}
+        assert mine == theirs, (
+            "closure implementations disagree on %s: %s"
+            % (entry, sorted(mine ^ theirs)))
 
 
 def test_the_shared_closure_knows_the_package_markers_carry_no_behaviour():
@@ -535,3 +568,44 @@ def test_the_failing_forensics_behaviour_is_unreachable_from_the_entrypoint():
                         "src.l5_window_forensics",
                         "src.l5_research_supervisor"):
         assert C.reaches(ENTRY, {unreachable}) is None, unreachable
+
+
+# ================================ the q1 canary must be RUNNABLE in the image
+
+CANARY = "src/pmus_q1_canary.py"
+
+
+def test_the_canary_is_in_the_image_closure(closure):
+    """DEFECT 3: the probe cannot start a module the image does not carry."""
+    assert CANARY in closure
+    assert CANARY in _dockerfile_pyfiles(), "canary is not COPYed into the image"
+
+
+def test_the_canarys_own_imports_are_all_in_the_image():
+    """Its WS feed and the reviewed executor must travel with it."""
+    need = _closure(CANARY)
+    copied = _dockerfile_pyfiles()
+    for mod in ("src/pmus_q1_executor.py", "src/pmus_ws_live_state.py",
+                "src/pmus_ws_evidence_recorder.py"):
+        assert mod in need, f"{mod} is not reachable from the canary"
+        assert mod in copied, f"{mod} is reachable but not in the image"
+
+
+def test_the_image_start_command_targets_the_canary():
+    """A correct COPY list with the old CMD still runs the wrong program."""
+    text = open(DOCKERFILE, encoding="utf-8").read()
+    cmd = [l for l in text.splitlines() if l.startswith("CMD ")]
+    assert len(cmd) == 1, cmd
+    assert "src.pmus_q1_canary" in cmd[0], cmd[0]
+    assert "l5_pmus_live_oneshot" not in cmd[0], \
+        "CMD still targets the previous entrypoint"
+
+
+def test_the_canary_imports_cleanly_with_no_credentials(monkeypatch):
+    """Import must not require env, network, or a venue -- the image builds
+    and starts before any of those exist."""
+    import importlib
+    monkeypatch.delenv("PMUS_API_KEY_ID", raising=False)
+    monkeypatch.delenv("PMUS_API_SECRET_KEY", raising=False)
+    mod = importlib.import_module("src.pmus_q1_canary")
+    assert mod.canary_armed() is False

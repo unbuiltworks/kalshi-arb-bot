@@ -59,6 +59,7 @@ from decimal import Decimal as D
 from typing import Any, Mapping, Optional
 
 from src import pmus_q1_executor as X
+from src import pmus_ws_live_state as WS
 
 CANARY_ARM_ENV = "PMUS_CANARY_ARM"
 HOLD_DEADLINE_ENV = "PMUS_CANARY_DEADLINE_SECONDS"      # default 600
@@ -73,6 +74,22 @@ def canary_armed() -> bool:
     sid = os.getenv(X.SID_ENV, "").strip()
     return (X.armed() and bool(sid)
             and os.getenv(CANARY_ARM_ENV, "").strip() == sid)
+
+
+def _ws_fields(snap: Mapping[str, Any]) -> dict:
+    """The WS evidence every decision row must carry, per the mandate."""
+    return {"ws_recv_t": snap.get("ws_recv_t"),
+            "book_age_s": round(float(snap.get("book_age_s") or 0), 4),
+            "bid": str(snap.get("bid")), "ask": str(snap.get("ask")),
+            "bid_qty": str(snap.get("bid_qty")),
+            "ask_qty": str(snap.get("ask_qty")),
+            "depth": snap.get("depth"),
+            "last_trade_px": str(snap.get("last_trade_px")),
+            "last_trade_qty": str(snap.get("last_trade_qty")),
+            "last_trade_venue_t": snap.get("last_trade_venue_t"),
+            "last_trade_age_s": snap.get("last_trade_age_s"),
+            "book_updates": snap.get("book_updates"),
+            "feed": snap.get("source")}
 
 
 def record(kind: str, **fields: Any) -> None:
@@ -138,7 +155,7 @@ def extend_permitted(inv: Inventory, *, residual_cap: int = X.RESIDUAL_CAP
 
 # -------------------------------------------------------- validity of a rest
 
-def open_still_valid(px: D, bbo: Mapping[str, Any]) -> bool:
+def open_still_valid(px: D, snap: Mapping[str, Any]) -> bool:
     """Rule 2. May a resting OPEN keep its price, and its queue position?
 
     A better touch is explicitly NOT a reason to move. The order is given up
@@ -148,11 +165,11 @@ def open_still_valid(px: D, bbo: Mapping[str, Any]) -> bool:
     """
     if not X.entry_ok(D(str(px))):
         return False
-    return not X.would_cross("OUTCOME_SIDE_YES", D(str(px)), bbo)
+    return not X.would_cross("OUTCOME_SIDE_YES", D(str(px)), snap)
 
 
 def complement_still_valid(px: D, first_cost: D, tick: Optional[D],
-                           bbo: Mapping[str, Any]) -> bool:
+                           snap: Mapping[str, Any]) -> bool:
     """Rule 4. A resting complement keeps its place while it still pairs.
 
     The bound is recomputed from the CURRENT basis every poll. If the bound
@@ -163,7 +180,51 @@ def complement_still_valid(px: D, first_cost: D, tick: Optional[D],
     bound = X.complement_bound(D(str(first_cost)), tick=tick)
     if bound is None or D(str(px)) > bound:
         return False
-    return not X.would_cross("OUTCOME_SIDE_NO", D(str(px)), bbo)
+    return not X.would_cross("OUTCOME_SIDE_NO", D(str(px)), snap)
+
+
+def place_taker_buy(t: X.Transport, slug: str, outcome_side: str, price: D,
+                    stage: str, sleep=time.sleep) -> str:
+    """DEFECT 2 FIX: a REAL crossing completion, not a counter increment.
+
+    Same reviewed shape as `X.place_limit_buy` -- preview first, durable
+    intent on disk BEFORE the POST, q=1, the venue's long-side wire price
+    convention -- with exactly two deliberate differences:
+
+    * `participateDontInitiate` is FALSE. A post-only order cannot cross,
+      and crossing is the entire purpose of this leg.
+    * there is no `would_cross` refusal. That guard exists to stop a MAKER
+      being rejected for crossing; here crossing is intended, so refusing on
+      it would make the branch unreachable.
+
+    Marketable LIMIT, never a market order: the price is the cap that the
+    fee-adjusted pair-cost check just approved, so a moving book can leave
+    this unfilled but can never fill it worse than the approved bound.
+    """
+    wire_px = (X.ONE - D(str(price))) if str(outcome_side).upper().endswith("NO") \
+        else D(str(price))
+    body = {"marketSlug": slug, "type": "ORDER_TYPE_LIMIT",
+            "price": {"value": str(wire_px)}, "quantity": X.QTY,
+            "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
+            "participateDontInitiate": False,      # crossing leg
+            "outcomeSide": outcome_side,
+            "action": "ORDER_ACTION_BUY",
+            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"}
+    preview = t.request("POST", "/v1/order/preview", body)
+    if preview.get("error") or preview.get("warnings"):
+        raise X.Halt(f"PREVIEW_REJECTED:{stage}")
+    X.persist_intent({"stage": stage, "slug": slug, "side": outcome_side,
+                      "price": str(price), "qty": X.QTY, "taker": True,
+                      "submitted_utc": datetime.now(timezone.utc).isoformat()})
+    resp = t.request("POST", "/v1/orders", body)
+    order_id = str(resp.get("id") or resp.get("orderId")
+                   or (resp.get("order") or {}).get("id") or "")
+    if not order_id:
+        raise X.Halt(f"NO_ORDER_ID:{stage}")
+    X.persist_intent({"stage": stage + ":accepted", "order_id": order_id})
+    record("submitted", stage=stage, slug=slug, side=outcome_side,
+           price=str(price), order_id=order_id, maker=False)
+    return order_id
 
 
 # -------------------------------------------------------------- the campaign
@@ -189,7 +250,9 @@ def _poll_fill(t: X.Transport, order_id: str, sleep) -> dict:
 
 
 def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
-               sleep=time.sleep) -> dict:
+               sleep=time.sleep, state: Optional["WS.LiveState"] = None,
+               feed: Optional["WS.WsFeed"] = None,
+               max_book_age_s: float = WS.DEFAULT_MAX_BOOK_AGE_S) -> dict:
     slug = os.getenv(X.MARKET_ENV, "").strip()
     report: dict[str, Any] = {
         "campaign": "pmus-q1-canary", "arm": "HOLD_OPEN_EXTEND",
@@ -224,11 +287,22 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         if reason:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": reason}
         tick = _tick(t, slug, sleep)
+        # DEFECT 1: strategy decisions come from the authenticated WS only.
+        if state is None:
+            feed = feed or WS.WsFeed(slug).start()
+            state = feed.state
+        ready = WS.wait_ready(state, slug, max_age_s=max_book_age_s,
+                              sleep=sleep)
+        record("ws_ready", **{k: str(v) for k, v in ready.items()})
         record("canary_start", slug=slug, tick=str(tick),
-               deadline_s=deadline_s, max_loss=str(CANARY_MAX_LOSS))
+               deadline_s=deadline_s, max_loss=str(CANARY_MAX_LOSS),
+               decision_feed="AUTHENTICATED_WS",
+               rest_role="pre-submit cross check, order status, account only")
 
         while clock() < stop_at:
-            bbo = X.fresh_bbo(t, slug, sleep=sleep)
+            # A stale feed REFUSES. There is deliberately no REST fallback
+            # for a strategy decision: a cached book is not market state.
+            snap = state.snapshot(slug, max_age_s=max_book_age_s)
             want_side = inv.deficient()
 
             # ---------------------------------------- 1 look at what rests
@@ -262,23 +336,30 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                     continue
 
                 # ------------------------------ 2/4 hold, or give it up
-                still = (open_still_valid(D(str(resting["px"])), bbo)
+                still = (open_still_valid(D(str(resting["px"])), snap)
                          if resting["stage"] == "open"
                          else complement_still_valid(
-                             D(str(resting["px"])), first_cost, tick, bbo))
+                             D(str(resting["px"])), first_cost, tick, snap))
                 if still:
                     holds += 1
                     record("hold", stage=resting["stage"],
                            px=str(resting["px"]),
+                           queue_depth_at_our_price=str(state.depth_at(
+                               slug,
+                               "bids" if resting["inv_side"] == "yes"
+                               else "asks", D(str(resting["px"])))),
+                           residual=str(inv.residual()),
                            note="valid; queue position preserved; a better "
-                                "touch is not a reason to move")
+                                "touch is not a reason to move",
+                           **_ws_fields(snap))
                 else:
                     ok = X.cancel_exact(t, resting["order_id"], slug,
                                         sleep=sleep)
                     cancels += 1
                     record("cancel", stage=resting["stage"],
                            px=str(resting["px"]), verified=ok,
-                           reason="no_longer_economically_valid")
+                           reason="no_longer_economically_valid",
+                           residual=str(inv.residual()), **_ws_fields(snap))
                     # a fill can land during the cancel race
                     late = X.authoritative_fill(
                         X._order_status(t, resting["order_id"], sleep=sleep))
@@ -296,21 +377,75 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
 
             # ------------------------------------------- 6 reactive take
             if want_side is not None and first_cost is not None:
-                ask = bbo.get("ask") if want_side == "yes" else (
-                    (X.ONE - D(str(bbo["bid"]))) if bbo.get("bid") else None)
+                # 1. contemporaneous EXECUTABLE price, from WS state
+                ask = (snap.get("ask") if want_side == "yes"
+                       else ((X.ONE - D(str(snap["bid"])))
+                             if snap.get("bid") is not None else None))
+                # 2. fee-adjusted pair-cost check
                 if ask is not None and X.taker_completion_ok(first_cost,
                                                              D(str(ask))):
                     record("decision", action="taker_complete",
                            ask_cost=str(ask), first_cost=str(first_cost),
-                           reason="fee_adjusted_pair_cost_acceptable_now")
-                    takes += 1
-                    # the sweep in `finally` covers the resting order; a
-                    # taker completion is a fresh crossing order, so the
-                    # maker rest must be gone FIRST to avoid double fills
+                           residual=str(inv.residual()),
+                           reason="fee_adjusted_pair_cost_acceptable_now",
+                           **_ws_fields(snap))
+                    # 3. cancel the maker rest and resolve it AUTHORITATIVELY
+                    #    before crossing, so the two legs cannot both fill.
                     if resting is not None:
-                        X.cancel_exact(t, resting["order_id"], slug,
-                                       sleep=sleep)
+                        ok = X.cancel_exact(t, resting["order_id"], slug,
+                                           sleep=sleep)
+                        settled = X.authoritative_fill(X._order_status(
+                            t, resting["order_id"], sleep=sleep))
+                        record("cancel", stage=resting["stage"], verified=ok,
+                               reason="pre_take_double_fill_guard",
+                               late_fill=(str(settled["price"])
+                                          if settled else None))
+                        if settled is not None:
+                            # the maker filled during the race: that IS the
+                            # completion. Book it and do NOT also cross.
+                            px = D(str(settled["price"]))
+                            inv.add(resting["inv_side"],
+                                    D(str(settled.get("qty") or 1)), px)
+                            record("filled",
+                                   stage=resting["stage"] + "_race",
+                                   price=str(px), maker=True,
+                                   residual=str(inv.residual()),
+                                   matched=str(inv.matched()))
+                            resting = None
+                            record("decision", action="take_aborted",
+                                   reason="maker_filled_during_cancel_race")
+                            continue
                         resting = None
+                    # 4. durable intent then POST, inside place_taker_buy
+                    side_wire = ("OUTCOME_SIDE_YES" if want_side == "yes"
+                                 else "OUTCOME_SIDE_NO")
+                    try:
+                        tid = place_taker_buy(t, slug, side_wire,
+                                              D(str(ask)), "taker_complete",
+                                              sleep=sleep)
+                    except X.Halt:
+                        raise
+                    takes += 1
+                    # resolve THAT order authoritatively; only confirmed
+                    # quantity moves inventory
+                    got = X.authoritative_fill(
+                        X._order_status(t, tid, sleep=sleep))
+                    if got is None:
+                        ok = X.cancel_exact(t, tid, slug, sleep=sleep)
+                        got = X.authoritative_fill(
+                            X._order_status(t, tid, sleep=sleep))
+                        record("taker_unfilled", order_id=tid,
+                               cancel_verified=ok,
+                               note="no confirmed fill; inventory unchanged")
+                    if got is not None:
+                        px = D(str(got["price"]))
+                        fq = D(str(got.get("qty") or 1))
+                        inv.add(want_side, fq, px)
+                        record("filled", stage="taker_complete", maker=False,
+                               price=str(px), qty=str(fq),
+                               taker_fee_separate=str(X.taker_fee(px)),
+                               residual=str(inv.residual()),
+                               matched=str(inv.matched()))
                     break
 
             # --------------------------------------- place what is missing
@@ -321,10 +456,11 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                         record("decision", action="stop",
                                reason="paired_inventory_complete")
                         break
-                    bid = bbo.get("bid")
+                    bid = snap.get("bid")
                     if bid is None or not X.entry_ok(D(str(bid))):
                         record("decision", action="wait",
-                               reason="entry_out_of_band", bid=str(bid))
+                               reason="entry_out_of_band",
+                               **_ws_fields(snap))
                         sleep(X.POLL_S)
                         continue
                     stage, side, px = "open", "yes", D(str(bid))
@@ -353,7 +489,8 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                     continue
                 resting = {"order_id": oid, "stage": stage, "px": px,
                            "inv_side": side, "qty": D(X.QTY)}
-                record("resting", stage=stage, px=str(px), order_id=oid)
+                record("resting", stage=stage, px=str(px), order_id=oid,
+                       residual=str(inv.residual()), **_ws_fields(snap))
             sleep(X.POLL_S)
 
         matched = inv.matched()
@@ -377,6 +514,10 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         record("canary_end", **{k: v for k, v in out.items()
                                 if k not in ("labels",)})
         return out
+    except WS.StaleFeed as stale:
+        record("ws_stale_refused", reason=str(stale),
+               note="no REST fallback for a strategy decision")
+        return {**report, "status": "WS_STALE_REFUSED", "reason": str(stale)}
     except X.StaleRefuse as stale:
         record("stale_refused", reason=str(stale))
         return {**report, "status": "STALE_PRICE_REFUSED", "reason": str(stale)}
@@ -387,6 +528,8 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         # rule 8: unconditional, on EVERY exit path including Halt and
         # KeyboardInterrupt. Market-scoped so no unrelated order is touched.
         X.cancel_all_deadman(t, slug)
+        if feed is not None:
+            feed.close()
         record("sweep", note="market-scoped cancel-all on exit")
 
 

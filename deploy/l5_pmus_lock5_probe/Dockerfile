@@ -43,6 +43,11 @@ COPY scripts/pmus_balance_admission_probe.py scripts/pmus_balance_admission_prob
 COPY src/l5_persistence_signature.py src/l5_persistence_signature.py
 COPY scripts/pmus_completeness_rule.py scripts/pmus_completeness_rule.py
 COPY scripts/audit_economic_complete.py scripts/audit_economic_complete.py
+# Reachable from audit_economic_complete and MISSING until 2026-09-30: the
+# closure guard walked only the main entrypoint, so every auxiliary script's
+# own imports were invisible to it and this file would have ImportError'd in
+# the image. The guard is now the union over all declared entrypoints.
+COPY src/l5_replay_input.py src/l5_replay_input.py
 COPY data/pmus_btc15m_tape_oos/oos_tape.jsonl data/pmus_btc15m_tape_oos/oos_tape.jsonl
 COPY src/__init__.py src/__init__.py
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
@@ -84,6 +89,15 @@ COPY src/pmus_paired_log.py src/pmus_paired_log.py
 COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
 COPY src/pmus_probe_observability.py src/pmus_probe_observability.py
 COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
+# ---- the bounded q1 HOLD_OPEN_EXTEND canary and its decision feed.
+# The canary makes OPEN/HOLD/COMPLEMENT/TAKE decisions from the AUTHENTICATED
+# WS stream only; the public REST BBO is a ~30s cache (1.43-2.07 distinct book
+# states/min against the WS's ~590, analysis/V1_PUBLIC_FEED_CEILING.md) and is
+# not a basis for a queue-sensitive decision. pmus_ws_live_state reuses the
+# recorder's own auth_headers/subscribe_frames/guard_outbound, so it cannot
+# emit anything but a read-only subscription and holds no mutation path.
+COPY src/pmus_q1_canary.py src/pmus_q1_canary.py
+COPY src/pmus_ws_live_state.py src/pmus_ws_live_state.py
 # the canonical market row, shared with pmus_micro_executor rather than
 # duplicated beside it, and the venue's own series listing -- selection
 # never manufactures a slug from the clock.
@@ -109,4 +123,6 @@ COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.
 COPY analysis/l5/authorization/ analysis/l5/authorization/
 # restartPolicyType NEVER is set on the SERVICE, not here: a one-shot the platform
 # restarts is not a one-shot.
-CMD ["python3", "-m", "scripts.l5_pmus_live_oneshot"]
+# The bounded probe starts the canary. restartPolicyType NEVER is set on the
+# SERVICE: a one-shot the platform restarts is not a one-shot.
+CMD ["python3", "-m", "src.pmus_q1_canary"]
