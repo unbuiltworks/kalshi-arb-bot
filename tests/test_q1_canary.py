@@ -4,8 +4,12 @@ No test here touches the network. The fake transport asserts on any path it
 was not told about, so an unexpected mutation fails the test rather than
 passing silently.
 """
+import os
 import time
 from decimal import Decimal as D
+from pathlib import Path
+
+from src import pmus_fees as FEES
 
 #: A window far enough ahead that the suite never depends on the wall clock.
 #: The campaign's deadline is capped by the window close, so a slug from a
@@ -525,7 +529,63 @@ def test_rebates_are_reported_separately_and_never_net_against_cost(monkeypatch)
     out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
                        state=ws_state(*f.books[0]), max_book_age_s=1e9)
     assert D(out["pair_cost"]) == D("0.99")      # gross of any rebate
-    assert D(out["rebates_separate"]) > 0
+    # both legs here are makers, so the bound is positive and cashflow rounds
+    assert D(out["modeled_maker_rebate_bound"]) > 0
+    assert D(out["modeled_taker_fee_bound"]) == 0
+
+
+# ---- fee reporting: decision bounds vs venue cashflow rounding
+
+def test_a_taker_leg_gets_no_maker_rebate_and_is_labelled_taker(monkeypatch):
+    """The 2026-09-30 defect: the crossing leg was logged maker=true and was
+    credited a maker rebate it can never earn."""
+    import json as _json
+    slug = _arm(monkeypatch)
+    st = ws_state("0.45", "0.60", slug=slug)
+    f = Fake([("0.40", "0.60")] * 10)
+    f.fills["O1"] = _filled("0.40")
+    f.fills["O2"] = _filled("0.55", side="OUTCOME_SIDE_NO")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None, state=st,
+                       max_book_age_s=1e9)
+    assert out["takes"] == 1
+    # the maker rebate covers ONLY the YES leg, at its EXECUTED price
+    assert D(out["modeled_maker_rebate_bound"]) == FEES.maker_rebate(D("0.40"))
+    # and a taker fee is reported for the crossing leg, at its executed price
+    assert D(out["modeled_taker_fee_bound"]) == FEES.taker_fee(D("0.55"))
+    # cashflow figures apply the venue's cent rounding
+    assert D(out["modeled_maker_rebate_cashflow"]) == D("0.00")
+    assert D(out["modeled_taker_fee_cashflow"]) == D("0.02")
+    # the fill row itself says maker=false
+    rows = [_json.loads(l) for l in
+            (Path(os.environ[X.STATE_ENV]) / "ledger.jsonl").open()]
+    taker_fills = [r for r in rows
+                   if r["kind"] == "filled"
+                   and r.get("stage") == "taker_complete"]
+    assert taker_fills and taker_fills[0]["maker"] is False
+
+
+def test_cash_figures_use_venue_cent_rounding_on_the_whole_order():
+    """The live q1 numbers exactly: raw bound vs venue cashflow.
+
+    taker NO @0.57 -> .01703445 unrounded, .02 as cash
+    maker YES @0.35 -> .00284375 unrounded, .00 as cash
+    The venue charged .0200 and credited .0000, so the schedule matches; the
+    error was comparing unrounded bounds against rounded statements.
+    """
+    assert FEES.taker_fee(D("0.57"), D(1)) == D("0.0170")
+    assert FEES.taker_fee(D("0.57"), D(1), cents=True) == D("0.02")
+    assert FEES.maker_rebate(D("0.35"), D(1)) == D("0.0028")
+    assert FEES.maker_rebate(D("0.35"), D(1), cents=True) == D("0.00")
+
+
+def test_cash_rounding_is_applied_to_the_whole_quantity_not_per_contract():
+    """Rounding per contract then multiplying overstates a small fee 10x."""
+    whole = FEES.taker_fee(D("0.57"), D(10), cents=True)
+    per_contract_then_multiplied = FEES.taker_fee(D("0.57"), D(1),
+                                                 cents=True) * 10
+    assert whole == D("0.17")
+    assert per_contract_then_multiplied == D("0.20")
+    assert whole != per_contract_then_multiplied
 
 
 def test_every_decision_reaches_the_durable_ledger(monkeypatch, tmp_path):

@@ -59,6 +59,7 @@ from decimal import Decimal as D
 from typing import Any, Mapping, Optional
 
 from src import pmus_q1_executor as X
+from src import pmus_fees as FEES
 from src import pmus_order_lifecycle as LC
 from src import pmus_ws_live_state as WS
 
@@ -270,6 +271,10 @@ def reconcile(t: X.Transport, oid: str, info: dict, inv: "Inventory", *,
             raise X.Halt(f"FILL_WITHOUT_PRICE:{oid}")
         inv.add(info["inv_side"], delta, px)
         info["booked_qty"] = filled
+        FILLED_LEGS.append({"order_id": oid, "stage": info.get("stage"),
+                            "inv_side": info["inv_side"], "px": str(px),
+                            "qty": str(delta),
+                            "maker": bool(info.get("maker", True))})
         record("filled", stage=info.get("stage"), order_id=oid,
                price=str(px), qty=str(delta), cumulative=str(filled),
                classification=v["classification"],
@@ -469,6 +474,20 @@ def complement_still_valid(px: D, first_cost: D, tick: Optional[D],
     return not X.would_cross("OUTCOME_SIDE_NO", D(str(px)), snap)
 
 
+#: Every leg this process submitted, with the maker/taker fact from OUR OWN
+#: submission rather than the venue's reply -- the venue returned
+#: `participateDontInitiate: null` on both legs of the 2026-09-30 campaign,
+#: so inferring it from the reply defaults a crossing leg to maker.
+SUBMITTED_LEGS: list = []
+
+#: Every EXECUTED fill: the venue's own price and the quantity actually
+#: booked, with maker/taker taken from our submission record rather than the
+#: venue's reply. Fee and rebate economics must use the EXECUTED price -- a
+#: post-only maker normally fills at its own limit, but a fill price is what
+#: the venue charges on, so the submitted price is the wrong input.
+FILLED_LEGS: list = []
+
+
 def place_order(t: X.Transport, slug: str, side: str, price: D, *,
                 post_only: bool, stage: str, sleep=time.sleep) -> str:
     """ONE placement path for this canary, on THE proven serializer.
@@ -528,6 +547,9 @@ def place_order(t: X.Transport, slug: str, side: str, price: D, *,
     record("submitted", stage=stage, slug=slug, side=OB.outcome_side(side),
            price=str(price), order_id=order_id, maker=post_only,
            wire_price=body["price"]["value"])
+    SUBMITTED_LEGS.append({"order_id": order_id, "stage": stage,
+                           "side": OB.outcome_side(side), "px": str(price),
+                           "qty": X.QTY, "maker": bool(post_only)})
     return order_id
 
 
@@ -879,7 +901,14 @@ def _campaign(ctx: dict, t: Optional[X.Transport] = None,
                         unresolved[tid] = {"stage": "taker_complete",
                                            "inv_side": want_side,
                                            "px": D(str(ask)),
-                                           "qty": D(X.QTY)}
+                                           "qty": D(X.QTY),
+                                           #: REQUIRED. reconcile() defaults a
+                                           #: missing `maker` to True, so
+                                           #: omitting this logged the crossing
+                                           #: leg as a maker fill on
+                                           #: 2026-09-30 and let the maker
+                                           #: rebate be applied to it.
+                                           "maker": False}
                     except X.Halt:
                         raise
                     takes += 1
@@ -959,7 +988,7 @@ def _campaign(ctx: dict, t: Optional[X.Transport] = None,
                     sleep(X.POLL_S)
                     continue
                 resting = {"order_id": oid, "stage": stage, "px": px,
-                           "inv_side": side, "qty": D(X.QTY)}
+                           "inv_side": side, "qty": D(X.QTY), "maker": True}
                 unresolved[oid] = dict(resting)
                 record("resting", stage=stage, px=str(px), order_id=oid,
                        residual=str(inv.residual()), **_ws_fields(snap))
@@ -1015,6 +1044,8 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                    "audit reconciles"),
     }
     ctx: dict = {}
+    del SUBMITTED_LEGS[:]
+    del FILLED_LEGS[:]
     try:
         outcome = _campaign(ctx, t, clock=clock, sleep=sleep, state=state,
                             feed=feed, max_book_age_s=max_book_age_s)
@@ -1044,6 +1075,10 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
     if not fin["sweep_verified"] and status in CLEAN:
         status = "SWEEP_UNVERIFIED"
     counters = ctx.get("counters") or {}
+    #: EXECUTED legs, not submitted ones: the venue charges on the fill price.
+    ctx["maker_legs"] = [lg for lg in FILLED_LEGS if lg["maker"]]
+    ctx["taker_legs"] = [lg for lg in FILLED_LEGS if not lg["maker"]]
+    ctx["submitted_legs"] = list(SUBMITTED_LEGS)
     out = {**report, **{k: v for k, v in outcome.items() if k != "status"},
            "status": status,
            "matched_contracts": str(matched),
@@ -1055,9 +1090,28 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
            "requotes": counters.get("requotes", 0),
            "cancels": counters.get("cancels", 0),
            "takes": counters.get("takes", 0),
-           "rebates_separate": str(
-               sum((X.maker_rebate(inv.basis(sd)) * inv.qty[sd]
-                    for sd in ("yes", "no") if inv.qty[sd] > 0), D(0))),
+           #: MAKER LEGS ONLY. This used to sum maker_rebate over every side
+           #: holding inventory, which credited the crossing leg with a maker
+           #: rebate it can never earn. `maker_legs` carries what we actually
+           #: submitted, from our own record, not from the venue's reply.
+           "modeled_maker_rebate_bound": str(
+               sum((FEES.maker_rebate(D(str(lg["px"])), D(str(lg["qty"])))
+                    for lg in ctx.get("maker_legs") or []), D(0))),
+           "modeled_maker_rebate_cashflow": str(
+               sum((FEES.maker_rebate(D(str(lg["px"])), D(str(lg["qty"])),
+                                      cents=True)
+                    for lg in ctx.get("maker_legs") or []), D(0))),
+           "modeled_taker_fee_bound": str(
+               sum((FEES.taker_fee(D(str(lg["px"])), D(str(lg["qty"])))
+                    for lg in ctx.get("taker_legs") or []), D(0))),
+           "modeled_taker_fee_cashflow": str(
+               sum((FEES.taker_fee(D(str(lg["px"])), D(str(lg["qty"])),
+                                   cents=True)
+                    for lg in ctx.get("taker_legs") or []), D(0))),
+           "fee_note": ("bound figures are unrounded per-contract economics; "
+                        "cashflow figures apply the venue's cent rounding to "
+                        "the WHOLE order quantity. Venue commission is "
+                        "authoritative after execution."),
            "sweep_verified": fin["sweep_verified"],
            "open_orders_after_sweep": fin["open_orders"],
            "open_order_ids": fin["open_order_ids"],

@@ -55,6 +55,41 @@ def _d(v: Any) -> Optional[D]:
         return None
 
 
+def submitted_legs_from_state() -> Dict[str, Dict[str, Any]]:
+    """Our OWN durable record of what we submitted, keyed by order id.
+
+    The venue returned `participateDontInitiate: null` on both legs of the
+    2026-09-30 campaign, so maker/taker CANNOT be inferred from its reply --
+    an absent field would default a crossing leg to maker. `persist_intent`
+    wrote the fact before the POST, so it is read from there.
+    """
+    path = os.path.join(os.getenv("PMUS_Q1_STATE_DIR", "/state/pmus-q1"),
+                        "campaign_state.json")
+    out: Dict[str, Dict[str, Any]] = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            st = json.load(fh)
+    except Exception:                                        # noqa: BLE001
+        return out
+    pending: Dict[str, Any] = {}
+    for row in (st.get("orders") or []):
+        stage = str(row.get("stage") or "")
+        if stage.endswith(":accepted") and row.get("order_id"):
+            base = stage[: -len(":accepted")]
+            src = pending.get(base) or {}
+            out[str(row["order_id"])] = {
+                "stage": base,
+                "submitted_price": src.get("price"),
+                "submitted_qty": src.get("qty"),
+                # post_only is the maker fact, written before the POST
+                "maker": (None if src.get("post_only") is None
+                          else bool(src.get("post_only"))),
+            }
+        elif stage:
+            pending[stage] = row
+    return out
+
+
 def order_record(t: Any, oid: str) -> Dict[str, Any]:
     try:
         raw = t.request("GET", f"/v1/order/{oid}")
@@ -92,7 +127,14 @@ def main() -> int:
         return 2
     t = AUTH.ReadOnlyTransport()
 
+    ours = submitted_legs_from_state()
+    out["our_submission_record"] = ours
     out["orders"] = [order_record(t, oid) for oid in ids]
+    for o in out["orders"]:
+        mine = ours.get(o["order_id"]) or {}
+        o["maker_from_our_record"] = mine.get("maker")
+        o["maker_source"] = ("our durable submission record" if mine
+                             else "UNAVAILABLE -- venue reply is not a source")
 
     # settlement, from the venue's own field
     try:
@@ -127,20 +169,42 @@ def main() -> int:
     modeled = {}
     for o in out["orders"]:
         px = _d(o.get("avg_price_own_terms"))
+        qty = _d(o.get("cumulative_qty")) or D(1)
+        maker = o.get("maker_from_our_record")
         if px is None:
             continue
-        taker = o.get("participate_dont_initiate") is False
+        if maker is None:
+            modeled[o["order_id"]] = {
+                "leg": "UNKNOWN",
+                "why": "maker/taker absent from our record; the venue's "
+                       "participateDontInitiate is null and is not a source",
+            }
+            continue
+        # cash figures apply the venue's cent rounding to the WHOLE order
+        # quantity; rounding per contract and multiplying overstates a small
+        # fee (10 contracts at 0.57: 0.17 correct vs 0.20 that way).
         modeled[o["order_id"]] = {
-            "leg": "taker" if taker else "maker",
-            "modeled_taker_fee": str(FEES.taker_fee(px)) if taker else None,
-            "modeled_maker_rebate": (None if taker
-                                     else str(FEES.maker_rebate(px))),
+            "leg": "maker" if maker else "taker",
+            "fee_bound_unrounded": (None if maker
+                                    else str(FEES.taker_fee(px, qty))),
+            "fee_cashflow_rounded": (None if maker
+                                     else str(FEES.taker_fee(px, qty,
+                                                             cents=True))),
+            "rebate_bound_unrounded": (str(FEES.maker_rebate(px, qty))
+                                       if maker else None),
+            "rebate_cashflow_rounded": (
+                str(FEES.maker_rebate(px, qty, cents=True)) if maker else None),
         }
     out["economics"] = {
         "matched_contracts": str(matched),
         "pair_cost": str(cost) if matched else None,
         "gross_pair_edge": str(matched - cost) if matched else None,
         "modeled_per_leg": modeled,
+        "fee_note": ("bound figures are unrounded economics for decision "
+                     "bounds; cashflow figures apply the venue's cent "
+                     "rounding to the whole order quantity. After execution "
+                     "the VENUE COMMISSION is authoritative and the modeled "
+                     "lines are only a cross-check."),
         "venue_commission_total": (
             str(sum((D(c) for c in venue_comm), D(0))) if have_all else None),
         "REALIZED_NET": None,
