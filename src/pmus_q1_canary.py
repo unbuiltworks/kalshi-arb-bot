@@ -78,6 +78,52 @@ class CancelUnconfirmed(Exception):
     """A cancel was ACK'd but the order never reached a terminal state."""
 
 
+#: seconds reserved at the end of the window for authoritative cancellation
+#: and the market-scoped sweep. The campaign must be finished BEFORE the
+#: market closes, not at the same moment.
+SWEEP_BUFFER_S = float(os.getenv("PMUS_CANARY_SWEEP_BUFFER_S", "90"))
+
+
+def window_end_epoch(slug: str) -> Optional[float]:
+    """The close time encoded in a BTC15m slug, e.g. ...-2026-09-30-1800z.
+
+    Parsed from the slug rather than the clock because the slug is what the
+    gate, the feed and the orders all name; if they ever disagree this
+    returns None and the caller refuses rather than guessing a close.
+    """
+    import re
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})z$", slug)
+    if not m:
+        return None
+    y, mo, d, hh, mm = (int(g) for g in m.groups())
+    try:
+        start = datetime(y, mo, d, hh, mm, tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return start.timestamp() + 900.0
+
+
+def effective_deadline_s(slug: str, requested_s: float, *,
+                         now: Optional[float] = None,
+                         buffer_s: float = SWEEP_BUFFER_S) -> Optional[float]:
+    """How long this campaign may run: never past the window's close.
+
+    Railway's build time is consumed INSIDE the window (measured
+    2026-09-30: the venue had not quoted 1745z three minutes after its own
+    start, and 1730z was already EXPIRED), so a deadline set by hand before
+    deployment cannot know how much runway the container will actually
+    have. This derives it at startup instead, and returns None when there is
+    no usable runway left -- in which case nothing is placed at all.
+    """
+    end = window_end_epoch(slug)
+    if end is None:
+        return None
+    left = end - (time.time() if now is None else now) - buffer_s
+    if left <= 0:
+        return None
+    return min(float(requested_s), left)
+
+
 def canary_armed() -> bool:
     """The executor's dual key AND the canary-specific third key."""
     sid = os.getenv(X.SID_ENV, "").strip()
@@ -316,7 +362,13 @@ def _tick(t: X.Transport, slug: str, sleep=time.sleep) -> Optional[D]:
     """
     from src import pmus_market_row as MR
     try:
-        row = MR.market_row(slug)
+        # through the injected transport: authenticated, bounded retries, and
+        # testable. market_row takes any getter and matches the slug on the
+        # row the venue returned.
+        row = MR.market_row(
+            slug,
+            get=lambda path: X._get_with_retry(t, path, base=X.GATEWAY,
+                                               sleep=sleep))
         return X.tick_for_market(row)
     except Exception as exc:                                 # noqa: BLE001
         record("tick_unavailable", slug=slug, err=str(exc)[:160])
@@ -357,8 +409,8 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         return {**report, "status": "DAILY_LOSS_STOP"}
 
     t = t or X.Transport()
-    deadline_s = float(os.getenv(HOLD_DEADLINE_ENV, "600"))
-    stop_at = clock() + deadline_s
+    requested_s = float(os.getenv(HOLD_DEADLINE_ENV, "600"))
+    stop_at = clock()          # set inside the try, so NO_RUNWAY still sweeps
     inv = Inventory()
     #: what is resting right now: at most ONE order, per the mandate
     resting: Optional[dict] = None
@@ -370,6 +422,17 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
     first_cost: Optional[D] = None
 
     try:
+        # The campaign must be finished BEFORE the window closes, with time
+        # left to cancel and sweep. Railway's build time is spent inside the
+        # window, so this is derived at startup rather than estimated when
+        # the variables were set.
+        deadline_s = effective_deadline_s(slug, requested_s)
+        if deadline_s is None:
+            return {**report, "status": "NO_RUNWAY",
+                    "note": f"no usable time before {slug} closes (reserving "
+                            f"{SWEEP_BUFFER_S:.0f}s for cancel/sweep); "
+                            f"placed nothing"}
+        stop_at = clock() + deadline_s
         reason = X.preflight(t, slug, sleep=sleep)
         if reason:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": reason}
@@ -387,7 +450,11 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                               sleep=sleep)
         record("ws_ready", **{k: str(v) for k, v in ready.items()})
         record("canary_start", slug=slug, tick=str(tick),
-               deadline_s=deadline_s, max_loss=str(CANARY_MAX_LOSS),
+               requested_deadline_s=requested_s,
+               effective_deadline_s=deadline_s,
+               sweep_buffer_s=SWEEP_BUFFER_S,
+               window_end=window_end_epoch(slug),
+               max_loss=str(CANARY_MAX_LOSS),
                decision_feed="AUTHENTICATED_WS",
                rest_role="pre-submit cross check, order status, account only")
 

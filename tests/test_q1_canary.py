@@ -7,6 +7,12 @@ passing silently.
 import time
 from decimal import Decimal as D
 
+#: A window far enough ahead that the suite never depends on the wall clock.
+#: The campaign's deadline is capped by the window close, so a slug from a
+#: window that has already ended correctly refuses to trade -- which made
+#: every test using a past slug fail once that cap existed.
+FUTURE_SLUG = "cpc-btc-updown-15m-2099-01-01-1200z"
+
 import pytest
 
 from src import pmus_q1_canary as C
@@ -22,7 +28,7 @@ def _state(tmp_path, monkeypatch):
     yield
 
 
-def _arm(monkeypatch, slug="cpc-btc-updown-15m-2026-09-30-1700z"):
+def _arm(monkeypatch, slug=FUTURE_SLUG):
     monkeypatch.setenv(X.LIVE_ENV, "YES")
     monkeypatch.setenv(X.SID_ENV, "sid-1")
     monkeypatch.setenv(X.ARM_ENV, "sid-1")
@@ -34,7 +40,7 @@ def _arm(monkeypatch, slug="cpc-btc-updown-15m-2026-09-30-1700z"):
     return slug
 
 
-def ws_state(bid, ask, *, slug="cpc-btc-updown-15m-2026-09-30-1700z",
+def ws_state(bid, ask, *, slug=FUTURE_SLUG,
              bid_qty="100", ask_qty="100", now=None, trade=("0.41", "5")):
     """A LiveState holding one injected authenticated-WS book."""
     st = WS.LiveState()
@@ -106,6 +112,11 @@ class Fake:
             bid, ask = self._book()
             return {"marketData": {"bestBid": {"value": bid},
                                    "bestAsk": {"value": ask}}}
+        if path.startswith("/v1/market/slug/"):
+            # the canonical grid route; the slug is matched on the row
+            self.market_reads += 1
+            return {"market": {"slug": path.rsplit("/", 1)[-1],
+                               X.TICK_FIELD: self.tick}}
         if path.startswith("/v1/markets/") and path.count("/") == 3:
             self.market_reads += 1
             return {"market": {X.TICK_FIELD: self.tick}}
@@ -770,3 +781,55 @@ def test_the_grid_comes_from_the_canonical_row_route():
     row = MR.market_row("S", get=fake_get)
     assert row[MR.TICK_FIELD] == "0.01"
     assert calls == ["/v1/market/slug/S"]
+
+
+# ---------------- the campaign must end before the window closes
+
+def test_the_window_close_is_parsed_from_the_slug():
+    import datetime as dt
+    end = C.window_end_epoch("cpc-btc-updown-15m-2026-09-30-1800z")
+    assert end == dt.datetime(2026, 9, 30, 18, 15,
+                              tzinfo=dt.timezone.utc).timestamp()
+    assert C.window_end_epoch("not-a-window-slug") is None
+
+
+def test_the_deadline_is_capped_by_the_window_close_with_a_sweep_buffer():
+    slug = "cpc-btc-updown-15m-2026-09-30-1800z"
+    end = C.window_end_epoch(slug)
+    # 10 minutes of runway left, 600s requested -> capped by the buffer
+    now = end - 600
+    got = C.effective_deadline_s(slug, 600, now=now, buffer_s=90)
+    assert got == 510
+    # plenty of runway -> the request stands
+    assert C.effective_deadline_s(slug, 300, now=end - 900,
+                                  buffer_s=90) == 300
+
+
+def test_no_usable_runway_refuses_the_campaign():
+    slug = "cpc-btc-updown-15m-2026-09-30-1800z"
+    end = C.window_end_epoch(slug)
+    assert C.effective_deadline_s(slug, 600, now=end - 60, buffer_s=90) is None
+    assert C.effective_deadline_s(slug, 600, now=end + 10, buffer_s=90) is None
+
+
+def test_a_campaign_with_no_runway_places_nothing(monkeypatch):
+    slug = "cpc-btc-updown-15m-2026-09-30-1800z"
+    _arm(monkeypatch, slug)
+    monkeypatch.setattr(C, "effective_deadline_s", lambda *a, **k: None)
+    f = Fake([("0.40", "0.60")] * 6)
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    assert out["status"] == "NO_RUNWAY"
+    assert not f.placed
+    assert f.sweeps >= 1
+
+
+def test_an_unparseable_slug_refuses_rather_than_guessing_a_close(monkeypatch):
+    _arm(monkeypatch, "some-other-market")
+    f = Fake([("0.40", "0.60")] * 6)
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug="some-other-market"),
+                       max_book_age_s=1e9)
+    assert out["status"] in ("NO_RUNWAY", "TICK_UNAVAILABLE")
+    assert not f.placed
