@@ -527,3 +527,212 @@ def test_the_daily_loss_stop_blocks_the_run(monkeypatch, tmp_path):
                        sleep=lambda *_: None,
                        state=ws_state("0.40", "0.60"), max_book_age_s=1e9)
     assert out["status"] == "DAILY_LOSS_STOP"
+
+
+# ============ BLOCKERS from independent review of b26f3db7 ============
+# 1. an ACK'd-but-ineffective cancel left a live maker the controller had
+#    forgotten, and the next iteration placed a SECOND order: two live YES
+#    orders, $1.59 committed against an authorized $0.80 cap, residual 2
+#    against a cap of 1, reported as residual=0.
+# 2. the same mechanism bypassed the pre-take double-fill guard, because by
+#    the time the take fired `resting` was already None.
+# 3. no test ever executed that guard.
+
+class StubbornCancel(Fake):
+    """A venue that ACKs a cancel and leaves the order WORKING.
+
+    This is the eventual-consistency case the executor itself documents, and
+    it is the exact shape that produced two live orders.
+    """
+
+    def request(self, method, path, body=None, **kw):
+        if path.endswith("/cancel") and path.startswith("/v1/order/"):
+            self.cancelled.append(path.split("/")[3])
+            return {}                      # ACK, but nothing changes
+        return super().request(method, path, body, **kw)
+
+
+def test_an_ackd_but_ineffective_cancel_never_places_a_second_order(monkeypatch):
+    slug = _arm(monkeypatch)
+    # touch walks away so the resting OPEN becomes invalid and a requote is
+    # attempted: 0.80 -> 0.79 with the ask collapsing onto our price
+    st = StepState(slug, [("0.80", "0.95")] * 12 + [("0.79", "0.795")] * 30)
+    f = StubbornCancel([("0.80", "0.95")] * 20)
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=st, max_book_age_s=1e9)
+    assert out["status"] == "CANCEL_UNCONFIRMED", out["status"]
+    assert len(f.placed) == 1, (
+        "placed a second order while the first may still be live: %s"
+        % [(p["id"], p["body"]["price"]["value"]) for p in f.placed])
+    assert f.sweeps >= 1
+
+
+def test_a_stubborn_cancel_blocks_the_take_instead_of_crossing(monkeypatch):
+    """Blocker 2: never cross while any placed order is unresolved."""
+    slug = _arm(monkeypatch)
+    st = StepState(slug, [("0.20", "0.60")] * 12 + [("0.45", "0.60")] * 30)
+    f = StubbornCancel([("0.40", "0.60")] * 20)
+    f.fills["O1"] = _filled("0.40")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=st, max_book_age_s=1e9)
+    takers = [p for p in f.placed
+              if p["body"]["participateDontInitiate"] is False]
+    assert not takers, "crossed while a maker may still be live on the venue"
+    assert out["status"] == "CANCEL_UNCONFIRMED"
+
+
+class FillDuringCancel(Fake):
+    """An order that reads OPEN until its cancel is requested, then FILLED.
+
+    This IS the cancel race, stated exactly: the fill becomes visible only
+    after the cancel goes out. A static `fills` dict cannot express it -- the
+    ordinary poll at the top of the loop would see the fill first and the
+    pre-take guard would never be entered, which is why the previous version
+    of this test was vacuous.
+    """
+
+    def __init__(self, books, oid, px, side, **kw):
+        super().__init__(books, **kw)
+        self.target, self.px, self.side = oid, px, side
+        self.cancel_seen = False
+
+    def request(self, method, path, body=None, **kw):
+        if path.endswith("/cancel") and path.startswith("/v1/order/"):
+            if path.split("/")[3] == self.target:
+                self.cancel_seen = True
+            self.cancelled.append(path.split("/")[3])
+            return {}
+        if (path.startswith("/v1/order/") and not path.endswith("/cancel")
+                and path.split("/")[3] == self.target):
+            if self.cancel_seen:
+                return _filled(self.px, side=self.side)
+            return {"id": self.target, "state": "ORDER_STATE_OPEN"}
+        return super().request(method, path, body, **kw)
+
+
+def test_the_take_and_a_resting_complement_are_mutually_exclusive_at_q1():
+    """Why the PRE-TAKE guard branch is unreachable while a complement rests.
+
+    The reviewer asked for a test that enters the pre-take guard. It cannot be
+    entered from the loop in this design, and the reason is arithmetic rather
+    than an accident, so it is pinned here instead of faked:
+
+    with `first_cost` c the complement rests at the fee-safe bound
+    b = floor(1 - c - 0.01), and the crossing price for the same side is
+    (1 - bid). The take requires 1 - c - (1 - bid) - fee >= 0.01, i.e.
+    bid >= c + 0.01 + fee; our resting b crosses the live quote as soon as
+    b >= 1 - bid, i.e. bid >= 1 - b = c + 0.01. The take window is therefore a
+    STRICT SUBSET of the region where our own complement is already invalid,
+    so `complement_still_valid` is False first and the hold path cancels and
+    resolves it before any take is considered.
+
+    The pre-take loop stays as defence in depth (tested directly below), and
+    the protection that actually fires on this path is tested by
+    `test_a_race_fill_during_the_requote_cancel_is_booked_and_never_crossed`.
+    """
+    for c in (D("0.30"), D("0.40"), D("0.55")):
+        bound = X.complement_bound(c, tick=D("0.01"))
+        assert bound is not None
+        for bid_cents in range(20, 81):
+            bid = D(bid_cents) / D(100)
+            take_ok = X.taker_completion_ok(c, X.ONE - bid)
+            ours_crosses = bound >= X.ONE - bid
+            if take_ok:
+                assert ours_crosses, (
+                    f"c={c} bid={bid}: take is available while our complement "
+                    f"at {bound} is still valid -- the pre-take guard IS "
+                    f"reachable and needs a loop-level test")
+
+
+def test_a_race_fill_during_the_requote_cancel_is_booked_and_never_crossed(
+        monkeypatch, tmp_path):
+    """The reachable race: the fill appears only once the cancel is sent.
+
+    This is the path that actually protects against a double fill here, and a
+    static `fills` dict cannot express it -- the ordinary poll would see the
+    fill first. `FillDuringCancel` makes the fill visible only after the
+    cancel goes out.
+    """
+    import json
+    slug = _arm(monkeypatch)
+    st = StepState(slug, [("0.20", "0.60")] * 12 + [("0.45", "0.60")] * 40)
+    f = FillDuringCancel([("0.40", "0.60")] * 20, "O2", "0.58",
+                         "OUTCOME_SIDE_NO")
+    f.fills["O1"] = _filled("0.40")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=st, max_book_age_s=1e9)
+    rows = [json.loads(l) for l in (tmp_path / "ledger.jsonl").open()]
+    assert any(r.get("stage") == "complement_late" for r in rows), \
+        "the race fill was not booked: %s" % [r.get("stage") for r in rows]
+    assert not [p for p in f.placed
+                if p["body"]["participateDontInitiate"] is False], \
+        "crossed after the maker had already completed the pair"
+    assert out["matched_contracts"] == "1"
+    assert out["residual"] == "0"
+    # exactly two orders, both makers, one per leg
+    assert len(f.placed) == 2
+
+
+def test_the_pre_take_loop_resolves_every_unresolved_order(monkeypatch):
+    """Defence in depth, tested directly since the loop cannot reach it.
+
+    A forgotten-but-live order must be cancelled AND positively resolved, and
+    an unconfirmable one must stop the campaign rather than be crossed over.
+    """
+    slug = _arm(monkeypatch)
+    ok = Fake([("0.40", "0.60")] * 4)
+    ok.fills["OX"] = {"id": "OX", "state": "ORDER_STATE_CANCELLED",
+                      "cumQuantity": "0"}
+    assert C.cancel_and_resolve(ok, "OX", slug,
+                                sleep=lambda *_: None)["cancelled"] is True
+    stubborn = StubbornCancel([("0.40", "0.60")] * 4)
+    stubborn.fills["OY"] = None
+    with pytest.raises(C.CancelUnconfirmed):
+        C.cancel_and_resolve(stubborn, "OY", slug, sleep=lambda *_: None)
+
+
+def test_the_worst_case_loss_cap_is_measured_not_assumed():
+    inv = C.Inventory()
+    assert C.worst_case_loss(inv, None) == D(0)
+    # one unpaired long at 0.40 plus an opening order at 0.45 = 0.85 > cap
+    inv.add("yes", D(1), D("0.40"))
+    assert C.worst_case_loss(inv, None) == D("0.40")
+    projected = C.worst_case_loss(inv, {"stage": "open", "px": D("0.45"),
+                                        "qty": D(1)})
+    assert projected == D("0.85")
+    assert projected > C.CANARY_MAX_LOSS
+    # a complement REDUCES residual, so it adds no worst-case loss
+    assert C.worst_case_loss(inv, {"stage": "complement", "px": D("0.59"),
+                                   "qty": D(1)}) == D("0.40")
+
+
+def test_a_matched_pair_carries_no_worst_case_loss():
+    inv = C.Inventory()
+    inv.add("yes", D(1), D("0.40"))
+    inv.add("no", D(1), D("0.59"))
+    assert C.worst_case_loss(inv, None) == D(0)
+
+
+def test_cancel_and_resolve_requires_proof(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = StubbornCancel([("0.40", "0.60")] * 4)
+    f.fills["O9"] = None
+    with pytest.raises(C.CancelUnconfirmed, match="CANCEL_UNCONFIRMED"):
+        C.cancel_and_resolve(f, "O9", slug, sleep=lambda *_: None)
+
+
+def test_cancel_and_resolve_accepts_a_terminal_cancel(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = Fake([("0.40", "0.60")] * 4)
+    f.fills["O9"] = {"id": "O9", "state": "ORDER_STATE_CANCELLED",
+                     "cumQuantity": "0"}
+    res = C.cancel_and_resolve(f, "O9", slug, sleep=lambda *_: None)
+    assert res["cancelled"] is True
+
+
+def test_cancel_and_resolve_books_a_race_fill(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = Fake([("0.40", "0.60")] * 4)
+    f.fills["O9"] = _filled("0.58", side="OUTCOME_SIDE_NO")
+    res = C.cancel_and_resolve(f, "O9", slug, sleep=lambda *_: None)
+    assert res["fill"]["price"] == D("0.58")

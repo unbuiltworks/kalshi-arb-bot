@@ -67,6 +67,15 @@ HOLD_DEADLINE_ENV = "PMUS_CANARY_DEADLINE_SECONDS"      # default 600
 #: already caps that at $0.80. This is the smallest practical loss cap for a
 #: probe that actually trades: one contract, one market, one campaign.
 CANARY_MAX_LOSS = D("0.80")
+#: how many status reads a cancel gets to reach a TERMINAL state before the
+#: campaign refuses to continue. The venue is eventually consistent (the
+#: executor documents a 429 on /v1/orders/open outlasting five one-second
+#: retries), so one read is not proof.
+CANCEL_CONFIRM_POLLS = 6
+
+
+class CancelUnconfirmed(Exception):
+    """A cancel was ACK'd but the order never reached a terminal state."""
 
 
 def canary_armed() -> bool:
@@ -102,6 +111,46 @@ def record(kind: str, **fields: Any) -> None:
         raise X.Halt(f"LEDGER_WRITE_FAILED:{kind}:{str(exc)[:80]}") from exc
 
 
+def cancel_and_resolve(t: X.Transport, order_id: str, slug: str,
+                       sleep=time.sleep) -> dict:
+    """Cancel an order and POSITIVELY resolve what happened to it.
+
+    BLOCKER FIX. `X.cancel_exact` returns
+    `"CANCEL" in s or "REJECT" in s or "FILLED" not in s`, which is **True for
+    a still-working `ORDER_STATE_OPEN`**. The canary used to record that value
+    and then clear `resting` unconditionally, so a cancel the venue ACK'd but
+    did not apply left a live maker the controller had forgotten -- and the
+    next iteration placed a second order. Measured consequence: two live YES
+    orders, $1.59 committed against an authorized $0.80 cap, residual 2
+    against a cap of 1, while the report said `residual=0`.
+
+    So this returns only on PROOF:
+      * `{"fill": ...}`  -- the venue says filled, with a parseable price;
+      * `{"cancelled": True}` -- a terminal CANCEL, or a REJECT with no fill.
+    Anything else raises, and the caller must NOT clear its record of the
+    order. Refusing to trade on is the only safe response to "we do not know
+    whether our order is live".
+    """
+    try:
+        t.request("POST", f"/v1/order/{order_id}/cancel", {"marketSlug": slug})
+    except Exception as exc:                                 # noqa: BLE001
+        raise CancelUnconfirmed(
+            f"CANCEL_REQUEST_FAILED:{order_id}:{str(exc)[:80]}") from exc
+    for _ in range(CANCEL_CONFIRM_POLLS):
+        st = X._order_status(t, order_id, sleep=sleep)
+        fill = X.authoritative_fill(st)      # raises Halt if filled-but-vague
+        if fill is not None:
+            return {"fill": fill, "state": X.order_state_str(st)}
+        state = X.order_state_str(st)
+        if "CANCEL" in state or ("REJECT" in state and X._filled_qty(st) == 0):
+            return {"cancelled": True, "state": state}
+        sleep(X.POLL_S)
+    raise CancelUnconfirmed(
+        f"CANCEL_UNCONFIRMED:{order_id}: still not terminal after "
+        f"{CANCEL_CONFIRM_POLLS} reads; refusing to place another order "
+        f"while this one may be live")
+
+
 # ----------------------------------------------------------------- inventory
 
 class Inventory:
@@ -135,6 +184,27 @@ class Inventory:
 
     def matched(self) -> D:
         return min(self.qty["yes"], self.qty["no"])
+
+
+def worst_case_loss(inv: "Inventory", resting: Optional[Mapping[str, Any]]
+                    ) -> D:
+    """The most this campaign can still lose, in dollars.
+
+    A matched pair cannot lose more than its cost above $1, and this probe
+    only ever pairs below $1, so the exposure that matters is the UNMATCHED
+    long plus any opening order still able to add one. The complement reduces
+    residual, so it adds nothing.
+
+    The $0.80 bound used to be an emergent property of `entry_ok` + q=1 + one
+    order, with nothing checking it. The reviewer's point stands: any defect
+    in the order-count invariant breached it silently. Now it is measured.
+    """
+    r = inv.residual()
+    loss = (r * inv.basis("yes")) if r > 0 else (
+        (-r * inv.basis("no")) if r < 0 else D(0))
+    if resting is not None and resting.get("stage") in ("open", "extend"):
+        loss += D(str(resting["px"])) * D(str(resting["qty"]))
+    return loss
 
 
 def extend_permitted(inv: Inventory, *, residual_cap: int = X.RESIDUAL_CAP
@@ -279,6 +349,10 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
     inv = Inventory()
     #: what is resting right now: at most ONE order, per the mandate
     resting: Optional[dict] = None
+    #: EVERY order id this campaign has placed and not POSITIVELY resolved.
+    #: The take refuses while this is non-empty, because "resting is None" is
+    #: not the same as "nothing of ours is live on the venue".
+    unresolved: Dict[str, dict] = {}
     holds = requotes = cancels = takes = 0
     first_cost: Optional[D] = None
 
@@ -324,6 +398,7 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                         record("partial_remainder_kept",
                                stage=resting["stage"], remaining=str(remaining))
                     else:
+                        unresolved.pop(resting["order_id"], None)
                         resting = None
                     if resting is None and inv.qty["yes"] > 0 and \
                             first_cost is None:
@@ -331,7 +406,9 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                     continue
                 if got.get("terminal"):
                     record("terminal_rejection", stage=resting["stage"],
-                           order_id=resting["order_id"])
+                           order_id=resting["order_id"],
+                           residual=str(inv.residual()), **_ws_fields(snap))
+                    unresolved.pop(resting["order_id"], None)
                     resting = None
                     continue
 
@@ -353,24 +430,28 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                                 "touch is not a reason to move",
                            **_ws_fields(snap))
                 else:
-                    ok = X.cancel_exact(t, resting["order_id"], slug,
-                                        sleep=sleep)
+                    oid = resting["order_id"]
+                    res = cancel_and_resolve(t, oid, slug, sleep=sleep)
                     cancels += 1
                     record("cancel", stage=resting["stage"],
-                           px=str(resting["px"]), verified=ok,
+                           px=str(resting["px"]), order_id=oid,
+                           resolution=res.get("state"),
+                           confirmed_terminal=True,
                            reason="no_longer_economically_valid",
                            residual=str(inv.residual()), **_ws_fields(snap))
-                    # a fill can land during the cancel race
-                    late = X.authoritative_fill(
-                        X._order_status(t, resting["order_id"], sleep=sleep))
+                    late = res.get("fill")
                     if late is not None:
                         px = D(str(late["price"]))
                         inv.add(resting["inv_side"],
                                 D(str(late.get("qty") or 1)), px)
                         record("filled", stage=resting["stage"] + "_late",
-                               price=str(px), residual=str(inv.residual()))
+                               price=str(px), residual=str(inv.residual()),
+                               matched=str(inv.matched()))
                         if inv.qty["yes"] > 0 and first_cost is None:
                             first_cost = inv.basis("yes")
+                    # ONLY now, with a terminal state proven, is the order
+                    # off the venue and safe to forget.
+                    unresolved.pop(oid, None)
                     resting = None
                     requotes += 1
                     continue
@@ -389,33 +470,41 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                            residual=str(inv.residual()),
                            reason="fee_adjusted_pair_cost_acceptable_now",
                            **_ws_fields(snap))
-                    # 3. cancel the maker rest and resolve it AUTHORITATIVELY
-                    #    before crossing, so the two legs cannot both fill.
-                    if resting is not None:
-                        ok = X.cancel_exact(t, resting["order_id"], slug,
-                                           sleep=sleep)
-                        settled = X.authoritative_fill(X._order_status(
-                            t, resting["order_id"], sleep=sleep))
-                        record("cancel", stage=resting["stage"], verified=ok,
+                    # 3. Resolve EVERY order this campaign has placed and not
+                    #    positively resolved -- not merely `resting`. A cancel
+                    #    the venue ACK'd but did not apply leaves a live maker
+                    #    that `resting is None` cannot see, and crossing on top
+                    #    of it is the double fill this guard exists to stop.
+                    aborted = False
+                    for oid in list(unresolved):
+                        info = unresolved[oid]
+                        res = cancel_and_resolve(t, oid, slug, sleep=sleep)
+                        record("cancel", stage=info.get("stage"), order_id=oid,
+                               resolution=res.get("state"),
+                               confirmed_terminal=True,
                                reason="pre_take_double_fill_guard",
-                               late_fill=(str(settled["price"])
-                                          if settled else None))
-                        if settled is not None:
+                               late_fill=(str(res["fill"]["price"])
+                                          if res.get("fill") else None))
+                        unresolved.pop(oid, None)
+                        if resting is not None and \
+                                resting["order_id"] == oid:
+                            resting = None
+                        if res.get("fill") is not None:
                             # the maker filled during the race: that IS the
                             # completion. Book it and do NOT also cross.
-                            px = D(str(settled["price"]))
-                            inv.add(resting["inv_side"],
-                                    D(str(settled.get("qty") or 1)), px)
-                            record("filled",
-                                   stage=resting["stage"] + "_race",
-                                   price=str(px), maker=True,
+                            px = D(str(res["fill"]["price"]))
+                            inv.add(info["inv_side"],
+                                    D(str(res["fill"].get("qty") or 1)), px)
+                            record("filled", stage=info.get("stage", "") +
+                                   "_race", price=str(px), maker=True,
                                    residual=str(inv.residual()),
                                    matched=str(inv.matched()))
-                            resting = None
-                            record("decision", action="take_aborted",
-                                   reason="maker_filled_during_cancel_race")
-                            continue
-                        resting = None
+                            aborted = True
+                    if aborted and inv.deficient() is None:
+                        record("decision", action="take_aborted",
+                               reason="maker_filled_during_cancel_race",
+                               residual=str(inv.residual()))
+                        continue
                     # 4. durable intent then POST, inside place_taker_buy
                     side_wire = ("OUTCOME_SIDE_YES" if want_side == "yes"
                                  else "OUTCOME_SIDE_NO")
@@ -423,6 +512,10 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                         tid = place_taker_buy(t, slug, side_wire,
                                               D(str(ask)), "taker_complete",
                                               sleep=sleep)
+                        unresolved[tid] = {"stage": "taker_complete",
+                                           "inv_side": want_side,
+                                           "px": D(str(ask)),
+                                           "qty": D(X.QTY)}
                     except X.Halt:
                         raise
                     takes += 1
@@ -437,6 +530,7 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                         record("taker_unfilled", order_id=tid,
                                cancel_verified=ok,
                                note="no confirmed fill; inventory unchanged")
+                    unresolved.pop(tid, None)
                     if got is not None:
                         px = D(str(got["price"]))
                         fq = D(str(got.get("qty") or 1))
@@ -477,6 +571,18 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                         sleep(X.POLL_S)
                         continue
                     stage, side, px = "complement", "no", bound
+                projected = worst_case_loss(
+                    inv, {"stage": stage, "px": px, "qty": D(X.QTY)})
+                if projected > CANARY_MAX_LOSS:
+                    record("decision", action="refuse_placement",
+                           reason="worst_case_loss_cap",
+                           projected_loss=str(projected),
+                           cap=str(CANARY_MAX_LOSS))
+                    break
+                if unresolved:
+                    raise X.Halt(
+                        "UNRESOLVED_ORDERS_BEFORE_PLACEMENT:"
+                        + ",".join(sorted(unresolved)))
                 try:
                     oid = X.place_limit_buy(
                         t, slug,
@@ -489,6 +595,7 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                     continue
                 resting = {"order_id": oid, "stage": stage, "px": px,
                            "inv_side": side, "qty": D(X.QTY)}
+                unresolved[oid] = dict(resting)
                 record("resting", stage=stage, px=str(px), order_id=oid,
                        residual=str(inv.residual()), **_ws_fields(snap))
             sleep(X.POLL_S)
@@ -514,6 +621,10 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         record("canary_end", **{k: v for k, v in out.items()
                                 if k not in ("labels",)})
         return out
+    except CancelUnconfirmed as unc:
+        record("cancel_unconfirmed", reason=str(unc),
+               note="an order may still be live; placed nothing further")
+        return {**report, "status": "CANCEL_UNCONFIRMED", "reason": str(unc)}
     except WS.StaleFeed as stale:
         record("ws_stale_refused", reason=str(stale),
                note="no REST fallback for a strategy decision")
