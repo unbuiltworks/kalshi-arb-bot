@@ -11,7 +11,7 @@
 #   * the Railway CLI version is PINNED and asserted after install;
 #   * API authentication comes from the workspace-scoped RAILWAY_API_TOKEN
 #     Actions secret. Service-file reads additionally require Railway SSH, so a
-#     dedicated RAILWAY_SSH_PRIVATE_KEY is materialized only in the ephemeral
+#     dedicated RAILWAY_SSH_PRIVATE_KEY_B64 is decoded only into the ephemeral
 #     runner's ~/.ssh and never uploaded as an artifact;
 #   * the ONLY Railway operations are `files list` and `files download`. There
 #     is no deploy, redeploy, restart, variable change, domain change or agent
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 60
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-      RAILWAY_SSH_PRIVATE_KEY: ${{ secrets.RAILWAY_SSH_PRIVATE_KEY }}
+      RAILWAY_SSH_PRIVATE_KEY_B64: ${{ secrets.RAILWAY_SSH_PRIVATE_KEY_B64 }}
       PROJECT_ID: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
       ENVIRONMENT_ID: f3642d27-26dc-4e21-9170-bc76290c076f
       # pmus-ws-evidence-recorder. READ ONLY; never redeployed here.
@@ -72,8 +72,8 @@ jobs:
             echo "::error::RAILWAY_API_TOKEN secret is not set."
             exit 1
           fi
-          if [ -z "${RAILWAY_SSH_PRIVATE_KEY:-}" ]; then
-            echo "::error::RAILWAY_SSH_PRIVATE_KEY secret is not set."
+          if [ -z "${RAILWAY_SSH_PRIVATE_KEY_B64:-}" ]; then
+            echo "::error::RAILWAY_SSH_PRIVATE_KEY_B64 secret is not set."
             exit 1
           fi
 
@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$RAILWAY_SSH_PRIVATE_KEY" > ~/.ssh/l5_volume_export
+          printf '%s' "$RAILWAY_SSH_PRIVATE_KEY_B64" | base64 --decode > ~/.ssh/l5_volume_export
           chmod 600 ~/.ssh/l5_volume_export
           ssh-keygen -y -f ~/.ssh/l5_volume_export > ~/.ssh/l5_volume_export.pub
           chmod 644 ~/.ssh/l5_volume_export.pub
