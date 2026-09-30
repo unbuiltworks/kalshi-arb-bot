@@ -1,52 +1,111 @@
-[
- {
-  "invariant": "D1 monotonic replay input (all slugs)",
-  "verdict": "PASS",
-  "detail": "51 slugs"
- },
- {
-  "invariant": "D2 NO own-terms inversion (bid<=ask, up+down<=1)",
-  "verdict": "PASS",
-  "detail": "2219 rows, 0 viol"
- },
- {
-  "invariant": "D3 fees non-negative + net identity",
-  "verdict": "PASS",
-  "detail": "[]"
- },
- {
-  "invariant": "D4 qty conservation 2*matched+|resid|",
-  "verdict": "FAIL",
-  "detail": "44 mismatches"
- },
- {
-  "invariant": "D5 fill prices strictly in (0,1)",
-  "verdict": "PASS",
-  "detail": ""
- },
- {
-  "invariant": "D6 tape rows unique by (slug,kind,t)",
-  "verdict": "PASS",
-  "detail": "4424 rows"
- },
- {
-  "invariant": "D7 settlement direction vs last-trade direction",
-  "verdict": "PASS",
-  "detail": "0 disagree"
- },
- {
-  "invariant": "D8 all 49 authoritative terminal settlements",
-  "verdict": "PASS",
-  "detail": "49 rows"
- },
- {
-  "invariant": "D9 non-OPEN bbo rows skipped by construction",
-  "verdict": "PASS",
-  "detail": "79 non-OPEN rows present and ignored"
- },
- {
-  "invariant": "D10 no unknown/uncosted events",
-  "verdict": "FAIL",
-  "detail": "2 windows with unknown_events"
- }
-]
+{
+ "LABEL": "OOS_DEFECT_CLASS_SWEEP_CORRECTED",
+ "tape": "data/pmus_btc15m_tape_oos/oos_tape_ordered.jsonl",
+ "cohort": 49,
+ "verdict": "ALL PASS",
+ "notes": "D4 and D10 each failed a first, mis-specified version of the invariant and passed the corrected one; both first versions were specification errors (D4 missed taker completion legs reaching Book.add directly; D10 treated unknown_events, a ladder-depth shortfall counter, as uncosted money).",
+ "invariants": [
+  {
+   "id": "A1",
+   "invariant": "loader inversions on the corrected tape",
+   "verdict": "PASS",
+   "detail": "0 repaired; ordered at derivation"
+  },
+  {
+   "id": "A2",
+   "invariant": "assert_monotonic over all 51 slugs",
+   "verdict": "PASS",
+   "detail": "raises on inversion; none raised"
+  },
+  {
+   "id": "A3",
+   "invariant": "cohort determinism",
+   "verdict": "PASS",
+   "detail": "admitted 49, rejected 2 (0230z,1500z), frozen-25 overlap 0"
+  },
+  {
+   "id": "A4",
+   "invariant": "frozen q50 checkpoint through corrected path",
+   "verdict": "PASS",
+   "detail": "6.116725359099999999999999992 exact"
+  },
+  {
+   "id": "A5",
+   "invariant": "net == matched + residual - fees",
+   "verdict": "PASS",
+   "detail": "196/196 ledger rows"
+  },
+  {
+   "id": "D1",
+   "invariant": "future-data leakage",
+   "verdict": "PASS",
+   "detail": "monotonic input, 51 slugs"
+  },
+  {
+   "id": "D2",
+   "invariant": "NO own-terms inversion",
+   "verdict": "PASS",
+   "detail": "2219 bbo rows, 0 violations"
+  },
+  {
+   "id": "D3",
+   "invariant": "fee sign non-negative",
+   "verdict": "PASS",
+   "detail": "49 windows x 4 clips"
+  },
+  {
+   "id": "D4",
+   "invariant": "qty conservation bought==2*matched+|resid|",
+   "verdict": "PASS",
+   "detail": "49/49, instrumented at Book.add"
+  },
+  {
+   "id": "D5",
+   "invariant": "fill prices strictly in (0,1)",
+   "verdict": "PASS",
+   "detail": ""
+  },
+  {
+   "id": "D6",
+   "invariant": "duplicate/missing rows",
+   "verdict": "PASS",
+   "detail": "4424 rows unique by (slug,kind,t)"
+  },
+  {
+   "id": "D7",
+   "invariant": "settlement inversion",
+   "verdict": "PASS",
+   "detail": "settlementPx direction == lastTradePx direction 49/49"
+  },
+  {
+   "id": "D8",
+   "invariant": "authoritative terminal settlement",
+   "verdict": "PASS",
+   "detail": "49/49 EXPIRED with settlementPx"
+  },
+  {
+   "id": "D9",
+   "invariant": "end-of-window / non-OPEN rows",
+   "verdict": "PASS",
+   "detail": "79 non-OPEN bbo rows skipped; no fill taken"
+  },
+  {
+   "id": "D10",
+   "invariant": "partial fills",
+   "verdict": "PASS",
+   "detail": "1 partial at q10, costed at own qty"
+  },
+  {
+   "id": "D11",
+   "invariant": "cash identity payout-cash_paid-fees==net",
+   "verdict": "PASS",
+   "detail": "49/49 within 1e-18"
+  },
+  {
+   "id": "D12",
+   "invariant": "adverse-price maker fill",
+   "verdict": "PASS",
+   "detail": "0 occurrences; resting px == fill px"
+  }
+ ]
+}
