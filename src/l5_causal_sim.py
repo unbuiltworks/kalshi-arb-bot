@@ -80,6 +80,11 @@ class CausalSim:
         self.resting: Dict[str, Optional[Order]] = {"up": None, "down": None}
         self.book: Dict[str, Optional[D]] = {"bid": None, "ask": None,
                                              "bid_qty": None, "ask_qty": None}
+        #: FULL LADDER when the feed carries one: {venue_px: qty} per side.
+        #: This is the upgrade that makes exact-level queue initialisation
+        #: possible away from the touch -- with top of book alone we could only
+        #: rest where our price happened to equal the touch.
+        self.ladder: Dict[str, Dict[D, D]] = {"bids": {}, "offers": {}}
         self.fills: List[dict] = []
         self.requotes = 0
         self.cancels = 0
@@ -104,17 +109,28 @@ class CausalSim:
     def displayed_at(self, side: str, px: D) -> Optional[D]:
         """Depth shown AT OUR EXACT PRICE, in venue terms, right now.
 
-        The recorder gives top of book plus its size. Our price equals the touch
-        only sometimes; when it does not, the displayed size at OUR level is not
-        observable from this feed and the queue is unknowable -- so we return
-        None and the caller refuses to rest. That refusal is the conservative
-        direction and it is deliberate.
+        With a FULL LADDER this is a direct observation at any level. With top of
+        book only it can be answered solely where our price equals the touch, and
+        everywhere else the queue is unknowable -- so we return None and the
+        caller refuses to rest rather than guess a position. That refusal is the
+        conservative direction and it is deliberate.
+
+        A level the FULL ladder does not show means something quite different
+        from an unobservable level, and conflating the two was a real bug: with a
+        complete ladder, absence is EMPTY, so an order there is ALONE AND FIRST
+        IN QUEUE -- queue_ahead = 0, the best position available, not an unknown
+        one. Refusing to rest there made the engine deadlock after its first
+        fill, because a basis-derived complement price is usually not already
+        quoted. Absence is unknowable only when the feed shows the touch alone.
         """
+        venue = px if side == "up" else (D(1) - px)
+        book_side = "bids" if side == "up" else "offers"
+        if self.ladder[book_side]:
+            return self.ladder[book_side].get(venue, D(0))
         if side == "up":
             if self.book["bid"] is not None and px == self.book["bid"]:
                 return self.book["bid_qty"]
             return None
-        venue = D(1) - px
         if self.book["ask"] is not None and venue == self.book["ask"]:
             return self.book["ask_qty"]
         return None
@@ -129,6 +145,9 @@ class CausalSim:
     # --------------------------------------------------------------- events
 
     def on_book(self, row: dict, t: float) -> None:
+        lad = row.get("_ladder")
+        if lad is not None:
+            self.ladder = lad
         self.book["bid"] = ES._d(row.get("bid"))
         self.book["ask"] = ES._d(row.get("ask"))
         self.book["bid_qty"] = ES._d(row.get("bid_qty"))

@@ -153,3 +153,22 @@ def test_merged_stream_puts_book_before_trade_on_a_tie():
             "trades": [{"t": 5.0, "px": "0.4", "_src": (0, 0, 0)}]}
     ev = ES.merged(data)
     assert [k for _t, k, _r in ev] == ["book", "trade"]
+
+
+def test_an_empty_level_in_a_full_ladder_means_first_in_queue():
+    """With a COMPLETE ladder, a price no one is quoting is EMPTY, so an order
+    there is alone and first -- queue_ahead 0, the best position. Treating that
+    as 'unknowable' deadlocked the engine after its first fill, because a
+    basis-derived complement price is usually not already quoted."""
+    s = CausalSim(clip=D(10))
+    row = _book("0.40", "0.41", "100", "100")
+    row["_ladder"] = {"bids": {D("0.40"): D(100)}, "offers": {D("0.41"): D(100)}}
+    s.on_book(row, 1.0)
+    assert s.displayed_at("up", D("0.33")) == D(0), "empty level read as unknown"
+    assert s.displayed_at("up", D("0.40")) == D(100)
+
+
+def test_top_of_book_only_still_refuses_an_unobservable_level():
+    s = CausalSim(clip=D(10))
+    s.on_book(_book("0.40", "0.41", "100", "100"), 1.0)   # no _ladder
+    assert s.displayed_at("up", D("0.33")) is None
