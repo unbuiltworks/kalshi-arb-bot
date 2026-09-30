@@ -213,6 +213,34 @@ def run_forever(*, clock=time.time, sleep=time.sleep,
             feed = ((feed_factory(slug, deadline) if feed_factory
                      else FEED.AuthenticatedBookFeed(slug, clock=clock,
                                                      deadline=deadline)))
+            # THE SUBSCRIPTION MUST BE STARTED. Without this the feed object
+            # exists, `latest()` answers None forever, and the window reports
+            # `ticks: 0` -- which reads like a quiet market and is in fact a
+            # collector that never connected. That defect produced every
+            # zero-tick shadow window recorded before this fix, so readiness
+            # is now established explicitly and journalled either way.
+            started = getattr(feed, "start", None)
+            if callable(started):
+                started()
+            ready = getattr(feed, "wait_ready", None)
+            ok = True if not callable(ready) else bool(ready(sleep=sleep))
+            health = (feed.health() if callable(getattr(feed, "health", None))
+                      else {})
+            journal.write("shadow_book_feed", {
+                "market": slug, "ready": ok, "health": health,
+                "labels": ("frames must be arriving before any window is "
+                           "used as behavioral evidence; " + SHADOW)})
+            if not ok:
+                # no frames: say so and move to the next window rather than
+                # spending 15 minutes producing a zero-tick artefact.
+                journal.write("shadow_window_failed", {
+                    "market": slug, "error": "FeedNotReady",
+                    "detail": "no book frame arrived before wait_ready gave up",
+                    "labels": SHADOW})
+                print("SHADOW_FEED_NOT_READY " + json.dumps(
+                    {"market": slug, "health": health}, default=str),
+                    flush=True)
+                continue
             shadow_window(slug, deadline, feed=feed, journal=journal,
                           clock=clock, sleep=sleep)
         except BaseException as exc:                           # noqa: BLE001

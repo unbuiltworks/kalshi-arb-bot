@@ -1,0 +1,52 @@
+[
+ {
+  "invariant": "D1 monotonic replay input (all slugs)",
+  "verdict": "PASS",
+  "detail": "51 slugs"
+ },
+ {
+  "invariant": "D2 NO own-terms inversion (bid<=ask, up+down<=1)",
+  "verdict": "PASS",
+  "detail": "2219 rows, 0 viol"
+ },
+ {
+  "invariant": "D3 fees non-negative + net identity",
+  "verdict": "PASS",
+  "detail": "[]"
+ },
+ {
+  "invariant": "D4 qty conservation 2*matched+|resid|",
+  "verdict": "FAIL",
+  "detail": "44 mismatches"
+ },
+ {
+  "invariant": "D5 fill prices strictly in (0,1)",
+  "verdict": "PASS",
+  "detail": ""
+ },
+ {
+  "invariant": "D6 tape rows unique by (slug,kind,t)",
+  "verdict": "PASS",
+  "detail": "4424 rows"
+ },
+ {
+  "invariant": "D7 settlement direction vs last-trade direction",
+  "verdict": "PASS",
+  "detail": "0 disagree"
+ },
+ {
+  "invariant": "D8 all 49 authoritative terminal settlements",
+  "verdict": "PASS",
+  "detail": "49 rows"
+ },
+ {
+  "invariant": "D9 non-OPEN bbo rows skipped by construction",
+  "verdict": "PASS",
+  "detail": "79 non-OPEN rows present and ignored"
+ },
+ {
+  "invariant": "D10 no unknown/uncosted events",
+  "verdict": "FAIL",
+  "detail": "2 windows with unknown_events"
+ }
+]

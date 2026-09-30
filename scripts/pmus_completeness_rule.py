@@ -40,7 +40,29 @@ def scheduled_close(slug: str) -> dt.datetime:
     return start + dt.timedelta(seconds=WINDOW_S)
 
 
+#: inversions this loader repaired on its last call, per slug. NOT a log
+#: line: a caller auditing replay integrity reads this.
+LOAD_ORDER_REPORT: Dict[str, dict] = {}
+
+
 def load_tape(path: str = TAPE) -> Dict[str, List[dict]]:
+    """Rows per slug, STRICTLY TIME-ORDERED, with inversions reported.
+
+    This loader used to return FILE order. The 49-window out-of-sample run
+    consumed it that way, and the derived tape carried two chronological
+    inversions (0445z, 1400z): a `book` row read before the earlier `bbo` it
+    precedes hands that decision a ladder from its own future, which moved
+    one window by $3.93 at clip 30.
+
+    Sorting alone would have hidden that, because
+    `audit_economic_complete.load()` sorts and silently repaired FIVE
+    inversions in the frozen tape -- which is why the frozen checkpoint
+    validated the engine and said nothing about the loader. So this both
+    orders the rows AND records what it had to repair, in
+    LOAD_ORDER_REPORT, for the integrity audit to assert on.
+    """
+    from src import l5_replay_input as RI
+
     by: Dict[str, List[dict]] = {}
     with open(path, encoding="utf-8") as fh:
         for ln in fh:
@@ -51,6 +73,12 @@ def load_tape(path: str = TAPE) -> Dict[str, List[dict]]:
             s = r.get("slug")
             if s:
                 by.setdefault(str(s), []).append(r)
+    LOAD_ORDER_REPORT.clear()
+    for slug in list(by):
+        rows, rep = RI.ordered(by[slug])
+        by[slug] = list(rows)
+        if rep["repaired_inversions"]:
+            LOAD_ORDER_REPORT[slug] = rep
     return by
 
 
