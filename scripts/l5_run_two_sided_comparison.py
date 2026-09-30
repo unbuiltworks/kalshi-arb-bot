@@ -65,10 +65,12 @@ def build(arm: str, clip: D) -> TwoSided:
     return TwoSided(arm=arm, clip=clip)
 
 
-def run_window(path: str, slug: str, winner: str, start: float,
+def run_window(paths, slug: str, winner: str, start: float,
                clip: D) -> Dict[str, Any]:
+    """`paths` is EVERY raw source covering the window: a window ending on an
+    hour boundary lives in two hourly recorder files."""
     import scripts.l5_run_causal_ws as W
-    W.SLICE = path
+    W.SLICE = list(paths)
     events = W.events(slug)
     out: Dict[str, Any] = {"slug": slug, "events": len(events),
                            "winner": winner}
@@ -104,7 +106,7 @@ def main(argv) -> int:
             if not w["complete"]:
                 print(f"  {w['slug']}: {w.get('exclusion')}")
         return 1
-    rows = [run_window(w["raw_paths"][0], w["slug"], w["winner"],
+    rows = [run_window(w["raw_paths"], w["slug"], w["winner"],
                        w["window_start"], D(1)) for w in usable]
     print(json.dumps({"windows": rows}, indent=1, default=str))
     # aggregate + worst ten by settled net

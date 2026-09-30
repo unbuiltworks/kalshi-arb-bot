@@ -43,8 +43,34 @@ def _ep(t) -> Optional[float]:
         return None
 
 
+def _open_text(path: str):
+    """RAW recorder files arrive either gzipped or plain; pick by magic bytes
+    rather than by extension so a mis-named file cannot be read as empty."""
+    with open(path, "rb") as fh:
+        magic = fh.read(2)
+    if magic == b"\x1f\x8b":
+        return gzip.open(path, "rt", encoding="utf-8")
+    return open(path, "rt", encoding="utf-8")
+
+
+def _rows(paths):
+    """A 15m window whose end lands on an hour boundary is split across TWO
+    hourly recorder files, so the loader must consume every source file for the
+    window and re-order by receipt time -- reading only the first would silently
+    truncate the window's tail (and its settlement record)."""
+    rows = []
+    for path in paths:
+        with _open_text(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+    return rows
+
+
 def events(slug: str):
-    rows = [json.loads(l) for l in gzip.open(SLICE, "rt", encoding="utf-8")]
+    paths = [SLICE] if isinstance(SLICE, str) else list(SLICE)
+    rows = _rows(paths)
     out = []
     seen_ids = set()
     for r in rows:
