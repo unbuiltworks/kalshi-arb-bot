@@ -28,9 +28,22 @@ from src import pmus_l5_native_engine as E
 class ReplayVenue:
     """The frozen fill model, wearing the venue's hat."""
 
-    def __init__(self, *, fill_model: str = "queue_aware") -> None:
+    def __init__(self, *, fill_model: str = "queue_aware",
+                 respect_limit: bool = False) -> None:
         self.fill_model = fill_model
         self.qstate: Dict[str, Any] = {}
+        #: HONOUR THE RESTING LIMIT. False is the frozen arm byte-for-byte:
+        #: `maker_fill` recomputes the price from the CURRENT touch and ignores
+        #: the limit we passed it, which was harmless only because the frozen
+        #: engine requotes to that same touch every tick -- audited, and no
+        #: frozen fill was ever worse than its own limit.
+        #:
+        #: The complement controller breaks that coincidence on purpose: it
+        #: rests BELOW the touch and waits. A resting buy cannot fill above its
+        #: limit, so with the controller on the adapter must enforce that, or
+        #: the cap would be priced and then ignored. This is a correctness
+        #: requirement of the fill model, not a policy choice.
+        self.respect_limit = bool(respect_limit)
 
     def fills_for(self, eng: "E.NativeEngine", row: Mapping[str, Any],
                   side: str, px: D, clip: D,
@@ -41,17 +54,40 @@ class ReplayVenue:
                                 ladder=ladder, qstate=self.qstate)
         if qty <= 0 or fpx is None:
             return None
+        if self.respect_limit:
+            if fpx > px:
+                # the market is richer than our limit: we are behind it and
+                # nothing trades against us. No fill, no cost, keep waiting.
+                return None
+            # the touch is at or below our limit, so our order is at the front
+            # of the book at OUR price and that is what we pay. Never the
+            # touch: filling at a price we did not post would be a discount
+            # the venue never gave us.
+            return qty, px
         return qty, fpx
 
 
 def replay_window(rows, *, winner, clip=E.CLIP, cap_at_fill=True,
-                  fill_model="queue_aware") -> Dict[str, Any]:
-    """Drive the engine over one window exactly as run_window walks it."""
+                  fill_model="queue_aware",
+                  complement_controller=False,
+                  residual_backstop=False,
+                  extend_requires_balance=False) -> Dict[str, Any]:
+    """Drive the engine over one window exactly as run_window walks it.
+
+    `complement_controller=False` is the frozen arm and is the default
+    everywhere, so every existing caller and the pinned checkpoint are
+    untouched. True turns on the inventory-aware complement quote AND the
+    limit-respecting fill model it requires.
+    """
     # parity: the cap runs where FROZEN runs it (on the filled qty), so the
     # engine's strictly-tighter prospective cap is switched off for the replay
     # and pinned separately by its own test.
-    eng = E.NativeEngine(clip=clip, prospective_cap=not cap_at_fill)
-    venue = ReplayVenue(fill_model=fill_model)
+    eng = E.NativeEngine(clip=clip, prospective_cap=not cap_at_fill,
+                         complement_controller=complement_controller,
+                         residual_backstop=residual_backstop,
+                         extend_requires_balance=extend_requires_balance)
+    venue = ReplayVenue(fill_model=fill_model,
+                        respect_limit=complement_controller)
     ladder: Optional[Mapping[str, Any]] = None
 
     for row in rows:

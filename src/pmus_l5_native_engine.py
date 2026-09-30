@@ -28,7 +28,7 @@ FROZEN PARAMETERS, fixed here so a caller cannot tune them:
 """
 from __future__ import annotations
 
-from decimal import Decimal as D, InvalidOperation
+from decimal import Decimal as D, ROUND_FLOOR, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import l5_authenticated_observation as OBS
@@ -43,6 +43,13 @@ from src import pmus_completion_shadow as S
 #: Default 50, which is the frozen arm; unset means exactly clip-50 behaviour.
 CLIP = D(50)
 THETA = D("0.96")
+
+#: venue price tick. The venue's own name for it is `orderPriceMinTickSize`
+#: (read per market by the transport); every price in the recorded tape is on
+#: a 2-decimal grid, so 0.01 is the observed grid and not a chosen parameter.
+#: A derived complement price is floored to this grid, which can only make the
+#: quote CHEAPER than the economics admit, never richer.
+PRICE_TICK = D("0.01")
 VARIANT = "B"
 HOLD_S = 60.0
 RESIDUAL_CAP_K = D(2)
@@ -132,6 +139,9 @@ class NativeEngine:
                  profit_lock_usd: D = PROFIT_LOCK_USD,
                  charge_resting: bool = False,
                  prospective_cap: bool = True,
+                 complement_controller: bool = False,
+                 residual_backstop: bool = False,
+                 extend_requires_balance: bool = False,
                  lock_gate=None) -> None:
         self.clip, self.theta = D(str(clip)), D(str(theta))
         self.variant, self.hold_s = variant, float(hold_s)
@@ -149,6 +159,32 @@ class NativeEngine:
         #: also runs against the clip we intend to rest -- strictly tighter.
         #: Parity replay sets this False and applies the cap at the frozen point.
         self.prospective_cap = bool(prospective_cap)
+        #: INVENTORY-AWARE COMPLEMENT CONTROLLER. Default False, which is the
+        #: frozen policy byte-for-byte: step 4 rests both sides at OUR touch
+        #: with no reference to the inventory being completed. The trace of the
+        #: ten corrected-OOS tail windows showed what that costs: holding 20
+        #: DOWN at basis 0.5700, the engine posted UP at 0.57, 0.40, 0.49,
+        #: 0.37, ... 0.96, 0.97, 0.98, 0.99 -- following its own bid up as the
+        #: market left, and completing pairs at 1.34 while the theta-gated
+        #: TAKER walk was attempted 47 times and admitted nothing.
+        #:
+        #: True derives the maximum economically acceptable complement price
+        #: from the held side's own cost basis and rests THERE, waiting for the
+        #: market to come to us. It is NOT a global ceiling: when a side is not
+        #: the deficient one -- flat inventory, or the side we are already long
+        #: -- the quote is the touch, exactly as frozen. The cap exists only
+        #: where unmatched inventory exists to complete.
+        self.complement_controller = bool(complement_controller)
+        #: repair the residual at market once it reaches the frozen bound.
+        self.residual_backstop = bool(residual_backstop)
+        #: refuse to EXTEND the long side while its complement is outstanding.
+        self.extend_requires_balance = bool(extend_requires_balance)
+        #: diagnostics for the controller. Counts only; no economics.
+        self.complement_capped = 0
+        self.complement_no_price = 0
+        self.extend_refused_by_bound = 0
+        self.residual_repairs = 0
+        self.extend_refused_while_imbalanced = 0
         #: LIVE SAFETY OVERLAY SEAT. None -- the default, and what the parity
         #: replay uses -- latches immediately, exactly as frozen. Live, the
         #: overlay installs a gate that must run the cancel/reconcile
@@ -303,6 +339,57 @@ class NativeEngine:
                     return out
                 self.on_completion_fill(it, *got)
 
+        # ---- 1b. RESIDUAL REPAIR BACKSTOP. Only with the controller on.
+        #
+        # THE MISSING HALF. `residual_cap_k` is already frozen in the config at
+        # 2, and the engine already enforces it -- but only by REFUSING to add
+        # more. It never repairs, so a residual that reaches the bound rides to
+        # settlement and the whole basis is lost: 1415z is 20 contracts and
+        # -$18.80 with no matched inventory at all. With the complement
+        # controller waiting at a basis-derived price, that happens more often,
+        # not less, which is exactly what the training cohort showed.
+        #
+        # L5's mature-era evidence is "much larger peak imbalance but FASTER
+        # REPAIR". Repair is the half we never implemented. This closes it with
+        # no new parameter: the trigger is the bound the config already
+        # declares, and the action is the same no-theta walk the floor-securing
+        # completion already uses.
+        #
+        # Theta is deliberately NOT applied here, and that is not a loophole:
+        # residual-on-winner is established as approximately a coin flip, so
+        # completing an unhedged residual at the market's own price is
+        # expectation-neutral and variance-reducing. This is a risk action, not
+        # an edge action, and it is the only place in the engine allowed to pay
+        # above theta for a reason other than securing a locked floor.
+        if self.residual_backstop and self.locked_at is None:
+            rb = self.bk.residual()
+            if rb != 0:
+                bound = self.residual_cap_k * (
+                    self.max_clip_seen if self.max_clip_seen > 0 else self.clip)
+                if abs(rb) >= bound and self.ladder:
+                    heldb = "up" if rb > 0 else "down"
+                    compb = S.complement(heldb)
+                    lvb = S.buy_levels(self.ladder, compb)
+                    nb, costb, _shortb = S.walk_ladder(lvb, abs(rb))
+                    if nb > 0:
+                        feeb = S.taker_fee(costb / nb, nb)
+                        itb = Intent(SECURE, side=compb, qty=nb, cost=costb,
+                                     fee=feeb, now=now, taker=True,
+                                     limit_price=worst_walked_price(lvb,
+                                                                   abs(rb)),
+                                     residual_before=rb, bound=bound,
+                                     reason="RESIDUAL_BOUND_REPAIR_NO_THETA")
+                        out.append(itb)
+                        if execute_taker is None:
+                            return out      # unconfirmed: change nothing
+                        gotb = execute_taker(itb)
+                        if gotb is None:
+                            return out
+                        nbf, costbf, feebf = gotb
+                        self.bk.add(compb, nbf, costbf, maker=False,
+                                    fee=feebf)
+                        self.residual_repairs += 1
+
         # ---- 2. PROFIT_LOCK. Causal, settlement-independent.
         if self.locked_at is None:
             fh = self.floor()
@@ -396,6 +483,66 @@ class NativeEngine:
             px = own if side == "up" else (D(1) - own)
             if px <= 0 or px >= 1:
                 continue
+            if self.complement_controller:
+                cap = self.complement_cap(side)
+                if cap is None:
+                    # NOT a complement. This is an OPEN (flat) or an EXTEND of
+                    # the side we are already long. The price is the touch,
+                    # exactly as frozen -- the controller adds no ceiling here.
+                    # The only discipline that applies to an EXTEND is the
+                    # residual bound already frozen in the config
+                    # (residual_cap_k), evaluated BEFORE the quote goes out
+                    # rather than after the venue fills it. L5 evidence makes
+                    # same-side EXTEND first-class (P(EXTEND|EXTEND) ~ 0.695 in
+                    # the mature era), so nothing here suppresses it; the bound
+                    # is the "explicit risk bounds" the operating model already
+                    # names, applied at the point a live account must apply it.
+                    _rr = self.bk.residual()
+                    _is_extend = _rr != 0 and ((_rr > 0) == (side == "up"))
+                    if self.extend_requires_balance and _is_extend:
+                        # WAIT MEANS WAIT FOR THE COMPLEMENT, not "keep buying
+                        # the side we already hold". The sequence L5 exhibits is
+                        # OPEN -> EXTEND -> WAIT -> COMPLETE; the wait state is
+                        # a wait for the other leg. Adding to the long side
+                        # while its complement is unfilled raises the very
+                        # basis the complement has to clear, so each extend
+                        # makes its own completion harder. Nothing here
+                        # suppresses EXTEND in general -- from flat, and after
+                        # a completion returns us to balance, EXTEND is
+                        # untouched and first-class.
+                        self.extend_refused_while_imbalanced += 1
+                        if self.resting.get(side):
+                            out.append(Intent(CANCEL, side=side,
+                                              reason="AWAITING_COMPLEMENT"))
+                            self.resting[side] = None
+                        continue
+                    if (_rr != 0
+                            and not self._cap_permits(side, self.clip)):
+                        self.extend_refused_by_bound += 1
+                        if self.resting.get(side):
+                            out.append(Intent(CANCEL, side=side,
+                                              reason="RESIDUAL_BOUND"))
+                            self.resting[side] = None
+                        continue
+                elif cap < PRICE_TICK:
+                    # the inventory is already so expensive that NO price on
+                    # the grid completes it acceptably. Do not quote. Waiting
+                    # is the action; the theta-gated taker walk in step 1 keeps
+                    # testing the real ladder every tick and will take the
+                    # completion the moment the book offers one.
+                    self.complement_no_price += 1
+                    if self.resting.get(side):
+                        out.append(Intent(CANCEL, side=side,
+                                          reason="NO_ACCEPTABLE_COMPLEMENT"))
+                        self.resting[side] = None
+                    continue
+                elif px > cap:
+                    # THE CORRECTION. The touch is richer than this inventory
+                    # can afford. Rest at the acceptable price and WAIT for the
+                    # market to come to us, instead of chasing it upward into
+                    # progressively worse pair economics.
+                    px = cap
+                    self.complement_capped += 1
             if self.prospective_cap and not self._cap_permits(side, self.clip):
                 continue
             cur = self.resting.get(side)
@@ -403,8 +550,14 @@ class NativeEngine:
                 continue              # already resting exactly there
             if cur:
                 out.append(Intent(CANCEL, side=side, reason="REQUOTE"))
+            _reason = "TWO_SIDED_OUR_TOUCH"
+            if self.complement_controller:
+                _c = self.complement_cap(side)
+                if _c is not None and px == _c and (
+                        (own if side == "up" else (D(1) - own)) > _c):
+                    _reason = "COMPLEMENT_AT_BASIS_CAP"
             out.append(Intent(REST, side=side, price=px, qty=self.clip,
-                              maker=True, reason="TWO_SIDED_OUR_TOUCH"))
+                              maker=True, reason=_reason))
             if not self._resting_owned_by_execution:
                 # NO EXECUTION LAYER IS PRESENT. The frozen replay harness
                 # drives this engine directly with no money path and no
@@ -447,6 +600,43 @@ class NativeEngine:
             v = (live or {}).get(side)
             self.resting[side] = (None if not v else
                                   {"px": v["px"], "qty": v["qty"]})
+
+    def complement_cap(self, side: str) -> Optional[D]:
+        """The richest own-terms price at which resting `side` still completes
+        a pair at acceptable economics -- or None when `side` is not completing
+        anything.
+
+        `side` is a COMPLEMENT only when we hold more of the other side than of
+        this one. Then every clip filled here matches against inventory already
+        carried at `avg(other)`, and the pair costs `avg(other) + px`. A maker
+        fill pays no taker fee at this venue (maker volume earns a rebate; the
+        0.0695 * p * (1-p) charge is the taker's), so the acceptable price is
+
+            cap = theta - avg(other)
+
+        floored to the venue tick. Two consequences worth stating because they
+        are the whole point:
+
+        * the cap depends ONLY on inventory, never on the touch, so a market
+          moving away can never raise it. That is the defect this closes.
+        * a pair bought at the cap costs exactly theta or less, whatever the
+          book does. The invariant is on the PAIR, not on the price, which is
+          why this is not a global 0.96 price ceiling: an OPEN with no
+          inventory behind it is not capped at all, and an EXTEND is not
+          capped either.
+
+        Returns None when the side is not deficient (no cap applies) and a
+        non-positive Decimal when no acceptable price exists at all, which the
+        caller must treat as "do not quote", not as "quote at zero".
+        """
+        held = "down" if side == "up" else "up"
+        if self.bk.q[held] <= self.bk.q[side]:
+            return None               # not a complement: OPEN or EXTEND
+        cap = self.theta - self.bk.avg(held)
+        # floor to the venue grid; quantize(ROUND_FLOOR) keeps it no richer
+        # than the economics admit even when the basis is a repeating decimal.
+        return (cap / PRICE_TICK).to_integral_value(rounding=ROUND_FLOOR) \
+            * PRICE_TICK
 
     def _cap_permits(self, side: str, qty: D) -> bool:
         """B' RESIDUAL_CAP_k2, applied PROSPECTIVELY.
