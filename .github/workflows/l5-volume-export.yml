@@ -108,10 +108,11 @@ jobs:
           mkdir -p export
           railway --help > export/cli_help.txt 2>&1 || true
           railway service --help >> export/cli_help.txt 2>&1 || true
-          if ! railway service files list "$REMOTE_DIR" \
+          if ! railway service files \
                  --service "$SERVICE_ID" \
                  --environment "$ENVIRONMENT_ID" \
                  --project "$PROJECT_ID" \
+                 list "$REMOTE_DIR" \
                  < /dev/null > export/INVENTORY.txt 2>export/inventory_err.txt; then
             echo "::error::The pinned Railway CLI could not list service files" \
                  "non-interactively. Failing closed: this workflow has no" \
@@ -137,11 +138,11 @@ jobs:
               */*|..*) echo "::error::refusing suspicious name '$name'"; exit 1 ;;
             esac
             echo "downloading $name"
-            railway service files download "$REMOTE_DIR/$name" \
+            railway service files \
               --service "$SERVICE_ID" \
               --environment "$ENVIRONMENT_ID" \
               --project "$PROJECT_ID" \
-              --output "export/raw/$name" < /dev/null
+              download "$REMOTE_DIR/$name" "export/raw/$name" < /dev/null
             bytes="$(stat -c%s "export/raw/$name")"
             if [ "$bytes" -le 0 ]; then
               echo "::error::downloaded 0 bytes for $name"; exit 1
