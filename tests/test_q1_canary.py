@@ -736,3 +736,37 @@ def test_cancel_and_resolve_books_a_race_fill(monkeypatch):
     f.fills["O9"] = _filled("0.58", side="OUTCOME_SIDE_NO")
     res = C.cancel_and_resolve(f, "O9", slug, sleep=lambda *_: None)
     assert res["fill"]["price"] == D("0.58")
+
+
+def test_the_venue_grid_must_be_known_before_any_order_exists(monkeypatch):
+    """Reviewer NON-BLOCKER 12, promoted: a wrong grid strands the first leg.
+
+    GET /v1/markets/{slug} answers with an error object, so the old _tick
+    returned None and complement_bound fell back to TICK=0.005 -- off-grid on
+    this 0.01 market, so the complement would be refused at preview after the
+    opening leg had already filled. Now an unknown grid refuses up front.
+    """
+    slug = _arm(monkeypatch)
+    monkeypatch.setattr(C, "_tick", lambda *a, **k: None)
+    f = Fake([("0.40", "0.60")] * 6)
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    assert out["status"] == "TICK_UNAVAILABLE"
+    assert not f.placed, "placed an order without knowing the price grid"
+    assert f.sweeps >= 1
+
+
+def test_the_grid_comes_from_the_canonical_row_route():
+    """The route that actually serves it, with the slug matched on the row."""
+    from src import pmus_market_row as MR
+    assert MR.MARKET_ROW_PATH == "/v1/market/slug/%s"
+    calls = []
+
+    def fake_get(path):
+        calls.append(path)
+        return {"market": {"slug": "S", MR.TICK_FIELD: "0.01"}}
+
+    row = MR.market_row("S", get=fake_get)
+    assert row[MR.TICK_FIELD] == "0.01"
+    assert calls == ["/v1/market/slug/S"]

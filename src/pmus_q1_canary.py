@@ -299,15 +299,28 @@ def place_taker_buy(t: X.Transport, slug: str, outcome_side: str, price: D,
 
 # -------------------------------------------------------------- the campaign
 
-def _tick(t: X.Transport, slug: str, sleep) -> Optional[D]:
-    """The venue's own price grid for this market, or None."""
+def _tick(t: X.Transport, slug: str, sleep=time.sleep) -> Optional[D]:
+    """The venue's own price grid for this market, or None.
+
+    Uses the canonical row route `/v1/market/slug/{slug}` via
+    `pmus_market_row`, which matches the slug on the row the venue returned
+    and treats a missing tick as an error rather than a default.
+
+    This was `GET /v1/markets/{slug}`, which the gateway answers with an
+    ERROR OBJECT (verified 2026-09-30 17:35Z), so `tick_for_market` returned
+    None and `complement_bound` silently fell back to `TICK` = 0.005. PMUS
+    BTC15m is a 0.01-grid market that REJECTS such a price, so the probe
+    would have placed its opening leg, then had the complement refused at
+    preview and Halted holding an unpaired long. Fail-closed, but it burns
+    the one authorized campaign.
+    """
+    from src import pmus_market_row as MR
     try:
-        md = X._get_with_retry(t, f"/v1/markets/{slug}", base=X.GATEWAY,
-                               sleep=sleep)
-    except Exception:                                        # noqa: BLE001
+        row = MR.market_row(slug)
+        return X.tick_for_market(row)
+    except Exception as exc:                                 # noqa: BLE001
+        record("tick_unavailable", slug=slug, err=str(exc)[:160])
         return None
-    market = md.get("market") or md.get("marketData") or md
-    return X.tick_for_market(market)
 
 
 def _poll_fill(t: X.Transport, order_id: str, sleep) -> dict:
@@ -361,6 +374,11 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         if reason:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": reason}
         tick = _tick(t, slug, sleep)
+        if tick is None:
+            # Refuse BEFORE any order exists. A wrong grid makes the
+            # complement unquotable, which would strand the opening leg.
+            return {**report, "status": "TICK_UNAVAILABLE",
+                    "note": "venue grid not served; placed nothing"}
         # DEFECT 1: strategy decisions come from the authenticated WS only.
         if state is None:
             feed = feed or WS.WsFeed(slug).start()
