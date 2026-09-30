@@ -9,8 +9,10 @@
 # HARD CONSTRAINTS, enforced below:
 #   * manual trigger only: no schedule, no push trigger;
 #   * the Railway CLI version is PINNED and asserted after install;
-#   * authentication comes ONLY from the RAILWAY_TOKEN Actions secret, which is
-#     never echoed, never written to disk and never passed on a command line;
+#   * API authentication comes from the workspace-scoped RAILWAY_API_TOKEN
+#     Actions secret. Service-file reads additionally require Railway SSH, so a
+#     dedicated RAILWAY_SSH_PRIVATE_KEY is materialized only in the ephemeral
+#     runner's ~/.ssh and never uploaded as an artifact;
 #   * the ONLY Railway operations are `files list` and `files download`. There
 #     is no deploy, redeploy, restart, variable change, domain change or agent
 #     call anywhere in this file, so the healthy pmus-ws-evidence-recorder
@@ -55,19 +57,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_SSH_PRIVATE_KEY: ${{ secrets.RAILWAY_SSH_PRIVATE_KEY }}
       PROJECT_ID: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
       ENVIRONMENT_ID: f3642d27-26dc-4e21-9170-bc76290c076f
       # pmus-ws-evidence-recorder. READ ONLY; never redeployed here.
       SERVICE_ID: 71b6ea99-ea6a-4b20-9602-fa873721ed35
       REMOTE_DIR: ${{ inputs.remote_dir }}
     steps:
-      - name: Fail closed if the token secret is absent
+      - name: Fail closed if required CI secrets are absent
         run: |
           set -euo pipefail
-          if [ -z "${RAILWAY_TOKEN:-}" ]; then
-            echo "::error::RAILWAY_TOKEN secret is not set. This workflow" \
-                 "authenticates only from that secret and will not prompt."
+          if [ -z "${RAILWAY_API_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_API_TOKEN secret is not set."
+            exit 1
+          fi
+          if [ -z "${RAILWAY_SSH_PRIVATE_KEY:-}" ]; then
+            echo "::error::RAILWAY_SSH_PRIVATE_KEY secret is not set."
             exit 1
           fi
 
@@ -87,18 +93,29 @@ jobs:
                     "${{ inputs.railway_cli_version }}, got '$got'"; exit 1 ;;
           esac
 
-      - name: Confirm project-token authentication (read-only)
+      - name: Prepare dedicated Railway SSH identity
         run: |
           set -euo pipefail
-          # RAILWAY_TOKEN is a PROJECT token. `railway whoami` asks for a
-          # logged-in USER and can reject a valid project token, so it is the
-          # wrong CI check. Project tokens identify their project directly.
-          # Use a project-scoped read instead; any auth failure still stops here.
-          railway status --json > /tmp/railway-status.json
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$RAILWAY_SSH_PRIVATE_KEY" > ~/.ssh/l5_volume_export
+          chmod 600 ~/.ssh/l5_volume_export
+          ssh-keygen -y -f ~/.ssh/l5_volume_export > ~/.ssh/l5_volume_export.pub
+          chmod 644 ~/.ssh/l5_volume_export.pub
+          echo "SSH identity prepared; public fingerprint:"
+          ssh-keygen -lf ~/.ssh/l5_volume_export.pub | awk '{print $2, $4}'
+
+      - name: Confirm workspace-token project access (read-only)
+        run: |
+          set -euo pipefail
+          railway service status \
+            --service "$SERVICE_ID" \
+            --environment "$ENVIRONMENT_ID" \
+            --project "$PROJECT_ID" \
+            --json > /tmp/railway-status.json
           python3 - <<'PY'
           import json
           p = json.load(open("/tmp/railway-status.json"))
-          print("project auth OK:", p.get("name") or p.get("project") or "project")
+          print("workspace token can read target service:", p.get("name") or p.get("id") or "ok")
           PY
 
       - name: Inventory the raw directory (read-only)
