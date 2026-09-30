@@ -56,6 +56,69 @@ def current_slug(now: float) -> str:
         t.year, t.month, t.day, t.hour, m)
 
 
+def window_bounds(now: float) -> tuple:
+    """The [start, end) epoch bounds of the 15-minute window containing `now`."""
+    t = datetime.fromtimestamp(now, tz=timezone.utc)
+    start = t.replace(minute=(t.minute // 15) * 15, second=0, microsecond=0)
+    return start.timestamp(), start.timestamp() + 900.0
+
+
+def run_window(*, wait: bool = True) -> str:
+    """Capture ONE COMPLETE window, boundary to boundary, or nothing.
+
+    Completeness is the whole point: the arms' settled scoreboard refuses a
+    partial window, so a recorder that starts mid-window produces an
+    unusable file. If we are already inside a window this waits for the next
+    boundary rather than emitting a stub.
+    """
+    os.makedirs(OUT_DIR, exist_ok=True)
+    now = time.time()
+    start, end = window_bounds(now)
+    if wait and now > start + 2.0:
+        start, end = end, end + 900.0
+        print("WAITING %.0fs for the next window boundary" % (start - now),
+              flush=True)
+        while time.time() < start:
+            time.sleep(min(5.0, max(0.0, start - time.time())))
+    slug = current_slug(start + 1.0)
+    path = os.path.join(OUT_DIR, "window_%s.jsonl" % slug)
+    n = 0
+    with open(path, "a", encoding="utf-8") as fh:
+        while time.time() < end:
+            t0 = time.time()
+            book = _get(slug, "book")
+            bbo = _get(slug, "bbo")
+            fh.write(json.dumps({
+                "recv_t": t0, "slug": slug,
+                "transact_time": book.get("transactTime"),
+                "state": book.get("state"),
+                "bids": book.get("bids"), "offers": book.get("offers"),
+                "last_trade_px": (bbo.get("lastTradePx") or {}).get("value"),
+                "settlement_px": (bbo.get("settlementPx") or {}).get("value"),
+                "shares_traded": bbo.get("sharesTraded"),
+                "source": "PUBLIC_GATEWAY",
+                "fidelity": "L2_OBSERVED__VOLUME_COUNTER_ONLY__NO_PRINTS",
+            }, separators=(",", ":")) + "\n")
+            fh.flush()
+            n += 1
+            if n % 200 == 0:
+                print("WINDOW %s %d rows" % (slug, n), flush=True)
+            time.sleep(max(0.0, POLL_S - (time.time() - t0)))
+    # settlement, polled after the close
+    time.sleep(20.0)
+    bbo = _get(slug, "bbo")
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({
+            "recv_t": time.time(), "slug": slug, "kind": "settlement_poll",
+            "settlement_px": (bbo.get("settlementPx") or {}).get("value"),
+            "last_trade_px": (bbo.get("lastTradePx") or {}).get("value"),
+            "shares_traded": bbo.get("sharesTraded"),
+            "source": "PUBLIC_GATEWAY",
+        }, separators=(",", ":")) + "\n")
+    print("WINDOW_DONE slug=%s rows=%d path=%s" % (slug, n, path), flush=True)
+    return path
+
+
 def run(minutes: float) -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
     stop = time.time() + minutes * 60
@@ -87,4 +150,7 @@ def run(minutes: float) -> None:
 
 
 if __name__ == "__main__":
-    run(float(sys.argv[1]) if len(sys.argv) > 1 else 20.0)
+    if len(sys.argv) > 1 and sys.argv[1] == "window":
+        run_window()
+    else:
+        run(float(sys.argv[1]) if len(sys.argv) > 1 else 20.0)
