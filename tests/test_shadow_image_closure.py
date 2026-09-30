@@ -74,9 +74,53 @@ def test_the_image_copies_every_module_the_entry_points_import():
 
 
 def test_the_image_copies_nothing_the_closure_does_not_need():
-    """A no-POST image's safety is in what it omits."""
-    extra = sorted(_copied() - _closure() - {"__init__.py"})
+    """A no-POST image's safety is in what it omits.
+
+    SUPERSEDED, and deliberately delegated rather than deleted. This file's
+    `_closure()` imports the entry points and walks `sys.modules`, which cannot
+    see an import written inside a function -- and `l5_live_book_feed` imports
+    `pmus_ws_evidence_recorder` inside its connect coroutine, its `ingest` fold
+    and its `_level_pair` parser. That blind spot is why the image failed on
+    Railway four times, and it also makes this assertion WRONG in the dangerous
+    direction: it calls a genuinely-required lazy module "unused" and invites
+    someone to delete the COPY line again.
+
+    The authoritative check is the AST closure in
+    tests/test_shadow_image_packaging.py, which counts imports at any nesting
+    depth. This test now asks that one, so the two can never disagree.
+    """
+    from src.l5_image_closure import closure_of
+    from src import l5_image_manifest as M
+    import tests.test_shadow_image_packaging as PK
+
+    c = closure_of(PK.ENTRYPOINTS, exclude=tuple(PK.EXCLUDED))
+    required = {m for m in c.first_party if m not in PK.EXCLUDED}
+    copied = M.copied_paths(PK.DOCKERFILE)
+    extra = []
+    for src in sorted(copied):
+        if not src.endswith(".py"):
+            continue
+        mod = src[:-3].replace(os.sep, ".")
+        if mod.endswith(".__init__"):
+            mod = mod[:-len(".__init__")]
+        if mod not in required:
+            extra.append(src)
     assert not extra, "copied but unused: %s" % extra
+
+
+def test_the_runtime_walk_really_is_blind_to_lazy_imports():
+    """Pins the reason the test above was superseded, so nobody re-derives it
+    from four more Railway failures."""
+    from src.l5_image_closure import closure_of
+    import tests.test_shadow_image_packaging as PK
+
+    runtime_seen = _closure()                       # sys.modules walk
+    static = closure_of(PK.ENTRYPOINTS, exclude=tuple(PK.EXCLUDED))
+    static_files = {m.split(".")[-1] + ".py" for m in static.first_party}
+    invisible = sorted(static_files - runtime_seen)
+    assert "pmus_ws_evidence_recorder.py" in invisible, (
+        "the runtime walk now sees the lazy import; if that is genuinely true "
+        "this test should be removed, but verify it rather than assuming it")
 
 
 def test_no_order_capable_module_is_ever_copied():
