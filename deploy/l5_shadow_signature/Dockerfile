@@ -15,6 +15,14 @@ FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app
 
+# THE FEED NEEDS THESE. The first fixed build reported
+# SHADOW_FEED_NOT_READY with ModuleNotFoundError: websockets -- the
+# authenticated subscription could never connect because the image had no
+# dependencies at all. That is the real cause of every `ticks: 0` window;
+# before the readiness check it was invisible. Same pins as the other
+# PMUS images so the shadow observes through the same client.
+RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
+
 COPY src/__init__.py src/__init__.py
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 COPY src/l5_live_book_feed.py src/l5_live_book_feed.py

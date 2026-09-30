@@ -112,3 +112,15 @@ def test_frames_actually_reach_the_engine_once_started():
     assert done, "the window did not complete"
     assert done[0]["ticks"] > 0, "frames did not reach the decision loop"
     json.dumps(done[0], default=str)          # the row must be serialisable
+
+
+def test_the_shadow_image_installs_the_feeds_third_party_dependency():
+    """The readiness check turned the silent zero-tick window into a report,
+    and the report named the real cause: the image had no dependencies, so
+    `websockets` was missing and the subscription could never connect. The
+    COPY-closure test cannot see this -- it walks first-party modules only."""
+    df = open("deploy/l5_shadow_signature/Dockerfile").read()
+    assert "pip install" in df, "the image installs nothing"
+    assert "websockets" in df, (
+        "l5_live_book_feed imports websockets at connect time; without it "
+        "every shadow window reports ticks: 0")
