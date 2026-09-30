@@ -172,3 +172,78 @@ def test_top_of_book_only_still_refuses_an_unobservable_level():
     s = CausalSim(clip=D(10))
     s.on_book(_book("0.40", "0.41", "100", "100"), 1.0)   # no _ladder
     assert s.displayed_at("up", D("0.33")) is None
+
+
+# --------------------------------------------------- HOLD_OPEN_EXTEND arm
+
+def _sim_open(**kw):
+    from decimal import Decimal as D
+    from src.l5_causal_sim import CausalSim
+    return CausalSim(clip=D(10), **kw)
+
+
+def test_hold_open_extend_keeps_a_valid_open_leg_when_the_touch_improves():
+    """A better touch is NOT a reason to give up an earned queue position."""
+    from decimal import Decimal as D
+    s = _sim_open(hold_open_extend=True)
+    s.on_book({"bid": D("0.40"), "ask": D("0.60"), "bid_qty": D(100),
+               "ask_qty": D(100), "status": "OK",
+               "_ladder": {"bids": {D("0.40"): D(100)},
+                           "offers": {D("0.60"): D(100)}}}, 0.0)
+    o = s.resting["up"]
+    assert o is not None and o.px == D("0.40")
+    s.on_book({"bid": D("0.41"), "ask": D("0.60"), "bid_qty": D(100),
+               "ask_qty": D(100), "status": "OK",
+               "_ladder": {"bids": {D("0.41"): D(100)},
+                           "offers": {D("0.60"): D(100)}}}, 1.0)
+    assert s.resting["up"] is o, "held order was replaced by a better touch"
+    assert s.requotes_by_type["open_or_extend"] == 0
+    assert s.holds_by_type["open_or_extend"] >= 1
+
+
+def test_control_requotes_the_open_leg_on_the_same_sequence():
+    """The control must show the churn the arm is meant to remove."""
+    from decimal import Decimal as D
+    s = _sim_open(hold_open_extend=False)
+    for t, bid in ((0.0, D("0.40")), (1.0, D("0.41"))):
+        s.on_book({"bid": bid, "ask": D("0.60"), "bid_qty": D(100),
+                   "ask_qty": D(100), "status": "OK",
+                   "_ladder": {"bids": {bid: D(100)},
+                               "offers": {D("0.60"): D(100)}}}, t)
+    assert s.requotes_by_type["open_or_extend"] == 1
+    assert s.resting["up"].px == D("0.41")
+
+
+def test_hold_open_extend_still_gives_up_a_role_changed_order():
+    """Once the side becomes the deficient one it is a complement, not an open."""
+    from decimal import Decimal as D
+    s = _sim_open(hold_open_extend=True)
+    s.bk.add("down", D(10), D(10) * D("0.50"), maker=True)
+    o = s.resting.get("up")
+    assert o is None or s._still_valid_open("up", o) is False
+
+
+def test_adverse_movement_is_recorded_for_a_held_order():
+    """Holding a stale-high level must be COSTED, not just counted."""
+    from decimal import Decimal as D
+    s = _sim_open(hold_open_extend=True)
+    s.on_book({"bid": D("0.40"), "ask": D("0.60"), "bid_qty": D(100),
+               "ask_qty": D(100), "status": "OK",
+               "_ladder": {"bids": {D("0.40"): D(100)},
+                           "offers": {D("0.60"): D(100)}}}, 0.0)
+    s.on_book({"bid": D("0.30"), "ask": D("0.60"), "bid_qty": D(100),
+               "ask_qty": D(100), "status": "OK",
+               "_ladder": {"bids": {D("0.30"): D(100)},
+                           "offers": {D("0.60"): D(100)}}}, 1.0)
+    assert s.adverse_orders == 1
+    assert s.resting["up"].worst_adv == D("0.10")
+
+
+def test_pre_registered_arm_is_declared_and_flagged():
+    from src.l5_frozen_arms import ARMS, PRE_REGISTERED
+    assert "HOLD_OPEN_EXTEND_REACTIVE_TAKE" in ARMS
+    assert "HOLD_OPEN_EXTEND_REACTIVE_TAKE" in PRE_REGISTERED
+    assert ARMS["HOLD_OPEN_EXTEND_REACTIVE_TAKE"]["reactive_take"] is True
+    # the completed arms must not have been altered
+    assert ARMS["CONTROL"]["hold_the_level"] is False
+    assert ARMS["HOLD_THE_LEVEL"]["hold_open_extend"] is False

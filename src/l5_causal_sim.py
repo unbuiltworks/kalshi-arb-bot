@@ -58,16 +58,24 @@ class Order:
     """One resting maker order with a causally-earned queue position."""
 
     __slots__ = ("side", "px", "qty", "ahead", "filled", "placed_t",
-                 "ahead0", "consumed", "is_complement")
+                 "ahead0", "consumed", "is_complement", "own0", "worst_adv",
+                 "held_adverse")
 
     def __init__(self, side: str, px: D, qty: D, ahead: D, t: float,
-                 is_complement: bool = False) -> None:
+                 is_complement: bool = False, own0: Optional[D] = None) -> None:
         self.side, self.px, self.qty = side, px, qty
         self.ahead, self.filled, self.placed_t = ahead, D(0), t
         #: queue depth we joined behind, and how much of it real prints ate.
         #: `ahead0 - ahead` is the position we EARNED; a cancel forfeits it.
         self.ahead0, self.consumed = ahead, D(0)
         self.is_complement = is_complement
+        #: adverse-movement instrumentation. `own0` is the own-terms touch on
+        #: our side at placement; `worst_adv` is the largest amount by which
+        #: our resting price has since sat ABOVE the prevailing own-terms
+        #: touch, i.e. how stale-high the level we are holding became.
+        self.own0 = own0
+        self.worst_adv = D(0)
+        self.held_adverse = False
 
     def remaining(self) -> D:
         return self.qty - self.filled
@@ -77,6 +85,7 @@ class CausalSim:
     def __init__(self, *, clip: D, persistent_maker: bool = True,
                  reactive_take: bool = False, basis_extend: bool = False,
                  hold_the_level: bool = False,
+                 hold_open_extend: bool = False,
                  residual_cap_k: D = E.RESIDUAL_CAP_K) -> None:
         self.clip = D(str(clip))
         self.persistent_maker = persistent_maker
@@ -96,6 +105,16 @@ class CausalSim:
         #: breach the residual cap. A partial fill leaves the remainder resting
         #: while more of it would still reduce residual.
         self.hold_the_level = hold_the_level
+        #: HOLD_OPEN_EXTEND. The measured cause of the queue destruction on the
+        #: 1330z slice: all 54 requotes in 5 minutes were on the OPEN/EXTEND
+        #: leg, whose desired price IS the touch, so every touch move restarted
+        #: the queue climb from the back. With this on, a resting OPEN/EXTEND
+        #: order keeps its price and its earned queue position even when a
+        #: better touch appears. It is given up only when it stops being a
+        #: valid open/extend: it became the deficient (complement) side, it no
+        #: longer lowers the aggregate basis of a side we already hold, or the
+        #: residual cap no longer permits it.
+        self.hold_open_extend = hold_open_extend
         self.residual_cap_k = D(str(residual_cap_k))
         self.bk = S.Book()
         self.resting: Dict[str, Optional[Order]] = {"up": None, "down": None}
@@ -126,6 +145,11 @@ class CausalSim:
         #: rule is scoped to complements, so it can only ever suppress churn
         #: recorded under the "complement" key.
         self.requotes_by_type = {"complement": 0, "open_or_extend": 0}
+        self.holds_by_type = {"complement": 0, "open_or_extend": 0}
+        #: adverse movement over held orders
+        self.adverse_orders = 0       # held orders that went stale-high
+        self.adverse_ticks: List[D] = []
+        self.fills_while_adverse = 0
         self.cancels_by_type = {"complement": 0, "open_or_extend": 0}
 
     # ------------------------------------------------------------ economics
@@ -188,9 +212,40 @@ class CausalSim:
         self.book["ask_qty"] = ES._d(row.get("ask_qty"))
         if str(row.get("status") or "") not in ("OK", "ONE_SIDED"):
             return
+        self._track_adverse()
         self._reconcile(t)
         if self.reactive_take:
             self._maybe_take(t)
+
+    def own_touch(self, side: str) -> Optional[D]:
+        """The best price WE could join on `side`, in our own terms."""
+        if side == "up":
+            return self.book["bid"]
+        a = self.book["ask"]
+        return None if a is None else D(1) - a
+
+    def _track_adverse(self) -> None:
+        """Did the market move away from a level we are holding?
+
+        Adverse here means our resting price sits ABOVE the prevailing
+        own-terms touch: the level we are holding has become the expensive
+        side of the book, so a fill on it is worse than the price now
+        available. This is the cost side of refusing to requote, and it is
+        measured whether or not the arm acts on it.
+        """
+        for side in ("up", "down"):
+            o = self.resting.get(side)
+            if o is None:
+                continue
+            own = self.own_touch(side)
+            if own is None:
+                continue
+            adv = o.px - own
+            if adv > o.worst_adv:
+                o.worst_adv = adv
+            if adv >= E.PRICE_TICK and not o.held_adverse:
+                o.held_adverse = True
+                self.adverse_orders += 1
 
     def on_trade(self, row: dict, t: float) -> None:
         """A real print. The ONLY thing that can fill us."""
@@ -227,6 +282,8 @@ class CausalSim:
             o.filled += got
             if got < o.qty:
                 self.partial_fills += 1
+            if o.held_adverse:
+                self.fills_while_adverse += 1
             self.fills.append({"t": t, "side": side, "px": str(o.px),
                                "qty": str(got), "maker": True,
                                "placed_t": o.placed_t,
@@ -285,7 +342,32 @@ class CausalSim:
             return False            # basis moved; this price no longer pairs
         return self._cap_permits(side, o.remaining())
 
+    def _still_valid_open(self, side: str, o: "Order") -> bool:
+        """May a resting OPEN/EXTEND order keep its price and queue position?
+
+        A better touch is explicitly NOT a reason to move. The order is given
+        up only when it stops being a valid open/extend:
+
+        * nothing left to fill;
+        * `side` became the DEFICIENT side, so this is now a complement and
+          must be priced off the basis, not off the old touch;
+        * we already hold `side` and the held price no longer lowers that
+          side's aggregate economic basis, so filling it would make our
+          inventory worse;
+        * the residual cap no longer permits the remaining size.
+        """
+        if o.remaining() <= 0:
+            return False
+        if self.complement_cap(side) is not None:
+            return False            # role changed: it is a complement now
+        if self.bk.q[side] > 0 and o.px >= self.basis(side):
+            return False            # no longer lowers the basis we hold
+        if not self._cap_permits(side, o.remaining()):
+            return False
+        return True
+
     def _drop(self, side: str, o: "Order", t: float) -> None:
+        self.adverse_ticks.append(o.worst_adv)
         self.held_s += max(0.0, t - o.placed_t)
         self.queue_forfeited += (o.ahead0 - o.ahead)
         self.resting[side] = None
@@ -301,6 +383,15 @@ class CausalSim:
                 # A newer touch is explicitly NOT a reason to move.
                 if self._still_valid(side, cur):
                     self.holds += 1
+                    self.holds_by_type["complement"] += 1
+                    continue
+                self._drop(side, cur, t)
+                cur = None
+            if (self.hold_open_extend and cur is not None
+                    and not cur.is_complement):
+                if self._still_valid_open(side, cur):
+                    self.holds += 1
+                    self.holds_by_type["open_or_extend"] += 1
                     continue
                 self._drop(side, cur, t)
                 cur = None
@@ -327,7 +418,8 @@ class CausalSim:
             # a replace joins the BACK of the new level's queue
             self.resting[side] = Order(side, want, self.clip, shown, t,
                                        is_complement=(
-                                           self.complement_cap(side) is not None))
+                                           self.complement_cap(side) is not None),
+                                       own0=self.own_touch(side))
 
     def _maybe_take(self, t: float) -> None:
         """Cross for the whole residual when displayed depth is fee-safe."""
@@ -386,6 +478,17 @@ class CausalSim:
         res["partial_fills"] = self.partial_fills
         res["holds"] = self.holds
         res["requotes_by_type"] = dict(self.requotes_by_type)
+        res["holds_by_type"] = dict(self.holds_by_type)
+        res["adverse_orders"] = self.adverse_orders
+        res["fills_while_adverse"] = self.fills_while_adverse
+        res["max_adverse_ticks"] = (max(self.adverse_ticks)
+                                    if self.adverse_ticks else D(0))
+        res["mean_adverse_ticks"] = (
+            sum(self.adverse_ticks) / D(len(self.adverse_ticks))
+            if self.adverse_ticks else D(0))
+        res["contracts_acquired"] = sum(D(f["qty"]) for f in self.fills)
+        res["inventory_up"] = self.bk.q["up"]
+        res["inventory_down"] = self.bk.q["down"]
         res["cancels_by_type"] = dict(self.cancels_by_type)
         res["median_ahead_at_placement"] = (
             sorted(self.ahead_at_placement)[len(self.ahead_at_placement) // 2]
