@@ -32,6 +32,10 @@ COPY scripts/l5_pmus_live_oneshot.py scripts/l5_pmus_live_oneshot.py
 # ReadOnlyTransport, imports no engine, money path, mandate or
 # authorization, and an AST test asserts no order-path name appears in it.
 COPY scripts/pmus_oos_settlement_sweep.py scripts/pmus_oos_settlement_sweep.py
+# READ-ONLY settlement/cashflow audit of a completed q1 campaign. Holds
+# pmus_auth.ReadOnlyTransport, which raises on any method but GET, and imports
+# no engine, money path, mandate or authorization.
+COPY scripts/pmus_q1_settlement_audit.py scripts/pmus_q1_settlement_audit.py
 # READ-ONLY R5 persistence-signature extraction. Opens the journal on the
 # volume and prints; it contains no writer and re-hashes the file before
 # and after so `unmutated` is measured rather than claimed.

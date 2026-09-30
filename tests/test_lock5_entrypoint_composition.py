@@ -42,6 +42,8 @@ ENTRYPOINTS = [
     ENTRY,
     #: the bounded q1 HOLD_OPEN_EXTEND canary -- the probe's start command
     "src/pmus_q1_canary.py",
+    #: READ-ONLY settlement/cashflow audit for a completed q1 campaign
+    "scripts/pmus_q1_settlement_audit.py",
     "scripts/pmus_oos_settlement_sweep.py",
     "scripts/r5_signature_extract.py",
     "scripts/pmus_balance_admission_probe.py",
