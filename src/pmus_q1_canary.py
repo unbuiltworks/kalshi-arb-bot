@@ -179,6 +179,49 @@ def record(kind: str, **fields: Any) -> None:
         raise X.Halt(f"LEDGER_WRITE_FAILED:{kind}:{str(exc)[:80]}") from exc
 
 
+def terminal_no_fill(order: Mapping[str, Any]) -> bool:
+    """Is this order PROVABLY off the venue with nothing filled?
+
+    CANCEL and REJECT, plus EXPIRED because an IOC that finds no liquidity
+    expires rather than being cancelled. Anything else -- including
+    ORDER_STATE_OPEN -- is NOT proof, which is the whole point: the legacy
+    `X.cancel_exact` predicate returns True for a still-working order, and
+    treating that as terminal is how an order gets forgotten while live.
+    """
+    state = X.order_state_str(order)
+    if X._filled_qty(order) != 0:
+        return False
+    return any(w in state for w in ("CANCEL", "REJECT", "EXPIRE"))
+
+
+def resolve_ioc(t: X.Transport, order_id: str, slug: str,
+                sleep=time.sleep) -> dict:
+    """Resolve a crossing IOC on POSITIVE VENUE PROOF only.
+
+    An IOC normally terminates immediately, but the safety design here does
+    not assume venue lifecycle behaviour -- that assumption is exactly what
+    produced the forgotten-order defect on the maker path. So this reads the
+    order's own record until it proves one of two things:
+
+      * a parseable fill, or
+      * a terminal state with no fill (cancelled / rejected / expired).
+
+    If neither is proven it escalates to `cancel_and_resolve`, which also
+    demands proof and raises `CancelUnconfirmed` if it cannot get it. The
+    caller must keep the order in `unresolved` unless this returns.
+    """
+    for _ in range(CANCEL_CONFIRM_POLLS):
+        st = X._order_status(t, order_id, sleep=sleep)
+        fill = X.authoritative_fill(st)       # raises Halt if filled-but-vague
+        if fill is not None:
+            return {"fill": fill, "state": X.order_state_str(st)}
+        if terminal_no_fill(st):
+            return {"terminal": True, "state": X.order_state_str(st)}
+        sleep(X.POLL_S)
+    # still non-terminal: try to take it off the book, with proof required
+    return cancel_and_resolve(t, order_id, slug, sleep=sleep)
+
+
 def cancel_and_resolve(t: X.Transport, order_id: str, slug: str,
                        sleep=time.sleep) -> dict:
     """Cancel an order and POSITIVELY resolve what happened to it.
@@ -209,9 +252,8 @@ def cancel_and_resolve(t: X.Transport, order_id: str, slug: str,
         fill = X.authoritative_fill(st)      # raises Halt if filled-but-vague
         if fill is not None:
             return {"fill": fill, "state": X.order_state_str(st)}
-        state = X.order_state_str(st)
-        if "CANCEL" in state or ("REJECT" in state and X._filled_qty(st) == 0):
-            return {"cancelled": True, "state": state}
+        if terminal_no_fill(st):
+            return {"cancelled": True, "state": X.order_state_str(st)}
         sleep(X.POLL_S)
     raise CancelUnconfirmed(
         f"CANCEL_UNCONFIRMED:{order_id}: still not terminal after "
@@ -461,6 +503,23 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
     holds = requotes = cancels = takes = 0
     first_cost: Optional[D] = None
 
+    def _exit(status: str, **extra: Any) -> dict:
+        """A fail-closed exit still reports what inventory was left behind.
+
+        A HALT that says nothing about position is the least useful report a
+        money path can produce: the operator's first question is always "what
+        do I still hold, and is anything of ours still live".
+        """
+        return {**report, "status": status,
+                "matched_contracts": str(inv.matched()),
+                "residual": str(inv.residual()),
+                "first_cost": (str(first_cost) if first_cost is not None
+                               else None),
+                "holds": holds, "requotes": requotes, "cancels": cancels,
+                "takes": takes,
+                "unresolved_orders": sorted(unresolved),
+                **extra}
+
     try:
         # The campaign must be finished BEFORE the window closes, with time
         # left to cancel and sweep. Railway's build time is spent inside the
@@ -468,20 +527,20 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         # the variables were set.
         deadline_s = effective_deadline_s(slug, requested_s)
         if deadline_s is None:
-            return {**report, "status": "NO_RUNWAY",
-                    "note": f"no usable time before {slug} closes (reserving "
-                            f"{SWEEP_BUFFER_S:.0f}s for cancel/sweep); "
-                            f"placed nothing"}
+            return _exit("NO_RUNWAY",
+                         note=f"no usable time before {slug} closes "
+                              f"(reserving {SWEEP_BUFFER_S:.0f}s for "
+                              f"cancel/sweep); placed nothing")
         stop_at = clock() + deadline_s
         reason = X.preflight(t, slug, sleep=sleep)
         if reason:
-            return {**report, "status": "PREFLIGHT_FAILED", "reason": reason}
+            return _exit("PREFLIGHT_FAILED", reason=reason)
         tick = _tick(t, slug, sleep)
         if tick is None:
             # Refuse BEFORE any order exists. A wrong grid makes the
             # complement unquotable, which would strand the opening leg.
-            return {**report, "status": "TICK_UNAVAILABLE",
-                    "note": "venue grid not served; placed nothing"}
+            return _exit("TICK_UNAVAILABLE",
+                         note="venue grid not served; placed nothing")
         # DEFECT 1: strategy decisions come from the authenticated WS only.
         if state is None:
             feed = feed or WS.WsFeed(slug).start()
@@ -644,18 +703,20 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                     except X.Halt:
                         raise
                     takes += 1
-                    # resolve THAT order authoritatively; only confirmed
-                    # quantity moves inventory
-                    got = X.authoritative_fill(
-                        X._order_status(t, tid, sleep=sleep))
+                    # Resolve THAT order on POSITIVE PROOF, never on the
+                    # legacy cancel predicate, and only then forget it.
+                    # `resolve_ioc` raises CancelUnconfirmed if the venue
+                    # will not prove terminality, and the campaign then exits
+                    # fail-closed with the order still tracked for the sweep.
+                    res = resolve_ioc(t, tid, slug, sleep=sleep)
+                    got = res.get("fill")
                     if got is None:
-                        ok = X.cancel_exact(t, tid, slug, sleep=sleep)
-                        got = X.authoritative_fill(
-                            X._order_status(t, tid, sleep=sleep))
                         record("taker_unfilled", order_id=tid,
-                               cancel_verified=ok,
-                               note="no confirmed fill; inventory unchanged")
-                    unresolved.pop(tid, None)
+                               resolution=res.get("state"),
+                               confirmed_terminal=True,
+                               note="proven terminal with no fill; "
+                                    "inventory unchanged")
+                    unresolved.pop(tid, None)   # reached only on proof
                     if got is not None:
                         px = D(str(got["price"]))
                         fq = D(str(got.get("qty") or 1))
@@ -749,17 +810,17 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
     except CancelUnconfirmed as unc:
         record("cancel_unconfirmed", reason=str(unc),
                note="an order may still be live; placed nothing further")
-        return {**report, "status": "CANCEL_UNCONFIRMED", "reason": str(unc)}
+        return _exit("CANCEL_UNCONFIRMED", reason=str(unc))
     except WS.StaleFeed as stale:
         record("ws_stale_refused", reason=str(stale),
                note="no REST fallback for a strategy decision")
-        return {**report, "status": "WS_STALE_REFUSED", "reason": str(stale)}
+        return _exit("WS_STALE_REFUSED", reason=str(stale))
     except X.StaleRefuse as stale:
         record("stale_refused", reason=str(stale))
-        return {**report, "status": "STALE_PRICE_REFUSED", "reason": str(stale)}
+        return _exit("STALE_PRICE_REFUSED", reason=str(stale))
     except X.Halt as halt:
         record("halt", reason=str(halt))
-        return {**report, "status": "HALT", "reason": str(halt)}
+        return _exit("HALT", reason=str(halt))
     except Exception as exc:                                 # noqa: BLE001
         # LIVE 2026-09-30: an unhandled urllib HTTPError from the preview
         # endpoint escaped every handler, so the campaign died by traceback
@@ -767,9 +828,8 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         # a HALT with the sanitized venue text, and the sweep still runs.
         detail = getattr(exc, "venue_body", "") or f"{type(exc).__name__}: {exc}"
         record("halt", reason=f"UNEXPECTED:{str(detail)[:300]}")
-        return {**report, "status": "HALT",
-                "reason": f"UNEXPECTED:{type(exc).__name__}",
-                "venue": str(detail)[:500]}
+        return _exit("HALT", reason=f"UNEXPECTED:{type(exc).__name__}",
+                     venue=str(detail)[:500])
     finally:
         # rule 8: unconditional, on EVERY exit path including Halt and
         # KeyboardInterrupt. Market-scoped so no unrelated order is touched.

@@ -991,3 +991,97 @@ def test_the_transport_sanitizes_and_bounds_a_venue_error_body():
     assert "deadbeef" not in out and "Bearer" not in out
     assert "<redacted>" in out and "nope" in out
     assert len(san(b"x" * 99999)) <= 2048
+
+
+# ===== IOC lifecycle: an ACK'd taker that never proves terminality =====
+# The taker path previously released the order with X.cancel_exact -- the
+# legacy predicate that returns True for ORDER_STATE_OPEN -- and then popped
+# `unresolved` unconditionally. IOC normally terminates at once, but the
+# safety design does not assume venue lifecycle behaviour.
+
+class StubbornIOC(RecordingFake):
+    """Accepts the IOC, ACKs its cancel, and keeps reporting OPEN forever."""
+
+    def __init__(self, books, taker_oid="O2", **kw):
+        super().__init__(books, **kw)
+        self.taker_oid = taker_oid
+
+    def request(self, method, path, body=None, **kw):
+        if path.endswith("/cancel") and path.startswith("/v1/order/"):
+            self.calls.append({"method": method, "path": path, "body": body})
+            self.cancelled.append(path.split("/")[3])
+            return {}                      # ACK, but nothing changes
+        if (path.startswith("/v1/order/") and not path.endswith("/cancel")
+                and path.split("/")[3] == self.taker_oid):
+            self.calls.append({"method": method, "path": path, "body": body})
+            return {"id": self.taker_oid, "state": "ORDER_STATE_OPEN",
+                    "cumQuantity": "0"}
+        return super().request(method, path, body, **kw)
+
+
+def test_a_nonterminal_ioc_is_never_forgotten(monkeypatch, capsys):
+    slug = _arm(monkeypatch)
+    st = ws_state("0.45", "0.60", slug=slug)
+    f = StubbornIOC([("0.40", "0.60")] * 12, taker_oid="O2")
+    f.fills["O1"] = _filled("0.40")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None, state=st,
+                       max_book_age_s=1e9)
+    # fail-closed, not a silent continue
+    assert out["status"] == "CANCEL_UNCONFIRMED", out
+    assert "O2" in out["reason"]
+    # the IOC was placed exactly once and nothing further was placed after it
+    submits = [c["body"] for c in f.calls if c["path"] == "/v1/orders"]
+    takers = [b for b in submits if b["participateDontInitiate"] is False]
+    assert len(takers) == 1
+    assert submits[-1] is takers[-1], "placed again after an unresolved IOC"
+    # inventory unchanged by the unproven taker: still one unpaired YES
+    assert out["matched_contracts"] == "0"
+    assert out["residual"] == "1"
+    # and the sweep still ran
+    assert f.sweeps >= 1
+    printed = capsys.readouterr().out
+    assert "CANARY cancel_unconfirmed" in printed
+    assert "CANARY sweep" in printed
+
+
+def test_an_expired_ioc_counts_as_proven_terminal():
+    """An IOC that finds no liquidity EXPIRES; that is proof, unlike OPEN."""
+    assert C.terminal_no_fill({"state": "ORDER_STATE_EXPIRED",
+                               "cumQuantity": "0"}) is True
+    assert C.terminal_no_fill({"state": "ORDER_STATE_CANCELLED",
+                               "cumQuantity": "0"}) is True
+    assert C.terminal_no_fill({"state": "ORDER_STATE_REJECTED",
+                               "cumQuantity": "0"}) is True
+    assert C.terminal_no_fill({"state": "ORDER_STATE_OPEN",
+                               "cumQuantity": "0"}) is False
+    # a filled order is not "terminal with no fill"
+    assert C.terminal_no_fill({"state": "ORDER_STATE_EXPIRED",
+                               "cumQuantity": "1"}) is False
+
+
+def test_a_filled_ioc_books_exactly_once(monkeypatch):
+    slug = _arm(monkeypatch)
+    st = ws_state("0.45", "0.60", slug=slug)
+    f = RecordingFake([("0.40", "0.60")] * 10)
+    f.fills["O1"] = _filled("0.40")
+    f.fills["O2"] = _filled("0.55", side="OUTCOME_SIDE_NO")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None, state=st,
+                       max_book_age_s=1e9)
+    assert out["matched_contracts"] == "1"
+    assert out["residual"] == "0"
+    assert D(out["pair_cost"]) == D("0.95")
+
+
+def test_an_expired_ioc_leaves_inventory_untouched(monkeypatch):
+    slug = _arm(monkeypatch)
+    st = ws_state("0.45", "0.60", slug=slug)
+    f = RecordingFake([("0.40", "0.60")] * 10)
+    f.fills["O1"] = _filled("0.40")
+    f.fills["O2"] = {"id": "O2", "state": "ORDER_STATE_EXPIRED",
+                     "cumQuantity": "0"}
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None, state=st,
+                       max_book_age_s=1e9)
+    assert out["takes"] == 1
+    assert out["matched_contracts"] == "0"
+    assert out["residual"] == "1"
+    assert f.sweeps >= 1
