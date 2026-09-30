@@ -1,0 +1,2842 @@
+{
+ "LABEL": "V1_RESIDUAL_DIAGNOSIS",
+ "cohort": "oos49_CONSUMED_diagnostic_only",
+ "clip": "10",
+ "theta": "0.96",
+ "labels": "Diagnosis of a consumed cohort. Never validation evidence. No threshold introduced, nothing fitted.",
+ "windows": [
+  {
+   "window": "0245z",
+   "winner": "down",
+   "net": "-4.2000",
+   "matched_qty": "0",
+   "resid_qty": "10",
+   "resid_pnl": "-4.2000",
+   "matched_pnl": "0.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T02:50:37.238672+00:00",
+     "side": "up",
+     "px": "0.4200",
+     "qty": "10",
+     "implied_cap_for_complement": "0.54"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T02:50:37.238672+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.4200",
+   "cap_at_requirement": "0.54",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.5600",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.0100",
+    "at": "2026-09-28T02:58:38.323085+00:00",
+    "qty_fillable": "50",
+    "basis_before": "0.4200",
+    "basis_after": "0.07833333333333333333333333333",
+    "cap_before": "0.54",
+    "cap_after": "0.88",
+    "cap_improvement": "0.34"
+   },
+   "mechanism": "B_continuous_inventory",
+   "loss_on_residual": "-4.2000",
+   "recoverable": "7.816666666666666666666666667",
+   "best_complement_price_seen": "0.5600"
+  },
+  {
+   "window": "0300z",
+   "winner": "up",
+   "net": "5.875751000000",
+   "matched_qty": "50",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "6.5000",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T03:05:09.726653+00:00",
+     "side": "up",
+     "px": "0.7400",
+     "qty": "10",
+     "implied_cap_for_complement": "0.22"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T03:06:39.129296+00:00",
+    "side": "down",
+    "px": "0.29",
+    "other_basis": "0.6700",
+    "first_pair_cost": "0.9600",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0400"
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "0315z",
+   "winner": "down",
+   "net": "0.309201500000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "-1.4000",
+   "matched_pnl": "2.1000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T03:16:19.298617+00:00",
+     "side": "down",
+     "px": "0.6200",
+     "qty": "10",
+     "implied_cap_for_complement": "0.34"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T03:16:19.298617+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.6200",
+   "cap_at_requirement": "0.34",
+   "A_persistent_maker": {
+    "verdict": "traded_at",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 1,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.2600",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T03:25:22.093561+00:00",
+      "t1": "2026-09-28T03:25:22.093561+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "9451.15",
+      "cap": "0.23",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T03:26:21.530156+00:00",
+      "t1": "2026-09-28T03:26:23.566506+00:00",
+      "ticks": 2,
+      "displayed": "556.0000",
+      "traded": "11757.31",
+      "cap": "0.82",
+      "duration_s": 2.0363500118255615
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-1.4000",
+   "recoverable": "2.6000",
+   "best_complement_price_seen": "0.2600"
+  },
+  {
+   "window": "0330z",
+   "winner": "up",
+   "net": "-0.402582000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-4.1500",
+   "matched_pnl": "3.8500",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T03:33:40.971056+00:00",
+     "side": "down",
+     "px": "0.7100",
+     "qty": "10",
+     "implied_cap_for_complement": "0.25"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T03:35:10.930161+00:00",
+    "side": "up",
+    "px": "0.25",
+    "other_basis": "0.7100",
+    "first_pair_cost": "0.9600",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0400"
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T03:33:40.971056+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.7100",
+   "cap_at_requirement": "0.25",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 1,
+    "displayed_ticks": 1,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.1800",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T03:37:41.235951+00:00",
+      "t1": "2026-09-28T03:37:41.235951+00:00",
+      "ticks": 1,
+      "displayed": "6633.7800",
+      "traded": "14520.86",
+      "cap": "0.45",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.6100",
+    "at": "2026-09-28T03:34:41.306673+00:00",
+    "qty_fillable": "10",
+    "basis_before": "0.7100",
+    "basis_after": "0.6600",
+    "cap_before": "0.25",
+    "cap_after": "0.30",
+    "cap_improvement": "0.05"
+   },
+   "mechanism": "B_continuous_inventory",
+   "loss_on_residual": "-4.1500",
+   "recoverable": "5.7500",
+   "best_complement_price_seen": "0.1800"
+  },
+  {
+   "window": "0345z",
+   "winner": "down",
+   "net": "5.1945847000000000",
+   "matched_qty": "60.0000",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "5.94000000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T03:48:43.212771+00:00",
+     "side": "up",
+     "px": "0.4000",
+     "qty": "10",
+     "implied_cap_for_complement": "0.56"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "0400z",
+   "winner": "up",
+   "net": "-3.954947000000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "-5.8000",
+   "matched_pnl": "2.3000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T04:02:09.956887+00:00",
+     "side": "down",
+     "px": "0.6700",
+     "qty": "10",
+     "implied_cap_for_complement": "0.29"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T04:02:09.956887+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.6700",
+   "cap_at_requirement": "0.29",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 1,
+    "displayed_ticks": 1,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.3100",
+    "fillable_qty": {
+     "10": "20",
+     "20": "40",
+     "30": "60"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T04:04:40.610648+00:00",
+      "t1": "2026-09-28T04:04:40.610648+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "5513.08",
+      "cap": "0.29",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T04:07:41.080365+00:00",
+      "t1": "2026-09-28T04:07:41.080365+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "14593.51",
+      "cap": "0.39",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T04:09:12.813771+00:00",
+      "t1": "2026-09-28T04:09:12.813771+00:00",
+      "ticks": 1,
+      "displayed": "1458.1600",
+      "traded": "12230.95",
+      "cap": "0.41",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.6300",
+    "at": "2026-09-28T04:03:10.434478+00:00",
+    "qty_fillable": "20",
+    "basis_before": "0.6700",
+    "basis_after": "0.6433333333333333333333333333",
+    "cap_before": "0.29",
+    "cap_after": "0.31",
+    "cap_improvement": "0.02"
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-5.8000",
+   "recoverable": "6.2000",
+   "best_complement_price_seen": "0.3100"
+  },
+  {
+   "window": "0415z",
+   "winner": "up",
+   "net": "-5.0000",
+   "matched_qty": "0",
+   "resid_qty": "10",
+   "resid_pnl": "-5.0000",
+   "matched_pnl": "0.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T04:17:35.946167+00:00",
+     "side": "down",
+     "px": "0.5000",
+     "qty": "10",
+     "implied_cap_for_complement": "0.46"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T04:17:35.946167+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.5000",
+   "cap_at_requirement": "0.46",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.5000",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.0400",
+    "at": "2026-09-28T04:26:39.441642+00:00",
+    "qty_fillable": "10",
+    "basis_before": "0.5000",
+    "basis_after": "0.2700",
+    "cap_before": "0.46",
+    "cap_after": "0.69",
+    "cap_improvement": "0.23"
+   },
+   "mechanism": "B_continuous_inventory",
+   "loss_on_residual": "-5.0000",
+   "recoverable": "7.3000",
+   "best_complement_price_seen": "0.5000"
+  },
+  {
+   "window": "0430z",
+   "winner": "up",
+   "net": "-6.7000",
+   "matched_qty": "0",
+   "resid_qty": "10",
+   "resid_pnl": "-6.7000",
+   "matched_pnl": "0.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T04:33:57.441659+00:00",
+     "side": "down",
+     "px": "0.6700",
+     "qty": "10",
+     "implied_cap_for_complement": "0.29"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T04:33:57.441659+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.6700",
+   "cap_at_requirement": "0.29",
+   "A_persistent_maker": {
+    "verdict": "traded_at",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 1,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.2800",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T04:37:29.575350+00:00",
+      "t1": "2026-09-28T04:37:29.575350+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "5530.12",
+      "cap": "0.29",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T04:38:00.430297+00:00",
+      "t1": "2026-09-28T04:38:02.466066+00:00",
+      "ticks": 2,
+      "displayed": "4401.9200",
+      "traded": "5013.31",
+      "cap": "0.29",
+      "duration_s": 2.035768985748291
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.5400",
+    "at": "2026-09-28T04:39:30.743839+00:00",
+    "qty_fillable": "30",
+    "basis_before": "0.6700",
+    "basis_after": "0.5725",
+    "cap_before": "0.29",
+    "cap_after": "0.38",
+    "cap_improvement": "0.09"
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-6.7000",
+   "recoverable": "7.2000",
+   "best_complement_price_seen": "0.2800"
+  },
+  {
+   "window": "0445z",
+   "winner": "up",
+   "net": "4.008009500000",
+   "matched_qty": "30",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "4.5000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T04:51:19.324184+00:00",
+     "side": "up",
+     "px": "0.3900",
+     "qty": "10",
+     "implied_cap_for_complement": "0.57"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "0500z",
+   "winner": "down",
+   "net": "0.226608000000",
+   "matched_qty": "10",
+   "resid_qty": "10",
+   "resid_pnl": "-0.7000",
+   "matched_pnl": "1.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T05:05:41.197171+00:00",
+     "side": "down",
+     "px": "0.7800",
+     "qty": "10",
+     "implied_cap_for_complement": "0.18"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T05:05:41.197171+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.7800",
+   "cap_at_requirement": "0.18",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.1800",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T05:06:10.906283+00:00",
+      "t1": "2026-09-28T05:06:10.906283+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "6143.17",
+      "cap": "0.18",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T05:07:11.341176+00:00",
+      "t1": "2026-09-28T05:07:44.306650+00:00",
+      "ticks": 4,
+      "displayed": "2468.1600",
+      "traded": "8885.03",
+      "cap": "0.18",
+      "duration_s": 32.965473890304565
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-0.7000",
+   "recoverable": "1.1000",
+   "best_complement_price_seen": "0.1800"
+  },
+  {
+   "window": "0515z",
+   "winner": "down",
+   "net": "-1.948660500000",
+   "matched_qty": "10",
+   "resid_qty": "10",
+   "resid_pnl": "-2.4000",
+   "matched_pnl": "0.6000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T05:20:07.205880+00:00",
+     "side": "down",
+     "px": "0.6300",
+     "qty": "10",
+     "implied_cap_for_complement": "0.33"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T05:20:07.205880+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.6300",
+   "cap_at_requirement": "0.33",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.3700",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "unrecoverable_price_never_returned",
+   "loss_on_residual": "-2.4000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.3700"
+  },
+  {
+   "window": "0530z",
+   "winner": "up",
+   "net": "-8.346634500000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "-9.2750",
+   "matched_pnl": "0.9750",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T05:35:39.423276+00:00",
+     "side": "down",
+     "px": "0.8500",
+     "qty": "10",
+     "implied_cap_for_complement": "0.11"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T05:36:39.568346+00:00",
+    "side": "up",
+    "px": "0.0700",
+    "other_basis": "0.8500",
+    "first_pair_cost": "0.9200",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0800"
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T05:35:39.423276+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.8500",
+   "cap_at_requirement": "0.11",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 1,
+    "displayed_ticks": 1,
+    "traded_at_ticks": 1,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.0300",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T05:38:11.850115+00:00",
+      "t1": "2026-09-28T05:38:11.850115+00:00",
+      "ticks": 1,
+      "displayed": "3836.6300",
+      "traded": "3293.55",
+      "cap": "0.06",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T05:39:42.023936+00:00",
+      "t1": "2026-09-28T05:39:42.023936+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "1420.62",
+      "cap": "0.02",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-9.2750",
+   "recoverable": "10.4750",
+   "best_complement_price_seen": "0.0300"
+  },
+  {
+   "window": "0545z",
+   "winner": "up",
+   "net": "3.810195500000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "-1.8000",
+   "matched_pnl": "5.8000",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T05:47:44.461043+00:00",
+     "side": "down",
+     "px": "0.2900",
+     "qty": "10",
+     "implied_cap_for_complement": "0.67"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T05:48:14.122384+00:00",
+    "side": "up",
+    "px": "0.6400",
+    "other_basis": "0.2900",
+    "first_pair_cost": "0.9300",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0700"
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T05:47:44.461043+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.2900",
+   "cap_at_requirement": "0.67",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 3,
+    "displayed_ticks": 3,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.1300",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T05:56:17.771008+00:00",
+      "t1": "2026-09-28T05:56:19.809641+00:00",
+      "ticks": 2,
+      "displayed": "4026.0000",
+      "traded": "9804.99",
+      "cap": "0.43",
+      "duration_s": 2.038632869720459
+     },
+     {
+      "t0": "2026-09-28T05:57:17.176162+00:00",
+      "t1": "2026-09-28T05:57:17.176162+00:00",
+      "ticks": 1,
+      "displayed": "6573.9300",
+      "traded": "14046.52",
+      "cap": "0.26",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "-1.8000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.1300"
+  },
+  {
+   "window": "0600z",
+   "winner": "up",
+   "net": "-5.7000",
+   "matched_qty": "0",
+   "resid_qty": "10",
+   "resid_pnl": "-5.7000",
+   "matched_pnl": "0.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T06:01:56.385162+00:00",
+     "side": "down",
+     "px": "0.5700",
+     "qty": "10",
+     "implied_cap_for_complement": "0.39"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T06:01:56.385162+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.5700",
+   "cap_at_requirement": "0.39",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.3800",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T06:04:56.464725+00:00",
+      "t1": "2026-09-28T06:04:56.464725+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "7728.96",
+      "cap": "0.39",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T06:05:26.137150+00:00",
+      "t1": "2026-09-28T06:05:58.831223+00:00",
+      "ticks": 4,
+      "displayed": "5595.8200",
+      "traded": "13069.62",
+      "cap": "0.39",
+      "duration_s": 32.69407296180725
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.1500",
+    "at": "2026-09-28T06:10:57.437174+00:00",
+    "qty_fillable": "40",
+    "basis_before": "0.5700",
+    "basis_after": "0.2340",
+    "cap_before": "0.39",
+    "cap_after": "0.72",
+    "cap_improvement": "0.33"
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-5.7000",
+   "recoverable": "6.2000",
+   "best_complement_price_seen": "0.3800"
+  },
+  {
+   "window": "0615z",
+   "winner": "down",
+   "net": "-1.958112500000",
+   "matched_qty": "10",
+   "resid_qty": "10",
+   "resid_pnl": "-3.2000",
+   "matched_pnl": "1.4000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T06:17:23.207522+00:00",
+     "side": "down",
+     "px": "0.5100",
+     "qty": "10",
+     "implied_cap_for_complement": "0.45"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T06:17:23.207522+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.5100",
+   "cap_at_requirement": "0.45",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.4500",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T06:17:23.207522+00:00",
+      "t1": "2026-09-28T06:17:25.242947+00:00",
+      "ticks": 2,
+      "displayed": "166.6800",
+      "traded": "4956.87",
+      "cap": "0.45",
+      "duration_s": 2.0354251861572266
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-3.2000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.4500"
+  },
+  {
+   "window": "0630z",
+   "winner": "up",
+   "net": "1.949602000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-0.3000",
+   "matched_pnl": "2.4000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T06:33:08.737719+00:00",
+     "side": "up",
+     "px": "0.7200",
+     "qty": "10",
+     "implied_cap_for_complement": "0.24"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T06:33:08.737719+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.7200",
+   "cap_at_requirement": "0.24",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 3,
+    "displayed_ticks": 3,
+    "traded_at_ticks": 1,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.2000",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T06:33:08.737719+00:00",
+      "t1": "2026-09-28T06:33:08.737719+00:00",
+      "ticks": 1,
+      "displayed": "5220.1900",
+      "traded": "2777.74",
+      "cap": "0.24",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T06:35:40.028838+00:00",
+      "t1": "2026-09-28T06:36:10.830231+00:00",
+      "ticks": 3,
+      "displayed": "1651.1600",
+      "traded": "7397.66",
+      "cap": "0.24",
+      "duration_s": 30.801393032073975
+     },
+     {
+      "t0": "2026-09-28T06:41:12.346761+00:00",
+      "t1": "2026-09-28T06:41:12.346761+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "6491.55",
+      "cap": "0.18",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.6500",
+    "at": "2026-09-28T06:34:40.547381+00:00",
+    "qty_fillable": "10",
+    "basis_before": "0.7200",
+    "basis_after": "0.6850",
+    "cap_before": "0.24",
+    "cap_after": "0.27",
+    "cap_improvement": "0.03"
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-0.3000",
+   "recoverable": "1.1000",
+   "best_complement_price_seen": "0.2000"
+  },
+  {
+   "window": "0645z",
+   "winner": "down",
+   "net": "3.125902500000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "0.1000",
+   "matched_pnl": "3.2000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T06:49:21.837284+00:00",
+     "side": "down",
+     "px": "0.6300",
+     "qty": "10",
+     "implied_cap_for_complement": "0.33"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T06:49:21.837284+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.6300",
+   "cap_at_requirement": "0.33",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 10,
+    "displayed_ticks": 10,
+    "traded_at_ticks": 3,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.0200",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T06:50:22.154301+00:00",
+      "t1": "2026-09-28T06:50:52.817398+00:00",
+      "ticks": 4,
+      "displayed": "3629.3400",
+      "traded": "6116.49",
+      "cap": "0.33",
+      "duration_s": 30.663097143173218
+     },
+     {
+      "t0": "2026-09-28T06:52:22.995590+00:00",
+      "t1": "2026-09-28T06:52:25.037466+00:00",
+      "ticks": 2,
+      "displayed": "948.0000",
+      "traded": "5581.37",
+      "cap": "0.14",
+      "duration_s": 2.0418760776519775
+     },
+     {
+      "t0": "2026-09-28T06:57:24.785581+00:00",
+      "t1": "2026-09-28T06:57:24.785581+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "3286.82",
+      "cap": "0.02",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T06:57:53.289986+00:00",
+      "t1": "2026-09-28T06:58:26.169966+00:00",
+      "ticks": 4,
+      "displayed": "5765.2400",
+      "traded": "7459.36",
+      "cap": "0.02",
+      "duration_s": 32.87998008728027
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "0.1000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.0200"
+  },
+  {
+   "window": "0700z",
+   "winner": "down",
+   "net": "5.1797115305000000",
+   "matched_qty": "60.0000",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "6.17990000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T07:04:47.918187+00:00",
+     "side": "down",
+     "px": "0.2200",
+     "qty": "10",
+     "implied_cap_for_complement": "0.74"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "0715z",
+   "winner": "down",
+   "net": "-7.315300500000",
+   "matched_qty": "10",
+   "resid_qty": "10",
+   "resid_pnl": "-7.9000",
+   "matched_pnl": "0.7000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T07:20:41.575735+00:00",
+     "side": "up",
+     "px": "0.7200",
+     "qty": "10",
+     "implied_cap_for_complement": "0.24"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T07:20:41.575735+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.7200",
+   "cap_at_requirement": "0.24",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 1,
+    "displayed_ticks": 1,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.2100",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T07:20:41.575735+00:00",
+      "t1": "2026-09-28T07:20:41.575735+00:00",
+      "ticks": 1,
+      "displayed": "5242.0100",
+      "traded": "3507.79",
+      "cap": "0.24",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "-7.9000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.2100"
+  },
+  {
+   "window": "0730z",
+   "winner": "down",
+   "net": "-7.194054500000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-8.4000",
+   "matched_pnl": "1.5000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T07:35:11.763467+00:00",
+     "side": "down",
+     "px": "0.3000",
+     "qty": "10",
+     "implied_cap_for_complement": "0.66"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T07:35:11.763467+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.3000",
+   "cap_at_requirement": "0.66",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.1500",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T07:35:11.763467+00:00",
+      "t1": "2026-09-28T07:35:11.763467+00:00",
+      "ticks": 1,
+      "displayed": "5249.0000",
+      "traded": "3970.9",
+      "cap": "0.66",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T07:36:11.409350+00:00",
+      "t1": "2026-09-28T07:36:11.409350+00:00",
+      "ticks": 1,
+      "displayed": "2259.4700",
+      "traded": "7608.05",
+      "cap": "0.78",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "-8.4000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.1500"
+  },
+  {
+   "window": "0745z",
+   "winner": "up",
+   "net": "4.103443500000",
+   "matched_qty": "30",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "4.4000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T07:49:26.523467+00:00",
+     "side": "up",
+     "px": "0.7100",
+     "qty": "10",
+     "implied_cap_for_complement": "0.25"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "0800z",
+   "winner": "up",
+   "net": "2.5000",
+   "matched_qty": "10",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "2.5000",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T08:05:25.074382+00:00",
+     "side": "up",
+     "px": "0.7400",
+     "qty": "10",
+     "implied_cap_for_complement": "0.22"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T08:14:26.411901+00:00",
+    "side": "down",
+    "px": "0.0100",
+    "other_basis": "0.7400",
+    "first_pair_cost": "0.7500",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.2500"
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "0815z",
+   "winner": "down",
+   "net": "0.818188000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-0.9000",
+   "matched_pnl": "1.9000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T08:19:25.982355+00:00",
+     "side": "down",
+     "px": "0.6600",
+     "qty": "10",
+     "implied_cap_for_complement": "0.30"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T08:19:25.982355+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.6600",
+   "cap_at_requirement": "0.30",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 8,
+    "displayed_ticks": 8,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 3,
+    "best_own_terms_seen": "0.1300",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T08:19:25.982355+00:00",
+      "t1": "2026-09-28T08:19:28.014985+00:00",
+      "ticks": 2,
+      "displayed": "2990.0000",
+      "traded": "5253.39",
+      "cap": "0.30",
+      "duration_s": 2.03262996673584
+     },
+     {
+      "t0": "2026-09-28T08:20:26.162865+00:00",
+      "t1": "2026-09-28T08:20:28.216459+00:00",
+      "ticks": 2,
+      "displayed": "8921.1200",
+      "traded": "3680.82",
+      "cap": "0.30",
+      "duration_s": 2.0535941123962402
+     },
+     {
+      "t0": "2026-09-28T08:22:26.393579+00:00",
+      "t1": "2026-09-28T08:22:58.270554+00:00",
+      "ticks": 4,
+      "displayed": "3148.4200",
+      "traded": "11903.21",
+      "cap": "0.13",
+      "duration_s": 31.876975059509277
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-0.9000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.1300"
+  },
+  {
+   "window": "0830z",
+   "winner": "up",
+   "net": "1.184699500000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-0.3000",
+   "matched_pnl": "1.6000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T08:34:22.229765+00:00",
+     "side": "up",
+     "px": "0.8000",
+     "qty": "10",
+     "implied_cap_for_complement": "0.16"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T08:34:22.229765+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.8000",
+   "cap_at_requirement": "0.16",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.1400",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.6800",
+    "at": "2026-09-28T08:37:53.088527+00:00",
+    "qty_fillable": "30",
+    "basis_before": "0.8000",
+    "basis_after": "0.7100",
+    "cap_before": "0.16",
+    "cap_after": "0.25",
+    "cap_improvement": "0.09"
+   },
+   "mechanism": "B_continuous_inventory",
+   "loss_on_residual": "-0.3000",
+   "recoverable": "1.8000",
+   "best_complement_price_seen": "0.1400"
+  },
+  {
+   "window": "0845z",
+   "winner": "up",
+   "net": "2.998606000000",
+   "matched_qty": "50",
+   "resid_qty": "10",
+   "resid_pnl": "-0.7000",
+   "matched_pnl": "4.4000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T08:49:17.824447+00:00",
+     "side": "up",
+     "px": "0.5700",
+     "qty": "10",
+     "implied_cap_for_complement": "0.39"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T08:49:17.824447+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.5700",
+   "cap_at_requirement": "0.39",
+   "A_persistent_maker": {
+    "verdict": "traded_at",
+    "reached_ticks": 5,
+    "displayed_ticks": 5,
+    "traded_at_ticks": 1,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.2700",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T08:49:17.824447+00:00",
+      "t1": "2026-09-28T08:49:17.824447+00:00",
+      "ticks": 1,
+      "displayed": "1970.0000",
+      "traded": "3592.11",
+      "cap": "0.39",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T08:51:17.943971+00:00",
+      "t1": "2026-09-28T08:51:17.943971+00:00",
+      "ticks": 1,
+      "displayed": "5814.5200",
+      "traded": "2377.39",
+      "cap": "0.34",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T08:52:19.500844+00:00",
+      "t1": "2026-09-28T08:52:19.500844+00:00",
+      "ticks": 1,
+      "displayed": "1614.0100",
+      "traded": "4743.53",
+      "cap": "0.29",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T08:55:20.262279+00:00",
+      "t1": "2026-09-28T08:55:20.262279+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "8735.55",
+      "cap": "0.89",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T08:55:49.121025+00:00",
+      "t1": "2026-09-28T08:55:51.160654+00:00",
+      "ticks": 2,
+      "displayed": "113.3800",
+      "traded": "5333.86",
+      "cap": "0.89",
+      "duration_s": 2.0396289825439453
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-0.7000",
+   "recoverable": "2.3000",
+   "best_complement_price_seen": "0.2700"
+  },
+  {
+   "window": "0900z",
+   "winner": "down",
+   "net": "0.173312000000",
+   "matched_qty": "10",
+   "resid_qty": "10",
+   "resid_pnl": "-0.3000",
+   "matched_pnl": "0.5000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T09:07:20.798645+00:00",
+     "side": "down",
+     "px": "0.9100",
+     "qty": "10",
+     "implied_cap_for_complement": "0.05"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T09:07:20.798645+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.9100",
+   "cap_at_requirement": "0.05",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 1,
+    "displayed_ticks": 1,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.0400",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T09:07:20.798645+00:00",
+      "t1": "2026-09-28T09:07:20.798645+00:00",
+      "ticks": 1,
+      "displayed": "891.5200",
+      "traded": "2705.21",
+      "cap": "0.05",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "-0.3000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.0400"
+  },
+  {
+   "window": "0915z",
+   "winner": "down",
+   "net": "-1.076909000000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "-3.8000",
+   "matched_pnl": "3.2000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T09:19:44.913078+00:00",
+     "side": "down",
+     "px": "0.3000",
+     "qty": "10",
+     "implied_cap_for_complement": "0.66"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T09:19:44.913078+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.3000",
+   "cap_at_requirement": "0.66",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.5400",
+    "fillable_qty": {
+     "10": "20",
+     "20": "40",
+     "30": "60"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T09:21:45.424467+00:00",
+      "t1": "2026-09-28T09:22:17.009142+00:00",
+      "ticks": 3,
+      "displayed": "3660.0000",
+      "traded": "7948.04",
+      "cap": "0.78",
+      "duration_s": 31.584674835205078
+     },
+     {
+      "t0": "2026-09-28T09:25:46.609350+00:00",
+      "t1": "2026-09-28T09:25:46.609350+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "4242.61",
+      "cap": "0.50",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-3.8000",
+   "recoverable": "5.4000",
+   "best_complement_price_seen": "0.5400"
+  },
+  {
+   "window": "0930z",
+   "winner": "down",
+   "net": "-3.144998000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-4.1000",
+   "matched_pnl": "1.3000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T09:32:12.366451+00:00",
+     "side": "down",
+     "px": "0.4300",
+     "qty": "10",
+     "implied_cap_for_complement": "0.53"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T09:32:12.366451+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.4300",
+   "cap_at_requirement": "0.53",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.5000",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "unrecoverable_price_never_returned",
+   "loss_on_residual": "-4.1000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.5000"
+  },
+  {
+   "window": "0945z",
+   "winner": "up",
+   "net": "5.743562000000",
+   "matched_qty": "60",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "6.5000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T09:48:19.303498+00:00",
+     "side": "down",
+     "px": "0.2000",
+     "qty": "10",
+     "implied_cap_for_complement": "0.76"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "1000z",
+   "winner": "up",
+   "net": "2.937787000000000000000000003",
+   "matched_qty": "50",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "3.100000000000000000000000003",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T10:04:37.061634+00:00",
+     "side": "down",
+     "px": "0.0600",
+     "qty": "10",
+     "implied_cap_for_complement": "0.90"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T10:08:07.245384+00:00",
+    "side": "up",
+    "px": "0.8500",
+    "other_basis": "0.0600",
+    "first_pair_cost": "0.9100",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0900"
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "1015z",
+   "winner": "up",
+   "net": "0.2153967360000000",
+   "matched_qty": "17.6800",
+   "resid_qty": "2.3200",
+   "resid_pnl": "-0.58000000",
+   "matched_pnl": "1.06080000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T10:20:09.055274+00:00",
+     "side": "up",
+     "px": "0.6200",
+     "qty": "10",
+     "implied_cap_for_complement": "0.34"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T10:20:09.055274+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.6200",
+   "cap_at_requirement": "0.34",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 6,
+    "displayed_ticks": 6,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.3400",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T10:20:09.055274+00:00",
+      "t1": "2026-09-28T10:20:11.115201+00:00",
+      "ticks": 2,
+      "displayed": "2479.5800",
+      "traded": "2879.95",
+      "cap": "0.34",
+      "duration_s": 2.059926986694336
+     },
+     {
+      "t0": "2026-09-28T10:21:08.543758+00:00",
+      "t1": "2026-09-28T10:21:10.584179+00:00",
+      "ticks": 2,
+      "displayed": "2321.5800",
+      "traded": "4329.35",
+      "cap": "0.34",
+      "duration_s": 2.0404210090637207
+     },
+     {
+      "t0": "2026-09-28T10:22:08.163366+00:00",
+      "t1": "2026-09-28T10:22:10.204931+00:00",
+      "ticks": 2,
+      "displayed": "1895.3400",
+      "traded": "5617.51",
+      "cap": "0.71",
+      "duration_s": 2.04156494140625
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-0.58000000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.3400"
+  },
+  {
+   "window": "1030z",
+   "winner": "up",
+   "net": "-2.9000",
+   "matched_qty": "10",
+   "resid_qty": "10",
+   "resid_pnl": "-4.2000",
+   "matched_pnl": "1.3000",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T10:32:04.568915+00:00",
+     "side": "down",
+     "px": "0.5100",
+     "qty": "10",
+     "implied_cap_for_complement": "0.45"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T10:33:04.068949+00:00",
+    "side": "up",
+    "px": "0.45",
+    "other_basis": "0.5100",
+    "first_pair_cost": "0.9600",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0400"
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T10:32:04.568915+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.5100",
+   "cap_at_requirement": "0.45",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.4800",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "unrecoverable_price_never_returned",
+   "loss_on_residual": "-4.2000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.4800"
+  },
+  {
+   "window": "1045z",
+   "winner": "up",
+   "net": "-5.157150000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-6.6000",
+   "matched_pnl": "1.7000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T10:47:00.599335+00:00",
+     "side": "down",
+     "px": "0.6300",
+     "qty": "10",
+     "implied_cap_for_complement": "0.33"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T10:47:00.599335+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.6300",
+   "cap_at_requirement": "0.33",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.2800",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T10:47:31.513933+00:00",
+      "t1": "2026-09-28T10:47:31.513933+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "2336.73",
+      "cap": "0.33",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T10:52:02.443768+00:00",
+      "t1": "2026-09-28T10:52:04.482127+00:00",
+      "ticks": 2,
+      "displayed": "3120.4000",
+      "traded": "1449.01",
+      "cap": "0.30",
+      "duration_s": 2.0383589267730713
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-6.6000",
+   "recoverable": "7.5000",
+   "best_complement_price_seen": "0.2800"
+  },
+  {
+   "window": "1100z",
+   "winner": "up",
+   "net": "2.534013000000",
+   "matched_qty": "40",
+   "resid_qty": "10",
+   "resid_pnl": "0.1000",
+   "matched_pnl": "2.8000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T11:04:49.604239+00:00",
+     "side": "up",
+     "px": "0.6900",
+     "qty": "10",
+     "implied_cap_for_complement": "0.27"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T11:04:49.604239+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.6900",
+   "cap_at_requirement": "0.27",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 1,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.1500",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T11:05:50.073461+00:00",
+      "t1": "2026-09-28T11:05:50.073461+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "2169.05",
+      "cap": "0.27",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T11:06:21.100109+00:00",
+      "t1": "2026-09-28T11:06:23.156418+00:00",
+      "ticks": 2,
+      "displayed": "1994.8200",
+      "traded": "3256.39",
+      "cap": "0.27",
+      "duration_s": 2.0563089847564697
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "0.1000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.1500"
+  },
+  {
+   "window": "1115z",
+   "winner": "up",
+   "net": "-0.832766000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-3.1000",
+   "matched_pnl": "2.6000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T11:20:40.288193+00:00",
+     "side": "down",
+     "px": "0.4800",
+     "qty": "10",
+     "implied_cap_for_complement": "0.48"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T11:20:40.288193+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.4800",
+   "cap_at_requirement": "0.48",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.4800",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T11:20:40.288193+00:00",
+      "t1": "2026-09-28T11:20:42.324343+00:00",
+      "ticks": 2,
+      "displayed": "14.0000",
+      "traded": "4335.99",
+      "cap": "0.48",
+      "duration_s": 2.0361499786376953
+     },
+     {
+      "t0": "2026-09-28T11:22:10.355899+00:00",
+      "t1": "2026-09-28T11:22:10.355899+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "3756.05",
+      "cap": "0.52",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T11:26:40.357271+00:00",
+      "t1": "2026-09-28T11:26:42.401434+00:00",
+      "ticks": 2,
+      "displayed": "2145.9400",
+      "traded": "3635.92",
+      "cap": "0.65",
+      "duration_s": 2.0441629886627197
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-3.1000",
+   "recoverable": "3.5000",
+   "best_complement_price_seen": "0.4800"
+  },
+  {
+   "window": "1130z",
+   "winner": "up",
+   "net": "0.610581000000",
+   "matched_qty": "50",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "1.100000",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T11:33:36.333852+00:00",
+     "side": "up",
+     "px": "0.3600",
+     "qty": "10",
+     "implied_cap_for_complement": "0.60"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T11:34:06.962522+00:00",
+    "side": "down",
+    "px": "0.5700",
+    "other_basis": "0.3600",
+    "first_pair_cost": "0.9300",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0700"
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "1145z",
+   "winner": "up",
+   "net": "1.664951000000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "-4.4000",
+   "matched_pnl": "6.3000",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T11:49:13.337157+00:00",
+     "side": "down",
+     "px": "0.7600",
+     "qty": "10",
+     "implied_cap_for_complement": "0.20"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T11:51:43.656838+00:00",
+    "side": "down",
+    "px": "0.7900",
+    "other_basis": "0.1300",
+    "first_pair_cost": "0.9200",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0800"
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T11:49:13.337157+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.7600",
+   "cap_at_requirement": "0.20",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.2000",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T11:49:13.337157+00:00",
+      "t1": "2026-09-28T11:49:46.084884+00:00",
+      "ticks": 4,
+      "displayed": "4733.1000",
+      "traded": "5035.02",
+      "cap": "0.20",
+      "duration_s": 32.747726917266846
+     },
+     {
+      "t0": "2026-09-28T11:56:46.109347+00:00",
+      "t1": "2026-09-28T11:56:46.109347+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "6917.53",
+      "cap": "0.82",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "-4.4000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.2000"
+  },
+  {
+   "window": "1200z",
+   "winner": "up",
+   "net": "2.230698000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-2.7500",
+   "matched_pnl": "5.1500",
+   "open": {
+    "pair_formed": true,
+    "first_acquisition": {
+     "t": "2026-09-28T12:03:09.493964+00:00",
+     "side": "up",
+     "px": "0.3600",
+     "qty": "10",
+     "implied_cap_for_complement": "0.60"
+    },
+    "first_acquisition_above_theta": false,
+    "t": "2026-09-28T12:03:40.261133+00:00",
+    "side": "down",
+    "px": "0.5900",
+    "other_basis": "0.3600",
+    "first_pair_cost": "0.9500",
+    "above_theta": false,
+    "above_dollar": false,
+    "embedded_loss_per_pair": "-0.0500"
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T12:03:09.493964+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.3600",
+   "cap_at_requirement": "0.60",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 1,
+    "displayed_ticks": 1,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.4200",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T12:04:10.008502+00:00",
+      "t1": "2026-09-28T12:04:10.008502+00:00",
+      "ticks": 1,
+      "displayed": "4159.7900",
+      "traded": "4778.58",
+      "cap": "0.53",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "-2.7500",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.4200"
+  },
+  {
+   "window": "1215z",
+   "winner": "up",
+   "net": "7.343753500000",
+   "matched_qty": "20",
+   "resid_qty": "0",
+   "resid_pnl": "0",
+   "matched_pnl": "7.6000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T12:17:36.560752+00:00",
+     "side": "down",
+     "px": "0.5400",
+     "qty": "10",
+     "implied_cap_for_complement": "0.42"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": false,
+   "mechanism": "no_residual",
+   "recoverable": "0"
+  },
+  {
+   "window": "1230z",
+   "winner": "down",
+   "net": "-6.266800000000",
+   "matched_qty": "10",
+   "resid_qty": "10",
+   "resid_pnl": "-6.7000",
+   "matched_pnl": "0.6000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T12:33:47.008979+00:00",
+     "side": "down",
+     "px": "0.5400",
+     "qty": "10",
+     "implied_cap_for_complement": "0.42"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T12:33:47.008979+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.5400",
+   "cap_at_requirement": "0.42",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 1,
+    "displayed_ticks": 1,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.3200",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T12:33:47.008979+00:00",
+      "t1": "2026-09-28T12:33:47.008979+00:00",
+      "ticks": 1,
+      "displayed": "1098.4100",
+      "traded": "3510.45",
+      "cap": "0.42",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "-6.7000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.3200"
+  },
+  {
+   "window": "1245z",
+   "winner": "up",
+   "net": "-2.0000",
+   "matched_qty": "0",
+   "resid_qty": "10",
+   "resid_pnl": "-2.0000",
+   "matched_pnl": "0.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T12:49:58.512338+00:00",
+     "side": "down",
+     "px": "0.2000",
+     "qty": "10",
+     "implied_cap_for_complement": "0.76"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T12:49:58.512338+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.2000",
+   "cap_at_requirement": "0.76",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.7900",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.1100",
+    "at": "2026-09-28T12:51:29.485271+00:00",
+    "qty_fillable": "20",
+    "basis_before": "0.2000",
+    "basis_after": "0.1400",
+    "cap_before": "0.76",
+    "cap_after": "0.82",
+    "cap_improvement": "0.06"
+   },
+   "mechanism": "B_continuous_inventory",
+   "loss_on_residual": "-2.0000",
+   "recoverable": "2.7000",
+   "best_complement_price_seen": "0.7900"
+  },
+  {
+   "window": "1300z",
+   "winner": "down",
+   "net": "-2.1000",
+   "matched_qty": "0",
+   "resid_qty": "10",
+   "resid_pnl": "-2.1000",
+   "matched_pnl": "0.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T13:02:45.335951+00:00",
+     "side": "up",
+     "px": "0.2100",
+     "qty": "10",
+     "implied_cap_for_complement": "0.75"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T13:02:45.335951+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.2100",
+   "cap_at_requirement": "0.75",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.7900",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.0200",
+    "at": "2026-09-28T13:09:17.409427+00:00",
+    "qty_fillable": "80",
+    "basis_before": "0.2100",
+    "basis_after": "0.04111111111111111111111111111",
+    "cap_before": "0.75",
+    "cap_after": "0.91",
+    "cap_improvement": "0.16"
+   },
+   "mechanism": "B_continuous_inventory",
+   "loss_on_residual": "-2.1000",
+   "recoverable": "3.788888888888888888888888889",
+   "best_complement_price_seen": "0.7900"
+  },
+  {
+   "window": "1315z",
+   "winner": "up",
+   "net": "3.138530500000",
+   "matched_qty": "30",
+   "resid_qty": "10",
+   "resid_pnl": "0.3000",
+   "matched_pnl": "3.2000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T13:20:55.407898+00:00",
+     "side": "up",
+     "px": "0.4900",
+     "qty": "10",
+     "implied_cap_for_complement": "0.47"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T13:20:55.407898+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.4900",
+   "cap_at_requirement": "0.47",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.1700",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T13:21:24.183349+00:00",
+      "t1": "2026-09-28T13:21:56.121512+00:00",
+      "ticks": 4,
+      "displayed": "6211.9000",
+      "traded": "6375.50",
+      "cap": "0.47",
+      "duration_s": 31.93816304206848
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "0.3000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.1700"
+  },
+  {
+   "window": "1330z",
+   "winner": "up",
+   "net": "4.7451760000000000",
+   "matched_qty": "30.0000",
+   "resid_qty": "10.0000",
+   "resid_pnl": "-0.20000000",
+   "matched_pnl": "5.42000000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T13:35:24.697160+00:00",
+     "side": "down",
+     "px": "0.3500",
+     "qty": "10",
+     "implied_cap_for_complement": "0.61"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T13:35:24.697160+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.3500",
+   "cap_at_requirement": "0.61",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 3,
+    "best_own_terms_seen": "0.3300",
+    "fillable_qty": {
+     "10": "20",
+     "20": "40",
+     "30": "60"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T13:35:53.896250+00:00",
+      "t1": "2026-09-28T13:35:53.896250+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "4824.35",
+      "cap": "0.61",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T13:36:25.035643+00:00",
+      "t1": "2026-09-28T13:36:53.761440+00:00",
+      "ticks": 3,
+      "displayed": "1806.0000",
+      "traded": "11154.9",
+      "cap": "0.65",
+      "duration_s": 28.725796937942505
+     },
+     {
+      "t0": "2026-09-28T13:37:53.938223+00:00",
+      "t1": "2026-09-28T13:37:55.971576+00:00",
+      "ticks": 2,
+      "displayed": "1969.8200",
+      "traded": "4808.67",
+      "cap": "0.35",
+      "duration_s": 2.033353090286255
+     },
+     {
+      "t0": "2026-09-28T13:38:53.884092+00:00",
+      "t1": "2026-09-28T13:38:53.884092+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "5225.7",
+      "cap": "0.35",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-0.20000000",
+   "recoverable": "3.40000000",
+   "best_complement_price_seen": "0.3300"
+  },
+  {
+   "window": "1345z",
+   "winner": "down",
+   "net": "1.311575000000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-1.6000",
+   "matched_pnl": "3.2000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T13:50:19.864957+00:00",
+     "side": "up",
+     "px": "0.2400",
+     "qty": "10",
+     "implied_cap_for_complement": "0.72"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T13:50:19.864957+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.2400",
+   "cap_at_requirement": "0.72",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 2,
+    "best_own_terms_seen": "0.4000",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T13:53:21.182155+00:00",
+      "t1": "2026-09-28T13:53:21.182155+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "8032.52",
+      "cap": "0.72",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T13:56:53.419737+00:00",
+      "t1": "2026-09-28T13:57:25.562635+00:00",
+      "ticks": 4,
+      "displayed": "3699.7600",
+      "traded": "14429.62",
+      "cap": "0.80",
+      "duration_s": 32.142897844314575
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-1.6000",
+   "recoverable": "5.2000",
+   "best_complement_price_seen": "0.4000"
+  },
+  {
+   "window": "1400z",
+   "winner": "down",
+   "net": "0.869687500000",
+   "matched_qty": "20",
+   "resid_qty": "10",
+   "resid_pnl": "-0.5000",
+   "matched_pnl": "1.5000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T14:04:41.186094+00:00",
+     "side": "down",
+     "px": "0.8500",
+     "qty": "10",
+     "implied_cap_for_complement": "0.11"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T14:04:41.186094+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.8500",
+   "cap_at_requirement": "0.11",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 2,
+    "displayed_ticks": 2,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 3,
+    "best_own_terms_seen": "0.1200",
+    "fillable_qty": {
+     "10": "10",
+     "20": "20",
+     "30": "30"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T14:05:12.455011+00:00",
+      "t1": "2026-09-28T14:05:12.455011+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "4945.95",
+      "cap": "0.11",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T14:07:43.782407+00:00",
+      "t1": "2026-09-28T14:07:45.845556+00:00",
+      "ticks": 2,
+      "displayed": "498.0000",
+      "traded": "6806.87",
+      "cap": "0.17",
+      "duration_s": 2.0631489753723145
+     },
+     {
+      "t0": "2026-09-28T14:08:42.214812+00:00",
+      "t1": "2026-09-28T14:08:42.214812+00:00",
+      "ticks": 1,
+      "displayed": "0",
+      "traded": "10062.53",
+      "cap": "0.17",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "A_persistent_maker",
+   "loss_on_residual": "-0.5000",
+   "recoverable": "0.9000",
+   "best_complement_price_seen": "0.1200"
+  },
+  {
+   "window": "1415z",
+   "winner": "down",
+   "net": "-9.5000",
+   "matched_qty": "0",
+   "resid_qty": "10",
+   "resid_pnl": "-9.5000",
+   "matched_pnl": "0.0000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T14:25:50.132579+00:00",
+     "side": "up",
+     "px": "0.9500",
+     "qty": "10",
+     "implied_cap_for_complement": "0.01"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T14:25:50.132579+00:00",
+   "held": "up",
+   "basis_at_requirement": "0.9500",
+   "cap_at_requirement": "0.01",
+   "A_persistent_maker": {
+    "verdict": "never_reached",
+    "reached_ticks": 0,
+    "displayed_ticks": 0,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.0500",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": []
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.9300",
+    "at": "2026-09-28T14:26:22.135652+00:00",
+    "qty_fillable": "10",
+    "basis_before": "0.9500",
+    "basis_after": "0.9400",
+    "cap_before": "0.01",
+    "cap_after": "0.02",
+    "cap_improvement": "0.01"
+   },
+   "mechanism": "D_open_economics",
+   "loss_on_residual": "-9.5000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.0500"
+  },
+  {
+   "window": "1430z",
+   "winner": "down",
+   "net": "3.873099500000",
+   "matched_qty": "60",
+   "resid_qty": "10",
+   "resid_pnl": "0.1000",
+   "matched_pnl": "4.5000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T14:32:50.388610+00:00",
+     "side": "down",
+     "px": "0.4400",
+     "qty": "10",
+     "implied_cap_for_complement": "0.52"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T14:32:50.388610+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.4400",
+   "cap_at_requirement": "0.52",
+   "A_persistent_maker": {
+    "verdict": "traded_through",
+    "reached_ticks": 4,
+    "displayed_ticks": 4,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 1,
+    "best_own_terms_seen": "0.1800",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T14:32:50.388610+00:00",
+      "t1": "2026-09-28T14:32:50.388610+00:00",
+      "ticks": 1,
+      "displayed": "1495.5200",
+      "traded": "6192.43",
+      "cap": "0.52",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T14:33:19.522917+00:00",
+      "t1": "2026-09-28T14:33:19.522917+00:00",
+      "ticks": 1,
+      "displayed": "5033.5400",
+      "traded": "3374.1",
+      "cap": "0.60",
+      "duration_s": 0.0
+     },
+     {
+      "t0": "2026-09-28T14:41:21.314154+00:00",
+      "t1": "2026-09-28T14:41:23.361094+00:00",
+      "ticks": 2,
+      "displayed": "2584.0000",
+      "traded": "7516.71",
+      "cap": "0.92",
+      "duration_s": 2.0469400882720947
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": false
+   },
+   "mechanism": "C_speed",
+   "loss_on_residual": "0.1000",
+   "recoverable": "0",
+   "best_complement_price_seen": "0.1800"
+  },
+  {
+   "window": "1445z",
+   "winner": "up",
+   "net": "3.865684000000",
+   "matched_qty": "40",
+   "resid_qty": "10",
+   "resid_pnl": "0.1000",
+   "matched_pnl": "4.3000",
+   "open": {
+    "pair_formed": false,
+    "first_acquisition": {
+     "t": "2026-09-28T14:50:26.544335+00:00",
+     "side": "down",
+     "px": "0.3400",
+     "qty": "10",
+     "implied_cap_for_complement": "0.62"
+    },
+    "first_acquisition_above_theta": false
+   },
+   "stranded": true,
+   "complement_required_at": "2026-09-28T14:50:26.544335+00:00",
+   "held": "down",
+   "basis_at_requirement": "0.3400",
+   "cap_at_requirement": "0.62",
+   "A_persistent_maker": {
+    "verdict": "displayed_only",
+    "reached_ticks": 3,
+    "displayed_ticks": 3,
+    "traded_at_ticks": 0,
+    "traded_through_ticks": 0,
+    "best_own_terms_seen": "0.3700",
+    "fillable_qty": {
+     "10": "0",
+     "20": "0",
+     "30": "0"
+    },
+    "opportunities": [
+     {
+      "t0": "2026-09-28T14:52:26.461911+00:00",
+      "t1": "2026-09-28T14:52:28.508447+00:00",
+      "ticks": 2,
+      "displayed": "2427.3200",
+      "traded": "17387.87",
+      "cap": "0.79",
+      "duration_s": 2.0465359687805176
+     },
+     {
+      "t0": "2026-09-28T14:53:26.499770+00:00",
+      "t1": "2026-09-28T14:53:26.499770+00:00",
+      "ticks": 1,
+      "displayed": "1095.1200",
+      "traded": "16385.1",
+      "cap": "0.77",
+      "duration_s": 0.0
+     }
+    ]
+   },
+   "B_continuous_inventory": {
+    "available": true,
+    "cheapest_px": "0.2500",
+    "at": "2026-09-28T14:50:58.626695+00:00",
+    "qty_fillable": "10",
+    "basis_before": "0.3400",
+    "basis_after": "0.2950",
+    "cap_before": "0.62",
+    "cap_after": "0.66",
+    "cap_improvement": "0.04"
+   },
+   "mechanism": "B_continuous_inventory",
+   "loss_on_residual": "0.1000",
+   "recoverable": "3.2500",
+   "best_complement_price_seen": "0.3700"
+  }
+ ]
+}
