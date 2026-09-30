@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 
 from src.l5_causal_sim import CausalSim
 
-SLICE = "data/pmus_ws_stream/raw_l2/pmus_ws_20260930_13_slice.jsonl.gz"
+SLICE = "data/pmus_ws_stream/raw_l2/pmus_ws_20260930_1330z.jsonl.gz"
 CLIPS = (10, 20, 30, 50)
 
 
@@ -94,10 +94,12 @@ def events(slug: str):
 
 
 ARMS = {
-    "persistent_maker": dict(persistent_maker=True),
-    "maker+take": dict(persistent_maker=True, reactive_take=True),
-    "maker+take+extend": dict(persistent_maker=True, reactive_take=True,
-                              basis_extend=True),
+    "CONTROL reprice": dict(persistent_maker=True),
+    "HOLD_THE_LEVEL": dict(persistent_maker=True, hold_the_level=True),
+    "HOLD + take": dict(persistent_maker=True, hold_the_level=True,
+                        reactive_take=True),
+    "HOLD + take + extend": dict(persistent_maker=True, hold_the_level=True,
+                                 reactive_take=True, basis_extend=True),
 }
 
 if __name__ == "__main__":
@@ -110,16 +112,18 @@ if __name__ == "__main__":
     print("%s: %d events (%d book, %d PRINTS) over %.1f min"
           % (slug[-5:], len(ev), nb, nt, span / 60), flush=True)
     print()
-    hdr = "%-20s %4s %6s %8s %7s %7s %9s %9s %8s %8s"
-    print(hdr % ("arm", "clip", "fills", "contracts", "pairs", "resid",
-                 "matched$", "peak$", "places", "requotes"))
+    hdr = "%-22s %4s %6s %6s %7s %8s %9s %9s %8s %7s %7s"
+    print(hdr % ("arm", "clip", "fills", "part", "pairs", "resid",
+                 "q-ahead0", "q-eaten", "q-lost", "cancels", "held_s"))
     for arm, kw in ARMS.items():
         for clip in CLIPS:
             sim = CausalSim(clip=D(clip), **kw)
             r = sim.run(ev, winner=None)
-            print(hdr % (arm, clip, r["n_fills"], str(r["contracts"]),
+            print(hdr % (arm, clip, r["n_fills"], r["partial_fills"],
                          "%.2f" % (float(r["matched_qty"]) / clip),
                          str(r["resid_qty"]),
-                         "%+.3f" % float(r["matched_pnl"]),
-                         "%.2f" % float(r["peak_cash"]),
-                         r["places"], r["requotes"]), flush=True)
+                         "%.0f" % float(r["median_ahead_at_placement"]),
+                         "%.0f" % float(r["queue_consumed"]),
+                         "%.0f" % float(r["queue_forfeited"]),
+                         r["cancels"] + r["requotes"],
+                         "%.0f" % r["held_s"]), flush=True)

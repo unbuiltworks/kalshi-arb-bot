@@ -57,11 +57,17 @@ def _floor_tick(x: D) -> D:
 class Order:
     """One resting maker order with a causally-earned queue position."""
 
-    __slots__ = ("side", "px", "qty", "ahead", "filled", "placed_t")
+    __slots__ = ("side", "px", "qty", "ahead", "filled", "placed_t",
+                 "ahead0", "consumed", "is_complement")
 
-    def __init__(self, side: str, px: D, qty: D, ahead: D, t: float) -> None:
+    def __init__(self, side: str, px: D, qty: D, ahead: D, t: float,
+                 is_complement: bool = False) -> None:
         self.side, self.px, self.qty = side, px, qty
         self.ahead, self.filled, self.placed_t = ahead, D(0), t
+        #: queue depth we joined behind, and how much of it real prints ate.
+        #: `ahead0 - ahead` is the position we EARNED; a cancel forfeits it.
+        self.ahead0, self.consumed = ahead, D(0)
+        self.is_complement = is_complement
 
     def remaining(self) -> D:
         return self.qty - self.filled
@@ -70,11 +76,26 @@ class Order:
 class CausalSim:
     def __init__(self, *, clip: D, persistent_maker: bool = True,
                  reactive_take: bool = False, basis_extend: bool = False,
+                 hold_the_level: bool = False,
                  residual_cap_k: D = E.RESIDUAL_CAP_K) -> None:
         self.clip = D(str(clip))
         self.persistent_maker = persistent_maker
         self.reactive_take = reactive_take
         self.basis_extend = basis_extend
+        #: HOLD_THE_LEVEL. The control re-prices a complement whenever the
+        #: basis-derived price changes, and a replace joins the BACK of the new
+        #: level's queue. On the 1330z slice that meant 54 requotes in 5
+        #: minutes -- one every 5.5s -- against a median queue of 1,219
+        #: contracts that takes ~84 prints to climb. The engine restarted the
+        #: climb constantly and never finished it.
+        #:
+        #: With this on, a resting complement KEEPS ITS PRICE AND ITS QUEUE
+        #: POSITION even when a newer touch is available. It is cancelled only
+        #: when it becomes economically invalid: it no longer reduces residual,
+        #: its price no longer satisfies the pair bound after fees, or it would
+        #: breach the residual cap. A partial fill leaves the remainder resting
+        #: while more of it would still reduce residual.
+        self.hold_the_level = hold_the_level
         self.residual_cap_k = D(str(residual_cap_k))
         self.bk = S.Book()
         self.resting: Dict[str, Optional[Order]] = {"up": None, "down": None}
@@ -93,6 +114,19 @@ class CausalSim:
         self.peak_cash = D(0)
         self.cash = D(0)
         self.worst_residual = D(0)
+        #: instrumentation
+        self.held_s = 0.0             # order-seconds spent resting
+        self.queue_consumed = D(0)    # prints-ahead actually eaten
+        self.queue_forfeited = D(0)   # earned position thrown away by a cancel
+        self.ahead_at_placement: List[D] = []
+        self.partial_fills = 0
+        self.holds = 0                # times we kept a level the control drops
+        #: requotes/cancels split by order role. This is what distinguishes a
+        #: HOLD_THE_LEVEL no-op from a real behavioural difference: the hold
+        #: rule is scoped to complements, so it can only ever suppress churn
+        #: recorded under the "complement" key.
+        self.requotes_by_type = {"complement": 0, "open_or_extend": 0}
+        self.cancels_by_type = {"complement": 0, "open_or_extend": 0}
 
     # ------------------------------------------------------------ economics
 
@@ -175,6 +209,8 @@ class CausalSim:
             if o.ahead > 0:
                 take = qty if qty < o.ahead else o.ahead
                 o.ahead -= take
+                o.consumed += take
+                self.queue_consumed += take
                 qty -= take
                 if qty <= 0:
                     continue        # the queue absorbed the whole print
@@ -189,10 +225,16 @@ class CausalSim:
             if self.cash > self.peak_cash:
                 self.peak_cash = self.cash
             o.filled += got
+            if got < o.qty:
+                self.partial_fills += 1
             self.fills.append({"t": t, "side": side, "px": str(o.px),
                                "qty": str(got), "maker": True,
-                               "placed_t": o.placed_t})
+                               "placed_t": o.placed_t,
+                               "rested_s": t - o.placed_t,
+                               "ahead0": str(o.ahead0),
+                               "consumed": str(o.consumed)})
             if o.remaining() <= 0:
+                self.held_s += t - o.placed_t
                 self.resting[side] = None
         r = abs(self.bk.residual())
         if r > self.worst_residual:
@@ -225,28 +267,67 @@ class CausalSim:
                     return None
         return own
 
+    def _still_valid(self, side: str, o: "Order") -> bool:
+        """May this resting order keep its price and its queue position?
+
+        Four tests, and they are the only reasons to give up a position:
+        it must still REDUCE residual (its side is still the deficient one),
+        its price must still satisfy the pair bound computed from the CURRENT
+        basis, filling the rest of it must not breach the residual cap, and
+        there must be something left to fill.
+        """
+        if o.remaining() <= 0:
+            return False
+        cap = self.complement_cap(side)
+        if cap is None:
+            return False            # no longer the deficient side
+        if o.px > cap:
+            return False            # basis moved; this price no longer pairs
+        return self._cap_permits(side, o.remaining())
+
+    def _drop(self, side: str, o: "Order", t: float) -> None:
+        self.held_s += max(0.0, t - o.placed_t)
+        self.queue_forfeited += (o.ahead0 - o.ahead)
+        self.resting[side] = None
+        self.cancels += 1
+        self.cancels_by_type["complement" if o.is_complement
+                             else "open_or_extend"] += 1
+
     def _reconcile(self, t: float) -> None:
         for side in ("up", "down"):
-            want = self._desired(side)
             cur = self.resting.get(side)
+            if self.hold_the_level and cur is not None and cur.is_complement:
+                # KEEP THE POSITION unless it has become economically invalid.
+                # A newer touch is explicitly NOT a reason to move.
+                if self._still_valid(side, cur):
+                    self.holds += 1
+                    continue
+                self._drop(side, cur, t)
+                cur = None
+            want = self._desired(side)
             if want is None:
                 if cur is not None:
-                    self.resting[side] = None
-                    self.cancels += 1
+                    self._drop(side, cur, t)
                 continue
             if cur is not None and cur.px == want:
                 continue            # already there; keep our queue position
             shown = self.displayed_at(side, want)
             if shown is None:
                 if cur is not None:
-                    self.resting[side] = None
-                    self.cancels += 1
+                    self._drop(side, cur, t)
                 continue
             if cur is not None:
                 self.requotes += 1
+                self.requotes_by_type["complement" if cur.is_complement
+                                      else "open_or_extend"] += 1
+                self.queue_forfeited += (cur.ahead0 - cur.ahead)
+                self.held_s += max(0.0, t - cur.placed_t)
             self.places += 1
+            self.ahead_at_placement.append(shown)
             # a replace joins the BACK of the new level's queue
-            self.resting[side] = Order(side, want, self.clip, shown, t)
+            self.resting[side] = Order(side, want, self.clip, shown, t,
+                                       is_complement=(
+                                           self.complement_cap(side) is not None))
 
     def _maybe_take(self, t: float) -> None:
         """Cross for the whole residual when displayed depth is fee-safe."""
@@ -299,5 +380,15 @@ class CausalSim:
         res["cancels"] = self.cancels
         res["takes"] = self.takes
         res["contracts"] = sum(D(f["qty"]) for f in self.fills)
+        res["held_s"] = self.held_s
+        res["queue_consumed"] = self.queue_consumed
+        res["queue_forfeited"] = self.queue_forfeited
+        res["partial_fills"] = self.partial_fills
+        res["holds"] = self.holds
+        res["requotes_by_type"] = dict(self.requotes_by_type)
+        res["cancels_by_type"] = dict(self.cancels_by_type)
+        res["median_ahead_at_placement"] = (
+            sorted(self.ahead_at_placement)[len(self.ahead_at_placement) // 2]
+            if self.ahead_at_placement else D(0))
         res["fills_detail"] = self.fills
         return res
