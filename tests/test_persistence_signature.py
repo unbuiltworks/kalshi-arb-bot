@@ -362,9 +362,37 @@ def test_an_absent_ledger_leaves_side_metrics_unavailable_not_guessed():
 
 
 def test_venue_side_words_map_to_our_canonical_sides():
+    """YES->up, NO->down, observed through the price/streak metrics that a
+    side actually reaches. The mode metrics cannot be used for this: they are
+    suppressed in this source (see the next test)."""
+    j = [_adm(1.0, "c1"), _adm(2.0, "c2"), _adm(3.0, "c3")]
+    l = [_cmt("c1", "OUTCOME_SIDE_YES", "0.40"),
+         _cmt("c2", "OUTCOME_SIDE_YES", "0.40"),
+         _cmt("c3", "OUTCOME_SIDE_NO", "0.60")]
+    s = SIG.from_mandate_records(j, l, expect_actions=3)
+    assert s["ledger_joined"] == 3
+    # two consecutive YES then a NO: the streak proves the sides were read
+    assert s["max_streak"] == 2
+    # both YES actions at the same price, the NO is a first-on-side
+    assert s["same_price_frac"] == pytest.approx(1.0)
+
+
+def test_inventory_dependent_metrics_are_suppressed_not_zeroed():
+    """mandate_admission carries no up/down book. An earlier version passed
+    up=down=0 as a placeholder, which made every action classify as
+    flat_open and reported flat_open_frac 1.0 and matched/residual 0.0 --
+    numbers that read as findings about the clone and were artefacts of the
+    placeholder."""
     j = [_adm(1.0, "c1"), _adm(2.0, "c2")]
     l = [_cmt("c1", "OUTCOME_SIDE_YES", "0.4"),
          _cmt("c2", "OUTCOME_SIDE_NO", "0.6")]
     s = SIG.from_mandate_records(j, l, expect_actions=2)
-    assert s["ledger_joined"] == 2
-    assert s["flat_open_frac"] == pytest.approx(1.0)
+    for k in ("median_matched", "max_matched", "median_residual",
+              "max_residual", "extend_frac", "rebalance_frac",
+              "flat_open_frac", "transitions"):
+        assert s[k] is None, "%s was reported from an absent inventory" % k
+    assert "unavailable rather than as zero" in s["inventory_unavailable"]
+    # what the records DO support still comes through
+    assert s["actions_per_min"] is not None
+    assert s["median_dt_prev"] is not None
+    assert s["median_qty"] == 10.0

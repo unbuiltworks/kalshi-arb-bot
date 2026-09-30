@@ -264,8 +264,15 @@ def from_mandate_records(journal_rows: Iterable[Mapping[str, Any]],
             elif "NO" in raw:
                 side = "down"
             px = _num(c.get("price_wire"))
+        # INVENTORY IS NOT IN THESE RECORDS. mandate_admission carries cash
+        # and quantity but not the up/down book, so up=down=0 is a
+        # PLACEHOLDER, not a reading. Passing it through would make every
+        # action classify as flat_open and report flat_open_frac 1.0 and
+        # matched/residual 0.0 -- numbers that look like findings about the
+        # clone's behaviour and are artefacts of the placeholder. They are
+        # therefore suppressed below.
         acts.append({"t": _num(r.get("t")), "side": side, "px": px,
-                     "up": 0.0, "down": 0.0,
+                     "up": None, "down": None,
                      "qty": _num(r.get("quantity")),
                      "cash_at_risk": _num(r.get("cash_at_risk"))})
 
@@ -295,6 +302,18 @@ def from_mandate_records(journal_rows: Iterable[Mapping[str, Any]],
     out["no_intent_note"] = ("not computable from mandate records -- they "
                              "contain only admitted orders, not declined "
                              "ticks. Do not read the absence as idleness.")
+    # Suppress everything that depended on an inventory these records do
+    # not contain. Cadence, timing, quantity, cash, side and price survive.
+    out["inventory_unavailable"] = (
+        "mandate_admission carries no up/down book, so matched, residual and "
+        "the extend/rebalance classification are NOT derivable from this "
+        "source and are reported as unavailable rather than as zero.")
+    for k in ("median_matched", "max_matched", "median_residual",
+              "max_residual", "extend_frac", "rebalance_frac",
+              "flat_open_frac", "transitions", "matched_series",
+              "residual_series"):
+        out[k] = None
+
     if out["ledger_joined"] == 0:
         out["side_metrics_unavailable"] = (
             "no mandate_commit row joined, so side and price are unknown and "
