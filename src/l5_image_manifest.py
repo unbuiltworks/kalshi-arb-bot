@@ -57,18 +57,55 @@ class UnsupportedCopy(Exception):
     """
 
 
-def image_root(dockerfile: str) -> str:
-    """Where the image's import root is: PYTHONPATH if set, else WORKDIR."""
+def image_roots(dockerfile: str) -> Tuple[List[str], str]:
+    """(import roots, working directory) as the image will actually have them.
+
+    Roots are every entry of PYTHONPATH -- it is colon-separated and treating it
+    as one literal path dropped legitimate destinations -- falling back to the
+    working directory when PYTHONPATH is unset. Both ENV spellings are read
+    (`ENV K=V` and the legacy `ENV K V`), and a relative WORKDIR is resolved
+    cumulatively against the previous one, as Docker does.
+    """
     workdir, pypath = "/", None
     for line in _lines(dockerfile):
-        u = line.upper()
-        if u.startswith("WORKDIR "):
-            workdir = shlex.split(line[8:])[0]
-        elif u.startswith("ENV "):
-            for tok in shlex.split(line[4:]):
-                if tok.startswith("PYTHONPATH="):
-                    pypath = tok.split("=", 1)[1]
-    return pypath or workdir
+        instr = _instruction(line)
+        rest = line.split(None, 1)
+        args = rest[1] if len(rest) > 1 else ""
+        if instr == "WORKDIR":
+            got = shlex.split(args)
+            if got:
+                workdir = got[0] if os.path.isabs(got[0]) \
+                    else os.path.normpath(os.path.join(workdir, got[0]))
+        elif instr == "ENV":
+            toks = shlex.split(args)
+            if len(toks) == 2 and "=" not in toks[0]:
+                if toks[0] == "PYTHONPATH":       # legacy `ENV KEY value`
+                    pypath = toks[1]
+            else:
+                for tok in toks:
+                    if tok.startswith("PYTHONPATH="):
+                        pypath = tok.split("=", 1)[1]
+    roots = [r for r in (pypath or workdir).split(":") if r]
+    return (roots or ["/"]), workdir
+
+
+def image_root(dockerfile: str) -> str:
+    """The FIRST import root. Kept for callers that want one path."""
+    return image_roots(dockerfile)[0][0]
+
+
+def _instruction(line: str) -> str:
+    """The Dockerfile instruction, upper-cased.
+
+    Docker's parser splits the instruction from its arguments on ANY
+    whitespace, so `ADD\tfoo bar` is a valid ADD. Testing
+    `line.upper().startswith("ADD ")` -- a literal space -- missed it, and a
+    tab-separated ADD therefore slipped the whole gate: an independent review
+    reproduced shipping `src/pmus_q1_executor.py`, the order path, with every
+    layer green including the no-POST assertion. Split, do not prefix-match.
+    """
+    parts = line.split(None, 1)
+    return parts[0].upper() if parts else ""
 
 
 def copy_specs(dockerfile: str):
@@ -80,14 +117,18 @@ def copy_specs(dockerfile: str):
     """
     out = []
     for line in _lines(dockerfile):
-        u = line.upper()
-        if u.startswith("ADD "):
+        instr = _instruction(line)
+        if instr == "ADD":
             raise UnsupportedCopy("ADD is not modelled: %s" % line)
-        if not u.startswith("COPY "):
+        if instr != "COPY":
             continue
-        parts = shlex.split(line[5:])
+        rest = line.split(None, 1)
+        parts = shlex.split(rest[1]) if len(rest) > 1 else []
         for flag in [p for p in parts if p.startswith("--")]:
-            if flag.startswith("--from"):
+            # case-insensitive: buildkit rejects a wrong-case flag at build
+            # time, but a parser that reads `--FROM=` as an unknown flag and
+            # strips it would treat a build-stage COPY as a repo COPY.
+            if flag.upper().startswith("--FROM"):
                 raise UnsupportedCopy(
                     "COPY --from names a build stage, not this repo: %s" % line)
         parts = [p for p in parts if not p.startswith("--")]
@@ -115,22 +156,50 @@ def image_paths(dockerfile: str) -> Set[str]:
     does not cover the module -- so the coverage check fails, which is the
     fail-closed direction.
     """
-    root = image_root(dockerfile)
+    roots, workdir = image_roots(dockerfile)
     out: Set[str] = set()
     for src, dst in copy_specs(dockerfile):
-        if dst.endswith("/") or dst in (".", "./"):
-            # a directory destination keeps the BASENAME only
-            base = os.path.basename(src.rstrip("/"))
-            placed = os.path.join(dst, base)
+        is_dir_dst = dst.endswith("/") or dst in (".", "./")
+        if os.path.isdir(src):
+            # A DIRECTORY SOURCE COPIES ITS CONTENTS, NOT ITSELF. Keeping the
+            # source basename modelled `COPY src/polymarket_l5 src/` as landing
+            # `src/polymarket_l5/...` when Docker actually lands `config.py` at
+            # `src/config.py` -- so the gate read the package as covered while
+            # the image died on ModuleNotFoundError. Found by review, fail-open,
+            # now expanded file by file.
+            base_dst = dst if is_dir_dst else dst + "/"
+            for dirpath, _dirs, files in os.walk(src):
+                for fn in files:
+                    full = os.path.join(dirpath, fn)
+                    inner = os.path.relpath(full, src)
+                    out.update(_place(os.path.join(base_dst, inner),
+                                      roots, workdir))
+            continue
+        if is_dir_dst:
+            placed = os.path.join(dst, os.path.basename(src.rstrip("/")))
         else:
             placed = dst
-        placed = os.path.normpath(placed)
-        if os.path.isabs(placed):
-            if not (placed == root or placed.startswith(root.rstrip("/") + "/")):
-                continue                # outside the import root: not importable
-            placed = os.path.relpath(placed, root)
-        out.add(os.path.normpath(placed))
+        out.update(_place(placed, roots, workdir))
     return out
+
+
+def _place(placed: str, roots: List[str], workdir: str) -> Set[str]:
+    """Where `placed` ends up relative to whichever import root contains it.
+
+    A relative destination resolves against WORKDIR -- not against the import
+    root. Assuming those were the same was fail-open whenever PYTHONPATH and
+    WORKDIR differ: the file landed under WORKDIR, off sys.path, while the gate
+    read it as covered.
+    """
+    placed = os.path.normpath(placed)
+    if not os.path.isabs(placed):
+        placed = os.path.normpath(os.path.join(workdir, placed))
+    got: Set[str] = set()
+    for root in roots:
+        r = root.rstrip("/") or "/"
+        if placed == r or placed.startswith(r + "/") or r == "/":
+            got.add(os.path.normpath(os.path.relpath(placed, r)))
+    return got
 
 
 def copied_paths(dockerfile: str) -> Set[str]:

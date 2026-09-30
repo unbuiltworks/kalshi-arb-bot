@@ -168,6 +168,98 @@ def test_unmodellable_copy_forms_are_refused_not_skipped():
 
 def test_the_import_root_is_read_from_the_image_not_assumed():
     assert M.image_root(DOCKERFILE) == "/app"
+    roots, workdir = M.image_roots(DOCKERFILE)
+    assert roots == ["/app"] and workdir == "/app"
+
+
+def _tmp_dockerfile(text: str) -> str:
+    import tempfile as _tf
+    with _tf.NamedTemporaryFile("w", suffix=".Dockerfile", delete=False) as fh:
+        fh.write(text)
+        return fh.name
+
+
+def test_a_tab_separated_instruction_cannot_evade_the_parser():
+    """THE WORST FAIL-OPEN A REVIEW FOUND HERE, and it defeated the no-POST
+    guarantee itself. Docker splits the instruction on ANY whitespace, so
+    `ADD\tfoo\tbar` is a valid ADD -- while `line.upper().startswith("ADD ")`
+    with a literal space saw nothing. Reproduced: the order path shipped in the
+    image with all six layers green, including the assertion that it is absent.
+    """
+    base = open(DOCKERFILE, encoding="utf-8").read()
+    for extra in ("ADD\tsrc/pmus_q1_executor.py\tsrc/pmus_q1_executor.py\n",
+                  "COPY\t--from=builder\tsrc/x.py\tsrc/x.py\n",
+                  "  add\tsrc/pmus_q1_executor.py\tsrc/q.py\n"):
+        path = _tmp_dockerfile(base + extra)
+        try:
+            with pytest.raises(M.UnsupportedCopy):
+                M.copy_specs(path)
+        finally:
+            os.unlink(path)
+
+
+def test_a_wrong_case_from_flag_is_not_mistaken_for_a_repo_copy():
+    base = open(DOCKERFILE, encoding="utf-8").read()
+    path = _tmp_dockerfile(base + "COPY --FROM=builder src/x.py src/x.py\n")
+    try:
+        with pytest.raises(M.UnsupportedCopy):
+            M.copy_specs(path)
+    finally:
+        os.unlink(path)
+
+
+def test_a_directory_source_copies_its_contents_not_itself():
+    """Docker copies the CONTENTS of a directory source. Keeping the source
+    basename modelled `COPY src/polymarket_l5 src/` as landing
+    `src/polymarket_l5/config.py` when the image actually lands
+    `src/config.py`, so the gate read the package as covered while the
+    container would die on ModuleNotFoundError."""
+    base = open(DOCKERFILE, encoding="utf-8").read()
+    mut = "\n".join(l for l in base.splitlines()
+                    if not l.startswith("COPY src/polymarket_l5/"))
+    mut = mut.replace("COPY scripts/__init__.py scripts/__init__.py",
+                      "COPY src/polymarket_l5 src/\n"
+                      "COPY scripts/__init__.py scripts/__init__.py")
+    path = _tmp_dockerfile(mut)
+    try:
+        placed = M.image_paths(path)
+        assert "src/config.py" in placed, "contents were not expanded"
+        assert not M.module_is_covered("src.polymarket_l5.config", placed), (
+            "a flattened directory COPY still read as covering the package")
+    finally:
+        os.unlink(path)
+
+
+def test_a_relative_destination_resolves_against_workdir_not_the_import_root():
+    """Fail-open whenever PYTHONPATH and WORKDIR differ: the file lands under
+    WORKDIR, off sys.path, while the gate read it as covered."""
+    base = open(DOCKERFILE, encoding="utf-8").read()
+    mut = base.replace("ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app",
+                       "ENV PYTHONUNBUFFERED=1 PYTHONPATH=/code")
+    path = _tmp_dockerfile(mut)
+    try:
+        assert M.image_roots(path)[0] == ["/code"]
+        assert M.image_paths(path) == set(), (
+            "destinations under WORKDIR read as covered although /code is the "
+            "import root")
+    finally:
+        os.unlink(path)
+
+
+def test_both_env_spellings_and_a_multi_entry_pythonpath_are_read():
+    base = open(DOCKERFILE, encoding="utf-8").read()
+    legacy = _tmp_dockerfile(base.replace(
+        "ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app", "ENV PYTHONPATH /code"))
+    multi = _tmp_dockerfile(base.replace("PYTHONPATH=/app",
+                                         "PYTHONPATH=/app:/app/vendor"))
+    try:
+        assert M.image_roots(legacy)[0] == ["/code"]
+        assert M.image_roots(multi)[0] == ["/app", "/app/vendor"]
+        # the real 31 modules stay covered when a second root is added
+        assert len(M.image_paths(multi)) == 31
+    finally:
+        os.unlink(legacy)
+        os.unlink(multi)
 
 
 # ------------------------------------------------------------------- layer 2
