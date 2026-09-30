@@ -1,0 +1,212 @@
+# One-time, manually-triggered, READ-ONLY export of an existing raw WS tape
+# from the L5 Railway volume, followed by the already-frozen settled-window
+# scoreboard.
+#
+# Hard constraints, enforced below and not negotiable in this file:
+#   * manual trigger only -- no schedule, no push trigger;
+#   * the Railway CLI version is PINNED and the installed version is asserted;
+#   * authentication comes only from the RAILWAY_TOKEN Actions secret;
+#   * the only Railway operation is a file download. No deploy, no redeploy,
+#     no variable change, no domain, no restart, no Railway Agent;
+#   * if the CLI cannot read service files non-interactively, the job FAILS.
+#     There is deliberately no fallback path;
+#   * no PMUS credential is used anywhere in this workflow.
+name: l5-volume-export
+
+on:
+  workflow_dispatch:
+    inputs:
+      remote_path:
+        description: Absolute path of the tape on the recorder's volume
+        required: true
+        default: /state/pmus-ws/raw/pmus_ws_20260930_13.jsonl
+      slug:
+        description: Market slug of the window to score
+        required: true
+        default: cpc-btc-updown-15m-2026-09-30-1330z
+      window_start:
+        description: ISO8601 start of that 15-minute window
+        required: true
+        default: '2026-09-30T13:30:00+00:00'
+      railway_cli_version:
+        description: Pinned @railway/cli version (asserted after install)
+        required: true
+        default: 5.63.1
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The CLI reads RAILWAY_TOKEN from the environment; it is never written
+      # to disk, never echoed, and never passed on a command line.
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      PROJECT_ID: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
+      ENVIRONMENT_ID: f3642d27-26dc-4e21-9170-bc76290c076f
+      SERVICE_ID: 71b6ea99-ea6a-4b20-9602-fa873721ed35
+      REMOTE_PATH: ${{ inputs.remote_path }}
+    steps:
+      - name: Fail closed if the token secret is absent
+        run: |
+          set -euo pipefail
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_TOKEN secret is not set. This workflow" \
+                 "authenticates only from that secret and will not prompt."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install the PINNED Railway CLI and assert the version
+        run: |
+          set -euo pipefail
+          npm install -g "@railway/cli@${{ inputs.railway_cli_version }}"
+          got="$(railway --version | tr -d '\r')"
+          echo "installed: $got"
+          case "$got" in
+            *"${{ inputs.railway_cli_version }}"*) ;;
+            *) echo "::error::CLI version mismatch: wanted" \
+                    "${{ inputs.railway_cli_version }}, got '$got'"; exit 1 ;;
+          esac
+
+      - name: Confirm non-interactive authentication (read-only)
+        run: |
+          set -euo pipefail
+          # `whoami` is a read. If the token cannot authenticate without a
+          # browser prompt, this fails here rather than hanging later.
+          railway whoami
+
+      - name: Read-only download of the tape
+        id: dl
+        run: |
+          set -euo pipefail
+          mkdir -p export
+          base="$(basename "$REMOTE_PATH")"
+          echo "requesting: $REMOTE_PATH"
+          # Record what this CLI version actually offers, so a failure is
+          # diagnosable from the log instead of guesswork.
+          railway --help > export/cli_help.txt 2>&1 || true
+          railway service --help >> export/cli_help.txt 2>&1 || true
+          # The ONLY Railway operation in this workflow: a file read.
+          if ! railway service files download "$REMOTE_PATH" \
+                 --service "$SERVICE_ID" \
+                 --environment "$ENVIRONMENT_ID" \
+                 --project "$PROJECT_ID" \
+                 --output "export/$base" < /dev/null; then
+            echo "::error::The pinned Railway CLI could not read service" \
+                 "files non-interactively. Failing closed: this workflow has" \
+                 "no fallback to deployment, variables, an HTTP endpoint or" \
+                 "Railway Agent, by design. See the cli_help.txt artifact."
+            exit 1
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Verify bytes, checksum, and compress
+        id: verify
+        run: |
+          set -euo pipefail
+          base="${{ steps.dl.outputs.base }}"
+          f="export/$base"
+          [ -f "$f" ] || { echo "::error::no file was written"; exit 1; }
+          bytes="$(stat -c%s "$f")"
+          echo "bytes=$bytes"
+          if [ "$bytes" -le 0 ]; then
+            echo "::error::downloaded 0 bytes"; exit 1
+          fi
+          sha="$(sha256sum "$f" | awk '{print $1}')"
+          lines="$(wc -l < "$f")"
+          gzip -9 -k "$f"
+          gz_sha="$(sha256sum "$f.gz" | awk '{print $1}')"
+          cat > export/METADATA.json <<META
+          {
+            "remote_path": "$REMOTE_PATH",
+            "service_id": "$SERVICE_ID",
+            "environment_id": "$ENVIRONMENT_ID",
+            "project_id": "$PROJECT_ID",
+            "railway_cli_version": "${{ inputs.railway_cli_version }}",
+            "bytes": $bytes,
+            "lines": $lines,
+            "sha256_plain": "$sha",
+            "sha256_gz": "$gz_sha",
+            "exported_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "run_id": "${{ github.run_id }}",
+            "operations_performed": ["files download (read-only)"],
+            "operations_explicitly_not_performed": [
+              "deploy", "redeploy", "restart", "variable change",
+              "domain/TCP proxy change", "Railway Agent"
+            ]
+          }
+          META
+          printf '%s  %s\n' "$sha" "$base" > export/SHA256SUMS
+          printf '%s  %s\n' "$gz_sha" "$base.gz" >> export/SHA256SUMS
+          rm -f "$f"          # keep only the .gz in the artifact
+          cat export/METADATA.json
+          echo "gz=$base.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve AUTHORITATIVE settlement from the venue
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 20 \
+            "https://gateway.polymarket.us/v1/markets/${{ inputs.slug }}/bbo" \
+            > export/settlement_bbo.json
+          python3 - <<'PY'
+          import json, pathlib, sys
+          sys.path.insert(0, ".")
+          from src.l5_settlement_source import winner_from_bbo
+          bbo = json.loads(pathlib.Path("export/settlement_bbo.json").read_text())
+          w = winner_from_bbo(bbo)          # raises unless genuinely settled
+          pathlib.Path("export/WINNER").write_text(w + "\n")
+          print("authoritative winner:", w)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: l5-raw-tape-${{ github.run_id }}
+          path: export/
+          retention-days: 7
+          if-no-files-found: error
+
+  scoreboard:
+    needs: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: l5-raw-tape-${{ github.run_id }}
+          path: export
+      - name: Verify the artifact against its own checksum
+        run: |
+          set -euo pipefail
+          cd export
+          grep '\.gz$' SHA256SUMS | sha256sum -c -
+      - name: Slice the window and run ALL frozen arms
+        run: |
+          set -euo pipefail
+          mkdir -p data/pmus_ws_stream/raw_l2
+          gz="$(ls export/*.jsonl.gz)"
+          python3 scripts/l5_slice_window.py "$gz" \
+            "${{ inputs.slug }}" "${{ inputs.window_start }}" \
+            data/pmus_ws_stream/raw_l2/exported_window.jsonl.gz
+          winner="$(cat export/WINNER)"
+          echo "winner=$winner"
+          # Fails closed unless the window is complete AND settled.
+          python3 scripts/l5_run_frozen_arms_settled.py \
+            data/pmus_ws_stream/raw_l2/exported_window.jsonl.gz \
+            "${{ inputs.slug }}" "${{ inputs.window_start }}" "$winner" \
+            | tee export/SCOREBOARD.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: l5-scoreboard-${{ github.run_id }}
+          path: export/SCOREBOARD.txt
+          retention-days: 14
+          if-no-files-found: error
