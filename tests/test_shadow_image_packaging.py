@@ -97,7 +97,7 @@ def test_the_closure_sees_lazy_imports_a_sys_modules_walk_cannot():
 
 def test_every_required_module_is_copied_into_the_image():
     c = _closure()
-    copied = M.copied_paths(DOCKERFILE)
+    copied = M.image_paths(DOCKERFILE)
     missing = [m for m in _required(c) if not M.module_is_covered(m, copied)]
     assert not missing, (
         "the image would crash at runtime on: %s" % ", ".join(missing))
@@ -108,7 +108,7 @@ def test_the_copy_list_carries_nothing_the_closure_does_not_need():
     security property is what it cannot do."""
     c = _closure()
     req = set(_required(c))
-    copied = M.copied_paths(DOCKERFILE)
+    copied = M.image_paths(DOCKERFILE)
     extra = []
     for src in sorted(copied):
         if not src.endswith(".py"):
@@ -119,6 +119,55 @@ def test_the_copy_list_carries_nothing_the_closure_does_not_need():
         if mod not in req:
             extra.append(src)
     assert not extra, "copied but not required: %s" % (extra,)
+
+
+def test_the_copy_destination_is_honoured_not_assumed():
+    """THE FAIL-OPEN AN INDEPENDENT REVIEW FOUND AND I REPRODUCED.
+
+    `copied_paths` returned only the SOURCE of each COPY, so
+    `COPY src/l5_live_book_feed.py /opt/wrong/l5_live_book_feed.py` passed every
+    offline layer while the deployed image died on
+    `ModuleNotFoundError: src.l5_live_book_feed`. The manifest now resolves each
+    COPY to where the file actually lands relative to the import root.
+    """
+    import tempfile as _tf
+    src_df = open(DOCKERFILE, encoding="utf-8").read()
+    for bad_dst in ("/opt/wrong/l5_live_book_feed.py", "./", "src/renamed.py"):
+        mutated = src_df.replace(
+            "COPY src/l5_live_book_feed.py src/l5_live_book_feed.py",
+            "COPY src/l5_live_book_feed.py " + bad_dst)
+        assert mutated != src_df, "the anchor COPY line moved"
+        with _tf.NamedTemporaryFile("w", suffix=".Dockerfile",
+                                    delete=False) as fh:
+            fh.write(mutated)
+            path = fh.name
+        try:
+            placed = M.image_paths(path)
+            assert "src/l5_live_book_feed.py" not in placed, (
+                "destination %r still read as covering the module" % bad_dst)
+        finally:
+            os.unlink(path)
+
+
+def test_unmodellable_copy_forms_are_refused_not_skipped():
+    """A form we silently skip is a form that ships broken."""
+    import tempfile as _tf
+    for line in ("ADD src/l5_live_book_feed.py src/l5_live_book_feed.py",
+                 "COPY --from=builder src/ /app/src/",
+                 "COPY src/l5_live_book_feed.py"):
+        with _tf.NamedTemporaryFile("w", suffix=".Dockerfile",
+                                    delete=False) as fh:
+            fh.write("FROM python:3.11-slim\nWORKDIR /app\n" + line + "\n")
+            path = fh.name
+        try:
+            with pytest.raises(M.UnsupportedCopy):
+                M.copy_specs(path)
+        finally:
+            os.unlink(path)
+
+
+def test_the_import_root_is_read_from_the_image_not_assumed():
+    assert M.image_root(DOCKERFILE) == "/app"
 
 
 # ------------------------------------------------------------------- layer 2
@@ -143,10 +192,26 @@ def test_the_dockerfile_installs_something_at_all():
 # --------------------------------------------------------- the image sandbox
 
 def _materialise(dest: str) -> None:
-    """Copy exactly what the Dockerfile copies, and nothing else."""
-    for src in sorted(M.copied_paths(DOCKERFILE)):
+    """Build the IMAGE's layout, not the repository's.
+
+    The destination is what decides where a file lands, so the sandbox has to
+    honour it: a COPY that renames or misplaces a module must produce a sandbox
+    in which that module does not import, exactly as in the real image.
+    """
+    root = M.image_root(DOCKERFILE)
+    for src, dst in M.copy_specs(DOCKERFILE):
+        if dst.endswith("/") or dst in (".", "./"):
+            placed = os.path.join(dst, os.path.basename(src.rstrip("/")))
+        else:
+            placed = dst
+        placed = os.path.normpath(placed)
+        if os.path.isabs(placed):
+            if not (placed == root
+                    or placed.startswith(root.rstrip("/") + "/")):
+                continue          # outside the import root; unreachable anyway
+            placed = os.path.relpath(placed, root)
         s = os.path.abspath(src)
-        d = os.path.join(dest, src)
+        d = os.path.join(dest, placed)
         os.makedirs(os.path.dirname(d), exist_ok=True)
         if os.path.isdir(s):
             shutil.copytree(s, d, dirs_exist_ok=True)
@@ -155,6 +220,7 @@ def _materialise(dest: str) -> None:
         else:
             raise AssertionError("COPY names a path that does not exist: %s"
                                  % src)
+    del root
 
 
 PROBE = r'''
@@ -249,7 +315,7 @@ def test_the_lazy_import_sites_execute_inside_the_image(sandbox):
 # ------------------------------------------------------------------- layer 5
 
 def test_the_order_path_is_absent_from_the_image():
-    copied = M.copied_paths(DOCKERFILE)
+    copied = M.image_paths(DOCKERFILE)
     for mod in EXCLUDED:
         assert not M.module_is_covered(mod, copied), (
             "%s is in the image; the no-POST guarantee is that the code to "

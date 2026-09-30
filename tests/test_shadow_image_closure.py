@@ -95,7 +95,7 @@ def test_the_image_copies_nothing_the_closure_does_not_need():
 
     c = closure_of(PK.ENTRYPOINTS, exclude=tuple(PK.EXCLUDED))
     required = {m for m in c.first_party if m not in PK.EXCLUDED}
-    copied = M.copied_paths(PK.DOCKERFILE)
+    copied = M.image_paths(PK.DOCKERFILE)
     extra = []
     for src in sorted(copied):
         if not src.endswith(".py"):
