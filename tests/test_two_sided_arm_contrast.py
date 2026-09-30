@@ -224,3 +224,34 @@ def test_source_settled_identity_holds_and_excludes_modeled_rebates():
         D(s["shadow_total_with_flatten"])
     # the modeled rebate is reported but is NOT inside either total
     assert "maker_rebates_modeled_cashflow" in s
+
+
+# ------------------------------------------- D: observability is decision-neutral
+
+def test_opportunity_counters_mutate_only_their_own_dict():
+    """Observability must never be able to change an action."""
+    c = TwoSided(arm=ARM_REPLICATION, clip=D(1))
+    before = {k: v for k, v in c.__dict__.items() if k != "opp"}
+    c._count_opportunity(cmp_(D("0.02"), D("0.10")), D("0.50"))
+    after = {k: v for k, v in c.__dict__.items() if k != "opp"}
+    assert before == after
+    assert c.opp["decisions"] == 1
+    assert c.opp["exit_beats_completion"] == 1
+    assert c.opp["arm_divergence_available"] == 1
+
+
+def test_counters_record_a_state_with_no_divergence():
+    c = TwoSided(arm=ARM_ADAPTED, clip=D(1))
+    c._count_opportunity(cmp_(D("-0.05"), D("-0.03")), D("0.50"))
+    assert c.opp["completion_positive"] == 0
+    assert c.opp["exit_positive"] == 0
+    assert c.opp["arm_divergence_available"] == 0
+    assert c.opp["forced_flatten_available"] == 0
+
+
+def test_report_exposes_the_opportunity_counters():
+    c = TwoSided(arm=ARM_REPLICATION, clip=D(1))
+    assert set(c.report(winner="up")["decision_opportunity"]) == {
+        "decisions", "completion_positive", "exit_positive",
+        "exit_beats_completion", "forced_flatten_available",
+        "arm_divergence_available"}

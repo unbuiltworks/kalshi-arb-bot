@@ -352,6 +352,15 @@ class TwoSided:
         self.queue_forfeited = self.queue_consumed = D(0)
         self.ahead_at_placement: List[D] = []
         self.blocked: Dict[str, int] = {}
+        #: DECISION-NEUTRAL observability. These are counted at every decision
+        #: point and are never read by any rule, so they cannot change an
+        #: action. They exist to expose how OFTEN the arms' differentiating
+        #: states occur, which Batch 1 showed is a separate question from
+        #: whether the arms are different functions.
+        self.opp: Dict[str, int] = {"decisions": 0, "completion_positive": 0,
+                                    "exit_positive": 0, "exit_beats_completion": 0,
+                                    "forced_flatten_available": 0,
+                                    "arm_divergence_available": 0}
         self.actions: List[dict] = []
         self.peak_committed = D(0)
         self.worst_residual = D(0)
@@ -637,6 +646,27 @@ class TwoSided:
             return D("0.05")
         return D("0.50")
 
+    def _count_opportunity(self, cmp_: dict, tol: D) -> None:
+        """Pure counting. Reads the comparison, writes only counters, and is
+        called AFTER the action is already chosen so it cannot influence it."""
+        o = self.opp
+        o["decisions"] += 1
+        cv = (cmp_.get(COMPLETE_NOW) or {}).get("value")
+        ev = (cmp_.get(EXIT_NOW) or {}).get("value")
+        cv = D(str(cv)) if cv is not None else None
+        ev = D(str(ev)) if ev is not None else None
+        if cv is not None and cv > 0:
+            o["completion_positive"] += 1
+        if ev is not None and ev > 0:
+            o["exit_positive"] += 1
+        if cv is not None and ev is not None and ev > cv:
+            o["exit_beats_completion"] += 1
+        if tol > 0 and ev is not None and -ev > tol:
+            o["forced_flatten_available"] += 1
+        if best_action(cmp_, arm=ARM_REPLICATION, residual_tolerance=tol) != \
+                best_action(cmp_, arm=ARM_ADAPTED, residual_tolerance=tol):
+            o["arm_divergence_available"] += 1
+
     def decide_completion(self) -> Optional[str]:
         """Rules 6 and 7. Records the comparison whether or not it acts."""
         defic = self.deficient()
@@ -651,8 +681,9 @@ class TwoSided:
                                comp_ask=comp_ask, own_bid=own_bid,
                                pair_floor=self.pair_floor,
                                cash=self.cash_basis)
-        action = best_action(cmp_, arm=self.arm,
-                             residual_tolerance=self.residual_tolerance())
+        tol = self.residual_tolerance()
+        action = best_action(cmp_, arm=self.arm, residual_tolerance=tol)
+        self._count_opportunity(cmp_, tol)
         self.actions.append({"t": self.now, "arm": self.arm, "action": action,
                              "residual": str(self.residual()),
                              "seconds_left": self.seconds_left(),
@@ -775,6 +806,7 @@ class TwoSided:
                    (sum(self.adverse) / D(len(self.adverse)))
                    if self.adverse else D(0)),
                "blocked_reasons": dict(self.blocked),
+               "decision_opportunity": dict(self.opp),
                "pairs_per_min": (round(len(self.pairs) / minutes, 4)
                                  if minutes else None),
                "actions_considered": len(self.actions),

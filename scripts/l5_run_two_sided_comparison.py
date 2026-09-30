@@ -55,7 +55,7 @@ METRICS = ("cycles_started", "cycles_completed", "maker_fills", "taker_fills",
            "time_one_sided_s", "queue_forfeited", "queue_consumed",
            "cancels", "requotes", "takes", "adverse_markout_mean",
            "pairs_per_min", "source_settled_dollars_per_min",
-           "shadow_dollars_per_min")
+           "shadow_dollars_per_min", "decision_opportunity")
 
 
 def build(arm: str, clip: D) -> TwoSided:
