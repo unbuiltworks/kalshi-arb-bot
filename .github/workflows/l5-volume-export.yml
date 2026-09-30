@@ -151,17 +151,36 @@ jobs:
               */*|..*) echo "::error::refusing suspicious name '$name'"; exit 1 ;;
             esac
             echo "downloading $name"
-            railway service files \
-              --service "$SERVICE_ID" \
-              --environment "$ENVIRONMENT_ID" \
-              --project "$PROJECT_ID" \
-              download "$REMOTE_DIR/$name" "export/raw/$name" < /dev/null
-            bytes="$(stat -c%s "export/raw/$name")"
-            if [ "$bytes" -le 0 ]; then
-              echo "::error::downloaded 0 bytes for $name"; exit 1
+            # A PER-FILE failure must not destroy files that already
+            # transferred. Run 8 lost 284 MB of good data because the third
+            # file timed out, the step exited non-zero, and the upload step
+            # therefore never ran. Each file is now attempted independently,
+            # failures are recorded, and the step only fails if NOTHING
+            # transferred.
+            if railway service files \
+                 --service "$SERVICE_ID" \
+                 --environment "$ENVIRONMENT_ID" \
+                 --project "$PROJECT_ID" \
+                 download "$REMOTE_DIR/$name" "export/raw/$name" < /dev/null; then
+              bytes="$(stat -c%s "export/raw/$name" 2>/dev/null || echo 0)"
+              if [ "$bytes" -le 0 ]; then
+                echo "::warning::0 bytes for $name; discarding"
+                rm -f "export/raw/$name"
+                echo "$name ZERO_BYTES" >> export/FAILED.txt
+              else
+                echo "$name $bytes" >> export/TRANSFERRED.txt
+                echo "$name $bytes"
+              fi
+            else
+              echo "::warning::transfer failed for $name (see FAILED.txt)"
+              rm -f "export/raw/$name"
+              echo "$name TRANSFER_FAILED" >> export/FAILED.txt
             fi
-            echo "$name $bytes"
           done
+          if [ ! -s export/TRANSFERRED.txt ]; then
+            echo "::error::no file transferred at all"
+            exit 1
+          fi
           cd export/raw && sha256sum ./* > ../SHA256SUMS.raw && cd -
           gzip -9 export/raw/* || true
           cd export/raw && sha256sum ./* > ../SHA256SUMS.gz && cd -
@@ -189,9 +208,12 @@ jobs:
           META
           cat export/METADATA.json
 
+      # ALWAYS upload: a partially successful export is still evidence, and
+      # discarding it forces the whole transfer to be repeated.
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: l5-volume-${{ inputs.mode }}-${{ github.run_id }}
           path: export/
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
