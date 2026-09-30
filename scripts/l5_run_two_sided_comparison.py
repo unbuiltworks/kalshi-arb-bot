@@ -104,7 +104,7 @@ def main(argv) -> int:
             if not w["complete"]:
                 print(f"  {w['slug']}: {w.get('exclusion')}")
         return 1
-    rows = [run_window(w["raw_sources"][0], w["slug"], w["winner"],
+    rows = [run_window(w["raw_paths"][0], w["slug"], w["winner"],
                        w["window_start"], D(1)) for w in usable]
     print(json.dumps({"windows": rows}, indent=1, default=str))
     # aggregate + worst ten by settled net

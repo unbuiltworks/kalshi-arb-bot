@@ -60,9 +60,14 @@ def scan(paths: List[str]) -> Dict[str, Dict[str, Any]]:
                 if not slug or t is None:
                     continue
                 w = windows.setdefault(slug, {
-                    "slug": slug, "sources": set(), "ts": [],
-                    "book_updates": 0, "prints": 0})
+                    "slug": slug, "sources": set(), "paths": set(),
+                    "ts": [], "book_updates": 0, "prints": 0})
+                # basenames for the human-readable manifest, and the FULL
+                # paths a replay run actually has to open. Reporting only the
+                # basename made the manifest unusable as an input: the
+                # comparison passed it straight to the reader as a path.
                 w["sources"].add(os.path.basename(path))
+                w["paths"].add(path)
                 w["ts"].append(t)
                 msg = row.get("msg") or {}
                 if isinstance(msg.get("marketData"), dict):
@@ -112,6 +117,7 @@ def manifest(paths: List[str]) -> Dict[str, Any]:
             "window_start": start,
             "window_end": (start + SB.WINDOW_S) if start else None,
             "raw_sources": sorted(w["sources"]),
+            "raw_paths": sorted(w["paths"]),
             "first_receipt": ts[0] if ts else None,
             "last_receipt": ts[-1] if ts else None,
             "max_observation_gap_s": round(max(gaps), 3) if gaps else None,
