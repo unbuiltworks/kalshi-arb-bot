@@ -17,10 +17,40 @@ import sys
 from decimal import Decimal as D
 from typing import Any, Dict, List
 
+from src import pmus_l5_native_engine as E
 from src import pmus_native_parity as P
+
+
+def _sha() -> str:
+    import subprocess
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"],
+                              capture_output=True, text=True,
+                              timeout=30).stdout.strip()
+    except BaseException:
+        return "unknown"
 
 #: credited, sourced, maker-only. Derived from the credit ledger, not chosen.
 REBATE_JSON = "analysis/l5/venue_rebate_credits.json"
+
+#: THE FROZEN ARMS, named here and nowhere else. The review found that this
+#: script could not express the chosen variant at all -- it passed only
+#: `complement_controller=`, so the committed artefact recorded a different arm
+#: than the one reported, and the reported numbers came from a scratchpad file
+#: that left no artefact. Every arm now lives in this dict, the artefact records
+#: exactly which one produced each row, and nothing outside this file selects a
+#: configuration.
+#:
+#: VARIANT_C is the frozen controller: the inventory-derived complement cap plus
+#: the refusal to EXTEND the long side while its complement is outstanding. The
+#: residual backstop is deliberately absent -- it is a no-op under this
+#: combination and strictly harmful without it, because it pays as a taker,
+#: with fee, the same price the cap had just refused as a maker.
+ARMS = {
+    "baseline": {},
+    "variant_c": {"complement_controller": True,
+                  "extend_requires_balance": True},
+}
 
 
 def sourced_rate() -> D:
@@ -48,11 +78,12 @@ def oos_cohort():
     return by, coh
 
 
-def arm(by, coh, *, clip: int, controller: bool, rate: D) -> Dict[str, Any]:
+def arm(by, coh, *, clip: int, config: Dict[str, Any],
+        rate: D) -> Dict[str, Any]:
     rows: List[Dict[str, Any]] = []
     for slug, winner in coh.items():
         r = P.replay_window(by[slug], winner=winner, clip=D(str(clip)),
-                            complement_controller=controller)
+                            **config)
         net = P.net_of(r)
         mk = D(str(r["maker_qty"]))
         rows.append({
@@ -71,7 +102,7 @@ def arm(by, coh, *, clip: int, controller: bool, rate: D) -> Dict[str, Any]:
     rnets = sorted(x["realistic_net"] for x in rows)
     mq, rq = tot("matched_qty"), tot("resid_qty")
     return {
-        "n": n, "clip": clip, "controller": controller,
+        "n": n, "clip": clip, "config": dict(config),
         "mean_net": tot("net") / n,
         "median_net": nets[n // 2] if n % 2 else (nets[n//2-1]+nets[n//2])/2,
         "mean_matched_pnl": tot("matched_pnl") / n,
@@ -94,6 +125,7 @@ def arm(by, coh, *, clip: int, controller: bool, rate: D) -> Dict[str, Any]:
 
 
 def show(a: Dict[str, Any], b: Dict[str, Any]) -> None:
+    print("  arms: %s vs %s" % (a["arm"], b["arm"]))
     f = lambda v: ("%+.4f" % float(v)) if v is not None else "n/a"  # noqa: E731
     print("  %-26s %14s %14s" % ("", "BASELINE", "CONTROLLER"))
     for label, key in (
@@ -123,22 +155,48 @@ def show(a: Dict[str, Any], b: Dict[str, Any]) -> None:
 
 if __name__ == "__main__":
     which = "oos" if "--cohort=oos" in sys.argv else "frozen"
+    if any(a.startswith("--cohort") and a != "--cohort=oos" for a in sys.argv):
+        # FAIL CLOSED on cohort selection. `--cohort oos` (a space) used to
+        # silently rerun the TRAINING cohort and overwrite its artefact.
+        raise SystemExit("cohort is selected as --cohort=oos exactly, or "
+                         "omitted for the frozen training cohort; got %r"
+                         % ([a for a in sys.argv if a.startswith("--cohort")],))
     clips = [int(x) for x in sys.argv[1:] if x.isdigit()] or [10]
     by, coh = oos_cohort() if which == "oos" else frozen_cohort()
     rate = sourced_rate()
     print("COHORT %s  n=%d  sourced maker rebate $%.6f/contract"
           % (which, len(coh), rate), flush=True)
-    doc = {"cohort": which, "sourced_rate": str(rate), "arms": []}
+    doc: Dict[str, Any] = {
+        "LABEL": "COMPLEMENT_CONTROLLER_EVAL",
+        "cohort": which,
+        "command": "python -m scripts.l5_complement_controller_eval "
+                   + " ".join(sys.argv[1:]),
+        "argv": list(sys.argv[1:]),
+        "git_sha": _sha(),
+        "arms_config": {k: dict(v) for k, v in ARMS.items()},
+        "engine_params": {"theta": str(E.THETA), "variant": E.VARIANT,
+                          "hold_s": str(E.HOLD_S),
+                          "residual_cap_k": str(E.RESIDUAL_CAP_K),
+                          "profit_lock_usd": str(E.PROFIT_LOCK_USD),
+                          "price_tick": str(E.PRICE_TICK)},
+        "sourced_rate": str(rate),
+        "labels": ("SHADOW / HISTORICAL REPLAY. Incentive is the CREDITED "
+                   "maker rate only and is reported on its own line, never "
+                   "inside net. No parameter is fitted."),
+        "results": []}
     for clip in clips:
-        a = arm(by, coh, clip=clip, controller=False, rate=rate)
-        b = arm(by, coh, clip=clip, controller=True, rate=rate)
+        got = {}
+        for name, cfg in ARMS.items():
+            a = arm(by, coh, clip=clip, config=cfg, rate=rate)
+            a["arm"] = name
+            got[name] = a
+            doc["results"].append(
+                {k: (str(v) if isinstance(v, D) else v)
+                 for k, v in a.items() if k != "rows"})
+            doc["results"][-1]["rows"] = [
+                {kk: str(vv) for kk, vv in r.items()} for r in a["rows"]]
         print("\n=== clip q%d ===" % clip, flush=True)
-        show(a, b)
-        for x in (a, b):
-            doc["arms"].append({k: (str(v) if isinstance(v, D) else v)
-                                for k, v in x.items() if k != "rows"})
-            doc["arms"][-1]["rows"] = [
-                {kk: str(vv) for kk, vv in r.items()} for r in x["rows"]]
+        show(got["baseline"], got["variant_c"])
     out = "analysis/l5/r8_complement_controller_%s.json" % which
     json.dump(doc, open(out, "w"), indent=1)
     print("\nWROTE " + out, flush=True)

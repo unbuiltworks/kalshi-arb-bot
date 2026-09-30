@@ -127,7 +127,17 @@ def parse_clip(raw, *, default: D = CLIP) -> D:
 
 class StaleBook(RuntimeError):
     """Fail closed. A decision was asked for against a book we cannot stand
-    behind, so no intent is produced at all."""
+    behind, so no ACQUISITION intent is produced.
+
+    `cancels` carries any cancel the engine still wants executed -- a stale
+    complement whose cap the current inventory refuses. Cancelling needs no
+    readable book and reduces risk, so it must not be lost when the tick is
+    refused. A caller that ignores the attribute behaves exactly as before.
+    """
+
+    def __init__(self, *args) -> None:
+        self.cancels = list(args[1]) if len(args) > 1 else []
+        super().__init__(*args[:1])
 
 
 class NativeEngine:
@@ -169,11 +179,23 @@ class NativeEngine:
         #: TAKER walk was attempted 47 times and admitted nothing.
         #:
         #: True derives the maximum economically acceptable complement price
-        #: from the held side's own cost basis and rests THERE, waiting for the
-        #: market to come to us. It is NOT a global ceiling: when a side is not
-        #: the deficient one -- flat inventory, or the side we are already long
-        #: -- the quote is the touch, exactly as frozen. The cap exists only
-        #: where unmatched inventory exists to complete.
+        #: from the held side's own all-in basis and posts `min(touch, cap)`.
+        #:
+        #: SAY THAT PRECISELY, because an earlier wording overclaimed it. The
+        #: quote still FOLLOWS the touch while the touch is below the cap -- on
+        #: the training tape that is most of the time -- so "it rests below the
+        #: touch and waits" is false. What is true, and is what the tests pin,
+        #: is that the quote can never become more aggressive than the cap: the
+        #: cap is a pure function of present inventory, so an adverse touch move
+        #: cannot raise it, and a complement fill can therefore never form a
+        #: pair costing more than theta.
+        #:
+        #: It is NOT a global ceiling: when a side is not the deficient one --
+        #: flat inventory, or the side we are already long -- the quote is the
+        #: touch, exactly as frozen. The cap exists only where unmatched
+        #: inventory exists to complete, which also means the FIRST pair formed
+        #: from flat is uncapped; see tests/test_complement_controller.py's
+        #: scope-limitation test, which quantifies that on the real tape.
         self.complement_controller = bool(complement_controller)
         #: repair the residual at market once it reaches the frozen bound.
         self.residual_backstop = bool(residual_backstop)
@@ -185,6 +207,7 @@ class NativeEngine:
         self.extend_refused_by_bound = 0
         self.residual_repairs = 0
         self.extend_refused_while_imbalanced = 0
+        self.stale_complement_cancels = 0
         #: LIVE SAFETY OVERLAY SEAT. None -- the default, and what the parity
         #: replay uses -- latches immediately, exactly as frozen. Live, the
         #: overlay installs a gate that must run the cancel/reconcile
@@ -242,10 +265,14 @@ class NativeEngine:
         bk.locked += n * D(1) - n * basis - cost
         bk.gross_margin += n * D(1) - n * basis - cost
         bk.edges.append((n * D(1) - n * basis - cost - fee) / n)
+        _qh, _qc = bk.q[held], bk.q[comp]
         bk.q[held] -= n
         bk.c[held] -= n * basis
         bk.q[comp] -= n
         bk.c[comp] -= cost
+        # the attributed taker fee follows the shares off the book
+        bk.release_fees(held, _qh, bk.q[held])
+        bk.release_fees(comp, _qc, bk.q[comp])
         bk.completions += 1
         bk.completed_qty += n
         bk.completion_cost += cost + fee
@@ -292,12 +319,21 @@ class NativeEngine:
         # was not too strict, it was reading a field the feed never sets. Both
         # shapes are accepted here and neither is weakened -- a row that states
         # neither is still refused.
+        # CANCELS NEED NO READABLE BOOK. Revalidation of what is already
+        # resting runs before both StaleBook gates and is attached to the
+        # exception when the tick is refused, because an unreadable book is
+        # exactly when a stale too-aggressive quote is most dangerous: the
+        # engine will take no decision at all, and the old order would sit at
+        # the venue until the book comes back.
+        stale_cancels = self._revalidate_resting()
         if not usable_book(row):
             raise StaleBook("book is not usable: state=%r status=%r"
-                            % (row.get("state"), row.get("status")))
+                            % (row.get("state"), row.get("status")),
+                            stale_cancels)
         bid, ask = S._d(row.get("bid")), S._d(row.get("ask"))
         if bid is None and ask is None:
-            raise StaleBook("unreadable book: neither side quoted")
+            raise StaleBook("unreadable book: neither side quoted",
+                            stale_cancels)
         # NOT a two-sided requirement. Frozen decides PER SIDE -- `maker_fill`
         # reads `bid` for UP and `ask` for DOWN and independently declines the
         # side it cannot price -- so a one-sided book still quotes the side that
@@ -306,7 +342,7 @@ class NativeEngine:
         # policy change, not a safety margin. Freshness and disconnect remain
         # the FEED's job, upstream, where MAX_AGE_S already fails closed.
         now = S._epoch(row.get("t"))
-        out: List[Intent] = []
+        out: List[Intent] = list(stale_cancels)
 
         # ---- 1. completion decision FIRST, on the residual held right now
         r = self.bk.residual()
@@ -601,6 +637,42 @@ class NativeEngine:
             self.resting[side] = (None if not v else
                                   {"px": v["px"], "qty": v["qty"]})
 
+    def _revalidate_resting(self) -> List[Intent]:
+        """Cancel any resting complement whose price the current cap refuses.
+
+        THE HOLE THIS CLOSES. The cap used to be applied only where a quote was
+        (re)priced, and step 4 has several `continue` paths that skip a side
+        without cancelling it -- `own is None`, when the venue shows no touch on
+        that side, being the reachable one: the training tape has 228 bbo rows
+        with no bid and 276 with no ask. So a fill that RAISED the held basis
+        could tighten the cap while an order rested at the old, looser one, and
+        the next tick would skip the side and leave it there. Replay could not
+        fill it, but live the order is at the venue: hold 10 DOWN at basis 0.30,
+        rest UP at 0.66, take a DOWN fill that moves the basis to 0.60, and the
+        stale 0.66 forms a pair at 1.26 -- precisely what the controller exists
+        to prevent.
+
+        Consults NO market data. A cancel is always available even when a
+        replacement price is not, which is why this runs ahead of the StaleBook
+        gates rather than inside the quoting loop.
+        """
+        out: List[Intent] = []
+        if not self.complement_controller:
+            return out
+        for side in ("up", "down"):
+            cur = self.resting.get(side)
+            if not cur:
+                continue
+            cap = self.complement_cap(side)
+            if cap is None:
+                continue                  # not a complement: nothing to check
+            if D(str(cur["px"])) > cap:
+                self.stale_complement_cancels += 1
+                out.append(Intent(CANCEL, side=side,
+                                  reason="CAP_TIGHTENED_STALE_QUOTE"))
+                self.resting[side] = None
+        return out
+
     def complement_cap(self, side: str) -> Optional[D]:
         """The richest own-terms price at which resting `side` still completes
         a pair at acceptable economics -- or None when `side` is not completing
@@ -619,11 +691,17 @@ class NativeEngine:
 
         * the cap depends ONLY on inventory, never on the touch, so a market
           moving away can never raise it. That is the defect this closes.
-        * a pair bought at the cap costs exactly theta or less, whatever the
-          book does. The invariant is on the PAIR, not on the price, which is
-          why this is not a global 0.96 price ceiling: an OPEN with no
-          inventory behind it is not capped at all, and an EXTEND is not
-          capped either.
+        * a pair bought at the cap costs at most theta, whatever the book does,
+          because the basis used here is the ALL-IN basis: price paid plus any
+          taker fee already paid on those shares. `avg()` alone excludes that
+          fee (a taker fee never enters `c[side]`) and made this bound
+          optimistic by up to ~$0.0174/share -- the review demonstrated a pair
+          at 0.9686875 passing a bound of 0.96. `economic_basis` closes it.
+    * the invariant is on the PAIR, not on the price, which is why this is
+          not a global 0.96 price ceiling: an OPEN with no inventory behind it
+          is not capped at all, and an EXTEND is not capped either. The quote
+          itself is `min(touch, cap)` and does still track an improving touch;
+          what it cannot do is exceed the cap.
 
         Returns None when the side is not deficient (no cap applies) and a
         non-positive Decimal when no acceptable price exists at all, which the
@@ -632,7 +710,7 @@ class NativeEngine:
         held = "down" if side == "up" else "up"
         if self.bk.q[held] <= self.bk.q[side]:
             return None               # not a complement: OPEN or EXTEND
-        cap = self.theta - self.bk.avg(held)
+        cap = self.theta - self.bk.economic_basis(held)
         # floor to the venue grid; quantize(ROUND_FLOOR) keeps it no richer
         # than the economics admit even when the basis is a repeating decimal.
         return (cap / PRICE_TICK).to_integral_value(rounding=ROUND_FLOOR) \

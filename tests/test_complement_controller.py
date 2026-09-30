@@ -242,3 +242,242 @@ def test_frozen_checkpoint_is_untouched_by_the_controller_defaults():
     tot = sum(P.net_of(P.replay_window(by[s], winner=w, clip=D(50)))
               for s, w in USABLE.items())
     assert tot / len(USABLE) == D("6.116725359099999999999999992")
+
+
+# ============================================================ REVIEW FIXES
+# Each test below pins a defect the independent review confirmed at 0dbe3597.
+
+# ---------------------------------------------------------------------- 5
+
+def test_the_cap_includes_taker_fees_already_paid_on_the_held_side():
+    """The reviewer's counterexample. Held UP = 10 taker @0.50 (fee $0.1738)
+    + 10 maker @0.40 gives avg 0.45, so a cap of theta - avg = 0.51 read as
+    "exactly theta" while the true all-in pair cost was 0.9686875."""
+    e = eng()
+    e.bk.add("up", D(10), D("5.00"), maker=False)
+    e.bk.add("up", D(10), D("4.00"), maker=True)
+    assert e.bk.avg("up") == D("0.45")
+    assert e.bk.fee_per_share("up") > 0
+    cap = e.complement_cap("down")
+    assert cap == D("0.50"), cap                       # was 0.51
+    assert cap + e.bk.economic_basis("up") <= E.THETA
+
+
+def test_the_all_in_pair_cost_never_exceeds_theta_even_with_taker_inventory():
+    for tq, tcost in (("10", "5.00"), ("20", "14.00"), ("5", "4.50")):
+        e = eng()
+        e.bk.add("up", D(tq), D(tcost), maker=False)
+        cap = e.complement_cap("down")
+        if cap is None or cap < E.PRICE_TICK:
+            continue
+        assert cap + e.bk.economic_basis("up") <= E.THETA
+
+
+def test_attributed_fees_follow_shares_off_the_book():
+    """Without this the remaining shares inherit departed shares' fees and the
+    basis drifts upward, tightening the cap for the wrong reason."""
+    bk = S.Book()
+    bk.add("up", D(20), D("10.00"), maker=False)
+    per_share = bk.fee_per_share("up")
+    bk.release_fees("up", D(20), D(10))
+    bk.q["up"] = D(10)
+    assert bk.fee_per_share("up") == per_share
+    bk.release_fees("up", D(10), D(0))
+    assert bk.fees_side["up"] == 0
+
+
+def test_the_fee_split_never_changes_the_fee_total():
+    bk = S.Book()
+    bk.add("up", D(10), D("5.00"), maker=False)
+    bk.add("down", D(10), D("4.00"), maker=False)
+    assert bk.fees == bk.fees_side["up"] + bk.fees_side["down"]
+
+
+# ---------------------------------------------------------------------- 6b
+
+def test_an_adverse_touch_move_cannot_worsen_the_permissible_price():
+    """THE invariant, stated as the reviewer asked: with inventory unchanged,
+    walking the touch upward cannot raise the cap or the posted price above it."""
+    e = eng()
+    e.bk.add("down", D(20), D(20) * D("0.40"), maker=True)
+    cap0 = e.complement_cap("up")
+    worst = None
+    for i, bid in enumerate(("0.10", "0.30", "0.55", "0.56", "0.70",
+                             "0.90", "0.99")):
+        ask = "0.99" if D(bid) >= D("0.98") else str(D(bid) + D("0.01"))
+        for it in e.on_book(bbo(bid, ask, t=float(i))):
+            if it.kind == E.REST and it.get("side") == "up":
+                px = D(str(it["price"]))
+                worst = px if worst is None or px > worst else worst
+        assert e.complement_cap("up") == cap0, "the cap moved with the touch"
+    assert worst is not None and worst <= cap0
+
+
+def test_the_quote_does_follow_an_improving_touch_and_that_is_intended():
+    """Stated explicitly so the docs and the code agree: min(touch, cap) is
+    not 'always the cap'. Documenting the real behaviour is part of the fix."""
+    e = eng()
+    e.bk.add("down", D(10), D(10) * D("0.30"), maker=True)
+    cap = e.complement_cap("up")                        # 0.96 - 0.30 = 0.66
+    posted = []
+    for i, bid in enumerate(("0.05", "0.10", "0.20")):
+        for it in e.on_book(bbo(bid, str(D(bid) + D("0.01")), t=float(i))):
+            if it.kind == E.REST and it.get("side") == "up":
+                posted.append(D(str(it["price"])))
+    assert posted == [D("0.05"), D("0.10"), D("0.20")]
+    assert all(p <= cap for p in posted)
+
+
+# ---------------------------------------------------------------------- 6c
+
+def test_a_resting_complement_is_cancelled_when_a_fill_tightens_the_cap():
+    e = eng()
+    e.bk.add("down", D(10), D("3.00"), maker=True)       # cap(up) = 0.66
+    e.resting["up"] = {"px": D("0.66"), "qty": D(10)}
+    e.bk.add("down", D(10), D("9.00"), maker=True)       # cap(up) = 0.36
+    out = e.on_book(bbo("0.40", "0.41"))
+    assert e.resting["up"] is None or \
+        D(str(e.resting["up"]["px"])) <= e.complement_cap("up")
+    assert any(it.kind == E.CANCEL
+               and it.get("reason") == "CAP_TIGHTENED_STALE_QUOTE"
+               for it in out)
+    assert e.stale_complement_cancels >= 1
+
+
+def test_a_missing_touch_cannot_let_a_stale_quote_survive():
+    """The reachable case: the tape has 228 bbo rows with no bid and 276 with
+    no ask, and step 4 skips a side it cannot price WITHOUT cancelling it."""
+    e = eng()
+    e.bk.add("down", D(10), D("3.00"), maker=True)
+    e.resting["up"] = {"px": D("0.66"), "qty": D(10)}
+    e.bk.add("down", D(10), D("9.00"), maker=True)
+    row = bbo("0.40", "0.70")
+    row["bid"] = None                                    # no UP touch at all
+    e.on_book(row)
+    assert e.resting["up"] is None, "stale 0.66 survived a missing bid"
+
+
+def test_an_unreadable_book_still_cancels_and_carries_the_cancel():
+    """StaleBook means no ACQUISITION, but a cancel needs no readable book and
+    reduces risk, so it must not be lost with the refused tick."""
+    e = eng()
+    e.bk.add("down", D(10), D("3.00"), maker=True)
+    e.resting["up"] = {"px": D("0.66"), "qty": D(10)}
+    e.bk.add("down", D(10), D("9.00"), maker=True)
+    row = bbo("0.40", "0.41")
+    row["bid"] = row["ask"] = None
+    with pytest.raises(E.StaleBook) as ei:
+        e.on_book(row)
+    assert e.resting["up"] is None
+    assert any(it.get("reason") == "CAP_TIGHTENED_STALE_QUOTE"
+               for it in ei.value.cancels)
+
+
+def test_revalidation_never_touches_an_uncapped_side():
+    e = eng()
+    e.resting["up"] = {"px": D("0.90"), "qty": D(10)}    # flat: uncapped
+    e.on_book(bbo("0.90", "0.91"))
+    assert e.stale_complement_cancels == 0
+
+
+# ---------------------------------------------------------------------- 7
+
+def _ladder(bids, offers):
+    return {"kind": "book", "bids": [[p, q] for p, q in bids],
+            "offers": [[p, q] for p, q in offers]}
+
+
+def test_queue_state_is_keyed_on_our_resting_price_not_the_touch():
+    v = P.ReplayVenue(respect_limit=True)
+    e = eng()
+    lad = _ladder([("0.60", "100"), ("0.39", "50")], [("0.61", "100")])
+    row = bbo("0.60", "0.61", last="0.39", vol="10")
+    v.fills_for(e, row, "up", D("0.39"), D(10), lad)
+    st = v.qstate.get("up")
+    assert st is not None and st["px"] == D("0.39"), (
+        "queue keyed on %s, not on our resting price" % (st,))
+
+
+def test_a_touch_move_does_not_reset_our_queue_position(monkeypatch):
+    """Our order never moved, so it should be GAINING priority. Keying on the
+    touch reset it to 'just joined' every time the touch moved -- 28 spurious
+    resets were measured on the training cohort."""
+    v = P.ReplayVenue(respect_limit=True)
+    e = eng()
+    lad = _ladder([("0.60", "100"), ("0.39", "50")], [("0.61", "100")])
+    v.fills_for(e, bbo("0.60", "0.61", last="0.39", vol="10"),
+                "up", D("0.39"), D(10), lad)
+    ahead_1 = v.qstate["up"]["ahead"]
+    lad2 = _ladder([("0.75", "100"), ("0.39", "50")], [("0.76", "100")])
+    v.fills_for(e, bbo("0.75", "0.76", last="0.39", vol="10"),
+                "up", D("0.39"), D(10), lad2)
+    ahead_2 = v.qstate["up"]["ahead"]
+    assert ahead_2 < ahead_1, (
+        "queue reset when only the touch moved: %s -> %s" % (ahead_1, ahead_2))
+
+
+def test_an_undisplayed_level_fails_closed_rather_than_guessing():
+    v = P.ReplayVenue(respect_limit=True)
+    e = eng()
+    lad = _ladder([("0.60", "100")], [("0.61", "100")])   # 0.39 not displayed
+    got = v.fills_for(e, bbo("0.60", "0.61", last="0.39", vol="500"),
+                      "up", D("0.39"), D(10), lad)
+    assert got is None, "granted a fill at a level whose queue is unknowable"
+
+
+def test_the_frozen_queue_keying_is_unchanged_without_respect_limit():
+    v = P.ReplayVenue()
+    e = eng(complement_controller=False)
+    lad = _ladder([("0.60", "100")], [("0.61", "100")])
+    v.fills_for(e, bbo("0.60", "0.61", last="0.60", vol="10"),
+                "up", D("0.39"), D(10), lad)
+    st = v.qstate.get("up")
+    assert st is not None and st["px"] == D("0.60"), (
+        "the frozen arm must still key on the touch: %s" % (st,))
+
+
+# -------------------------------------------- KNOWN SCOPE LIMITATION (not fixed)
+
+def test_flat_state_open_quotes_can_form_pairs_near_one_dollar():
+    """PRESERVED, NOT FIXED, on purpose.
+
+    The cap governs only the SECOND leg. Two simultaneous uncapped quotes from
+    flat form a pair at `1 - spread`, so a one-tick spread yields a pair cost of
+    0.99 -- above theta, and entirely outside the controller. This is consistent
+    with the design (an OPEN is uncapped) and is the part of the maker leak the
+    controller does NOT close. Quantified here so the subsequent validation
+    reads its numbers knowing this, rather than rediscovering it.
+    """
+    e = eng()
+    got = {it.get("side"): D(str(it["price"]))
+           for it in e.on_book(bbo("0.49", "0.50")) if it.kind == E.REST}
+    pair = got["up"] + got["down"]
+    assert pair == D("0.99")
+    assert pair > E.THETA, "if this ever fails the limitation is gone"
+
+
+def test_the_scope_limitation_is_quantified_on_the_real_tape():
+    """How often the uncapped first pair is above theta, on the training tape."""
+    from scripts.audit_economic_complete import load, USABLE
+    by = load()
+    two_sided = above = 0
+    for slug in USABLE:
+        for row in by[slug]:
+            if row.get("kind") != "bbo":
+                continue
+            bid, ask = S._d(row.get("bid")), S._d(row.get("ask"))
+            if bid is None or ask is None:
+                continue
+            up, down = bid, D(1) - ask
+            if not (D(0) < up < 1 and D(0) < down < 1):
+                continue
+            two_sided += 1
+            if up + down > E.THETA:
+                above += 1
+    assert two_sided > 1000, two_sided
+    frac = D(above) / D(two_sided)
+    # the measurement, recorded rather than asserted tightly: on this tape the
+    # uncapped two-sided quote is above theta on essentially every tick.
+    assert frac > D("0.9"), (
+        "flat-state pair cost above theta on %d of %d two-sided ticks (%.4f)"
+        % (above, two_sided, frac))

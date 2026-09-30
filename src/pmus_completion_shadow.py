@@ -151,6 +151,13 @@ class Book:
         self.maker_qty = D(0)
         self.taker_qty = D(0)
         self.fees = D(0)
+        #: the same fees, ATTRIBUTED TO THE SIDE that paid them. `fees` stays
+        #: the single authoritative total and no economics read this split; it
+        #: exists so a complement cap can include the fee the held leg already
+        #: paid, which `avg()` cannot see because a taker fee never enters
+        #: `c[side]`. Adding it changed no P&L: the sum is unchanged and
+        #: `settle` still reads `self.fees`.
+        self.fees_side = {"up": D(0), "down": D(0)}
         self.modeled_rebate = D(0)
         self.locked = D(0)          # realized P&L of completed pairs
         self.completions = 0
@@ -173,6 +180,42 @@ class Book:
     def avg(self, side: str) -> D:
         return (self.c[side] / self.q[side]) if self.q[side] > 0 else D(0)
 
+    def fee_per_share(self, side: str) -> D:
+        """Taker fee already paid per share still held on `side`.
+
+        Zero for maker-only inventory, which is the common case. `avg()` cannot
+        see this: a taker fee is added to `fees` and never to `c[side]`.
+        """
+        return (self.fees_side[side] / self.q[side]) if self.q[side] > 0 \
+            else D(0)
+
+    def economic_basis(self, side: str) -> D:
+        """All-in cost per share held on `side`: price paid plus fee paid.
+
+        This is the basis a pair-cost bound must use. Using `avg()` alone makes
+        the bound optimistic by up to `THETA_TAKER * p * (1-p)` per share
+        (<= ~$0.0174), which the review of the complement controller
+        demonstrated: held UP = 10 taker @0.50 + 10 maker @0.40 gives
+        avg 0.45, so a 0.51 complement reads as "exactly theta" while the true
+        pair costs 0.9686875.
+        """
+        return self.avg(side) + self.fee_per_share(side)
+
+    def release_fees(self, side: str, q_before: D, q_after: D) -> None:
+        """Keep attributed fee per share constant when shares leave the book.
+
+        A completion decrements `q` and `c`; without this the remaining shares
+        would inherit the departed shares' fees and the basis would drift up.
+        No P&L reads `fees_side`, so this cannot move a reported number -- it
+        keeps the CAP honest, nothing else.
+        """
+        if q_before <= 0:
+            return
+        if q_after <= 0:
+            self.fees_side[side] = D(0)
+            return
+        self.fees_side[side] = self.fees_side[side] * q_after / q_before
+
     def add(self, side: str, qty: D, cost: D, *, maker: bool,
             fee: Optional[D] = None) -> None:
         if qty <= 0:
@@ -188,7 +231,9 @@ class Book:
             # the blended average price understates/overstates it, because the
             # fee is convex in price -- so the caller's per-level sum wins
             # whenever it is supplied.
-            self.fees += taker_fee(cost / qty, qty) if fee is None else fee
+            _f = taker_fee(cost / qty, qty) if fee is None else fee
+            self.fees += _f
+            self.fees_side[side] += _f
         a = abs(self.residual())
         if a > self.peak_resid:
             self.peak_resid = a
@@ -246,7 +291,8 @@ def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
                queue_aware: bool = False,
                fill_model: Optional[str] = None,
                ladder: Optional[Dict[str, Any]] = None,
-               qstate: Optional[Dict[str, Any]] = None
+               qstate: Optional[Dict[str, Any]] = None,
+               limit_px: Optional[D] = None
                ) -> Tuple[D, Optional[D]]:
     """Would a clip resting at `side`'s touch have filled on THIS observation?
 
@@ -293,7 +339,13 @@ def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
     last = _d(row.get("last"))
     if last is None:
         return D(0), None
-    if own_price(side, last) > px:
+    # the price the causal test is about is OURS when the caller supplied it.
+    # Against the touch it asked the wrong question for an order resting away
+    # from the touch: a print through our limit fills us even when it did not
+    # reach the touch, and a print at the touch says nothing about an order
+    # sitting behind it.
+    test_px = px if limit_px is None else D(str(limit_px))
+    if own_price(side, last) > test_px:
         return D(0), None          # nothing printed at or through our price
 
     if model == "optimistic":
@@ -303,9 +355,31 @@ def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
                    else row.get("ask_shares")) or D(0)
         avail = dlt - ahead
     else:
-        venue_px = resting_venue_price(row, side)
+        # OUR PRICE, NOT THE TOUCH. `resting_venue_price(row, side)` is the
+        # touch, and keying the queue on it was harmless only while the engine
+        # requoted to the touch every tick. Once a complement rests BELOW the
+        # touch that keying asserts something false -- it measures the queue at
+        # a level we are not on, and it resets our queue position to "just
+        # joined" whenever the TOUCH moves, although our order never moved and
+        # should be GAINING priority. Measured on the training cohort with the
+        # controller on: 434 of 1162 fill queries had our price != the touch,
+        # with 28 spurious resets.
+        #
+        # So the queue is keyed on the price WE are resting at, in venue terms,
+        # whenever the caller tells us what that is. `limit_px` is our own-terms
+        # resting price; `resting_venue_price` converts the touch, so the same
+        # conversion is applied here: UP rests at its own price, DOWN rests as a
+        # YES sell at 1 - own.
+        if limit_px is None:
+            venue_px = resting_venue_price(row, side)
+        else:
+            venue_px = (D(str(limit_px)) if side == "up"
+                        else D(1) - D(str(limit_px)))
         shown = level_displayed_qty(ladder, side, venue_px)
         if shown is None:
+            # FAIL CLOSED. Our level is not displayed, so our position in its
+            # queue is unknown and cannot be represented. No fill is granted --
+            # never a guess, and never a silent fallback to the touch level.
             return D(0), None      # queue position not establishable
         st = None if qstate is None else qstate.get(side)
         if st is None or st.get("px") != venue_px:
@@ -325,7 +399,7 @@ def maker_fill(row: Dict[str, Any], side: str, clip: D, *,
     if avail <= 0:
         return D(0), None
     qty = clip if clip < avail else avail
-    return qty, px
+    return qty, (px if limit_px is None else D(str(limit_px)))
 
 
 def settlement_independent_floor(bk: "Book", *, resting=None) -> D:

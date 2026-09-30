@@ -51,7 +51,8 @@ class ReplayVenue:
         """Would our resting clip have filled on THIS observation?"""
         qty, fpx = S.maker_fill(row, side, clip, queue_aware=True,
                                 fill_model=self.fill_model,
-                                ladder=ladder, qstate=self.qstate)
+                                ladder=ladder, qstate=self.qstate,
+                                limit_px=(px if self.respect_limit else None))
         if qty <= 0 or fpx is None:
             return None
         if self.respect_limit:
