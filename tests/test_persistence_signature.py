@@ -299,3 +299,72 @@ def test_a_sideless_action_still_counts_toward_cadence():
     assert s["n_actions"] == 2
     assert s["actions_per_min"] == pytest.approx(2 * 60.0 / 900.0)
     assert s["median_dt_prev"] == 30
+
+
+# ------------------------------------------------- mandate-record reconstruction
+
+def _adm(t, cid, qty="10", cash="4.60"):
+    return {"kind": "mandate_admission", "admits": True, "t": t,
+            "commit_id": cid, "quantity": qty, "cash_at_risk": cash}
+
+
+def _cmt(cid, side, px):
+    return {"kind": "mandate_commit", "commit_id": cid, "side": side,
+            "price_wire": px}
+
+
+def test_the_reconciliation_invariant_refuses_rather_than_estimating():
+    """R5 submitted 13 orders. A cadence built from the wrong count is worse
+    than no cadence, so a mismatch must produce a refusal, not statistics."""
+    out = SIG.from_mandate_records([_adm(1.0, "c1")], [], expect_actions=13)
+    assert out["RECONCILIATION_FAILED"] is True
+    assert out["expected_actions"] == 13
+    assert out["reconstructed_actions"] == 1
+    assert "actions_per_min" not in out, "statistics leaked past the invariant"
+
+
+def test_a_matching_count_produces_cadence_from_the_mandate():
+    j = [_adm(100.0, "c1"), _adm(115.0, "c2")]
+    l = [_cmt("c1", "OUTCOME_SIDE_YES", "0.46"),
+         _cmt("c2", "OUTCOME_SIDE_NO", "0.50")]
+    s = SIG.from_mandate_records(j, l, expect_actions=2, window_s=900.0)
+    assert s["reconciled_actions"] == 2 and s["ledger_joined"] == 2
+    assert s["actions_per_min"] == pytest.approx(2 * 60.0 / 900.0)
+    assert s["median_dt_prev"] == 15.0
+    assert s["median_qty"] == 10.0
+    assert s["total_cash_at_risk"] == pytest.approx(9.2)
+
+
+def test_declined_admissions_are_not_actions():
+    j = [_adm(1.0, "c1"),
+         {"kind": "mandate_admission", "admits": False, "t": 2.0,
+          "commit_id": "x"}]
+    assert SIG.from_mandate_records(j, [], expect_actions=1
+                                    )["reconciled_actions"] == 1
+
+
+def test_no_intent_fraction_is_not_reported_from_mandate_records():
+    """The mandate records only ADMITTED orders. Absence of a declined tick
+    is not evidence of idleness, and reporting 0.0 or 1.0 here would invite
+    exactly that misreading."""
+    s = SIG.from_mandate_records([_adm(1.0, "c1")], [], expect_actions=1)
+    assert s["no_intent_tick_frac"] is None
+    assert "idleness" in s["no_intent_note"]
+
+
+def test_an_absent_ledger_leaves_side_metrics_unavailable_not_guessed():
+    s = SIG.from_mandate_records([_adm(1.0, "c1"), _adm(2.0, "c2")], [],
+                                 expect_actions=2)
+    assert s["ledger_joined"] == 0
+    for k in ("extend_frac", "rebalance_frac", "max_streak", "transitions"):
+        assert s[k] is None
+    assert s["actions_per_min"] is not None, "cadence should still be reported"
+
+
+def test_venue_side_words_map_to_our_canonical_sides():
+    j = [_adm(1.0, "c1"), _adm(2.0, "c2")]
+    l = [_cmt("c1", "OUTCOME_SIDE_YES", "0.4"),
+         _cmt("c2", "OUTCOME_SIDE_NO", "0.6")]
+    s = SIG.from_mandate_records(j, l, expect_actions=2)
+    assert s["ledger_joined"] == 2
+    assert s["flat_open_frac"] == pytest.approx(1.0)

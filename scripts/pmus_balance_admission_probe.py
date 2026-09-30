@@ -107,6 +107,36 @@ def main() -> int:
     slug = os.getenv("L5_PROBE_MARKET", "").strip() or WA.current_slug()
     tp = TP.PmusTransport(market_slug=slug)
 
+    # THE SANCTIONED PATH, and nothing else. PmusTransport defaults its http
+    # to ReadOnlyTransport, which raises on any non-GET -- the first run of
+    # this probe was refused there and never reached the wire, which is the
+    # guard working. `_SignedHTTP` is constructed ONLY inside arm(), and this
+    # module does not name it: preflight must pass and the owner arm trio
+    # must be present, exactly as for a real order.
+    #
+    # The arm identity here is the PROBE's own, never R7's, and arming does
+    # not touch the authorization ledger: that is l5_live_authorization.claim,
+    # which is not imported here and never called. R7's single-use token is
+    # untouched.
+    pf = {}
+    armed = {}
+    try:
+        pf = tp.preflight(expect_account=os.getenv(
+            "PMUS_PREFLIGHT_ACCOUNT", "").strip() or None)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        pf = {"preflight": "RAISED",
+              "error": "%s: %s" % (type(exc).__name__, str(exc)[:200])}
+    if str(pf.get("preflight")) == "PASSED":
+        try:
+            armed = tp.arm()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            armed = {"armed": False,
+                     "error": "%s: %s" % (type(exc).__name__, str(exc)[:200])}
+
     before = _bal(tp)
     bp = D(str(before.get("buyingPower") or 0))
     dc = D(str(before.get("displayedCash") or 0))
@@ -123,8 +153,19 @@ def main() -> int:
     a = preview(tp, slug=slug, side="up", price=px, qty=qty_for(target_a))
     b = preview(tp, slug=slug, side="up", price=px, qty=qty_for(target_b))
     after = _bal(tp)
+    # DISARM IMMEDIATELY. This removes the POST-capable object from the
+    # process; it can only ever take capability away, so it cannot fail open.
+    try:
+        disarmed = tp.disarm("balance admission probe complete")
+    except BaseException as exc:                               # noqa: BLE001
+        disarmed = {"disarmed": False,
+                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200])}
 
-    if a.get("accepted") and not b.get("accepted"):
+    reached_wire = (a.get("error_type") != "PermissionError"
+                    and b.get("error_type") != "PermissionError")
+    if not reached_wire:
+        verdict = "NEVER_REACHED_THE_VENUE__OUR_OWN_GUARD_REFUSED"
+    elif a.get("accepted") and not b.get("accepted"):
         verdict = "BUYING_POWER_GOVERNS"
     elif a.get("accepted") and b.get("accepted"):
         verdict = "PREVIEW_DOES_NOT_CHECK_FUNDS__INCONCLUSIVE"
@@ -137,6 +178,9 @@ def main() -> int:
         "LABEL": "BALANCE_ADMISSION_PREVIEW_PROBE",
         "orders_created": 0, "armed": False, "max_possible_loss_usd": "0.00",
         "market": slug, "probe_price": str(px),
+        "preflight": pf.get("preflight"), "arm": armed,
+        "disarmed": disarmed, "reached_venue": reached_wire,
+        "r7_authorization_touched": False,
         "balances_before": before, "balances_after": after,
         "balances_unchanged": before == after,
         "A_above_displayed_cash": {"target_usd": str(target_a), **a},

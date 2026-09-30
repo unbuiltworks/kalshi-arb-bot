@@ -213,3 +213,95 @@ def from_native_journal(rows: Iterable[Mapping[str, Any]], *,
                   "same_price_frac"):
             out[k] = None
     return out
+
+
+# ------------------------------------------------- the clone's own journal
+
+#: R5's vintage of `native_tick` records the DECISION but not the intents:
+#: l5_pmus_live_oneshot writes `**{k: v for k, v in res.items() if k !=
+#: "submitted"}`, so the per-tick action list is explicitly excluded. Reading
+#: it therefore yields n_actions 0 and no_intent_tick_frac 1.0 -- which looks
+#: exactly like the R5 idleness thesis being confirmed, and is in fact a
+#: wrong key lookup. The authoritative record of what was SUBMITTED is the
+#: mandate: one `mandate_admission` journal row per admitted order, and one
+#: `mandate_commit` ledger row per commitment carrying side and price_wire.
+ADMISSION_KIND = "mandate_admission"
+COMMIT_KIND = "mandate_commit"
+
+
+def from_mandate_records(journal_rows: Iterable[Mapping[str, Any]],
+                         ledger_rows: Iterable[Mapping[str, Any]] = (),
+                         *, label: str = "CLONE",
+                         expect_actions: Optional[int] = None,
+                         window_s: Optional[float] = None) -> Dict[str, Any]:
+    """Signature of a live clone window, from the mandate's own records.
+
+    `expect_actions` is a RECONCILIATION INVARIANT, not a hint. R5 submitted
+    13 orders; if the reconstruction does not find exactly that many, this
+    returns a refusal instead of statistics, because a cadence computed from
+    the wrong number of actions is worse than no cadence at all.
+
+    Side and price come from the ledger's `mandate_commit` rows, joined to
+    the journal's admissions by `commit_id`. Where the ledger is absent the
+    actions are UNSIDED and the side-dependent metrics report None.
+    """
+    admitted = [r for r in journal_rows
+                if r.get("kind") == ADMISSION_KIND and r.get("admits") is True]
+    by_commit: Dict[str, Mapping[str, Any]] = {}
+    for r in ledger_rows:
+        if r.get("kind") == COMMIT_KIND and r.get("commit_id"):
+            by_commit[str(r["commit_id"])] = r
+
+    acts: List[Dict[str, Any]] = []
+    for r in admitted:
+        c = by_commit.get(str(r.get("commit_id") or ""))
+        side = None
+        px = None
+        if c is not None:
+            raw = str(c.get("side") or "").upper()
+            if "YES" in raw:
+                side = "up"
+            elif "NO" in raw:
+                side = "down"
+            px = _num(c.get("price_wire"))
+        acts.append({"t": _num(r.get("t")), "side": side, "px": px,
+                     "up": 0.0, "down": 0.0,
+                     "qty": _num(r.get("quantity")),
+                     "cash_at_risk": _num(r.get("cash_at_risk"))})
+
+    if expect_actions is not None and len(acts) != int(expect_actions):
+        return {"label": label, "RECONCILIATION_FAILED": True,
+                "expected_actions": int(expect_actions),
+                "reconstructed_actions": len(acts),
+                "admission_rows_seen": len(admitted),
+                "ledger_commit_rows_seen": len(by_commit),
+                "why": ("the reconstruction does not match the known "
+                        "submitted-order count, so no comparison statistics "
+                        "are produced: a cadence computed from the wrong "
+                        "number of actions is worse than none"),
+                "labels": "STOPPED on the reconciliation invariant"}
+
+    out = signature(acts, no_intent_ticks=0, window_s=window_s, label=label)
+    out["source"] = "mandate_admission + mandate_commit"
+    out["reconciled_actions"] = len(acts)
+    out["ledger_joined"] = sum(1 for a in acts if a.get("side"))
+    qty = [a["qty"] for a in acts if a.get("qty") is not None]
+    cash = [a["cash_at_risk"] for a in acts if a.get("cash_at_risk") is not None]
+    out["median_qty"] = statistics.median(qty) if qty else None
+    out["total_cash_at_risk"] = sum(cash) if cash else None
+    # no_intent has NO meaning here: the mandate records only what was
+    # admitted, so ticks that decided nothing are simply not in this source.
+    out["no_intent_tick_frac"] = None
+    out["no_intent_note"] = ("not computable from mandate records -- they "
+                             "contain only admitted orders, not declined "
+                             "ticks. Do not read the absence as idleness.")
+    if out["ledger_joined"] == 0:
+        out["side_metrics_unavailable"] = (
+            "no mandate_commit row joined, so side and price are unknown and "
+            "extend/rebalance, streaks, transitions and same_price are NOT "
+            "reported rather than guessed.")
+        for k in ("extend_frac", "rebalance_frac", "flat_open_frac",
+                  "max_streak", "median_streak", "transitions",
+                  "same_price_frac"):
+            out[k] = None
+    return out
