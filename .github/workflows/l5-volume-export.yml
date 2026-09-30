@@ -87,10 +87,19 @@ jobs:
                     "${{ inputs.railway_cli_version }}, got '$got'"; exit 1 ;;
           esac
 
-      - name: Confirm non-interactive authentication (a read)
+      - name: Confirm project-token authentication (read-only)
         run: |
           set -euo pipefail
-          railway whoami
+          # RAILWAY_TOKEN is a PROJECT token. `railway whoami` asks for a
+          # logged-in USER and can reject a valid project token, so it is the
+          # wrong CI check. Project tokens identify their project directly.
+          # Use a project-scoped read instead; any auth failure still stops here.
+          railway status --json > /tmp/railway-status.json
+          python3 - <<'PY'
+          import json
+          p = json.load(open("/tmp/railway-status.json"))
+          print("project auth OK:", p.get("name") or p.get("project") or "project")
+          PY
 
       - name: Inventory the raw directory (read-only)
         id: inv
