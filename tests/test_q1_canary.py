@@ -95,6 +95,10 @@ class Fake:
         self.placed, self.cancelled, self.sweeps = [], [], 0
         self.bbo_calls = 0
         self.market_reads = 0
+        self.swept = False
+        #: a venue that ACKs cancels without applying them. The pathological
+        #: subclasses set this; the honest default does not.
+        self.stubborn = False
         self.n = 0
         self._next = 0
 
@@ -132,11 +136,19 @@ class Fake:
             return {}
         if path == "/v1/orders/open/cancel":
             self.sweeps += 1
+            # a venue that HONOURS cancel-all: unfilled orders go terminal.
+            # StubbornCancel / StubbornIOC model the venue that does not.
+            self.swept = True
             return {}
+        if path.startswith("/v1/orders/open"):
+            return {"orders": []}
         if path.startswith("/v1/order/"):
             oid = path.split("/")[3]
             f = self.fills.get(oid)
             if f is None:
+                if not self.stubborn and (oid in self.cancelled or self.swept):
+                    return {"id": oid, "state": "ORDER_STATE_CANCELLED",
+                            "cumQuantity": "0"}
                 return {"id": oid, "state": "ORDER_STATE_OPEN"}
             return f
         if path == "/v1/account/balances":
@@ -555,6 +567,10 @@ class StubbornCancel(Fake):
     This is the eventual-consistency case the executor itself documents, and
     it is the exact shape that produced two live orders.
     """
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.stubborn = True
 
     def request(self, method, path, body=None, **kw):
         if path.endswith("/cancel") and path.startswith("/v1/order/"):
@@ -985,7 +1001,7 @@ def test_the_terminal_summary_reaches_stdout_even_on_rejection(
 
 
 def test_the_transport_sanitizes_and_bounds_a_venue_error_body():
-    from src.pmus_q1_executor import _sanitize_venue_error as san
+    san = C.sanitize_venue_error
     out = san(b'{"code":3,"message":"nope","signature":"deadbeef",'
               b'"authorization":"Bearer x"}')
     assert "deadbeef" not in out and "Bearer" not in out
@@ -1005,6 +1021,7 @@ class StubbornIOC(RecordingFake):
     def __init__(self, books, taker_oid="O2", **kw):
         super().__init__(books, **kw)
         self.taker_oid = taker_oid
+        self.stubborn = True
 
     def request(self, method, path, body=None, **kw):
         if path.endswith("/cancel") and path.startswith("/v1/order/"):
@@ -1085,3 +1102,129 @@ def test_an_expired_ioc_leaves_inventory_untouched(monkeypatch):
     assert out["matched_contracts"] == "0"
     assert out["residual"] == "1"
     assert f.sweeps >= 1
+
+
+# ============ EXIT SWEEP: verified, and the report is POST-sweep ============
+# The old exit logged `sweep` because the cancel request had been SENT, and
+# built the report BEFORE the sweep ran. An order filling during the shutdown
+# race therefore produced a report claiming residual 1 / matched 0 while the
+# venue had completed the pair.
+
+class OpenAfterSweep(Fake):
+    """Cancel-all is ACK'd but /v1/orders/open still lists our order."""
+
+    def __init__(self, books, stuck="O1", **kw):
+        super().__init__(books, **kw)
+        self.stuck, self.stubborn = stuck, True
+
+    def request(self, method, path, body=None, **kw):
+        # only AFTER cancel-all, so preflight still sees a clean account --
+        # otherwise this fake fails the run before it starts.
+        if (path.startswith("/v1/orders/open")
+                and path != "/v1/orders/open/cancel" and self.sweeps > 0):
+            return {"orders": [{"id": self.stuck,
+                                "marketSlug": FUTURE_SLUG}]}
+        return super().request(method, path, body, **kw)
+
+
+def test_an_order_still_open_after_cancel_all_is_sweep_unverified(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = OpenAfterSweep([("0.40", "0.60")] * 8, stuck="O1")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    assert out["sweep_verified"] is False
+    assert out["open_orders_after_sweep"] == 1
+    assert "O1" in out["open_order_ids"]
+    assert out["status"] in ("SWEEP_UNVERIFIED", "CANCEL_UNCONFIRMED")
+
+
+class FillDuringShutdown(Fake):
+    """The resting complement fills only once the campaign is shutting down.
+
+    `reveal_after` status reads of that order return OPEN; from then on it
+    reports FILLED -- i.e. the fill lands in the shutdown reconciliation.
+    """
+
+    def __init__(self, books, oid="O2", px="0.58", **kw):
+        super().__init__(books, **kw)
+        self.oid, self.px = oid, px
+
+    def request(self, method, path, body=None, **kw):
+        if (path.startswith("/v1/order/") and not path.endswith("/cancel")
+                and path.split("/")[3] == self.oid):
+            # OPEN until ITS OWN cancel goes out, then FILLED. That is the
+            # shutdown cancel race exactly: during the campaign the order is
+            # valid and never cancelled, so the fill can only surface inside
+            # finalization.
+            if self.oid in self.cancelled:
+                return _filled(self.px, side="OUTCOME_SIDE_NO")
+            return {"id": self.oid, "state": "ORDER_STATE_OPEN",
+                    "cumQuantity": "0"}
+        return super().request(method, path, body, **kw)
+
+
+def test_a_fill_during_shutdown_is_booked_and_changes_the_final_report(
+        monkeypatch, capsys):
+    slug = _arm(monkeypatch)
+    f = FillDuringShutdown([("0.40", "0.60")] * 40, oid="O2", px="0.58")
+    f.stubborn = True          # its state is driven by the cancel, not the base
+    f.fills["O1"] = _filled("0.40")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    # the pair was completed during the shutdown race and the report says so
+    assert out["booked_during_shutdown"], out
+    assert out["booked_during_shutdown"][0]["order_id"] == "O2"
+    assert out["matched_contracts"] == "1"
+    assert out["residual"] == "0"
+    assert D(out["pair_cost"]) == D("0.98")
+    assert out["status"] == "MATCHED"
+    assert out["sweep_verified"] is True
+    # booked exactly once
+    printed = capsys.readouterr().out
+    assert printed.count('"stage":"complement_shutdown"') == 1
+
+
+def test_zero_open_orders_after_the_sweep_is_a_verified_exit(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = Fake([("0.40", "0.60")] * 12)
+    f.fills["O1"] = _filled("0.40")
+    f.fills["O2"] = _filled("0.59", side="OUTCOME_SIDE_NO")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    assert out["status"] == "MATCHED"
+    assert out["sweep_verified"] is True
+    assert out["open_orders_after_sweep"] == 0
+    assert out["unresolved_orders"] == []
+    assert out["sweep_errors"] == []
+
+
+def test_sweep_verification_failure_never_permits_another_placement(monkeypatch):
+    """Finalization is terminal: it runs after the loop, so nothing follows."""
+    slug = _arm(monkeypatch)
+    f = OpenAfterSweep([("0.40", "0.60")] * 8, stuck="O1")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    assert out["sweep_verified"] is False
+    # exactly one order was ever placed; the unverified sweep added none
+    assert len(f.placed) == 1, [p["id"] for p in f.placed]
+
+
+def test_the_sweep_row_records_verification_not_mere_submission(
+        monkeypatch, tmp_path):
+    import json as _json
+    slug = _arm(monkeypatch)
+    f = Fake([("0.40", "0.60")] * 12)
+    f.fills["O1"] = _filled("0.40")
+    f.fills["O2"] = _filled("0.59", side="OUTCOME_SIDE_NO")
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                 state=ws_state("0.40", "0.60", slug=slug),
+                 max_book_age_s=1e9)
+    rows = [_json.loads(l) for l in (tmp_path / "ledger.jsonl").open()]
+    sweeps = [r for r in rows if r["kind"] == "sweep"]
+    assert len(sweeps) == 1
+    assert sweeps[0]["sweep_verified"] is True
+    assert "open_orders" in sweeps[0]

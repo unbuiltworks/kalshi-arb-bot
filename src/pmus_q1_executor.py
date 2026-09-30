@@ -141,36 +141,6 @@ def signed_headers(method: str, path: str,
             "Content-Type": "application/json"}
 
 
-#: how much of a venue error body to keep. Bounded so a huge error page
-#: cannot flood the ledger, and sanitized so nothing credential-shaped is
-#: ever written down.
-VENUE_ERROR_BODY_MAX = 2048
-_REDACT_KEYS = ("signature", "secret", "key", "token", "authorization",
-                "x-pm-access-key", "x-pm-signature")
-
-
-def _sanitize_venue_error(raw: bytes) -> str:
-    """The venue's error text, bounded, with anything credential-shaped cut.
-
-    Never a passthrough: an error body is attacker-influenced text that we
-    are about to persist to the ledger and print to logs.
-    """
-    try:
-        text = raw.decode("utf-8", "replace")
-    except Exception:                                        # noqa: BLE001
-        return "<undecodable venue error body>"
-    try:
-        doc = json.loads(text)
-    except Exception:                                        # noqa: BLE001
-        return text[:VENUE_ERROR_BODY_MAX]
-    if isinstance(doc, Mapping):
-        clean = {k: ("<redacted>" if any(r in str(k).lower()
-                                         for r in _REDACT_KEYS) else v)
-                 for k, v in doc.items()}
-        return json.dumps(clean, separators=(",", ":"))[:VENUE_ERROR_BODY_MAX]
-    return text[:VENUE_ERROR_BODY_MAX]
-
-
 class Transport:
     """Real signed HTTP transport. Tests inject a fake with .request()."""
 
@@ -178,7 +148,6 @@ class Transport:
                 body: Optional[Mapping[str, Any]] = None,
                 base: str = API) -> Any:
         import ssl
-        import urllib.error
         import urllib.request
         data = json.dumps(body).encode() if body is not None else None
         headers = signed_headers(method, path) if base == API else \
@@ -186,23 +155,8 @@ class Transport:
         req = urllib.request.Request(base + path, data=data,
                                      headers=headers, method=method)
         ctx = ssl.create_default_context()
-        try:
-            with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
-                return json.loads(r.read() or b"{}")
-        except urllib.error.HTTPError as exc:
-            # LIVE 2026-09-30T18:09:16Z: a 400 from /v1/order/preview raised
-            # with its body unread, so the venue's REASON was lost and the
-            # traceback was all we had. The body is captured here, bounded
-            # and with any header-shaped material dropped, then the SAME
-            # exception is re-raised so every existing caller's handling is
-            # unchanged.
-            try:
-                raw = exc.read(VENUE_ERROR_BODY_MAX) or b""
-            except Exception:                                # noqa: BLE001
-                raw = b""
-            exc.venue_body = _sanitize_venue_error(raw)       # type: ignore[attr-defined]
-            exc.venue_path = path                             # type: ignore[attr-defined]
-            raise
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+            return json.loads(r.read() or b"{}")
 
 
 # ------------------------- pure economics -------------------------

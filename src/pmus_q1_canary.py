@@ -124,6 +124,62 @@ def effective_deadline_s(slug: str, requested_s: float, *,
     return min(float(requested_s), left)
 
 
+#: how much of a venue error body to keep, and what never to write down.
+VENUE_ERROR_BODY_MAX = 2048
+_REDACT_KEYS = ("signature", "secret", "key", "token", "authorization",
+                "x-pm-access-key", "x-pm-signature")
+
+
+def sanitize_venue_error(raw: bytes) -> str:
+    """A venue error body, bounded, with anything credential-shaped cut.
+
+    Never a passthrough: this is attacker-influenced text we are about to
+    persist to the ledger and print to the platform log.
+    """
+    try:
+        text = raw.decode("utf-8", "replace")
+    except Exception:                                        # noqa: BLE001
+        return "<undecodable venue error body>"
+    try:
+        doc = json.loads(text)
+    except Exception:                                        # noqa: BLE001
+        return text[:VENUE_ERROR_BODY_MAX]
+    if isinstance(doc, Mapping):
+        clean = {k: ("<redacted>" if any(r in str(k).lower()
+                                         for r in _REDACT_KEYS) else v)
+                 for k, v in doc.items()}
+        return json.dumps(clean, separators=(",", ":"))[:VENUE_ERROR_BODY_MAX]
+    return text[:VENUE_ERROR_BODY_MAX]
+
+
+class CapturingTransport(X.Transport):
+    """The reviewed transport plus the venue's error text.
+
+    LIVE 2026-09-30T18:09:16Z: a 400 from /v1/order/preview raised with its
+    body unread, so the venue's REASON was lost and a traceback was all we
+    had. Capturing it belongs HERE, not in `pmus_q1_executor`: that module is
+    execution-class in the R1 source-lineage guard, and editing it drifted the
+    reviewed artifact (the guard caught it -- `undisclosed:
+    src/pmus_q1_executor.py`). Subclassing changes nothing for any other
+    caller of the reviewed transport.
+    """
+
+    def request(self, method: str, path: str,
+                body: Optional[Mapping[str, Any]] = None,
+                base: str = X.API) -> Any:
+        import urllib.error
+        try:
+            return super().request(method, path, body, base=base)
+        except urllib.error.HTTPError as exc:
+            try:
+                raw = exc.read(VENUE_ERROR_BODY_MAX) or b""
+            except Exception:                                # noqa: BLE001
+                raw = b""
+            exc.venue_body = sanitize_venue_error(raw)       # type: ignore[attr-defined]
+            exc.venue_path = path                            # type: ignore[attr-defined]
+            raise
+
+
 def canary_armed() -> bool:
     """The executor's dual key AND the canary-specific third key."""
     sid = os.getenv(X.SID_ENV, "").strip()
@@ -466,10 +522,102 @@ def _poll_fill(t: X.Transport, order_id: str, sleep) -> dict:
     return {"fill": fill} if fill is not None else {"working": True}
 
 
-def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
-               sleep=time.sleep, state: Optional["WS.LiveState"] = None,
-               feed: Optional["WS.WsFeed"] = None,
-               max_book_age_s: float = WS.DEFAULT_MAX_BOOK_AGE_S) -> dict:
+#: bounded proof that the market has no live orders of ours left
+SWEEP_VERIFY_POLLS = 6
+
+
+def open_order_ids(t: X.Transport, slug: str, sleep=time.sleep) -> list:
+    """Ids of OUR still-open orders in this market, from the venue."""
+    data = X._get_with_retry(t, "/v1/orders/open", sleep=sleep)
+    out = []
+    for o in (data.get("orders") or data.get("openOrders") or []):
+        if not isinstance(o, Mapping):
+            continue
+        if str(o.get("marketSlug") or o.get("slug") or "") != slug:
+            continue
+        oid = o.get("id") or o.get("orderId")
+        if oid:
+            out.append(str(oid))
+    return out
+
+
+def finalize(t: X.Transport, slug: str, inv: "Inventory",
+             unresolved: Dict[str, dict], *, sleep=time.sleep) -> dict:
+    """Reconcile, cancel, and PROVE the market is clear -- before reporting.
+
+    The old exit logged `sweep` merely because the cancel request had been
+    sent, and built the report BEFORE that sweep ran. So an order filling
+    during the shutdown race produced a report claiming residual 1 / matched 0
+    while the venue had in fact completed the pair. That breaks the strict
+    accounting rule: the terminal report must describe POST-SWEEP
+    authoritative state.
+
+    Order matters: reconcile first (a fill found now is real inventory),
+    then cancel-all, then prove zero open orders for this market.
+    """
+    out: dict = {"booked_during_shutdown": [], "sweep_errors": []}
+    # 1/2. reconcile every unresolved id; a fill found now is booked ONCE,
+    #      because the id is removed from `unresolved` only on proof.
+    for oid in list(unresolved):
+        info = unresolved[oid]
+        try:
+            res = resolve_ioc(t, oid, slug, sleep=sleep)
+        except Exception as exc:                             # noqa: BLE001
+            out["sweep_errors"].append(f"{oid}:{type(exc).__name__}")
+            continue
+        fill = res.get("fill")
+        if fill is not None:
+            px = D(str(fill["price"]))
+            qty = D(str(fill.get("qty") or 1))
+            inv.add(info["inv_side"], qty, px)
+            out["booked_during_shutdown"].append(
+                {"order_id": oid, "stage": info.get("stage"),
+                 "price": str(px), "qty": str(qty)})
+            record("filled", stage=str(info.get("stage")) + "_shutdown",
+                   order_id=oid, price=str(px), qty=str(qty),
+                   residual=str(inv.residual()), matched=str(inv.matched()))
+        unresolved.pop(oid, None)
+    # 3. market-scoped cancel-all. An error here is recorded, never swallowed
+    #    into a claim of success.
+    try:
+        t.request("POST", "/v1/orders/open/cancel", {"slugs": [slug]})
+    except Exception as exc:                                 # noqa: BLE001
+        out["sweep_errors"].append(f"cancel_all:{type(exc).__name__}")
+    # 4. PROVE zero open orders for this market, bounded.
+    open_ids: list = []
+    for _ in range(SWEEP_VERIFY_POLLS):
+        try:
+            open_ids = open_order_ids(t, slug, sleep=sleep)
+        except Exception as exc:                             # noqa: BLE001
+            out["sweep_errors"].append(f"open_read:{type(exc).__name__}")
+            open_ids = ["<unreadable>"]
+        if not open_ids:
+            break
+        sleep(X.POLL_S)
+    out["open_orders"] = len(open_ids)
+    out["open_order_ids"] = open_ids
+    out["unresolved_orders"] = sorted(unresolved)
+    out["sweep_verified"] = (not open_ids and not unresolved
+                             and not out["sweep_errors"])
+    record("sweep", sweep_verified=out["sweep_verified"],
+           open_orders=out["open_orders"], open_order_ids=open_ids,
+           unresolved=out["unresolved_orders"],
+           errors=out["sweep_errors"],
+           booked_during_shutdown=out["booked_during_shutdown"],
+           note="market-scoped cancel-all, then proof of zero open orders")
+    return out
+
+
+def _campaign(ctx: dict, t: Optional[X.Transport] = None,
+              clock=time.monotonic, sleep=time.sleep,
+              state: Optional["WS.LiveState"] = None,
+              feed: Optional["WS.WsFeed"] = None,
+              max_book_age_s: float = WS.DEFAULT_MAX_BOOK_AGE_S) -> dict:
+    """Run the campaign and return its OUTCOME. Never the final report.
+
+    The caller finalizes afterwards and assembles the report from post-sweep
+    state, so `ctx` carries out the live objects the finalizer needs.
+    """
     slug = os.getenv(X.MARKET_ENV, "").strip()
     report: dict[str, Any] = {
         "campaign": "pmus-q1-canary", "arm": "HOLD_OPEN_EXTEND",
@@ -490,35 +638,31 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
     if X.realized_today() <= X.DAILY_LOSS_STOP:
         return {**report, "status": "DAILY_LOSS_STOP"}
 
-    t = t or X.Transport()
+    t = t or CapturingTransport()
+    ctx["t"] = t
     requested_s = float(os.getenv(HOLD_DEADLINE_ENV, "600"))
     stop_at = clock()          # set inside the try, so NO_RUNWAY still sweeps
     inv = Inventory()
+    ctx["inv"] = inv
     #: what is resting right now: at most ONE order, per the mandate
     resting: Optional[dict] = None
     #: EVERY order id this campaign has placed and not POSITIVELY resolved.
     #: The take refuses while this is non-empty, because "resting is None" is
     #: not the same as "nothing of ours is live on the venue".
     unresolved: Dict[str, dict] = {}
+    ctx["unresolved"] = unresolved
     holds = requotes = cancels = takes = 0
     first_cost: Optional[D] = None
 
     def _exit(status: str, **extra: Any) -> dict:
-        """A fail-closed exit still reports what inventory was left behind.
-
-        A HALT that says nothing about position is the least useful report a
-        money path can produce: the operator's first question is always "what
-        do I still hold, and is anything of ours still live".
-        """
-        return {**report, "status": status,
-                "matched_contracts": str(inv.matched()),
-                "residual": str(inv.residual()),
-                "first_cost": (str(first_cost) if first_cost is not None
-                               else None),
-                "holds": holds, "requotes": requotes, "cancels": cancels,
-                "takes": takes,
-                "unresolved_orders": sorted(unresolved),
-                **extra}
+        """Record the OUTCOME only. Inventory numbers are deliberately NOT
+        put here: they are assembled after `finalize`, because a report built
+        before the sweep can claim residual 1 while the venue has just
+        completed the pair during the shutdown race."""
+        ctx.update(counters={"holds": holds, "requotes": requotes,
+                             "cancels": cancels, "takes": takes},
+                   first_cost=first_cost)
+        return {"status": status, **extra}
 
     try:
         # The campaign must be finished BEFORE the window closes, with time
@@ -786,27 +930,9 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                        residual=str(inv.residual()), **_ws_fields(snap))
             sleep(X.POLL_S)
 
-        matched = inv.matched()
-        pair_cost = ((inv.cost["yes"] + inv.cost["no"]) / matched
-                     if matched > 0 else None)
-        status = ("MATCHED" if matched > 0 else
-                  "ONE_SIDED_HOLD" if inv.residual() != 0 else "NO_FILL")
-        out = {**report, "status": status,
-               "matched_contracts": str(matched),
-               "residual": str(inv.residual()),
-               "pair_cost": (str(pair_cost) if pair_cost is not None else None),
-               "first_cost": (str(first_cost) if first_cost is not None
-                              else None),
-               "holds": holds, "requotes": requotes, "cancels": cancels,
-               "takes": takes,
-               "rebates_separate": str(
-                   sum((X.maker_rebate(inv.basis(s)) * inv.qty[s]
-                        for s in ("yes", "no") if inv.qty[s] > 0), D(0))),
-               "settlement": "PENDING — realized only after settlement rows "
-                             "reconcile"}
-        record("canary_end", **{k: v for k, v in out.items()
-                                if k not in ("labels",)})
-        return out
+        # The status is decided from POST-SWEEP inventory by the caller, so
+        # this only says the campaign reached its end without refusing.
+        return _exit("COMPLETED")
     except CancelUnconfirmed as unc:
         record("cancel_unconfirmed", reason=str(unc),
                note="an order may still be live; placed nothing further")
@@ -830,13 +956,83 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
         record("halt", reason=f"UNEXPECTED:{str(detail)[:300]}")
         return _exit("HALT", reason=f"UNEXPECTED:{type(exc).__name__}",
                      venue=str(detail)[:500])
+
+
+
+def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
+               sleep=time.sleep, state: Optional["WS.LiveState"] = None,
+               feed: Optional["WS.WsFeed"] = None,
+               max_book_age_s: float = WS.DEFAULT_MAX_BOOK_AGE_S) -> dict:
+    """Run the campaign, FINALIZE, then report post-sweep authoritative state.
+
+    The report is assembled last, deliberately. A report built before the
+    sweep can say residual 1 / matched 0 while the venue completed the pair
+    during the shutdown cancel race, and `sweep` used to be logged as success
+    merely because the cancel request had been sent.
+    """
+    slug = os.getenv(X.MARKET_ENV, "").strip()
+    report: dict[str, Any] = {
+        "campaign": "pmus-q1-canary", "arm": "HOLD_OPEN_EXTEND",
+        "slug": slug, "qty": X.QTY, "realized_pnl": None,
+        "max_loss_cap": str(CANARY_MAX_LOSS),
+        "labels": ("submitted->filled->settled->realized; fees and rebates "
+                   "reported separately; realized null until the settlement "
+                   "audit reconciles"),
+    }
+    ctx: dict = {}
+    try:
+        outcome = _campaign(ctx, t, clock=clock, sleep=sleep, state=state,
+                            feed=feed, max_book_age_s=max_book_age_s)
     finally:
-        # rule 8: unconditional, on EVERY exit path including Halt and
-        # KeyboardInterrupt. Market-scoped so no unrelated order is touched.
-        X.cancel_all_deadman(t, slug)
         if feed is not None:
             feed.close()
-        record("sweep", note="market-scoped cancel-all on exit")
+    inv = ctx.get("inv")
+    if inv is None:                      # refused before any campaign state
+        return {**report, **outcome}
+    tt, unresolved = ctx["t"], ctx.get("unresolved") or {}
+    fin = finalize(tt, slug, inv, unresolved, sleep=sleep)
+
+    matched = inv.matched()
+    pair_cost = ((inv.cost["yes"] + inv.cost["no"]) / matched
+                 if matched > 0 else None)
+    status = outcome.get("status")
+    if status == "COMPLETED":
+        status = ("MATCHED" if matched > 0 else
+                  "ONE_SIDED_HOLD" if inv.residual() != 0 else "NO_FILL")
+    #: An unproven sweep overrides a CLEAN-looking outcome, because an order
+    #: that may still be live is the most important fact about the run. It
+    #: does NOT overwrite a status that already says the campaign refused --
+    #: CANCEL_UNCONFIRMED names the specific order and is strictly more
+    #: informative than the generic label; `sweep_verified` is reported
+    #: alongside either way.
+    CLEAN = ("COMPLETED", "MATCHED", "ONE_SIDED_HOLD", "NO_FILL")
+    if not fin["sweep_verified"] and status in CLEAN:
+        status = "SWEEP_UNVERIFIED"
+    counters = ctx.get("counters") or {}
+    out = {**report, **{k: v for k, v in outcome.items() if k != "status"},
+           "status": status,
+           "matched_contracts": str(matched),
+           "residual": str(inv.residual()),
+           "pair_cost": (str(pair_cost) if pair_cost is not None else None),
+           "first_cost": (str(ctx.get("first_cost"))
+                          if ctx.get("first_cost") is not None else None),
+           "holds": counters.get("holds", 0),
+           "requotes": counters.get("requotes", 0),
+           "cancels": counters.get("cancels", 0),
+           "takes": counters.get("takes", 0),
+           "rebates_separate": str(
+               sum((X.maker_rebate(inv.basis(sd)) * inv.qty[sd]
+                    for sd in ("yes", "no") if inv.qty[sd] > 0), D(0))),
+           "sweep_verified": fin["sweep_verified"],
+           "open_orders_after_sweep": fin["open_orders"],
+           "open_order_ids": fin["open_order_ids"],
+           "unresolved_orders": fin["unresolved_orders"],
+           "booked_during_shutdown": fin["booked_during_shutdown"],
+           "sweep_errors": fin["sweep_errors"],
+           "settlement": "PENDING — realized only after settlement rows "
+                         "reconcile"}
+    record("canary_end", **{k: v for k, v in out.items() if k != "labels"})
+    return out
 
 
 def main() -> int:
