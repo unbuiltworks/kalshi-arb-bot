@@ -147,10 +147,32 @@ def _ws_fields(snap: Mapping[str, Any]) -> dict:
             "feed": snap.get("source")}
 
 
+#: lifecycle rows that must be visible in the platform log, not only in the
+#: ledger on the mounted volume. LIVE 2026-09-30: the container's logs held a
+#: traceback and nothing else -- no gate evidence, no decision, no report --
+#: because every record() went to the volume and the volume is not readable
+#: without the Railway agent.
+STDOUT_KINDS = ("canary_start", "ws_ready", "resting", "submitted", "filled",
+                "cancel", "decision", "preview_rejected", "taker_unfilled",
+                "terminal_rejection", "halt", "ws_stale_refused",
+                "cancel_unconfirmed", "tick_unavailable", "canary_end",
+                "sweep")
+
+
 def record(kind: str, **fields: Any) -> None:
-    """One ledger row per decision. Recording is part of the mandate, so a
-    failure to record is not swallowed silently -- it is re-raised as a Halt
-    so the campaign exits through the sweep."""
+    """One ledger row per decision, and the lifecycle ones to stdout too.
+
+    Recording is part of the mandate, so a failure to record is not swallowed
+    silently -- it is re-raised as a Halt so the campaign exits through the
+    sweep.
+    """
+    if kind in STDOUT_KINDS:
+        try:
+            print("CANARY %s %s" % (kind, json.dumps(
+                {k: v for k, v in fields.items() if k != "depth"},
+                separators=(",", ":"), default=str)[:900]), flush=True)
+        except Exception:                                    # noqa: BLE001
+            print("CANARY %s <unserializable fields>" % kind, flush=True)
     try:
         X.ledger_append({"kind": kind, "campaign": "pmus-q1-canary", **fields})
     except Exception as exc:                                 # noqa: BLE001
@@ -299,38 +321,55 @@ def complement_still_valid(px: D, first_cost: D, tick: Optional[D],
     return not X.would_cross("OUTCOME_SIDE_NO", D(str(px)), snap)
 
 
-def place_taker_buy(t: X.Transport, slug: str, outcome_side: str, price: D,
-                    stage: str, sleep=time.sleep) -> str:
-    """DEFECT 2 FIX: a REAL crossing completion, not a counter increment.
+def place_order(t: X.Transport, slug: str, side: str, price: D, *,
+                post_only: bool, stage: str, sleep=time.sleep) -> str:
+    """ONE placement path for this canary, on THE proven serializer.
 
-    Same reviewed shape as `X.place_limit_buy` -- preview first, durable
-    intent on disk BEFORE the POST, q=1, the venue's long-side wire price
-    convention -- with exactly two deliberate differences:
+    LIVE 2026-09-30T18:09:16Z: `/v1/order/preview` answered HTTP 400 and the
+    campaign died on its first action. The cause was serializer drift, not the
+    venue: this canary reached the venue through hand-built bodies that sent
+    `price` without `"currency": "USD"` and POSTed the bare order body to the
+    preview endpoint. `src/l5_order_body` is the body that has ACTUALLY TRADED
+    on PMUS -- `pmus_micro_executor._body` delegates to it, and both it and
+    `pmus_q1_executor_v4` send preview as `{"request": body}`.
 
-    * `participateDontInitiate` is FALSE. A post-only order cannot cross,
-      and crossing is the entire purpose of this leg.
-    * there is no `would_cross` refusal. That guard exists to stop a MAKER
-      being rejected for crossing; here crossing is intended, so refusing on
-      it would make the branch unreachable.
+    So nothing about the wire format is decided here. `OB.build` owns price
+    (including the `currency` field), quantity as a JSON number, the outcome
+    enum, TIF, post-only, action and the manual-order indicator;
+    `OB.preview_envelope` owns the preview wrapper. `/v1/orders` gets the
+    bare body, exactly as the proven callers send it.
 
-    Marketable LIMIT, never a market order: the price is the cap that the
-    fee-adjusted pair-cost check just approved, so a moving book can leave
-    this unfilled but can never fill it worse than the approved bound.
+    PRICE IS PASSED IN THE OUTCOME'S OWN TERMS. `OB.venue_price` performs the
+    NO inversion, so this function must never pre-convert -- inverting twice
+    sends a wildly wrong price, which is the failure the serializer's own
+    docstring records from 24 of 24 rejected NO orders.
     """
-    wire_px = (X.ONE - D(str(price))) if str(outcome_side).upper().endswith("NO") \
-        else D(str(price))
-    body = {"marketSlug": slug, "type": "ORDER_TYPE_LIMIT",
-            "price": {"value": str(wire_px)}, "quantity": X.QTY,
-            "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
-            "participateDontInitiate": False,      # crossing leg
-            "outcomeSide": outcome_side,
-            "action": "ORDER_ACTION_BUY",
-            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"}
-    preview = t.request("POST", "/v1/order/preview", body)
+    from src import l5_order_body as OB
+    body = OB.build(slug=slug, side=side, price=D(str(price)), qty=X.QTY,
+                    post_only=post_only,
+                    tif=OB.TIF_GTC if post_only else OB.TIF_IOC)
+    try:
+        preview = t.request("POST", "/v1/order/preview",
+                            OB.preview_envelope(body))
+    except Exception as exc:                                 # noqa: BLE001
+        detail = getattr(exc, "venue_body", "") or str(exc)[:200]
+        record("preview_rejected", stage=stage, side=side, px=str(price),
+               venue=str(detail)[:500])
+        raise X.Halt(f"PREVIEW_REJECTED:{stage}:{str(detail)[:200]}") from exc
     if preview.get("error") or preview.get("warnings"):
+        record("preview_rejected", stage=stage, side=side, px=str(price),
+               venue=json.dumps(
+                   {k: preview.get(k) for k in ("error", "warnings")},
+                   default=str)[:500])
         raise X.Halt(f"PREVIEW_REJECTED:{stage}")
-    X.persist_intent({"stage": stage, "slug": slug, "side": outcome_side,
-                      "price": str(price), "qty": X.QTY, "taker": True,
+    # a MAKER price that meets the live opposite quote is refused locally
+    # rather than submitted; a crossing leg is meant to cross, so it is not.
+    if post_only and X.would_cross(OB.outcome_side(side), D(str(price)),
+                                   X.fresh_bbo(t, slug, sleep=sleep)):
+        raise X.StaleRefuse(f"WOULD_CROSS:{stage}:{price}")
+    X.persist_intent({"stage": stage, "slug": slug,
+                      "side": OB.outcome_side(side), "price": str(price),
+                      "qty": X.QTY, "post_only": post_only,
                       "submitted_utc": datetime.now(timezone.utc).isoformat()})
     resp = t.request("POST", "/v1/orders", body)
     order_id = str(resp.get("id") or resp.get("orderId")
@@ -338,8 +377,9 @@ def place_taker_buy(t: X.Transport, slug: str, outcome_side: str, price: D,
     if not order_id:
         raise X.Halt(f"NO_ORDER_ID:{stage}")
     X.persist_intent({"stage": stage + ":accepted", "order_id": order_id})
-    record("submitted", stage=stage, slug=slug, side=outcome_side,
-           price=str(price), order_id=order_id, maker=False)
+    record("submitted", stage=stage, slug=slug, side=OB.outcome_side(side),
+           price=str(price), order_id=order_id, maker=post_only,
+           wire_price=body["price"]["value"])
     return order_id
 
 
@@ -590,13 +630,13 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                                reason="maker_filled_during_cancel_race",
                                residual=str(inv.residual()))
                         continue
-                    # 4. durable intent then POST, inside place_taker_buy
+                    # 4. durable intent then POST, inside place_order
                     side_wire = ("OUTCOME_SIDE_YES" if want_side == "yes"
                                  else "OUTCOME_SIDE_NO")
                     try:
-                        tid = place_taker_buy(t, slug, side_wire,
-                                              D(str(ask)), "taker_complete",
-                                              sleep=sleep)
+                        tid = place_order(t, slug, side_wire, D(str(ask)),
+                                          post_only=False,
+                                          stage="taker_complete", sleep=sleep)
                         unresolved[tid] = {"stage": "taker_complete",
                                            "inv_side": want_side,
                                            "px": D(str(ask)),
@@ -669,11 +709,11 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
                         "UNRESOLVED_ORDERS_BEFORE_PLACEMENT:"
                         + ",".join(sorted(unresolved)))
                 try:
-                    oid = X.place_limit_buy(
+                    oid = place_order(
                         t, slug,
                         "OUTCOME_SIDE_YES" if side == "yes"
                         else "OUTCOME_SIDE_NO",
-                        px, stage, sleep=sleep)
+                        px, post_only=True, stage=stage, sleep=sleep)
                 except X.StaleRefuse as stale:
                     record("stale_refused", stage=stage, reason=str(stale))
                     sleep(X.POLL_S)
@@ -720,6 +760,16 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
     except X.Halt as halt:
         record("halt", reason=str(halt))
         return {**report, "status": "HALT", "reason": str(halt)}
+    except Exception as exc:                                 # noqa: BLE001
+        # LIVE 2026-09-30: an unhandled urllib HTTPError from the preview
+        # endpoint escaped every handler, so the campaign died by traceback
+        # instead of returning its own report. Any venue/transport failure is
+        # a HALT with the sanitized venue text, and the sweep still runs.
+        detail = getattr(exc, "venue_body", "") or f"{type(exc).__name__}: {exc}"
+        record("halt", reason=f"UNEXPECTED:{str(detail)[:300]}")
+        return {**report, "status": "HALT",
+                "reason": f"UNEXPECTED:{type(exc).__name__}",
+                "venue": str(detail)[:500]}
     finally:
         # rule 8: unconditional, on EVERY exit path including Halt and
         # KeyboardInterrupt. Market-scoped so no unrelated order is touched.
@@ -731,7 +781,8 @@ def run_canary(t: Optional[X.Transport] = None, clock=time.monotonic,
 
 def main() -> int:
     out = run_canary()
-    print(json.dumps(out, indent=1, default=str))
+    print("CANARY_REPORT " + json.dumps(out, default=str), flush=True)
+    print(json.dumps(out, indent=1, default=str), flush=True)
     return 0
 
 

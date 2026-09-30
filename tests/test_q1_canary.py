@@ -833,3 +833,161 @@ def test_an_unparseable_slug_refuses_rather_than_guessing_a_close(monkeypatch):
                        max_book_age_s=1e9)
     assert out["status"] in ("NO_RUNWAY", "TICK_UNAVAILABLE")
     assert not f.placed
+
+
+# ========== SERIALIZER DRIFT: the live 400 at 2026-09-30T18:09:16Z ==========
+# The canary hand-built order bodies that omitted price.currency and POSTed
+# the bare body to /v1/order/preview. src/l5_order_body is the body that has
+# actually traded; pmus_micro_executor and pmus_q1_executor_v4 both send
+# preview as {"request": body}.
+
+def _bodies(fake):
+    """(preview payloads, submit payloads) seen by a fake venue."""
+    return ([c["body"] for c in fake.calls if c["path"] == "/v1/order/preview"],
+            [c["body"] for c in fake.calls if c["path"] == "/v1/orders"])
+
+
+class RecordingFake(Fake):
+    """Records every call path+body so wire shape can be asserted."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.calls = []
+
+    def request(self, method, path, body=None, **kw):
+        self.calls.append({"method": method, "path": path, "body": body})
+        return super().request(method, path, body, **kw)
+
+
+def test_maker_preview_body_is_the_certified_envelope(monkeypatch):
+    from src import l5_order_body as OB
+    slug = _arm(monkeypatch)
+    f = RecordingFake([("0.40", "0.60")] * 6)
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                 state=ws_state("0.40", "0.60", slug=slug), max_book_age_s=1e9)
+    previews, _ = _bodies(f)
+    assert previews, "no preview was sent"
+    expected = OB.preview_envelope(OB.build(
+        slug=slug, side="OUTCOME_SIDE_YES", price=D("0.40"), qty=1,
+        post_only=True, tif=OB.TIF_GTC))
+    assert previews[0] == expected
+
+
+def test_maker_submit_body_is_the_same_body_unwrapped(monkeypatch):
+    from src import l5_order_body as OB
+    slug = _arm(monkeypatch)
+    f = RecordingFake([("0.40", "0.60")] * 6)
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                 state=ws_state("0.40", "0.60", slug=slug), max_book_age_s=1e9)
+    previews, submits = _bodies(f)
+    assert submits, "nothing was submitted"
+    assert submits[0] == previews[0]["request"]
+    assert "request" not in submits[0]
+
+
+def test_taker_uses_the_same_certified_serializer(monkeypatch):
+    from src import l5_order_body as OB
+    slug = _arm(monkeypatch)
+    st = ws_state("0.45", "0.60", slug=slug)
+    f = RecordingFake([("0.40", "0.60")] * 8)
+    f.fills["O1"] = _filled("0.40")
+    f.fills["O2"] = _filled("0.55", side="OUTCOME_SIDE_NO")
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None, state=st,
+                 max_book_age_s=1e9)
+    previews, submits = _bodies(f)
+    takers = [b for b in submits
+              if b["participateDontInitiate"] is False]
+    assert len(takers) == 1
+    t_body = takers[0]
+    assert t_body == OB.build(slug=slug, side="OUTCOME_SIDE_NO",
+                              price=D("0.55"), qty=1, post_only=False,
+                              tif=OB.TIF_IOC)
+    assert t_body["tif"] == OB.TIF_IOC
+    # its preview carried the same envelope
+    assert {"request": t_body} in previews
+
+
+def test_the_no_inversion_happens_exactly_once(monkeypatch):
+    """A caller that pre-inverts inverts twice and sends a wildly wrong price."""
+    slug = _arm(monkeypatch)
+    f = RecordingFake([("0.40", "0.60")] * 8)
+    f.fills["O1"] = _filled("0.40")
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                 state=ws_state("0.40", "0.60", slug=slug), max_book_age_s=1e9)
+    _, submits = _bodies(f)
+    no_bodies = [b for b in submits
+                 if b["outcomeSide"] == "OUTCOME_SIDE_NO"]
+    assert no_bodies, "no complement was sent"
+    # complement bound off a 0.40 basis is 0.59 in NO terms -> wire 0.41
+    assert D(no_bodies[0]["price"]["value"]) == D("0.41")
+
+
+def test_every_price_carries_the_currency_field(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = RecordingFake([("0.40", "0.60")] * 8)
+    f.fills["O1"] = _filled("0.40")
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                 state=ws_state("0.40", "0.60", slug=slug), max_book_age_s=1e9)
+    previews, submits = _bodies(f)
+    for b in submits + [p["request"] for p in previews]:
+        assert b["price"]["currency"] == "USD", b["price"]
+        assert isinstance(b["quantity"], float), type(b["quantity"])
+
+
+class Http400Fake(RecordingFake):
+    """The venue answering /v1/order/preview with a real HTTPError."""
+
+    def request(self, method, path, body=None, **kw):
+        if path == "/v1/order/preview":
+            self.calls.append({"method": method, "path": path, "body": body})
+            import urllib.error
+            exc = urllib.error.HTTPError(
+                "https://api.polymarket.us" + path, 400, "Bad Request", {},
+                None)
+            exc.venue_body = '{"code":3,"message":"invalid price scale"}'
+            raise exc
+        return super().request(method, path, body, **kw)
+
+
+def test_a_preview_400_halts_cleanly_and_keeps_the_venue_reason(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = Http400Fake([("0.40", "0.60")] * 6)
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    assert out["status"] == "HALT"
+    assert "PREVIEW_REJECTED" in out["reason"]
+    assert "invalid price scale" in out["reason"]
+
+
+def test_a_preview_400_submits_nothing(monkeypatch):
+    slug = _arm(monkeypatch)
+    f = Http400Fake([("0.40", "0.60")] * 6)
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                 state=ws_state("0.40", "0.60", slug=slug),
+                 max_book_age_s=1e9)
+    _, submits = _bodies(f)
+    assert submits == [], "an order was submitted after a rejected preview"
+    assert f.sweeps >= 1
+
+
+def test_the_terminal_summary_reaches_stdout_even_on_rejection(
+        monkeypatch, capsys):
+    slug = _arm(monkeypatch)
+    f = Http400Fake([("0.40", "0.60")] * 6)
+    C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                 state=ws_state("0.40", "0.60", slug=slug),
+                 max_book_age_s=1e9)
+    printed = capsys.readouterr().out
+    assert "CANARY preview_rejected" in printed
+    assert "CANARY halt" in printed
+    assert "CANARY sweep" in printed
+
+
+def test_the_transport_sanitizes_and_bounds_a_venue_error_body():
+    from src.pmus_q1_executor import _sanitize_venue_error as san
+    out = san(b'{"code":3,"message":"nope","signature":"deadbeef",'
+              b'"authorization":"Bearer x"}')
+    assert "deadbeef" not in out and "Bearer" not in out
+    assert "<redacted>" in out and "nope" in out
+    assert len(san(b"x" * 99999)) <= 2048
