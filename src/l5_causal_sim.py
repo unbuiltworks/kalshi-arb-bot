@@ -11,9 +11,12 @@ THE CAUSAL CONTRACT, which is the whole point of this module:
     unknowable and we do not rest -- we never guess a position.
   * Queue is decremented ONLY by prints at or through our price. A print at a
     better price never reached us and is not counted. Volume is consumed once.
-  * A fill occurs only when the queue is exhausted AND a further print arrives
-    at or through our price; the fill takes the remaining print quantity, up to
-    what we still want. Partial fills are the normal case, not an exception.
+  * A SINGLE print both consumes the queue and fills us. The print quantity is
+    applied to `queue_ahead` first; whatever remains of THAT SAME print fills
+    our order, up to what we still want. No separate later print is required --
+    requiring one would understate fills, since in reality the tail of the
+    order that cleared the queue is what trades against us. Partial fills are
+    the normal case, not an exception.
   * TOUCH IS NEVER A FILL. DISPLAYED LIQUIDITY IS NEVER A FILL.
   * A re-price sends us to the BACK of the new level's queue, because that is
     what a cancel/replace does at a venue. Persistence therefore has a real

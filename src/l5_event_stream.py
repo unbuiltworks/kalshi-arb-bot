@@ -18,10 +18,25 @@ knew at T. A venue timestamp can precede its own arrival, so ordering by venue
 time would let a decision consume a print before we could possibly have seen it.
 Receipt time is the conservative choice and it is the one used.
 
-DE-DUPLICATION. The emitter re-sends its recent buffer, so the same row appears
-in several documents. Trades de-duplicate on (t, px, qty, trade_time); book
-states on t. Duplicates are dropped, never summed -- double-counting volume
-would manufacture fills.
+DE-DUPLICATION, corrected after an integrity audit. The earlier version
+de-duplicated individual TRADES on (t, px, qty, trade_time) and book states on
+`t`. That is wrong: a venue can legitimately print twice for the same size at
+the same price in the same instant, and collapsing those destroys real volume --
+the error runs in the dangerous direction, because volume is what fills us.
+
+What is actually duplicated is whole LOG LINES: the harvester may capture the
+same Railway line in overlapping rounds. So de-duplication now happens at the
+log-line level only ((timestamp, message)), and every row inside a document is
+kept. Source order is preserved for equal timestamps by carrying
+(file index, line index, position in array) and sorting stably on it.
+
+UPSTREAM CAVEAT, which this module cannot repair and must not hide: the recorder
+itself de-duplicates before emitting, via `_trade_row_key` =
+(slug, t, px, qty, trade_time, dir) in `emit_new_trades`. Two genuinely distinct
+prints identical in all six fields are therefore dropped at the source and never
+reach any consumer. Nothing downstream can recover them. Their frequency is
+unknown; the effect is to UNDERSTATE traded volume, so every fill estimate built
+on this stream is conservative on that axis.
 """
 from __future__ import annotations
 
@@ -46,26 +61,35 @@ def _d(v) -> Optional[D]:
         return None
 
 
-def _lines(paths) -> Iterator[dict]:
-    for p in sorted(paths):
+def _lines(paths) -> Iterator[Tuple[int, int, dict]]:
+    """(file_index, line_index, envelope), whole-line de-duplicated.
+
+    The same Railway log line can be captured by two overlapping harvest
+    rounds. That -- and only that -- is a duplicate.
+    """
+    seen_lines: set = set()
+    for fi, p in enumerate(sorted(paths)):
         op = gzip.open if p.endswith(".gz") else open
         with op(p, "rt", encoding="utf-8", errors="replace") as fh:
-            for line in fh:
+            for li, line in enumerate(fh):
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    yield json.loads(line)
+                    env = json.loads(line)
                 except ValueError:
                     continue
+                key = (env.get("timestamp"), env.get("message"))
+                if key in seen_lines:
+                    continue
+                seen_lines.add(key)
+                yield fi, li, env
 
 
 def load(pattern: str) -> Dict[str, Dict[str, list]]:
     """{slug: {"trades": [...], "book": [...]}} in receipt-time order."""
     out: Dict[str, Dict[str, list]] = {}
-    seen_t: Dict[str, set] = {}
-    seen_b: Dict[str, set] = {}
-    for env in _lines(glob.glob(pattern)):
+    for fi, li, env in _lines(glob.glob(pattern)):
         msg = env.get("message") or ""
         for mark, key in ((TRADE_MARK, "trades"), (BOOK_MARK, "book")):
             i = msg.find(mark)
@@ -79,22 +103,19 @@ def load(pattern: str) -> Dict[str, Dict[str, list]]:
                 if not slug.startswith(BTC15):
                     continue
                 bucket = out.setdefault(slug, {"trades": [], "book": []})
-                for r in rows or []:
-                    if key == "trades":
-                        k = (r.get("t"), r.get("px"), r.get("qty"),
-                             r.get("trade_time"))
-                        s = seen_t.setdefault(slug, set())
-                    else:
-                        k = r.get("t")
-                        s = seen_b.setdefault(slug, set())
-                    if k in s:
-                        continue
-                    s.add(k)
-                    bucket[key].append(r)
+                for ai, r in enumerate(rows or []):
+                    # EVERY row is kept. Two identical prints in one document
+                    # are two prints; only whole repeated log lines are
+                    # duplicates, and those were dropped in `_lines`.
+                    rr = dict(r)
+                    rr["_src"] = (fi, li, ai)
+                    bucket[key].append(rr)
             break
     for slug, b in out.items():
-        b["trades"].sort(key=lambda r: (float(r.get("t") or 0),))
-        b["book"].sort(key=lambda r: (float(r.get("t") or 0),))
+        # STABLE on receipt time, ties broken by source order -- never by
+        # value, so two equal-timestamp events keep the order the venue sent.
+        b["trades"].sort(key=lambda r: (float(r.get("t") or 0), r["_src"]))
+        b["book"].sort(key=lambda r: (float(r.get("t") or 0), r["_src"]))
     return out
 
 
@@ -115,7 +136,8 @@ def merged(slug_data: Dict[str, list]) -> List[Tuple[float, str, dict]]:
         t = r.get("t")
         if t is not None:
             ev.append((float(t), "trade", r))
-    ev.sort(key=lambda x: (x[0], 0 if x[1] == "book" else 1))
+    ev.sort(key=lambda x: (x[0], 0 if x[1] == "book" else 1,
+                           x[2].get("_src") or (0, 0, 0)))
     return ev
 
 
