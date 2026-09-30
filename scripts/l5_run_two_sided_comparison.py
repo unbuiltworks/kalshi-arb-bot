@@ -38,30 +38,31 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, ".")
 
-from src.l5_two_sided import ARM_ADAPTED, ARM_REPLICATION, TwoSided  # noqa: E402
+from src.l5_two_sided import (ARM_ADAPTED, ARM_CONTROL,  # noqa: E402
+                             ARM_REPLICATION, TwoSided)
 from scripts.l5_window_manifest import (manifest, window_start_from_slug)  # noqa: E402
 
-CONTROL = "CONTROL_ONE_LEG"
+CONTROL = ARM_CONTROL
 ARMS = (CONTROL, ARM_REPLICATION, ARM_ADAPTED)
 
 #: the metrics the comparison is judged on, fixed before any run
 METRICS = ("cycles_started", "cycles_completed", "maker_fills", "taker_fills",
            "matched_contracts", "residual_now", "matched_gross_edge",
            "taker_fees_cashflow", "maker_rebates_modeled_cashflow",
-           "flatten_pnl_shadow", "residual_settlement_pnl", "settled_net",
+           "flatten_pnl_shadow", "residual_settlement_pnl",
+           "source_settled_total", "shadow_total_with_flatten",
            "max_dollars_committed", "max_directional_residual",
            "time_one_sided_s", "queue_forfeited", "queue_consumed",
            "cancels", "requotes", "takes", "adverse_markout_mean",
-           "pairs_per_min", "dollars_per_min")
+           "pairs_per_min", "source_settled_dollars_per_min",
+           "shadow_dollars_per_min")
 
 
 def build(arm: str, clip: D) -> TwoSided:
-    """CONTROL is the same engine with two-sided quoting switched OFF, so the
-    difference measured is the POLICY and not a second implementation."""
-    if arm == CONTROL:
-        c = TwoSided(arm=ARM_REPLICATION, clip=clip, max_cycles=1)
-        c.one_leg_only = True                    # marker for the report
-        return c
+    """Every arm is the SAME engine, so what is measured is the POLICY and not
+    a second implementation. CONTROL_ONE_LEG is a real arm of that engine
+    (single resting first leg, complement only, exactly one cycle, no extend),
+    not a reporting flag."""
     return TwoSided(arm=arm, clip=clip)
 
 
@@ -109,20 +110,24 @@ def main(argv) -> int:
     rows = [run_window(w["raw_paths"], w["slug"], w["winner"],
                        w["window_start"], D(1)) for w in usable]
     print(json.dumps({"windows": rows}, indent=1, default=str))
-    # aggregate + worst ten by settled net
-    for arm in ARMS:
-        nets = [D(r[arm]["settled_net"]) for r in rows
-                if r[arm]["settled_net"] is not None]
-        print(f"\n{arm}: n={len(nets)} total={sum(nets, D(0))} "
-              f"mean={sum(nets, D(0)) / D(len(nets)) if nets else None}")
-        worst = sorted(rows, key=lambda r: D(r[arm]["settled_net"] or 0))[:10]
-        print("  worst ten:")
-        for r in worst:
-            a = r[arm]
-            print(f"    {r['slug']}: net={a['settled_net']} "
-                  f"resid={a['residual_now']} "
-                  f"max_resid={a['max_directional_residual']} "
-                  f"matched={a['matched_contracts']}")
+    # aggregate + worst ten, reported on BOTH totals: a hypothetical flatten
+    # must never be the single headline number.
+    for key in ("source_settled_total", "shadow_total_with_flatten"):
+        print(f"\n================ {key} ================")
+        for arm in ARMS:
+            nets = [D(r[arm][key]) for r in rows if r[arm][key] is not None]
+            print(f"\n{arm}: n={len(nets)} total={sum(nets, D(0))} "
+                  f"mean={sum(nets, D(0)) / D(len(nets)) if nets else None}")
+            worst = sorted(rows, key=lambda r: D(r[arm][key] or 0))[:10]
+            print("  worst ten:")
+            for r in worst:
+                a = r[arm]
+                print(f"    {r['slug']}: {key}={a[key]} "
+                      f"matched_edge={a['matched_gross_edge']} "
+                      f"flatten_shadow={a['flatten_pnl_shadow']} "
+                      f"resid={a['residual_now']} "
+                      f"max_resid={a['max_directional_residual']} "
+                      f"matched={a['matched_contracts']}")
     return 0
 
 

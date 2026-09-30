@@ -47,6 +47,21 @@ TICK = D("0.01")
 ARM_REPLICATION = "L5_REPLICATION"
 ARM_ADAPTED = "L5_ADAPTED_ECONOMIC"
 
+#: CONTROL_ONE_LEG -- a REAL comparator, not "replication with max_cycles=1".
+#:
+#: It reproduces the shape the live q1 canary actually ran:
+#:   1. while flat it rests exactly ONE side, never both at once, so it never
+#:      carries simultaneous two-sided working exposure;
+#:   2. the first-leg side is chosen deterministically as the cheaper
+#:      own-terms executable touch (ties -> "up") -- no arm-specific economics;
+#:   3. once a first leg exists it works ONLY the deficient complement side;
+#:   4. it never extends the heavy side;
+#:   5. it runs EXACTLY ONE cycle: when a pair banks, the market is finished.
+#: Its completion comparator is the patient REPLICATION one, because CONTROL
+#: isolates STRUCTURE (one leg, one cycle) rather than the WAIT/COMPLETE/EXIT
+#: economics that separate REPLICATION from ADAPTED.
+ARM_CONTROL = "CONTROL_ONE_LEG"
+
 #: actions the controller may take on a deficient side
 WAIT, COMPLETE_NOW, EXIT_NOW = "WAIT", "COMPLETE_NOW", "EXIT_NOW"
 
@@ -236,23 +251,30 @@ def best_action(cmp: Dict[str, Any], *, arm: str,
     exit_ = cmp.get(EXIT_NOW) or {}
     comp_v = D(comp["value"]) if comp.get("value") is not None else None
     exit_v = D(exit_["value"]) if exit_.get("value") is not None else None
-    if arm == ARM_REPLICATION:
+    forced_flatten = (residual_tolerance > 0 and exit_v is not None and
+                      -exit_v > residual_tolerance)
+    if arm in (ARM_REPLICATION, ARM_CONTROL):
+        # PATIENT, per the preregistered definition: complete when completion
+        # carries positive executable value, and flatten ONLY when the residual
+        # tolerance is breached. A merely better exit is not a reason to act.
         if comp_v is not None and comp_v > 0:
             return COMPLETE_NOW
-        if residual_tolerance > 0 and exit_v is not None and \
-                -exit_v > residual_tolerance:
+        if forced_flatten:
             return EXIT_NOW
         return WAIT
-    # adapted: take the best executable value, but only if it beats waiting,
-    # and waiting has no assertable value -- so a POSITIVE completion always
-    # beats waiting, and a negative exit is only chosen over a worse hold.
-    if comp_v is not None and comp_v > 0:
-        return COMPLETE_NOW
-    if exit_v is not None and comp_v is not None and exit_v > comp_v and \
-            residual_tolerance > 0 and -exit_v > residual_tolerance:
-        return EXIT_NOW
-    if exit_v is not None and residual_tolerance > 0 and \
-            -exit_v > residual_tolerance:
+    # ADAPTED, per the preregistered definition: take the economically
+    # SUPERIOR executable action. WAIT is worth 0 by construction (it asserts
+    # no value), so the best strictly-positive value wins, and EXIT may be
+    # chosen over COMPLETE purely because it is worth more -- with no
+    # tolerance breach required. The forced flatten still applies underneath.
+    best, best_v = WAIT, D(0)
+    if comp_v is not None and comp_v > best_v:
+        best, best_v = COMPLETE_NOW, comp_v
+    if exit_v is not None and exit_v > best_v:
+        best, best_v = EXIT_NOW, exit_v
+    if best is not WAIT:
+        return best
+    if forced_flatten:
         return EXIT_NOW
     return WAIT
 
@@ -291,16 +313,19 @@ class TwoSided:
                  max_cycles: int = 50, allow_extend: bool = False,
                  allow_reactive_take: bool = True,
                  cash_basis: bool = False) -> None:
-        if arm not in (ARM_REPLICATION, ARM_ADAPTED):
+        if arm not in (ARM_REPLICATION, ARM_ADAPTED, ARM_CONTROL):
             raise ValueError(f"unknown arm {arm!r}")
         self.arm = arm
+        #: CONTROL rests one side at a time and runs exactly one cycle. These
+        #: are BEHAVIOURAL, not reporting flags.
+        self.two_sided = (arm != ARM_CONTROL)
         self.clip = D(str(clip))
         self.pair_floor = D(str(pair_floor))
         self.residual_cap = D(str(residual_cap))
         self.no_new_cycle_s = no_new_cycle_s
         self.tighten_residual_s = tighten_residual_s
-        self.max_cycles = max_cycles
-        self.allow_extend = allow_extend
+        self.max_cycles = 1 if arm == ARM_CONTROL else max_cycles
+        self.allow_extend = False if arm == ARM_CONTROL else allow_extend
         self.allow_reactive_take = allow_reactive_take
         self.cash_basis = cash_basis
 
@@ -388,6 +413,16 @@ class TwoSided:
             return book[want]
         return D(0)
 
+    def first_leg_side(self) -> str:
+        """CONTROL's single first-leg side: the cheaper own-terms executable
+        touch, ties to "up". Deterministic and arm-independent."""
+        up, dn = self.own_touch("up"), self.own_touch("down")
+        if up is None:
+            return "down"
+        if dn is None:
+            return "up"
+        return "up" if up <= dn else "down"
+
     def desired(self, side: str) -> Optional[D]:
         """The price we want resting on `side`, or None to rest nothing."""
         left = self.seconds_left()
@@ -422,7 +457,10 @@ class TwoSided:
                 return None
             # quote at the touch if it is inside budget, else at the budget
             return floor_tick(min(own, budget))
-        # rule 1: flat/balanced -> quote BOTH sides passively
+        # rule 1: flat/balanced -> quote both sides passively (CONTROL: one)
+        if not self.two_sided and side != self.first_leg_side():
+            self._block("control_single_first_leg")
+            return None
         if left is not None and left <= self.no_new_cycle_s:
             self._block("no_new_cycle_near_settlement")
             return None
@@ -476,8 +514,6 @@ class TwoSided:
                                   maker=True, cycle=self.cycle)
             self.places += 1
             self.ahead_at_placement.append(shown)
-            if self.cycle == 0 or self.deficient() is None:
-                pass
 
     def _drop(self, side: str, leg: Leg, why: str) -> None:
         self.queue_forfeited += (leg.ahead0 - leg.ahead)
@@ -490,6 +526,12 @@ class TwoSided:
     def _book_fill(self, side: str, qty: D, px: D, *, maker: bool,
                    evidence: str) -> None:
         """Book a fill DELTA. Cumulative quantity is never booked twice."""
+        # A CYCLE IS STARTED BY ITS FIRST FILL. `self.cycle` is the current
+        # cycle index and is advanced only when a pair banks, so the first
+        # fill carrying this index is the one that opens the cycle. Counted
+        # BEFORE _bank_pairs can advance the index.
+        if not any(f["cycle"] == self.cycle for f in self.fills):
+            self.cycles_started += 1
         self.qty[side] += qty
         self.cost[side] += qty * px
         self.fills.append({"t": self.now, "side": side, "px": str(px),
@@ -674,8 +716,19 @@ class TwoSided:
             resid_pnl = payout - self.basis(side) * qty
         elif r == 0:
             resid_pnl = D(0)
-        settled_net = (None if resid_pnl is None else
-                       gross - fee_cash + resid_pnl + self.flatten_pnl)
+        # TWO TOTALS, NEVER ONE. `source_settled_total` contains only
+        # economics backed by events in the source tape: banked matched pairs,
+        # venue fee cashflow, and the residual's actual settlement against the
+        # source winner. The modelled maker rebate is DELIBERATELY EXCLUDED and
+        # stays on its own line -- a rebate is not economics until it is
+        # actually credited. `shadow_total_with_flatten` adds
+        # flatten_pnl_shadow, a HYPOTHETICAL unwind of open inventory at
+        # executable prices that never happened -- so it is modelled cashflow
+        # and must never be called settled or realized.
+        source_settled = (None if resid_pnl is None else
+                          gross - fee_cash + resid_pnl)
+        shadow_total = (None if source_settled is None else
+                        source_settled + self.flatten_pnl)
         return {"matched_contracts": str(matched),
                 "matched_gross_edge": str(gross),
                 "taker_fees_cashflow": str(fee_cash),
@@ -686,8 +739,16 @@ class TwoSided:
                 "flatten_pnl_shadow": str(self.flatten_pnl),
                 "residual_settlement_pnl": (None if resid_pnl is None
                                             else str(resid_pnl)),
-                "settled_net": (None if settled_net is None
-                                else str(settled_net))}
+                "source_settled_total": (None if source_settled is None
+                                         else str(source_settled)),
+                "shadow_total_with_flatten": (None if shadow_total is None
+                                              else str(shadow_total)),
+                "accounting_note":
+                    "source_settled_total = matched_gross_edge "
+                    "- taker_fees_cashflow + residual_settlement_pnl. "
+                    "Modelled maker rebates are EXCLUDED until credited. "
+                    "shadow_total_with_flatten adds flatten_pnl_shadow, "
+                    "which is MODELLED cashflow, not settled or realized"}
 
     def report(self, *, winner: Optional[str] = None) -> dict:
         med = (sorted(self.ahead_at_placement)[len(self.ahead_at_placement)//2]
@@ -720,7 +781,11 @@ class TwoSided:
                "flatten_count": len(self.flattens),
                "shadow_only": True}
         out.update(self.settle(winner))
-        if out["settled_net"] is not None and minutes:
-            out["dollars_per_min"] = str(
-                D(out["settled_net"]) / D(str(round(minutes, 6))))
+        if minutes:
+            for key, rate in (("source_settled_total",
+                               "source_settled_dollars_per_min"),
+                              ("shadow_total_with_flatten",
+                               "shadow_dollars_per_min")):
+                if out.get(key) is not None:
+                    out[rate] = str(D(out[key]) / D(str(round(minutes, 6))))
         return out

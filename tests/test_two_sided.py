@@ -318,8 +318,8 @@ def test_rebates_are_reported_separately_and_never_netted():
     assert D(s["matched_gross_edge"]) == D("0.08")   # gross of any rebate
     assert D(s["maker_rebates_modeled_cashflow"]) == D("0.00")
     assert "never assumed credited" in s["rebate_note"]
-    # settled net excludes the modeled rebate
-    assert D(s["settled_net"]) == D("0.08") - D("0.02")
+    # the source-settled total excludes the modeled rebate
+    assert D(s["source_settled_total"]) == D("0.08") - D("0.02")
 
 
 def test_settlement_pays_a_matched_pair_either_way():
@@ -328,7 +328,7 @@ def test_settlement_pays_a_matched_pair_either_way():
                         down_maker=False, cycle=0, t=0.0))
     up = c.settle("up")
     dn = c.settle("down")
-    assert up["settled_net"] == dn["settled_net"]
+    assert up["source_settled_total"] == dn["source_settled_total"]
 
 
 def test_a_residual_settles_as_a_directional_bet_on_its_own_line():
@@ -350,8 +350,10 @@ def test_flatten_pnl_is_reported_on_its_own_line_and_marked_shadow():
     assert c.report(winner="down")["shadow_only"] is True
 
 
-def test_settled_net_is_none_without_an_authoritative_winner():
+def test_totals_are_none_without_an_authoritative_winner():
     c = TwoSided(arm=ARM_REPLICATION)
     c.qty["up"] = D(1)
     c.cost["up"] = D("0.40")
-    assert c.settle(None)["settled_net"] is None
+    s = c.settle(None)
+    assert s["source_settled_total"] is None
+    assert s["shadow_total_with_flatten"] is None
