@@ -59,6 +59,7 @@ from decimal import Decimal as D
 from typing import Any, Mapping, Optional
 
 from src import pmus_q1_executor as X
+from src import pmus_order_lifecycle as LC
 from src import pmus_ws_live_state as WS
 
 CANARY_ARM_ENV = "PMUS_CANARY_ARM"
@@ -235,6 +236,49 @@ def record(kind: str, **fields: Any) -> None:
         raise X.Halt(f"LEDGER_WRITE_FAILED:{kind}:{str(exc)[:80]}") from exc
 
 
+def reconcile(t: X.Transport, oid: str, info: dict, inv: "Inventory", *,
+              sleep=time.sleep) -> dict:
+    """Read one order, classify it, and book ONLY the newly filled delta.
+
+    PARTIAL FILLS. `X.authoritative_fill` returns None while
+    `cumQuantity < QTY` unless the state says FILLED, and the old
+    `terminal_no_fill` required cumulative zero. A q1 maker that filled 0.40
+    and then cancelled therefore matched NEITHER classification: it was not a
+    fill and not a no-fill, so it fell through to CANCEL_UNCONFIRMED while the
+    account really owned 0.40 contracts and the report said residual 0.
+
+    `pmus_order_lifecycle.classify` is the repo's existing primitive for this
+    -- it understands PARTIALLY_FILLED, cumulative quantity, terminal partial
+    fills and the own-terms price inversion, without the executor's coupling
+    to a module-level QTY. Nothing new is invented here.
+
+    `info["booked_qty"]` is the cumulative quantity ALREADY in inventory, so
+    only the increase is added and no quantity can be counted twice. UNKNOWN
+    is never treated as a zero fill: it halts.
+    """
+    st = X._order_status(t, oid, sleep=sleep)
+    v = LC.classify(st, requested_qty=info.get("qty", D(X.QTY)),
+                    side=info.get("inv_side"))
+    if v["classification"] == LC.UNKNOWN:
+        raise X.Halt(f"UNKNOWN_ORDER_STATE:{oid}:{v.get('why')}")
+    filled = v["filled_qty"] or D(0)
+    booked = D(str(info.get("booked_qty", 0)))
+    if filled > booked:
+        delta = filled - booked
+        px = v["price_own"]
+        if px is None:                       # classify raises before this, but
+            raise X.Halt(f"FILL_WITHOUT_PRICE:{oid}")
+        inv.add(info["inv_side"], delta, px)
+        info["booked_qty"] = filled
+        record("filled", stage=info.get("stage"), order_id=oid,
+               price=str(px), qty=str(delta), cumulative=str(filled),
+               classification=v["classification"],
+               maker=bool(info.get("maker", True)),
+               residual=str(inv.residual()), matched=str(inv.matched()))
+    info["remaining"] = D(str(info.get("qty", X.QTY))) - filled
+    return v
+
+
 def terminal_no_fill(order: Mapping[str, Any]) -> bool:
     """Is this order PROVABLY off the venue with nothing filled?
 
@@ -250,8 +294,8 @@ def terminal_no_fill(order: Mapping[str, Any]) -> bool:
     return any(w in state for w in ("CANCEL", "REJECT", "EXPIRE"))
 
 
-def resolve_ioc(t: X.Transport, order_id: str, slug: str,
-                sleep=time.sleep) -> dict:
+def resolve_ioc(t: X.Transport, order_id: str, slug: str, info: dict,
+                inv: "Inventory", sleep=time.sleep) -> dict:
     """Resolve a crossing IOC on POSITIVE VENUE PROOF only.
 
     An IOC normally terminates immediately, but the safety design here does
@@ -267,18 +311,18 @@ def resolve_ioc(t: X.Transport, order_id: str, slug: str,
     caller must keep the order in `unresolved` unless this returns.
     """
     for _ in range(CANCEL_CONFIRM_POLLS):
-        st = X._order_status(t, order_id, sleep=sleep)
-        fill = X.authoritative_fill(st)       # raises Halt if filled-but-vague
-        if fill is not None:
-            return {"fill": fill, "state": X.order_state_str(st)}
-        if terminal_no_fill(st):
-            return {"terminal": True, "state": X.order_state_str(st)}
+        v = reconcile(t, order_id, info, inv, sleep=sleep)
+        if v["terminal"]:
+            return {"terminal": True, "state": v["state"],
+                    "classification": v["classification"]}
         sleep(X.POLL_S)
-    # still non-terminal: try to take it off the book, with proof required
-    return cancel_and_resolve(t, order_id, slug, sleep=sleep)
+    # still non-terminal: take it off the book, with proof required
+    return cancel_and_resolve(t, order_id, slug, info, inv, sleep=sleep)
 
 
 def cancel_and_resolve(t: X.Transport, order_id: str, slug: str,
+                       info: Optional[dict] = None,
+                       inv: Optional["Inventory"] = None,
                        sleep=time.sleep) -> dict:
     """Cancel an order and POSITIVELY resolve what happened to it.
 
@@ -304,12 +348,18 @@ def cancel_and_resolve(t: X.Transport, order_id: str, slug: str,
         raise CancelUnconfirmed(
             f"CANCEL_REQUEST_FAILED:{order_id}:{str(exc)[:80]}") from exc
     for _ in range(CANCEL_CONFIRM_POLLS):
-        st = X._order_status(t, order_id, sleep=sleep)
-        fill = X.authoritative_fill(st)      # raises Halt if filled-but-vague
-        if fill is not None:
-            return {"fill": fill, "state": X.order_state_str(st)}
-        if terminal_no_fill(st):
-            return {"cancelled": True, "state": X.order_state_str(st)}
+        if info is not None and inv is not None:
+            v = reconcile(t, order_id, info, inv, sleep=sleep)
+            if v["terminal"]:
+                return {"terminal": True, "state": v["state"],
+                        "classification": v["classification"],
+                        "filled_qty": str(v["filled_qty"] or 0)}
+        else:
+            st = X._order_status(t, order_id, sleep=sleep)
+            v = LC.classify(st, requested_qty=D(X.QTY))
+            if v["terminal"]:
+                return {"terminal": True, "state": v["state"],
+                        "classification": v["classification"]}
         sleep(X.POLL_S)
     raise CancelUnconfirmed(
         f"CANCEL_UNCONFIRMED:{order_id}: still not terminal after "
@@ -560,21 +610,24 @@ def finalize(t: X.Transport, slug: str, inv: "Inventory",
     #      because the id is removed from `unresolved` only on proof.
     for oid in list(unresolved):
         info = unresolved[oid]
+        before = D(str(info.get("booked_qty", 0)))
         try:
-            res = resolve_ioc(t, oid, slug, sleep=sleep)
+            # reconcile() inside this BOOKS any newly filled delta itself, so
+            # nothing is added here -- adding again is exactly the
+            # double-count this refactor exists to prevent.
+            resolve_ioc(t, oid, slug, info, inv, sleep=sleep)
         except Exception as exc:                             # noqa: BLE001
             out["sweep_errors"].append(f"{oid}:{type(exc).__name__}")
             continue
-        fill = res.get("fill")
-        if fill is not None:
-            px = D(str(fill["price"]))
-            qty = D(str(fill.get("qty") or 1))
-            inv.add(info["inv_side"], qty, px)
+        gained = D(str(info.get("booked_qty", 0))) - before
+        if gained > 0:
             out["booked_during_shutdown"].append(
                 {"order_id": oid, "stage": info.get("stage"),
-                 "price": str(px), "qty": str(qty)})
+                 "qty": str(gained),
+                 "cumulative": str(info.get("booked_qty"))})
             record("filled", stage=str(info.get("stage")) + "_shutdown",
-                   order_id=oid, price=str(px), qty=str(qty),
+                   order_id=oid, qty=str(gained),
+                   cumulative=str(info.get("booked_qty")),
                    residual=str(inv.residual()), matched=str(inv.matched()))
         unresolved.pop(oid, None)
     # 3. market-scoped cancel-all. An error here is recorded, never swallowed
@@ -709,36 +762,28 @@ def _campaign(ctx: dict, t: Optional[X.Transport] = None,
 
             # ---------------------------------------- 1 look at what rests
             if resting is not None:
-                got = _poll_fill(t, resting["order_id"], sleep)
-                if got.get("fill") is not None:
-                    fill = got["fill"]
-                    px, fq = D(str(fill["price"])), D(str(fill.get("qty") or 1))
-                    inv.add(resting["inv_side"], fq, px)
-                    record("filled", stage=resting["stage"], price=str(px),
-                           qty=str(fq), side=resting["inv_side"],
-                           maker_rebate_separate=str(X.maker_rebate(px)),
+                oid_now = resting["order_id"]
+                v = reconcile(t, oid_now, resting, inv, sleep=sleep)
+                if inv.qty["yes"] > 0 and first_cost is None:
+                    first_cost = inv.basis("yes")
+                if v["terminal"]:
+                    # FILLED, or finished with a partial: either way it is off
+                    # the venue and everything filled has been booked.
+                    record("terminal", stage=resting["stage"], order_id=oid_now,
+                           classification=v["classification"],
+                           cumulative=str(v["filled_qty"] or 0),
                            residual=str(inv.residual()),
-                           matched=str(inv.matched()))
-                    # rule 5: a partial leaves the REMAINDER working
-                    remaining = D(str(resting["qty"])) - fq
-                    if remaining > 0:
-                        resting["qty"] = remaining
-                        record("partial_remainder_kept",
-                               stage=resting["stage"], remaining=str(remaining))
-                    else:
-                        unresolved.pop(resting["order_id"], None)
-                        resting = None
-                    if resting is None and inv.qty["yes"] > 0 and \
-                            first_cost is None:
-                        first_cost = inv.basis("yes")
-                    continue
-                if got.get("terminal"):
-                    record("terminal_rejection", stage=resting["stage"],
-                           order_id=resting["order_id"],
-                           residual=str(inv.residual()), **_ws_fields(snap))
-                    unresolved.pop(resting["order_id"], None)
+                           matched=str(inv.matched()), **_ws_fields(snap))
+                    unresolved.pop(oid_now, None)
                     resting = None
                     continue
+                if v["classification"] == LC.PARTIAL:
+                    # rule 5: the REMAINDER keeps working, and its queue
+                    # position with it.
+                    record("partial_remainder_kept", stage=resting["stage"],
+                           order_id=oid_now,
+                           cumulative=str(v["filled_qty"]),
+                           remaining=str(resting.get("remaining")))
 
                 # ------------------------------ 2/4 hold, or give it up
                 still = (open_still_valid(D(str(resting["px"])), snap)
@@ -759,7 +804,8 @@ def _campaign(ctx: dict, t: Optional[X.Transport] = None,
                            **_ws_fields(snap))
                 else:
                     oid = resting["order_id"]
-                    res = cancel_and_resolve(t, oid, slug, sleep=sleep)
+                    res = cancel_and_resolve(t, oid, slug, resting, inv,
+                                             sleep=sleep)
                     cancels += 1
                     record("cancel", stage=resting["stage"],
                            px=str(resting["px"]), order_id=oid,
@@ -767,16 +813,11 @@ def _campaign(ctx: dict, t: Optional[X.Transport] = None,
                            confirmed_terminal=True,
                            reason="no_longer_economically_valid",
                            residual=str(inv.residual()), **_ws_fields(snap))
-                    late = res.get("fill")
-                    if late is not None:
-                        px = D(str(late["price"]))
-                        inv.add(resting["inv_side"],
-                                D(str(late.get("qty") or 1)), px)
-                        record("filled", stage=resting["stage"] + "_late",
-                               price=str(px), residual=str(inv.residual()),
-                               matched=str(inv.matched()))
-                        if inv.qty["yes"] > 0 and first_cost is None:
-                            first_cost = inv.basis("yes")
+                    # cancel_and_resolve -> reconcile already booked any
+                    # quantity that filled during the race, including a
+                    # PARTIAL. Re-adding it here would double-count.
+                    if inv.qty["yes"] > 0 and first_cost is None:
+                        first_cost = inv.basis("yes")
                     # ONLY now, with a terminal state proven, is the order
                     # off the venue and safe to forget.
                     unresolved.pop(oid, None)
@@ -806,27 +847,22 @@ def _campaign(ctx: dict, t: Optional[X.Transport] = None,
                     aborted = False
                     for oid in list(unresolved):
                         info = unresolved[oid]
-                        res = cancel_and_resolve(t, oid, slug, sleep=sleep)
+                        before = D(str(info.get("booked_qty", 0)))
+                        res = cancel_and_resolve(t, oid, slug, info, inv,
+                                                 sleep=sleep)
+                        gained = D(str(info.get("booked_qty", 0))) - before
                         record("cancel", stage=info.get("stage"), order_id=oid,
                                resolution=res.get("state"),
                                confirmed_terminal=True,
                                reason="pre_take_double_fill_guard",
-                               late_fill=(str(res["fill"]["price"])
-                                          if res.get("fill") else None))
+                               booked_in_race=str(gained))
                         unresolved.pop(oid, None)
                         if resting is not None and \
                                 resting["order_id"] == oid:
                             resting = None
-                        if res.get("fill") is not None:
-                            # the maker filled during the race: that IS the
-                            # completion. Book it and do NOT also cross.
-                            px = D(str(res["fill"]["price"]))
-                            inv.add(info["inv_side"],
-                                    D(str(res["fill"].get("qty") or 1)), px)
-                            record("filled", stage=info.get("stage", "") +
-                                   "_race", price=str(px), maker=True,
-                                   residual=str(inv.residual()),
-                                   matched=str(inv.matched()))
+                        if gained > 0:
+                            # the maker filled during the race; reconcile has
+                            # already booked it, so do NOT also cross.
                             aborted = True
                     if aborted and inv.deficient() is None:
                         record("decision", action="take_aborted",
@@ -852,24 +888,23 @@ def _campaign(ctx: dict, t: Optional[X.Transport] = None,
                     # `resolve_ioc` raises CancelUnconfirmed if the venue
                     # will not prove terminality, and the campaign then exits
                     # fail-closed with the order still tracked for the sweep.
-                    res = resolve_ioc(t, tid, slug, sleep=sleep)
-                    got = res.get("fill")
-                    if got is None:
+                    tinfo = unresolved.get(tid, {})
+                    res = resolve_ioc(t, tid, slug, tinfo, inv, sleep=sleep)
+                    filled_qty = D(str(tinfo.get("booked_qty", 0)))
+                    if filled_qty == 0:
                         record("taker_unfilled", order_id=tid,
                                resolution=res.get("state"),
                                confirmed_terminal=True,
                                note="proven terminal with no fill; "
                                     "inventory unchanged")
-                    unresolved.pop(tid, None)   # reached only on proof
-                    if got is not None:
-                        px = D(str(got["price"]))
-                        fq = D(str(got.get("qty") or 1))
-                        inv.add(want_side, fq, px)
-                        record("filled", stage="taker_complete", maker=False,
-                               price=str(px), qty=str(fq),
-                               taker_fee_separate=str(X.taker_fee(px)),
+                    else:
+                        record("taker_filled", order_id=tid,
+                               cumulative=str(filled_qty),
+                               taker_fee_separate=str(
+                                   X.taker_fee(D(str(ask)))),
                                residual=str(inv.residual()),
                                matched=str(inv.matched()))
+                    unresolved.pop(tid, None)   # reached only on proof
                     break
 
             # --------------------------------------- place what is missing

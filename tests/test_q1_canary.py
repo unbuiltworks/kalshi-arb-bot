@@ -689,8 +689,10 @@ def test_a_race_fill_during_the_requote_cancel_is_booked_and_never_crossed(
     out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
                        state=st, max_book_age_s=1e9)
     rows = [json.loads(l) for l in (tmp_path / "ledger.jsonl").open()]
-    assert any(r.get("stage") == "complement_late" for r in rows), \
-        "the race fill was not booked: %s" % [r.get("stage") for r in rows]
+    assert any(r["kind"] == "filled" and r.get("stage") == "complement"
+               for r in rows), \
+        "the race fill was not booked: %s" % [
+            (r["kind"], r.get("stage")) for r in rows]
     assert not [p for p in f.placed
                 if p["body"]["participateDontInitiate"] is False], \
         "crossed after the maker had already completed the pair"
@@ -711,7 +713,7 @@ def test_the_pre_take_loop_resolves_every_unresolved_order(monkeypatch):
     ok.fills["OX"] = {"id": "OX", "state": "ORDER_STATE_CANCELLED",
                       "cumQuantity": "0"}
     assert C.cancel_and_resolve(ok, "OX", slug,
-                                sleep=lambda *_: None)["cancelled"] is True
+                                sleep=lambda *_: None)["terminal"] is True
     stubborn = StubbornCancel([("0.40", "0.60")] * 4)
     stubborn.fills["OY"] = None
     with pytest.raises(C.CancelUnconfirmed):
@@ -754,15 +756,22 @@ def test_cancel_and_resolve_accepts_a_terminal_cancel(monkeypatch):
     f.fills["O9"] = {"id": "O9", "state": "ORDER_STATE_CANCELLED",
                      "cumQuantity": "0"}
     res = C.cancel_and_resolve(f, "O9", slug, sleep=lambda *_: None)
-    assert res["cancelled"] is True
+    assert res["terminal"] is True
 
 
 def test_cancel_and_resolve_books_a_race_fill(monkeypatch):
+    """The fill is booked into inventory by reconcile, not returned raw."""
     slug = _arm(monkeypatch)
     f = Fake([("0.40", "0.60")] * 4)
     f.fills["O9"] = _filled("0.58", side="OUTCOME_SIDE_NO")
-    res = C.cancel_and_resolve(f, "O9", slug, sleep=lambda *_: None)
-    assert res["fill"]["price"] == D("0.58")
+    inv = C.Inventory()
+    info = {"stage": "complement", "inv_side": "no", "qty": D(1)}
+    res = C.cancel_and_resolve(f, "O9", slug, info, inv,
+                               sleep=lambda *_: None)
+    assert res["terminal"] is True
+    assert inv.qty["no"] == D(1)
+    assert inv.basis("no") == D("0.58")
+    assert info["booked_qty"] == D(1)
 
 
 def test_the_venue_grid_must_be_known_before_any_order_exists(monkeypatch):
@@ -1228,3 +1237,134 @@ def test_the_sweep_row_records_verification_not_mere_submission(
     assert len(sweeps) == 1
     assert sweeps[0]["sweep_verified"] is True
     assert "open_orders" in sweeps[0]
+
+
+# ================= PARTIAL FILLS: the last accounting gap =================
+# X.authoritative_fill returns None while cumQuantity < QTY unless the state
+# says FILLED, and terminal_no_fill required cumulative zero. A q1 maker that
+# filled 0.40 and then cancelled matched NEITHER: not a fill, not a no-fill.
+# The account owned 0.40 contracts while the report said residual 0.
+
+class Staged(Fake):
+    """Serves a scripted sequence of status records for one order id."""
+
+    def __init__(self, books, oid, records, **kw):
+        super().__init__(books, **kw)
+        self.oid, self.records, self.i, self.stubborn = oid, records, 0, True
+
+    def request(self, method, path, body=None, **kw):
+        if (path.startswith("/v1/order/") and not path.endswith("/cancel")
+                and path.split("/")[3] == self.oid):
+            rec = self.records[min(self.i, len(self.records) - 1)]
+            self.i += 1
+            return dict(rec, id=self.oid)
+        return super().request(method, path, body, **kw)
+
+
+def _rec(state, cum, avg="0.40"):
+    return {"state": state, "cumQuantity": str(cum),
+            "avgPx": {"value": str(avg)}}
+
+
+def test_a_partial_fill_on_a_working_order_books_the_fraction():
+    """1. cum 0.40 on an OPEN q1 maker -> 0.40 booked, order stays working."""
+    inv = C.Inventory()
+    info = {"stage": "open", "inv_side": "yes", "qty": D(1)}
+    f = Staged([("0.40", "0.60")], "O1", [_rec("ORDER_STATE_OPEN", "0.40")])
+    v = C.reconcile(f, "O1", info, inv, sleep=lambda *_: None)
+    assert v["classification"] == "PARTIALLY_FILLED"
+    assert v["terminal"] is False
+    assert inv.qty["yes"] == D("0.40")
+    assert inv.residual() == D("0.40")
+    assert info["booked_qty"] == D("0.40")
+    assert info["remaining"] == D("0.60")
+
+
+def test_a_growing_partial_books_only_the_delta():
+    """2. cum 0.40 then 0.70 -> only 0.30 more is added."""
+    inv = C.Inventory()
+    info = {"stage": "open", "inv_side": "yes", "qty": D(1)}
+    f = Staged([("0.40", "0.60")], "O1",
+               [_rec("ORDER_STATE_OPEN", "0.40"),
+                _rec("ORDER_STATE_OPEN", "0.70")])
+    C.reconcile(f, "O1", info, inv, sleep=lambda *_: None)
+    C.reconcile(f, "O1", info, inv, sleep=lambda *_: None)
+    assert inv.qty["yes"] == D("0.70")
+    assert info["booked_qty"] == D("0.70")
+
+
+def test_a_terminal_partial_books_no_duplicate_and_clears():
+    """3. CANCELLED at cum 0.70 -> nothing re-booked, and it is terminal."""
+    inv = C.Inventory()
+    info = {"stage": "open", "inv_side": "yes", "qty": D(1)}
+    f = Staged([("0.40", "0.60")], "O1",
+               [_rec("ORDER_STATE_OPEN", "0.40"),
+                _rec("ORDER_STATE_OPEN", "0.70"),
+                _rec("ORDER_STATE_CANCELLED", "0.70")])
+    for _ in range(3):
+        v = C.reconcile(f, "O1", info, inv, sleep=lambda *_: None)
+    assert v["terminal"] is True
+    assert inv.qty["yes"] == D("0.70"), "cumulative was counted twice"
+    assert info["booked_qty"] == D("0.70")
+
+
+def test_a_terminal_partial_found_only_in_shutdown_reaches_the_report(
+        monkeypatch):
+    """4. The post-sweep report must show the real fractional position."""
+    slug = _arm(monkeypatch)
+
+    class PartialOnCancel(Fake):
+        """OPEN with nothing filled until ITS OWN cancel goes out, then
+        CANCELLED carrying 0.40 -- a terminal partial that can only surface
+        inside finalization."""
+
+        def __init__(self, books, oid="O1", **kw):
+            super().__init__(books, **kw)
+            self.oid, self.stubborn = oid, True
+
+        def request(self, method, path, body=None, **kw):
+            if (path.startswith("/v1/order/") and not path.endswith("/cancel")
+                    and path.split("/")[3] == self.oid):
+                if self.oid in self.cancelled:
+                    return _rec("ORDER_STATE_CANCELLED", "0.40")
+                return _rec("ORDER_STATE_OPEN", "0")
+            return super().request(method, path, body, **kw)
+
+    f = PartialOnCancel([("0.40", "0.60")] * 40, oid="O1")
+    out = C.run_canary(t=f, clock=_clock(), sleep=lambda *_: None,
+                       state=ws_state("0.40", "0.60", slug=slug),
+                       max_book_age_s=1e9)
+    assert out["residual"] == "0.40", out
+    assert out["matched_contracts"] == "0"
+    assert out["booked_during_shutdown"], out
+    assert out["booked_during_shutdown"][0]["qty"] == "0.40"
+    assert out["sweep_verified"] is True
+    assert out["open_orders_after_sweep"] == 0
+
+
+def test_a_partial_no_fill_uses_own_terms_price():
+    """5. The venue serves the LONG price; a NO fill's own price is 1 - avgPx."""
+    inv = C.Inventory()
+    info = {"stage": "complement", "inv_side": "no", "qty": D(1)}
+    # wire avgPx 0.41 == NO at 0.59
+    f = Staged([("0.40", "0.60")], "O2",
+               [_rec("ORDER_STATE_OPEN", "0.50", avg="0.41")])
+    C.reconcile(f, "O2", info, inv, sleep=lambda *_: None)
+    assert inv.qty["no"] == D("0.50")
+    assert inv.basis("no") == D("0.59")
+    assert inv.residual() == D("-0.50")
+
+
+def test_an_unknown_order_state_halts_rather_than_reading_as_zero():
+    inv = C.Inventory()
+    info = {"stage": "open", "inv_side": "yes", "qty": D(1)}
+
+    class NoRecord(Fake):
+        def request(self, method, path, body=None, **kw):
+            if path.startswith("/v1/order/") and not path.endswith("/cancel"):
+                return {}
+            return super().request(method, path, body, **kw)
+
+    with pytest.raises(X.Halt, match="UNKNOWN_ORDER_STATE"):
+        C.reconcile(NoRecord([("0.40", "0.60")]), "O1", info, inv,
+                    sleep=lambda *_: None)
