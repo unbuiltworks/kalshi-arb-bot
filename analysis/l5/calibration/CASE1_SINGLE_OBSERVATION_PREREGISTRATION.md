@@ -83,9 +83,16 @@ permitted a fee-safe complement and we are declining it.
 4. `public_sequence` — public book updates and the recorded transitions, enough
    to order the event.
 
-**A null is a result, not a failure.** If the book never reaches us the label is
-`NULL_NOT_REACHED` and we did not chase it. `CASE1_OBSERVED_NOT_FILLED` — crossed
-and still unfilled — is a genuine Case-1 answer, not a malfunction.
+**A null is a valid observation, but it is NOT a Case-1 answer.** If the book
+never reaches us the label is `RESTING_NOT_REACHED`: useful for the log, and it
+confirms we did not chase the market, but **it does not answer B**. It is not a
+result in the same sense as a qualifying observation, and it must not be reported
+as one. **No second probe launches automatically** — a null comes back here and
+the owner decides whether one more q1 observation is worth it.
+
+`REACHED_OR_CROSSED_UNFILLED` — crossed and still unfilled — IS a genuine Case-1
+answer, not a malfunction. Success here is **observational, not trading**
+success.
 
 ### Two vocabularies, deliberately separate
 
@@ -158,6 +165,25 @@ mismatch · `OBSERVE_MAX_S` 420 s · within 90 s of the window close.
 The exit code is a **safety** signal: 0 only on a preregistered terminal label
 with the account provably clean. A refusal exits **nonzero**, so a one-shot that
 fails to arm can never be read as "ran fine".
+
+## Scope note: the `HALT` artifact
+
+`analysis/l5/authorization/HALT` is present (authorization expired 2026-09-18),
+and `live_mandate.json` is absent. **This probe does not consult either**, which
+is the same scope the authorized $0.01 schema probe ran under on 2026-10-01.
+
+Stated explicitly rather than left implicit, because it is a real scope decision:
+that file-based system gates the **L5 session engine** (`l5_pmus_live_oneshot`,
+where `shutdown_requested()` precedes `armed()`), whose authorization is a
+reviewed commit. A bounded probe carries its own authorization instead — the
+four-variable arming contract, this preregistration, and an explicit owner
+decision — and its risk is bounded in code at $0.25 rather than by a mandate
+file's limits.
+
+Honoring `HALT` here would block this authorized observation outright, since
+removing `HALT` requires a committed unexpired mandate
+(`test_live_mandate_deployment.py::test_the_halt_and_the_authorization_are_consistent`).
+That is the owner's call, not an implementation detail to settle silently.
 
 ## Arming
 
