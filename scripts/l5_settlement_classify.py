@@ -115,16 +115,28 @@ def main(argv) -> int:
     excluded = ZERO
     n_incl = n_excl = 0
     anomalies = []
+    anom_spend = ZERO
     for c in ids:
         k = cls[c]["class"]
         if k in ("UNRESOLVED", "INVALID_AMBIGUOUS"):
             excluded += spend[c]
             n_excl += 1
             continue
-        realized += redeem.get(c, ZERO) - spend[c]
-        n_incl += 1
+        #: A PROVEN WINNER WITH NO CAPTURED REDEMPTION IS NOT A LOSS.
+        #: `redeem - spend` would score it at -spend, i.e. count a market the
+        #: venue says he WON as a total loss -- the exact mirror of the
+        #: survivorship bug this audit exists to prevent. Its redemption cash is
+        #: simply not in the capture (all 12 sit at the capture boundary), so
+        #: the market is EXCLUDED and reported, never valued at zero.
         if k == "RESOLVED_WIN" and redeem.get(c, ZERO) == 0:
             anomalies.append(c)
+            anom_spend += spend[c]
+            excluded += spend[c]
+            n_excl += 1
+            cls[c]["class"] = "REDEMPTION_NOT_CAPTURED"
+            continue
+        realized += redeem.get(c, ZERO) - spend[c]
+        n_incl += 1
 
     print("\n" + "=" * 96)
     print("AUTHORITATIVE REALIZED TRADING P&L (resolved markets only)")
@@ -135,8 +147,11 @@ def main(argv) -> int:
     print(f"  spend (resolved only)       ${sum(spend[c] for c in ids if cls[c]['class'].startswith('RESOLVED')):,.2f}")
     print(f"  redeem (resolved only)      ${sum(redeem.get(c,ZERO) for c in ids if cls[c]['class'].startswith('RESOLVED')):,.2f}")
     if anomalies:
-        print(f"\n  ANOMALY: {len(anomalies)} markets resolved WIN but show no "
-              f"redemption cash. Not silently treated as losses; listed.")
+        print(f"\n  REDEMPTION_NOT_CAPTURED: {len(anomalies)} markets the venue "
+              f"says L5 WON, with no redemption row in this capture, "
+              f"${anom_spend:,.2f} spend.")
+        print("    EXCLUDED from realized P&L. Scoring them redeem-spend would "
+              "book a proven winner as a total loss.")
         for c in anomalies[:5]:
             print(f"    {c}  spend ${spend[c]}")
     json.dump({"classes": cls,
