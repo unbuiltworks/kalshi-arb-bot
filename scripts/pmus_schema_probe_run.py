@@ -125,10 +125,15 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
     out: Dict[str, Any] = {
         "probe": "private_ws_schema", "session_id": session,
         "started_utc": datetime.now(timezone.utc).isoformat(),
-        "submitted": False, "order_id": None, "outcome": "REFUSED",
+        #: INCOMPLETE is a sentinel distinct from every terminal label. It used
+        #: to be "REFUSED", which collides with the exclusion list in `finally`,
+        #: so a genuinely completed observation could never become OBSERVED and
+        #: a successful run reported ERROR.
+        "submitted": False, "order_id": None, "outcome": "INCOMPLETE",
         "sweep_verified": False, "terminal_proved": False,
     }
     if not P.armed(session or "\x00"):
+        out["outcome"] = "REFUSED"
         #: state the ACTUAL contract. An earlier message said "all four must
         #: equal the session id", which is wrong and would have had an operator
         #: set PMUS_Q1_LIVE to the session id and refuse forever.
@@ -138,6 +143,7 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
             f"equal the same session id")
         return out
     if not X.has_credentials():
+        out["outcome"] = "REFUSED"
         out["refusal"] = "NO_CREDENTIALS"
         return out
 
@@ -244,12 +250,18 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
                 res = C.cancel_and_resolve(t, order_id, slug, info, inv,
                                            sleep=sleep)
                 out["cancel_result"] = {k: str(v) for k, v in res.items()}
-                if res.get("fill"):
+                #: THE REAL CONTRACT, read from the function rather than its
+                #: stale docstring: it returns `terminal`, `state`,
+                #: `classification` and (with an inventory) `filled_qty`, and
+                #: RAISES CancelUnconfirmed otherwise. There is no "cancelled".
+                out["terminal_proved"] = res.get("terminal") is True
+                out["terminal_state"] = res.get("state")
+                out["terminal_classification"] = res.get("classification")
+                filled = D(str(res.get("filled_qty") or 0))
+                out["filled_qty"] = str(filled)
+                if filled > 0 or "FILLED" in str(
+                        res.get("classification") or "").upper():
                     out["outcome"] = "PROBE_FAILURE_UNEXPECTED_FILL"
-                    out["reconciled_fill"] = {
-                        k: str(v) for k, v in res["fill"].items()}
-                else:
-                    out["terminal_proved"] = bool(res.get("cancelled"))
             still = C.open_order_ids(t, slug, sleep=sleep) if order_id else []
             out["open_orders_after"] = still
             out["sweep_verified"] = (not still)
@@ -260,11 +272,11 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
         out["private_frames_total"] = len(prv_frames)
         out["public_frames_total"] = len(pub_frames)
         out["private_schema"] = prv_ledger.report()
-        if out["outcome"] not in ("PROBE_FAILURE_UNEXPECTED_FILL", "ERROR",
-                                 "REFUSED"):
-            out["outcome"] = "OBSERVED"
-        elif out["outcome"] == "REFUSED" and out["submitted"]:
-            out["outcome"] = "ERROR"
+        #: only the untouched sentinel becomes OBSERVED. Every terminal label
+        #: already set -- REFUSED, ERROR, PROBE_FAILURE_UNEXPECTED_FILL -- is
+        #: preserved, so a failure can never be overwritten as a success.
+        if out["outcome"] == "INCOMPLETE":
+            out["outcome"] = "OBSERVED" if out["submitted"] else "REFUSED"
     return out
 
 

@@ -342,7 +342,12 @@ def cancel_and_resolve(t: X.Transport, order_id: str, slug: str,
 
     So this returns only on PROOF:
       * `{"fill": ...}`  -- the venue says filled, with a parseable price;
-      * `{"cancelled": True}` -- a terminal CANCEL, or a REJECT with no fill.
+      * `{"terminal": True, "state": ..., "classification": ...}` and, when an
+        inventory is supplied, `"filled_qty"` -- a terminal CANCEL, or a REJECT
+        with no fill. There is NO `"cancelled"` key; this docstring used to
+        claim one and a caller read `res.get("cancelled")`, silently reporting
+        no terminal proof for a cancellation the venue had positively
+        confirmed.
     Anything else raises, and the caller must NOT clear its record of the
     order. Refusing to trade on is the only safe response to "we do not know
     whether our order is live".
