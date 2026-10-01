@@ -129,3 +129,10 @@ complement quotes that never filled. What is now measurable is that they are
 **economically flat** (−0.24%), tiny (average $28 of spend), and lose
 completely 707 times out of 1,740. That profile is more consistent with
 *failed completion attempts* than with deliberate directional betting.
+
+---
+
+> **SUPERSEDED IN PART by `analysis/l5/economics/CANONICAL_L5_BENCHMARK.md` (frozen at 1f43db3b).**
+> Authoritative trading P&L for the captured population is **−$6,338.70** at 100%
+> settlement coverage. Figures in this document that predate that join remain as
+> the record of how it was reached; they are not the benchmark.

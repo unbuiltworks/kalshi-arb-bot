@@ -111,3 +111,10 @@ Resolution records (or `outcomePrices`) for the September conditionIds. That sin
 join converts the trading net from CASH-RECONCILED-as-cashflow to
 CASH-RECONCILED-as-realized, and is the only thing standing between the two.
 Nothing else in this ledger is unexplained.
+
+---
+
+> **SUPERSEDED IN PART by `analysis/l5/economics/CANONICAL_L5_BENCHMARK.md` (frozen at 1f43db3b).**
+> Authoritative trading P&L for the captured population is **−$6,338.70** at 100%
+> settlement coverage. Figures in this document that predate that join remain as
+> the record of how it was reached; they are not the benchmark.
