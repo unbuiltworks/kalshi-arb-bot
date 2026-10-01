@@ -46,6 +46,13 @@ ONE = D("1")
 #: tolerance far below economic significance rather than to equality: exact
 #: equality raised on a legitimate disposal (...445 -> ...446) and crashed a
 #: replay run.
+#: CASE 1 -- an already-resting post-only maker the market later reaches or
+#: crosses -- is UNRESOLVED. The live calibration of 2026-10-01 failed on its own
+#: instrument (cached-gateway pricing) and demonstrated nothing, so replay
+#: refuses the favourable fill rather than granting what has not been shown.
+#: Flipping this to False restores the previous generous behaviour and is only
+#: legitimate once a qualifying Case-1 observation exists.
+CONSERVATIVE_CASE1 = True
 BASIS_DRIFT_TOL = D("1e-20")
 TICK = D("0.01")
 
@@ -361,6 +368,9 @@ class TwoSided:
         #: prints whose aggressor direction the source could not establish, and
         #: which therefore filled nothing. Reported, never silently dropped.
         self.unresolved_prints = 0
+        #: Case-1 events refused rather than filled
+        self.case1_unresolved_no_fill = 0
+        self.case1_unresolved_qty = D(0)
         #: DECISION-NEUTRAL observability. These are counted at every decision
         #: point and are never read by any rule, so they cannot change an
         #: action. They exist to expose how OFTEN the arms' differentiating
@@ -696,6 +706,23 @@ class TwoSided:
             got = left if left < leg.remaining() else leg.remaining()
             if got <= 0:
                 continue
+            #: CASE 1 IS UNRESOLVED, SO IT IS TREATED CONSERVATIVELY.
+            #: What the venue does to an ALREADY-RESTING post-only maker that the
+            #: market later reaches or crosses has never been demonstrated: the
+            #: 2026-10-01 live calibration priced itself off a cached gateway BBO
+            #: ~19c away from the authenticated book, rested ~20 ticks from the
+            #: real touch, was never reached, and returned PROBE_FAILURE
+            #: (analysis/l5/calibration/CASE1_OBSERVATION_2026-10-01.md).
+            #:
+            #: Until it IS demonstrated, replay must not grant the favourable
+            #: outcome. A print that reaches our price while the contemporaneous
+            #: book has CROSSED that price is the unobserved case, so no fill is
+            #: granted and the event is counted instead. This is the same
+            #: discipline as `unresolved_prints`: refuse rather than invent.
+            if CONSERVATIVE_CASE1 and self.is_marketable(side, leg.px):
+                self.case1_unresolved_no_fill += 1
+                self.case1_unresolved_qty += got
+                continue
             leg.filled += got
             self._book_fill(side, got, leg.px, maker=leg.maker,
                             evidence=f"print@{px}x{qty}")
@@ -910,6 +937,8 @@ class TwoSided:
                    if self.adverse else D(0)),
                "blocked_reasons": dict(self.blocked),
                "unresolved_prints": self.unresolved_prints,
+               "case1_unresolved_no_fill": self.case1_unresolved_no_fill,
+               "case1_unresolved_qty": self.case1_unresolved_qty,
                "decision_opportunity": dict(self.opp),
                "pairs_per_min": (round(len(self.pairs) / minutes, 4)
                                  if minutes else None),
