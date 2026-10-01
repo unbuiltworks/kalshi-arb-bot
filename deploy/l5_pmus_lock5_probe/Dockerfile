@@ -129,6 +129,17 @@ COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.
 # cannot be trusted as proof. Closure = 25 first-party files, 23 already present.
 COPY src/pmus_private_schema_probe.py src/pmus_private_schema_probe.py
 COPY scripts/pmus_schema_probe_run.py scripts/pmus_schema_probe_run.py
+# ---- the ONE authorized CASE-1 live calibration entrypoint and its guard
+# library. Its AST import closure is the schema probe's closure plus these two
+# files: it reuses the same transport, serializer, canary and both sockets, and
+# imports scripts.pmus_schema_probe_run itself for the SocketReader rather than
+# writing a second socket implementation.
+# scripts/__init__.py enters the closure because the Case-1 runner imports
+# `from scripts import pmus_schema_probe_run` to REUSE its SocketReader
+# rather than writing a second socket implementation.
+COPY scripts/__init__.py scripts/__init__.py
+COPY src/pmus_case1_probe.py src/pmus_case1_probe.py
+COPY scripts/pmus_case1_probe_run.py scripts/pmus_case1_probe_run.py
 # ---- authorization artefacts. HALT present means safe_shutdown before armed()
 COPY analysis/l5/authorization/ analysis/l5/authorization/
 # restartPolicyType NEVER is set on the SERVICE, not here: a one-shot the platform

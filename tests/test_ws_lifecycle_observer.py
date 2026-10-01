@@ -194,7 +194,14 @@ def test_the_only_production_references_are_observation_wiring():
                "pmus_private_schema_probe.py": "imports the module for arming "
                                                "docs only",
                "pmus_schema_probe_run.py": "subscribes and guards the private "
-                                           "socket; observation only"}
+                                           "socket; observation only",
+               #: the Case-1 calibration observes the same socket to learn
+               #: what the venue says about a crossed resting order. It is
+               #: covered by the companion guard below too.
+               "pmus_case1_probe.py": "imports the module for the private "
+                                      "frame-name constants only",
+               "pmus_case1_probe_run.py": "subscribes and guards the private "
+                                          "socket; observation only"}
     hits = []
     for p in list(pathlib.Path("src").glob("*.py")) + \
             list(pathlib.Path("scripts").glob("*.py")):
@@ -214,7 +221,9 @@ def test_no_observer_call_site_can_reach_execution():
               #: the schema probe is held to the same rule: no line that
               #: touches the private observer may also submit or cancel.
               "src/pmus_private_schema_probe.py",
-              "scripts/pmus_schema_probe_run.py"):
+              "scripts/pmus_schema_probe_run.py",
+              "src/pmus_case1_probe.py",
+              "scripts/pmus_case1_probe_run.py"):
         for i, line in enumerate(pathlib.Path(f).read_text().split("\n"), 1):
             if "ws_observer" not in line and "lifecycle_observer" not in line \
                     and " PV." not in line and "PV." not in line:

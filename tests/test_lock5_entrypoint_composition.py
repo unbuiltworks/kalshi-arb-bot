@@ -53,6 +53,9 @@ ENTRYPOINTS = [
     #: excluded, so the guard stays bidirectional: its closure must be present
     #: in the image, and nothing unreachable may ride along with it.
     "scripts/pmus_schema_probe_run.py",
+    #: the ONE authorized Case-1 live calibration. Same reasoning: its
+    #: closure must be in the image and nothing unreachable may ride along.
+    "scripts/pmus_case1_probe_run.py",
 ]
 MKT = "cpc-btc-updown-15m-2026-09-28-0215z"
 
