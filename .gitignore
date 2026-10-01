@@ -79,3 +79,9 @@ analysis/gemini/p10_capture/
 # The forensic READINGS are committed; the raw frames stay local like the other
 # large tapes under data/.
 analysis/l5/sync_l2/*.jsonl
+
+# Kalshi incentive census: the raw dump is 102MB of JSON fetched from the
+# public /incentive_programs endpoint. The GZIPPED dump (~15MB) is tracked for
+# provenance and the derived summaries live in analysis/l5/kalshi/; the raw
+# file stays on disk for re-analysis. Same rule as the policy_d_port tapes.
+data/kalshi/census/*.json
