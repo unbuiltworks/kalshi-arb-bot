@@ -13,6 +13,12 @@ import scripts.pmus_schema_probe_run as S
 
 SID = "sess-1"
 SLUG = "cpc-btc-updown-15m-2099-01-01-1200z"
+#: the completed ORDER snapshot actually observed on the venue 2026-10-01
+READY_PRIVATE = [{
+    "requestId": "snap-0ad7630a",
+    "subscriptionType": "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT",
+    "orderSubscriptionSnapshot": {"orders": [], "eof": True},
+}]
 
 
 @pytest.fixture(autouse=True)
@@ -87,11 +93,10 @@ def test_missing_market_refuses_without_contacting_the_venue(monkeypatch):
 def test_insufficient_frames_on_either_socket_blocks_submission():
     with pytest.raises(P.ProbeRefuse) as e:
         P.preflight(Boom(), SLUG, public_frames=P.READY_FRAMES - 1,
-                    private_frames=99)
+                    private_frames=READY_PRIVATE)
     assert "PUBLIC_SOCKET_NOT_PROVEN" in str(e.value)
     with pytest.raises(P.ProbeRefuse) as e:
-        P.preflight(Boom(), SLUG, public_frames=99,
-                    private_frames=P.READY_FRAMES - 1)
+        P.preflight(Boom(), SLUG, public_frames=99, private_frames=[])
     assert "PRIVATE_SOCKET_NOT_PROVEN" in str(e.value)
 
 
@@ -117,7 +122,8 @@ def test_crossing_blocks_submission(monkeypatch):
                                                      "ask": D("0.41")})
     monkeypatch.setattr(X, "would_cross", lambda *a, **k: True)
     with pytest.raises(P.ProbeRefuse) as e:
-        P.preflight(Boom(), SLUG, public_frames=9, private_frames=9)
+        P.preflight(Boom(), SLUG, public_frames=9,
+                    private_frames=READY_PRIVATE)
     assert "WOULD_CROSS" in str(e.value)
 
 
@@ -126,7 +132,8 @@ def test_a_stale_feed_blocks_submission(monkeypatch):
         raise X.StaleRefuse("STALE")
     monkeypatch.setattr(X, "fresh_bbo", stale)
     with pytest.raises(X.StaleRefuse):
-        P.preflight(Boom(), SLUG, public_frames=9, private_frames=9)
+        P.preflight(Boom(), SLUG, public_frames=9,
+                    private_frames=READY_PRIVATE)
 
 
 def test_exactly_one_submission_maximum():

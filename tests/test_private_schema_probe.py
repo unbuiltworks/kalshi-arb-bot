@@ -100,3 +100,93 @@ def test_frames_are_recorded_verbatim_without_rest_field_mapping():
         rep["observed_frame_keys"]["SUBSCRIPTION_TYPE_ORDER"]
     assert rep["frames_verbatim"][0]["monotonic"] is not None
     assert rep["frames_verbatim"][0]["wall_utc"]
+
+
+# ---------------- private-socket readiness: a COMPLETED order snapshot only
+
+#: the frame actually observed on the venue, 2026-10-01T13:03:15.564568Z
+REAL_SNAPSHOT = {
+    "requestId": "snap-0ad7630a",
+    "subscriptionType": "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT",
+    "orderSubscriptionSnapshot": {"orders": [], "eof": True},
+}
+
+
+def test_the_real_observed_snapshot_proves_private_readiness():
+    proof = P.order_snapshot_proof([REAL_SNAPSHOT])
+    assert proof is REAL_SNAPSHOT, "the frame itself is retained, verbatim"
+
+
+def test_zero_private_frames_refuse():
+    assert P.order_snapshot_proof([]) is None
+    with pytest.raises(P.ProbeRefuse) as e:
+        P.preflight(None, "slug", public_frames=99, private_frames=[])
+    assert "PRIVATE_SOCKET_NOT_PROVEN" in str(e.value)
+
+
+def test_an_unrelated_private_frame_refuses():
+    """Readiness was NOT relaxed to 'any one frame'."""
+    for other in ({"subscriptionType": "SUBSCRIPTION_TYPE_POSITION"},
+                  {"subscriptionType": "SUBSCRIPTION_TYPE_ORDER",
+                   "orderUpdate": {"id": "X"}},
+                  {"requestId": "r", "ack": True}):
+        assert P.order_snapshot_proof([other]) is None
+    with pytest.raises(P.ProbeRefuse):
+        P.preflight(None, "slug", public_frames=99,
+                    private_frames=[{"subscriptionType":
+                                     "SUBSCRIPTION_TYPE_POSITION"}])
+
+
+def test_an_order_snapshot_without_eof_refuses():
+    partial = {**REAL_SNAPSHOT,
+               "orderSubscriptionSnapshot": {"orders": []}}
+    assert P.order_snapshot_proof([partial]) is None
+    eof_false = {**REAL_SNAPSHOT,
+                 "orderSubscriptionSnapshot": {"orders": [], "eof": False}}
+    assert P.order_snapshot_proof([eof_false]) is None
+
+
+@pytest.mark.parametrize("bad", [
+    {"subscriptionType": "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT"},
+    {"subscriptionType": "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT",
+     "orderSubscriptionSnapshot": None},
+    {"subscriptionType": "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT",
+     "orderSubscriptionSnapshot": []},
+    {"subscriptionType": "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT",
+     "orderSubscriptionSnapshot": {"orders": [], "eof": "true"}},
+    {"subscriptionType": 2, "orderSubscriptionSnapshot": {"eof": True}},
+    "not a dict at all",
+])
+def test_malformed_or_type_mismatched_snapshots_refuse(bad):
+    assert P.order_snapshot_proof([bad]) is None
+
+
+def test_the_proving_frame_is_found_among_other_traffic():
+    frames = [{"subscriptionType": "SUBSCRIPTION_TYPE_POSITION"},
+              REAL_SNAPSHOT,
+              {"subscriptionType": "SUBSCRIPTION_TYPE_ORDER"}]
+    assert P.order_snapshot_proof(frames) is REAL_SNAPSHOT
+
+
+def test_a_non_list_is_refused_rather_than_coerced():
+    """The parameter used to be an int count; passing one must not pass."""
+    for bad in (3, 99, None, "3"):
+        assert P.order_snapshot_proof(bad) is None
+
+
+def test_the_public_socket_requirement_is_unchanged():
+    assert P.READY_FRAMES == 3
+    with pytest.raises(P.ProbeRefuse) as e:
+        P.preflight(None, "slug", public_frames=2,
+                    private_frames=[REAL_SNAPSHOT])
+    assert "PUBLIC_SOCKET_NOT_PROVEN: 2 frames < 3" in str(e.value)
+
+
+def test_nothing_else_about_the_probe_moved():
+    """Price, quantity, timeout and distance are untouched by this change."""
+    from src import pmus_q1_executor as X
+    assert P.MAX_PX == D("0.01")
+    assert P.MIN_DISTANCE == D("0.20")
+    assert P.PRICE_TICK == D("0.01")
+    assert P.OBSERVE_MAX_S == 120.0
+    assert X.QTY == 1

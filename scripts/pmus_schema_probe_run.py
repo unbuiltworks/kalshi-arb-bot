@@ -162,8 +162,10 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
         # 4: BOTH sockets must prove they are receiving before anything else
         t0 = clock()
         while clock() - t0 < READY_TIMEOUT_S:
+            #: public: a fresh-frame count. private: a COMPLETED order snapshot,
+            #: because that socket is silent when the account is idle.
             if (len(pub_frames) >= P.READY_FRAMES
-                    and len(prv_frames) >= P.READY_FRAMES):
+                    and P.order_snapshot_proof(prv_frames) is not None):
                 break
             sleep(0.25)
         out["public_frames_at_preflight"] = len(pub_frames)
@@ -172,7 +174,8 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
             if r.error:
                 raise P.ProbeRefuse(f"SOCKET_ERROR[{r.name}]: {r.error}")
         pre = P.preflight(t, slug, public_frames=len(pub_frames),
-                          private_frames=len(prv_frames), sleep=sleep)
+                          private_frames=prv_frames, sleep=sleep)
+        out["private_readiness_frame"] = pre.get("private_readiness_frame")
         px = pre["price"]
         out["price"] = str(px)
         out["touch_at_preflight"] = str(pre["touch"])

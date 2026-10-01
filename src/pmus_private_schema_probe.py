@@ -48,7 +48,8 @@ MAX_PX = D("0.01")
 MIN_DISTANCE = D("0.20")
 #: how long we are willing to hold the resting order purely to observe
 OBSERVE_MAX_S = 120.0
-#: both sockets must deliver at least this many frames before we submit
+#: the PUBLIC market socket must deliver at least this many fresh frames. It is
+#: high-rate (~559/min measured), so a frame count is a sound liveness test.
 READY_FRAMES = 3
 
 
@@ -82,6 +83,38 @@ def probe_price(touch: Optional[D]) -> D:
             f"TOO_CLOSE: {px} is only {touch - px} below the touch {touch}, "
             f"need {MIN_DISTANCE}")
     return px
+
+
+def order_snapshot_proof(frames: Any) -> Optional[Dict[str, Any]]:
+    """Positive proof that the PRIVATE socket delivered a COMPLETED order
+    snapshot, returning the proving frame or None.
+
+    WHY NOT A FRAME COUNT. The 2026-10-01 run established that this socket is
+    EVENT-DRIVEN with no heartbeat: it sends one snapshot and then stays silent
+    until the account has order activity. Requiring 3 frames was therefore
+    unsatisfiable by construction, and the probe could never have submitted. The
+    snapshot with `eof: true` IS the subscribe acknowledgement, so that is the
+    right invariant -- and it is STRICTER than "any one frame", not weaker.
+
+    Observed envelope, captured verbatim on that run:
+        {"requestId": "snap-...",
+         "subscriptionType": "SUBSCRIPTION_TYPE_ORDER_SNAPSHOT",
+         "orderSubscriptionSnapshot": {"orders": [], "eof": true}}
+    """
+    if not isinstance(frames, (list, tuple)):
+        return None
+    for f in frames:
+        if not isinstance(f, dict):
+            continue
+        if str(f.get("subscriptionType") or "") != PV.NAME_ORDER_SNAPSHOT:
+            continue
+        snap = f.get("orderSubscriptionSnapshot")
+        if not isinstance(snap, dict):
+            continue
+        if snap.get("eof") is not True:
+            continue            # a partial snapshot is not proof of readiness
+        return f
+    return None
 
 
 def stamp(extra: Mapping[str, Any] | None = None) -> Dict[str, Any]:
@@ -123,22 +156,34 @@ class FrameLedger:
 
 
 def preflight(t: X.Transport, slug: str, *, public_frames: int,
-              private_frames: int, sleep=time.sleep) -> Dict[str, Any]:
-    """Prove both sockets are RECEIVING and the price is safe. Submit nothing."""
+              private_frames: Any, sleep=time.sleep) -> Dict[str, Any]:
+    """Prove both sockets are READY and the price is safe. Submit nothing.
+
+    The two sockets have DIFFERENT liveness invariants because they behave
+    differently: the public market socket is high-rate, so a fresh-frame count
+    is sound; the private order socket is event-driven and silent when idle, so
+    readiness is a completed ORDER snapshot. `private_frames` is the raw frame
+    list, not a count.
+    """
     if public_frames < READY_FRAMES:
         raise ProbeRefuse(
             f"PUBLIC_SOCKET_NOT_PROVEN: {public_frames} frames "
             f"< {READY_FRAMES}")
-    if private_frames < READY_FRAMES:
+    proof = order_snapshot_proof(private_frames)
+    if proof is None:
+        n = len(private_frames) if isinstance(private_frames,
+                                             (list, tuple)) else "?"
         raise ProbeRefuse(
-            f"PRIVATE_SOCKET_NOT_PROVEN: {private_frames} frames "
-            f"< {READY_FRAMES}")
+            f"PRIVATE_SOCKET_NOT_PROVEN: no completed "
+            f"{PV.NAME_ORDER_SNAPSHOT} (eof=true) among {n} frames")
     bbo = X.fresh_bbo(t, slug, sleep=sleep)       # raises on stale feed
     touch = bbo.get("bid")
     px = probe_price(D(str(touch)) if touch is not None else None)
     if X.would_cross(OB.outcome_side("up"), px, bbo):
         raise ProbeRefuse(f"WOULD_CROSS: {px} against {bbo}")
-    return {"price": px, "bbo": bbo, "touch": touch}
+    return {"price": px, "bbo": bbo, "touch": touch,
+            #: the subscription evidence is retained VERBATIM
+            "private_readiness_frame": proof}
 
 
 def build_body(slug: str, px: D) -> Dict[str, Any]:
