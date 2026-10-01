@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "/tmp/claude-0/-home-user-kalshi-arb-bot/671883cb-e673-5581-ae31-5d97cf169fd1/scratchpad/attrib/S0/scripts/l5_run_variant_comparison.py", line 181, in <module>
+    raise SystemExit(main(sys.argv))
+                     ^^^^^^^^^^^^^^
+  File "/tmp/claude-0/-home-user-kalshi-arb-bot/671883cb-e673-5581-ae31-5d97cf169fd1/scratchpad/attrib/S0/scripts/l5_run_variant_comparison.py", line 100, in main
+    rows = [run_window(w["raw_paths"], w["slug"], w["winner"],
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-0/-home-user-kalshi-arb-bot/671883cb-e673-5581-ae31-5d97cf169fd1/scratchpad/attrib/S0/scripts/l5_run_variant_comparison.py", line 100, in <listcomp>
+    rows = [run_window(w["raw_paths"], w["slug"], w["winner"],
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-0/-home-user-kalshi-arb-bot/671883cb-e673-5581-ae31-5d97cf169fd1/scratchpad/attrib/S0/scripts/l5_run_variant_comparison.py", line 68, in run_window
+    c.on_book(row, t)
+  File "/tmp/claude-0/-home-user-kalshi-arb-bot/671883cb-e673-5581-ae31-5d97cf169fd1/scratchpad/attrib/S0/src/l5_two_sided.py", line 678, in on_book
+    self.decide_completion()
+  File "/tmp/claude-0/-home-user-kalshi-arb-bot/671883cb-e673-5581-ae31-5d97cf169fd1/scratchpad/attrib/S0/src/l5_two_sided.py", line 774, in decide_completion
+    self._dispose(held, held_qty, basis_before)
+  File "/tmp/claude-0/-home-user-kalshi-arb-bot/671883cb-e673-5581-ae31-5d97cf169fd1/scratchpad/attrib/S0/src/l5_two_sided.py", line 582, in _dispose
+    raise AssertionError(
+AssertionError: disposal changed the basis of what remains on down: 0.1154453627180899908172635445 -> 0.1154453627180899908172635446

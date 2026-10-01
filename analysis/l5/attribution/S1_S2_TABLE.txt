@@ -1,0 +1,65 @@
+S1 vs S2 attribution over the 18 spent 2026-09-30 05Z-09Z windows.
+
+SPENT-WINDOW FORENSIC ANALYSIS. Not OOS. Not validation. Not realized profit.
+
+S1  A-refinement (restated basis, BASIS_DRIFT_TOL=1e-20) + old B + repaired C
+S2  S1 + the Case-2 repair, and nothing else
+=> S1 -> S2 is the PURE Case-2 execution-semantics effect.
+
+S0 (old subtractive _dispose + exact-equality invariant) does not appear: it
+raised AssertionError on window 1 and produced no windows at all. Preserved,
+not weakened. delta S0 -> S1 is therefore NOT MEASURABLE on this window set.
+
+windows compared: 18   (0500z .. 0915z)
+
+====================================================================================================
+source_settled_total, $/window   (modelled maker rebates EXCLUDED, per CLAUDE.md)
+====================================================================================================
+arm                                S1         S2     d S1->S2        t         95% CI on the delta
+CONTROL_ONE_LEG               -0.0076    -0.0076      +0.0000  exact 0   identical in every window
+L5_REPLICATION                 0.0167     0.0167      +0.0000  exact 0   identical in every window
+V1_EXTEND_ONLY                 0.3146     0.3146      +0.0000  exact 0   identical in every window
+V2_EXTEND_NO_BASIS_GATE        0.2167     0.2167      +0.0000  exact 0   identical in every window
+V3_CONTINUOUS_TWO_SIDED        0.6626     0.2147      -0.4479    -3.45          [-0.7222, -0.1736]
+V4_CONTINUOUS_PLUS_READJUST     0.2167     0.2167      +0.0000  exact 0   identical in every window
+
+====================================================================================================
+PAIRED PER-WINDOW DELTAS, S1 -> S2 (pure Case-2)
+====================================================================================================
+CONTROL_ONE_LEG            worse  0/18   better  0/18   unchanged 18/18   min  +0.0000   max  +0.0000
+L5_REPLICATION             worse  0/18   better  0/18   unchanged 18/18   min  +0.0000   max  +0.0000
+V1_EXTEND_ONLY             worse  0/18   better  0/18   unchanged 18/18   min  +0.0000   max  +0.0000
+V2_EXTEND_NO_BASIS_GATE    worse  0/18   better  0/18   unchanged 18/18   min  +0.0000   max  +0.0000
+V3_CONTINUOUS_TWO_SIDED    worse 15/18   better  3/18   unchanged  0/18   min  -1.9944   max  +0.4772
+V4_CONTINUOUS_PLUS_READJUST worse  0/18   better  0/18   unchanged 18/18   min  +0.0000   max  +0.0000
+
+====================================================================================================
+FILLS AND MATCHED QUANTITY (totals over the 18 windows)
+====================================================================================================
+arm                           maker S1    maker S2         d    matched S1    matched S2         d
+CONTROL_ONE_LEG                     26          26        +0          12.2          12.2      +0.0
+L5_REPLICATION                     212         212        +0         135.6         135.6      +0.0
+V1_EXTEND_ONLY                     449         449        +0         255.3         255.3      +0.0
+V2_EXTEND_NO_BASIS_GATE            389         389        +0         223.2         223.2      +0.0
+V3_CONTINUOUS_TWO_SIDED            861         387      -474         404.2         219.2    -185.0
+V4_CONTINUOUS_PLUS_READJUST         389         389        +0         223.2         223.2      +0.0
+
+====================================================================================================
+CASE-2 REFUSAL COUNTERS (totals; these counters exist only in S2)
+====================================================================================================
+  CONTROL_ONE_LEG            ZERO Case-2 refusals
+  L5_REPLICATION             ZERO Case-2 refusals
+  V1_EXTEND_ONLY             ZERO Case-2 refusals
+  V2_EXTEND_NO_BASIS_GATE    ZERO Case-2 refusals
+  V3_CONTINUOUS_TWO_SIDED    {'replenish_marketable_refused_not_resting': 272, 'replenish_queue_position_unknowable': 6}
+  V4_CONTINUOUS_PLUS_READJUST ZERO Case-2 refusals
+
+====================================================================================================
+EXACT S1 == S2 CHECK over every reported metric, every window
+====================================================================================================
+  CONTROL_ONE_LEG            IDENTICAL on all 29 metrics x 18 windows
+  L5_REPLICATION             IDENTICAL on all 29 metrics x 18 windows
+  V1_EXTEND_ONLY             IDENTICAL on all 29 metrics x 18 windows
+  V2_EXTEND_NO_BASIS_GATE    IDENTICAL on all 29 metrics x 18 windows
+  V3_CONTINUOUS_TWO_SIDED    445 metric-window differences, e.g. [('0500z', 'cycles_started'), ('0500z', 'cycles_completed'), ('0500z', 'maker_fills'), ('0500z', 'partial_fills'), ('0500z', 'matched_contracts')]
+  V4_CONTINUOUS_PLUS_READJUST IDENTICAL on all 29 metrics x 18 windows

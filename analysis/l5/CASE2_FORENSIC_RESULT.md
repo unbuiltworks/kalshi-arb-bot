@@ -96,3 +96,21 @@ only 13.3% and is now +0.0167/window, essentially zero.
 * **Does NOT**: validate profitability. These windows are spent, the CIs describe
   already-seen data, and Defect-B Case 1 remains open, so even these numbers rest
   on an unresolved assumption about a resting order the market later crosses.
+
+---
+
+## SUPERSEDED IN PART -- see `A_VS_CASE2_ATTRIBUTION.md`
+
+Two claims in this document are corrected there:
+
+1. The BEFORE column came from `48ec7ba8`, whose `src/l5_two_sided.py` predates
+   BOTH the Defect-A repair (`8784bfdc`) and the Defect-C repair (`39d78f22`).
+   The BEFORE -> AFTER comparison therefore confounds FOUR changes, not the two
+   ("Case-2 with the A-refinement") stated above.
+2. The pure Case-2 effect on V3 is **-0.4479/window**, not -1.3133: 29.3% of the
+   original 1.5281 headline, not 85.9%. The 85.9% figure is the whole repair
+   stack. V3's advantage *over V2* was, however, entirely Case 2.
+
+The clean S1 vs S2 decomposition also shows CONTROL, REPLICATION, V1, V2 and V4
+are bit-identical across the Case-2 repair on all 29 metrics and all 18 windows,
+confirming the zero-refusal reading rather than assuming it.
