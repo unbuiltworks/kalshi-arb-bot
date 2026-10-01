@@ -123,6 +123,12 @@ COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY src/polymarket_l5/action_model_v2.py src/polymarket_l5/action_model_v2.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.py
+# ---- the authorized private-WS SCHEMA PROBE entrypoint and its guard library.
+# Added by hand after enumerating the entrypoint's AST import closure, because
+# tests/test_l5_live_probe_image_closure.py is a pre-existing baseline failure and
+# cannot be trusted as proof. Closure = 25 first-party files, 23 already present.
+COPY src/pmus_private_schema_probe.py src/pmus_private_schema_probe.py
+COPY scripts/pmus_schema_probe_run.py scripts/pmus_schema_probe_run.py
 # ---- authorization artefacts. HALT present means safe_shutdown before armed()
 COPY analysis/l5/authorization/ analysis/l5/authorization/
 # restartPolicyType NEVER is set on the SERVICE, not here: a one-shot the platform
