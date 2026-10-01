@@ -1,0 +1,38 @@
+{
+  "LABEL": "NARROW, SINGLE-PURPOSE AUTHORIZATION. It authorizes exactly one bounded Case-1 observation and nothing else.",
+  "probe": "case1_resting_order_crossed",
+  "purpose": "Observe what the venue does to a genuinely resting post-only maker order that the market later reaches or crosses. The last unresolved fill-semantic question bearing on V1_EXTEND_ONLY.",
+  "quantity": 1,
+  "max_submissions": 1,
+  "max_markets": 1,
+  "max_entry_price_usd": "0.25",
+  "max_loss_usd": "0.25",
+  "allow_reprice": false,
+  "allow_chase": false,
+  "allow_replacement": false,
+  "allow_complement_leg": false,
+  "reviewed_code_sha256": "3ef96ac726ddd26c1d7abafd26d4df2e7a0647f21d587a965f5b70aca9edb6fb",
+  "reviewed_code_files": [
+    "src/pmus_case1_probe.py",
+    "scripts/pmus_case1_probe_run.py"
+  ],
+  "reviewed_commit_informational": "the commit that introduced this artifact; NOT the enforced pin, because the artifact lives in the commit it would name",
+  "requires_arming_envs": [
+    "PMUS_Q1_LIVE",
+    "PMUS_Q1_SESSION_ID",
+    "PMUS_Q1_ARM",
+    "PMUS_CASE1_ARM"
+  ],
+  "overrides_global_halt": true,
+  "overrides_global_halt_scope": "THIS PROBE ONLY. The global HALT remains in force for the L5 session engine and every other entrypoint; nothing here un-halts them.",
+  "authorizes_l5_session_engine": false,
+  "authorizes_further_probes": false,
+  "expires_utc": "2026-10-01T23:59:00Z",
+  "authorized_by": "repository owner, 2026-10-01, in session_016DeuDiP8grHXemCG4VBhqt",
+  "preregistration": "analysis/l5/calibration/CASE1_SINGLE_OBSERVATION_PREREGISTRATION.md",
+  "NOTES": [
+    "Absence of this file is the safe state: no file, no Case-1 order.",
+    "Every field is REQUIRED. A missing limit must never fall back to a default; a default is how $0.05 became $7.50.",
+    "The numeric bounds must EQUAL the code's own constants, not merely permit them, so this file cannot widen the envelope either."
+  ]
+}

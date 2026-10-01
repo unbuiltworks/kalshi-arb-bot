@@ -81,6 +81,27 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
         "sweep_verified": False, "terminal_proved": False,
         "rest_open_proved": False, "stops_fired": [],
     }
+    #: THE NARROW AUTHORIZATION IS CONSULTED BEFORE armed(), the same order the
+    #: L5 session engine uses for HALT. The repository HALT means "no orders",
+    #: so this probe does not bypass it: it requires its own time-boxed,
+    #: SHA-pinned artifact that states the override explicitly and scopes it to
+    #: this probe. Absence of that artifact is the safe state.
+    out["global_halt_present"] = K.halt_present()
+    try:
+        auth = K.authorization()
+    except K.Case1Refuse as exc:
+        out["outcome"] = "REFUSED"
+        out["refusal"] = str(exc)
+        return out
+    out["authorization"] = {
+        "probe": auth.get("probe"), "expires_utc": auth.get("expires_utc"),
+        "reviewed_sha": auth.get("reviewed_sha"),
+        "max_entry_price_usd": auth.get("max_entry_price_usd"),
+        "max_loss_usd": auth.get("max_loss_usd"),
+        "overrides_global_halt": auth.get("overrides_global_halt"),
+        "authorizes_l5_session_engine": auth.get(
+            "authorizes_l5_session_engine"),
+    }
     if not K.armed(session or "\x00"):
         out["outcome"] = "REFUSED"
         out["refusal"] = f"NOT_ARMED: {K.arming_contract()}"

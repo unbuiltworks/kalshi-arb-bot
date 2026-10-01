@@ -470,3 +470,173 @@ def verdict(*, safety_ok: bool, rest_proved: bool,
     if reached_after_rest:
         return "REACHED_OR_CROSSED_UNFILLED"
     return "RESTING_NOT_REACHED"
+
+
+# =====================================================================
+# THE NARROW AUTHORIZATION GATE
+#
+# The repository-level HALT means "no orders". A money-moving entrypoint must
+# not knowingly bypass it, so this probe does not. Instead it requires its OWN
+# narrow, time-boxed, SHA-pinned authorization that states the override
+# EXPLICITLY and scopes it to this probe alone. The global HALT stays in force
+# for the L5 session engine and every other entrypoint: nothing here un-halts
+# them, and no other module reads this artifact.
+#
+# ABSENCE IS THE SAFE STATE. No file, no Case-1 order.
+# =====================================================================
+
+AUTH_PATH = "analysis/l5/authorization/CASE1_PROBE_AUTHORIZATION.json"
+HALT_PATH = "analysis/l5/authorization/HALT"
+
+#: WHAT THE AUTHORIZATION PINS. Not the commit SHA: the artifact lives IN the
+#: commit it would name, so a commit pin is circular -- updating the field
+#: changes the SHA that the field must contain. An operator-supplied
+#: PMUS_CASE1_SHA would not fix that, since a value the operator sets proves
+#: nothing about what is running.
+#:
+#: So the pin is a CONTENT digest of the probe's own two source files, which do
+#: not change when the artifact changes. It is non-circular, needs no extra
+#: variable, and guarantees the stronger property: the code that places the
+#: order is byte-for-byte the code that was reviewed.
+CODE_FILES = ("src/pmus_case1_probe.py", "scripts/pmus_case1_probe_run.py")
+
+#: every field is REQUIRED. A missing limit must never fall back to a default.
+AUTH_REQUIRED = (
+    "probe", "quantity", "max_submissions", "max_markets",
+    "max_entry_price_usd", "max_loss_usd", "allow_reprice", "allow_chase",
+    "allow_replacement", "allow_complement_leg", "reviewed_code_sha256",
+    "requires_arming_envs", "overrides_global_halt",
+    "authorizes_l5_session_engine", "authorizes_further_probes", "expires_utc",
+)
+
+#: what the authorization must say EXACTLY. Equality, not permission, so the
+#: artifact can never widen the envelope the code enforces.
+AUTH_EXACT = {
+    "probe": "case1_resting_order_crossed",
+    "quantity": 1,
+    "max_submissions": 1,
+    "max_markets": 1,
+    "allow_reprice": False,
+    "allow_chase": False,
+    "allow_replacement": False,
+    "allow_complement_leg": False,
+    "authorizes_l5_session_engine": False,
+    "authorizes_further_probes": False,
+}
+
+
+def halt_present(root: str = ".") -> bool:
+    return os.path.exists(os.path.join(root, HALT_PATH))
+
+
+def code_digest(root: str = ".") -> str:
+    """SHA-256 over the probe's own source files, in a fixed order.
+
+    This is what the authorization pins, so an edit to the probe after review
+    invalidates the authorization rather than riding along with it.
+    """
+    import hashlib
+    h = hashlib.sha256()
+    for rel in CODE_FILES:
+        path = os.path.join(root, rel)
+        if not os.path.exists(path):
+            raise Case1Refuse(f"CODE_MISSING: {rel} is absent")
+        with open(path, "rb") as fh:
+            h.update(rel.encode("utf-8"))
+            h.update(b"\0")
+            h.update(fh.read())
+            h.update(b"\0")
+    return h.hexdigest()
+
+
+def authorization(*, root: str = ".", now: Any = None,
+                  sha: Optional[str] = None) -> Dict[str, Any]:
+    # `sha` overrides the computed code digest; tests use it, production does not.
+    """Load and FULLY validate the narrow Case-1 authorization, or refuse.
+
+    Checks, in order, every one of which refuses rather than defaults:
+      * the file exists and parses;
+      * every required field is present;
+      * the exact-value fields say exactly what they must;
+      * the numeric bounds EQUAL this module's constants, so the artifact
+        cannot widen MAX_ENTRY_PX, MAX_LOSS or QTY;
+      * it has not expired;
+      * the probe's own source files hash to the digest that was reviewed;
+      * if the global HALT is present, the override is stated EXPLICITLY and
+        scoped to this probe.
+    """
+    import json
+    from datetime import datetime, timezone
+
+    path = os.path.join(root, AUTH_PATH)
+    if not os.path.exists(path):
+        raise Case1Refuse(
+            f"NO_AUTHORIZATION: {AUTH_PATH} absent. Absence is the safe state")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            auth = json.load(fh)
+    except Exception as exc:                                  # noqa: BLE001
+        raise Case1Refuse(f"UNPARSEABLE_AUTHORIZATION: {exc}") from None
+    if not isinstance(auth, dict):
+        raise Case1Refuse("AUTHORIZATION_NOT_AN_OBJECT")
+
+    missing = [k for k in AUTH_REQUIRED if k not in auth]
+    if missing:
+        raise Case1Refuse(f"AUTHORIZATION_INCOMPLETE: missing {missing}; a "
+                          f"missing limit must never fall back to a default")
+    for key, want in AUTH_EXACT.items():
+        if auth[key] != want:
+            raise Case1Refuse(
+                f"AUTHORIZATION_FIELD: {key} is {auth[key]!r}, must be "
+                f"{want!r} exactly")
+    #: EQUALITY against the code's constants, so the file cannot widen anything
+    for key, const, name in (("max_entry_price_usd", MAX_ENTRY_PX,
+                              "MAX_ENTRY_PX"),
+                             ("max_loss_usd", MAX_LOSS, "MAX_LOSS")):
+        try:
+            got = D(str(auth[key]))
+        except Exception:                                     # noqa: BLE001
+            raise Case1Refuse(f"AUTHORIZATION_BOUND: {key} is not a "
+                              f"number: {auth[key]!r}") from None
+        if got != const:
+            raise Case1Refuse(
+                f"AUTHORIZATION_BOUND: {key}={got} must EQUAL {name}={const}; "
+                f"the artifact may not widen or narrow the coded envelope")
+    if D(str(auth["quantity"])) != D(QTY):
+        raise Case1Refuse(f"AUTHORIZATION_BOUND: quantity must equal {QTY}")
+
+    now_dt = now or datetime.now(timezone.utc)
+    try:
+        exp = datetime.fromisoformat(
+            str(auth["expires_utc"]).replace("Z", "+00:00"))
+    except Exception:                                         # noqa: BLE001
+        raise Case1Refuse(f"AUTHORIZATION_EXPIRY_UNPARSEABLE: "
+                          f"{auth['expires_utc']!r}") from None
+    if exp.tzinfo is None:
+        raise Case1Refuse("AUTHORIZATION_EXPIRY_NAIVE: need an explicit zone")
+    if now_dt >= exp:
+        raise Case1Refuse(f"AUTHORIZATION_EXPIRED at {exp.isoformat()}")
+
+    want_envs = list(auth["requires_arming_envs"] or [])
+    for env in (LIVE_ENV, SESSION_ENV, ARM_ENV, CASE1_ARM_ENV):
+        if env not in want_envs:
+            raise Case1Refuse(
+                f"AUTHORIZATION_ARMING: {env} is not among the required "
+                f"arming variables {want_envs}")
+
+    have = (sha if sha is not None else code_digest(root))
+    if str(auth["reviewed_code_sha256"]) != str(have):
+        raise Case1Refuse(
+            f"CODE_DIGEST_MISMATCH: the authorization reviewed "
+            f"{auth['reviewed_code_sha256']}, the running probe code hashes to "
+            f"{have}. The probe was edited after it was authorized")
+
+    if halt_present(root):
+        if auth["overrides_global_halt"] is not True:
+            raise Case1Refuse(
+                "HALT_PRESENT: the global HALT means no orders, and this "
+                "authorization does not explicitly override it")
+        if not str(auth.get("overrides_global_halt_scope") or "").strip():
+            raise Case1Refuse(
+                "HALT_OVERRIDE_UNSCOPED: an override must state its scope")
+    return dict(auth)
