@@ -278,3 +278,33 @@ def test_cap_observer_records_a_bind_and_its_residual():
     assert obs["blocked_up"] >= 1 and obs["blocked_down"] == 0
     assert obs["entries_into_cap"] >= 1
     assert obs["residual_at_first_bind"] is not None
+
+
+def test_blocked_fraction_has_a_real_denominator():
+    """The first version incremented attempts only in the blocked branch, so
+    the fraction was vacuously 1.0. An attempt is every heavy-side opportunity."""
+    c = build(V1)
+    c.window_end = 10_000.0
+    c.now = 1000.0
+    # residual 1: a heavy side exists and the cap still PERMITS the extend
+    c._book_fill("up", D(1), D("0.50"), maker=True, evidence="t")
+    feed(c, t=1001.0, bid="0.40", ask="0.60")
+    obs = c.report(winner="up")["residual_cap_observer"]
+    assert obs["acquisitions_attempted"] > 0
+    assert obs["blocked_by_cap"] == 0, "the cap permits an extend at residual 1"
+    assert obs["blocked_fraction"] == 0.0
+
+
+def test_v4_no_longer_double_counts_the_cap_diagnostic():
+    """V4 used to call desired() inside _replenish_price AND again in
+    reconcile_quotes, doubling a diagnostic counter and breaking a strict
+    equivalence check for no behavioural reason."""
+    v2, v4 = build(V2), build(V4)
+    for c in (v2, v4):
+        c.window_end = 10_000.0
+        c.now = 1000.0
+        c._book_fill("up", D(3), D("0.50"), maker=True, evidence="t")
+        feed(c, t=1001.0, bid="0.40", ask="0.60")
+        fill_resting(c, "down", 1002.0) if c.legs.get("down") else None
+    assert (v4.blocked.get("extend_breaches_residual_cap", 0) ==
+            v2.blocked.get("extend_breaches_residual_cap", 0))

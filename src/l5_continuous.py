@@ -84,8 +84,14 @@ class V1ExtendOnly(TwoSided):
         if self._cap_last_t is not None and self._cap_bound:
             c["seconds_cap_bound"] += max(0.0, self.now - self._cap_last_t)
         self._cap_last_t = self.now
+        # DENOMINATOR FIX: an attempt is every heavy-side opportunity, blocked
+        # or not. Previously this was incremented only inside the blocked
+        # branch, which made blocked_fraction vacuously 1.0.
+        defic = self.deficient()
+        for s in ("up", "down"):
+            if defic is not None and s != defic and self.qty[s] > 0:
+                c["acquisitions_attempted"] += 1
         for s in bound_sides:
-            c["acquisitions_attempted"] += 1
             c["blocked_by_cap"] += 1
             c[f"blocked_{s}"] += 1
             if self.own_touch(s) is not None:
@@ -174,8 +180,10 @@ class V3Continuous(V2NoBasisGate):
         self.replenishes = 0
         self._filled_px: dict = {}
 
-    def _replenish_price(self, side: str) -> Optional[D]:
-        """V3 keeps the level the filled leg held."""
+    def _replenish_price(self, side: str, allowed: Optional[D]) -> Optional[D]:
+        """V3 keeps the level the filled leg held. `allowed` is the price the
+        frozen `desired()` would pick, passed in so it is computed ONCE -- a
+        second call would double-count the diagnostic block counters."""
         return self._filled_px.get(side)
 
     def _book_fill(self, side, qty, px, *, maker, evidence) -> None:
@@ -188,10 +196,18 @@ class V3Continuous(V2NoBasisGate):
         for side in ("up", "down"):
             if self.legs[side] is not None or side not in self._filled_px:
                 continue
-            want = self._replenish_price(side)
+            # PROBE, not a decision: deciding whether to replenish requires
+            # asking what the frozen gate would allow, but that question must
+            # not inflate the diagnostic block counters -- otherwise V3/V4
+            # report blocks that V2 never recorded for the same behaviour. The
+            # counters are snapshotted and restored around the probe.
+            _blocked_snapshot = dict(self.blocked)
+            allowed = self.desired(side)          # computed ONCE
+            self.blocked = _blocked_snapshot
+            want = self._replenish_price(side, allowed)
             if want is None:
                 continue
-            if self.desired(side) is None:
+            if allowed is None:
                 self._block("replenish_blocked_by_gate")
                 self._filled_px.pop(side, None)
                 continue
@@ -228,12 +244,12 @@ class V4Readjust(V3Continuous):
     variant = V4
     readjust_on_replenish = True
 
-    def _replenish_price(self, side: str) -> Optional[D]:
+    def _replenish_price(self, side: str, allowed: Optional[D]) -> Optional[D]:
         """Re-choose from the current book. NOTE: this reproduces what the frozen
         engine's own `reconcile_quotes` already does, so V4 is expected to be
         BEHAVIOURALLY EQUIVALENT to V2 -- asserted by test, and reported rather
         than disguised as a distinct mechanism."""
-        return self.desired(side)
+        return allowed
 
 
 BY_NAME = {V1: V1ExtendOnly, V2: V2NoBasisGate,

@@ -1,0 +1,51 @@
+DEVELOPMENT windows: 20 (Batch 2 tape; the OOS block is spent and not re-run)
+
+================ SIMULATOR-VALIDITY AUDIT ================
+arm                  fills   persist   crossed cross_share    ahead0=0   med_age_s
+L5_REPLICATION         253         0       197      0.7787      0.01986.46738600730896
+V1_EXTEND_ONLY         673         0       561      0.8336      0.00156.466825008392334
+V2_EXTEND_NO_BASIS_GATE     670         0       535      0.7985      0.00156.108808994293213
+V3_CONTINUOUS_TWO_SIDED    1586      1201      1459      0.9199      0.72510.2130908966064453
+
+  price relative to the executable touch at fill time
+    L5_REPLICATION     fills priced ABOVE the touch: 200/253 = 0.7905   median px-touch = 0.0100
+    V1_EXTEND_ONLY     fills priced ABOVE the touch: 570/673 = 0.8470   median px-touch = 0.0100
+    V2_EXTEND_NO_BASIS_GATE fills priced ABOVE the touch: 545/670 = 0.8134   median px-touch = 0.0100
+    V3_CONTINUOUS_TWO_SIDED fills priced ABOVE the touch: 1473/1586 = 0.9288   median px-touch = 0.0100
+
+  PERSISTED vs DERIVED fills within V3
+    persisted  n=  1201 crossed=0.9467 ahead0=0 0.9534 median px-touch=0.0100 maker_share=0.9825
+    derived    n=   385 crossed=0.8364 ahead0=0 0.0130 median px-touch=0.0100 maker_share=0.5351
+
+================ PAIR FORENSICS ================
+arm                  pairsmed_pair_cost      cost>1    med_edge    neg_edge
+L5_REPLICATION         100      0.9750   3 (0.030)      0.0250   3 (0.030)
+V1_EXTEND_ONLY         216     0.89125   8 (0.037) 0.117500000   8 (0.037)
+V2_EXTEND_NO_BASIS_GATE     2110.8984659090909090909090909091   9 (0.043)0.1085714285714285714285714286   9 (0.043)
+V3_CONTINUOUS_TWO_SIDED     5280.9581611347631017830182416905  32 (0.061)0.0452963975983989326217478318  32 (0.061)
+
+  worst five pairs by gross edge, per arm
+    L5_REPLICATION
+      1030z qty=1 up_px=0.9400 down_px=0.5900 up_maker=True down_maker=False cost=1.5300 edge=-0.5300
+      1030z qty=1 up_px=0.9450 down_px=0.3200 up_maker=True down_maker=False cost=1.2650 edge=-0.2650
+      1030z qty=1 up_px=0.9533333333333333333333333333 down_px=0.1233333333333333333333333333 up_maker=True down_maker=False cost=1.076666666666666666666666667 edge=-0.076666666666666666666666667
+      1445z qty=0.4100 up_px=0.4800 down_px=0.5100 up_maker=True down_maker=True cost=0.9900 edge=0.00410000
+      1445z qty=0.5900 up_px=0.4800 down_px=0.5100 up_maker=True down_maker=True cost=0.9900 edge=0.00590000
+    V1_EXTEND_ONLY
+      1130z qty=1.0000 up_px=5.6500 down_px=5.14 up_maker=True down_maker=True cost=10.7900 edge=-9.79000000
+      1130z qty=1.0000 up_px=0.4650 down_px=2.6150 up_maker=True down_maker=False cost=3.0800 edge=-2.08000000
+      1030z qty=2 up_px=0.8250 down_px=1.1200 up_maker=True down_maker=False cost=1.9450 edge=-1.8900
+      1000z qty=2 up_px=0.7650 down_px=0.8400 up_maker=True down_maker=False cost=1.6050 edge=-1.2100
+      1000z qty=2 up_px=0.7675 down_px=0.5300 up_maker=True down_maker=False cost=1.2975 edge=-0.5950
+    V2_EXTEND_NO_BASIS_GATE
+      1130z qty=1.0000 up_px=5.6500 down_px=5.15 up_maker=True down_maker=True cost=10.8000 edge=-9.80000000
+      1130z qty=1.0000 up_px=0.4650 down_px=2.6200 up_maker=True down_maker=False cost=3.0850 edge=-2.08500000
+      1030z qty=2 up_px=0.8250 down_px=1.1200 up_maker=True down_maker=False cost=1.9450 edge=-1.8900
+      1000z qty=1 up_px=0.7600 down_px=1.1800 up_maker=True down_maker=True cost=1.9400 edge=-0.9400
+      1130z qty=1.0000 up_px=0.6200 down_px=0.9100 up_maker=True down_maker=False cost=1.5300 edge=-0.53000000
+    V3_CONTINUOUS_TWO_SIDED
+      1000z qty=1 up_px=0.7600 down_px=2.5300 up_maker=True down_maker=True cost=3.2900 edge=-2.2900
+      1000z qty=1 up_px=0.7600 down_px=1.3800 up_maker=True down_maker=True cost=2.1400 edge=-1.1400
+      1030z qty=2 up_px=0.6900 down_px=0.8300 up_maker=True down_maker=False cost=1.5200 edge=-1.0400
+      1345z qty=1.4200 up_px=0.7668476249228871067242442936 down_px=0.2534068476249228871067242443 up_maker=True down_maker=False cost=1.020254472547809993830968538 edge=-0.028761351017890191239975324
+      1345z qty=2.0000 up_px=0.7610931806350858927641853201 down_px=0.2481897449245184799583550234 up_maker=False down_maker=True cost=1.009282925559604372722540344 edge=-0.018565851119208745445080688
