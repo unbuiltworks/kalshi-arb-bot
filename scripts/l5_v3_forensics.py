@@ -194,7 +194,7 @@ def main(argv) -> int:
         P = [p for _, p in prs[a]]
         if not P:
             continue
-        costs = [p.up_basis + p.down_basis for p in P]
+        costs = [p.up_px + p.down_px for p in P]
         edges = [p.gross_edge() for p in P]
         over = sum(1 for c in costs if c > ONE)
         neg = sum(1 for e in edges if e < 0)
@@ -209,9 +209,10 @@ def main(argv) -> int:
             continue
         print(f"    {a}")
         for slug, p in P:
-            print(f"      {slug[-5:]} qty={p.qty} up_basis={p.up_basis} "
-                  f"down_basis={p.down_basis} "
-                  f"cost={p.up_basis + p.down_basis} edge={p.gross_edge()}")
+            print(f"      {slug[-5:]} qty={p.qty} up_px={p.up_px} "
+                  f"down_px={p.down_px} up_maker={p.up_maker} "
+                  f"down_maker={p.down_maker} "
+                  f"cost={p.up_px + p.down_px} edge={p.gross_edge()}")
     return 0
 
 

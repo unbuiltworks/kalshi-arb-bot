@@ -1,0 +1,21 @@
+DEVELOPMENT windows: 20 (Batch 2 tape; the OOS block is spent and not re-run)
+
+================ SIMULATOR-VALIDITY AUDIT ================
+arm                  fills   persist   crossed cross_share    ahead0=0   med_age_s
+L5_REPLICATION         253         0       197      0.7787      0.01986.46738600730896
+V1_EXTEND_ONLY         673         0       561      0.8336      0.00156.466825008392334
+V2_EXTEND_NO_BASIS_GATE     670         0       535      0.7985      0.00156.108808994293213
+V3_CONTINUOUS_TWO_SIDED    1586      1201      1459      0.9199      0.72510.2130908966064453
+
+  price relative to the executable touch at fill time
+    L5_REPLICATION     fills priced ABOVE the touch: 200/253 = 0.7905   median px-touch = 0.0100
+    V1_EXTEND_ONLY     fills priced ABOVE the touch: 570/673 = 0.8470   median px-touch = 0.0100
+    V2_EXTEND_NO_BASIS_GATE fills priced ABOVE the touch: 545/670 = 0.8134   median px-touch = 0.0100
+    V3_CONTINUOUS_TWO_SIDED fills priced ABOVE the touch: 1473/1586 = 0.9288   median px-touch = 0.0100
+
+  PERSISTED vs DERIVED fills within V3
+    persisted  n=  1201 crossed=0.9467 ahead0=0 0.9534 median px-touch=0.0100 maker_share=0.9825
+    derived    n=   385 crossed=0.8364 ahead0=0 0.0130 median px-touch=0.0100 maker_share=0.5351
+
+================ PAIR FORENSICS ================
+arm                  pairsmed_pair_cost      cost>1    med_edge    neg_edge
