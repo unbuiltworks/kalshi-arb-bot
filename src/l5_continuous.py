@@ -211,6 +211,14 @@ class V3Continuous(V2NoBasisGate):
                 self._block("replenish_blocked_by_gate")
                 self._filled_px.pop(side, None)
                 continue
+            #: CASE-2: a replenishment at a price that is now MARKETABLE is not
+            #: resting maker inventory. Our live entry is post-only and would be
+            #: refused, so no maker fill, no zero-ahead grant, and no synthetic
+            #: persistence. This is precisely V3's mechanism.
+            if self.is_marketable(side, want):
+                self._block("replenish_marketable_refused_not_resting")
+                self._filled_px.pop(side, None)
+                continue
             shown = self.displayed_at(side, want)
             if shown is None:
                 self._block("replenish_queue_position_unknowable")

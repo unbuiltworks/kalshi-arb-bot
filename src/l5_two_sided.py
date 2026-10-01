@@ -409,13 +409,34 @@ class TwoSided:
 
     # ----------------------------------------------------------- quoting
 
+    def is_marketable(self, side: str, px: D) -> bool:
+        """Would a BUY of `side` at `px` cross the contemporaneous book?
+
+        CASE-2 RULE. Our live order entry is post-only
+        (`participateDontInitiate`) and the proven executor additionally refuses
+        a crossing price via `X.would_cross` BEFORE submission. So a marketable
+        quote is never resting maker inventory for us -- the venue would refuse
+        it, not rest it. Replay must model that refusal rather than grant a
+        maker fill, which is the mechanism that produced V3's advantage.
+        """
+        oask = self.own_ask(side)
+        return oask is not None and D(str(px)) >= D(str(oask))
+
     def displayed_at(self, side: str, px: D) -> Optional[D]:
         """Size resting at exactly `px` on our side, in own terms.
 
-        A full ladder that does not show the price means the level is EMPTY,
-        so we would be first in queue -- returning None there would deadlock
-        the controller. With top-of-book only we cannot know, and None is
-        correct: we refuse rather than invent a queue position.
+        ABSENCE FROM THE LADDER DOES NOT MEAN THE LEVEL IS EMPTY. The previous
+        rule returned 0 -- first in queue -- for any price the ladder did not
+        show, and that single line handed V3 free queue priority on 95.3% of its
+        persisted fills. Measured market structure argues against it too: on this
+        book a price level is REPLENISHED at the same price 78-80% of the time
+        rather than abandoned.
+
+        So absence is now split:
+          * inside the represented depth on our side -> a genuine hole, 0;
+          * outside it -> the queue position is UNKNOWABLE, None, and the caller
+            must refuse rather than invent one.
+        A marketable price is not a queue question at all; see `is_marketable`.
         """
         book = self.ladder["bids"] if side == "up" else self.ladder["offers"]
         if not book:
@@ -423,7 +444,9 @@ class TwoSided:
         want = D(str(px)) if side == "up" else ONE - D(str(px))
         if want in book:
             return book[want]
-        return D(0)
+        if min(book) <= want <= max(book):
+            return D(0)          # a hole inside depth the venue does represent
+        return None              # beyond represented depth: do not invent a queue
 
     def first_leg_side(self) -> str:
         """CONTROL's single first-leg side: the cheaper own-terms executable
@@ -517,6 +540,10 @@ class TwoSided:
                 leg = None
             want = self.desired(side)
             if want is None:
+                continue
+            if self.is_marketable(side, want):
+                #: post-only would be refused by the venue, not rested
+                self._block("marketable_quote_refused_not_resting")
                 continue
             shown = self.displayed_at(side, want)
             if shown is None:

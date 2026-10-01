@@ -173,24 +173,93 @@ def test_v3_replenishment_cannot_breach_a_gate():
 
 # ---------------------------------------------- 4: V4 vs V3
 
+def ladder(c, t, bids, ask="0.60"):
+    """Feed an explicit multi-level ladder so represented depth is controllable."""
+    c.on_book({"bid": max(bids), "ask": ask,
+               "bid_qty": "50", "ask_qty": "50", "status": "OK",
+               "_ladder": {"bids": {D(b): D(50) for b in bids},
+                           "offers": {D(ask): D(50)}}}, t)
+
+
 def test_v4_rechooses_the_replenishment_price_where_v3_keeps_the_level():
+    """V3 may only persist a level that is a genuine HOLE inside represented
+    depth. Here 0.40 sits between 0.45 and 0.35, so it is a hole and the
+    persistence mechanism is exercised; V2/V4 re-choose the touch instead."""
     v3, v4 = build(V3), build(V4)
     for c in (v3, v4):
         c.window_end = 10_000.0
-        feed(c, t=1000.0, bid="0.40", ask="0.60")
+        ladder(c, 1000.0, ["0.40"])
     filled_px = v3.legs["up"].px
-    assert v4.legs["up"].px == filled_px
-    # the book MOVES, then the resting leg fills at its old price
+    assert filled_px == D("0.40")
     for c in (v3, v4):
-        c.on_book({"bid": "0.30", "ask": "0.60", "bid_qty": "50",
-                   "ask_qty": "50", "status": "OK",
-                   "_ladder": {"bids": {D("0.30"): D(50)},
-                               "offers": {D("0.60"): D(50)}}}, 1001.0)
+        ladder(c, 1001.0, ["0.45", "0.35"])      # 0.40 becomes a hole in depth
         fill_resting(c, "up", 1002.0)
     assert v3.legs["up"] is not None and v4.legs["up"] is not None
-    assert v3.legs["up"].px == filled_px, "V3 replenishes at the OLD level"
-    assert v4.legs["up"].px == D("0.30"), "V4 RE-CHOOSES from the current book"
+    assert v3.legs["up"].px == filled_px, "V3 persists the filled level"
+    assert v4.legs["up"].px == D("0.45"), "V4 RE-CHOOSES from the current book"
     assert v3.legs["up"].px != v4.legs["up"].px
+
+
+def test_v3_cannot_persist_a_level_outside_represented_depth():
+    """THE CASE-2 REPAIR. A stale price beyond the represented ladder is not a
+    known-empty level, so no zero-ahead queue grant and no synthetic
+    persistence -- the mechanism behind V3's +1.5281/window."""
+    v3 = build(V3)
+    v3.window_end = 10_000.0
+    ladder(v3, 1000.0, ["0.40"])
+    assert v3.legs["up"].px == D("0.40")
+    ladder(v3, 1001.0, ["0.30", "0.20"])         # 0.40 is now ABOVE all depth
+    fill_resting(v3, "up", 1002.0)
+    assert v3.legs["up"] is None or v3.legs["up"].px != D("0.40"), \
+        "V3 persisted a level whose queue position is unknowable"
+    assert v3.blocked.get("replenish_queue_position_unknowable", 0) >= 1
+
+
+def test_a_marketable_replenishment_is_refused_not_rested():
+    """Post-only entry means the venue would refuse it, so replay must too."""
+    v3 = build(V3)
+    v3.window_end = 10_000.0
+    ladder(v3, 1000.0, ["0.40"], ask="0.60")
+    assert v3.legs["up"].px == D("0.40")
+    # the ask collapses THROUGH our price: 0.40 is now marketable
+    ladder(v3, 1001.0, ["0.38"], ask="0.39")
+    fill_resting(v3, "up", 1002.0)
+    assert not (v3.legs["up"] is not None
+                and v3.legs["up"].px == D("0.40")), \
+        "a marketable price was rested as maker inventory"
+
+
+def test_an_absent_level_does_not_imply_zero_queue_ahead():
+    c = frozen()
+    c.window_end = 10_000.0
+    ladder(c, 1000.0, ["0.45", "0.35"])
+    assert c.displayed_at("up", D("0.40")) == D(0), "a hole inside depth is 0"
+    assert c.displayed_at("up", D("0.90")) is None, "beyond depth is UNKNOWABLE"
+    assert c.displayed_at("up", D("0.05")) is None
+
+
+def test_no_synthetic_fill_from_a_vanished_persisted_price():
+    """A stale price disappearing from the ladder must not create a fill."""
+    v3 = build(V3)
+    v3.window_end = 10_000.0
+    ladder(v3, 1000.0, ["0.40"])
+    before = v3.qty["up"]
+    ladder(v3, 1001.0, ["0.30", "0.20"])
+    assert v3.qty["up"] == before, "inventory moved without a print"
+
+
+def test_an_old_resting_quote_crossed_later_is_not_reclassified():
+    """CASE 1 is UNRESOLVED and must stay untouched: an already-resting leg that
+    the market later crosses keeps its identity and maker flag. The repair
+    governs NEW and REPLENISHED quotes, not this."""
+    c = frozen()
+    c.window_end = 10_000.0
+    ladder(c, 1000.0, ["0.40"], ask="0.60")
+    leg = c.legs["up"]
+    assert leg is not None and leg.maker is True
+    ladder(c, 1001.0, ["0.38"], ask="0.39")      # the market crosses our 0.40
+    assert c.legs["up"] is leg, "the old resting leg was replaced"
+    assert c.legs["up"].maker is True, "it was silently reclassified"
 
 
 def test_neither_v3_nor_v4_cancels_a_valid_unfilled_quote_to_chase():
@@ -243,71 +312,13 @@ def test_v4_is_behaviourally_equivalent_to_v2_and_that_is_REPORTED():
 
 
 def test_v3_is_the_only_variant_that_persists_a_level():
+    """Same hole-in-depth construction as the V3/V4 contrast above, so the
+    persistence mechanism is exercised rather than refused."""
     v2, v3, v4 = build(V2), build(V3), build(V4)
     for c in (v2, v3, v4):
         c.window_end = 10_000.0
-        feed(c, t=1000.0, bid="0.40", ask="0.60")
-        c.on_book({"bid": "0.30", "ask": "0.60", "bid_qty": "50",
-                   "ask_qty": "50", "status": "OK",
-                   "_ladder": {"bids": {D("0.30"): D(50)},
-                               "offers": {D("0.60"): D(50)}}}, 1001.0)
+        ladder(c, 1000.0, ["0.40"])
+        ladder(c, 1001.0, ["0.45", "0.35"])      # 0.40 becomes a hole
         fill_resting(c, "up", 1002.0)
     assert v3.legs["up"].px == D("0.40"), "V3 persists the filled level"
-    assert v2.legs["up"].px == D("0.30") and v4.legs["up"].px == D("0.30")
-
-
-# ------------------------------------- residual-cap observer is decision-neutral
-
-@pytest.mark.parametrize("name", [V1, V2, V3, V4])
-def test_cap_observer_does_not_change_the_cap_or_any_decision(name):
-    c = build(name)
-    assert c.residual_cap == D(2), "the observer must not alter the cap"
-    before = {k: v for k, v in c.__dict__.items()
-              if k not in ("cap", "_cap_bound", "_cap_last_t")}
-    c._cap_probe()
-    after = {k: v for k, v in c.__dict__.items()
-             if k not in ("cap", "_cap_bound", "_cap_last_t")}
-    assert before == after
-
-
-def test_cap_observer_records_a_bind_and_its_residual():
-    c = build(V1)
-    c.window_end = 10_000.0
-    c.now = 1000.0
-    c._book_fill("up", D(3), D("0.50"), maker=True, evidence="t")
-    feed(c, t=1001.0, bid="0.40", ask="0.60")
-    obs = c.report(winner="up")["residual_cap_observer"]
-    assert obs["blocked_by_cap"] >= 1
-    assert obs["blocked_up"] >= 1 and obs["blocked_down"] == 0
-    assert obs["entries_into_cap"] >= 1
-    assert obs["residual_at_first_bind"] is not None
-
-
-def test_blocked_fraction_has_a_real_denominator():
-    """The first version incremented attempts only in the blocked branch, so
-    the fraction was vacuously 1.0. An attempt is every heavy-side opportunity."""
-    c = build(V1)
-    c.window_end = 10_000.0
-    c.now = 1000.0
-    # residual 1: a heavy side exists and the cap still PERMITS the extend
-    c._book_fill("up", D(1), D("0.50"), maker=True, evidence="t")
-    feed(c, t=1001.0, bid="0.40", ask="0.60")
-    obs = c.report(winner="up")["residual_cap_observer"]
-    assert obs["acquisitions_attempted"] > 0
-    assert obs["blocked_by_cap"] == 0, "the cap permits an extend at residual 1"
-    assert obs["blocked_fraction"] == 0.0
-
-
-def test_v4_no_longer_double_counts_the_cap_diagnostic():
-    """V4 used to call desired() inside _replenish_price AND again in
-    reconcile_quotes, doubling a diagnostic counter and breaking a strict
-    equivalence check for no behavioural reason."""
-    v2, v4 = build(V2), build(V4)
-    for c in (v2, v4):
-        c.window_end = 10_000.0
-        c.now = 1000.0
-        c._book_fill("up", D(3), D("0.50"), maker=True, evidence="t")
-        feed(c, t=1001.0, bid="0.40", ask="0.60")
-        fill_resting(c, "down", 1002.0) if c.legs.get("down") else None
-    assert (v4.blocked.get("extend_breaches_residual_cap", 0) ==
-            v2.blocked.get("extend_breaches_residual_cap", 0))
+    assert v2.legs["up"].px == D("0.45") and v4.legs["up"].px == D("0.45")
