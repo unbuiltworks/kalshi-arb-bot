@@ -1,0 +1,281 @@
+========================================================================================================
+WHAT PREDICTS L5's NEXT ACTION CLASS?
+  116675 labelled actions, 1007 markets
+  CHRONOLOGICAL split at window epoch 1788957900: train 93192 / test 23483
+  Fills only. No book data, no resting-order claims.
+========================================================================================================
+
+  unconditional TRAIN split: P(A)=0.4363, P(B)=0.2304, P(D)=0.3333
+  unconditional TEST  split: P(A)=0.4253, P(B)=0.2638, P(D)=0.3109
+
+========================================================================================================
+WHICH VARIABLES ACTUALLY MOVE P(A)/P(B)/P(D)
+  weighted TV = mean total-variation distance from the unconditional split; spread = widest swing in any single class across buckets with n >= 500
+========================================================================================================
+  variable                weightedTV   maxSpread
+  size                        0.1051       0.256
+  d_px_same_side              0.0675       0.179
+  d_size                      0.0530       0.198
+  mv2                         0.0504       0.179
+  mv5                         0.0503       0.185
+  mv10                        0.0462       0.163
+  mv1                         0.0455       0.187
+  run_len                     0.0421       0.178
+  mv30                        0.0416       0.124
+  same_side_cheaper           0.0355       0.077
+  gap_s                       0.0329       0.096
+  t_remaining                 0.0321       0.180
+  lvl_band                    0.0316       0.092
+  matched                     0.0305       0.080
+  prev_same_side              0.0260       0.095
+  fragments                   0.0172       0.101
+  residual_signed             0.0094       0.027
+  side                        0.0053       0.011
+  residual_dir                0.0013       0.002
+
+========================================================================================================
+TOP VARIABLES IN DETAIL
+========================================================================================================
+
+  size   (weighted TV 0.1051, max spread 0.256)
+    bucket                    n    P(A)    P(B)    P(D)
+    [25,100)              39775   0.472   0.109   0.419
+    [5,25)                36364   0.413   0.303   0.284
+    [0,5)                 16521   0.397   0.366   0.237
+    [100,400)               532   0.592   0.113   0.295
+
+  d_px_same_side   (weighted TV 0.0675, max spread 0.179)
+    bucket                    n    P(A)    P(B)    P(D)
+    [-0.005,0.005)        25417   0.375   0.313   0.312
+    [-0.02,-0.005)        17932   0.463   0.236   0.300
+    [0.005,0.02)          14140   0.415   0.140   0.445
+    >=0.05                 9346   0.461   0.171   0.368
+    [0.02,0.05)            9049   0.439   0.196   0.365
+    [-0.05,-0.02)          8173   0.498   0.235   0.267
+    [-1.0,-0.05)           7625   0.516   0.218   0.266
+    UNK                    1510   0.442   0.232   0.326
+
+  d_size   (weighted TV 0.0530, max spread 0.198)
+    bucket                    n    P(A)    P(B)    P(D)
+    [5,50)                29918   0.462   0.165   0.373
+    [-50,-5)              29537   0.418   0.290   0.292
+    [-5,5)                26809   0.415   0.243   0.342
+    >=50                   3209   0.533   0.110   0.357
+    [-1000000000.0,-50)     2964   0.435   0.308   0.258
+    UNK                     755   0.491   0.230   0.278
+
+  mv2   (weighted TV 0.0504, max spread 0.179)
+    bucket                    n    P(A)    P(B)    P(D)
+    UNK                   45456   0.424   0.257   0.319
+    [-0.01,0.01)          20178   0.389   0.275   0.336
+    [-0.03,-0.01)         11056   0.448   0.158   0.394
+    [0.01,0.03)            8417   0.473   0.152   0.375
+    [-1,-0.03)             4598   0.568   0.147   0.285
+    >=0.03                 3487   0.566   0.152   0.282
+
+  mv5   (weighted TV 0.0503, max spread 0.185)
+    bucket                    n    P(A)    P(B)    P(D)
+    UNK                   28450   0.420   0.257   0.323
+    [-0.01,0.01)          21012   0.374   0.286   0.339
+    [-0.05,-0.01)         16784   0.440   0.190   0.371
+    [0.01,0.05)           15214   0.453   0.197   0.350
+    [-1,-0.05)             6301   0.559   0.166   0.274
+    >=0.05                 5431   0.560   0.170   0.270
+
+  mv10   (weighted TV 0.0462, max spread 0.163)
+    bucket                    n    P(A)    P(B)    P(D)
+    [-0.05,-0.01)         19129   0.427   0.216   0.357
+    [0.01,0.05)           18596   0.428   0.225   0.347
+    [-0.01,0.01)          17924   0.366   0.289   0.345
+    UNK                   16086   0.418   0.259   0.323
+    [-1,-0.05)            11192   0.519   0.179   0.302
+    >=0.05                10265   0.530   0.177   0.293
+
+  mv1   (weighted TV 0.0455, max spread 0.187)
+    bucket                    n    P(A)    P(B)    P(D)
+    UNK                   56241   0.427   0.254   0.318
+    [-0.01,0.01)          14734   0.394   0.275   0.331
+    [-0.03,-0.01)         10061   0.444   0.149   0.407
+    [0.01,0.03)            6423   0.476   0.133   0.392
+    [-1,-0.03)             3490   0.581   0.134   0.285
+    >=0.03                 2243   0.565   0.135   0.300
+
+========================================================================================================
+OUT-OF-SAMPLE PREDICTION vs THE UNCONDITIONAL BASELINE
+========================================================================================================
+  baseline (fixed 43/24/33)          log loss 1.08160   accuracy 0.4253   (n=23483)
+  decision tree depth 2              log loss 1.05198   accuracy 0.4265   (n=23483)
+  decision tree depth 3              log loss 1.04551   accuracy 0.4401   (n=23483)
+  decision tree depth 4              log loss 1.04372   accuracy 0.4458   (n=23483)
+  decision tree depth 5              log loss 1.04374   accuracy 0.4457   (n=23483)
+
+  best tree: depth 4, log loss 1.04372 vs baseline 1.08160 (3.50% better), accuracy 0.4458 vs 0.4253
+
+========================================================================================================
+THE TREE (top branches by sample size)
+========================================================================================================
+   root  n=93192  A0.44 B0.23 D0.33   split on size
+      size=[25,100)  n=39775  A0.47 B0.11 D0.42   split on d_px_same_side
+         d_px_same_side=[0.005,0.02)  n=9048  A0.40 B0.07 D0.52   split on d_size
+            d_size=[5,50)  n=3908  A0.44 B0.08 D0.48   split on fragments
+               fragments=[1,2)  n=3150  A0.42 B0.07 D0.51
+               fragments=[2,3)  n=509  A0.50 B0.12 D0.38
+            d_size=[-5,5)  n=3727  A0.35 B0.03 D0.61   split on run_len
+               run_len=[2,3)  n=1677  A0.28 B0.03 D0.69
+               run_len=[3,5)  n=937  A0.39 B0.03 D0.58
+               run_len=[5,9)  n=557  A0.42 B0.03 D0.55
+            d_size=[-50,-5)  n=884  A0.38 B0.19 D0.43   split on residual_dir
+               residual_dir=long_down  n=446  A0.36 B0.20 D0.44
+               residual_dir=long_up  n=438  A0.41 B0.17 D0.42
+            d_size=>=50  n=450  A0.58 B0.10 D0.32
+         d_px_same_side=[-0.02,-0.005)  n=8052  A0.52 B0.12 D0.37   split on lvl_band
+            lvl_band=[0.1,0.25)  n=1427  A0.55 B0.11 D0.34   split on matched
+               matched=>=800  n=721  A0.58 B0.12 D0.30
+               matched=[200,800)  n=653  A0.53 B0.09 D0.38
+            lvl_band=[0.75,0.9)  n=1187  A0.55 B0.12 D0.34   split on residual_dir
+               residual_dir=long_down  n=649  A0.57 B0.13 D0.30
+               residual_dir=long_up  n=538  A0.51 B0.10 D0.39
+            lvl_band=>=0.9  n=1157  A0.45 B0.19 D0.36
+            lvl_band=[0.4,0.6)  n=1150  A0.50 B0.09 D0.42   split on residual_dir
+               residual_dir=long_down  n=659  A0.51 B0.08 D0.41
+               residual_dir=long_up  n=491  A0.48 B0.09 D0.43
+            lvl_band=[0.0,0.1)  n=1149  A0.47 B0.16 D0.37
+            lvl_band=[0.25,0.4)  n=1034  A0.53 B0.08 D0.38   split on side
+               side=down  n=574  A0.53 B0.08 D0.39
+               side=up  n=460  A0.54 B0.09 D0.37
+         d_px_same_side=[-0.005,0.005)  n=6802  A0.42 B0.15 D0.43   split on fragments
+            fragments=[1,2)  n=5339  A0.42 B0.13 D0.45   split on run_len
+               run_len=[1,2)  n=1533  A0.39 B0.11 D0.50
+               run_len=[2,3)  n=1330  A0.39 B0.12 D0.49
+               run_len=[3,5)  n=1297  A0.42 B0.14 D0.43
+               run_len=[5,9)  n=794  A0.45 B0.16 D0.38
+            fragments=[2,3)  n=957  A0.44 B0.19 D0.37   split on side
+               side=up  n=499  A0.41 B0.19 D0.39
+               side=down  n=458  A0.46 B0.19 D0.35
+            fragments=[3,6)  n=443  A0.42 B0.28 D0.30
+         d_px_same_side=>=0.05  n=4360  A0.49 B0.09 D0.42   split on mv10
+            mv10=UNK  n=1211  A0.41 B0.09 D0.49   split on side
+               side=down  n=645  A0.42 B0.11 D0.46
+               side=up  n=566  A0.40 B0.07 D0.53
+            mv10=[-1,-0.05)  n=898  A0.60 B0.09 D0.32
+            mv10=>=0.05  n=748  A0.59 B0.09 D0.32
+            mv10=[-0.05,-0.01)  n=597  A0.48 B0.09 D0.43
+            mv10=[0.01,0.05)  n=561  A0.45 B0.08 D0.48
+         d_px_same_side=[0.02,0.05)  n=3994  A0.47 B0.10 D0.43   split on gap_s
+            gap_s=[0,1)  n=918  A0.59 B0.07 D0.34   split on residual_dir
+               residual_dir=long_down  n=504  A0.59 B0.08 D0.33
+               residual_dir=long_up  n=414  A0.59 B0.06 D0.35
+            gap_s=[9,30)  n=890  A0.41 B0.10 D0.48   split on prev_same_side
+               prev_same_side=False  n=471  A0.39 B0.09 D0.52
+               prev_same_side=True  n=419  A0.44 B0.12 D0.44
+            gap_s=[4,9)  n=847  A0.42 B0.11 D0.47   split on residual_dir
+               residual_dir=long_down  n=436  A0.43 B0.10 D0.47
+               residual_dir=long_up  n=411  A0.41 B0.13 D0.46
+            gap_s=[2,4)  n=795  A0.45 B0.11 D0.43
+         d_px_same_side=[-0.05,-0.02)  n=3555  A0.54 B0.13 D0.33   split on fragments
+            fragments=[1,2)  n=2775  A0.54 B0.10 D0.36   split on lvl_band
+               lvl_band=[0.4,0.6)  n=564  A0.48 B0.06 D0.46
+               lvl_band=[0.1,0.25)  n=478  A0.57 B0.10 D0.33
+               lvl_band=[0.6,0.75)  n=433  A0.53 B0.10 D0.37
+               lvl_band=[0.25,0.4)  n=430  A0.54 B0.08 D0.38
+               lvl_band=[0.75,0.9)  n=426  A0.59 B0.12 D0.29
+            fragments=[2,3)  n=525  A0.58 B0.19 D0.23
+      size=[5,25)  n=36364  A0.41 B0.30 D0.28   split on mv1
+         mv1=UNK  n=22348  A0.40 B0.33 D0.27   split on d_px_same_side
+            d_px_same_side=[-0.005,0.005)  n=5796  A0.35 B0.38 D0.28   split on run_len
+               run_len=[3,5)  n=1526  A0.35 B0.36 D0.29
+               run_len=[2,3)  n=1409  A0.33 B0.34 D0.33
+               run_len=[5,9)  n=1217  A0.36 B0.43 D0.21
+               run_len=[1,2)  n=956  A0.34 B0.31 D0.36
+               run_len=[9,17)  n=586  A0.35 B0.50 D0.15
+            d_px_same_side=[-0.02,-0.005)  n=4213  A0.39 B0.36 D0.25   split on mv5
+               mv5=UNK  n=2017  A0.36 B0.40 D0.24
+               mv5=[0.01,0.05)  n=928  A0.43 B0.32 D0.24
+               mv5=[-0.05,-0.01)  n=738  A0.43 B0.33 D0.24
+            d_px_same_side=>=0.05  n=2824  A0.43 B0.25 D0.32   split on lvl_band
+               lvl_band=[0.4,0.6)  n=769  A0.47 B0.27 D0.26
+               lvl_band=[0.25,0.4)  n=580  A0.45 B0.24 D0.31
+               lvl_band=[0.6,0.75)  n=563  A0.43 B0.26 D0.31
+            d_px_same_side=[0.02,0.05)  n=2559  A0.40 B0.28 D0.33   split on lvl_band
+               lvl_band=[0.4,0.6)  n=515  A0.43 B0.25 D0.32
+               lvl_band=[0.25,0.4)  n=433  A0.44 B0.26 D0.29
+               lvl_band=[0.1,0.25)  n=432  A0.38 B0.28 D0.34
+               lvl_band=[0.6,0.75)  n=416  A0.43 B0.31 D0.27
+            d_px_same_side=[-0.05,-0.02)  n=2384  A0.43 B0.34 D0.23   split on gap_s
+               gap_s=[9,30)  n=849  A0.40 B0.39 D0.21
+               gap_s=[4,9)  n=737  A0.42 B0.33 D0.25
+               gap_s=[2,4)  n=626  A0.50 B0.27 D0.23
+            d_px_same_side=[-1.0,-0.05)  n=2381  A0.46 B0.33 D0.22   split on mv30
+               mv30=>=0.08  n=673  A0.50 B0.31 D0.19
+               mv30=[-1,-0.08)  n=585  A0.47 B0.33 D0.20
+         mv1=[-0.01,0.01)  n=6872  A0.38 B0.32 D0.29   split on d_px_same_side
+            d_px_same_side=[-0.005,0.005)  n=5333  A0.37 B0.35 D0.28   split on run_len
+               run_len=[3,5)  n=1590  A0.35 B0.35 D0.29
+               run_len=[2,3)  n=1496  A0.37 B0.31 D0.33
+               run_len=[5,9)  n=1301  A0.37 B0.39 D0.24
+               run_len=[9,17)  n=582  A0.37 B0.42 D0.21
+            d_px_same_side=[0.005,0.02)  n=545  A0.46 B0.19 D0.35
+            d_px_same_side=[-0.02,-0.005)  n=537  A0.47 B0.23 D0.30
+         mv1=[-0.03,-0.01)  n=3001  A0.45 B0.23 D0.32   split on mv10
+            mv10=[-0.05,-0.01)  n=1207  A0.43 B0.25 D0.32   split on same_side_cheaper
+               same_side_cheaper=False  n=700  A0.41 B0.23 D0.35
+               same_side_cheaper=True  n=497  A0.46 B0.27 D0.27
+            mv10=[-1,-0.05)  n=605  A0.48 B0.22 D0.30
+            mv10=>=0.05  n=460  A0.53 B0.18 D0.29
+            mv10=[0.01,0.05)  n=425  A0.44 B0.19 D0.37
+         mv1=[0.01,0.03)  n=2037  A0.49 B0.19 D0.32   split on run_len
+            run_len=[3,5)  n=565  A0.51 B0.17 D0.32
+            run_len=[2,3)  n=468  A0.48 B0.18 D0.34
+            run_len=[5,9)  n=435  A0.51 B0.19 D0.29
+         mv1=[-1,-0.03)  n=1299  A0.56 B0.18 D0.26   split on same_side_cheaper
+            same_side_cheaper=False  n=680  A0.53 B0.18 D0.29
+            same_side_cheaper=True  n=613  A0.59 B0.17 D0.24
+         mv1=>=0.03  n=807  A0.55 B0.19 D0.27
+      size=[0,5)  n=16521  A0.40 B0.37 D0.24   split on d_px_same_side
+         d_px_same_side=[-0.005,0.005)  n=6092  A0.35 B0.41 D0.24   split on lvl_band
+            lvl_band=[0.1,0.25)  n=1201  A0.32 B0.45 D0.23   split on mv30
+               mv30=[-0.02,0.02)  n=425  A0.30 B0.51 D0.19
+               mv30=[-0.08,-0.02)  n=413  A0.31 B0.46 D0.22
+            lvl_band=[0.75,0.9)  n=1137  A0.32 B0.48 D0.20   split on mv1
+               mv1=[-0.01,0.01)  n=524  A0.31 B0.47 D0.21
+               mv1=UNK  n=520  A0.31 B0.53 D0.17
+            lvl_band=[0.25,0.4)  n=1001  A0.34 B0.41 D0.25   split on mv1
+               mv1=[-0.01,0.01)  n=461  A0.36 B0.35 D0.28
+               mv1=UNK  n=436  A0.32 B0.48 D0.20
+            lvl_band=[0.4,0.6)  n=961  A0.42 B0.30 D0.29   split on side
+               side=down  n=504  A0.42 B0.28 D0.30
+               side=up  n=457  A0.41 B0.32 D0.27
+            lvl_band=[0.6,0.75)  n=832  A0.39 B0.38 D0.23   split on residual_dir
+               residual_dir=long_up  n=431  A0.40 B0.36 D0.24
+               residual_dir=long_down  n=401  A0.39 B0.40 D0.21
+            lvl_band=>=0.9  n=505  A0.30 B0.44 D0.26
+         d_px_same_side=[-0.02,-0.005)  n=3114  A0.39 B0.39 D0.22   split on gap_s
+            gap_s=[2,4)  n=811  A0.38 B0.40 D0.22
+            gap_s=[4,9)  n=633  A0.39 B0.45 D0.16
+            gap_s=[9,30)  n=632  A0.31 B0.49 D0.20
+            gap_s=[0,1)  n=551  A0.52 B0.19 D0.29
+         d_px_same_side=[-0.05,-0.02)  n=1538  A0.46 B0.35 D0.19   split on gap_s
+            gap_s=[9,30)  n=445  A0.38 B0.43 D0.19
+            gap_s=[4,9)  n=415  A0.45 B0.38 D0.17
+         d_px_same_side=[0.02,0.05)  n=1470  A0.40 B0.32 D0.28   split on t_remaining
+            t_remaining=[600,900)  n=476  A0.41 B0.37 D0.22
+            t_remaining=[360,600)  n=445  A0.39 B0.33 D0.28
+         d_px_same_side=>=0.05  n=1438  A0.43 B0.26 D0.30   split on prev_same_side
+            prev_same_side=False  n=968  A0.41 B0.26 D0.33   split on side
+               side=down  n=492  A0.43 B0.26 D0.30
+               side=up  n=476  A0.38 B0.27 D0.35
+            prev_same_side=True  n=470  A0.49 B0.26 D0.25
+         d_px_same_side=[-1.0,-0.05)  n=1314  A0.47 B0.31 D0.21   split on matched
+            matched=[200,800)  n=544  A0.48 B0.34 D0.18
+            matched=>=800  n=455  A0.49 B0.24 D0.27
+      size=[100,400)  n=532  A0.59 B0.11 D0.30
+
+========================================================================================================
+BURSTS: multiple L5 fills at DIFFERENT prices inside 0s / 1s / 2s
+  Fill-only evidence. CONSISTENT with pre-existing ladders being swept, and ALSO with fast sequential decisions. It does NOT establish resting orders, and no such claim is made.
+========================================================================================================
+  window 0s: 85286 groups, 15930 (18.7%) span MORE THAN ONE price
+  window 1s: 71601 groups, 18451 (25.8%) span MORE THAN ONE price
+  window 2s: 65035 groups, 19948 (30.7%) span MORE THAN ONE price
+  same-second groups touching BOTH sides: 5949
+  size of same-second groups: {1: 63752, 2: 15184, 3: 3970, 4: 1343, 5: 539, 6: 227}

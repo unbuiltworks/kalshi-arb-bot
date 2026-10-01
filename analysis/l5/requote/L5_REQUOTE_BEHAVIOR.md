@@ -62,6 +62,13 @@ Flat to within ~2 points across two orders of magnitude of residual. **The mixtu
 does not depend on how imbalanced he is.** A cap-like or imbalance-triggered rule
 is not what he is running.
 
+> **CORRECTION.** This document went on to call the split a "state-independent
+> mixture". That was too strong: it generalised from ONE variable. See
+> `L5_NEXT_ACTION_PREDICTORS.md` -- conditioning on action size, distance from
+> his own last level and recent price movement moves the probabilities to
+> P(A) 0.28-0.60, P(B) 0.03-0.50, P(D) 0.15-0.69. The correct narrow claim is
+> that RESIDUAL does not explain the mixture; other state does.
+
 ### How far he moves, and how fast
 
 Same-side re-price distance while imbalanced (n = 78,296):
@@ -70,6 +77,9 @@ Same-side re-price distance while imbalanced (n = 78,296):
 Seconds to his next action while imbalanced: **p50 2 s**, p90 17 s, p99 58 s.
 
 ## The smallest rule that explains it
+
+*(Superseded in part: the proportions are conditional, not fixed. See the
+correction above and `L5_NEXT_ACTION_PREDICTORS.md`.)*
 
 > **Act again within a couple of seconds. Stay imbalanced. Each time, either
 > re-execute the same side within about one tick of your last level (~43%), repeat
