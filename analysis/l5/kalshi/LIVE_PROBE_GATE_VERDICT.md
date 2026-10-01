@@ -129,3 +129,20 @@ period** because the thinner touch held 0.34 contracts — it read an empty book
 as a free pool. Adding the supply ceiling moved that candidate to $0.60 and
 inverted the ranking. Recorded here rather than silently fixed: the loose bound
 would have manufactured a passing candidate.
+
+---
+
+## SUPERSEDED, 2026-10-01 — the bound in this document is invalid
+
+The verdict (NO LIVE PROBE) stands, but the argument below does not. The
+claimed global ceiling `min(pool/(1+touch), pool/target_size_fp)` is **not a
+valid upper bound** under Kalshi's published Liquidity Incentive Program
+scoring: payout is normalized against *total raw score on the side*, and the
+Reference Price sits only Target/5 deep with a flat 1.0 multiplier at or above
+it. The true structural ceiling is `pool/(Target/5 + 1)` = **$4.98**, roughly
+5x what this document reports.
+
+The corrected analysis is in `LIP_SCORING_CORRECTION.md`, and the corrected
+verdict — which declines the probe because the venue's $1.00 minimum payout
+floors q1 compensation at zero — is in `CORRECTED_VERDICT.md`. Read those
+instead. This file is retained as the record of the superseded reasoning.
