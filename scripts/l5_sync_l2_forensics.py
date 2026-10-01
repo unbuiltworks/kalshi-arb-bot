@@ -81,9 +81,13 @@ def scan(path: str) -> Dict[str, Any]:
                             aid = str(c.get("asset_id"))
                             out["touch"][aid].append(
                                 (ms, c.get("best_bid"), c.get("best_ask")))
+                            #: SIDE MATTERS. L5 is a BUYER, so only BID depth
+                            #: can be his resting order. Conflating bid and ask
+                            #: depth at the same price made the first run's
+                            #: verdicts meaningless.
                             out["levels"][aid].append(
                                 (ms, str(c.get("price")), str(c.get("size")),
-                                 str(c.get("side"))))
+                                 str(c.get("side")).upper()))
                     elif et == "last_trade_price":
                         out["trades"][str(e.get("transaction_hash")).lower()] = {
                             "ts": float(e.get("timestamp") or 0) / 1000.0,
@@ -131,12 +135,21 @@ def validate_level_semantics(snaps: List[dict], levels: List[tuple]) -> Dict[str
 
 
 def level_size_at(snaps: List[dict], levels: List[tuple], px: str,
-                  t: float) -> Tuple[Optional[str], str]:
-    """Size resting at `px` at time `t`: the latest price_change for that price,
-    else the newest snapshot at or before t. Returns (size, source)."""
+                  t: float, side: str = "BUY") -> Tuple[Optional[str], str]:
+    """BID-side size resting at `px` as of time `t`, or ask-side if asked.
+
+    TWO CORRECTIONS over the first version, both of which invalidated its output:
+      * the SIDE is respected. L5 buys, so only bid depth can be his resting
+        order; the first version summed bids and asks at the same price.
+      * `t` must be a MARGIN before the fill, not a millisecond. A price_change
+        reporting the level consumed BY the fill can carry a timestamp at or
+        before the trade's, so a 1ms lookback reads post-fill state and calls it
+        pre-fill. The caller passes an explicit margin and the margin is printed.
+    """
+    want = "bids" if side == "BUY" else "asks"
     best = None
-    for ms, p, sz, _s in levels:
-        if ms <= t and p == px:
+    for ms, p, sz, sd in levels:
+        if ms <= t and p == px and sd == side:
             best = (ms, sz)
     snap = None
     for s in snaps:
@@ -146,7 +159,7 @@ def level_size_at(snaps: List[dict], levels: List[tuple], px: str,
             break
     snap_sz = None
     if snap:
-        for row in (snap["bids"] or []) + (snap["asks"] or []):
+        for row in (snap[want] or []):
             if str(row.get("price")) == px:
                 snap_sz = str(row.get("size"))
                 break
@@ -267,8 +280,9 @@ def main(argv) -> int:
         for lead in LEADS:
             b, a = touch_at(touch, t0 - lead)
             print(f"      T-{lead:>5.0f}s  best_bid {b}  best_ask {a}")
-        b0, a0 = touch_at(touch, t0 - 0.001)
-        print(f"      T-0.001s  best_bid {b0}  best_ask {a0}")
+        b0, a0 = touch_at(touch, t0 - 0.25)
+        print(f"      T-0.25 s  best_bid {b0}  best_ask {a0}   "
+              f"(a 1ms lookback would read state the fill itself caused)")
 
         print("    level represented at each executed price, BEFORE the burst:")
         verdicts = []
@@ -276,14 +290,23 @@ def main(argv) -> int:
             px = f"{f['px']:.2f}"
             row = []
             for lead in LEADS:
-                sz, src = level_size_at(snaps, levels, px, t0 - lead)
+                sz, _src = level_size_at(snaps, levels, px, t0 - lead)
                 row.append(f"T-{lead:.0f}s={sz if sz is not None else 'absent'}")
-            sz_pre, src_pre = level_size_at(snaps, levels, px, t0 - 0.001)
-            enough = (sz_pre is not None and float(sz_pre) >= f["size"])
+            #: MARGINS, not a millisecond: state within ~250ms of the fill may
+            #: already reflect the fill itself.
+            marg = {}
+            for m in (0.25, 1.0):
+                s, src = level_size_at(snaps, levels, px, t0 - m)
+                marg[m] = (s, src)
+            s25 = marg[0.25][0]
+            enough = (s25 is not None and float(s25) >= f["size"])
             verdicts.append(enough)
-            print("      px %-6s %s | just before: %s (%s) -> covers %s? %s" % (
-                px, "  ".join(row), sz_pre if sz_pre is not None else "absent",
-                src_pre, f["size"], "YES" if enough else "NO"))
+            print("      px %-6s BID %s | T-250ms: %s (%s) | T-1s: %s "
+                  "-> covers %s? %s" % (
+                      px, "  ".join(row),
+                      s25 if s25 is not None else "absent", marg[0.25][1],
+                      marg[1.0][0] if marg[1.0][0] is not None else "absent",
+                      f["size"], "YES" if enough else "NO"))
 
         if all(verdicts):
             cls = "CONSISTENT_WITH_PRE_RESTING"
