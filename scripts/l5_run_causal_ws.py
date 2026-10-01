@@ -114,7 +114,9 @@ def events(slug: str):
             px, q = _d(tr.get("price")), _d(tr.get("quantity"))
             if px is None or q is None or q <= 0:
                 continue
-            out.append((t, "trade", {"px": str(px), "qty": str(q)}))
+            tk = tr.get("taker") or {}
+            out.append((t, "trade", {"px": str(px), "qty": str(q),
+                                     "taker_side": tk.get("side")}))
     out.sort(key=lambda e: (e[0], 0 if e[1] == "book" else 1))
     return out
 

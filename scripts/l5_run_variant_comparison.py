@@ -67,7 +67,8 @@ def run_window(paths, slug, winner, start, clip) -> Dict[str, Any]:
             if kind == "book":
                 c.on_book(row, t)
             else:
-                c.on_trade(row.get("px"), row.get("qty"), t)
+                c.on_trade(row.get("px"), row.get("qty"), t,
+                            row.get("taker_side"))
         r = c.report(winner=winner)
         d = {k: r.get(k) for k in METRICS}
         if arm in VARIANT_NAMES:

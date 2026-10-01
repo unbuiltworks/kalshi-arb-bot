@@ -352,6 +352,9 @@ class TwoSided:
         self.queue_forfeited = self.queue_consumed = D(0)
         self.ahead_at_placement: List[D] = []
         self.blocked: Dict[str, int] = {}
+        #: prints whose aggressor direction the source could not establish, and
+        #: which therefore filled nothing. Reported, never silently dropped.
+        self.unresolved_prints = 0
         #: DECISION-NEUTRAL observability. These are counted at every decision
         #: point and are never read by any rule, so they cannot change an
         #: action. They exist to expose how OFTEN the arms' differentiating
@@ -601,16 +604,38 @@ class TwoSided:
         # rule 9: reset cycle-local state only; inventory and economics persist
         self.cycle += 1
 
-    def on_trade(self, px: D, qty: D, t: float) -> None:
+    #: which aggressor can consume which resting queue. Established empirically
+    #: from the authenticated tape (window 1915z, 6,874 trades): `taker.side`
+    #: alone decides the side of the book consumed, and `outcomeSide` does not
+    #: flip it -- SELL lands AT_BID 86-87% of the time, BUY lands AT_ASK 84-90%.
+    #: Our "up" leg rests on the YES bid, so only a SELL aggressor can consume
+    #: it; our "down" leg rests on the YES ask, so only a BUY aggressor can.
+    CONSUMED_BY = {"up": "SELL", "down": "BUY"}
+
+    def on_trade(self, px: D, qty: D, t: float,
+                 taker_side: Optional[str] = None) -> None:
         """A real print. The only thing that fills a resting quote.
 
         Causal: a leg may fill only from evidence AFTER it was placed, its
-        queue is consumed only by prints at or through its price, and a
-        partial reduces remaining quantity without resetting queue.
+        queue is consumed only by prints at or through its price, AND only by
+        flow whose aggressor direction can actually reach that side of the book.
+
+        `taker_side` is "BUY", "SELL", or None for unknown. UNKNOWN DOES NOT
+        FILL: inventing a fill from a print whose direction we cannot establish
+        is exactly what made replay too generous. Unknown prints are counted in
+        `unresolved_prints` so their share is always visible.
         """
         self.now = t
         px, qty = D(str(px)), D(str(qty))
+        side_of = (None if taker_side is None
+                   else ("SELL" if str(taker_side).upper().endswith("SELL")
+                         else "BUY"))
+        if side_of is None:
+            self.unresolved_prints += 1
+            return
         for side in ("up", "down"):
+            if self.CONSUMED_BY[side] != side_of:
+                continue                    # this flow cannot reach our queue
             leg = self.legs[side]
             if leg is None or t < leg.placed_t:
                 continue
@@ -761,7 +786,8 @@ class TwoSided:
             if kind == "book":
                 self.on_book(row, t)
             else:
-                self.on_trade(row.get("px"), row.get("qty"), t)
+                self.on_trade(row.get("px"), row.get("qty"), t,
+                            row.get("taker_side"))
         return self.report()
 
     def settle(self, winner: Optional[str]) -> dict:
@@ -841,6 +867,7 @@ class TwoSided:
                    (sum(self.adverse) / D(len(self.adverse)))
                    if self.adverse else D(0)),
                "blocked_reasons": dict(self.blocked),
+               "unresolved_prints": self.unresolved_prints,
                "decision_opportunity": dict(self.opp),
                "pairs_per_min": (round(len(self.pairs) / minutes, 4)
                                  if minutes else None),

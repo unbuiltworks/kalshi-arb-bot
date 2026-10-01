@@ -157,8 +157,8 @@ def test_rule_3_both_sides_filling_banks_a_pair_and_opens_a_new_cycle():
     # a print at 0.40 fills our UP; at 0.60 fills our DOWN (own terms 0.40)
     c.legs["up"].ahead = D(0)
     c.legs["down"].ahead = D(0)
-    c.on_trade(D("0.40"), D(1), 1.0)
-    c.on_trade(D("0.60"), D(1), 2.0)
+    c.on_trade(D("0.40"), D(1), 1.0, "ORDER_SIDE_SELL")
+    c.on_trade(D("0.60"), D(1), 2.0, "ORDER_SIDE_BUY")
     assert c.matched() == D(1), (c.qty, c.pairs)
     assert c.residual() == D(0)
     assert c.cycles_completed == 1
@@ -169,7 +169,7 @@ def test_rule_4_the_heavy_side_is_not_added_to_by_default():
     c = TwoSided(arm=ARM_REPLICATION)          # allow_extend False
     c.on_book(_book("0.40", "0.60"), 0.0)
     c.legs["up"].ahead = D(0)
-    c.on_trade(D("0.40"), D(1), 1.0)           # long UP now
+    c.on_trade(D("0.40"), D(1), 1.0, "ORDER_SIDE_SELL")           # long UP now
     assert c.residual() == D(1)
     c.on_book(_book("0.40", "0.60"), 2.0)
     assert c.legs["up"] is None, "added to the heavy side"
@@ -180,7 +180,7 @@ def test_rule_5_the_deficient_side_is_worked_inside_the_budget():
     c = TwoSided(arm=ARM_REPLICATION, allow_reactive_take=False)
     c.on_book(_book("0.40", "0.60"), 0.0)
     c.legs["up"].ahead = D(0)
-    c.on_trade(D("0.40"), D(1), 1.0)
+    c.on_trade(D("0.40"), D(1), 1.0, "ORDER_SIDE_SELL")
     c.on_book(_book("0.40", "0.60"), 2.0)
     dn = c.legs["down"]
     assert dn is not None
@@ -222,9 +222,9 @@ def test_fills_book_only_the_delta_and_never_cumulative_twice():
     c.on_book(_book("0.40", "0.60"), 0.0)
     assert c.legs["up"] is not None, c.blocked
     c.legs["up"].ahead = D(0)
-    c.on_trade(D("0.40"), D("0.4"), 1.0)        # partial
+    c.on_trade(D("0.40"), D("0.4"), 1.0, "ORDER_SIDE_SELL")        # partial
     assert c.qty["up"] == D("0.4")
-    c.on_trade(D("0.40"), D("0.6"), 2.0)        # completes the clip
+    c.on_trade(D("0.40"), D("0.6"), 2.0, "ORDER_SIDE_SELL")        # completes the clip
     assert c.qty["up"] == D("1.0"), "cumulative was double-booked"
     assert c.matched() == D(1)
 
@@ -234,7 +234,7 @@ def test_a_partial_on_the_deficient_side_keeps_its_queue_position():
     c.on_book(_book("0.40", "0.60"), 0.0)
     leg = c.legs["up"]
     leg.ahead = D(0)
-    c.on_trade(D("0.40"), D("0.4"), 1.0)
+    c.on_trade(D("0.40"), D("0.4"), 1.0, "ORDER_SIDE_SELL")
     assert c.legs["up"] is leg, "the remainder was re-placed"
     assert c.legs["up"].filled == D("0.4")
     assert c.legs["up"].remaining() == D("0.6")
@@ -247,7 +247,7 @@ def test_a_partial_that_turns_its_own_side_heavy_is_pulled_not_extended():
     c = TwoSided(arm=ARM_REPLICATION)
     c.on_book(_book("0.40", "0.60"), 0.0)
     c.legs["up"].ahead = D(0)
-    c.on_trade(D("0.40"), D("0.4"), 1.0)        # now long UP: UP is heavy
+    c.on_trade(D("0.40"), D("0.4"), 1.0, "ORDER_SIDE_SELL")        # now long UP: UP is heavy
     assert c.qty["up"] == D("0.4")
     assert c.legs["up"] is None
     assert "heavy_side_extend_disabled" in c.blocked
@@ -261,7 +261,7 @@ def test_the_no_side_is_inverted_exactly_once():
     assert dn.px == D("0.40")                    # own terms
     # a print at wire 0.60 is own-terms 0.40 and reaches us
     dn.ahead = D(0)
-    c.on_trade(D("0.60"), D(1), 1.0)
+    c.on_trade(D("0.60"), D(1), 1.0, "ORDER_SIDE_BUY")
     assert c.qty["down"] == D(1)
     assert c.basis("down") == D("0.40")
 
@@ -270,7 +270,7 @@ def test_a_print_before_placement_can_never_fill_a_leg():
     c = TwoSided(arm=ARM_REPLICATION)
     c.on_book(_book("0.40", "0.60"), 10.0)
     c.legs["up"].ahead = D(0)
-    c.on_trade(D("0.40"), D(1), 5.0)            # BEFORE placement
+    c.on_trade(D("0.40"), D(1), 5.0, "ORDER_SIDE_SELL")            # BEFORE placement
     assert c.qty["up"] == D(0)
 
 
@@ -280,13 +280,13 @@ def test_queue_is_consumed_only_by_prints_at_or_through_our_price():
     leg = c.legs["up"]
     leg.ahead = D(50)
     # A print ABOVE our bid traded without reaching us: queue untouched.
-    c.on_trade(D("0.45"), D(10), 1.0)
+    c.on_trade(D("0.45"), D(10), 1.0, "ORDER_SIDE_SELL")
     assert leg.ahead == D(50)
     # At our price: queue is consumed.
-    c.on_trade(D("0.40"), D(10), 2.0)
+    c.on_trade(D("0.40"), D(10), 2.0, "ORDER_SIDE_SELL")
     assert leg.ahead == D(40)
     # THROUGH our price (below a bid) means our level was reached too.
-    c.on_trade(D("0.35"), D(10), 3.0)
+    c.on_trade(D("0.35"), D(10), 3.0, "ORDER_SIDE_SELL")
     assert leg.ahead == D(30)
 
 

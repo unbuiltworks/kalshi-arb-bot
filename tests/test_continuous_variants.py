@@ -30,7 +30,10 @@ def fill_resting(c, side, t):
     leg = c.legs[side]
     leg.ahead = D(0)
     px = leg.px if side == "up" else (D(1) - leg.px)
-    c.on_trade(px, leg.remaining(), t)
+    # only correctly directed flow can reach a resting queue: our "up" leg sits
+    # on the YES bid (SELL reaches it), our "down" leg on the YES ask (BUY does)
+    c.on_trade(px, leg.remaining(), t,
+               "ORDER_SIDE_SELL" if side == "up" else "ORDER_SIDE_BUY")
     return leg
 
 

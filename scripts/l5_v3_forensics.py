@@ -129,7 +129,8 @@ def run(paths, slug, winner, start):
             if kind == "book":
                 c.on_book(row, t)
             else:
-                c.on_trade(row.get("px"), row.get("qty"), t)
+                c.on_trade(row.get("px"), row.get("qty"), t,
+                            row.get("taker_side"))
         out[name] = {"ledger": c.ledger, "pairs": c.pairs,
                      "report": c.report(winner=winner)}
     return out

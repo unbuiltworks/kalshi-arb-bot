@@ -82,7 +82,8 @@ def run_window(paths, slug: str, winner: str, start: float,
             if kind == "book":
                 c.on_book(row, t)
             else:
-                c.on_trade(row.get("px"), row.get("qty"), t)
+                c.on_trade(row.get("px"), row.get("qty"), t,
+                            row.get("taker_side"))
         r = c.report(winner=winner)
         out[arm] = {k: r.get(k) for k in METRICS}
     return out
