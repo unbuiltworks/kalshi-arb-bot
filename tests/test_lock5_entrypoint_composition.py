@@ -49,6 +49,10 @@ ENTRYPOINTS = [
     "scripts/pmus_balance_admission_probe.py",
     "scripts/pmus_completeness_rule.py",
     "scripts/audit_economic_complete.py",
+    #: the authorized $0.01 private-WS SCHEMA PROBE. Declared here rather than
+    #: excluded, so the guard stays bidirectional: its closure must be present
+    #: in the image, and nothing unreachable may ride along with it.
+    "scripts/pmus_schema_probe_run.py",
 ]
 MKT = "cpc-btc-updown-15m-2026-09-28-0215z"
 

@@ -185,7 +185,16 @@ def test_the_only_production_references_are_observation_wiring():
     import pathlib
     allowed = {"pmus_ws_lifecycle_observer.py": "the module itself",
                "pmus_native_money_path.py": "holds the on_rest hook",
-               "l5_pmus_live_oneshot.py": "constructs, starts, journals, stops"}
+               "l5_pmus_live_oneshot.py": "constructs, starts, journals, stops",
+               #: the $0.01 schema probe exists to OBSERVE this socket: it uses
+               #: the module's subscribe frames and outbound guard and nothing
+               #: else. test_no_observer_call_site_can_reach_execution is
+               #: extended to cover both files, so the safety property is
+               #: enforced here rather than merely waived.
+               "pmus_private_schema_probe.py": "imports the module for arming "
+                                               "docs only",
+               "pmus_schema_probe_run.py": "subscribes and guards the private "
+                                           "socket; observation only"}
     hits = []
     for p in list(pathlib.Path("src").glob("*.py")) + \
             list(pathlib.Path("scripts").glob("*.py")):
@@ -201,9 +210,14 @@ def test_no_observer_call_site_can_reach_execution():
     forbidden = ("submit", "cancel", "on_fill", "mark_terminal",
                  "release_terminal", "registry.record", "_post(")
     for f in ("src/pmus_native_money_path.py",
-              "scripts/l5_pmus_live_oneshot.py"):
+              "scripts/l5_pmus_live_oneshot.py",
+              #: the schema probe is held to the same rule: no line that
+              #: touches the private observer may also submit or cancel.
+              "src/pmus_private_schema_probe.py",
+              "scripts/pmus_schema_probe_run.py"):
         for i, line in enumerate(pathlib.Path(f).read_text().split("\n"), 1):
-            if "ws_observer" not in line:
+            if "ws_observer" not in line and "lifecycle_observer" not in line \
+                    and " PV." not in line and "PV." not in line:
                 continue
             for bad in forbidden:
                 assert bad not in line, "%s:%d %r" % (f, i, line.strip())
