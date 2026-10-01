@@ -267,3 +267,30 @@ def test_signals_set_the_stop_flag_so_readers_wind_down():
     assert not S._STOP.is_set()
     S._STOP.set()
     assert S._STOP.is_set()
+
+
+def test_pmus_q1_live_is_the_literal_YES_not_the_session_id(monkeypatch):
+    """The exact arming contract, pinned so the Railway values cannot be wrong.
+
+    PMUS_Q1_LIVE must be 'YES'. Setting it to the session id -- which an earlier
+    refusal message wrongly implied -- must NOT arm the probe.
+    """
+    arm(monkeypatch)
+    assert P.armed(SID) is True
+    monkeypatch.setenv(P.LIVE_ENV, SID)
+    assert P.armed(SID) is False, "PMUS_Q1_LIVE=<session id> must not arm"
+    monkeypatch.setenv(P.LIVE_ENV, "yes")
+    assert P.armed(SID) is True, "case and surrounding space are tolerated"
+    monkeypatch.setenv(P.LIVE_ENV, " YES ")
+    assert P.armed(SID) is True
+    monkeypatch.setenv(P.LIVE_ENV, "TRUE")
+    assert P.armed(SID) is False
+
+
+def test_the_refusal_message_states_the_real_contract(monkeypatch):
+    for env in (P.LIVE_ENV, P.SESSION_ENV, P.ARM_ENV, P.PROBE_ARM_ENV):
+        monkeypatch.delenv(env, raising=False)
+    msg = S.run(Boom())["refusal"]
+    assert "must be exactly 'YES'" in msg
+    assert "equal the same session id" in msg
+    assert "all four" not in msg, "the old, misleading wording is back"

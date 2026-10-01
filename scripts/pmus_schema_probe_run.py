@@ -129,9 +129,13 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
         "sweep_verified": False, "terminal_proved": False,
     }
     if not P.armed(session or "\x00"):
-        out["refusal"] = ("NOT_ARMED: all four of "
-                          f"{P.LIVE_ENV}/{P.SESSION_ENV}/{P.ARM_ENV}/"
-                          f"{P.PROBE_ARM_ENV} must equal the session id")
+        #: state the ACTUAL contract. An earlier message said "all four must
+        #: equal the session id", which is wrong and would have had an operator
+        #: set PMUS_Q1_LIVE to the session id and refuse forever.
+        out["refusal"] = (
+            f"NOT_ARMED: {P.LIVE_ENV} must be exactly 'YES', and "
+            f"{P.SESSION_ENV}, {P.ARM_ENV} and {P.PROBE_ARM_ENV} must all "
+            f"equal the same session id")
         return out
     if not X.has_credentials():
         out["refusal"] = "NO_CREDENTIALS"

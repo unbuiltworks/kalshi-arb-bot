@@ -15,8 +15,10 @@ at least MIN_DISTANCE below the executable touch in own terms. Worst case if it
 somehow filled in full is $0.01, and filling at all would need the market to
 collapse 20+ ticks while we are live.
 
-ARMING. The existing triple key plus a probe-specific key, all of which must be
-set to the same session id. Absent any of them the module refuses to submit.
+ARMING, exactly: `PMUS_Q1_LIVE` must be the literal string `YES`, and
+`PMUS_Q1_SESSION_ID`, `PMUS_Q1_ARM` and `PMUS_SCHEMA_PROBE_ARM` must all equal
+the SAME session id. `PMUS_Q1_LIVE` is NOT the session id. Absent or mismatched
+on any of the four, the module refuses to submit.
 """
 from __future__ import annotations
 
