@@ -359,21 +359,14 @@ def test_totals_are_none_without_an_authoritative_winner():
     assert s["shadow_total_with_flatten"] is None
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "KNOWN BUG, deliberately not patched yet (owner instruction). In "
-    "decide_completion's EXIT_NOW branch, `self.qty[held] -= held_qty` runs "
-    "BEFORE `self.cost[held] -= self.basis(held) * held_qty`, so basis is "
-    "recomputed on the ALREADY-REDUCED quantity. A flatten therefore changes "
-    "the average cost of what remains, and a FULL flatten leaves the cost "
-    "behind entirely because basis() returns 0 when qty is 0. The stale cost "
-    "then inflates the next acquisition's basis without bound, which is how "
-    "pairs priced above $1 and negative matched gross edge arise."))
 def test_a_flatten_must_not_change_the_average_cost_of_what_remains():
+    """REGRESSION. Was a strict xfail: `self.qty[held] -= held_qty` ran BEFORE
+    `self.cost[held] -= self.basis(held) * held_qty`, so basis was recomputed on
+    the already-reduced quantity. Repaired with basis-before-mutation."""
     from src.l5_two_sided import ARM_REPLICATION, TwoSided
     c = TwoSided(arm=ARM_REPLICATION, clip=D(1))
     c.qty["up"] = D(2)
     c.cost["up"] = D(2) * D("0.40")
     before = c.basis("up")
-    c.qty["up"] -= D(1)
-    c.cost["up"] -= c.basis("up") * D(1)
+    c._dispose("up", D(1), before)
     assert c.basis("up") == before

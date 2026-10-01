@@ -555,6 +555,34 @@ class TwoSided:
             self.worst_residual = r
         self._bank_pairs()
 
+    def _dispose(self, side: str, qty: D, basis_before: D) -> None:
+        """Remove `qty` of `side` at the average cost it was carried at.
+
+        INVARIANTS enforced here rather than trusted:
+          * quantity never goes negative;
+          * cost never retains disposed inventory;
+          * a FULL disposal leaves qty == 0 AND cost == 0 exactly, so no
+            residue can contaminate a later acquisition's basis;
+          * the average cost of what REMAINS is unchanged by a disposal.
+        """
+        if qty <= 0:
+            return
+        if qty > self.qty[side]:
+            raise AssertionError(
+                f"cannot dispose {qty} of {side}: only {self.qty[side]} held")
+        self.qty[side] -= qty
+        if self.qty[side] == 0:
+            self.cost[side] = D(0)          # exact, never a rounding residue
+        else:
+            self.cost[side] -= basis_before * qty
+            if self.basis(side) != basis_before:
+                raise AssertionError(
+                    f"disposal changed the basis of what remains on {side}: "
+                    f"{basis_before} -> {self.basis(side)}")
+        if self.cost[side] < 0:
+            raise AssertionError(
+                f"cost went negative on {side}: {self.cost[side]}")
+
     def _bank_pairs(self) -> None:
         """Rule 3: min(UP, DOWN) becomes matched, and its economics are banked."""
         m = min(self.qty["up"], self.qty["down"])
@@ -705,13 +733,20 @@ class TwoSided:
             fee = (FEES.taker_fee(D(str(own_bid)), held_qty, cents=True)
                    if self.cash_basis
                    else FEES.taker_fee(D(str(own_bid)), held_qty))
-            pnl = proceeds - fee - self.basis(held) * held_qty
+            # BASIS-BEFORE-MUTATION. `basis()` is cost/qty, so it MUST be read
+            # before the quantity changes. Reading it afterwards used the wrong
+            # denominator: a partial flatten silently re-priced the inventory
+            # that remained, and a full flatten removed no cost at all because
+            # basis() returns 0 once qty is 0 -- leaving stale cost that
+            # inflated the next acquisition's basis without bound and
+            # manufactured impossible pair prices such as 5.65.
+            basis_before = self.basis(held)
+            pnl = proceeds - fee - basis_before * held_qty
             self.flatten_pnl += pnl
             self.flattens.append({"t": self.now, "side": held,
                                   "qty": str(held_qty), "px": str(own_bid),
                                   "pnl": str(pnl), "shadow_only": True})
-            self.qty[held] -= held_qty
-            self.cost[held] -= self.basis(held) * held_qty
+            self._dispose(held, held_qty, basis_before)
             leg = self.legs.get(defic)
             if leg is not None:
                 self._drop(defic, leg, "flattened")
