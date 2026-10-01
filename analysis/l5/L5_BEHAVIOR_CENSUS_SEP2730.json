@@ -1,0 +1,58 @@
+{
+ "markets": 384,
+ "actions": 33395,
+ "fill_fragments": 38961,
+ "action_classes": {
+  "OPEN": 384,
+  "EXTEND": 16885,
+  "COMPLETE": 16066,
+  "REOPEN": 60
+ },
+ "same_side_share_of_followups": 0.6302,
+ "gap_s": {
+  "median": 2,
+  "p25": 0,
+  "p75": 9,
+  "p90": 24,
+  "mean": 8.46
+ },
+ "gap_s_EXTEND": {
+  "n": 16885,
+  "median": 2,
+  "p90": 22
+ },
+ "gap_s_COMPLETE": {
+  "n": 16066,
+  "median": 3,
+  "p90": 25
+ },
+ "gap_s_REOPEN": {
+  "n": 60,
+  "median": 9,
+  "p90": 54
+ },
+ "abs_residual_before_action": {
+  "median": "63.729506",
+  "p90": "180.975789",
+  "max": "592.001075"
+ },
+ "extend_basis_improving_share": 0.4594,
+ "cycled_after_match_actions": 16025,
+ "size": {
+  "median": "20",
+  "p90": "20",
+  "max": "130"
+ },
+ "fragments_per_action": {
+  "median": 1,
+  "p90": 2
+ },
+ "secs_left_at_action": {
+  "median": 390,
+  "p10": 81,
+  "p90": 792,
+  "negative(after_close)": 0
+ },
+ "size_median_when_imbalanced": "20",
+ "size_median_when_flat": "20"
+}
