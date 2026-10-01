@@ -1,0 +1,39 @@
+markets=384 actions=33395
+
+=========== DISCRIMINATING MEASUREMENTS ===========
+
+1. consecutive same-side fills at an UNCHANGED price (runs)
+   n_runs=29944 median=1 p75=1 p90=1 p99=3 max=9
+   share of runs with length 1 (a new price every fill): 0.9102
+   share of runs with length >= 3: 0.0180
+
+2. runs of one outcome filling before the opposite outcome fills
+   n=12591 median=2 p90=5 max=40
+   alternation rate (next fill flips outcome): 0.3698
+
+3. quantity accumulated at a level before that level changes
+   n=29176 median=20 p90=30
+
+4. seconds a side holds one level before changing it
+   n=29176 median=5s p90=52s max=447s
+
+5. one side's level held while the other side's level changed
+   events where a side changed level with the other side present: 28346
+   of those, the other side's level was UNCHANGED: 23762 (0.8383)
+
+6. price-level RECURRENCE (a level left, then returned to)
+   level changes=29944 returns to a previously used level=8010 (0.2675)
+
+7. both-outcome fills inside tight time windows
+   within 0s:    3488 (0.2414 of min(up,down) fills)
+   within 1s:    4907 (0.3396 of min(up,down) fills)
+   within 2s:    5897 (0.4081 of min(up,down) fills)
+   within 5s:    8363 (0.5788 of min(up,down) fills)
+
+8. same-price run length vs residual size at the time
+   residual == 0      n=     60 median_run=1 p90=1
+   residual 1-49      n=  11699 median_run=1 p90=1
+   residual >= 50     n=  17417 median_run=1 p90=1
+
+9. final 120 seconds
+   same-price runs beginning in the last 120s: n=5189 median=1 p90=1
