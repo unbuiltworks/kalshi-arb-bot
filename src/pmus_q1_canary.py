@@ -543,7 +543,19 @@ def place_order(t: X.Transport, slug: str, side: str, price: D, *,
                    or (resp.get("order") or {}).get("id") or "")
     if not order_id:
         raise X.Halt(f"NO_ORDER_ID:{stage}")
-    X.persist_intent({"stage": stage + ":accepted", "order_id": order_id})
+    # ACCEPTANCE TIMESTAMPS. The ACK is the moment our quote joined the queue,
+    # which sets the causal `placed_t` for every later fill judgement. It was
+    # previously persisted with no time at all, so a lifecycle could not be
+    # joined to the ~0.1s market-data sequence. Wall clock AND monotonic are
+    # recorded, plus any venue-supplied timestamp verbatim.
+    X.persist_intent({"stage": stage + ":accepted", "order_id": order_id,
+                      "accepted_utc": datetime.now(timezone.utc).isoformat(),
+                      "accepted_monotonic": time.monotonic(),
+                      "venue_ts": {k: resp.get(k) for k in
+                                   ("createdAt", "created_at", "transactTime",
+                                    "updatedAt", "timestamp")
+                                   if resp.get(k) is not None} or None,
+                      "venue_state": resp.get("state")})
     record("submitted", stage=stage, slug=slug, side=OB.outcome_side(side),
            price=str(price), order_id=order_id, maker=post_only,
            wire_price=body["price"]["value"])
