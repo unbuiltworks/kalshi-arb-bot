@@ -140,6 +140,11 @@ COPY scripts/pmus_schema_probe_run.py scripts/pmus_schema_probe_run.py
 COPY scripts/__init__.py scripts/__init__.py
 COPY src/pmus_case1_probe.py src/pmus_case1_probe.py
 COPY scripts/pmus_case1_probe_run.py scripts/pmus_case1_probe_run.py
+# ---- the NARROW Case-1 probe authorization. Deliberately NOT inside
+# analysis/l5/authorization/, whose content is pinned by the R1 lane's source
+# lineage; it lives beside its own preregistration so it reaches ONLY this image
+# and the R1 lane cannot see it.
+COPY analysis/l5/calibration/CASE1_PROBE_AUTHORIZATION.json analysis/l5/calibration/CASE1_PROBE_AUTHORIZATION.json
 # ---- authorization artefacts. HALT present means safe_shutdown before armed()
 COPY analysis/l5/authorization/ analysis/l5/authorization/
 # restartPolicyType NEVER is set on the SERVICE, not here: a one-shot the platform

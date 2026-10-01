@@ -24,7 +24,7 @@ from src import pmus_case1_probe as K
 #: commit SHA: the artifact lives in the commit it would name, so a commit pin
 #: is circular.
 SHA = K.code_digest()
-LIVE = pathlib.Path("analysis/l5/authorization/CASE1_PROBE_AUTHORIZATION.json")
+LIVE = pathlib.Path(K.AUTH_PATH)
 FUTURE = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()
 
 
@@ -36,12 +36,16 @@ def good(**over):
 
 
 def write(tmp_path, auth, *, halt=True):
-    d = tmp_path / "analysis" / "l5" / "authorization"
-    d.mkdir(parents=True, exist_ok=True)
+    """Build a fake root. The authorization and HALT live in DIFFERENT
+    directories now, which is the point of the relocation."""
+    a = tmp_path / pathlib.Path(K.AUTH_PATH).parent
+    a.mkdir(parents=True, exist_ok=True)
     if auth is not None:
-        (d / "CASE1_PROBE_AUTHORIZATION.json").write_text(json.dumps(auth))
+        (tmp_path / K.AUTH_PATH).write_text(json.dumps(auth))
+    h = tmp_path / pathlib.Path(K.HALT_PATH).parent
+    h.mkdir(parents=True, exist_ok=True)
     if halt:
-        (d / "HALT").write_text("HALTED\n")
+        (tmp_path / K.HALT_PATH).write_text("HALTED\n")
     return str(tmp_path)
 
 
@@ -88,14 +92,13 @@ def test_an_expiry_without_a_timezone_refuses(tmp_path):
 
 
 def test_unparseable_or_non_object_refuses(tmp_path):
-    d = tmp_path / "analysis" / "l5" / "authorization"
-    d.mkdir(parents=True)
-    (d / "HALT").write_text("x")
-    (d / "CASE1_PROBE_AUTHORIZATION.json").write_text("{not json")
+    write(tmp_path, None)                      # creates the dirs and HALT
+    bad = tmp_path / K.AUTH_PATH
+    bad.write_text("{not json")
     with pytest.raises(K.Case1Refuse) as e:
         K.authorization(root=str(tmp_path), sha=SHA)
     assert "UNPARSEABLE" in str(e.value)
-    (d / "CASE1_PROBE_AUTHORIZATION.json").write_text("[1,2]")
+    bad.write_text("[1,2]")
     with pytest.raises(K.Case1Refuse) as e:
         K.authorization(root=str(tmp_path), sha=SHA)
     assert "NOT_AN_OBJECT" in str(e.value)
@@ -252,7 +255,8 @@ def test_the_runner_refuses_when_the_authorization_is_unreachable(monkeypatch,
     """An expired authorization refuses before any arming or transport."""
     import scripts.pmus_case1_probe_run as S
     from src import pmus_q1_executor as X
-    monkeypatch.setattr(K, "AUTH_PATH", "analysis/l5/authorization/__absent__.json")
+    monkeypatch.setattr(K, "AUTH_PATH",
+                        "analysis/l5/calibration/__absent__.json")
     for env, val in ((K.LIVE_ENV, "YES"), (K.SESSION_ENV, "s"),
                      (K.ARM_ENV, "s"), (K.CASE1_ARM_ENV, "s")):
         monkeypatch.setenv(env, val)
@@ -270,3 +274,34 @@ def test_the_runner_refuses_when_the_authorization_is_unreachable(monkeypatch,
     assert "NO_AUTHORIZATION" in out["refusal"]
     assert out["submitted"] is False
     assert S.terminal_ok(out) is False
+
+
+# ---- the relocation itself is a property worth pinning ------------------
+
+def test_the_authorization_is_not_in_the_r1_pinned_directory():
+    """analysis/l5/authorization/ is COPYed into the owner-gated R1 lane image
+    and its content is pinned by r1_source_lineage. A Case-1 authorization must
+    not sit there: it would turn that gate red and would carry this
+    authorization into a second money-moving image."""
+    assert not K.AUTH_PATH.startswith("analysis/l5/authorization/")
+    assert K.AUTH_PATH == "analysis/l5/calibration/CASE1_PROBE_AUTHORIZATION.json"
+    assert pathlib.Path(K.AUTH_PATH).exists()
+    assert not pathlib.Path(
+        "analysis/l5/authorization/CASE1_PROBE_AUTHORIZATION.json").exists()
+
+
+def test_the_r1_lane_image_does_not_carry_the_case1_authorization():
+    r1 = pathlib.Path("deploy/l5_r1_probe/Dockerfile")
+    if not r1.exists():
+        pytest.skip("no R1 dockerfile")
+    assert "CASE1_PROBE_AUTHORIZATION" not in r1.read_text()
+
+
+def test_the_lock5_probe_image_does_carry_it():
+    df = pathlib.Path("deploy/l5_pmus_lock5_probe/Dockerfile").read_text()
+    assert f"COPY {K.AUTH_PATH} {K.AUTH_PATH}" in df
+
+
+def test_halt_is_still_read_from_the_authorization_directory_unchanged():
+    assert K.HALT_PATH == "analysis/l5/authorization/HALT"
+    assert pathlib.Path(K.HALT_PATH).exists()

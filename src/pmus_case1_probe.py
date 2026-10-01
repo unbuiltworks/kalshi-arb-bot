@@ -485,7 +485,19 @@ def verdict(*, safety_ok: bool, rest_proved: bool,
 # ABSENCE IS THE SAFE STATE. No file, no Case-1 order.
 # =====================================================================
 
-AUTH_PATH = "analysis/l5/authorization/CASE1_PROBE_AUTHORIZATION.json"
+#: DELIBERATELY NOT under analysis/l5/authorization/. That directory is COPYed
+#: into the owner-gated R1 lane image as well, and its content is PINNED by
+#: analysis/l5/lanes/r1_source_lineage.py against reviewed artifact e48960f7, so
+#: a file added there made the R1 lineage gate red -- and would have carried this
+#: authorization into a second money-moving image it was never meant to reach.
+#: By that module's own definition the honest class of "whether POST /v1/orders
+#: happens at all" is SUBMISSION, one of its FORBIDDEN_CLASSES, so the delta
+#: could not be disclosed as DOCUMENTATION, and re-pointing REVIEWED is an owner
+#: decision rather than a workaround. Living beside its own preregistration is
+#: also better scoping: the R1 lane cannot see it, and a probe authorization does
+#: not sit in the directory that governs the L5 session engine.
+AUTH_PATH = "analysis/l5/calibration/CASE1_PROBE_AUTHORIZATION.json"
+#: HALT is still READ from the authorization directory, and never written there.
 HALT_PATH = "analysis/l5/authorization/HALT"
 
 #: WHAT THE AUTHORIZATION PINS. Not the commit SHA: the artifact lives IN the
