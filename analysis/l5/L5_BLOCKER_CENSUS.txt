@@ -1,0 +1,38 @@
+L5 median action size (the CLIP UNIT) = 20
+markets=384 grouped actions=33395
+
+================ BLOCKER CENSUS ================
+actions the frozen clone would PROHIBIT: 16885 / 33395 = 0.5056
+
+  attributed to the FIRST binding gate:
+    heavy_side_extend_disabled               16885  0.5056 of all actions
+
+  each gate counted independently (gates overlap):
+    heavy_side_extend_disabled               16885  0.5056 of all actions
+    extend_breaches_residual_cap             13913  0.4166 of all actions
+    extend_would_not_improve_basis            6321  0.1893 of all actions
+
+  by action class:
+    OPEN_OR_REOPEN   n=    444  blocked=      0  0.0000
+    EXTEND           n=  16885  blocked=  16885  1.0000
+    COMPLETE         n=  16066  blocked=      0  0.0000
+
+====== basis-improvement gate, measured on EXTENDs alone ======
+  EXTENDs failing the basis gate: 6321 / 16885 = 0.3744
+  as a share of ALL actions: 0.1893
+
+====== residual-cap gate, in CLIPS (the honest comparison) ======
+  EXTENDs breaching residual_cap=2 clips: 13913 / 16885 = 0.8240
+  L5 |residual| in CLIPS: median=3.19 p90=9.05 max=29.60
+  L5 |residual| in CONTRACTS: median=63.7 p90=181.0 max=592.0
+
+====== time spent above residual thresholds ======
+  total tracked inter-action time: 77.61 h
+   threshold     time>th (contracts)    share   time>th (clips)    share
+           1               76.28 h   0.9829          59.81 h   0.7706
+           2               75.52 h   0.9731          44.75 h   0.5766
+           5               72.93 h   0.9397          16.87 h   0.2173
+          10               68.85 h   0.8871           3.49 h   0.0450
+          25               55.98 h   0.7213           0.03 h   0.0003
+          50               38.67 h   0.4982           0.00 h   0.0000
+         100               16.87 h   0.2173           0.00 h   0.0000
