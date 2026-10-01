@@ -319,3 +319,115 @@ def test_consuming_trades_reads_the_recorders_actual_row_shape():
     assert got[0]["dir"].upper() == "SELL" and got[0]["px"] == "0.20"
     #: and a resting UP buy at 0.19 is below both prints: nothing consumes it
     assert K.consuming_trades("up", D("0.19"), rows) == []
+
+
+# =====================================================================
+# THE SIX-LABEL VERDICT TAXONOMY
+# =====================================================================
+
+def test_the_six_verdicts_are_exactly_these_and_mutually_exclusive():
+    assert K.VERDICTS == ("RESTING_NOT_REACHED", "REACHED_OR_CROSSED_UNFILLED",
+                          "FILLED_AS_MAKER", "FILLED_AS_AGGRESSOR",
+                          "AMBIGUOUS_EVENT_ORDER", "PROBE_FAILURE")
+    assert len(set(K.VERDICTS)) == len(K.VERDICTS)
+
+
+def _v(**kw):
+    base = dict(safety_ok=True, rest_proved=True, reached_before_rest=False,
+                reached_after_rest=False, filled_qty=0,
+                role={"role": "UNRESOLVED"})
+    base.update(kw)
+    return K.verdict(**base)
+
+
+def test_no_fill_and_no_opportunity_never_share_a_bucket():
+    """The distinction Case 1 turns on."""
+    assert _v(reached_after_rest=False) == "RESTING_NOT_REACHED"
+    assert _v(reached_after_rest=True) == "REACHED_OR_CROSSED_UNFILLED"
+
+
+def test_a_safety_or_lifecycle_deviation_is_never_an_evidence_claim():
+    for kw in ({"safety_ok": False}, {"rest_proved": False}):
+        assert _v(**kw) == "PROBE_FAILURE"
+    #: and it outranks everything, including a fill
+    assert _v(safety_ok=False, filled_qty=1,
+              role={"role": "MAKER"}) == "PROBE_FAILURE"
+
+
+def test_a_book_already_there_when_we_were_proved_resting_is_ambiguous():
+    """If the book was already at/through our price at rest, the ordering claim
+    is unestablished and no amount of later observation rescues it."""
+    assert _v(reached_before_rest=True,
+              reached_after_rest=True) == "AMBIGUOUS_EVENT_ORDER"
+    assert _v(reached_before_rest=True, filled_qty=1,
+              role={"role": "MAKER"}) == "AMBIGUOUS_EVENT_ORDER"
+
+
+def test_fill_role_decides_between_maker_and_aggressor():
+    assert _v(filled_qty=1, role={"role": "MAKER"}) == "FILLED_AS_MAKER"
+    assert _v(filled_qty=1, role={"role": "AGGRESSOR"}) == "FILLED_AS_AGGRESSOR"
+    #: an unresolved role is NEVER guessed into one of the two
+    assert _v(filled_qty=1,
+              role={"role": "UNRESOLVED"}) == "AMBIGUOUS_EVENT_ORDER"
+
+
+# ------------------------------------------------- the two-signal role rule
+
+def test_the_aggressor_orientation_rule_is_marked_unverified():
+    assert K.AGGRESSOR_RULE_VERIFIED is False, \
+        "no real fill has ever established this mapping for our account"
+
+
+def test_one_signal_alone_is_never_enough():
+    px = D("0.20")
+    #: aggressor only
+    r = K.fill_role({"aggressor": ["AGGRESSOR_SIDE_SELL"],
+                     "commissionNotionalCollected": "UNAVAILABLE"}, px)
+    assert r["role"] == "UNRESOLVED" and "one is never enough" in r["basis"]
+    #: commission only
+    r = K.fill_role({"aggressor": "UNAVAILABLE",
+                     "commissionNotionalCollected": ["0"]}, px)
+    assert r["role"] == "UNRESOLVED"
+
+
+def test_two_agreeing_signals_resolve_maker():
+    """Post-only filled by someone else's SELL, nothing charged to us."""
+    r = K.fill_role({"aggressor": ["AGGRESSOR_SIDE_SELL"],
+                     "commissionNotionalCollected": ["0"]}, D("0.20"))
+    assert r["role"] == "MAKER"
+    assert r["basis"] == "two independent signals agree"
+    assert r["aggressor_rule_verified"] is False
+
+
+def test_two_agreeing_signals_resolve_aggressor_against_the_fee_schedule():
+    from src import pmus_fees as FEES
+    px = D("0.20")
+    charged = FEES.taker_fee(px, D(1), cents=True)
+    assert charged > 0, "the fee model must charge a taker something"
+    r = K.fill_role({"aggressor": ["AGGRESSOR_SIDE_BUY"],
+                     "commissionNotionalCollected": [str(charged)]}, px)
+    assert r["role"] == "AGGRESSOR"
+
+
+def test_disagreeing_signals_are_reported_not_interpreted():
+    r = K.fill_role({"aggressor": ["AGGRESSOR_SIDE_BUY"],
+                     "commissionNotionalCollected": ["0"]}, D("0.20"))
+    assert r["role"] == "UNRESOLVED"
+    assert "DISAGREE" in r["basis"]
+
+
+def test_a_commission_we_cannot_account_for_is_not_evidence():
+    assert K.role_from_commission("0.99", D("0.20")) is None
+    assert K.role_from_commission(None, D("0.20")) is None
+    assert K.role_from_commission("UNAVAILABLE", D("0.20")) is None
+    #: a credit to us is maker evidence
+    assert K.role_from_commission("-0.0125", D("0.20")) == "MAKER"
+    #: and the venue's nested {"value": ...} shape is read too
+    assert K.role_from_commission({"value": "0"}, D("0.20")) == "MAKER"
+
+
+def test_a_contradictory_or_empty_aggressor_string_yields_nothing():
+    for bad in ("", None, "AGGRESSOR_SIDE_UNSPECIFIED", "BUY_SELL"):
+        assert K.role_from_aggressor(bad) is None
+    assert K.role_from_aggressor("AGGRESSOR_SIDE_SELL") == "MAKER"
+    assert K.role_from_aggressor("AGGRESSOR_SIDE_BUY") == "AGGRESSOR"

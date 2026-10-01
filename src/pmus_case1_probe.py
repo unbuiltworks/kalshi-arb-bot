@@ -334,3 +334,139 @@ def classify(*, submitted: bool, rest_proved: bool, reach: Mapping[str, Any],
         return ("CASE1_OBSERVED_FILLED" if D(str(filled_qty)) > 0
                 else "CASE1_OBSERVED_NOT_FILLED")
     return "CASE1_INCONCLUSIVE"
+
+
+# =====================================================================
+# THE LIVE-REPORT VERDICT TAXONOMY
+#
+# Six mutually exclusive labels, so "no fill" and "no opportunity" can never
+# collapse into the same bucket -- which is the distinction Case 1 turns on.
+# =====================================================================
+
+VERDICTS = (
+    #: null. We rested, the market never came to us, we did not chase it.
+    "RESTING_NOT_REACHED",
+    #: QUALIFYING OBSERVATIONAL result: proven resting, the book moved to or
+    #: through our price AFTERWARDS with our order unchanged, still unfilled.
+    "REACHED_OR_CROSSED_UNFILLED",
+    "FILLED_AS_MAKER",
+    "FILLED_AS_AGGRESSOR",
+    #: the event order, or our role in the fill, cannot be established from the
+    #: evidence. Record and DO NOT OVERINTERPRET.
+    "AMBIGUOUS_EVENT_ORDER",
+    #: any safety or lifecycle deviation. Never an evidence claim.
+    "PROBE_FAILURE",
+)
+
+#: Candidate orientation for the venue's `aggressor` enum relative to OUR order,
+#: which is always an ORDER_ACTION_BUY. UNVERIFIED: the 2026-10-01 schema run saw
+#: the field only on NEW/CANCELED, where it was empty, so no fill has ever
+#: established this mapping for our account. It is therefore only ever used as
+#: ONE of two signals that must AGREE.
+AGGRESSOR_ROLE_RULE = {"BUY": "AGGRESSOR", "SELL": "MAKER"}
+AGGRESSOR_RULE_VERIFIED = False
+
+
+def _first(values: Any) -> Optional[Any]:
+    if isinstance(values, (list, tuple)) and values:
+        return values[-1]            # the last observed value for the field
+    return None
+
+
+def role_from_aggressor(value: Any) -> Optional[str]:
+    """Our role implied by the venue's `aggressor` string, or None.
+
+    Deliberately crude and deliberately not trusted alone: it looks for BUY or
+    SELL anywhere in the enum (`AGGRESSOR_SIDE_SELL`) and maps it through the
+    UNVERIFIED rule above.
+    """
+    s = str(value or "").upper()
+    if not s:
+        return None
+    has_buy, has_sell = "BUY" in s, "SELL" in s
+    if has_buy == has_sell:          # neither, or contradictory
+        return None
+    return AGGRESSOR_ROLE_RULE["BUY" if has_buy else "SELL"]
+
+
+def role_from_commission(value: Any, px: Any, qty: Any = QTY) -> Optional[str]:
+    """Our role implied by what the venue actually CHARGED, or None.
+
+    Economically grounded and independent of the enum's orientation: a taker is
+    charged on the published schedule, a maker is not charged (and may be
+    credited). Compared against `pmus_fees.taker_fee` with `cents=True`, the
+    venue's own statement rounding on the whole order quantity.
+    """
+    if value is None or value == "UNAVAILABLE":
+        return None
+    raw = value
+    if isinstance(raw, Mapping):
+        raw = raw.get("value")
+    try:
+        charged = D(str(raw))
+    except Exception:                                        # noqa: BLE001
+        return None
+    if charged <= 0:
+        return "MAKER"               # nothing taken, or credited to us
+    from src import pmus_fees as FEES
+    expect = FEES.taker_fee(D(str(px)), D(str(qty)), cents=True)
+    if expect <= 0:
+        return None
+    #: within half a cent of the taker charge is the taker charge
+    if abs(charged - expect) <= D("0.005"):
+        return "AGGRESSOR"
+    return None                      # charged something we cannot account for
+
+
+def fill_role(fields: Mapping[str, Any], px: Any,
+              qty: Any = QTY) -> Dict[str, Any]:
+    """Our role in the fill, from TWO independent signals that must AGREE.
+
+    Returns MAKER, AGGRESSOR or UNRESOLVED. One signal alone is never enough:
+    the `aggressor` enum's orientation relative to our BUY has never been
+    established by a real fill, and a commission we cannot account for is not
+    evidence of anything.
+    """
+    agg_raw = _first(fields.get("aggressor"))
+    com_raw = _first(fields.get("commissionNotionalCollected"))
+    by_agg = role_from_aggressor(agg_raw)
+    by_com = role_from_commission(com_raw, px, qty)
+    out = {"aggressor_raw": agg_raw, "commission_raw": com_raw,
+           "role_by_aggressor": by_agg, "role_by_commission": by_com,
+           "aggressor_rule_verified": AGGRESSOR_RULE_VERIFIED}
+    if by_agg is not None and by_com is not None and by_agg == by_com:
+        out["role"] = by_agg
+        out["basis"] = "two independent signals agree"
+    elif by_agg is not None and by_com is not None:
+        out["role"] = "UNRESOLVED"
+        out["basis"] = "the two signals DISAGREE; not interpreted"
+    else:
+        out["role"] = "UNRESOLVED"
+        out["basis"] = "only one signal available; one is never enough"
+    return out
+
+
+def verdict(*, safety_ok: bool, rest_proved: bool,
+            reached_before_rest: bool, reached_after_rest: bool,
+            filled_qty: Any, role: Mapping[str, Any]) -> str:
+    """The single live-report label. Safety first, then event order, then role.
+
+    `reached_before_rest` is why this exists: if the book was ALREADY at or
+    through our price when we were first proved resting, the experiment's whole
+    ordering claim -- private NEW + REST OPEN, THEN the book moves, with our
+    order unchanged -- is unestablished, and the honest label is ambiguity.
+    """
+    if not safety_ok or not rest_proved:
+        return "PROBE_FAILURE"
+    if reached_before_rest:
+        return "AMBIGUOUS_EVENT_ORDER"
+    if D(str(filled_qty or 0)) > 0:
+        r = str(role.get("role") or "UNRESOLVED")
+        if r == "MAKER":
+            return "FILLED_AS_MAKER"
+        if r == "AGGRESSOR":
+            return "FILLED_AS_AGGRESSOR"
+        return "AMBIGUOUS_EVENT_ORDER"
+    if reached_after_rest:
+        return "REACHED_OR_CROSSED_UNFILLED"
+    return "RESTING_NOT_REACHED"

@@ -72,8 +72,12 @@ permitted a fee-safe complement and we are declining it.
 
 1. `rest_proved` — private frames naming our order **and** REST `OPEN`: we were
    actually resting, not merely accepted;
-2. `reached` — the own-terms best **ask** fell to at or below our price, i.e. the
-   market came to or through us **on its own**;
+2. `reached` — **ORDERED**, and this is the whole point of the experiment: the
+   own-terms best **ask** fell to at or below our price **after** private NEW +
+   REST `OPEN`, with our order unchanged. The reach state is sampled as a
+   BASELINE at the instant rest is proved; if the book was already at or through
+   our price then, no later observation can establish the ordering and the
+   verdict is `AMBIGUOUS_EVENT_ORDER`, not a Case-1 result;
 3. `private_terminal` — private evidence plus a proved terminal state, so the
    venue has said what happened;
 4. `public_sequence` — public book updates and the recorded transitions, enough
@@ -83,12 +87,46 @@ permitted a fee-safe complement and we are declining it.
 `NULL_NOT_REACHED` and we did not chase it. `CASE1_OBSERVED_NOT_FILLED` — crossed
 and still unfilled — is a genuine Case-1 answer, not a malfunction.
 
-### Labels
+### Two vocabularies, deliberately separate
 
-`REFUSED` · `STOPPED_REST_NOT_PROVED` · `NULL_NOT_REACHED` ·
-`CASE1_OBSERVED_FILLED` · `CASE1_OBSERVED_NOT_FILLED` · `CASE1_INCONCLUSIVE` ·
-`STOPPED` · `ERROR`. None of them says realized, profit, validated or OOS, and a
-test asserts that.
+**Process `outcome`** drives the exit code: `REFUSED` · `STOPPED` · `ERROR` ·
+`NULL_NOT_REACHED` · `CASE1_OBSERVED_FILLED` · `CASE1_OBSERVED_NOT_FILLED` ·
+`CASE1_INCONCLUSIVE` · `STOPPED_REST_NOT_PROVED`.
+
+**Evidence `verdict`** — the six mutually exclusive labels the live report must
+distinguish, so that *no fill* and *no opportunity* can never collapse into one
+bucket:
+
+| verdict | meaning |
+|---|---|
+| `RESTING_NOT_REACHED` | null. We rested, the market never came, we did not chase |
+| `REACHED_OR_CROSSED_UNFILLED` | **qualifying observational result** |
+| `FILLED_AS_MAKER` | |
+| `FILLED_AS_AGGRESSOR` | would be a surprising and important finding on a post-only order |
+| `AMBIGUOUS_EVENT_ORDER` | event order or our role unestablished. **Do not overinterpret** |
+| `PROBE_FAILURE` | any safety or lifecycle deviation. Never an evidence claim |
+
+Success here is **observational, not trading** success. A refusal carries no
+verdict at all, and the verdict never feeds the exit code — safety does. No label
+says realized, profit, validated or OOS, and a test asserts it.
+
+### Maker vs aggressor needs TWO agreeing signals
+
+The role is only called when two independent signals agree, because neither is
+sufficient alone:
+
+1. the venue's `aggressor` enum, mapped through an **UNVERIFIED** orientation
+   rule relative to our `ORDER_ACTION_BUY` — the 2026-10-01 schema run saw this
+   field only on NEW/CANCELED, where it was empty, so **no real fill has ever
+   established the mapping for our account** (`AGGRESSOR_RULE_VERIFIED = False`);
+2. `commissionNotionalCollected` against `pmus_fees.taker_fee(..., cents=True)`,
+   the venue's own statement rounding — economically grounded and independent of
+   the enum's orientation. Nothing charged, or a credit, is maker evidence; a
+   charge matching the taker schedule is aggressor evidence.
+
+If they disagree, or only one is available, the role is `UNRESOLVED` and the
+verdict is `AMBIGUOUS_EVENT_ORDER`. A commission we cannot account for is not
+evidence of anything.
 
 ## Captured, verbatim
 

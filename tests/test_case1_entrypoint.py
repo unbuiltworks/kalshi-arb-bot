@@ -200,3 +200,35 @@ def test_the_cleanup_path_is_unconditional():
     assert "cancel_and_resolve" in body
     assert "open_order_ids" in body
     assert "sweep_verified" in body
+
+
+# -------------------------------------- the ordering claim is enforced in code
+
+def test_the_runner_samples_the_reach_baseline_at_rest_and_not_before():
+    """"Crossed" must mean the book moved AFTER private NEW + REST OPEN. The
+    baseline sample is what makes that checkable rather than assumed."""
+    src = RUN_SRC.read_text()
+    assert "reached_before_rest" in src
+    assert "reach_baseline_at_rest" in src
+    #: the baseline must be taken after rest is proved, not before
+    i_rest = src.index('out["rest_proved"] = rest_proved')
+    i_base = src.index('reached_before_rest = bool(base["reached"])')
+    assert i_rest < i_base, "the baseline is sampled before rest is proved"
+    #: and qualification must use the ORDERED flag
+    assert '"reached": reach["reached_after_rest"]' in src
+
+
+def test_the_verdict_is_reported_and_is_one_of_the_six():
+    src = RUN_SRC.read_text()
+    assert 'out["verdict"] = K.verdict(' in src
+    for label in K.VERDICTS:
+        assert label in "".join(K.VERDICTS)
+    #: the verdict never feeds the exit code; safety does
+    assert "out.get(\"outcome\") in TERMINAL_LABELS" in src
+
+
+def test_a_refusal_carries_no_verdict_claim(monkeypatch):
+    arm(monkeypatch, creds=False)
+    out = S.run(Boom())
+    assert out["outcome"] == "REFUSED"
+    assert "verdict" not in out, "a refusal must make no evidence claim"

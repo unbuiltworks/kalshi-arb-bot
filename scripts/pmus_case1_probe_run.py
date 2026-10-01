@@ -131,7 +131,8 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
     order_id = ""
     info: Dict[str, Any] = {"booked_qty": D(0)}
     side, px = "", D(0)
-    reach = {"touched": False, "reached": False}
+    reach = {"touched": False, "reached": False, "reached_after_rest": False}
+    reached_before_rest = False
     bbo_before: Dict[str, Any] = {}
     bbo_at_reach: Dict[str, Any] = {}
     bbo_after: Dict[str, Any] = {}
@@ -218,6 +219,18 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
         bbo_before = book_view(book, slug)
         out["bbo_before"] = {k: v for k, v in bbo_before.items()
                              if k in ("bid", "ask", "bid_qty", "ask_qty")}
+        #: THE ORDERING BASELINE, and the whole point of the experiment. "Crossed"
+        #: must mean the public book moved to or through our resting price AFTER
+        #: private NEW + REST OPEN, with our order unchanged. So the reach state
+        #: is sampled HERE, at the instant rest was proved: if the book was
+        #: already there, no later observation can establish that ordering and the
+        #: verdict is AMBIGUOUS_EVENT_ORDER rather than a Case-1 result.
+        base = K.reach_state(side, px, bbo_before.get("bid"),
+                             bbo_before.get("ask"))
+        reached_before_rest = bool(base["reached"])
+        out["reach_baseline_at_rest"] = base
+        out["reached_before_rest"] = reached_before_rest
+        out["rest_proved_monotonic"] = clock()
 
         # ---- condition 2: WAIT. Never move the order. A null is a result.
         t2 = clock()
@@ -251,6 +264,9 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
                                     "ask_qty": bv.get("ask_qty")})
             if st["reached"] and not reach["reached"]:
                 reach["reached"] = True
+                #: a transition observed AFTER the baseline, with the order
+                #: untouched since: this is the ordered Case-1 event.
+                reach["reached_after_rest"] = not reached_before_rest
                 bbo_at_reach = dict(bv)
                 transitions.append({"event": "reached", "monotonic": clock(),
                                     "utc": datetime.now(timezone.utc)
@@ -329,19 +345,37 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
         out["carried_to_settlement"] = str(filled)
         qual = K.qualifies({
             "rest_proved": out.get("rest_proved"),
-            "reached": reach["reached"],
+            #: the ORDERED condition, never the bare one
+            "reached": reach["reached_after_rest"],
             #: the venue said SOMETHING terminal about our order privately
             "private_terminal": bool(out.get("terminal_proved")
                                      and priv["frames_naming_our_order"] > 0),
-            "public_sequence": bool(bv.get("book_updates")) and bool(transitions
-                                                                    or not reach["reached"]),
+            "public_sequence": (bool(bv.get("book_updates"))
+                                and bool(transitions or not reach["reached"])),
         })
         out["qualification"] = qual
+        #: THE LIVE-REPORT VERDICT. Six mutually exclusive labels, so "no fill"
+        #: and "no opportunity" can never share a bucket.
+        role = K.fill_role(priv["fields"], px or K.MAX_ENTRY_PX)
+        safety_ok = bool(out.get("terminal_proved")
+                         and out.get("sweep_verified")
+                         and not out.get("cleanup_error")
+                         and not out.get("open_orders_after")
+                         and out.get("outcome") not in ("STOPPED", "ERROR"))
+        out["fill_role"] = role
+        out["safety_ok"] = safety_ok
+        out["verdict"] = K.verdict(
+            safety_ok=safety_ok, rest_proved=bool(out.get("rest_proved")),
+            reached_before_rest=bool(out.get("reached_before_rest")),
+            reached_after_rest=bool(reach["reached_after_rest"]),
+            filled_qty=filled, role=role)
         if out["outcome"] == "INCOMPLETE":
             out["outcome"] = K.classify(
                 submitted=bool(out["submitted"]),
                 rest_proved=bool(out.get("rest_proved")),
-                reach=reach, filled_qty=filled, qual=qual)
+                reach={"touched": reach["touched"],
+                       "reached": reach["reached_after_rest"]},
+                filled_qty=filled, qual=qual)
     return out
 
 
