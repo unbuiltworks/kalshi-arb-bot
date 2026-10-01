@@ -74,3 +74,8 @@ data/pmus_btc15m/
 # P10 decoder capture. That workstream is closed and GATE FAILED; its capture
 # is not revived, merged or modified.
 analysis/gemini/p10_capture/
+
+# Synchronized L5 + native Polymarket L2 raw tapes: ~50MB per 5m window.
+# The forensic READINGS are committed; the raw frames stay local like the other
+# large tapes under data/.
+analysis/l5/sync_l2/*.jsonl
