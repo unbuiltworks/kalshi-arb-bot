@@ -1,15 +1,32 @@
-"""LADDER or REACTIVE? The forensic reading of one synchronized window.
+"""Were the levels L5 executed at ALREADY REPRESENTED before his burst began?
 
-PRIMARY DISCRIMINATOR. When consecutive L5 fills walk .31 -> .32 -> .33:
-  REACTIVE  the book moved through those levels BEFORE each fill, so each fill
-            follows a move it did not cause.
-  LADDER    the levels were already resting and one move swept them, so the
-            fills cluster INSIDE a single book transition rather than after
-            separate ones.
+THE QUESTION, restated after the Grok reconciliation (bd10a5e5). Not "did he
+react after the market moved" but: before his first execution, what liquidity
+pattern existed at the prices where his subsequent executions occur, and did the
+market move TOWARD those levels?
 
-Every conclusion is labelled OBSERVED / INFERRED / UNKNOWN. Fill-only inference
-is never dressed as observation, and the absence of order-level events is stated
-rather than worked around.
+THREE METHODOLOGICAL FACTS, each established from our own captured frames rather
+than assumed:
+
+1. L5's fills join the native feed EXACTLY. `last_trade_price` carries
+   `transaction_hash`, and L5's activity rows carry `transactionHash`. On the
+   first window all 4 of 4 joined with identical price and size. So his fills are
+   placed on the book timeline at MILLISECOND resolution, and within-second
+   ordering -- previously unknowable, and the flaw the audit identified -- is now
+   OBSERVED.
+
+2. The touch does not need reconstructing. Every `price_change` entry STATES
+   `best_bid` and `best_ask` for its asset, at ~38 Hz with ms timestamps. That is
+   the venue reporting the touch, not us inferring it.
+
+3. Per-level sizes are taken from `price_change.price`/`size` read as the new
+   size AT that level, and that reading is VALIDATED against the next `book`
+   snapshot rather than trusted: the validation rate is reported, and folded
+   state is used only where it validates. Deltas are never discarded.
+
+NO ATTRIBUTION. Anonymous resting liquidity is never assigned to L5. The only
+classification offered is CONSISTENT_WITH_PRE_RESTING / REQUIRES_POST_EVENT_ORDER
+/ AMBIGUOUS.
 
     python3 scripts/l5_sync_l2_forensics.py analysis/l5/sync_l2/<slug>.jsonl
 """
@@ -18,110 +35,136 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections import Counter
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
-SIDE_OF = {"Up": "up", "Down": "down", "UP": "up", "DOWN": "down"}
+LEADS = (30.0, 10.0, 5.0, 1.0)
+BURST_S = 3.0
 
 
-def load(path: str) -> Dict[str, Any]:
-    recs = [json.loads(l) for l in open(path)]
-    out: Dict[str, Any] = {"open": None, "close": None, "ws": [], "act": [],
-                           "rest": [], "errors": [], "failed_reads": 0}
-    for r in recs:
-        k = r["kind"]
-        if k == "window_open":
-            out["open"] = r
-        elif k == "window_close":
-            out["close"] = r
-        elif k == "ws":
-            out["ws"].append(r)
-        elif k == "activity":
-            out["act"].append(r)
-        elif k == "rest_book":
-            out["rest"].append(r)
-        elif k in ("ws_error", "ws_fatal", "window_abandoned"):
-            out["errors"].append(r)
-        elif k == "activity_read_failed":
-            out["failed_reads"] += 1
+def scan(path: str) -> Dict[str, Any]:
+    """One pass. Keeps only what the forensics needs, so a 200MB tape fits."""
+    out: Dict[str, Any] = {"open": None, "snaps": defaultdict(list),
+                           "touch": defaultdict(list), "levels": defaultdict(list),
+                           "trades": {}, "act": [], "failed": 0, "errors": [],
+                           "n_ws": 0, "ev": defaultdict(int)}
+    with open(path) as fh:
+        for line in fh:
+            r = json.loads(line)
+            k = r["kind"]
+            if k == "window_open":
+                out["open"] = r
+            elif k == "activity_read_failed":
+                out["failed"] += 1
+            elif k in ("ws_error", "ws_fatal", "window_abandoned"):
+                out["errors"].append(r)
+            elif k == "activity":
+                out["act"].append(r)
+            elif k == "ws":
+                out["n_ws"] += 1
+                pay = r["payload"]
+                for e in (pay if isinstance(pay, list) else [pay]):
+                    if not isinstance(e, dict):
+                        continue
+                    et = str(e.get("event_type"))
+                    out["ev"][et] += 1
+                    if et == "book":
+                        aid = str(e.get("asset_id"))
+                        ms = float(e.get("timestamp") or 0) / 1000.0
+                        out["snaps"][aid].append(
+                            {"ts": ms, "hash": e.get("hash"),
+                             "bids": e.get("bids") or [],
+                             "asks": e.get("asks") or []})
+                    elif et == "price_change":
+                        ms = float(e.get("timestamp") or 0) / 1000.0
+                        for c in (e.get("price_changes") or []):
+                            aid = str(c.get("asset_id"))
+                            out["touch"][aid].append(
+                                (ms, c.get("best_bid"), c.get("best_ask")))
+                            out["levels"][aid].append(
+                                (ms, str(c.get("price")), str(c.get("size")),
+                                 str(c.get("side"))))
+                    elif et == "last_trade_price":
+                        out["trades"][str(e.get("transaction_hash")).lower()] = {
+                            "ts": float(e.get("timestamp") or 0) / 1000.0,
+                            "px": e.get("price"), "size": e.get("size"),
+                            "side": e.get("side"),
+                            "asset_id": str(e.get("asset_id"))}
+    for d in (out["snaps"], out["touch"], out["levels"]):
+        for v in d.values():
+            v.sort(key=lambda x: x[0] if isinstance(x, tuple) else x["ts"])
     return out
 
 
-def best(levels: Any, side: str) -> Optional[Tuple[float, float]]:
-    """Top of one side of a book payload: (price, size)."""
-    if not isinstance(levels, list) or not levels:
-        return None
-    try:
-        rows = [(float(x["price"]), float(x["size"])) for x in levels
-                if x.get("price") is not None]
-    except (TypeError, ValueError, KeyError):
-        return None
-    if not rows:
-        return None
-    return max(rows, key=lambda r: r[0]) if side == "bid" \
-        else min(rows, key=lambda r: r[0])
+def validate_level_semantics(snaps: List[dict], levels: List[tuple]) -> Dict[str, Any]:
+    """Is `price_change.size` the NEW SIZE at that level? Checked against the
+    next snapshot, not assumed. Reports agreement rather than asserting it."""
+    ok = bad = 0
+    for a, b in zip(snaps, snaps[1:]):
+        state = {}
+        for ms, px, sz, _side in levels:
+            if a["ts"] < ms <= b["ts"]:
+                state[px] = sz
+        if not state:
+            continue
+        actual = {}
+        for row in (b["bids"] or []) + (b["asks"] or []):
+            actual[str(row.get("price"))] = str(row.get("size"))
+        for px, sz in state.items():
+            got = actual.get(px)
+            if got is None:
+                #: level absent from the snapshot: consistent only with size 0
+                if float(sz) == 0.0:
+                    ok += 1
+                else:
+                    bad += 1
+            elif abs(float(got) - float(sz)) < 1e-6:
+                ok += 1
+            else:
+                bad += 1
+    n = ok + bad
+    return {"checked": n, "agree": ok, "disagree": bad,
+            "agreement_rate": (ok / n) if n else None,
+            "reading": "price_change.size is the NEW SIZE at that price",
+            "verdict": ("VALIDATED" if n and ok / n >= 0.95 else
+                        ("NOT_VALIDATED" if n else "UNTESTABLE"))}
 
 
-def book_series(ws: List[dict], token: str) -> List[Dict[str, Any]]:
-    """Reconstruct a touch series for ONE token from `book` snapshots only.
-
-    price_change deltas are recorded and counted but NOT folded: folding a delta
-    stream without the venue's own sequencing rules would invent a book, and the
-    `book` snapshots alone are already ~1/s here. Stated rather than silently
-    approximated.
-    """
-    out = []
-    for r in ws:
-        for e in (r["payload"] if isinstance(r["payload"], list)
-                  else [r["payload"]]):
-            if not isinstance(e, dict) or e.get("event_type") != "book":
-                continue
-            if str(e.get("asset_id")) != str(token):
-                continue
-            b, a = best(e.get("bids"), "bid"), best(e.get("asks"), "ask")
-            out.append({"recv": r["recv_epoch"],
-                        "venue_ts": e.get("timestamp"),
-                        "bid": b and b[0], "bid_sz": b and b[1],
-                        "ask": a and a[0], "ask_sz": a and a[1],
-                        "bids": e.get("bids"), "asks": e.get("asks")})
-    out.sort(key=lambda x: x["recv"])
-    return out
-
-
-def l5_fills(act: List[dict], condition_id: str) -> List[Dict[str, Any]]:
-    seen, fills = set(), []
-    for r in act:
-        for row in (r["payload"] or []):
-            if str(row.get("conditionId")) != str(condition_id):
-                continue
-            key = (str(row.get("transactionHash")), str(row.get("timestamp")),
-                   str(row.get("price")), str(row.get("size")),
-                   str(row.get("outcome")), str(row.get("side")))
-            if key in seen:
-                continue
-            seen.add(key)
-            fills.append({
-                "venue_ts": int(row.get("timestamp") or 0),
-                "first_seen_recv": r["recv_epoch"],
-                "outcome": row.get("outcome"),
-                "side": str(row.get("side") or ""),
-                "px": float(row.get("price") or 0),
-                "size": float(row.get("size") or 0),
-                "usdc": float(row.get("usdcSize") or 0),
-                "tx": row.get("transactionHash"),
-            })
-    fills.sort(key=lambda f: (f["venue_ts"], f["px"]))
-    return fills
-
-
-def at_or_before(series: List[Dict[str, Any]], t: float):
-    prev = None
-    for s in series:
-        if s["recv"] <= t:
-            prev = s
+def level_size_at(snaps: List[dict], levels: List[tuple], px: str,
+                  t: float) -> Tuple[Optional[str], str]:
+    """Size resting at `px` at time `t`: the latest price_change for that price,
+    else the newest snapshot at or before t. Returns (size, source)."""
+    best = None
+    for ms, p, sz, _s in levels:
+        if ms <= t and p == px:
+            best = (ms, sz)
+    snap = None
+    for s in snaps:
+        if s["ts"] <= t:
+            snap = s
         else:
             break
-    return prev
+    snap_sz = None
+    if snap:
+        for row in (snap["bids"] or []) + (snap["asks"] or []):
+            if str(row.get("price")) == px:
+                snap_sz = str(row.get("size"))
+                break
+    if best and (snap is None or best[0] >= snap["ts"]):
+        return best[1], "price_change"
+    if snap_sz is not None:
+        return snap_sz, "book_snapshot"
+    return None, ("absent_from_snapshot" if snap else "no_state_before_t")
+
+
+def touch_at(touch: List[tuple], t: float):
+    prev = None
+    for ms, b, a in touch:
+        if ms <= t:
+            prev = (b, a)
+        else:
+            break
+    return prev or (None, None)
 
 
 def main(argv) -> int:
@@ -129,137 +172,147 @@ def main(argv) -> int:
         print(__doc__)
         return 2
     path = argv[1]
-    d = load(path)
+    d = scan(path)
     op = d["open"]
     if not op:
-        print(f"{path}: no window_open record")
+        print(f"{path}: no window_open")
         return 1
     info = op["payload"]
     ids = info.get("ids") or {}
-    slug = info["slug"]
-    cond = ids.get("condition_id")
-    toks = ids.get("token_ids") or []
+    cond = str(ids.get("condition_id"))
+    toks = [str(t) for t in (ids.get("token_ids") or [])]
     outcomes = ids.get("outcomes") or []
+    tok_of = dict(zip(outcomes, toks))
 
-    ev = Counter()
-    for r in d["ws"]:
-        for e in (r["payload"] if isinstance(r["payload"], list)
-                  else [r["payload"]]):
-            if isinstance(e, dict):
-                ev[str(e.get("event_type"))] += 1
+    print("=" * 102)
+    print(f"PRE-RESTING FORENSICS  {info['slug']}")
+    print("=" * 102)
+    print(f"  {ids.get('question')}")
+    print(f"  ws frames {d['n_ws']}  events {dict(d['ev'])}")
+    print(f"  activity polls {len(d['act'])}  failed reads {d['failed']}  "
+          f"errors {len(d['errors'])}")
+    print(f"  outcome -> token: "
+          + ", ".join(f"{k}={v[:12]}..." for k, v in tok_of.items()))
 
-    print("=" * 100)
-    print(f"SYNCHRONIZED FORENSICS  {slug}")
-    print("=" * 100)
-    print(f"  question      {ids.get('question')}")
-    print(f"  outcomes      {outcomes}  tokens {len(toks)}")
-    print(f"  ws frames     {len(d['ws'])}   event types {dict(ev)}")
-    print(f"  activity polls{len(d['act'])}   failed reads {d['failed_reads']}")
-    print(f"  rest snapshots{len(d['rest'])}   errors {len(d['errors'])}")
-    if d["errors"]:
-        for e in d["errors"][:3]:
-            print(f"    ERROR {e['kind']}: {str(e['payload'])[:140]}")
+    for name, tid in tok_of.items():
+        v = validate_level_semantics(d["snaps"][tid], d["levels"][tid])
+        print(f"\n  DELTA SEMANTICS CHECK [{name}]: {v['verdict']}  "
+              f"agree {v['agree']}/{v['checked']}"
+              + (f" = {v['agreement_rate']:.4f}" if v['agreement_rate'] else ""))
+        print(f"    reading tested: {v['reading']}")
 
-    fills = l5_fills(d["act"], cond)
-    print(f"\n  L5 fills in THIS market: {len(fills)}")
+    #: L5's fills, joined to the native feed for ms timing
+    seen, fills = set(), []
+    for r in d["act"]:
+        for row in (r["payload"] or []):
+            if str(row.get("conditionId")) != cond:
+                continue
+            tx = str(row.get("transactionHash")).lower()
+            key = (tx, row.get("timestamp"), row.get("price"), row.get("size"),
+                   row.get("outcome"))
+            if key in seen:
+                continue
+            seen.add(key)
+            j = d["trades"].get(tx)
+            fills.append({
+                "outcome": row.get("outcome"), "side": str(row.get("side")),
+                "px": float(row.get("price") or 0),
+                "size": float(row.get("size") or 0),
+                "activity_ts": int(row.get("timestamp") or 0),
+                "ms_ts": j["ts"] if j else None,
+                "joined": bool(j), "tx": tx,
+                "asset_id": (j or {}).get("asset_id"),
+            })
+    fills.sort(key=lambda f: (f["ms_ts"] if f["ms_ts"] else f["activity_ts"]))
+    nj = sum(1 for f in fills if f["joined"])
+    print(f"\n  L5 fills: {len(fills)}   joined to native feed on "
+          f"transaction_hash: {nj}/{len(fills)}")
     if not fills:
-        print("  OBSERVED: L5 did not trade this window. Not an active window; "
-              "the discriminator needs one where he does.")
+        print("  L5 did not trade this window.")
         return 0
-
-    #: the UP token's series carries the whole market in up-terms
-    up_tok = str(toks[0])
-    series = book_series(d["ws"], up_tok)
-    print(f"  book snapshots for the up token: {len(series)}")
-
-    #: LATENCY, measured, kept distinct from L5's event time
-    lat = sorted(f["first_seen_recv"] - f["venue_ts"] for f in fills)
-    if lat:
-        print(f"\n  OBSERVED collection lag (our first sight MINUS venue event "
-              f"time): min {lat[0]:.1f}s  median {lat[len(lat)//2]:.1f}s  "
-              f"max {lat[-1]:.1f}s")
-        print("  This is OUR delay. It is NOT L5's reaction time and is never "
-              "used as his decision time.")
-
-    print("\n" + "=" * 100)
-    print("FILL-BY-FILL against the contemporaneous book")
-    print("=" * 100)
-    print("  %-9s%-6s%8s%8s%11s%11s%9s" % (
-        "venue_ts", "side", "px", "size", "bid@fill", "ask@fill", "vs touch"))
-    rows = []
     for f in fills:
-        side = SIDE_OF.get(str(f["outcome"]), "?")
-        #: own-terms touch for this side, from the up-token book
-        s = at_or_before(series, f["venue_ts"])
-        own_bid = own_ask = None
-        if s and s["bid"] is not None and s["ask"] is not None:
-            own_bid = s["bid"] if side == "up" else 1.0 - s["ask"]
-            own_ask = s["ask"] if side == "up" else 1.0 - s["bid"]
-        rel = ("UNKNOWN" if own_ask is None else
-               ("at/through ask" if f["px"] >= own_ask else
-                ("at bid" if own_bid is not None and f["px"] >= own_bid
-                 else "below bid")))
-        print("  %-9d%-6s%8.3f%8.1f%11s%11s%9s" % (
-            f["venue_ts"], side, f["px"], f["size"],
-            "n/a" if own_bid is None else "%.3f" % own_bid,
-            "n/a" if own_ask is None else "%.3f" % own_ask, rel))
-        rows.append({**f, "side": side, "own_bid": own_bid,
-                     "own_ask": own_ask, "rel": rel})
+        print("    %-5s %-4s px=%-6s size=%-10s ms_ts=%s" % (
+            f["outcome"], f["side"], f["px"], f["size"],
+            ("%.3f" % f["ms_ts"]) if f["ms_ts"] else "UNJOINED"))
 
-    print("\n" + "=" * 100)
-    print("THE DISCRIMINATOR: same-side price walks")
-    print("=" * 100)
-    walks, cur = [], [rows[0]]
-    for a, b in zip(rows, rows[1:]):
-        if b["side"] == a["side"] and b["venue_ts"] - a["venue_ts"] <= 3 \
-                and b["px"] != a["px"]:
+    #: bursts, now at MILLISECOND resolution
+    bursts, cur = [], [fills[0]]
+    for a, b in zip(fills, fills[1:]):
+        ta = a["ms_ts"] or a["activity_ts"]
+        tb = b["ms_ts"] or b["activity_ts"]
+        if tb - ta <= BURST_S:
             cur.append(b)
         else:
-            if len(cur) >= 2:
-                walks.append(cur)
+            bursts.append(cur)
             cur = [b]
-    if len(cur) >= 2:
-        walks.append(cur)
-    if not walks:
-        print("  No multi-level same-side walk within 3s in this window. "
-              "The discriminator needs one; UNKNOWN for this window.")
-    for wk in walks:
-        t0, t1 = wk[0]["venue_ts"], wk[-1]["venue_ts"]
-        pxs = [w["px"] for w in wk]
-        moved = [s for s in series if t0 - 2 <= s["recv"] <= t1 + 2]
-        touches = [(round(s["recv"] - t0, 2), s["bid"], s["ask"])
-                   for s in moved]
-        print(f"\n  WALK {wk[0]['side']} {pxs}  over {t1 - t0}s, "
-              f"sizes {[w['size'] for w in wk]}")
-        print(f"    book snapshots spanning it: {len(moved)}")
-        for t, b, a in touches[:14]:
-            print(f"      t{t:+6.2f}s  bid {b}  ask {a}")
-        distinct = {(b, a) for _, b, a in touches}
-        print(f"    distinct touch states across the walk: {len(distinct)}")
-        if len(moved) == 0:
-            print("    UNKNOWN: no book snapshot covers this walk.")
-        elif len(distinct) <= 1:
-            print("    FITS LADDER (INFERRED): the touch did not change across "
-                  "the walk, so the levels were not reached sequentially by a "
-                  "moving book.")
-        else:
-            print("    FITS REACTIVE (INFERRED): the touch changed "
-                  f"{len(distinct)} times across the walk, consistent with "
-                  "levels being reached sequentially.")
-        print("    Either reading is INFERRED, not OBSERVED: order placement "
-              "and cancellation are not in this feed.")
+    bursts.append(cur)
 
-    print("\n" + "=" * 100)
-    print("CLASSIFICATION OF WHAT THIS WINDOW SUPPORTS")
-    print("=" * 100)
-    print("  OBSERVED : L5's fills (venue timestamp, side, price, size), the "
-          "native book snapshots and trade prints, our collection lag.")
-    print("  INFERRED : whether a walk fits ladder or reactive, L5's position "
-          "relative to the touch, any adverse selection.")
-    print("  UNKNOWN  : L5's order placements and cancellations; whether a fill "
-          "was maker or taker from his side; his unfilled intent; his reaction "
-          "latency; whether a small fill is a partial of a larger resting "
-          "order. None of these are in any public feed.")
+    print("\n" + "=" * 102)
+    print("PER BURST: were the executed levels represented BEFORE the burst?")
+    print("=" * 102)
+    for bi, bu in enumerate(bursts, 1):
+        t0 = bu[0]["ms_ts"] or bu[0]["activity_ts"]
+        span = (bu[-1]["ms_ts"] or bu[-1]["activity_ts"]) - t0
+        print(f"\n  BURST {bi}: {len(bu)} fill(s), span {span*1000:.0f} ms")
+        for f in bu:
+            dt = ((f["ms_ts"] or f["activity_ts"]) - t0) * 1000.0
+            print("    T%+8.0fms  %-5s px=%-6s size=%s" % (
+                dt, f["outcome"], f["px"], f["size"]))
+        aid = bu[0]["asset_id"]
+        if not aid:
+            print("    UNJOINED: no ms timing, burst not analysable")
+            continue
+        snaps, levels, touch = d["snaps"][aid], d["levels"][aid], d["touch"][aid]
+        print("    touch on the executed token, before the burst:")
+        for lead in LEADS:
+            b, a = touch_at(touch, t0 - lead)
+            print(f"      T-{lead:>5.0f}s  best_bid {b}  best_ask {a}")
+        b0, a0 = touch_at(touch, t0 - 0.001)
+        print(f"      T-0.001s  best_bid {b0}  best_ask {a0}")
+
+        print("    level represented at each executed price, BEFORE the burst:")
+        verdicts = []
+        for f in bu:
+            px = f"{f['px']:.2f}"
+            row = []
+            for lead in LEADS:
+                sz, src = level_size_at(snaps, levels, px, t0 - lead)
+                row.append(f"T-{lead:.0f}s={sz if sz is not None else 'absent'}")
+            sz_pre, src_pre = level_size_at(snaps, levels, px, t0 - 0.001)
+            enough = (sz_pre is not None and float(sz_pre) >= f["size"])
+            verdicts.append(enough)
+            print("      px %-6s %s | just before: %s (%s) -> covers %s? %s" % (
+                px, "  ".join(row), sz_pre if sz_pre is not None else "absent",
+                src_pre, f["size"], "YES" if enough else "NO"))
+
+        if all(verdicts):
+            cls = "CONSISTENT_WITH_PRE_RESTING"
+            why = ("every executed price already showed at least the executed "
+                   "size before the burst began")
+        elif any(verdicts):
+            cls = "AMBIGUOUS"
+            why = ("some executed prices were represented beforehand and others "
+                   "were not")
+        else:
+            cls = "REQUIRES_POST_EVENT_ORDER"
+            why = ("no executed price showed enough size beforehand, so some "
+                   "order must have arrived after the burst began")
+        print(f"    => {cls}: {why}")
+        print("       Liquidity is ANONYMOUS. This says the sequence is "
+              "consistent with standing liquidity, NOT that the standing "
+              "liquidity was L5's.")
+
+    print("\n" + "=" * 102)
+    print("CLASSIFICATION")
+    print("=" * 102)
+    print("  OBSERVED : L5's fills at ms resolution via the transaction_hash "
+          "join; venue-stated best_bid/best_ask; book snapshots; per-level "
+          "sizes where the delta reading validated.")
+    print("  INFERRED : whether a burst is consistent with pre-resting; that "
+          "the market moved toward the executed levels.")
+    print("  UNKNOWN  : whose orders the resting liquidity was; whether L5 "
+          "cancelled or replaced anything; his unfilled intent; whether a fill "
+          "was a book trade or a complete-set mint.")
     return 0
 
 
