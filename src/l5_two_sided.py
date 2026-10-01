@@ -41,6 +41,12 @@ from typing import Any, Dict, List, Optional
 from src import pmus_fees as FEES
 
 ONE = D("1")
+#: the largest average-cost drift a disposal may introduce. Decimal division
+#: cannot round-trip exactly, so the inventory invariant is checked to a
+#: tolerance far below economic significance rather than to equality: exact
+#: equality raised on a legitimate disposal (...445 -> ...446) and crashed a
+#: replay run.
+BASIS_DRIFT_TOL = D("1e-20")
 TICK = D("0.01")
 
 #: arms. They share the fill simulator and differ ONLY in policy.
@@ -604,11 +610,20 @@ class TwoSided:
         if self.qty[side] == 0:
             self.cost[side] = D(0)          # exact, never a rounding residue
         else:
-            self.cost[side] -= basis_before * qty
-            if self.basis(side) != basis_before:
+            #: RESTATE the cost from the preserved average rather than
+            #: subtracting. `basis` is cost/qty, so a subtraction leaves a
+            #: rounding residue in the last significant digit and the invariant
+            #: below -- originally exact equality -- raised on a legitimate
+            #: disposal (observed: ...445 -> ...446, which crashed a replay run).
+            #: Restating keeps the average exactly where it was.
+            self.cost[side] = basis_before * self.qty[side]
+            #: and verify to a tolerance far below economic significance, since
+            #: exact Decimal equality through division is unattainable.
+            drift = abs(self.basis(side) - basis_before)
+            if drift > BASIS_DRIFT_TOL:
                 raise AssertionError(
                     f"disposal changed the basis of what remains on {side}: "
-                    f"{basis_before} -> {self.basis(side)}")
+                    f"{basis_before} -> {self.basis(side)} (drift {drift})")
         if self.cost[side] < 0:
             raise AssertionError(
                 f"cost went negative on {side}: {self.cost[side]}")

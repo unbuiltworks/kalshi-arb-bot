@@ -107,3 +107,36 @@ def test_disposing_nothing_is_a_no_op():
     before = (c.qty["up"], c.cost["up"])
     c._dispose("up", D(0), c.basis("up"))
     assert (c.qty["up"], c.cost["up"]) == before
+
+
+def test_a_repeating_decimal_basis_survives_disposal():
+    """REGRESSION. The invariant was exact Decimal equality, which a basis
+    derived by DIVISION cannot round-trip: a legitimate disposal moved the last
+    significant digit (...445 -> ...446) and the AssertionError crashed a replay
+    run mid-flight. The cost is now RESTATED from the preserved average instead
+    of subtracted, and verified to a tolerance far below economic significance.
+    """
+    from src.l5_two_sided import BASIS_DRIFT_TOL
+    for denom in ("8.66", "7", "3", "11", "9.73"):
+        c = eng()
+        c.qty["down"] = D(3)
+        c.cost["down"] = D(3) * (D(1) / D(denom))
+        before = c.basis("down")
+        c._dispose("down", D(1), before)          # must not raise
+        assert abs(c.basis("down") - before) <= BASIS_DRIFT_TOL
+        assert c.qty["down"] == D(2)
+
+
+def test_the_tolerance_is_economically_negligible():
+    from src.l5_two_sided import BASIS_DRIFT_TOL
+    assert BASIS_DRIFT_TOL < D("0.01") / D(10) ** 15, \
+        "the tolerance must be far below one cent"
+
+
+def test_cost_stays_consistent_with_basis_times_quantity():
+    c = eng()
+    c.qty["up"] = D(7)
+    c.cost["up"] = D(7) * (D(1) / D(3))
+    b = c.basis("up")
+    c._dispose("up", D(2), b)
+    assert c.cost["up"] == c.basis("up") * c.qty["up"]
