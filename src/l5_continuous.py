@@ -38,7 +38,15 @@ VARIANTS = (V1, V2, V3, V4)
 
 
 class V1ExtendOnly(TwoSided):
-    """V1: heavy-side acquisition is permitted. Nothing else changes."""
+    """V1: heavy-side acquisition is permitted. Nothing else changes.
+
+    Also carries the RESIDUAL-CAP OBSERVER shared by every variant. The cap is
+    NOT altered -- it is instrumented, because the preregistration predicts it
+    becomes the binding constraint once extension is allowed, and that
+    prediction has to be measurable rather than argued. Every counter below is
+    written AFTER decisions are made and is read by no rule, so it cannot change
+    behaviour; a test pins that.
+    """
 
     variant = V1
 
@@ -46,6 +54,71 @@ class V1ExtendOnly(TwoSided):
         kw["allow_extend"] = True                 # the ONLY difference
         kw.setdefault("arm", ARM_REPLICATION)
         super().__init__(**kw)
+        self.cap = {
+            "acquisitions_attempted": 0,
+            "blocked_by_cap": 0,
+            "blocked_up": 0, "blocked_down": 0,
+            "seconds_cap_bound": 0.0,
+            "entries_into_cap": 0, "exits_from_cap": 0,
+            "residual_at_first_bind": None,
+            "matched_before_first_bind": None,
+            "matched_after_first_bind": None,
+            "touch_available_while_cap_bound": 0,
+            "reopened_by_opposite_fill": 0,
+        }
+        self._cap_bound = False
+        self._cap_last_t = None
+
+    # ------------------------------------------------ decision-neutral probe
+    def _cap_would_block(self, side: str) -> bool:
+        """Pure predicate, mirroring the frozen gate. Reads nothing new."""
+        defic = self.deficient()
+        if defic is None or side == defic or self.qty[side] <= 0:
+            return False
+        return (abs(self.residual()) + self.clip) > self.residual_cap
+
+    def _cap_probe(self) -> None:
+        c = self.cap
+        bound_sides = [s for s in ("up", "down") if self._cap_would_block(s)]
+        bound = bool(bound_sides)
+        if self._cap_last_t is not None and self._cap_bound:
+            c["seconds_cap_bound"] += max(0.0, self.now - self._cap_last_t)
+        self._cap_last_t = self.now
+        for s in bound_sides:
+            c["acquisitions_attempted"] += 1
+            c["blocked_by_cap"] += 1
+            c[f"blocked_{s}"] += 1
+            if self.own_touch(s) is not None:
+                # an upper bound on missed chances: a quotable touch existed
+                # while the cap forbade acquiring there.
+                c["touch_available_while_cap_bound"] += 1
+        if bound and not self._cap_bound:
+            c["entries_into_cap"] += 1
+            if c["residual_at_first_bind"] is None:
+                c["residual_at_first_bind"] = str(self.residual())
+                c["matched_before_first_bind"] = str(self.matched())
+        elif self._cap_bound and not bound:
+            c["exits_from_cap"] += 1
+            if abs(self.residual()) < self.residual_cap:
+                # the opposite side filling is what re-opens acquisition
+                c["reopened_by_opposite_fill"] += 1
+        self._cap_bound = bound
+
+    def reconcile_quotes(self) -> None:
+        super().reconcile_quotes()
+        self._cap_probe()            # AFTER decisions: cannot influence them
+
+    def report(self, *, winner: Optional[str] = None) -> dict:
+        out = super().report(winner=winner)
+        c = dict(self.cap)
+        if c["matched_before_first_bind"] is not None:
+            c["matched_after_first_bind"] = str(
+                self.matched() - D(c["matched_before_first_bind"]))
+        att = c["acquisitions_attempted"]
+        c["blocked_fraction"] = (c["blocked_by_cap"] / att) if att else None
+        out["residual_cap_observer"] = c
+        out["variant"] = self.variant
+        return out
 
 
 class V2NoBasisGate(V1ExtendOnly):

@@ -251,3 +251,30 @@ def test_v3_is_the_only_variant_that_persists_a_level():
         fill_resting(c, "up", 1002.0)
     assert v3.legs["up"].px == D("0.40"), "V3 persists the filled level"
     assert v2.legs["up"].px == D("0.30") and v4.legs["up"].px == D("0.30")
+
+
+# ------------------------------------- residual-cap observer is decision-neutral
+
+@pytest.mark.parametrize("name", [V1, V2, V3, V4])
+def test_cap_observer_does_not_change_the_cap_or_any_decision(name):
+    c = build(name)
+    assert c.residual_cap == D(2), "the observer must not alter the cap"
+    before = {k: v for k, v in c.__dict__.items()
+              if k not in ("cap", "_cap_bound", "_cap_last_t")}
+    c._cap_probe()
+    after = {k: v for k, v in c.__dict__.items()
+             if k not in ("cap", "_cap_bound", "_cap_last_t")}
+    assert before == after
+
+
+def test_cap_observer_records_a_bind_and_its_residual():
+    c = build(V1)
+    c.window_end = 10_000.0
+    c.now = 1000.0
+    c._book_fill("up", D(3), D("0.50"), maker=True, evidence="t")
+    feed(c, t=1001.0, bid="0.40", ask="0.60")
+    obs = c.report(winner="up")["residual_cap_observer"]
+    assert obs["blocked_by_cap"] >= 1
+    assert obs["blocked_up"] >= 1 and obs["blocked_down"] == 0
+    assert obs["entries_into_cap"] >= 1
+    assert obs["residual_at_first_bind"] is not None
