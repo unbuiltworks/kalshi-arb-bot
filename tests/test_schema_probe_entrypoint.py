@@ -50,7 +50,8 @@ def test_no_arming_means_no_submission(monkeypatch):
         monkeypatch.delenv(env, raising=False)
     out = S.run(Boom())
     assert out["submitted"] is False and out["outcome"] == "REFUSED"
-    assert S.terminal_ok(out) is True, "a clean refusal is a safe outcome"
+    assert S.terminal_ok(out) is False, \
+        "a refusal is SAFE but must not look like successful execution"
 
 
 @pytest.mark.parametrize("drop", [P.LIVE_ENV, P.SESSION_ENV, P.ARM_ENV,
@@ -166,13 +167,37 @@ def test_exactly_one_submission_maximum():
     assert submits[0] == 0, "the submission sits inside a loop"
 
 
-def test_terminal_success_requires_both_proofs():
+def test_terminal_success_requires_every_proof():
     base = {"outcome": "OBSERVED", "submitted": True,
             "terminal_proved": True, "sweep_verified": True}
     assert S.terminal_ok(base) is True
     assert S.terminal_ok({**base, "terminal_proved": False}) is False
     assert S.terminal_ok({**base, "sweep_verified": False}) is False
     assert S.terminal_ok({**base, "outcome": "ERROR"}) is False
+    assert S.terminal_ok({**base, "submitted": False}) is False
+    assert S.terminal_ok({**base, "open_orders_after": ["OID"]}) is False
+    assert S.terminal_ok({**base, "cleanup_error": "boom"}) is False
+
+
+@pytest.mark.parametrize("outcome", ["REFUSED", "ERROR",
+                                     "PROBE_FAILURE_UNEXPECTED_FILL"])
+def test_every_non_observed_outcome_exits_nonzero(outcome):
+    out = {"outcome": outcome, "submitted": True, "terminal_proved": True,
+           "sweep_verified": True}
+    assert S.terminal_ok(out) is False
+
+
+def test_a_failed_reconciliation_exits_nonzero():
+    out = {"outcome": "OBSERVED", "submitted": True, "terminal_proved": True,
+           "sweep_verified": True, "cleanup_error": "RuntimeError: venue 500"}
+    assert S.terminal_ok(out) is False
+
+
+def test_main_returns_nonzero_on_a_safe_refusal(monkeypatch):
+    """The whole point: unarmed must not look like a successful observation."""
+    for env in (P.LIVE_ENV, P.SESSION_ENV, P.ARM_ENV, P.PROBE_ARM_ENV):
+        monkeypatch.delenv(env, raising=False)
+    assert S.main() == 1
 
 
 def test_an_unexpected_fill_is_a_failure_never_a_success():

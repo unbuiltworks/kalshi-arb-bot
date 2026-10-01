@@ -262,12 +262,21 @@ def run(t: Optional[X.Transport] = None, *, sleep=time.sleep,
 
 
 def terminal_ok(out: Dict[str, Any]) -> bool:
-    """16: success requires positive proof, never absence of bad news."""
-    if out.get("outcome") == "REFUSED" and not out.get("submitted"):
-        return True                     # a clean refusal is a safe outcome
+    """Success requires POSITIVE PROOF that the probe did its job and left the
+    account clean. Never the absence of bad news.
+
+    A REFUSED run is SAFE but is NOT success: a one-shot that fails to arm and
+    exits 0 is operationally ambiguous -- Railway and any automation would read
+    it as "ran fine" when nothing was observed. Only OBSERVED with both terminal
+    assertions exits 0; refusal, an unexpected fill, an unresolved cancellation,
+    a remaining open order or a failed reconciliation all exit nonzero.
+    """
     return bool(out.get("outcome") == "OBSERVED"
+                and out.get("submitted")
                 and out.get("terminal_proved")
-                and out.get("sweep_verified"))
+                and out.get("sweep_verified")
+                and not out.get("open_orders_after")
+                and not out.get("cleanup_error"))
 
 
 def main() -> int:
@@ -277,9 +286,13 @@ def main() -> int:
         except Exception:                               # noqa: BLE001
             pass
     out = run()
+    out["terminal_ok"] = terminal_ok(out)
+    #: the exit code is a SAFETY signal, and `outcome` is the evidence signal.
+    #: A safe refusal still exits nonzero so automation cannot mistake "armed
+    #: incorrectly, observed nothing" for "observed the schema".
     print("SCHEMA_PROBE_REPORT " + json.dumps(out, default=str), flush=True)
     print(json.dumps(out, indent=1, default=str), flush=True)
-    return 0 if terminal_ok(out) else 1
+    return 0 if out["terminal_ok"] else 1
 
 
 if __name__ == "__main__":
