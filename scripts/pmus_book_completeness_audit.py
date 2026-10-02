@@ -76,7 +76,10 @@ def main(paths):
         for slug, arr in (o.get("markets") or {}).items():
             n = len(arr)
             emitted += n
-            row_ts.setdefault(slug, []).extend(
+            # a row can appear in two documents; count DISTINCT receipt
+            # timestamps. An earlier revision extended a list and reported
+            # 9,814 rows for a window that actually held 7,914.
+            row_ts.setdefault(slug, set()).update(
                 float(x["t"]) for x in arr if x.get("t") is not None)
             bu = ((o.get("identity") or {}).get(slug) or {}).get("book_updates")
             cap = o.get("cap_per_market") or 0
@@ -103,7 +106,7 @@ def main(paths):
 
     gaps = {}
     for slug, ts_ in row_ts.items():
-        ts_ = sorted(ts_)
+        ts_ = sorted(ts_)   # set -> ordered
         g = [round(b - a, 3) for a, b in zip(ts_, ts_[1:]) if b - a > 2.0]
         gaps[slug] = {"rows": len(ts_), "span_s": round(ts_[-1] - ts_[0], 1) if ts_ else 0,
                       "gaps_over_2s": len(g), "worst_gap_s": max(g) if g else 0.0}
