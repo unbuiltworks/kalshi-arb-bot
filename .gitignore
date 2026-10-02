@@ -111,3 +111,7 @@ data/btc15m/coinbase_1m.jsonl
 # recorder and for provenance, and the completed tape is committed gzipped
 # once the run ends, alongside the derived analysis.
 data/gemini_shadow/*.jsonl
+
+# Merged shadow tape is derived from the raw L2 + raw trade tapes by
+# scripts/gemini_tape_merge.py and is regenerable; the raws are the evidence.
+data/gemini_shadow/merged/

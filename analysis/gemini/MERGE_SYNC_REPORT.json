@@ -1,0 +1,590 @@
+{
+  "merged_tape": "data/gemini_shadow/merged/merged_tape.jsonl",
+  "raw_preserved": {
+    "l2": [
+      "data/gemini_shadow/gemini_BTC15M_20261002T021747Z.jsonl",
+      "data/gemini_shadow/gemini_BTC15M_20261002T023352Z.jsonl",
+      "data/gemini_shadow/gemini_BTC15M_20261002T024801Z.jsonl"
+    ],
+    "trades": [
+      "data/gemini_shadow/trades_BTC15M_20261002T023237Z.jsonl",
+      "data/gemini_shadow/trades_BTC15M_20261002T024801Z.jsonl"
+    ]
+  },
+  "freshness_threshold_ms": 2000,
+  "clock_offset_ms_venue_minus_receipt": 21.690185546875,
+  "clock_offset_source": "median of 223 heartbeat frames",
+  "distinct_tids": 4,
+  "scored_trades": 1,
+  "unscorable": {
+    "COVERAGE_GAP_RECORDER_DOWN": 3,
+    "DEDUP_CONFLICT": 0
+  },
+  "dedup_conflicts": [],
+  "coverage_gaps": [
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 3908.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 3450.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4073.5,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2688.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2175.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2110.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5821.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2989.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2403.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5619.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 3558.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 3736.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 3138.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 22003.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2210.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2561.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5568.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 6571.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 7459.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 3130.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2411.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5795.5,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 6810.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2530.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 35079.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 10308.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 6173.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 6623.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 14112.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 8615.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2701.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 16016.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 6904.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2665.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2341.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2559.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4786.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 6442.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 3781.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5085.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5462.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4077.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 6632.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 14102.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5812.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 8926.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 9962.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 67829.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 16745.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 8177.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 17612.5,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4100.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 5444.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4999.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2938.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4751.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4174.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 4203.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 2860.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 8967.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 21635.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020230-UP",
+      "gap_ms": 46961.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 480092.5,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 70256.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 119952.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 293547.5,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 5992.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 5163.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 3077.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2886.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2239.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2638.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 3676.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 5333.2,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 3235.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2285.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2021.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2085.2,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2107.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2881.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2122.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 4171.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 3406.3,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 5612.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2381.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2235.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2265.2,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2146.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2977.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 3429.2,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2162.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2230.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2267.5,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 4191.8,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2225.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2318.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020245-UP",
+      "gap_ms": 2034.1,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020300-UP",
+      "gap_ms": 965341.8,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020300-UP",
+      "gap_ms": 849072.6,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020300-UP",
+      "gap_ms": 5024.0,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020300-UP",
+      "gap_ms": 7171.9,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020300-UP",
+      "gap_ms": 3469.6,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020300-UP",
+      "gap_ms": 8501.7,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020300-UP",
+      "gap_ms": 2173.4,
+      "why": "gap"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020315-UP",
+      "gap_ms": 965341.8,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020315-UP",
+      "gap_ms": 849072.9,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020330-UP",
+      "gap_ms": 965341.9,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020330-UP",
+      "gap_ms": 849072.9,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020345-UP",
+      "gap_ms": 329974.7,
+      "why": "segment_boundary"
+    },
+    {
+      "symbol": "GEMI-BTC15M2610020345-UP",
+      "gap_ms": 849072.9,
+      "why": "segment_boundary"
+    }
+  ],
+  "heartbeat_liveness_threshold_ms": 15000,
+  "scored_under_strict_frame_recency": 1,
+  "scored_only_because_of_liveness_rule": 0,
+  "liveness_age_ms_p50": 423.806884765625,
+  "book_age_ms": {
+    "n": 1,
+    "min": 423.806884765625,
+    "p50": 423.806884765625,
+    "p90": 423.806884765625,
+    "p99": 423.806884765625,
+    "max": 423.806884765625,
+    "mean": 423.806884765625
+  },
+  "frames_written": 12269
+}
