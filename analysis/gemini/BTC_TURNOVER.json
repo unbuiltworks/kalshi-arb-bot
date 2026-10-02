@@ -1,0 +1,1380 @@
+{
+  "BTC15M": {
+    "summary": {
+      "prefix": "BTC15M",
+      "windows": 96,
+      "windows_with_any_trade": 81,
+      "volume_mean": 489.1326041666667,
+      "volume_median": 133.55,
+      "volume_p10": 0.0,
+      "volume_p90": 1417.5,
+      "volume_max": 4806.96,
+      "notional_mean": 269.4916979166667,
+      "notional_median": 43.1796,
+      "trades_median": 3.0
+    },
+    "rows": [
+      {
+        "symbol": "GEMI-BTC15M2610020200-UP",
+        "window_utc": "2026-10-02T02:00:00+00:00",
+        "trades": 4,
+        "volume": "120.09",
+        "notional": "92.5385"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020145-UP",
+        "window_utc": "2026-10-02T01:45:00+00:00",
+        "trades": 4,
+        "volume": "267.41",
+        "notional": "165.3652"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020130-UP",
+        "window_utc": "2026-10-02T01:30:00+00:00",
+        "trades": 1,
+        "volume": "20",
+        "notional": "1.00"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020115-UP",
+        "window_utc": "2026-10-02T01:15:00+00:00",
+        "trades": 1,
+        "volume": "50.42",
+        "notional": "19.1596"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020100-UP",
+        "window_utc": "2026-10-02T01:00:00+00:00",
+        "trades": 4,
+        "volume": "137.56",
+        "notional": "43.4412"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020045-UP",
+        "window_utc": "2026-10-02T00:45:00+00:00",
+        "trades": 19,
+        "volume": "3158.77",
+        "notional": "1538.3680"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020030-UP",
+        "window_utc": "2026-10-02T00:30:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020015-UP",
+        "window_utc": "2026-10-02T00:15:00+00:00",
+        "trades": 23,
+        "volume": "2162.76",
+        "notional": "806.5505"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610020000-UP",
+        "window_utc": "2026-10-02T00:00:00+00:00",
+        "trades": 8,
+        "volume": "449.29",
+        "notional": "145.7871"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012345-UP",
+        "window_utc": "2026-10-01T23:45:00+00:00",
+        "trades": 5,
+        "volume": "268.86",
+        "notional": "198.8665"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012330-UP",
+        "window_utc": "2026-10-01T23:30:00+00:00",
+        "trades": 6,
+        "volume": "140.54",
+        "notional": "88.5436"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012315-UP",
+        "window_utc": "2026-10-01T23:15:00+00:00",
+        "trades": 12,
+        "volume": "133.38",
+        "notional": "30.2282"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012300-UP",
+        "window_utc": "2026-10-01T23:00:00+00:00",
+        "trades": 2,
+        "volume": "133.72",
+        "notional": "40.7144"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012245-UP",
+        "window_utc": "2026-10-01T22:45:00+00:00",
+        "trades": 8,
+        "volume": "1104.51",
+        "notional": "771.0064"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012230-UP",
+        "window_utc": "2026-10-01T22:30:00+00:00",
+        "trades": 3,
+        "volume": "441.53",
+        "notional": "149.2911"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012215-UP",
+        "window_utc": "2026-10-01T22:15:00+00:00",
+        "trades": 4,
+        "volume": "4",
+        "notional": "2.08"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012200-UP",
+        "window_utc": "2026-10-01T22:00:00+00:00",
+        "trades": 46,
+        "volume": "1069.54",
+        "notional": "902.5622"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012145-UP",
+        "window_utc": "2026-10-01T21:45:00+00:00",
+        "trades": 5,
+        "volume": "508.22",
+        "notional": "104.850"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012130-UP",
+        "window_utc": "2026-10-01T21:30:00+00:00",
+        "trades": 13,
+        "volume": "409.30",
+        "notional": "147.7806"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012115-UP",
+        "window_utc": "2026-10-01T21:15:00+00:00",
+        "trades": 18,
+        "volume": "1012.04",
+        "notional": "641.1123"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012100-UP",
+        "window_utc": "2026-10-01T21:00:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012045-UP",
+        "window_utc": "2026-10-01T20:45:00+00:00",
+        "trades": 5,
+        "volume": "134.29",
+        "notional": "28.2447"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012030-UP",
+        "window_utc": "2026-10-01T20:30:00+00:00",
+        "trades": 36,
+        "volume": "1393.03",
+        "notional": "823.8072"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012015-UP",
+        "window_utc": "2026-10-01T20:15:00+00:00",
+        "trades": 45,
+        "volume": "572.85",
+        "notional": "483.2353"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610012000-UP",
+        "window_utc": "2026-10-01T20:00:00+00:00",
+        "trades": 4,
+        "volume": "88.53",
+        "notional": "42.918"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011945-UP",
+        "window_utc": "2026-10-01T19:45:00+00:00",
+        "trades": 9,
+        "volume": "176.33",
+        "notional": "154.8005"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011930-UP",
+        "window_utc": "2026-10-01T19:30:00+00:00",
+        "trades": 2,
+        "volume": "92.37",
+        "notional": "34.0717"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011915-UP",
+        "window_utc": "2026-10-01T19:15:00+00:00",
+        "trades": 4,
+        "volume": "25.4",
+        "notional": "8.608"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011900-UP",
+        "window_utc": "2026-10-01T19:00:00+00:00",
+        "trades": 11,
+        "volume": "1417.5",
+        "notional": "410.280"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011845-UP",
+        "window_utc": "2026-10-01T18:45:00+00:00",
+        "trades": 6,
+        "volume": "44.49",
+        "notional": "32.2029"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011830-UP",
+        "window_utc": "2026-10-01T18:30:00+00:00",
+        "trades": 12,
+        "volume": "831.53",
+        "notional": "321.5536"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011815-UP",
+        "window_utc": "2026-10-01T18:15:00+00:00",
+        "trades": 12,
+        "volume": "1290.68",
+        "notional": "486.1446"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011800-UP",
+        "window_utc": "2026-10-01T18:00:00+00:00",
+        "trades": 10,
+        "volume": "1343.26",
+        "notional": "632.9990"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011745-UP",
+        "window_utc": "2026-10-01T17:45:00+00:00",
+        "trades": 2,
+        "volume": "134.39",
+        "notional": "101.7364"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011730-UP",
+        "window_utc": "2026-10-01T17:30:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011715-UP",
+        "window_utc": "2026-10-01T17:15:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011700-UP",
+        "window_utc": "2026-10-01T17:00:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011645-UP",
+        "window_utc": "2026-10-01T16:45:00+00:00",
+        "trades": 16,
+        "volume": "1680.72",
+        "notional": "980.8949"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011630-UP",
+        "window_utc": "2026-10-01T16:30:00+00:00",
+        "trades": 3,
+        "volume": "61.9",
+        "notional": "43.60"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011615-UP",
+        "window_utc": "2026-10-01T16:15:00+00:00",
+        "trades": 4,
+        "volume": "758.95",
+        "notional": "506.3560"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011600-UP",
+        "window_utc": "2026-10-01T16:00:00+00:00",
+        "trades": 3,
+        "volume": "6",
+        "notional": "4.88"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011545-UP",
+        "window_utc": "2026-10-01T15:45:00+00:00",
+        "trades": 3,
+        "volume": "42.72",
+        "notional": "4.6992"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011530-UP",
+        "window_utc": "2026-10-01T15:30:00+00:00",
+        "trades": 1,
+        "volume": "20",
+        "notional": "19.20"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011515-UP",
+        "window_utc": "2026-10-01T15:15:00+00:00",
+        "trades": 16,
+        "volume": "4806.96",
+        "notional": "4284.1396"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011500-UP",
+        "window_utc": "2026-10-01T15:00:00+00:00",
+        "trades": 15,
+        "volume": "2517.67",
+        "notional": "1266.1714"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011445-UP",
+        "window_utc": "2026-10-01T14:45:00+00:00",
+        "trades": 15,
+        "volume": "1747.68",
+        "notional": "1165.3266"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011430-UP",
+        "window_utc": "2026-10-01T14:30:00+00:00",
+        "trades": 1,
+        "volume": "5",
+        "notional": "3.45"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011415-UP",
+        "window_utc": "2026-10-01T14:15:00+00:00",
+        "trades": 6,
+        "volume": "1115.32",
+        "notional": "455.7568"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011400-UP",
+        "window_utc": "2026-10-01T14:00:00+00:00",
+        "trades": 15,
+        "volume": "625.46",
+        "notional": "235.9464"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011345-UP",
+        "window_utc": "2026-10-01T13:45:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011330-UP",
+        "window_utc": "2026-10-01T13:30:00+00:00",
+        "trades": 1,
+        "volume": "1071",
+        "notional": "921.06"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011315-UP",
+        "window_utc": "2026-10-01T13:15:00+00:00",
+        "trades": 1,
+        "volume": "119.12",
+        "notional": "45.2656"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011300-UP",
+        "window_utc": "2026-10-01T13:00:00+00:00",
+        "trades": 3,
+        "volume": "773.6",
+        "notional": "286.232"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011245-UP",
+        "window_utc": "2026-10-01T12:45:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011230-UP",
+        "window_utc": "2026-10-01T12:30:00+00:00",
+        "trades": 6,
+        "volume": "522.56",
+        "notional": "205.6876"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011215-UP",
+        "window_utc": "2026-10-01T12:15:00+00:00",
+        "trades": 11,
+        "volume": "1460.85",
+        "notional": "856.6389"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011200-UP",
+        "window_utc": "2026-10-01T12:00:00+00:00",
+        "trades": 3,
+        "volume": "301.89",
+        "notional": "198.9853"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011145-UP",
+        "window_utc": "2026-10-01T11:45:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011130-UP",
+        "window_utc": "2026-10-01T11:30:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011115-UP",
+        "window_utc": "2026-10-01T11:15:00+00:00",
+        "trades": 2,
+        "volume": "447.43",
+        "notional": "136.2033"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011100-UP",
+        "window_utc": "2026-10-01T11:00:00+00:00",
+        "trades": 2,
+        "volume": "15.18",
+        "notional": "14.7210"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011045-UP",
+        "window_utc": "2026-10-01T10:45:00+00:00",
+        "trades": 1,
+        "volume": "20",
+        "notional": "18.60"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011030-UP",
+        "window_utc": "2026-10-01T10:30:00+00:00",
+        "trades": 21,
+        "volume": "3283.58",
+        "notional": "1457.806"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011015-UP",
+        "window_utc": "2026-10-01T10:15:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610011000-UP",
+        "window_utc": "2026-10-01T10:00:00+00:00",
+        "trades": 9,
+        "volume": "1881.18",
+        "notional": "298.6388"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010945-UP",
+        "window_utc": "2026-10-01T09:45:00+00:00",
+        "trades": 2,
+        "volume": "1163",
+        "notional": "1011.71"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010930-UP",
+        "window_utc": "2026-10-01T09:30:00+00:00",
+        "trades": 8,
+        "volume": "952.70",
+        "notional": "689.8140"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010915-UP",
+        "window_utc": "2026-10-01T09:15:00+00:00",
+        "trades": 2,
+        "volume": "30.13",
+        "notional": "22.1845"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010900-UP",
+        "window_utc": "2026-10-01T09:00:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010845-UP",
+        "window_utc": "2026-10-01T08:45:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010830-UP",
+        "window_utc": "2026-10-01T08:30:00+00:00",
+        "trades": 1,
+        "volume": "0.93",
+        "notional": "0.5115"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010815-UP",
+        "window_utc": "2026-10-01T08:15:00+00:00",
+        "trades": 4,
+        "volume": "432.37",
+        "notional": "165.3346"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010800-UP",
+        "window_utc": "2026-10-01T08:00:00+00:00",
+        "trades": 2,
+        "volume": "259.4",
+        "notional": "150.606"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010745-UP",
+        "window_utc": "2026-10-01T07:45:00+00:00",
+        "trades": 3,
+        "volume": "6.17",
+        "notional": "5.2268"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010730-UP",
+        "window_utc": "2026-10-01T07:30:00+00:00",
+        "trades": 2,
+        "volume": "1.38",
+        "notional": "0.540"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010715-UP",
+        "window_utc": "2026-10-01T07:15:00+00:00",
+        "trades": 2,
+        "volume": "5.04",
+        "notional": "2.1112"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010700-UP",
+        "window_utc": "2026-10-01T07:00:00+00:00",
+        "trades": 1,
+        "volume": "10",
+        "notional": "9.40"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010645-UP",
+        "window_utc": "2026-10-01T06:45:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010630-UP",
+        "window_utc": "2026-10-01T06:30:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010615-UP",
+        "window_utc": "2026-10-01T06:15:00+00:00",
+        "trades": 1,
+        "volume": "4.92",
+        "notional": "2.3616"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010600-UP",
+        "window_utc": "2026-10-01T06:00:00+00:00",
+        "trades": 3,
+        "volume": "23.09",
+        "notional": "15.7440"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010545-UP",
+        "window_utc": "2026-10-01T05:45:00+00:00",
+        "trades": 2,
+        "volume": "270.56",
+        "notional": "191.7328"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010530-UP",
+        "window_utc": "2026-10-01T05:30:00+00:00",
+        "trades": 1,
+        "volume": "0.06",
+        "notional": "0.0372"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010515-UP",
+        "window_utc": "2026-10-01T05:15:00+00:00",
+        "trades": 3,
+        "volume": "10.05",
+        "notional": "9.5865"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010500-UP",
+        "window_utc": "2026-10-01T05:00:00+00:00",
+        "trades": 1,
+        "volume": "2",
+        "notional": "1.72"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010445-UP",
+        "window_utc": "2026-10-01T04:45:00+00:00",
+        "trades": 4,
+        "volume": "35.75",
+        "notional": "24.9875"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010430-UP",
+        "window_utc": "2026-10-01T04:30:00+00:00",
+        "trades": 3,
+        "volume": "46.56",
+        "notional": "14.8928"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010415-UP",
+        "window_utc": "2026-10-01T04:15:00+00:00",
+        "trades": 5,
+        "volume": "299.36",
+        "notional": "171.876"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010400-UP",
+        "window_utc": "2026-10-01T04:00:00+00:00",
+        "trades": 5,
+        "volume": "277",
+        "notional": "193.91"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010345-UP",
+        "window_utc": "2026-10-01T03:45:00+00:00",
+        "trades": 1,
+        "volume": "10",
+        "notional": "9.30"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010330-UP",
+        "window_utc": "2026-10-01T03:30:00+00:00",
+        "trades": 4,
+        "volume": "277",
+        "notional": "180.53"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010315-UP",
+        "window_utc": "2026-10-01T03:15:00+00:00",
+        "trades": 4,
+        "volume": "31.78",
+        "notional": "9.6141"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010300-UP",
+        "window_utc": "2026-10-01T03:00:00+00:00",
+        "trades": 0,
+        "volume": "0",
+        "notional": "0"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010245-UP",
+        "window_utc": "2026-10-01T02:45:00+00:00",
+        "trades": 3,
+        "volume": "149.88",
+        "notional": "99.6796"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010230-UP",
+        "window_utc": "2026-10-01T02:30:00+00:00",
+        "trades": 1,
+        "volume": "202.82",
+        "notional": "8.1128"
+      },
+      {
+        "symbol": "GEMI-BTC15M2610010215-UP",
+        "window_utc": "2026-10-01T02:15:00+00:00",
+        "trades": 4,
+        "volume": "33.42",
+        "notional": "19.5728"
+      }
+    ]
+  },
+  "BTC05M": {
+    "summary": {
+      "prefix": "BTC05M",
+      "windows": 96,
+      "windows_with_any_trade": 96,
+      "volume_mean": 395.464375,
+      "volume_median": 84.125,
+      "volume_p10": 6.83,
+      "volume_p90": 1005.37,
+      "volume_max": 4959.76,
+      "notional_mean": 199.22785520833332,
+      "notional_median": 48.046499999999995,
+      "trades_median": 7.0
+    },
+    "rows": [
+      {
+        "symbol": "GEMI-BTC05M2610020215-UP",
+        "window_utc": "2026-10-02T02:15:00+00:00",
+        "trades": 10,
+        "volume": "1005.37",
+        "notional": "367.725"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020210-UP",
+        "window_utc": "2026-10-02T02:10:00+00:00",
+        "trades": 13,
+        "volume": "572.09",
+        "notional": "374.5711"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020205-UP",
+        "window_utc": "2026-10-02T02:05:00+00:00",
+        "trades": 22,
+        "volume": "2982.24",
+        "notional": "2126.4040"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020200-UP",
+        "window_utc": "2026-10-02T02:00:00+00:00",
+        "trades": 16,
+        "volume": "790.90",
+        "notional": "389.6921"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020155-UP",
+        "window_utc": "2026-10-02T01:55:00+00:00",
+        "trades": 6,
+        "volume": "57.10",
+        "notional": "48.1934"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020150-UP",
+        "window_utc": "2026-10-02T01:50:00+00:00",
+        "trades": 5,
+        "volume": "10.82",
+        "notional": "7.7172"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020145-UP",
+        "window_utc": "2026-10-02T01:45:00+00:00",
+        "trades": 6,
+        "volume": "55.72",
+        "notional": "13.7667"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020140-UP",
+        "window_utc": "2026-10-02T01:40:00+00:00",
+        "trades": 10,
+        "volume": "77.59",
+        "notional": "41.2407"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020135-UP",
+        "window_utc": "2026-10-02T01:35:00+00:00",
+        "trades": 5,
+        "volume": "7.86",
+        "notional": "4.1924"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020130-UP",
+        "window_utc": "2026-10-02T01:30:00+00:00",
+        "trades": 7,
+        "volume": "106.94",
+        "notional": "17.5938"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020125-UP",
+        "window_utc": "2026-10-02T01:25:00+00:00",
+        "trades": 8,
+        "volume": "90.85",
+        "notional": "22.8421"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020120-UP",
+        "window_utc": "2026-10-02T01:20:00+00:00",
+        "trades": 6,
+        "volume": "233.58",
+        "notional": "154.9386"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020115-UP",
+        "window_utc": "2026-10-02T01:15:00+00:00",
+        "trades": 8,
+        "volume": "515.68",
+        "notional": "180.7884"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020110-UP",
+        "window_utc": "2026-10-02T01:10:00+00:00",
+        "trades": 8,
+        "volume": "530.00",
+        "notional": "205.7830"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020105-UP",
+        "window_utc": "2026-10-02T01:05:00+00:00",
+        "trades": 5,
+        "volume": "7.19",
+        "notional": "3.7144"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020100-UP",
+        "window_utc": "2026-10-02T01:00:00+00:00",
+        "trades": 6,
+        "volume": "56.71",
+        "notional": "24.5704"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020055-UP",
+        "window_utc": "2026-10-02T00:55:00+00:00",
+        "trades": 7,
+        "volume": "528.50",
+        "notional": "210.3076"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020050-UP",
+        "window_utc": "2026-10-02T00:50:00+00:00",
+        "trades": 6,
+        "volume": "55.79",
+        "notional": "12.3334"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020045-UP",
+        "window_utc": "2026-10-02T00:45:00+00:00",
+        "trades": 5,
+        "volume": "78.44",
+        "notional": "65.212"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020040-UP",
+        "window_utc": "2026-10-02T00:40:00+00:00",
+        "trades": 16,
+        "volume": "1211.01",
+        "notional": "730.9345"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020035-UP",
+        "window_utc": "2026-10-02T00:35:00+00:00",
+        "trades": 10,
+        "volume": "555.18",
+        "notional": "182.8956"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020030-UP",
+        "window_utc": "2026-10-02T00:30:00+00:00",
+        "trades": 7,
+        "volume": "378.28",
+        "notional": "110.3166"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020025-UP",
+        "window_utc": "2026-10-02T00:25:00+00:00",
+        "trades": 4,
+        "volume": "11.55",
+        "notional": "5.5912"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020020-UP",
+        "window_utc": "2026-10-02T00:20:00+00:00",
+        "trades": 8,
+        "volume": "131.19",
+        "notional": "69.7662"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020015-UP",
+        "window_utc": "2026-10-02T00:15:00+00:00",
+        "trades": 16,
+        "volume": "534.30",
+        "notional": "415.3434"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020010-UP",
+        "window_utc": "2026-10-02T00:10:00+00:00",
+        "trades": 9,
+        "volume": "404.16",
+        "notional": "290.9532"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020005-UP",
+        "window_utc": "2026-10-02T00:05:00+00:00",
+        "trades": 4,
+        "volume": "6.95",
+        "notional": "3.3902"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610020000-UP",
+        "window_utc": "2026-10-02T00:00:00+00:00",
+        "trades": 7,
+        "volume": "9.69",
+        "notional": "5.1694"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012355-UP",
+        "window_utc": "2026-10-01T23:55:00+00:00",
+        "trades": 6,
+        "volume": "621.03",
+        "notional": "401.9662"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012350-UP",
+        "window_utc": "2026-10-01T23:50:00+00:00",
+        "trades": 3,
+        "volume": "4.72",
+        "notional": "2.3056"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012345-UP",
+        "window_utc": "2026-10-01T23:45:00+00:00",
+        "trades": 7,
+        "volume": "287.08",
+        "notional": "131.9273"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012340-UP",
+        "window_utc": "2026-10-01T23:40:00+00:00",
+        "trades": 16,
+        "volume": "1274.38",
+        "notional": "603.6805"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012335-UP",
+        "window_utc": "2026-10-01T23:35:00+00:00",
+        "trades": 12,
+        "volume": "30.48",
+        "notional": "17.2442"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012330-UP",
+        "window_utc": "2026-10-01T23:30:00+00:00",
+        "trades": 7,
+        "volume": "28.05",
+        "notional": "18.8124"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012325-UP",
+        "window_utc": "2026-10-01T23:25:00+00:00",
+        "trades": 10,
+        "volume": "516.77",
+        "notional": "264.0565"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012320-UP",
+        "window_utc": "2026-10-01T23:20:00+00:00",
+        "trades": 8,
+        "volume": "187.18",
+        "notional": "92.5846"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012315-UP",
+        "window_utc": "2026-10-01T23:15:00+00:00",
+        "trades": 10,
+        "volume": "514.62",
+        "notional": "196.5920"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012310-UP",
+        "window_utc": "2026-10-01T23:10:00+00:00",
+        "trades": 4,
+        "volume": "56.78",
+        "notional": "12.2089"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012305-UP",
+        "window_utc": "2026-10-01T23:05:00+00:00",
+        "trades": 3,
+        "volume": "4.74",
+        "notional": "2.3242"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012300-UP",
+        "window_utc": "2026-10-01T23:00:00+00:00",
+        "trades": 11,
+        "volume": "573.80",
+        "notional": "192.9006"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012255-UP",
+        "window_utc": "2026-10-01T22:55:00+00:00",
+        "trades": 8,
+        "volume": "515.95",
+        "notional": "193.6040"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012250-UP",
+        "window_utc": "2026-10-01T22:50:00+00:00",
+        "trades": 6,
+        "volume": "76.49",
+        "notional": "36.0070"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012245-UP",
+        "window_utc": "2026-10-01T22:45:00+00:00",
+        "trades": 8,
+        "volume": "69.81",
+        "notional": "32.5529"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012240-UP",
+        "window_utc": "2026-10-01T22:40:00+00:00",
+        "trades": 6,
+        "volume": "52.04",
+        "notional": "41.6758"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012235-UP",
+        "window_utc": "2026-10-01T22:35:00+00:00",
+        "trades": 4,
+        "volume": "78.47",
+        "notional": "51.5810"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012230-UP",
+        "window_utc": "2026-10-01T22:30:00+00:00",
+        "trades": 7,
+        "volume": "100.57",
+        "notional": "47.8996"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012225-UP",
+        "window_utc": "2026-10-01T22:25:00+00:00",
+        "trades": 12,
+        "volume": "365.14",
+        "notional": "158.1475"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012220-UP",
+        "window_utc": "2026-10-01T22:20:00+00:00",
+        "trades": 14,
+        "volume": "907.03",
+        "notional": "342.6120"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012215-UP",
+        "window_utc": "2026-10-01T22:15:00+00:00",
+        "trades": 5,
+        "volume": "95.11",
+        "notional": "83.8860"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012210-UP",
+        "window_utc": "2026-10-01T22:10:00+00:00",
+        "trades": 4,
+        "volume": "6.80",
+        "notional": "3.3152"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012205-UP",
+        "window_utc": "2026-10-01T22:05:00+00:00",
+        "trades": 4,
+        "volume": "5.78",
+        "notional": "2.8232"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012200-UP",
+        "window_utc": "2026-10-01T22:00:00+00:00",
+        "trades": 7,
+        "volume": "266.11",
+        "notional": "174.6358"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012155-UP",
+        "window_utc": "2026-10-01T21:55:00+00:00",
+        "trades": 4,
+        "volume": "6.01",
+        "notional": "2.9370"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012150-UP",
+        "window_utc": "2026-10-01T21:50:00+00:00",
+        "trades": 7,
+        "volume": "32.46",
+        "notional": "17.8872"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012145-UP",
+        "window_utc": "2026-10-01T21:45:00+00:00",
+        "trades": 5,
+        "volume": "18.53",
+        "notional": "4.685"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012140-UP",
+        "window_utc": "2026-10-01T21:40:00+00:00",
+        "trades": 6,
+        "volume": "366.30",
+        "notional": "195.5714"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012135-UP",
+        "window_utc": "2026-10-01T21:35:00+00:00",
+        "trades": 11,
+        "volume": "1275.22",
+        "notional": "683.6270"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012130-UP",
+        "window_utc": "2026-10-01T21:30:00+00:00",
+        "trades": 6,
+        "volume": "8.43",
+        "notional": "3.6374"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012125-UP",
+        "window_utc": "2026-10-01T21:25:00+00:00",
+        "trades": 3,
+        "volume": "5.25",
+        "notional": "2.5744"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012120-UP",
+        "window_utc": "2026-10-01T21:20:00+00:00",
+        "trades": 4,
+        "volume": "6.83",
+        "notional": "3.3250"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012115-UP",
+        "window_utc": "2026-10-01T21:15:00+00:00",
+        "trades": 9,
+        "volume": "370.80",
+        "notional": "203.3223"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012110-UP",
+        "window_utc": "2026-10-01T21:10:00+00:00",
+        "trades": 12,
+        "volume": "724.83",
+        "notional": "550.3586"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012105-UP",
+        "window_utc": "2026-10-01T21:05:00+00:00",
+        "trades": 7,
+        "volume": "89.78",
+        "notional": "62.7708"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012100-UP",
+        "window_utc": "2026-10-01T21:00:00+00:00",
+        "trades": 12,
+        "volume": "567.88",
+        "notional": "321.1797"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012055-UP",
+        "window_utc": "2026-10-01T20:55:00+00:00",
+        "trades": 10,
+        "volume": "829.86",
+        "notional": "394.6868"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012050-UP",
+        "window_utc": "2026-10-01T20:50:00+00:00",
+        "trades": 8,
+        "volume": "464.34",
+        "notional": "174.1340"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012045-UP",
+        "window_utc": "2026-10-01T20:45:00+00:00",
+        "trades": 4,
+        "volume": "7.60",
+        "notional": "3.7512"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012040-UP",
+        "window_utc": "2026-10-01T20:40:00+00:00",
+        "trades": 5,
+        "volume": "753.63",
+        "notional": "252.0494"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012035-UP",
+        "window_utc": "2026-10-01T20:35:00+00:00",
+        "trades": 7,
+        "volume": "548.61",
+        "notional": "106.7886"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012030-UP",
+        "window_utc": "2026-10-01T20:30:00+00:00",
+        "trades": 13,
+        "volume": "516.61",
+        "notional": "289.6440"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012025-UP",
+        "window_utc": "2026-10-01T20:25:00+00:00",
+        "trades": 11,
+        "volume": "3054.99",
+        "notional": "2883.3983"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012020-UP",
+        "window_utc": "2026-10-01T20:20:00+00:00",
+        "trades": 13,
+        "volume": "1565.58",
+        "notional": "386.4929"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012015-UP",
+        "window_utc": "2026-10-01T20:15:00+00:00",
+        "trades": 14,
+        "volume": "1971.74",
+        "notional": "315.8928"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012010-UP",
+        "window_utc": "2026-10-01T20:10:00+00:00",
+        "trades": 11,
+        "volume": "1046.36",
+        "notional": "205.5951"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012005-UP",
+        "window_utc": "2026-10-01T20:05:00+00:00",
+        "trades": 4,
+        "volume": "10.37",
+        "notional": "7.1326"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610012000-UP",
+        "window_utc": "2026-10-01T20:00:00+00:00",
+        "trades": 14,
+        "volume": "4959.76",
+        "notional": "2381.6664"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011955-UP",
+        "window_utc": "2026-10-01T19:55:00+00:00",
+        "trades": 3,
+        "volume": "5.46",
+        "notional": "2.6770"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011950-UP",
+        "window_utc": "2026-10-01T19:50:00+00:00",
+        "trades": 8,
+        "volume": "553.66",
+        "notional": "150.9648"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011945-UP",
+        "window_utc": "2026-10-01T19:45:00+00:00",
+        "trades": 5,
+        "volume": "27.70",
+        "notional": "22.2138"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011940-UP",
+        "window_utc": "2026-10-01T19:40:00+00:00",
+        "trades": 6,
+        "volume": "42.25",
+        "notional": "13.8655"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011935-UP",
+        "window_utc": "2026-10-01T19:35:00+00:00",
+        "trades": 5,
+        "volume": "15.65",
+        "notional": "11.0624"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011930-UP",
+        "window_utc": "2026-10-01T19:30:00+00:00",
+        "trades": 5,
+        "volume": "29.47",
+        "notional": "24.1173"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011925-UP",
+        "window_utc": "2026-10-01T19:25:00+00:00",
+        "trades": 4,
+        "volume": "11.24",
+        "notional": "3.6462"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011920-UP",
+        "window_utc": "2026-10-01T19:20:00+00:00",
+        "trades": 5,
+        "volume": "18.38",
+        "notional": "10.7132"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011915-UP",
+        "window_utc": "2026-10-01T19:15:00+00:00",
+        "trades": 5,
+        "volume": "12.86",
+        "notional": "7.9492"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011910-UP",
+        "window_utc": "2026-10-01T19:10:00+00:00",
+        "trades": 5,
+        "volume": "30.49",
+        "notional": "22.5888"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011905-UP",
+        "window_utc": "2026-10-01T19:05:00+00:00",
+        "trades": 4,
+        "volume": "5.84",
+        "notional": "2.8530"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011900-UP",
+        "window_utc": "2026-10-01T19:00:00+00:00",
+        "trades": 6,
+        "volume": "37.66",
+        "notional": "25.3172"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011855-UP",
+        "window_utc": "2026-10-01T18:55:00+00:00",
+        "trades": 7,
+        "volume": "27.03",
+        "notional": "11.5470"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011850-UP",
+        "window_utc": "2026-10-01T18:50:00+00:00",
+        "trades": 9,
+        "volume": "119.42",
+        "notional": "65.2088"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011845-UP",
+        "window_utc": "2026-10-01T18:45:00+00:00",
+        "trades": 6,
+        "volume": "12.88",
+        "notional": "4.1086"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011840-UP",
+        "window_utc": "2026-10-01T18:40:00+00:00",
+        "trades": 4,
+        "volume": "6.01",
+        "notional": "2.9374"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011835-UP",
+        "window_utc": "2026-10-01T18:35:00+00:00",
+        "trades": 5,
+        "volume": "11.64",
+        "notional": "7.3036"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011830-UP",
+        "window_utc": "2026-10-01T18:30:00+00:00",
+        "trades": 6,
+        "volume": "17.40",
+        "notional": "7.6754"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011825-UP",
+        "window_utc": "2026-10-01T18:25:00+00:00",
+        "trades": 8,
+        "volume": "111.35",
+        "notional": "76.2169"
+      },
+      {
+        "symbol": "GEMI-BTC05M2610011820-UP",
+        "window_utc": "2026-10-01T18:20:00+00:00",
+        "trades": 6,
+        "volume": "21.81",
+        "notional": "8.5105"
+      }
+    ]
+  }
+}
