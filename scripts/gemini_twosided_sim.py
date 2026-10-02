@@ -226,10 +226,14 @@ def simulate(frames, meta, sym, q, withdraw_s):
             qty = min(residual, depth) if depth else D(0)
             if qty < residual:
                 residual_unknown = True
-            cash += ba * qty * 0      # we SELL to close a long: receive bid
             if bb is not None:
+                # closing a long means SELLING at the bid. That price already
+                # pays the crossing. An earlier revision ALSO subtracted
+                # (ba-bb)/2*qty from net, charging the spread twice and
+                # overstating the loss by 3.3x on the historical sample.
+                # cleanup_cost is now a DIAGNOSTIC only and is never netted.
                 cash += bb * qty
-                cleanup_cost += (ba - bb) / 2 * qty   # half-spread paid
+                cleanup_cost += (ba - bb) / 2 * qty
                 inv -= qty
         elif residual < 0 and bb is not None:
             depth = book.bids.get(bb, D(0))
@@ -237,6 +241,7 @@ def simulate(frames, meta, sym, q, withdraw_s):
             if qty < -residual:
                 residual_unknown = True
             if ba is not None:
+                # closing a short means BUYING at the ask: same argument.
                 cash -= ba * qty
                 cleanup_cost += (ba - bb) / 2 * qty
                 inv += qty
@@ -279,8 +284,11 @@ def simulate(frames, meta, sym, q, withdraw_s):
         "residual_after_cleanup": str(inv),
         "residual_unknown": residual_unknown,
         "taker_cleanup_cost": str(cleanup_cost),
-        "net_before_compensation": str(cash - cleanup_cost),
-        "net_after_modeled_compensation": str(cash - cleanup_cost + modeled_rebate),
+        # cleanup is already embodied in `cash`, because the close is booked at
+        # the opposite touch. It is reported for visibility, never subtracted.
+        "taker_cleanup_cost_DIAGNOSTIC_NOT_NETTED": str(cleanup_cost),
+        "net_before_compensation": str(cash),
+        "net_after_modeled_compensation": str(cash + modeled_rebate),
         "markouts_per_fill": {str(h): (statistics.mean(v) if v else None)
                               for h, v in mo.items()},
         "markout_n": {str(h): len(v) for h, v in mo.items()},
