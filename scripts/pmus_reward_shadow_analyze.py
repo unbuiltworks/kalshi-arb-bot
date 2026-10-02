@@ -79,14 +79,25 @@ def side_score(lv, best, tick, df):
 
 
 def params(slug):
+    """EVERY active program on the slug, not the first one found.
+
+    A slug carries more than one: the sampled NFL market runs both
+    nfl_player_props_day_of (pool 450, target 7500, df 0.30) and
+    nfl_player_props_live (pool 1350, target 2000, df 0.35). An earlier
+    revision returned whichever appeared first, so the pool, target and
+    discount factor it scored with were arbitrary between the two -- and the
+    reported reward was attributed to a program whose parameters were not the
+    ones used. Each (slug, program) pair is now scored on its own.
+    """
     cen = json.load(open(CENSUS))
+    out = []
     for p in cen["programs"]:
         if p["marketSlug"] != slug:
             continue
         for tp in p.get("timePeriods") or []:
             if tp.get("status") == "active":
-                return tp
-    return None
+                out.append(tp)
+    return out
 
 
 def main(tape):
@@ -106,11 +117,13 @@ def main(tape):
 
     cache = {}
     out_rows = []
+    pairs = []
     for slug, rs in samples.items():
-        tp = cache.get(slug) or params(slug)
-        cache[slug] = tp
-        if not tp:
-            continue
+        if slug not in cache:
+            cache[slug] = params(slug)
+        for tp in cache[slug]:
+            pairs.append((slug, rs, tp))
+    for slug, rs, tp in pairs:
         df = D(str(tp["discountFactor"]))
         target = D(str(tp["targetSize"]))
         pool = D(str(tp.get("rewardPool") or 0))
@@ -149,10 +162,13 @@ def main(tape):
                 per_q[q].append(max(cands) if cands else D(0))
 
         n = len(rs)
+        distinct_states = len({json.dumps([x["bids"], x["offers"]]) for x in rs})
         rec = {
             "marketSlug": slug,
             "programId": tp["programId"],
+            "period_SOURCE": tp.get("period"),
             "samples": n,
+            "distinct_book_states_OBSERVED": distinct_states,
             "fetch_errors": errs.get(slug, 0),
             "rewardPool_SOURCE": str(pool),
             "targetSize_SOURCE": str(target),
@@ -269,10 +285,11 @@ def main(tape):
     json.dump(res, open(OUT, "w"), indent=2, sort_keys=True)
 
     print(f"tape={tape}")
-    print(f"{'market':42s} {'n':>5s} {'qualFrac':>8s} {'bidP50':>9s} "
+    print(f"{'market / program':58s} {'n':>5s} {'dstnct':>6s} {'qualFrac':>8s} {'bidP50':>9s} "
           f"{'q1$':>8s} {'q10$':>8s} {'q10 R/AS':>9s} {'q10 net':>8s}")
     for r in sorted(out_rows, key=lambda r: -D(r["q10_period_reward_MODELED"])):
-        print(f"{r['marketSlug'][:42]:42s} {r['samples']:>5d} "
+        print(f"{(r['marketSlug'][:30]+' / '+r['programId'][:25]):58s} {r['samples']:>5d} "
+              f"{r['distinct_book_states_OBSERVED']:>6d} "
               f"{float(r['qualifying_time_fraction_OBSERVED']):>8.3f} "
               f"{r.get('bid_score_p10_p50_p90_OBSERVED',[0,0,0])[1]:>9.1f} "
               f"{D(r['q1_period_reward_MODELED']):>8.4f} "
