@@ -85,3 +85,8 @@ analysis/l5/sync_l2/*.jsonl
 # provenance and the derived summaries live in analysis/l5/kalshi/; the raw
 # file stays on disk for re-analysis. Same rule as the policy_d_port tapes.
 data/kalshi/census/*.json
+
+# PMUS incentive census: 30MB of public program JSON, regenerable via
+# scripts/pmus_incentive_census.py. Derived analysis is in
+# analysis/l5/pmus_rewards/.
+data/pmus/incentives/programs.json
