@@ -1,0 +1,53 @@
+{
+  "utc": "2026-10-02T03:53:02.325293+00:00",
+  "slug": "cpc-btc-updown-15m-2026-10-02-0345z",
+  "links": {
+    "L1_captured_trade": {
+      "status": "FAIL",
+      "probed": {
+        "/markets/cpc-btc-updown-15m-2026-10-02-0345z/trades": "ERR HTTP Error 404: Not Found",
+        "/trades?market_slug=cpc-btc-updown-15m-2026-10-02-0345z": "ERR HTTP Error 404: Not Found",
+        "/markets/cpc-btc-updown-15m-2026-10-02-0345z/prints": "ERR HTTP Error 404: Not Found",
+        "/markets/cpc-btc-updown-15m-2026-10-02-0345z/history": "ERR HTTP Error 404: Not Found",
+        "/markets/cpc-btc-updown-15m-2026-10-02-0345z/fills": "ERR HTTP Error 404: Not Found",
+        "/markets/cpc-btc-updown-15m-2026-10-02-0345z/ticks": "ERR HTTP Error 404: Not Found"
+      },
+      "why": "no public endpoint returns individual trades (price, size, aggressor side). The authenticated WS carries SUB_TRADE=3 but rejects an unauthenticated handshake with HTTP 401 and no PMUS credentials exist in this environment."
+    },
+    "L2_preceding_book": {
+      "status": "PASS",
+      "polls": 40,
+      "span_s": 46.5,
+      "distinct_book_states": 2,
+      "median_bid_levels": 32,
+      "median_ask_levels": 29,
+      "effective_update_interval_s": 46.5,
+      "why": "full ladder is present, but the REST surface is cached: distinct states per second-poll is far below 1"
+    },
+    "L3_queue_consumption": {
+      "status": "FAIL",
+      "stats_fields_seen": [
+        "currentPx",
+        "highPx",
+        "highSetTime",
+        "lastPriceSample",
+        "lastTradePx",
+        "lastTradeQty",
+        "lastTradeSetTime",
+        "lowPx",
+        "lowSetTime",
+        "notionalSetTime",
+        "notionalTraded",
+        "openInterest",
+        "openInterestSetTime",
+        "openPx",
+        "openSetTime",
+        "sharesTraded"
+      ],
+      "sharesTraded_distinct_values": 2,
+      "notionalTraded_distinct_values": 2,
+      "why": "the stats block carries only CUMULATIVE traded counters. Differencing them bounds traded VOLUME but yields no price and no aggressor side, so it cannot say WHICH side's queue was consumed. Queue consumption is therefore UNKNOWN, and a defensible maker fill cannot be established."
+    }
+  },
+  "verdict": "ACCEPTANCE FAILED at L1 and L3. Full depth is available (L2 passes on content), but individual trades are not, so the chain venue trade -> captured trade -> queue consumption cannot be closed on public data."
+}
