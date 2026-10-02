@@ -1,0 +1,138 @@
+{
+  "frozen_refs": {
+    "prefill_study": "4cfc293f",
+    "preregistration": "82714061"
+  },
+  "ref_rows": 3384,
+  "ref_span_recv": [
+    1790944616.9436936,
+    1790945026.5882192
+  ],
+  "ref_skew_s_p90": -0.018,
+  "clock_note": "venue and receipt clocks kept separate; cross-feed claims only above the reference feed's own p90 receipt-venue skew",
+  "rtt": {
+    "min": 0.187,
+    "p50": 0.266,
+    "p90": 0.612
+  },
+  "horizons": {
+    "0.25": "NOT_ACTIONABLE",
+    "0.5": "OPTIMISTIC_ONLY",
+    "1.0": "ACTIONABLE",
+    "2.0": "ACTIONABLE",
+    "5.0": "ACTIONABLE"
+  },
+  "levels": {
+    "btc_adverse_bps": [
+      1.0,
+      2.0,
+      5.0
+    ],
+    "queue_depletion_frac": [
+      0.25,
+      0.5
+    ],
+    "pmus_mid_adverse": [
+      0.005,
+      0.01
+    ],
+    "trade_imbalance": [
+      0.6,
+      0.75
+    ],
+    "spread_widening": [
+      0.005,
+      0.01
+    ]
+  },
+  "coverage": {
+    "cpc-btc-updown-15m-2026-09-30-1215z": {
+      "pmus_span_s": 610.4,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-09-30-1230z": {
+      "pmus_span_s": 878.0,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-09-30-1245z": {
+      "pmus_span_s": 859.6,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-09-30-1300z": {
+      "pmus_span_s": 873.8,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-09-30-1315z": {
+      "pmus_span_s": 892.0,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-09-30-1330z": {
+      "pmus_span_s": 893.7,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-09-30-1345z": {
+      "pmus_span_s": 535.7,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-0400z": {
+      "pmus_span_s": 45.2,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1115z": {
+      "pmus_span_s": 891.7,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1130z": {
+      "pmus_span_s": 890.6,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1145z": {
+      "pmus_span_s": 889.8,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1200z": {
+      "pmus_span_s": 891.6,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1045z": {
+      "pmus_span_s": 295.5,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1100z": {
+      "pmus_span_s": 866.6,
+      "overlap_s": 0.0,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1215z": {
+      "pmus_span_s": 217.6,
+      "overlap_s": 0.0,
+      "covered": false
+    }
+  },
+  "synchronized_windows": [],
+  "ttls": {
+    "TTL5": 5.0,
+    "TTL30": 30.0,
+    "WINDOW": null
+  },
+  "ceilings": [
+    "0.99",
+    "0.98",
+    "0.97",
+    "0.95"
+  ],
+  "status": "NO_SYNCHRONIZED_WINDOW -- the reference feed does not yet span a complete PMUS window. Nothing is back-dated."
+}
