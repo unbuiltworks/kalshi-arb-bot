@@ -1040,6 +1040,26 @@ def publish_live_trades(state: Mapping[str, Any], now: float) -> None:
 #: carries only rows not already emitted, keyed on the row's own identity, so a
 #: consumer can concatenate emissions without deduplicating and without holes.
 TRADES_LOG_ENV = "PMUS_WS_TRADES_LOG"
+#: Both seen-structures below are ORDERED SETS: dicts keyed by the same identity
+#: as before, with insertion order carrying recency. Neither may be a plain set.
+#: A set has no order, so the previous bound `set(list(seen)[-2000:])` retained
+#: 2,000 ARBITRARY identities and could drop recent ones; identities it dropped
+#: stopped being recognised as emitted, so already-emitted rows re-entered
+#: `fresh` and were emitted a second time. Measured in production on the book
+#: stream: bursts of 349-365 duplicate rows against 35-51 genuinely new ones,
+#: clipping at the cap and looking like censorship when nothing was lost.
+#: Insertion-ordered dict slicing retains the NEWEST identities deterministically.
+SEEN_MAX = 4000
+SEEN_KEEP = 2000
+
+
+def _trim_seen(store: dict, slug: str) -> None:
+    """Bound one slug's emitted-identity set, keeping the NEWEST identities."""
+    seen = store.get(slug)
+    if seen is not None and len(seen) > SEEN_MAX:
+        store[slug] = {k: None for k in list(seen)[-SEEN_KEEP:]}
+
+
 _TRADES_LOG_SEEN: dict = {}
 
 
@@ -1073,20 +1093,19 @@ def emit_new_trades(state: Mapping[str, Any]) -> Optional[dict]:
     for slug, s in (state or {}).items():
         rows = list((s or {}).get("trades") or [])
         fresh = []
-        seen = _TRADES_LOG_SEEN.setdefault(slug, set())
+        seen = _TRADES_LOG_SEEN.setdefault(slug, {})
         for t in rows:
             k = _trade_row_key(slug, t)
             if k in seen:
                 continue
-            seen.add(k)
+            seen[k] = None              # ordered set: insertion order == recency
             fresh.append({"t": t.get("t"), "px": t.get("px"),
                           "qty": t.get("qty"),
                           "trade_time": t.get("trade_time"),
                           "bid_at_trade": t.get("bid_at_trade"),
                           "ask_at_trade": t.get("ask_at_trade"),
                           "dir": t.get("dir")})
-        if len(seen) > 4000:                      # bounded memory
-            _TRADES_LOG_SEEN[slug] = set(list(seen)[-2000:])
+        _trim_seen(_TRADES_LOG_SEEN, slug)        # bounded memory, newest kept
         if fresh:
             out[slug] = fresh[-cap:]
             total += len(out[slug])
@@ -1210,13 +1229,13 @@ def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
             hist = list((s or {}).get("bbo_history") or [])
             if not hist:
                 continue
-            seen = _BOOK_LOG_SEEN.setdefault(slug, set())
+            seen = _BOOK_LOG_SEEN.setdefault(slug, {})
             fresh = []
             for h in hist:
                 k = str(h.get("t"))
                 if k in seen:
                     continue
-                seen.add(k)
+                seen[k] = None          # ordered set: insertion order == recency
                 fresh.append({
                     # every field comes from THIS history entry. Reading depth
                     # from the live snapshot `s` would backdate present depth
@@ -1231,8 +1250,7 @@ def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
                         {"bid": h.get("bid"), "ask": h.get("ask"),
                          "t": h.get("t")}, now, connected),
                 })
-            if len(seen) > 4000:
-                _BOOK_LOG_SEEN[slug] = set(list(seen)[-2000:])
+            _trim_seen(_BOOK_LOG_SEEN, slug)
             if fresh:
                 out[slug] = fresh[-cap:]
                 total += len(out[slug])
