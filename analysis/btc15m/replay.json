@@ -1,0 +1,420 @@
+{
+  "evidence_class": "MINUTE-RESOLUTION COINBASE SPOT PROXY -- NOT SETTLEMENT",
+  "settlement_sources_unavailable": [
+    "Chainlink BTC/USD 60s TWAP",
+    "CF Benchmarks BRTI"
+  ],
+  "binance_status": "api.binance.com HTTP 451 from this environment; api.binance.us quotes a near-dead book",
+  "sixty_second_average_proxy": "OHLC4 of the first and last minute",
+  "candles": 194478,
+  "windows": 12959,
+  "span": [
+    "2026-05-20T00:00:00+00:00",
+    "2026-10-02T01:38:00+00:00"
+  ],
+  "part1": {
+    "8": [
+      {
+        "bin": "<2",
+        "n": 2413,
+        "hold_pct": 57.8118524658102,
+        "published_pct": 58.8,
+        "gap_pct": -0.9881475341897996
+      },
+      {
+        "bin": "2-5",
+        "n": 2962,
+        "hold_pct": 68.87238352464551,
+        "published_pct": 69.5,
+        "gap_pct": -0.6276164753544862
+      },
+      {
+        "bin": "5-10",
+        "n": 3266,
+        "hold_pct": 80.86344151867728,
+        "published_pct": 80.8,
+        "gap_pct": 0.06344151867727987
+      },
+      {
+        "bin": "10-15",
+        "n": 1777,
+        "hold_pct": 88.01350590883511,
+        "published_pct": 87.7,
+        "gap_pct": 0.3135059088351113
+      },
+      {
+        "bin": "15-25",
+        "n": 1564,
+        "hold_pct": 91.56010230179028,
+        "published_pct": 92.9,
+        "gap_pct": -1.3398976982097253
+      },
+      {
+        "bin": "25-40",
+        "n": 666,
+        "hold_pct": 96.54654654654655,
+        "published_pct": 96.3,
+        "gap_pct": 0.24654654654655417
+      },
+      {
+        "bin": ">40",
+        "n": 311,
+        "hold_pct": 97.42765273311898,
+        "published_pct": 97.8,
+        "gap_pct": -0.3723472668810217
+      }
+    ],
+    "10": [
+      {
+        "bin": "<2",
+        "n": 2185,
+        "hold_pct": 59.816933638443935,
+        "published_pct": 60.2,
+        "gap_pct": -0.3830663615560681
+      },
+      {
+        "bin": "2-5",
+        "n": 2700,
+        "hold_pct": 74.92592592592592,
+        "published_pct": 74.0,
+        "gap_pct": 0.9259259259259238
+      },
+      {
+        "bin": "5-10",
+        "n": 3227,
+        "hold_pct": 85.28044623489309,
+        "published_pct": 86.1,
+        "gap_pct": -0.8195537651069031
+      },
+      {
+        "bin": "10-15",
+        "n": 1877,
+        "hold_pct": 92.38145977623869,
+        "published_pct": 91.4,
+        "gap_pct": 0.9814597762386796
+      },
+      {
+        "bin": "15-25",
+        "n": 1762,
+        "hold_pct": 94.8921679909194,
+        "published_pct": 95.6,
+        "gap_pct": -0.7078320090805903
+      },
+      {
+        "bin": "25-40",
+        "n": 779,
+        "hold_pct": 97.30423620025674,
+        "published_pct": 97.4,
+        "gap_pct": -0.09576379974326699
+      },
+      {
+        "bin": ">40",
+        "n": 429,
+        "hold_pct": 98.6013986013986,
+        "published_pct": 99.3,
+        "gap_pct": -0.6986013986013972
+      }
+    ],
+    "12": [
+      {
+        "bin": "<2",
+        "n": 2002,
+        "hold_pct": 61.73826173826174,
+        "published_pct": 62.0,
+        "gap_pct": -0.26173826173825887
+      },
+      {
+        "bin": "2-5",
+        "n": 2529,
+        "hold_pct": 79.87346777382365,
+        "published_pct": 81.1,
+        "gap_pct": -1.2265322261763458
+      },
+      {
+        "bin": "5-10",
+        "n": 3140,
+        "hold_pct": 90.70063694267516,
+        "published_pct": 90.9,
+        "gap_pct": -0.19936305732484527
+      },
+      {
+        "bin": "10-15",
+        "n": 1989,
+        "hold_pct": 96.02815485168426,
+        "published_pct": 95.8,
+        "gap_pct": 0.2281548516842662
+      },
+      {
+        "bin": "15-25",
+        "n": 1861,
+        "hold_pct": 98.60290166577109,
+        "published_pct": 98.6,
+        "gap_pct": 0.0029016657710911886
+      },
+      {
+        "bin": "25-40",
+        "n": 929,
+        "hold_pct": 98.70828848223897,
+        "published_pct": 99.6,
+        "gap_pct": -0.8917115177610242
+      },
+      {
+        "bin": ">40",
+        "n": 509,
+        "hold_pct": 99.60707269155206,
+        "published_pct": 99.4,
+        "gap_pct": 0.20707269155205665
+      }
+    ]
+  },
+  "part1_vol": {
+    "<2": {
+      "median_vol_bp_min": 2.965586287898488,
+      "n_calm": 1506,
+      "calm_pct": 62.54980079681275,
+      "pub_calm": 63.9,
+      "n_vol": 678,
+      "vol_pct": 53.68731563421829,
+      "pub_vol": 52.1
+    },
+    "2-5": {
+      "median_vol_bp_min": 2.965586287898488,
+      "n_calm": 1691,
+      "calm_pct": 80.36664695446481,
+      "pub_calm": 77.7,
+      "n_vol": 1009,
+      "vol_pct": 65.80773042616453,
+      "pub_vol": 67.4
+    },
+    "5-10": {
+      "median_vol_bp_min": 2.965586287898488,
+      "n_calm": 1802,
+      "calm_pct": 90.62153163152053,
+      "pub_calm": 90.6,
+      "n_vol": 1424,
+      "vol_pct": 78.51123595505618,
+      "pub_vol": 80.1
+    },
+    "10-15": {
+      "median_vol_bp_min": 2.965586287898488,
+      "n_calm": 784,
+      "calm_pct": 95.66326530612245,
+      "pub_calm": 94.9,
+      "n_vol": 1093,
+      "vol_pct": 90.0274473924977,
+      "pub_vol": 88.5
+    },
+    "15-25": {
+      "median_vol_bp_min": 2.965586287898488,
+      "n_calm": 505,
+      "calm_pct": 98.01980198019803,
+      "pub_calm": 97.8,
+      "n_vol": 1256,
+      "vol_pct": 93.63057324840764,
+      "pub_vol": 94.7
+    },
+    "25-40": {
+      "median_vol_bp_min": 2.965586287898488,
+      "n_calm": 152,
+      "calm_pct": 98.6842105263158,
+      "pub_calm": 98.8,
+      "n_vol": 627,
+      "vol_pct": 96.96969696969697,
+      "pub_vol": 97.0
+    }
+  },
+  "part2": {
+    "8_IN_SAMPLE_published": {
+      "elapsed": 8,
+      "mode": "IN_SAMPLE",
+      "ask_mode": "published",
+      "scored_windows": 12959,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "8_IN_SAMPLE_published+2c": {
+      "elapsed": 8,
+      "mode": "IN_SAMPLE",
+      "ask_mode": "published+2c",
+      "scored_windows": 12959,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "8_OUT_OF_SAMPLE_published": {
+      "elapsed": 8,
+      "mode": "OUT_OF_SAMPLE",
+      "ask_mode": "published",
+      "scored_windows": 5184,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "8_OUT_OF_SAMPLE_published+2c": {
+      "elapsed": 8,
+      "mode": "OUT_OF_SAMPLE",
+      "ask_mode": "published+2c",
+      "scored_windows": 5184,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "10_IN_SAMPLE_published": {
+      "elapsed": 10,
+      "mode": "IN_SAMPLE",
+      "ask_mode": "published",
+      "scored_windows": 12959,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "10_IN_SAMPLE_published+2c": {
+      "elapsed": 10,
+      "mode": "IN_SAMPLE",
+      "ask_mode": "published+2c",
+      "scored_windows": 12959,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "10_OUT_OF_SAMPLE_published": {
+      "elapsed": 10,
+      "mode": "OUT_OF_SAMPLE",
+      "ask_mode": "published",
+      "scored_windows": 5184,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "10_OUT_OF_SAMPLE_published+2c": {
+      "elapsed": 10,
+      "mode": "OUT_OF_SAMPLE",
+      "ask_mode": "published+2c",
+      "scored_windows": 5184,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "12_IN_SAMPLE_published": {
+      "elapsed": 12,
+      "mode": "IN_SAMPLE",
+      "ask_mode": "published",
+      "scored_windows": 12959,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "12_IN_SAMPLE_published+2c": {
+      "elapsed": 12,
+      "mode": "IN_SAMPLE",
+      "ask_mode": "published+2c",
+      "scored_windows": 12959,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "12_OUT_OF_SAMPLE_published": {
+      "elapsed": 12,
+      "mode": "OUT_OF_SAMPLE",
+      "ask_mode": "published",
+      "scored_windows": 5184,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    },
+    "12_OUT_OF_SAMPLE_published+2c": {
+      "elapsed": 12,
+      "mode": "OUT_OF_SAMPLE",
+      "ask_mode": "published+2c",
+      "scored_windows": 5184,
+      "qualified": 0,
+      "qualify_frac": 0.0,
+      "hit_rate": null,
+      "avg_ask": null,
+      "expectancy_per_share": null,
+      "total_pnl_50clip": 0.0,
+      "pnl_mean_50clip": null,
+      "pnl_p05": null,
+      "pnl_median": null,
+      "pnl_p95": null
+    }
+  }
+}
