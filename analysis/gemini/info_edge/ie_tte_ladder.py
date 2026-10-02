@@ -48,6 +48,39 @@ def pct(v, q):
     return s[lo] + (s[hi] - s[lo]) * (i - lo)
 
 
+def _predicted_side_fields(c, strike, bid, ask, bids, asks, up_won):
+    """Side-symmetric executability of the PREDICTED side.
+
+    predicted UP   -> price = best UP ask,        size = UP ask size
+    predicted DOWN -> price = 1 - best UP bid,    size = UP bid size
+
+    `predicted_side_edge` is intentionally NOT computed here: it requires an
+    empirical conditional settlement probability, which must be estimated on
+    DEV and applied out-of-sample. Computing it from the same observations
+    being scored would be circular. The field is emitted as None and filled
+    by the frozen-model stage.
+    """
+    if c is None:
+        return {"predicted_side": None, "predicted_side_available": None,
+                "predicted_side_price": None, "predicted_side_size": None,
+                "predicted_side_settled_correct": None,
+                "predicted_side_edge": None}
+    side = "UP" if (c - strike) > 0 else "DOWN"
+    if side == "UP":
+        px = ask
+        sz = asks[ask] if ask is not None else None
+    else:
+        px = round(1 - bid, 4) if bid is not None else None
+        sz = bids[bid] if bid is not None else None
+    correct = (up_won if side == "UP" else (not up_won))
+    return {"predicted_side": side,
+            "predicted_side_available": px is not None,
+            "predicted_side_price": px,
+            "predicted_side_size": sz,
+            "predicted_side_settled_correct": correct,
+            "predicted_side_edge": None}
+
+
 def ap(book, rows):
     for px, sz in rows or []:
         p, s = float(px), float(sz)
@@ -150,6 +183,13 @@ def build(outdir="data/gemini_infoedge"):
                         if (bid is not None and ask is not None) else None),
                 "coinbase": c,
                 "cb_dist": (round(c - strike, 2) if c is not None else None),
+                # ---- SIDE-SYMMETRIC predicted-side executability ----------
+                # has_ask is NOT shorthand for "can buy the predicted winner".
+                # Determine the predicted side FIRST, then price/size THAT
+                # side. Placeholder predictor for DESCRIPTIVE use only:
+                # sign(coinbase - strike). It is mechanical, not fitted, and
+                # is replaced by the frozen model on the powered cohort.
+                **_predicted_side_fields(c, strike, bid, ask, b, a, up_won),
                 "strike": strike, "settlement_value": settle,
                 "settle_dist": round(settle - strike, 2),
                 "resolution_side": s["resolution_side"], "up_won": up_won,
@@ -246,6 +286,26 @@ def report(rows):
     print("  actually EXISTS in the favourable buckets, or whether offers appear")
     print("  only when the favourite is about to lose (selection). That is what")
     print("  the n=100 read must settle, and it is NOT settled here.")
+
+    print()
+    print("--- SIDE-SYMMETRIC: can we acquire the PREDICTED side at all? ---")
+    print("  (placeholder predictor sign(coinbase-strike); mechanical, NOT fitted)")
+    print(f"  {'TTE':>5s} {'n':>5s} {'avail':>6s} {'avail%':>8s} {'px_p50':>8s} "
+          f"{'size_p50':>9s} {'correct%':>9s} {'correct%|avail':>15s}")
+    for tte in TTES:
+        g = [r for r in rows if r.get("observed") and r["tte"] == tte
+             and r.get("predicted_side") is not None]
+        if not g:
+            continue
+        av = [r for r in g if r["predicted_side_available"]]
+        cr = lambda s2: (sum(1 for r in s2 if r["predicted_side_settled_correct"])
+                         / len(s2) * 100) if s2 else None
+        print(f"  {tte:5d} {len(g):5d} {len(av):6d} {len(av)/len(g)*100:7.1f}% "
+              f"{fmt(pct([r['predicted_side_price'] for r in av], .5) if av else None):>8s} "
+              f"{fmt(pct([r['predicted_side_size'] for r in av], .5) if av else None,1):>9s} "
+              f"{fmt(cr(g),1):>8s}% {fmt(cr(av),1):>14s}%")
+    print("  'correct%|avail' is the one that matters: how often the predicted")
+    print("  side won, AMONG the observations where it was actually buyable.")
 
     print()
     print("--- UI-vs-EXECUTABLE: windows with NO buyable UP at T-5 s ---")
