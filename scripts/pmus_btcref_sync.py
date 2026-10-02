@@ -107,12 +107,15 @@ def measure_lag(ts, mids, books):
     if len(pts) < 50:
         return {"status": "INSUFFICIENT", "n": len(pts)}
     H = 1.0
+    # loop-invariant, hoisted out of the lag/point loops (see note above)
+    _pt_ts = [p[0] for p in pts]
+    _pt_mids = [p[1] for p in pts]
     best, rows = None, {}
     for lag in LAGS:
         xs, ys = [], []
         for t, pm in pts:
             a = ref_at(ts, mids, t - lag - H); b = ref_at(ts, mids, t - lag)
-            pa = ref_at([p[0] for p in pts], [p[1] for p in pts], t - H)
+            pa = ref_at(_pt_ts, _pt_mids, t - H)
             if a is None or b is None or pa is None or a == 0:
                 continue
             xs.append((b - a) / a); ys.append(pm - pa)
@@ -258,6 +261,15 @@ def main():
                          "covered": ov > 0.9 * span and span >= 600.0}
 
     covered = [s for s, v in overlap.items() if v["covered"]]
+    # INPUT SELECTION ONLY -- which windows are scored, never how. An earlier
+    # revision added the flag but the filter replacement silently missed this
+    # line, so a run intended for two windows scored five, including frozen
+    # discovery. Asserted at patch time now.
+    excluded_by_only: list = []
+    if a.only:
+        keep = {w.strip() for w in a.only.split(",") if w.strip()}
+        excluded_by_only = [w for w in covered if w not in keep]
+        covered = [w for w in covered if w in keep]
     res = {"ref_rows": len(rts),
            "ref_span_utc": [ref_span[0], ref_span[1]] if ref_span else None,
            "ref_skew_s": {"p10": round(sorted(skews)[len(skews)//10], 4),
@@ -268,7 +280,8 @@ def main():
            "lookbacks_s": list(LOOKBACKS), "ext_bps_levels": list(EXT_BPS),
            "queue_frac_levels": list(QUEUE_FRAC),
            "pmus_windows": len(sc), "overlap": overlap,
-           "synchronized_windows": covered}
+           "synchronized_windows": covered,
+           "excluded_by_only": excluded_by_only}
 
     if not covered:
         res["status"] = "NO_OVERLAP -- reference feed does not span any PMUS window yet"
