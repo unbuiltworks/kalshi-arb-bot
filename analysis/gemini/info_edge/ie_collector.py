@@ -121,7 +121,12 @@ async def gemini_meta(sink: Sink, stop: asyncio.Event, known: Dict[str, Any],
         try:
             async with httpx.AsyncClient(timeout=25.0, proxy=proxy_url(),
                                          verify=CA) as http:
-                r = await http.get(EVENTS)
+                # FILTERED listing: the unfiltered feed is ~12 MB, which
+                # stretched the 10 s cadence to ~30 s. status+category cuts it
+                # to the crypto windows we actually subscribe.
+                r = await http.get(EVENTS, params=[("status", "active"),
+                                                   ("category", "Crypto"),
+                                                   ("limit", "500")])
                 data = r.json().get("data", [])
             t = now_ns()
             for ev in data:
@@ -159,21 +164,69 @@ async def gemini_meta(sink: Sink, stop: asyncio.Event, known: Dict[str, Any],
                         # price/state snapshot each poll: cheap, and it is the
                         # only record of the venue's own quoted prices
                         sink.write({**row, "kind": "window_poll"})
-                    sv = c.get("settlementValue") or ev.get("settlementValue")
-                    rs = c.get("resolutionSide") or ev.get("resolutionSide")
-                    if (sv is not None or rs is not None) and sym not in seen_settle:
-                        seen_settle.add(sym)
-                        sink.write({"t_ns": now_ns(), "kind": "settlement",
-                                    "market": sym, "ticker": tick,
-                                    "settlement_value": sv,
-                                    "resolution_side": rs,
-                                    "source": c.get("source"),
-                                    "expiry": c.get("expiryDate")})
+                    # settlement is handled by settlement_task: settled events
+                    # LEAVE the active listing, so polling it never yields a
+                    # settlement row (measured: 0 rows in 58 min before this fix).
         except Exception as exc:
             sink.write({"t_ns": now_ns(), "kind": "error", "where": "meta",
                         "error": type(exc).__name__})
         try:
             await asyncio.wait_for(stop.wait(), timeout=META_POLL_S)
+        except asyncio.TimeoutError:
+            pass
+
+
+async def settlement_task(sink: Sink, stop: asyncio.Event,
+                          series_re: re.Pattern) -> None:
+    """GROUND TRUTH. Method reused verbatim from src/gemini_maker/
+    ref_lag_recorder.py, which captured 33,772 settlement rows this way.
+
+    Settled events are NOT in the active listing -- they require
+    status=settled, and that listing is OLDEST-FIRST and ignores sort params,
+    so offset pages must be walked to reach recent settlements. Polling the
+    active feed for settlement yields exactly zero rows, which is what this
+    collector did for its first 58 minutes before this fix.
+    """
+    seen: set = set()
+    while not stop.is_set():
+        try:
+            rows_all = []
+            async with httpx.AsyncClient(timeout=30.0, proxy=proxy_url(),
+                                         verify=CA) as http:
+                for offset in range(0, 3000, 500):
+                    r = await http.get(EVENTS,
+                                       params=[("status", "settled"),
+                                               ("category", "Crypto"),
+                                               ("limit", "500"),
+                                               ("offset", str(offset))])
+                    if r.status_code != 200:
+                        break
+                    page = r.json().get("data", [])
+                    if not page:
+                        break
+                    rows_all.extend(page)
+            for row in rows_all:
+                tick = str(row.get("ticker") or "").upper()
+                if not series_re.match(tick) or tick in seen:
+                    continue
+                for c in row.get("contracts", []) or []:
+                    sym = str(c.get("instrumentSymbol") or "").upper()
+                    if not sym.endswith("-UP"):
+                        continue
+                    seen.add(tick)
+                    strike = c.get("strike") or {}
+                    sink.write({"t_ns": now_ns(), "kind": "settlement",
+                                "market": sym, "ticker": tick,
+                                "settlement_value": c.get("settlementValue"),
+                                "resolution_side": c.get("resolutionSide"),
+                                "strike": strike.get("value"),
+                                "expiry": c.get("expiryDate"),
+                                "source": c.get("source")})
+        except Exception as exc:
+            sink.write({"t_ns": now_ns(), "kind": "error",
+                        "where": "settlement", "error": type(exc).__name__})
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=60.0)
         except asyncio.TimeoutError:
             pass
 
@@ -363,6 +416,7 @@ async def main_async(args):
     known: Dict[str, Any] = {}
     await asyncio.gather(
         gemini_meta(sink, stop, known, series_re),
+        settlement_task(sink, stop, series_re),
         gemini_pred_task(sink, stop, known),
         coinbase_task(sink, stop, args.product),
         clock_probe(sink, stop),
