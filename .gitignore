@@ -104,3 +104,10 @@ data/pmus/reward_shadow/*.jsonl
 # the other in-flight collector files: the raw JSONL stays on disk, and the
 # completed cache is committed gzipped once the fetch ends.
 data/btc15m/coinbase_1m.jsonl
+
+# Gemini BTC15m two-sided shadow: the raw L2+trades tape is written
+# continuously by a running read-only recorder. Same rule as the policy_d_port,
+# Gemini and PMUS reward-shadow tapes: the raw JSONL stays on disk for the
+# recorder and for provenance, and the completed tape is committed gzipped
+# once the run ends, alongside the derived analysis.
+data/gemini_shadow/*.jsonl
