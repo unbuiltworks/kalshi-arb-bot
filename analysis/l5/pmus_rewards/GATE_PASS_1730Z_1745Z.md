@@ -93,3 +93,20 @@ Gate passed on both windows with nothing relaxed. The frozen synchronized study
 these two windows together, with unchanged `82714061` scoring alongside. 1300z remains
 frozen discovery; 1430z, 1445z, 1515z, 1530z, 1615z and 1715z remain
 recorder-validation only. No live orders.
+
+## Addendum: an input-selection guard, found when first running the study
+
+The first run of the frozen study scored **five** windows — 1300z, 1315z, 1430z,
+1730z, 1745z — because its coverage test admits any window the BTC reference happens
+to bracket, and the reference tape now spans the earlier harvests too. That would
+have rescored **1300z frozen discovery** and two recorder-validation windows.
+
+That output is discarded, preserved only as
+`PMUS_PREFILL_REALTIME_STUDY.INVALID_5WINDOW.json`, and both scripts gained an
+`--only` argument that narrows the window list **before any feature, label or
+statistic is computed**. No analytic path is touched: this restricts WHICH windows
+are scored, never how. The scripts record what they excluded, so the restriction is
+visible in the output rather than implicit.
+
+Stated plainly because it matters: without this guard, "run the frozen study" would
+silently have violated the frozen-window rule.

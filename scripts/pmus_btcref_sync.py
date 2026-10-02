@@ -218,6 +218,10 @@ def onset(fill, rows, ts, mids, ext_bps, qfrac):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=OUT)
+    # INPUT SELECTION ONLY -- restricts WHICH windows are scored, never how.
+    # Required because the coverage test alone would admit frozen-discovery and
+    # recorder-validation windows that must not be rescored.
+    ap.add_argument("--only", default="", help="comma-separated slugs to score")
     a = ap.parse_args()
     rts, vts, mids, skews = load_ref()
     tr, bk = pou.load()

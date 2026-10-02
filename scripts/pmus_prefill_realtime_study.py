@@ -413,6 +413,10 @@ def event_sequence(lot, rows, rts, mids, back_s=5.0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=OUT)
+    # INPUT SELECTION ONLY -- restricts WHICH windows are scored, never how.
+    # Required because the coverage test alone would admit frozen-discovery and
+    # recorder-validation windows that must not be rescored.
+    ap.add_argument("--only", default="", help="comma-separated slugs to score")
     a = ap.parse_args()
     rts, vts, mids, skews, meta = load_ref()
     skew_bound = round(sorted(skews)[len(skews) * 9 // 10], 3) if skews else 1.0
@@ -434,6 +438,11 @@ def main():
                      "long_enough": wspan >= MIN_SPAN_S,
                      "covered": ov > 0.9 * wspan and wspan >= MIN_SPAN_S}
     covered = sorted(s for s, v in cov.items() if v["covered"])
+    if a.only:
+        keep = {w.strip() for w in a.only.split(",") if w.strip()}
+        excluded = [w for w in covered if w not in keep]
+        covered = [w for w in covered if w in keep]
+        res["excluded_by_only"] = excluded
     proof = {s_: coverage_proof(s_, sc[s_], bk.get(s_) or [], rts, meta)
              for s_ in covered}
 
