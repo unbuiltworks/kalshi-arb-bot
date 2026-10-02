@@ -1,0 +1,2537 @@
+{
+ "A_REPRICE|FIFO_STRICT|1|0": {
+  "fills": 32,
+  "qty": 32.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 2148068.05,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.0105700492858887,
+  "basis": {
+   "through_price": 28.0,
+   "same_price_fifo": 4.0,
+   "price_came_to_us": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.09999999999999998
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|1|1": {
+  "fills": 19,
+  "qty": 19.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5896,
+  "q_discarded": 1196576.57,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 19.0,
+   "price_came_to_us": 0.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|1|2": {
+  "fills": 19,
+  "qty": 19.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6911,
+  "q_discarded": 217260.75,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.010805368423462,
+  "basis": {
+   "through_price": 14.0,
+   "price_came_to_us": 5.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|1|3": {
+  "fills": 16,
+  "qty": 16.0,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6990,
+  "q_discarded": 229915.44,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.0114328861236572,
+  "basis": {
+   "through_price": 14.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|1|5": {
+  "fills": 9,
+  "qty": 9.0,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6256,
+  "q_discarded": 725975.11,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118190050125122,
+  "basis": {
+   "through_price": 8.0,
+   "price_came_to_us": 1.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|5|0": {
+  "fills": 32,
+  "qty": 160.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 2148068.05,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.0105700492858887,
+  "basis": {
+   "through_price": 140.0,
+   "same_price_fifo": 20.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.09999999999999998
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|5|1": {
+  "fills": 19,
+  "qty": 95.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5896,
+  "q_discarded": 1196576.57,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 95.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|5|2": {
+  "fills": 19,
+  "qty": 95.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6911,
+  "q_discarded": 217260.75,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.010805368423462,
+  "basis": {
+   "through_price": 70.0,
+   "price_came_to_us": 25.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|5|3": {
+  "fills": 16,
+  "qty": 78.08,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6994,
+  "q_discarded": 229915.44,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.0114328861236572,
+  "basis": {
+   "through_price": 68.08,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|5|5": {
+  "fills": 9,
+  "qty": 43.08,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6260,
+  "q_discarded": 725975.11,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118930339813232,
+  "basis": {
+   "through_price": 38.08,
+   "price_came_to_us": 5.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|10|0": {
+  "fills": 34,
+  "qty": 299.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 2148574.05,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.0105700492858887,
+  "basis": {
+   "through_price": 264.0,
+   "same_price_fifo": 35.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.07999999999999996
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|10|1": {
+  "fills": 20,
+  "qty": 172.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5900,
+  "q_discarded": 1196588.57,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 172.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|10|2": {
+  "fills": 20,
+  "qty": 169.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6915,
+  "q_discarded": 217471.75,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0108089447021484,
+  "basis": {
+   "through_price": 122.0,
+   "price_came_to_us": 47.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|10|3": {
+  "fills": 16,
+  "qty": 135.08,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6997,
+  "q_discarded": 229915.44,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.011460781097412,
+  "basis": {
+   "through_price": 121.08,
+   "price_came_to_us": 14.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|10|5": {
+  "fills": 9,
+  "qty": 77.08,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6261,
+  "q_discarded": 725975.11,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118951797485352,
+  "basis": {
+   "through_price": 70.08,
+   "price_came_to_us": 7.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|25|0": {
+  "fills": 36,
+  "qty": 659.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 2148579.05,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.0105700492858887,
+  "basis": {
+   "through_price": 594.0,
+   "same_price_fifo": 65.0
+  },
+  "adv_p50": {
+   "5.0": 0.02749999999999997,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.08499999999999996
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|25|1": {
+  "fills": 21,
+  "qty": 352.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5900,
+  "q_discarded": 1196588.57,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 352.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|25|2": {
+  "fills": 21,
+  "qty": 334.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6915,
+  "q_discarded": 217471.75,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0108089447021484,
+  "basis": {
+   "through_price": 244.0,
+   "price_came_to_us": 90.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|25|3": {
+  "fills": 16,
+  "qty": 257.08,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6997,
+  "q_discarded": 229915.44,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.011460781097412,
+  "basis": {
+   "through_price": 243.08,
+   "price_came_to_us": 14.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_STRICT|25|5": {
+  "fills": 9,
+  "qty": 167.08,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6261,
+  "q_discarded": 725975.11,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118951797485352,
+  "basis": {
+   "through_price": 160.08,
+   "price_came_to_us": 7.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|1|0": {
+  "fills": 32,
+  "qty": 32.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 924007.2,
+  "attrition_credited": 1226231.04,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.010575294494629,
+  "basis": {
+   "through_price": 26.0,
+   "same_price_fifo": 6.0,
+   "price_came_to_us": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.09999999999999998
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|1|1": {
+  "fills": 19,
+  "qty": 19.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5896,
+  "q_discarded": 673124.91,
+  "attrition_credited": 523451.66,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 19.0,
+   "price_came_to_us": 0.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|1|2": {
+  "fills": 19,
+  "qty": 19.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6911,
+  "q_discarded": 155619.75,
+  "attrition_credited": 61641.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.010805368423462,
+  "basis": {
+   "through_price": 14.0,
+   "price_came_to_us": 5.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|1|3": {
+  "fills": 16,
+  "qty": 16.0,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6990,
+  "q_discarded": 168437.01,
+  "attrition_credited": 61478.43,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.0114328861236572,
+  "basis": {
+   "through_price": 14.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|1|5": {
+  "fills": 9,
+  "qty": 9.0,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6256,
+  "q_discarded": 274137.91,
+  "attrition_credited": 439737.2,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118190050125122,
+  "basis": {
+   "through_price": 8.0,
+   "price_came_to_us": 1.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|5|0": {
+  "fills": 32,
+  "qty": 160.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 924007.2,
+  "attrition_credited": 1226231.04,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.010575294494629,
+  "basis": {
+   "through_price": 130.0,
+   "same_price_fifo": 30.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.09999999999999998
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|5|1": {
+  "fills": 19,
+  "qty": 95.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5896,
+  "q_discarded": 673124.91,
+  "attrition_credited": 523451.66,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 95.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|5|2": {
+  "fills": 19,
+  "qty": 95.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6911,
+  "q_discarded": 155619.75,
+  "attrition_credited": 61641.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.010805368423462,
+  "basis": {
+   "through_price": 70.0,
+   "price_came_to_us": 25.0
+  },
+  "adv_p50": {
+   "5.0": 0.03499999999999996,
+   "15.0": 0.09000000000000008,
+   "30.0": 0.11499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|5|3": {
+  "fills": 16,
+  "qty": 78.08,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6994,
+  "q_discarded": 168437.01,
+  "attrition_credited": 61478.43,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.0114328861236572,
+  "basis": {
+   "through_price": 68.08,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|5|5": {
+  "fills": 9,
+  "qty": 43.08,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6260,
+  "q_discarded": 274137.91,
+  "attrition_credited": 439737.2,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118930339813232,
+  "basis": {
+   "through_price": 38.08,
+   "price_came_to_us": 5.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|10|0": {
+  "fills": 34,
+  "qty": 299.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 924007.2,
+  "attrition_credited": 1226737.04,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.010575294494629,
+  "basis": {
+   "through_price": 244.0,
+   "same_price_fifo": 55.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.07999999999999996
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|10|1": {
+  "fills": 20,
+  "qty": 172.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5900,
+  "q_discarded": 673124.91,
+  "attrition_credited": 523463.66,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 172.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|10|2": {
+  "fills": 20,
+  "qty": 169.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6915,
+  "q_discarded": 155619.75,
+  "attrition_credited": 61852.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0108089447021484,
+  "basis": {
+   "through_price": 122.0,
+   "price_came_to_us": 47.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|10|3": {
+  "fills": 16,
+  "qty": 135.08,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6997,
+  "q_discarded": 168437.01,
+  "attrition_credited": 61478.43,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.011460781097412,
+  "basis": {
+   "through_price": 121.08,
+   "price_came_to_us": 14.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|10|5": {
+  "fills": 9,
+  "qty": 77.08,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6261,
+  "q_discarded": 274137.91,
+  "attrition_credited": 439737.2,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118951797485352,
+  "basis": {
+   "through_price": 70.08,
+   "price_came_to_us": 7.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|25|0": {
+  "fills": 36,
+  "qty": 659.0,
+  "flow": 49674.62,
+  "placed": 7970,
+  "reprices": 1859,
+  "q_discarded": 924007.2,
+  "attrition_credited": 1226742.04,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 1.010575294494629,
+  "basis": {
+   "through_price": 544.0,
+   "same_price_fifo": 115.0
+  },
+  "adv_p50": {
+   "5.0": 0.02749999999999997,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.08499999999999996
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|25|1": {
+  "fills": 21,
+  "qty": 352.0,
+  "flow": 49674.62,
+  "placed": 8400,
+  "reprices": 5900,
+  "q_discarded": 673124.91,
+  "attrition_credited": 523463.66,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0082499980926514,
+  "basis": {
+   "through_price": 352.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|25|2": {
+  "fills": 21,
+  "qty": 334.0,
+  "flow": 49674.62,
+  "placed": 8141,
+  "reprices": 6915,
+  "q_discarded": 155619.75,
+  "attrition_credited": 61852.0,
+  "invalidations": 0,
+  "windows": 12,
+  "life_p50": 1.0108089447021484,
+  "basis": {
+   "through_price": 244.0,
+   "price_came_to_us": 90.0
+  },
+  "adv_p50": {
+   "5.0": 0.04000000000000001,
+   "15.0": 0.09500000000000004,
+   "30.0": 0.08499999999999999
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|25|3": {
+  "fills": 16,
+  "qty": 257.08,
+  "flow": 49674.62,
+  "placed": 8112,
+  "reprices": 6997,
+  "q_discarded": 168437.01,
+  "attrition_credited": 61478.43,
+  "invalidations": 0,
+  "windows": 11,
+  "life_p50": 1.011460781097412,
+  "basis": {
+   "through_price": 243.08,
+   "price_came_to_us": 14.0
+  },
+  "adv_p50": {
+   "5.0": 0.029999999999999916,
+   "15.0": 0.04750000000000003,
+   "30.0": 0.08750000000000002
+  }
+ },
+ "A_REPRICE|FIFO_ATTRITION|25|5": {
+  "fills": 9,
+  "qty": 167.08,
+  "flow": 49674.62,
+  "placed": 7981,
+  "reprices": 6261,
+  "q_discarded": 274137.91,
+  "attrition_credited": 439737.2,
+  "invalidations": 0,
+  "windows": 7,
+  "life_p50": 1.0118951797485352,
+  "basis": {
+   "through_price": 160.08,
+   "price_came_to_us": 7.0
+  },
+  "adv_p50": {
+   "5.0": 0.025000000000000022,
+   "15.0": 0.04500000000000004,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "B_STICKY|FIFO_STRICT|1|0": {
+  "fills": 26,
+  "qty": 26.0,
+  "flow": 49674.62,
+  "placed": 102,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 296.6790871620178,
+  "basis": {
+   "through_price": 26.0,
+   "price_came_to_us": 0.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": 0.0,
+   "30.0": 0.04749999999999999
+  }
+ },
+ "B_STICKY|FIFO_STRICT|1|1": {
+  "fills": 25,
+  "qty": 25.0,
+  "flow": 49674.62,
+  "placed": 101,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 296.68380546569824,
+  "basis": {
+   "through_price": 23.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "B_STICKY|FIFO_STRICT|1|2": {
+  "fills": 24,
+  "qty": 24.0,
+  "flow": 49674.62,
+  "placed": 100,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 296.68380546569824,
+  "basis": {
+   "price_came_to_us": 3.0,
+   "through_price": 21.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": 0.0,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_STRICT|1|3": {
+  "fills": 21,
+  "qty": 21.0,
+  "flow": 49674.62,
+  "placed": 97,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.02799367904663,
+  "basis": {
+   "through_price": 20.0,
+   "price_came_to_us": 1.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_STRICT|1|5": {
+  "fills": 18,
+  "qty": 18.0,
+  "flow": 49674.62,
+  "placed": 95,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.13177585601807,
+  "basis": {
+   "through_price": 16.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_STRICT|5|0": {
+  "fills": 26,
+  "qty": 118.2,
+  "flow": 49674.62,
+  "placed": 98,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 296.94304168224335,
+  "basis": {
+   "through_price": 118.2
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": 0.0,
+   "30.0": 0.04749999999999999
+  }
+ },
+ "B_STICKY|FIFO_STRICT|5|1": {
+  "fills": 25,
+  "qty": 113.2,
+  "flow": 49674.62,
+  "placed": 97,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.13177585601807,
+  "basis": {
+   "through_price": 103.2,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "B_STICKY|FIFO_STRICT|5|2": {
+  "fills": 24,
+  "qty": 108.2,
+  "flow": 49674.62,
+  "placed": 96,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 297.13946211338043,
+  "basis": {
+   "price_came_to_us": 11.25,
+   "through_price": 96.95
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": 0.0,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_STRICT|5|3": {
+  "fills": 21,
+  "qty": 96.95,
+  "flow": 49674.62,
+  "placed": 94,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.1632617712021,
+  "basis": {
+   "through_price": 91.95,
+   "price_came_to_us": 5.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_STRICT|5|5": {
+  "fills": 18,
+  "qty": 81.95,
+  "flow": 49674.62,
+  "placed": 92,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.19452023506165,
+  "basis": {
+   "through_price": 71.95,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_STRICT|10|0": {
+  "fills": 27,
+  "qty": 215.8,
+  "flow": 49674.62,
+  "placed": 96,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.13946211338043,
+  "basis": {
+   "through_price": 215.8
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "B_STICKY|FIFO_STRICT|10|1": {
+  "fills": 26,
+  "qty": 205.8,
+  "flow": 49674.62,
+  "placed": 95,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.1471483707428,
+  "basis": {
+   "through_price": 185.8,
+   "price_came_to_us": 20.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_STRICT|10|2": {
+  "fills": 25,
+  "qty": 195.8,
+  "flow": 49674.62,
+  "placed": 94,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 297.1632617712021,
+  "basis": {
+   "price_came_to_us": 21.25,
+   "through_price": 174.55
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_STRICT|10|3": {
+  "fills": 22,
+  "qty": 174.55,
+  "flow": 49674.62,
+  "placed": 92,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.19452023506165,
+  "basis": {
+   "through_price": 166.95,
+   "price_came_to_us": 7.6
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": -0.0050000000000001155,
+   "30.0": -5.551115123125783e-17
+  }
+ },
+ "B_STICKY|FIFO_STRICT|10|5": {
+  "fills": 19,
+  "qty": 146.95,
+  "flow": 49674.62,
+  "placed": 91,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.19452023506165,
+  "basis": {
+   "through_price": 126.95,
+   "price_came_to_us": 20.0
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": -0.0050000000000001155,
+   "30.0": -5.551115123125783e-17
+  }
+ },
+ "B_STICKY|FIFO_STRICT|25|0": {
+  "fills": 32,
+  "qty": 490.54,
+  "flow": 49674.62,
+  "placed": 94,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.1632617712021,
+  "basis": {
+   "through_price": 490.54
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_STRICT|25|1": {
+  "fills": 31,
+  "qty": 465.54,
+  "flow": 49674.62,
+  "placed": 93,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.1793751716614,
+  "basis": {
+   "through_price": 415.07,
+   "price_came_to_us": 50.47
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0
+  }
+ },
+ "B_STICKY|FIFO_STRICT|25|2": {
+  "fills": 29,
+  "qty": 440.07,
+  "flow": 49674.62,
+  "placed": 92,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 297.1869477033615,
+  "basis": {
+   "price_came_to_us": 51.25,
+   "through_price": 388.82
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": -0.0050000000000001155
+  }
+ },
+ "B_STICKY|FIFO_STRICT|25|3": {
+  "fills": 26,
+  "qty": 388.82,
+  "flow": 49674.62,
+  "placed": 90,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.2019430398941,
+  "basis": {
+   "through_price": 381.22,
+   "price_came_to_us": 7.6
+  },
+  "adv_p50": {
+   "5.0": -0.004999999999999893,
+   "15.0": -0.0050000000000001155,
+   "30.0": -0.0050000000000001155
+  }
+ },
+ "B_STICKY|FIFO_STRICT|25|5": {
+  "fills": 23,
+  "qty": 331.22,
+  "flow": 49674.62,
+  "placed": 89,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.20936584472656,
+  "basis": {
+   "through_price": 292.95,
+   "price_came_to_us": 38.27
+  },
+  "adv_p50": {
+   "5.0": -0.004999999999999893,
+   "15.0": -0.0050000000000001155,
+   "30.0": -0.0050000000000001155
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|1|0": {
+  "fills": 27,
+  "qty": 27.0,
+  "flow": 49674.62,
+  "placed": 103,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 45405.24,
+  "invalidations": 0,
+  "windows": 21,
+  "life_p50": 296.55739426612854,
+  "basis": {
+   "through_price": 25.0,
+   "same_price_fifo": 2.0,
+   "price_came_to_us": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|1|1": {
+  "fills": 25,
+  "qty": 25.0,
+  "flow": 49674.62,
+  "placed": 101,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 14716.34,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 296.68380546569824,
+  "basis": {
+   "through_price": 23.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|1|2": {
+  "fills": 24,
+  "qty": 24.0,
+  "flow": 49674.62,
+  "placed": 100,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 441.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 296.68380546569824,
+  "basis": {
+   "price_came_to_us": 3.0,
+   "through_price": 21.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": 0.0,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|1|3": {
+  "fills": 21,
+  "qty": 21.0,
+  "flow": 49674.62,
+  "placed": 97,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.02799367904663,
+  "basis": {
+   "through_price": 20.0,
+   "price_came_to_us": 1.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|1|5": {
+  "fills": 18,
+  "qty": 18.0,
+  "flow": 49674.62,
+  "placed": 95,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 1156.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.13177585601807,
+  "basis": {
+   "through_price": 16.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|5|0": {
+  "fills": 27,
+  "qty": 123.2,
+  "flow": 49674.62,
+  "placed": 99,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 38914.32,
+  "invalidations": 0,
+  "windows": 21,
+  "life_p50": 296.82039618492126,
+  "basis": {
+   "through_price": 113.2,
+   "same_price_fifo": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|5|1": {
+  "fills": 25,
+  "qty": 113.2,
+  "flow": 49674.62,
+  "placed": 97,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 14263.78,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.13177585601807,
+  "basis": {
+   "through_price": 103.2,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|5|2": {
+  "fills": 24,
+  "qty": 108.2,
+  "flow": 49674.62,
+  "placed": 96,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 441.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 297.13946211338043,
+  "basis": {
+   "price_came_to_us": 11.25,
+   "through_price": 96.95
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": 0.0,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|5|3": {
+  "fills": 21,
+  "qty": 96.95,
+  "flow": 49674.62,
+  "placed": 94,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.1632617712021,
+  "basis": {
+   "through_price": 91.95,
+   "price_came_to_us": 5.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|5|5": {
+  "fills": 18,
+  "qty": 81.95,
+  "flow": 49674.62,
+  "placed": 92,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 1156.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.19452023506165,
+  "basis": {
+   "through_price": 71.95,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|10|0": {
+  "fills": 28,
+  "qty": 225.8,
+  "flow": 49674.62,
+  "placed": 97,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 38440.51,
+  "invalidations": 0,
+  "windows": 21,
+  "life_p50": 297.02799367904663,
+  "basis": {
+   "through_price": 205.8,
+   "same_price_fifo": 20.0
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": -0.00500000000000006,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|10|1": {
+  "fills": 26,
+  "qty": 205.8,
+  "flow": 49674.62,
+  "placed": 95,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 14263.78,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.1471483707428,
+  "basis": {
+   "through_price": 185.8,
+   "price_came_to_us": 20.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|10|2": {
+  "fills": 25,
+  "qty": 195.8,
+  "flow": 49674.62,
+  "placed": 94,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 297.1632617712021,
+  "basis": {
+   "price_came_to_us": 21.25,
+   "through_price": 174.55
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.0050000000000000044
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|10|3": {
+  "fills": 22,
+  "qty": 174.55,
+  "flow": 49674.62,
+  "placed": 92,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.19452023506165,
+  "basis": {
+   "through_price": 166.95,
+   "price_came_to_us": 7.6
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": -0.0050000000000001155,
+   "30.0": -5.551115123125783e-17
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|10|5": {
+  "fills": 19,
+  "qty": 146.95,
+  "flow": 49674.62,
+  "placed": 91,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 1156.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.19452023506165,
+  "basis": {
+   "through_price": 126.95,
+   "price_came_to_us": 20.0
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": -0.0050000000000001155,
+   "30.0": -5.551115123125783e-17
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|25|0": {
+  "fills": 33,
+  "qty": 500.54,
+  "flow": 49674.62,
+  "placed": 94,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 37954.51,
+  "invalidations": 0,
+  "windows": 21,
+  "life_p50": 297.1632617712021,
+  "basis": {
+   "through_price": 465.54,
+   "same_price_fifo": 35.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|25|1": {
+  "fills": 31,
+  "qty": 465.54,
+  "flow": 49674.62,
+  "placed": 93,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 14251.78,
+  "invalidations": 0,
+  "windows": 20,
+  "life_p50": 297.1793751716614,
+  "basis": {
+   "through_price": 415.07,
+   "price_came_to_us": 50.47
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|25|2": {
+  "fills": 29,
+  "qty": 440.07,
+  "flow": 49674.62,
+  "placed": 92,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 19,
+  "life_p50": 297.1869477033615,
+  "basis": {
+   "price_came_to_us": 51.25,
+   "through_price": 388.82
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": -0.0050000000000001155,
+   "30.0": -0.0050000000000001155
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|25|3": {
+  "fills": 26,
+  "qty": 388.82,
+  "flow": 49674.62,
+  "placed": 90,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 0.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.2019430398941,
+  "basis": {
+   "through_price": 381.22,
+   "price_came_to_us": 7.6
+  },
+  "adv_p50": {
+   "5.0": -0.004999999999999893,
+   "15.0": -0.0050000000000001155,
+   "30.0": -0.0050000000000001155
+  }
+ },
+ "B_STICKY|FIFO_ATTRITION|25|5": {
+  "fills": 23,
+  "qty": 331.22,
+  "flow": 49674.62,
+  "placed": 89,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 920.0,
+  "invalidations": 0,
+  "windows": 16,
+  "life_p50": 297.20936584472656,
+  "basis": {
+   "through_price": 292.95,
+   "price_came_to_us": 38.27
+  },
+  "adv_p50": {
+   "5.0": -0.004999999999999893,
+   "15.0": -0.0050000000000001155,
+   "30.0": -0.0050000000000001155
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|1|0": {
+  "fills": 15,
+  "qty": 15.0,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 1607146.68,
+  "attrition_credited": 0.0,
+  "invalidations": 4904,
+  "windows": 10,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 12.0,
+   "same_price_fifo": 3.0,
+   "price_came_to_us": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.07999999999999999,
+   "30.0": 0.05499999999999999
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|1|1": {
+  "fills": 25,
+  "qty": 25.0,
+  "flow": 49674.62,
+  "placed": 1263,
+  "reprices": 0,
+  "q_discarded": 186664.11,
+  "attrition_credited": 0.0,
+  "invalidations": 1291,
+  "windows": 17,
+  "life_p50": 5.065149307250977,
+  "basis": {
+   "through_price": 22.0,
+   "price_came_to_us": 3.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.04000000000000001
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|1|2": {
+  "fills": 21,
+  "qty": 21.0,
+  "flow": 49674.62,
+  "placed": 1041,
+  "reprices": 0,
+  "q_discarded": 47658.35,
+  "attrition_credited": 0.0,
+  "invalidations": 1340,
+  "windows": 18,
+  "life_p50": 14.085282325744629,
+  "basis": {
+   "through_price": 18.0,
+   "price_came_to_us": 3.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.05249999999999996
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|1|3": {
+  "fills": 19,
+  "qty": 19.0,
+  "flow": 49674.62,
+  "placed": 950,
+  "reprices": 0,
+  "q_discarded": 49704.0,
+  "attrition_credited": 0.0,
+  "invalidations": 1268,
+  "windows": 16,
+  "life_p50": 18.073444366455078,
+  "basis": {
+   "through_price": 19.0,
+   "price_came_to_us": 0.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.06749999999999998
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|1|5": {
+  "fills": 14,
+  "qty": 14.0,
+  "flow": 49674.62,
+  "placed": 970,
+  "reprices": 0,
+  "q_discarded": 212106.96,
+  "attrition_credited": 0.0,
+  "invalidations": 1226,
+  "windows": 12,
+  "life_p50": 11.02104640007019,
+  "basis": {
+   "through_price": 12.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|5|0": {
+  "fills": 15,
+  "qty": 75.0,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 1607146.68,
+  "attrition_credited": 0.0,
+  "invalidations": 4904,
+  "windows": 10,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 60.0,
+   "same_price_fifo": 15.0
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.07999999999999999,
+   "30.0": 0.05499999999999999
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|5|1": {
+  "fills": 25,
+  "qty": 116.02,
+  "flow": 49674.62,
+  "placed": 1264,
+  "reprices": 0,
+  "q_discarded": 188914.11,
+  "attrition_credited": 0.0,
+  "invalidations": 1295,
+  "windows": 17,
+  "life_p50": 5.056043863296509,
+  "basis": {
+   "through_price": 101.02,
+   "price_came_to_us": 15.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.04000000000000001
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|5|2": {
+  "fills": 21,
+  "qty": 96.95,
+  "flow": 49674.62,
+  "placed": 1031,
+  "reprices": 0,
+  "q_discarded": 47175.35,
+  "attrition_credited": 0.0,
+  "invalidations": 1333,
+  "windows": 18,
+  "life_p50": 14.085282325744629,
+  "basis": {
+   "through_price": 81.95,
+   "price_came_to_us": 15.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.05249999999999996
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|5|3": {
+  "fills": 19,
+  "qty": 86.95,
+  "flow": 49674.62,
+  "placed": 933,
+  "reprices": 0,
+  "q_discarded": 49704.0,
+  "attrition_credited": 0.0,
+  "invalidations": 1278,
+  "windows": 16,
+  "life_p50": 20.00091528892517,
+  "basis": {
+   "through_price": 86.95
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.06749999999999998
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|5|5": {
+  "fills": 14,
+  "qty": 68.08,
+  "flow": 49674.62,
+  "placed": 969,
+  "reprices": 0,
+  "q_discarded": 212106.96,
+  "attrition_credited": 0.0,
+  "invalidations": 1245,
+  "windows": 12,
+  "life_p50": 11.999319314956665,
+  "basis": {
+   "through_price": 58.08,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|10|0": {
+  "fills": 17,
+  "qty": 132.0,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 1607615.68,
+  "attrition_credited": 0.0,
+  "invalidations": 4910,
+  "windows": 10,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 110.0,
+   "same_price_fifo": 22.0
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.07999999999999999,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|10|1": {
+  "fills": 26,
+  "qty": 218.2,
+  "flow": 49674.62,
+  "placed": 1258,
+  "reprices": 0,
+  "q_discarded": 188022.3,
+  "attrition_credited": 0.0,
+  "invalidations": 1292,
+  "windows": 17,
+  "life_p50": 5.062899112701416,
+  "basis": {
+   "through_price": 188.2,
+   "price_came_to_us": 30.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": -0.00500000000000006,
+   "30.0": 0.022500000000000006
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|10|2": {
+  "fills": 22,
+  "qty": 184.14,
+  "flow": 49674.62,
+  "placed": 1028,
+  "reprices": 0,
+  "q_discarded": 47175.35,
+  "attrition_credited": 0.0,
+  "invalidations": 1331,
+  "windows": 18,
+  "life_p50": 14.200599789619446,
+  "basis": {
+   "through_price": 154.14,
+   "price_came_to_us": 30.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|10|3": {
+  "fills": 20,
+  "qty": 161.74,
+  "flow": 49674.62,
+  "placed": 921,
+  "reprices": 0,
+  "q_discarded": 49894.0,
+  "attrition_credited": 0.0,
+  "invalidations": 1268,
+  "windows": 16,
+  "life_p50": 20.01202940940857,
+  "basis": {
+   "through_price": 161.74
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.05499999999999999
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|10|5": {
+  "fills": 15,
+  "qty": 122.26,
+  "flow": 49674.62,
+  "placed": 965,
+  "reprices": 0,
+  "q_discarded": 211571.96,
+  "attrition_credited": 0.0,
+  "invalidations": 1245,
+  "windows": 12,
+  "life_p50": 12.00202751159668,
+  "basis": {
+   "through_price": 104.87,
+   "price_came_to_us": 17.39
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|25|0": {
+  "fills": 18,
+  "qty": 252.0,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 1607620.68,
+  "attrition_credited": 0.0,
+  "invalidations": 4911,
+  "windows": 10,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 230.0,
+   "same_price_fifo": 22.0
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.07999999999999999,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|25|1": {
+  "fills": 29,
+  "qty": 474.2,
+  "flow": 49674.62,
+  "placed": 1258,
+  "reprices": 0,
+  "q_discarded": 188022.3,
+  "attrition_credited": 0.0,
+  "invalidations": 1295,
+  "windows": 17,
+  "life_p50": 5.065149307250977,
+  "basis": {
+   "through_price": 414.2,
+   "price_came_to_us": 60.0
+  },
+  "adv_p50": {
+   "5.0": 0.0025000000000000022,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|25|2": {
+  "fills": 24,
+  "qty": 421.14,
+  "flow": 49674.62,
+  "placed": 1028,
+  "reprices": 0,
+  "q_discarded": 47175.35,
+  "attrition_credited": 0.0,
+  "invalidations": 1361,
+  "windows": 18,
+  "life_p50": 15.056029796600342,
+  "basis": {
+   "through_price": 346.14,
+   "price_came_to_us": 75.0
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|25|3": {
+  "fills": 22,
+  "qty": 357.74,
+  "flow": 49674.62,
+  "placed": 921,
+  "reprices": 0,
+  "q_discarded": 49894.0,
+  "attrition_credited": 0.0,
+  "invalidations": 1270,
+  "windows": 16,
+  "life_p50": 20.01154935359955,
+  "basis": {
+   "through_price": 357.74
+  },
+  "adv_p50": {
+   "5.0": -0.0050000000000000044,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_STRICT|25|5": {
+  "fills": 17,
+  "qty": 253.26,
+  "flow": 49674.62,
+  "placed": 965,
+  "reprices": 0,
+  "q_discarded": 211571.96,
+  "attrition_credited": 0.0,
+  "invalidations": 1273,
+  "windows": 12,
+  "life_p50": 13.024721384048462,
+  "basis": {
+   "through_price": 220.87,
+   "price_came_to_us": 32.39
+  },
+  "adv_p50": {
+   "5.0": -0.004999999999999893,
+   "15.0": 0.0,
+   "30.0": 0.0
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|1|0": {
+  "fills": 17,
+  "qty": 17.0,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 2614.0,
+  "attrition_credited": 1604758.45,
+  "invalidations": 4902,
+  "windows": 11,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 11.0,
+   "same_price_fifo": 6.0,
+   "price_came_to_us": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.050000000000000044,
+   "30.0": 0.05499999999999999
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|1|1": {
+  "fills": 26,
+  "qty": 26.0,
+  "flow": 49674.62,
+  "placed": 1263,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 186905.11,
+  "invalidations": 1290,
+  "windows": 17,
+  "life_p50": 5.065149307250977,
+  "basis": {
+   "through_price": 22.0,
+   "price_came_to_us": 4.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.007500000000000007,
+   "15.0": 0.0,
+   "30.0": 0.02500000000000001
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|1|2": {
+  "fills": 21,
+  "qty": 21.0,
+  "flow": 49674.62,
+  "placed": 1041,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 47658.35,
+  "invalidations": 1340,
+  "windows": 18,
+  "life_p50": 14.085282325744629,
+  "basis": {
+   "through_price": 18.0,
+   "price_came_to_us": 3.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.05249999999999996
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|1|3": {
+  "fills": 19,
+  "qty": 19.0,
+  "flow": 49674.62,
+  "placed": 950,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 49711.0,
+  "invalidations": 1268,
+  "windows": 16,
+  "life_p50": 18.073444366455078,
+  "basis": {
+   "through_price": 19.0,
+   "price_came_to_us": 0.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.06749999999999998
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|1|5": {
+  "fills": 14,
+  "qty": 14.0,
+  "flow": 49674.62,
+  "placed": 970,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 212106.96,
+  "invalidations": 1226,
+  "windows": 12,
+  "life_p50": 11.02104640007019,
+  "basis": {
+   "through_price": 12.0,
+   "price_came_to_us": 2.0,
+   "same_price_fifo": 0.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|5|0": {
+  "fills": 17,
+  "qty": 85.0,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 2614.0,
+  "attrition_credited": 1604758.45,
+  "invalidations": 4902,
+  "windows": 11,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 55.0,
+   "same_price_fifo": 30.0
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.050000000000000044,
+   "30.0": 0.05499999999999999
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|5|1": {
+  "fills": 26,
+  "qty": 121.02,
+  "flow": 49674.62,
+  "placed": 1264,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 189155.11,
+  "invalidations": 1294,
+  "windows": 17,
+  "life_p50": 5.056043863296509,
+  "basis": {
+   "through_price": 101.02,
+   "price_came_to_us": 20.0
+  },
+  "adv_p50": {
+   "5.0": 0.007500000000000007,
+   "15.0": 0.0,
+   "30.0": 0.02500000000000001
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|5|2": {
+  "fills": 21,
+  "qty": 96.95,
+  "flow": 49674.62,
+  "placed": 1031,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 47175.35,
+  "invalidations": 1333,
+  "windows": 18,
+  "life_p50": 14.085282325744629,
+  "basis": {
+   "through_price": 81.95,
+   "price_came_to_us": 15.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.05249999999999996
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|5|3": {
+  "fills": 19,
+  "qty": 86.95,
+  "flow": 49674.62,
+  "placed": 933,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 49711.0,
+  "invalidations": 1278,
+  "windows": 16,
+  "life_p50": 20.00091528892517,
+  "basis": {
+   "through_price": 86.95
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.06749999999999998
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|5|5": {
+  "fills": 14,
+  "qty": 68.08,
+  "flow": 49674.62,
+  "placed": 969,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 212106.96,
+  "invalidations": 1245,
+  "windows": 12,
+  "life_p50": 11.999319314956665,
+  "basis": {
+   "through_price": 58.08,
+   "price_came_to_us": 10.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|10|0": {
+  "fills": 19,
+  "qty": 152.0,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 2614.0,
+  "attrition_credited": 1605202.45,
+  "invalidations": 4908,
+  "windows": 11,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 100.0,
+   "same_price_fifo": 52.0
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.050000000000000044,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|10|1": {
+  "fills": 27,
+  "qty": 225.2,
+  "flow": 49674.62,
+  "placed": 1258,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 188263.3,
+  "invalidations": 1292,
+  "windows": 17,
+  "life_p50": 5.062899112701416,
+  "basis": {
+   "through_price": 188.2,
+   "price_came_to_us": 37.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.010000000000000009
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|10|2": {
+  "fills": 22,
+  "qty": 184.14,
+  "flow": 49674.62,
+  "placed": 1028,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 47175.35,
+  "invalidations": 1331,
+  "windows": 18,
+  "life_p50": 14.200599789619446,
+  "basis": {
+   "through_price": 154.14,
+   "price_came_to_us": 30.0
+  },
+  "adv_p50": {
+   "5.0": 0.0,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|10|3": {
+  "fills": 20,
+  "qty": 161.74,
+  "flow": 49674.62,
+  "placed": 921,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 49901.0,
+  "invalidations": 1268,
+  "windows": 16,
+  "life_p50": 20.01202940940857,
+  "basis": {
+   "through_price": 161.74
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.05499999999999999
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|10|5": {
+  "fills": 15,
+  "qty": 122.26,
+  "flow": 49674.62,
+  "placed": 965,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 211571.96,
+  "invalidations": 1245,
+  "windows": 12,
+  "life_p50": 12.00202751159668,
+  "basis": {
+   "through_price": 104.87,
+   "price_came_to_us": 17.39
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.025000000000000022
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|25|0": {
+  "fills": 20,
+  "qty": 287.23,
+  "flow": 49674.62,
+  "placed": 4947,
+  "reprices": 0,
+  "q_discarded": 2614.0,
+  "attrition_credited": 1605207.45,
+  "invalidations": 4910,
+  "windows": 11,
+  "life_p50": 1.9984214305877686,
+  "basis": {
+   "through_price": 205.0,
+   "same_price_fifo": 82.23
+  },
+  "adv_p50": {
+   "5.0": 0.03750000000000002,
+   "15.0": 0.050000000000000044,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|25|1": {
+  "fills": 30,
+  "qty": 481.2,
+  "flow": 49674.62,
+  "placed": 1258,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 188263.3,
+  "invalidations": 1295,
+  "windows": 17,
+  "life_p50": 5.065149307250977,
+  "basis": {
+   "through_price": 414.2,
+   "price_came_to_us": 67.0
+  },
+  "adv_p50": {
+   "5.0": 0.0050000000000000044,
+   "15.0": -0.0050000000000001155,
+   "30.0": 0.0025000000000000022
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|25|2": {
+  "fills": 24,
+  "qty": 421.14,
+  "flow": 49674.62,
+  "placed": 1028,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 47175.35,
+  "invalidations": 1361,
+  "windows": 18,
+  "life_p50": 15.056029796600342,
+  "basis": {
+   "through_price": 346.14,
+   "price_came_to_us": 75.0
+  },
+  "adv_p50": {
+   "5.0": -0.0024999999999999467,
+   "15.0": 0.0050000000000000044,
+   "30.0": 0.04500000000000004
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|25|3": {
+  "fills": 22,
+  "qty": 357.74,
+  "flow": 49674.62,
+  "placed": 921,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 49901.0,
+  "invalidations": 1270,
+  "windows": 16,
+  "life_p50": 20.01154935359955,
+  "basis": {
+   "through_price": 357.74
+  },
+  "adv_p50": {
+   "5.0": -0.0050000000000000044,
+   "15.0": -0.0050000000000000044,
+   "30.0": 0.04999999999999993
+  }
+ },
+ "C_INVALIDATED|FIFO_ATTRITION|25|5": {
+  "fills": 17,
+  "qty": 253.26,
+  "flow": 49674.62,
+  "placed": 965,
+  "reprices": 0,
+  "q_discarded": 0.0,
+  "attrition_credited": 211571.96,
+  "invalidations": 1273,
+  "windows": 12,
+  "life_p50": 13.024721384048462,
+  "basis": {
+   "through_price": 220.87,
+   "price_came_to_us": 32.39
+  },
+  "adv_p50": {
+   "5.0": -0.004999999999999893,
+   "15.0": 0.0,
+   "30.0": 0.0
+  }
+ }
+}
