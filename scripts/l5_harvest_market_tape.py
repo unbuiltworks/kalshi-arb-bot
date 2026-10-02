@@ -16,15 +16,19 @@ OUT = "data/l5_market_tape"
 API = "https://data-api.polymarket.com/trades"
 
 
+UA = {"User-Agent": "curl/8.5.0", "Accept": "*/*"}
+
+
 def get(url, tries=4):
+    """The agent proxy answers 403 without a User-Agent, so send one."""
     for i in range(tries):
         try:
-            with urllib.request.urlopen(url, timeout=30) as r:
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=30) as r:
                 return json.loads(r.read().decode())
         except Exception as e:
             if i == tries - 1:
-                print(f"    FAIL {e}")
-                return None
+                raise RuntimeError(f"harvest failed for {url}: {e}") from e
             time.sleep(2 ** i)
 
 
@@ -51,6 +55,8 @@ for i, cid in enumerate(sample, 1):
         if len(d) < 500:
             break
         off += 500
+    if not rows:
+        raise RuntimeError(f"no rows for {cid}; refusing to write an empty tape")
     with gzip.open(path, "wt") as fh:
         for x in rows:
             fh.write(json.dumps(x) + "\n")

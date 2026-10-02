@@ -1,0 +1,278 @@
+{
+ "source": "https://data-api.polymarket.com/trades",
+ "provenance": "PUBLIC market-wide trade tape, read-only, no credentials",
+ "sample_rule": "2026-08-31 windows ranked by L5 fill count, descending, top N; no price/settlement/P&L in the selection",
+ "n": 30,
+ "markets": [
+  {
+   "window_id": "0xde7d7f8853e4a0ce73be0cb6f218c601b58b0a2e035a5795836e046127ee4a8c",
+   "slug": "btc-updown-15m-1788155100",
+   "rows": 1138,
+   "wallets": 290,
+   "t_min": 1788154204,
+   "t_max": 1788156109,
+   "l5_fills_in_corpus": 387
+  },
+  {
+   "window_id": "0x26fd8f60ae0559b09974329e4f87e077f32f7dc51185a7d86be62c2bf3579ded",
+   "slug": "btc-updown-15m-1788150600",
+   "rows": 1940,
+   "wallets": 367,
+   "t_min": 1788066487,
+   "t_max": 1788151476,
+   "l5_fills_in_corpus": 373
+  },
+  {
+   "window_id": "0xbfa6adb7483075af3623dc2d676b825e808efcca9c127f2ae996e900e68d8975",
+   "slug": "btc-updown-15m-1788213600",
+   "rows": 1675,
+   "wallets": 245,
+   "t_min": 1788211863,
+   "t_max": 1788214537,
+   "l5_fills_in_corpus": 352
+  },
+  {
+   "window_id": "0x7e378bb83e720b469beee690161cbcb13e70db1658fee01eac99ec687b1845b2",
+   "slug": "btc-updown-15m-1788154200",
+   "rows": 1612,
+   "wallets": 375,
+   "t_min": 1788153280,
+   "t_max": 1788155119,
+   "l5_fills_in_corpus": 319
+  },
+  {
+   "window_id": "0x4027d29c359534dc0b21912ec58a2e1adfa17ffe5d28c519258c8b0264239e2f",
+   "slug": "btc-updown-15m-1788216300",
+   "rows": 1446,
+   "wallets": 373,
+   "t_min": 1788213655,
+   "t_max": 1788217222,
+   "l5_fills_in_corpus": 301
+  },
+  {
+   "window_id": "0xa7404d97bfd2acb2ccee1e5574614658bc007cb48025184efd42d14f5a118d38",
+   "slug": "btc-updown-15m-1788153300",
+   "rows": 1116,
+   "wallets": 396,
+   "t_min": 1788152542,
+   "t_max": 1788154195,
+   "l5_fills_in_corpus": 297
+  },
+  {
+   "window_id": "0xb34282eb7b16d56859bb465619a496185a26ab77725a8b239590d46c1d94789c",
+   "slug": "btc-updown-15m-1788141600",
+   "rows": 1015,
+   "wallets": 269,
+   "t_min": 1788140842,
+   "t_max": 1788142515,
+   "l5_fills_in_corpus": 287
+  },
+  {
+   "window_id": "0xe6d624d58018723cc79af7054221400d2a9328b6fce74aea0782716a6c40b384",
+   "slug": "btc-updown-15m-1788198300",
+   "rows": 2127,
+   "wallets": 382,
+   "t_min": 1788196615,
+   "t_max": 1788200077,
+   "l5_fills_in_corpus": 287
+  },
+  {
+   "window_id": "0xf7d77b91e93d427dd3e74ece61e6e1a7743786e0d6240ab6641556d483300e01",
+   "slug": "btc-updown-15m-1788210000",
+   "rows": 1296,
+   "wallets": 315,
+   "t_min": 1788209317,
+   "t_max": 1788210871,
+   "l5_fills_in_corpus": 279
+  },
+  {
+   "window_id": "0x7db1311da2ef9869c5b99752020d19ae4d6eee5a2d1a1b0a56d48d83880f1cd8",
+   "slug": "btc-updown-15m-1788200100",
+   "rows": 2455,
+   "wallets": 400,
+   "t_min": 1788199462,
+   "t_max": 1788201040,
+   "l5_fills_in_corpus": 277
+  },
+  {
+   "window_id": "0x0ed80b60b5eae53c597234ca048dc6414000565c36d4faad42fb5e3e0c77b41d",
+   "slug": "btc-updown-15m-1788149700",
+   "rows": 1593,
+   "wallets": 377,
+   "t_min": 1788066507,
+   "t_max": 1788150627,
+   "l5_fills_in_corpus": 271
+  },
+  {
+   "window_id": "0x4b3cdfc579ed27bfc8c987e326fbf670ec9725725917527a5501d9946ce8495c",
+   "slug": "btc-updown-15m-1788187500",
+   "rows": 2333,
+   "wallets": 494,
+   "t_min": 1788186213,
+   "t_max": 1788188467,
+   "l5_fills_in_corpus": 269
+  },
+  {
+   "window_id": "0xa9b47a2c824db5b447d044256b219cc57653205efc21cbdae59fd87d0e85d169",
+   "slug": "btc-updown-15m-1788139800",
+   "rows": 1673,
+   "wallets": 331,
+   "t_min": 1788138633,
+   "t_max": 1788140754,
+   "l5_fills_in_corpus": 266
+  },
+  {
+   "window_id": "0x02f7cb72d561e5d1042b05c191ec8ab3693a836b0ca0e92e2e925b95246f130b",
+   "slug": "btc-updown-15m-1788134400",
+   "rows": 1524,
+   "wallets": 327,
+   "t_min": 1788068709,
+   "t_max": 1788135366,
+   "l5_fills_in_corpus": 260
+  },
+  {
+   "window_id": "0xc5230577fb9826afd5ab63dd3157736505d5a6b74678ccef186f0e39279f3403",
+   "slug": "btc-updown-15m-1788208200",
+   "rows": 764,
+   "wallets": 261,
+   "t_min": 1788207253,
+   "t_max": 1788209164,
+   "l5_fills_in_corpus": 258
+  },
+  {
+   "window_id": "0xfdb9b37ab44112055b3ec91b57ea5088860ba1e8072d924499e42a70b61b8eb5",
+   "slug": "btc-updown-15m-1788183000",
+   "rows": 2594,
+   "wallets": 425,
+   "t_min": 1788180690,
+   "t_max": 1788183936,
+   "l5_fills_in_corpus": 239
+  },
+  {
+   "window_id": "0xeedd426c4d96deceb097d2613169c28a8cbef5cf3250d1c4b36e55f45f70bf5e",
+   "slug": "btc-updown-15m-1788156900",
+   "rows": 2531,
+   "wallets": 457,
+   "t_min": 1788154825,
+   "t_max": 1788157839,
+   "l5_fills_in_corpus": 230
+  },
+  {
+   "window_id": "0xb5546abe6d29977e111eb345ce6f26db078f71fa7ecd5a01f84ea9315ac4c3e8",
+   "slug": "btc-updown-15m-1788151500",
+   "rows": 2176,
+   "wallets": 417,
+   "t_min": 1788127603,
+   "t_max": 1788152479,
+   "l5_fills_in_corpus": 220
+  },
+  {
+   "window_id": "0x3846c8e56e5bb0086b0942aae605f87cb369b1552c8330d0790c85d41cfd041b",
+   "slug": "btc-updown-15m-1788194700",
+   "rows": 1825,
+   "wallets": 306,
+   "t_min": 1788192958,
+   "t_max": 1788195916,
+   "l5_fills_in_corpus": 213
+  },
+  {
+   "window_id": "0xc1f9f97e7767bddd43ed9943eb8c02b6781d65bb2252b6fe71971e3b749934cb",
+   "slug": "btc-updown-15m-1788180300",
+   "rows": 1757,
+   "wallets": 357,
+   "t_min": 1788172910,
+   "t_max": 1788181215,
+   "l5_fills_in_corpus": 203
+  },
+  {
+   "window_id": "0x05d54c300d5f65e4139057e9fd6d541e75641ebb4c39c66b13b0fe15d0d8a3b0",
+   "slug": "btc-updown-15m-1788142500",
+   "rows": 725,
+   "wallets": 267,
+   "t_min": 1788138933,
+   "t_max": 1788143445,
+   "l5_fills_in_corpus": 202
+  },
+  {
+   "window_id": "0x08f5d8e43c425362fa94b8f9d79245122c0a89f6332a4e012fc61bceb3540813",
+   "slug": "btc-updown-15m-1788207300",
+   "rows": 1249,
+   "wallets": 308,
+   "t_min": 1788206619,
+   "t_max": 1788208255,
+   "l5_fills_in_corpus": 196
+  },
+  {
+   "window_id": "0xeefd9bf51e56ff6e6fcf6b5da3a2de0b62d9f19e5269b5c660f317389991deb2",
+   "slug": "btc-updown-15m-1788209100",
+   "rows": 1049,
+   "wallets": 244,
+   "t_min": 1788208332,
+   "t_max": 1788209949,
+   "l5_fills_in_corpus": 191
+  },
+  {
+   "window_id": "0x062c8915cc494d358fd3e32332235c0d7ae8772720755e093060a4984aeb3cd0",
+   "slug": "btc-updown-15m-1788206400",
+   "rows": 1567,
+   "wallets": 306,
+   "t_min": 1788205549,
+   "t_max": 1788207324,
+   "l5_fills_in_corpus": 180
+  },
+  {
+   "window_id": "0x9ca36d17a40a26307e69f50213234342837e2558a0060f31d92436d4266b0e70",
+   "slug": "btc-updown-15m-1788210900",
+   "rows": 812,
+   "wallets": 205,
+   "t_min": 1788207351,
+   "t_max": 1788211836,
+   "l5_fills_in_corpus": 179
+  },
+  {
+   "window_id": "0x079228c18ae07f9e3c74da01824ec62bcfad6a2a8babc14831ea4a355c32849d",
+   "slug": "btc-updown-15m-1788199200",
+   "rows": 1311,
+   "wallets": 357,
+   "t_min": 1788198360,
+   "t_max": 1788200196,
+   "l5_fills_in_corpus": 174
+  },
+  {
+   "window_id": "0xb2383a6fb57e1a36ce49f92e08fe1e50dbb10e79a89d320a3682be6ccd5308fd",
+   "slug": "btc-updown-15m-1788147000",
+   "rows": 959,
+   "wallets": 262,
+   "t_min": 1788142506,
+   "t_max": 1788147922,
+   "l5_fills_in_corpus": 173
+  },
+  {
+   "window_id": "0x33fe4314a9c156d677afb63ef091a84534086782922c4f43021f8bd57ed720b8",
+   "slug": "btc-updown-15m-1788174000",
+   "rows": 827,
+   "wallets": 292,
+   "t_min": 1788172875,
+   "t_max": 1788174918,
+   "l5_fills_in_corpus": 173
+  },
+  {
+   "window_id": "0xb5d2ad496f9cb4579de02d2ba65b4517e7de442e8a6b5e3a038ce998419a337a",
+   "slug": "btc-updown-15m-1788184800",
+   "rows": 1242,
+   "wallets": 285,
+   "t_min": 1788183573,
+   "t_max": 1788185827,
+   "l5_fills_in_corpus": 171
+  },
+  {
+   "window_id": "0x862e386848d06881952f71c3c1a95cccaba3ebd4e80a861d6fba094d6f312069",
+   "slug": "btc-updown-15m-1788140700",
+   "rows": 3441,
+   "wallets": 380,
+   "t_min": 1788139975,
+   "t_max": 1788141654,
+   "l5_fills_in_corpus": 168
+  }
+ ]
+}
