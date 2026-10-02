@@ -74,3 +74,9 @@ data/pmus_btc15m/
 # P10 decoder capture. That workstream is closed and GATE FAILED; its capture
 # is not revived, merged or modified.
 analysis/gemini/p10_capture/
+
+# gemini_hifi raw tapes: lane_recorder.py preserves EVERY @depth diff and
+# trade, so a multi-hour run grows large and a growing file costs a full new
+# blob on every snapshot commit. Same rule as data/policy_d_port above:
+# track the gzipped tape, keep the raw file on disk for the running recorder.
+data/gemini_hifi/*.jsonl
