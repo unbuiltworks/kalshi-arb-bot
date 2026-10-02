@@ -1,0 +1,496 @@
+{
+  "signal": {
+    "name": "trade_imbalance",
+    "threshold": 0.75,
+    "horizon_s": 2.0,
+    "frozen": "taken from the pre-declared study; not tuned here"
+  },
+  "rtt_measured": {
+    "p50": 0.266,
+    "p90": 0.612,
+    "conservative_1s": 1.0
+  },
+  "windows": [
+    "cpc-btc-updown-15m-2026-10-02-1730z",
+    "cpc-btc-updown-15m-2026-10-02-1745z"
+  ],
+  "ceilings": [
+    "0.99",
+    "0.98",
+    "0.97",
+    "0.95"
+  ],
+  "note": "These two windows produced the candidate and therefore cannot validate it. No rule is promoted here.",
+  "per_window": {
+    "cpc-btc-updown-15m-2026-10-02-1730z": {
+      "scorable_trades": 12068,
+      "0.99": {
+        "n_toxic": 19,
+        "n_qualifying": 406,
+        "confusion": {
+          "TOXIC_flagged": 6,
+          "TOXIC_unflagged": 13,
+          "QUALIFYING_flagged": 68,
+          "QUALIFYING_unflagged": 338
+        },
+        "P_flag_given_toxic": 0.3158,
+        "P_flag_given_qualifying": 0.1675,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 425,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 74,
+          "p10": 0.01,
+          "p50": 0.613,
+          "p90": 3.306,
+          "frac_ge_0.266s": 0.6081,
+          "frac_ge_0.612s": 0.5,
+          "frac_ge_1.0s": 0.3243
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 6,
+            "avoided_toxic_net_removed": "-0.9304843600000000",
+            "sacrificed_qualifying_n": 39,
+            "sacrificed_qualifying_net_removed": "7.7984386250000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-6.8679542650000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 6,
+            "avoided_toxic_net_removed": "-0.9304843600000000",
+            "sacrificed_qualifying_n": 31,
+            "sacrificed_qualifying_net_removed": "5.8590729750000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-4.9285886150000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 3,
+            "avoided_toxic_net_removed": "-0.2149008400000000",
+            "sacrificed_qualifying_n": 21,
+            "sacrificed_qualifying_net_removed": "4.9992103875000000",
+            "toxic_flagged_too_late": 3,
+            "delta_net_if_cancelled": "-4.7843095475000000"
+          }
+        },
+        "baseline_net_all_lots": "35.2947904000000000",
+        "net_by_group": {
+          "tox_net_flagged": "-0.9304843600000000",
+          "tox_net_unflagged": "-9.5454227300000000",
+          "qual_net_flagged": "14.1191279500000000",
+          "qual_net_unflagged": "31.6515695400000000"
+        }
+      },
+      "0.98": {
+        "n_toxic": 63,
+        "n_qualifying": 362,
+        "confusion": {
+          "TOXIC_flagged": 10,
+          "TOXIC_unflagged": 53,
+          "QUALIFYING_flagged": 64,
+          "QUALIFYING_unflagged": 298
+        },
+        "P_flag_given_toxic": 0.1587,
+        "P_flag_given_qualifying": 0.1768,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 425,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 74,
+          "p10": 0.01,
+          "p50": 0.613,
+          "p90": 3.306,
+          "frac_ge_0.266s": 0.6081,
+          "frac_ge_0.612s": 0.5,
+          "frac_ge_1.0s": 0.3243
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 10,
+            "avoided_toxic_net_removed": "-1.2059156100000000",
+            "sacrificed_qualifying_n": 35,
+            "sacrificed_qualifying_net_removed": "8.2830035800000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-7.0770879700000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 10,
+            "avoided_toxic_net_removed": "-1.2059156100000000",
+            "sacrificed_qualifying_n": 27,
+            "sacrificed_qualifying_net_removed": "6.3754292875000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-5.1695136775000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 4,
+            "avoided_toxic_net_removed": "-0.4761008400000000",
+            "sacrificed_qualifying_n": 20,
+            "sacrificed_qualifying_net_removed": "5.5784974875000000",
+            "toxic_flagged_too_late": 6,
+            "delta_net_if_cancelled": "-5.1023966475000000"
+          }
+        },
+        "baseline_net_all_lots": "30.2527658900000000",
+        "net_by_group": {
+          "tox_net_flagged": "-1.2059156100000000",
+          "tox_net_unflagged": "-26.3442572375000000",
+          "qual_net_flagged": "16.5877714050000000",
+          "qual_net_unflagged": "41.2151673325000000"
+        }
+      },
+      "0.97": {
+        "n_toxic": 75,
+        "n_qualifying": 350,
+        "confusion": {
+          "TOXIC_flagged": 10,
+          "TOXIC_unflagged": 65,
+          "QUALIFYING_flagged": 64,
+          "QUALIFYING_unflagged": 286
+        },
+        "P_flag_given_toxic": 0.1333,
+        "P_flag_given_qualifying": 0.1829,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 425,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 74,
+          "p10": 0.01,
+          "p50": 0.613,
+          "p90": 3.306,
+          "frac_ge_0.266s": 0.6081,
+          "frac_ge_0.612s": 0.5,
+          "frac_ge_1.0s": 0.3243
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 10,
+            "avoided_toxic_net_removed": "-1.2059156100000000",
+            "sacrificed_qualifying_n": 35,
+            "sacrificed_qualifying_net_removed": "11.6290545875000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-10.4231389775000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 10,
+            "avoided_toxic_net_removed": "-1.2059156100000000",
+            "sacrificed_qualifying_n": 27,
+            "sacrificed_qualifying_net_removed": "9.0314429750000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-7.8255273650000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 4,
+            "avoided_toxic_net_removed": "-0.4761008400000000",
+            "sacrificed_qualifying_n": 20,
+            "sacrificed_qualifying_net_removed": "8.0786870375000000",
+            "toxic_flagged_too_late": 6,
+            "delta_net_if_cancelled": "-7.6025861975000000"
+          }
+        },
+        "baseline_net_all_lots": "59.7164787825000000",
+        "net_by_group": {
+          "tox_net_flagged": "-1.2059156100000000",
+          "tox_net_unflagged": "-31.0629547300000000",
+          "qual_net_flagged": "25.7092898375000000",
+          "qual_net_unflagged": "66.2760592850000000"
+        }
+      },
+      "0.95": {
+        "n_toxic": 81,
+        "n_qualifying": 344,
+        "confusion": {
+          "TOXIC_flagged": 11,
+          "TOXIC_unflagged": 70,
+          "QUALIFYING_flagged": 63,
+          "QUALIFYING_unflagged": 281
+        },
+        "P_flag_given_toxic": 0.1358,
+        "P_flag_given_qualifying": 0.1831,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 425,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 74,
+          "p10": 0.01,
+          "p50": 0.613,
+          "p90": 3.306,
+          "frac_ge_0.266s": 0.6081,
+          "frac_ge_0.612s": 0.5,
+          "frac_ge_1.0s": 0.3243
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 11,
+            "avoided_toxic_net_removed": "-1.2687113100000000",
+            "sacrificed_qualifying_n": 34,
+            "sacrificed_qualifying_net_removed": "21.5742309450000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-20.3055196350000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 11,
+            "avoided_toxic_net_removed": "-1.2687113100000000",
+            "sacrificed_qualifying_n": 26,
+            "sacrificed_qualifying_net_removed": "16.8233293725000000",
+            "toxic_flagged_too_late": 0,
+            "delta_net_if_cancelled": "-15.5546180625000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 5,
+            "avoided_toxic_net_removed": "-0.5388965400000000",
+            "sacrificed_qualifying_n": 19,
+            "sacrificed_qualifying_net_removed": "15.3687450625000000",
+            "toxic_flagged_too_late": 6,
+            "delta_net_if_cancelled": "-14.8298485225000000"
+          }
+        },
+        "baseline_net_all_lots": "102.1434858725000000",
+        "net_by_group": {
+          "tox_net_flagged": "-1.2687113100000000",
+          "tox_net_unflagged": "-41.4893413600000000",
+          "qual_net_flagged": "41.6653963700000000",
+          "qual_net_unflagged": "103.2361421725000000"
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1745z": {
+      "scorable_trades": 11074,
+      "0.99": {
+        "n_toxic": 123,
+        "n_qualifying": 342,
+        "confusion": {
+          "TOXIC_flagged": 104,
+          "TOXIC_unflagged": 19,
+          "QUALIFYING_flagged": 75,
+          "QUALIFYING_unflagged": 267
+        },
+        "P_flag_given_toxic": 0.8455,
+        "P_flag_given_qualifying": 0.2193,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 465,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 179,
+          "p10": 0.006,
+          "p50": 4.008,
+          "p90": 15.129,
+          "frac_ge_0.266s": 0.8659,
+          "frac_ge_0.612s": 0.7263,
+          "frac_ge_1.0s": 0.7095
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 98,
+            "avoided_toxic_net_removed": "-73.7604679725000000",
+            "sacrificed_qualifying_n": 57,
+            "sacrificed_qualifying_net_removed": "5.3759503375000000",
+            "toxic_flagged_too_late": 6,
+            "delta_net_if_cancelled": "68.3845176350000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 82,
+            "avoided_toxic_net_removed": "-51.0842429725000000",
+            "sacrificed_qualifying_n": 48,
+            "sacrificed_qualifying_net_removed": "5.1460955125000000",
+            "toxic_flagged_too_late": 22,
+            "delta_net_if_cancelled": "45.9381474600000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 82,
+            "avoided_toxic_net_removed": "-51.0842429725000000",
+            "sacrificed_qualifying_n": 45,
+            "sacrificed_qualifying_net_removed": "4.8770567500000000",
+            "toxic_flagged_too_late": 22,
+            "delta_net_if_cancelled": "46.2071862225000000"
+          }
+        },
+        "baseline_net_all_lots": "-56.4969420575000000",
+        "net_by_group": {
+          "tox_net_flagged": "-76.0264429725000000",
+          "tox_net_unflagged": "-20.2733464650000000",
+          "qual_net_flagged": "13.7297757625000000",
+          "qual_net_unflagged": "26.0730716175000000"
+        }
+      },
+      "0.98": {
+        "n_toxic": 143,
+        "n_qualifying": 322,
+        "confusion": {
+          "TOXIC_flagged": 108,
+          "TOXIC_unflagged": 35,
+          "QUALIFYING_flagged": 71,
+          "QUALIFYING_unflagged": 251
+        },
+        "P_flag_given_toxic": 0.7552,
+        "P_flag_given_qualifying": 0.2205,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 465,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 179,
+          "p10": 0.006,
+          "p50": 4.008,
+          "p90": 15.129,
+          "frac_ge_0.266s": 0.8659,
+          "frac_ge_0.612s": 0.7263,
+          "frac_ge_1.0s": 0.7095
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 102,
+            "avoided_toxic_net_removed": "-83.3665636425000000",
+            "sacrificed_qualifying_n": 53,
+            "sacrificed_qualifying_net_removed": "4.6486630100000000",
+            "toxic_flagged_too_late": 6,
+            "delta_net_if_cancelled": "78.7179006325000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 85,
+            "avoided_toxic_net_removed": "-59.9583019550000000",
+            "sacrificed_qualifying_n": 45,
+            "sacrificed_qualifying_net_removed": "4.3012948600000000",
+            "toxic_flagged_too_late": 23,
+            "delta_net_if_cancelled": "55.6570070950000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 84,
+            "avoided_toxic_net_removed": "-54.7158972850000000",
+            "sacrificed_qualifying_n": 43,
+            "sacrificed_qualifying_net_removed": "4.2856678600000000",
+            "toxic_flagged_too_late": 24,
+            "delta_net_if_cancelled": "50.4302294250000000"
+          }
+        },
+        "baseline_net_all_lots": "-74.8406166375000000",
+        "net_by_group": {
+          "tox_net_flagged": "-85.6325386425000000",
+          "tox_net_unflagged": "-36.1561409250000000",
+          "qual_net_flagged": "13.8265070100000000",
+          "qual_net_unflagged": "33.1215559200000000"
+        }
+      },
+      "0.97": {
+        "n_toxic": 181,
+        "n_qualifying": 284,
+        "confusion": {
+          "TOXIC_flagged": 118,
+          "TOXIC_unflagged": 63,
+          "QUALIFYING_flagged": 61,
+          "QUALIFYING_unflagged": 223
+        },
+        "P_flag_given_toxic": 0.6519,
+        "P_flag_given_qualifying": 0.2148,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 465,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 179,
+          "p10": 0.006,
+          "p50": 4.008,
+          "p90": 15.129,
+          "frac_ge_0.266s": 0.8659,
+          "frac_ge_0.612s": 0.7263,
+          "frac_ge_1.0s": 0.7095
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 111,
+            "avoided_toxic_net_removed": "-86.0963164050000000",
+            "sacrificed_qualifying_n": 44,
+            "sacrificed_qualifying_net_removed": "14.1402052900000000",
+            "toxic_flagged_too_late": 7,
+            "delta_net_if_cancelled": "71.9561111150000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 87,
+            "avoided_toxic_net_removed": "-61.2252627550000000",
+            "sacrificed_qualifying_n": 43,
+            "sacrificed_qualifying_net_removed": "13.9433962900000000",
+            "toxic_flagged_too_late": 31,
+            "delta_net_if_cancelled": "47.2818664650000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 84,
+            "avoided_toxic_net_removed": "-54.7158972850000000",
+            "sacrificed_qualifying_n": 43,
+            "sacrificed_qualifying_net_removed": "13.9433962900000000",
+            "toxic_flagged_too_late": 34,
+            "delta_net_if_cancelled": "40.7725009950000000"
+          }
+        },
+        "baseline_net_all_lots": "-108.2170214225000000",
+        "net_by_group": {
+          "tox_net_flagged": "-90.8474035350000000",
+          "tox_net_unflagged": "-89.2813131100000000",
+          "qual_net_flagged": "24.4954073775000000",
+          "qual_net_unflagged": "47.4162878450000000"
+        }
+      },
+      "0.95": {
+        "n_toxic": 248,
+        "n_qualifying": 217,
+        "confusion": {
+          "TOXIC_flagged": 123,
+          "TOXIC_unflagged": 125,
+          "QUALIFYING_flagged": 56,
+          "QUALIFYING_unflagged": 161
+        },
+        "P_flag_given_toxic": 0.496,
+        "P_flag_given_qualifying": 0.2581,
+        "provenance": {
+          "lots_all_contributing_trades_before_fill": 465,
+          "lots_with_a_contributing_trade_at_or_after_fill": 0
+        },
+        "onset_lead_s": {
+          "n": 179,
+          "p10": 0.006,
+          "p50": 4.008,
+          "p90": 15.129,
+          "frac_ge_0.266s": 0.8659,
+          "frac_ge_0.612s": 0.7263,
+          "frac_ge_1.0s": 0.7095
+        },
+        "counterfactual": {
+          "p50": {
+            "avoided_toxic_n": 112,
+            "avoided_toxic_net_removed": "-86.6828299250000000",
+            "sacrificed_qualifying_n": 43,
+            "sacrificed_qualifying_net_removed": "23.0190925675000000",
+            "toxic_flagged_too_late": 11,
+            "delta_net_if_cancelled": "63.6637373575000000"
+          },
+          "p90": {
+            "avoided_toxic_n": 87,
+            "avoided_toxic_net_removed": "-61.2252627550000000",
+            "sacrificed_qualifying_n": 43,
+            "sacrificed_qualifying_net_removed": "23.0190925675000000",
+            "toxic_flagged_too_late": 36,
+            "delta_net_if_cancelled": "38.2061701875000000"
+          },
+          "conservative_1s": {
+            "avoided_toxic_n": 84,
+            "avoided_toxic_net_removed": "-54.7158972850000000",
+            "sacrificed_qualifying_n": 43,
+            "sacrificed_qualifying_net_removed": "23.0190925675000000",
+            "toxic_flagged_too_late": 39,
+            "delta_net_if_cancelled": "31.6968047175000000"
+          }
+        },
+        "baseline_net_all_lots": "-142.4855899125000000",
+        "net_by_group": {
+          "tox_net_flagged": "-101.1230170550000000",
+          "tox_net_unflagged": "-150.5722132550000000",
+          "qual_net_flagged": "38.5947305575000000",
+          "qual_net_unflagged": "70.6149098400000000"
+        }
+      }
+    }
+  }
+}
