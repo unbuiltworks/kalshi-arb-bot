@@ -1,0 +1,109 @@
+# Instrumentation defects — latent-quote shadow
+
+Per §H of the preregistration, the experiment is not altered after seeing early
+results **except** for genuine instrumentation defects, documented here with the
+before/after and the reason. **No defect below changes a model, a price arm, a
+fill rule, a confidence bin or the discovery/validation split.** All were found
+in the first 4-minute smoke run, **before any scored result existed.**
+
+## D1 — the public market-wide trade tape lags several minutes
+
+**Found:** 2026-10-02T19:24Z, smoke run, window `btc-updown-15m-1790968500`.
+
+**Symptom.** `flow_n_60 = 0` and `taker_up_share_60 = None` at every decision,
+so **S1_FLOW received no input at all** and S5_FULL's flow term was inert.
+
+**Measured.** At a decision instant of 19:24:36Z the newest row from
+`GET /trades?market=<conditionId>` was timestamped **19:17:47Z — a 6m49s lag**,
+while `GET /activity?user=L5` was returning fills from 19:20:19Z. Ordering was
+confirmed newest-first (DESC), so this is latency in the endpoint, not a paging
+error.
+
+**Cause.** The public trade tape is an indexed/aggregated view and is not
+real-time. It is adequate for **retrospective** fill evidence, and unusable for
+a **live** 60-second flow feature.
+
+**Fix.** Two changes, each preserving the preregistered definitions:
+
+1. **Live flow is derived from our own 2-second book deltas**, which are
+   unlagged, and is **measured on the UP book only**. Depletion at the Up ask is
+   taker BUY pressure; depletion at the Up bid is taker SELL pressure. This is
+   observed consumption, not an inferred trade, and is recorded under
+   `bookflow_*` as a distinct family from the tape-derived `flow_*` fields — the
+   two are never merged into one number.
+
+   *First attempt was wrong and is recorded rather than quietly replaced:* it
+   summed depletion across **both** the Up and Down books, which double-counts,
+   because Up and Down are complements and a taker buying Up **is** a taker
+   selling Down. The symptom was `bookflow_sell == bookflow_buy` exactly
+   (647.9 / 647.9) and a degenerate `up_share` of 0.500 at every decision. The
+   single-book measurement above replaces it. Caught in the second smoke run,
+   still before any scored result.
+2. **Defensible-fill evidence remains tape-based and is re-evaluated
+   retrospectively** at window close over the full tape, because fill evidence
+   is inherently backward-looking. The live loop's fill state is provisional and
+   is labelled so; the window-close pass is authoritative.
+
+`trade_tape_lag_s` is now recorded at every decision so the lag is measured
+rather than assumed, and any result conditioned on tape freshness can be
+filtered after the fact.
+
+**S1_FLOW's definition is unchanged** — "the side opposite recent taker
+pressure". Only the *source* of the taker-pressure measurement changes, from a
+lagged tape to unlagged book deltas. The model's semantics and its frozen
+identity are preserved.
+
+## D2 — shadow orders accumulated instead of repricing explicitly
+
+**Found:** same smoke run.
+
+**Symptom.** 37 live shadow orders after 12 decisions. Each decision placed a
+fresh arm set without retiring the previous one, so the same (model, arm, side)
+held many resting orders at different prices simultaneously — which would
+inflate both the placement count and the fill count.
+
+**Cause.** The runner implemented placement but never invoked the
+`cancel_for_reprice` path that `lifecycle.py` already provided.
+
+**Fix.** One resting order per `(model, arm, side)` key. When the policy's price
+for that key changes, the existing order is explicitly `CANCELLED` and a new
+`PLACED_SHADOW` is emitted; both events are preserved in the order's event list.
+When the price is unchanged the existing order simply continues resting and is
+**not** re-placed, so placement counts are not inflated.
+
+This implements the preregistered rule — "no silent repricing" — which the
+runner had not yet honoured. The rule itself is unchanged.
+
+## D3 — placement accounting must distinguish orders from decisions
+
+**Found:** consequence of D2.
+
+**Fix.** Each record now carries `n_decisions`, `n_placements_new`,
+`n_repriced` and `n_live`, and the scored outputs will report **placement count
+and independent window/day count separately**, as §H requires. The
+~2,000-placement target counts *new* placements, never re-places.
+
+## D4 — P5_STATE proposed a crossing price and was refused 100% of the time
+
+**Found:** 2026-10-02T19:35Z, third smoke run, still before any scored result.
+
+**Symptom.** `P5_STATE` returned `REFUSED_CROSS` on **18 of 18** decisions, so
+the arm tested nothing. Cause: it computed `bid + 1 tick` when the complement
+was expensive, and the prevailing spread in this market is **one tick**, so that
+price lands exactly on the ask.
+
+**Fix.** `P5_STATE` is clamped to `min(bid + step, ask − 1 tick)`, keeping it
+strictly passive. The arm's **definition is unchanged** — still "the H1/H3
+state-driven price" — and the preregistered rule it now honours is the spec's
+own "**Never cross**". An arm permitted to propose a marketable price and be
+refused every time measures nothing, which was an implementation defect, not a
+property of the policy.
+
+### Not a defect, recorded so it is not later mistaken for one
+
+`P3_IMPROVE_BID` was also refused 18/18. That is **correct and specified**: the
+preregistration defines P3 as "improve the bid by one tick, **only if still
+passive**", and in a one-tick spread no improving price is passive. P3 is left
+exactly as written. Its refusal rate in tight spreads is a **finding about the
+venue**, and the frequency with which P3 is testable at all should be reported
+alongside its results.

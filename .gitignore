@@ -120,3 +120,10 @@ data/gemini_shadow/merged/
 # pmus-ws-evidence-recorder Railway logs and is regenerable; the .gz is tracked.
 data/pmus_ws_tape/*.jsonl
 data/btc_ref/*.jsonl
+
+# L5 latent-quote shadow: the raw per-decision JSONL is written continuously by a
+# running read-only collector and is regenerable. Findings and frozen specs are
+# committed; the raw tape stays on disk and is promoted as .gz when a scored
+# block closes.
+data/l5_latent_quote/*.jsonl
+data/l5_latent_quote/_prefix_smoke/

@@ -164,11 +164,17 @@ L5's maker price minus the last same-outcome bid proxy (n=6,918):
 |---|---|---|---|---|
 | −0.060 | −0.030 | **+0.000** | +0.024 | +0.072 |
 
-**At the median he rests exactly at the prevailing bid of the outcome he is
-accumulating**, at or below it 59.9% of the time. That is a near-deterministic
-pricing rule — and the 44% ceiling above is imposed by our *stale print proxy*,
-not by L5's behaviour. **The missing information is a live per-outcome bid, not
-a better model.**
+**CORRECTION (owner, 2026-10-02): this must NOT be stated as "L5 rests at the
+bid".** Historical Polymarket data has **no L2**. The quantity above is a
+*trade-derived same-outcome bid proxy* — the last same-outcome taker SELL print —
+not a quote. What the median offset of +0.000 licenses is a **hypothesis worth
+testing prospectively**, nothing more.
+
+The prospective full-L2 shadow must discriminate between the candidate rules:
+**at bid · one tick behind bid · one tick improving · basis-relative ·
+state-dependent.** They are not distinguishable from a stale print proxy, and no
+one of them is established here. **The missing information is a live per-outcome
+bid/ask ladder, not a better model.**
 
 ---
 
@@ -227,8 +233,8 @@ inverts to 0.56–0.58 independently, so there is real signal, but nothing here
 reaches a level at which one would confidently commit a side.
 
 **Price accuracy.** 44.1% within one tick on a stale proxy, and a clean
-underlying rule — **rest at the prevailing same-outcome bid, median offset
-+0.000.** With a live bid this is plausibly a high-accuracy rule; that is a
+underlying *candidate* rule — the proxy-derived offset has median +0.000, which
+is a **hypothesis to test**, not an established "rests at the bid" finding. With a live bid this is plausibly a high-accuracy rule; that is a
 hypothesis this data cannot close.
 
 **Defensible fill evidence.** **None, and none obtainable historically.** No
@@ -265,7 +271,7 @@ built, started, or authorized here.**
 | **scoring** | when a trade later prints, classify the hypothetical quote by **trade-through or observed queue depletion only** — no touch=fill, no invented queue. Separately record whether L5 subsequently filled on that side/price. |
 | **primary outputs** | side precision/recall against L5's realised side; price error in ticks against L5's realised maker price; **postable rate**; **defensible fill rate**; post-fill markout |
 | **sample needed** | from the observed 30% defensible fill rate and a need for losses in-sample: **≥2,000 hypothetical placements**, which at L5's observed cadence is days, not months |
-| **what it decides** | whether the "rest at the prevailing bid" rule is real at tick accuracy, and whether such quotes are adversely selected — the two things history cannot tell us |
+| **what it decides** | WHICH passive pricing rule L5 actually follows -- at bid, one tick behind, one tick improving, basis-relative, or state-dependent -- and whether such quotes are adversely selected. History can distinguish none of these |
 | **explicitly excluded** | Gemini; the active PMUS experiment's reserved windows; any production change; any live order |
 
 ### My read, for your decision
