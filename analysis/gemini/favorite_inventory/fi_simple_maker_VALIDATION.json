@@ -1,0 +1,12351 @@
+[
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227700.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227715.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227730.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227745.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227760.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227790.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227820.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227880.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227940.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227970.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010200-UP",
+  "t": 1788227985.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228000.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228015.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228030.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228045.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228060.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228090.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228120.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228180.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228240.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228270.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010205-UP",
+  "t": 1788228285.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010225-UP",
+  "t": 1788229290.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.74,
+  "qty_target": 19.23,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.2
+ },
+ {
+  "market": "GEMI-BTC05M2609010225-UP",
+  "t": 1788229320.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   85,
+   90
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.75,
+  "qty_target": 20.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.53,
+  "qty_target": 10.64,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229680.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229740.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229770.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010230-UP",
+  "t": 1788229785.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229800.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229815.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229830.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229845.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229860.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229890.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788229980.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788230040.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788230070.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010235-UP",
+  "t": 1788230085.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230100.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230115.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230130.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230145.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230160.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230190.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230220.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230280.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230340.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230370.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010240-UP",
+  "t": 1788230385.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010255-UP",
+  "t": 1788231120.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "UP",
+  "won": true,
+  "entry": 0.54,
+  "mid": 0.68,
+  "spread": 0.28,
+  "spread_bucket": ">20c",
+  "depth": 277.0,
+  "qty_target": 10.87,
+  "filled": 1.12,
+  "cash_risk": 0.6048,
+  "gross": 0.5152,
+  "fees": 0.01,
+  "rebate": 0.0,
+  "net": 0.5052,
+  "full_loss": -0.6148,
+  "breakeven_p": 0.54,
+  "btc": {
+   "btc": 78410.9,
+   "dist": 17.979999999995925,
+   "dist_pct": 0.00022935744707552576,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0015236626248967622,
+   "ret_15s": 0.0015236626248967622,
+   "ret_30s": 0.0015236626248967622,
+   "ret_60s": 0.0015236626248967622
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010255-UP",
+  "t": 1788231180.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.57,
+  "mid": 0.27,
+  "spread": 0.32,
+  "spread_bucket": ">20c",
+  "depth": 263.0,
+  "qty_target": 11.63,
+  "filled": 11.63,
+  "cash_risk": 6.6291,
+  "gross": -6.6291,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -6.6291,
+  "full_loss": -6.6291,
+  "breakeven_p": 0.57,
+  "btc": {
+   "btc": 78390.49,
+   "dist": -2.429999999993015,
+   "dist_pct": -3.0997697240937256e-05,
+   "dist_vol": -0.715792229939419,
+   "crossings": 1,
+   "frac_above": 0.6,
+   "max_exc": 17.979999999995925,
+   "ret_1s": 0.00013192115605814813,
+   "ret_5s": 0.00013192115605814813,
+   "ret_15s": -0.00021044042119203912,
+   "ret_30s": -0.00021044042119203912,
+   "ret_60s": -0.0002602954436180294,
+   "sigma_per_sqrt_s": 3.3948398688243344,
+   "hi": 78410.9,
+   "lo": 78380.15
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010255-UP",
+  "t": 1788231240.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "UP",
+  "won": true,
+  "entry": 0.39,
+  "mid": 0.585,
+  "spread": 0.39,
+  "spread_bucket": ">20c",
+  "depth": 384.0,
+  "qty_target": 8.2,
+  "filled": 8.2,
+  "cash_risk": 3.198,
+  "gross": 5.002,
+  "fees": 0.04,
+  "rebate": 0.04,
+  "net": 5.002,
+  "full_loss": -3.198,
+  "breakeven_p": 0.39,
+  "btc": {
+   "btc": 78402.22,
+   "dist": 9.30000000000291,
+   "dist_pct": 0.00011863316228050838,
+   "dist_vol": 2.575866388841118,
+   "crossings": 2,
+   "frac_above": 0.6666666666666666,
+   "max_exc": 17.979999999995925,
+   "ret_1s": 0.0,
+   "ret_5s": 1.2754742493561483e-07,
+   "ret_15s": 1.2754742493561483e-07,
+   "ret_30s": 3.188695386098079e-06,
+   "ret_60s": 0.00014963549787730534,
+   "sigma_per_sqrt_s": 3.6104357121515838,
+   "hi": 78410.9,
+   "lo": 78380.15
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231300.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231315.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231330.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231345.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231360.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.6,
+  "qty_target": 12.5,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231390.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231420.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231480.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231540.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231570.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010300-UP",
+  "t": 1788231585.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231600.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231615.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231630.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231645.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231660.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231690.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231720.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231780.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231840.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231870.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010305-UP",
+  "t": 1788231885.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788231900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788231915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788231930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788231945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788231960.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788231990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788232020.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788232080.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788232140.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788232170.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010310-UP",
+  "t": 1788232185.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010325-UP",
+  "t": 1788232845.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.65,
+  "qty_target": 14.29,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010325-UP",
+  "t": 1788232860.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.65,
+  "qty_target": 14.29,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010325-UP",
+  "t": 1788232890.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.3
+ },
+ {
+  "market": "GEMI-BTC05M2609010325-UP",
+  "t": 1788232920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233100.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233115.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233130.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.73,
+  "qty_target": 18.52,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233145.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233160.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233190.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233220.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233280.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233340.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233370.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010330-UP",
+  "t": 1788233385.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233400.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233415.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233430.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233445.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233460.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233490.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233520.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233580.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233640.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233670.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010335-UP",
+  "t": 1788233685.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233700.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233715.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233730.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233745.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233760.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233790.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233820.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233880.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233940.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233970.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010340-UP",
+  "t": 1788233985.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010345-UP",
+  "t": 1788234120.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.14
+ },
+ {
+  "market": "GEMI-BTC05M2609010345-UP",
+  "t": 1788234180.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "DOWN",
+  "won": true,
+  "entry": 0.73,
+  "mid": 0.17,
+  "spread": 0.2,
+  "spread_bucket": "11-20c",
+  "depth": 205.0,
+  "qty_target": 18.52,
+  "filled": 18.52,
+  "cash_risk": 13.5196,
+  "gross": 5.0004,
+  "fees": 0.07,
+  "rebate": 0.07,
+  "net": 5.0004,
+  "full_loss": -13.5196,
+  "breakeven_p": 0.73,
+  "btc": {
+   "btc": 78790.11,
+   "dist": -34.330000000001746,
+   "dist_pct": -0.00043552481945957047,
+   "dist_vol": -9.3853188315752,
+   "crossings": 2,
+   "frac_above": 0.3333333333333333,
+   "max_exc": 34.330000000001746,
+   "ret_1s": 0.0,
+   "ret_5s": -8.757367611476573e-06,
+   "ret_15s": -0.0003287402738682249,
+   "ret_30s": -0.00047851120600429016,
+   "ret_60s": 0.0050670411564110104,
+   "sigma_per_sqrt_s": 3.6578405716494897,
+   "hi": 78827.83,
+   "lo": 78790.11
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234300.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234315.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.62,
+  "qty_target": 13.16,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234330.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234345.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.77,
+  "qty_target": 21.74,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234360.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234390.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.73,
+  "qty_target": 18.52,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234420.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.73,
+  "qty_target": 18.52,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234480.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.73,
+  "qty_target": 18.52,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234540.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.73,
+  "qty_target": 18.52,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234570.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.73,
+  "qty_target": 18.52,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609010350-UP",
+  "t": 1788234585.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.73,
+  "qty_target": 18.52,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609010355-UP",
+  "t": 1788234600.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010355-UP",
+  "t": 1788234615.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010355-UP",
+  "t": 1788234630.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010355-UP",
+  "t": 1788234645.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010355-UP",
+  "t": 1788234660.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010355-UP",
+  "t": 1788234690.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.66,
+  "mid": 0.795,
+  "spread": 0.27,
+  "spread_bucket": ">20c",
+  "depth": 227.0,
+  "qty_target": 14.71,
+  "filled": 14.71,
+  "cash_risk": 9.7086,
+  "gross": -9.7086,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -9.7086,
+  "full_loss": -9.7086,
+  "breakeven_p": 0.66,
+  "btc": {
+   "btc": 78713.06,
+   "dist": 42.929999999993015,
+   "dist_pct": 0.0005456963144714902,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": -0.0004915445075076585,
+   "ret_15s": -0.0004915445075076585,
+   "ret_30s": -0.0004915445075076585,
+   "ret_60s": -0.0004915445075076585
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010355-UP",
+  "t": 1788234720.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.63,
+  "mid": 0.78,
+  "spread": 0.3,
+  "spread_bucket": ">20c",
+  "depth": 238.0,
+  "qty_target": 13.51,
+  "filled": 13.51,
+  "cash_risk": 8.5113,
+  "gross": -8.5113,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -8.5113,
+  "full_loss": -8.5113,
+  "breakeven_p": 0.63,
+  "btc": {
+   "btc": 78699.2,
+   "dist": 29.069999999992433,
+   "dist_pct": 0.0003695176301347466,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": -0.00017608259671267492,
+   "ret_30s": -0.00017608259671267492,
+   "ret_60s": -0.0006675405517870517
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788234900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788234915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788234930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788234945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788234960.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788234990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788235020.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788235080.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788235140.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788235170.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010400-UP",
+  "t": 1788235185.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235200.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235215.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235230.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235245.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235260.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235290.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235320.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235380.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235440.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235470.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010405-UP",
+  "t": 1788235485.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235680.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235740.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235770.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010410-UP",
+  "t": 1788235785.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010425-UP",
+  "t": 1788236460.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.47,
+  "qty_target": 9.43,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010425-UP",
+  "t": 1788236490.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010425-UP",
+  "t": 1788236520.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.4,
+  "qty_target": 8.33,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010430-UP",
+  "t": 1788236700.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 250.0,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": -5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 78784.58,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.0,
+   "ret_30s": 6.575322990537587e-05,
+   "ret_60s": 0.00017862014604205288,
+   "sigma_per_sqrt_s": 7.375198414033922,
+   "hi": 78784.58,
+   "lo": 78692.56
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237000.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237015.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237030.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237045.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237060.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237090.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237120.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237180.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237240.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237270.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010435-UP",
+  "t": 1788237285.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "DOWN",
+  "won": true,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 249.9,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": 5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": 5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 78723.1,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.0,
+   "ret_30s": 0.0,
+   "ret_60s": 2.5533183039123484e-05,
+   "sigma_per_sqrt_s": 105.34240226998158,
+   "hi": 78732.7,
+   "lo": 78685.3
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.44,
+  "qty_target": 8.93,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.15
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.65,
+  "qty_target": 14.29,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.06
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238680.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238740.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238770.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010500-UP",
+  "t": 1788238785.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.66,
+  "qty_target": 14.71,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238800.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238815.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238830.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238845.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238860.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238890.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788238980.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788239040.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788239070.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010505-UP",
+  "t": 1788239085.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239100.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239115.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239130.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239145.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239160.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239190.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239220.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239280.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239340.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239370.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010510-UP",
+  "t": 1788239385.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240300.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 240.24,
+  "qty_target": 10.0,
+  "filled": 3.27,
+  "cash_risk": 1.635,
+  "gross": -1.635,
+  "fees": 0.02,
+  "rebate": 0.01,
+  "net": -1.645,
+  "full_loss": -1.645,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 78783.97,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 6.169148140922869e-05,
+   "ret_30s": 6.753098713937069e-05,
+   "ret_60s": 6.004119867107026e-05,
+   "sigma_per_sqrt_s": 37.11205426504676,
+   "hi": 78798.41,
+   "lo": 78771.48
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240315.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.54,
+  "qty_target": 10.87,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240330.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240345.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.78,
+  "qty_target": 22.73,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240360.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240390.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240420.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240480.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240540.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240570.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010530-UP",
+  "t": 1788240585.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.79,
+  "qty_target": 23.81,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240600.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240615.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240630.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240645.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240660.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240690.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240720.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240780.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240840.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240870.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010535-UP",
+  "t": 1788240885.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788240900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788240915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788240930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788240945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788240960.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788240990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788241020.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788241080.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788241140.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788241170.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010540-UP",
+  "t": 1788241185.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010625-UP",
+  "t": 1788243780.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.6,
+  "qty_target": 12.5,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788243900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788243915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.52,
+  "qty_target": 10.42,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788243930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.65,
+  "mid": 0.29,
+  "spread": 0.12,
+  "spread_bucket": "11-20c",
+  "depth": 330.0,
+  "qty_target": 14.29,
+  "filled": 14.29,
+  "cash_risk": 9.2885,
+  "gross": -9.2885,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -9.2885,
+  "full_loss": -9.2885,
+  "breakeven_p": 0.65,
+  "btc": {
+   "btc": 78797.54,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": -0.00027277673008958245,
+   "ret_15s": -0.00032135343460599374,
+   "ret_30s": -0.00032135343460599374,
+   "ret_60s": -0.0003483666349509217,
+   "sigma_per_sqrt_s": 7.606930426232288,
+   "hi": 78904.0,
+   "lo": 78797.54
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788243945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.69,
+  "mid": 0.26,
+  "spread": 0.1,
+  "spread_bucket": "6-10c",
+  "depth": 217.0,
+  "qty_target": 16.13,
+  "filled": 16.13,
+  "cash_risk": 11.1297,
+  "gross": -11.1297,
+  "fees": 0.07,
+  "rebate": 0.07,
+  "net": -11.1297,
+  "full_loss": -11.1297,
+  "breakeven_p": 0.69,
+  "btc": {
+   "btc": 78797.58,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 5.076300606357645e-07,
+   "ret_15s": 5.076300606357645e-07,
+   "ret_30s": -0.0003208459676740215,
+   "ret_60s": -0.0003208459676740215,
+   "sigma_per_sqrt_s": 7.474626147494822,
+   "hi": 78904.0,
+   "lo": 78797.54
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788243960.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.46,
+  "qty_target": 9.26,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.32
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788243990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.6,
+  "qty_target": 12.5,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788244020.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.24
+ },
+ {
+  "market": "GEMI-BTC05M2609010630-UP",
+  "t": 1788244080.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.61,
+  "qty_target": 12.82,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.34
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244200.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 249.82,
+  "qty_target": 10.0,
+  "filled": 1.97,
+  "cash_risk": 0.985,
+  "gross": -0.985,
+  "fees": 0.01,
+  "rebate": 0.01,
+  "net": -0.985,
+  "full_loss": -0.985,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 78870.4,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.0,
+   "ret_30s": -4.5642417019623966e-05,
+   "ret_60s": -3.9683782379267884e-05,
+   "sigma_per_sqrt_s": 70.0809120836586,
+   "hi": 78892.0,
+   "lo": 78797.54
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244215.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244230.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.63,
+  "qty_target": 13.51,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.06
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244245.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.49,
+  "qty_target": 9.8,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244260.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.49,
+  "qty_target": 9.8,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244290.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.13
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244320.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244380.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244440.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244470.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010635-UP",
+  "t": 1788244485.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244680.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244740.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244770.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010640-UP",
+  "t": 1788244785.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244800.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244815.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244830.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244845.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244860.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244890.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788244980.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788245040.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788245070.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010645-UP",
+  "t": 1788245085.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010730-UP",
+  "t": 1788247500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010730-UP",
+  "t": 1788247515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.62,
+  "qty_target": 13.16,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010730-UP",
+  "t": 1788247530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.59,
+  "qty_target": 12.2,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609010730-UP",
+  "t": 1788247545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.6,
+  "qty_target": 12.5,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609010730-UP",
+  "t": 1788247560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.51,
+  "qty_target": 10.2,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010730-UP",
+  "t": 1788247590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.45,
+  "qty_target": 9.09,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ },
+ {
+  "market": "GEMI-BTC05M2609010730-UP",
+  "t": 1788247620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.51,
+  "qty_target": 10.2,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.3
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247800.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247815.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247830.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247845.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247860.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247890.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788247980.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788248040.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788248070.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010735-UP",
+  "t": 1788248085.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248100.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248115.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248130.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248145.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248160.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248190.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248220.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248280.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248340.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248370.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010740-UP",
+  "t": 1788248385.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010825-UP",
+  "t": 1788250920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.6,
+  "mid": 0.7,
+  "spread": 0.2,
+  "spread_bucket": "11-20c",
+  "depth": 100.0,
+  "qty_target": 12.5,
+  "filled": 12.5,
+  "cash_risk": 7.5,
+  "gross": -7.5,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -7.5,
+  "full_loss": -7.5,
+  "breakeven_p": 0.6,
+  "btc": {
+   "btc": 78694.79,
+   "dist": 538.4499999999971,
+   "dist_pct": 0.006889396304893463,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.0,
+   "ret_30s": 0.0,
+   "ret_60s": 0.0
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010825-UP",
+  "t": 1788250980.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.61,
+  "mid": 0.685,
+  "spread": 0.15,
+  "spread_bucket": "11-20c",
+  "depth": 245.0,
+  "qty_target": 12.82,
+  "filled": 12.82,
+  "cash_risk": 7.8202,
+  "gross": -7.8202,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -7.8202,
+  "full_loss": -7.8202,
+  "breakeven_p": 0.61,
+  "btc": {
+   "btc": 78181.0,
+   "dist": 24.660000000003492,
+   "dist_pct": 0.00031552142794818045,
+   "dist_vol": 5.488367744963532,
+   "crossings": 0,
+   "frac_above": 1.0,
+   "max_exc": 62.529999999998836,
+   "ret_1s": 0.0,
+   "ret_5s": -5.972961541415778e-05,
+   "ret_15s": -0.00048402648670666616,
+   "ret_30s": -0.00048287642467407854,
+   "ret_60s": -0.006528894733691946,
+   "sigma_per_sqrt_s": 4.4931391528260916,
+   "hi": 78218.87,
+   "lo": 78181.0
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010825-UP",
+  "t": 1788251040.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.46,
+  "mid": 0.6,
+  "spread": 0.28,
+  "spread_bucket": ">20c",
+  "depth": 326.0,
+  "qty_target": 9.26,
+  "filled": 9.26,
+  "cash_risk": 4.2596,
+  "gross": -4.2596,
+  "fees": 0.05,
+  "rebate": 0.04,
+  "net": -4.2696,
+  "full_loss": -4.2696,
+  "breakeven_p": 0.46,
+  "btc": {
+   "btc": 78190.12,
+   "dist": 33.779999999998836,
+   "dist_pct": 0.0004322106178462149,
+   "dist_vol": 8.99581186755927,
+   "crossings": 0,
+   "frac_above": 1.0,
+   "max_exc": 62.529999999998836,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.0,
+   "ret_30s": -3.6448289405119424e-05,
+   "ret_60s": 0.00011665238357139641,
+   "sigma_per_sqrt_s": 3.7550807528352603,
+   "hi": 78218.87,
+   "lo": 78181.0
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010830-UP",
+  "t": 1788251100.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010830-UP",
+  "t": 1788251130.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.51,
+  "mid": 0.565,
+  "spread": 0.11,
+  "spread_bucket": "11-20c",
+  "depth": 294.0,
+  "qty_target": 10.2,
+  "filled": 10.2,
+  "cash_risk": 5.202,
+  "gross": -5.202,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -5.202,
+  "full_loss": -5.202,
+  "breakeven_p": 0.51,
+  "btc": {
+   "btc": 78116.34,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0002294540657800536,
+   "ret_15s": 0.0002294540657800536,
+   "ret_30s": 0.00020921895006397576,
+   "ret_60s": 0.00020921895006397576,
+   "sigma_per_sqrt_s": 4.900805972740073,
+   "hi": 78218.87,
+   "lo": 78097.65
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609010830-UP",
+  "t": 1788251145.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.55,
+  "qty_target": 11.11,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251400.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251415.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251430.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251445.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251460.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251490.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251520.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251580.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251640.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251670.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010835-UP",
+  "t": 1788251685.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251700.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251715.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251730.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251745.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251760.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251790.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251820.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251880.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251940.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251970.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010840-UP",
+  "t": 1788251985.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010925-UP",
+  "t": 1788254460.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.49,
+  "qty_target": 9.8,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609010925-UP",
+  "t": 1788254490.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.61,
+  "qty_target": 12.82,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.31
+ },
+ {
+  "market": "GEMI-BTC05M2609010925-UP",
+  "t": 1788254520.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.68,
+  "qty_target": 15.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.28
+ },
+ {
+  "market": "GEMI-BTC05M2609010930-UP",
+  "t": 1788254700.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255000.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255015.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255030.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255045.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255060.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255090.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255120.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255180.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255240.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255270.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609010935-UP",
+  "t": 1788255285.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258300.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258315.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.63,
+  "mid": 0.68,
+  "spread": 0.1,
+  "spread_bucket": "6-10c",
+  "depth": 238.0,
+  "qty_target": 13.51,
+  "filled": 13.51,
+  "cash_risk": 8.5113,
+  "gross": -8.5113,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -8.5113,
+  "full_loss": -8.5113,
+  "breakeven_p": 0.63,
+  "btc": {
+   "btc": 78004.04,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.0,
+   "ret_30s": 0.0001382170715777086,
+   "ret_60s": 0.0005969919507423096,
+   "sigma_per_sqrt_s": 133.76371963269114,
+   "hi": 78004.04,
+   "lo": 77925.65
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258330.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258345.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258360.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258390.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258420.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258480.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258540.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258570.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011030-UP",
+  "t": 1788258585.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.48,
+  "qty_target": 9.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258600.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258615.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258630.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258645.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258660.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258690.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258720.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258780.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258840.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258870.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011035-UP",
+  "t": 1788258885.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788258900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788258915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788258930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788258945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788258960.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788258990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788259020.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788259080.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788259140.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788259170.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011040-UP",
+  "t": 1788259185.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788261900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788261915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "UP",
+  "won": true,
+  "entry": 0.66,
+  "mid": 0.715,
+  "spread": 0.11,
+  "spread_bucket": "11-20c",
+  "depth": 227.0,
+  "qty_target": 14.71,
+  "filled": 14.71,
+  "cash_risk": 9.7086,
+  "gross": 5.0014,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": 5.0014,
+  "full_loss": -9.7086,
+  "breakeven_p": 0.66,
+  "btc": {
+   "btc": 77924.7,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.0,
+   "ret_30s": 0.0,
+   "ret_60s": 0.00010344388567060479,
+   "sigma_per_sqrt_s": 11.257392433489118,
+   "hi": 77933.53,
+   "lo": 77908.97
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788261930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.53,
+  "qty_target": 10.64,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788261945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.56,
+  "qty_target": 11.36,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.12
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788261960.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788261990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.25
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788262020.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.51,
+  "qty_target": 10.2,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.19
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788262080.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.31,
+  "qty_target": 7.25,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.49
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788262140.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.56,
+  "qty_target": 11.36,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.22
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788262170.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.56,
+  "qty_target": 11.36,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.22
+ },
+ {
+  "market": "GEMI-BTC05M2609011130-UP",
+  "t": 1788262185.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.56,
+  "qty_target": 11.36,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.22
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262200.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262215.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262230.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262245.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262260.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262290.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262320.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262380.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262440.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262470.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011135-UP",
+  "t": 1788262485.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262680.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262740.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262770.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011140-UP",
+  "t": 1788262785.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011230-UP",
+  "t": 1788265500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 250.0,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": -5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 77938.56,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 2.489202123472032e-05,
+   "ret_15s": 2.5276959127941884e-05,
+   "ret_30s": -7.133315508594711e-05,
+   "ret_60s": 0.00013550970126267414,
+   "sigma_per_sqrt_s": 1.2324527009394743,
+   "hi": 77948.89,
+   "lo": 77936.59
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011230-UP",
+  "t": 1788265515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.52,
+  "qty_target": 10.42,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609011230-UP",
+  "t": 1788265530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.64,
+  "qty_target": 13.89,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011230-UP",
+  "t": 1788265545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.71,
+  "qty_target": 17.24,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011230-UP",
+  "t": 1788265560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.69,
+  "qty_target": 16.13,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609011230-UP",
+  "t": 1788265590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.68,
+  "qty_target": 15.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.17
+ },
+ {
+  "market": "GEMI-BTC05M2609011230-UP",
+  "t": 1788265620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.74,
+  "qty_target": 19.23,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.16
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265800.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265815.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265830.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265845.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265860.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265890.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788265980.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788266040.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788266070.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011235-UP",
+  "t": 1788266085.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266100.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266115.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266130.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266145.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266160.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266190.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266220.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266280.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266340.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266370.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011240-UP",
+  "t": 1788266385.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011310-UP",
+  "t": 1788267900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "DOWN",
+  "won": true,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 249.9,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": 5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": 5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 77814.36,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": -6.939111608663634e-05,
+   "ret_30s": -1.5421294339478127e-06,
+   "ret_60s": 3.855478171824782e-05,
+   "sigma_per_sqrt_s": 21.92057427946794,
+   "hi": 77912.5,
+   "lo": 77810.39
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011310-UP",
+  "t": 1788267915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.62,
+  "qty_target": 13.16,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.07
+ },
+ {
+  "market": "GEMI-BTC05M2609011310-UP",
+  "t": 1788267930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.77,
+  "qty_target": 21.74,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "3-5c",
+  "spread": 0.05
+ },
+ {
+  "market": "GEMI-BTC05M2609011310-UP",
+  "t": 1788267945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.75,
+  "qty_target": 20.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609011310-UP",
+  "t": 1788267960.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.75,
+  "qty_target": 20.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "3-5c",
+  "spread": 0.04
+ },
+ {
+  "market": "GEMI-BTC05M2609011310-UP",
+  "t": 1788267990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.67,
+  "qty_target": 15.15,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.3
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268200.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268215.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268230.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268245.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268260.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268290.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268320.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268380.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268440.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268470.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011315-UP",
+  "t": 1788268485.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268500.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268515.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268530.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268545.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268560.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268590.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268620.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268680.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268740.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268770.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011320-UP",
+  "t": 1788268785.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011325-UP",
+  "t": 1788268890.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.51,
+  "mid": 0.61,
+  "spread": 0.2,
+  "spread_bucket": "11-20c",
+  "depth": 100.0,
+  "qty_target": 10.2,
+  "filled": 3.48,
+  "cash_risk": 1.7748,
+  "gross": -1.7748,
+  "fees": 0.02,
+  "rebate": 0.01,
+  "net": -1.7848,
+  "full_loss": -1.7848,
+  "breakeven_p": 0.51,
+  "btc": {
+   "btc": 77784.36,
+   "dist": 25.180000000007567,
+   "dist_pct": 0.000323820287199628,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0011903431864436274,
+   "ret_15s": 0.0011903431864436274,
+   "ret_30s": 0.0011903431864436274,
+   "ret_60s": 0.0011903431864436274
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011325-UP",
+  "t": 1788268920.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.61,
+  "mid": 0.7,
+  "spread": 0.18,
+  "spread_bucket": "11-20c",
+  "depth": 245.0,
+  "qty_target": 12.82,
+  "filled": 3.48,
+  "cash_risk": 2.1228,
+  "gross": -2.1228,
+  "fees": 0.02,
+  "rebate": 0.01,
+  "net": -2.1328,
+  "full_loss": -2.1328,
+  "breakeven_p": 0.61,
+  "btc": {
+   "btc": 77794.0,
+   "dist": 34.820000000006985,
+   "dist_pct": 0.00044779278793844005,
+   "dist_vol": 28.41951052804394,
+   "crossings": 0,
+   "frac_above": 1.0,
+   "max_exc": 34.820000000006985,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 1.2854463429323152e-07,
+   "ret_30s": 0.0001239323689235139,
+   "ret_60s": 0.0013144230774180692,
+   "sigma_per_sqrt_s": 1.225214627312006,
+   "hi": 77794.0,
+   "lo": 77784.36
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011325-UP",
+  "t": 1788268980.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.63,
+  "mid": 0.725,
+  "spread": 0.19,
+  "spread_bucket": "11-20c",
+  "depth": 238.0,
+  "qty_target": 13.51,
+  "filled": 13.51,
+  "cash_risk": 8.5113,
+  "gross": -8.5113,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -8.5113,
+  "full_loss": -8.5113,
+  "breakeven_p": 0.63,
+  "btc": {
+   "btc": 77787.23,
+   "dist": 28.05000000000291,
+   "dist_pct": 0.00036072911262699677,
+   "dist_vol": 22.773290162339155,
+   "crossings": 0,
+   "frac_above": 1.0,
+   "max_exc": 46.91000000000349,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": -0.00022029610933164062,
+   "ret_30s": -0.00024239747814085738,
+   "ret_60s": -8.702470627560062e-05,
+   "sigma_per_sqrt_s": 1.2317060819955652,
+   "hi": 77806.09,
+   "lo": 77784.36
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269100.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "UP",
+  "won": false,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 250.0,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": -5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 77742.68,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.00016132738214537625,
+   "ret_30s": 0.0001280027087688428,
+   "ret_60s": -0.0001760627457274861,
+   "sigma_per_sqrt_s": 20.15293164314177,
+   "hi": 77806.09,
+   "lo": 77730.14
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269115.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.49,
+  "qty_target": 9.8,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269130.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "UP",
+  "won": true,
+  "entry": 0.73,
+  "mid": 0.78,
+  "spread": 0.1,
+  "spread_bucket": "6-10c",
+  "depth": 205.0,
+  "qty_target": 18.52,
+  "filled": 18.52,
+  "cash_risk": 13.5196,
+  "gross": 5.0004,
+  "fees": 0.07,
+  "rebate": 0.07,
+  "net": 5.0004,
+  "full_loss": -13.5196,
+  "breakeven_p": 0.73,
+  "btc": {
+   "btc": 77787.23,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 2.841164018459918e-05,
+   "ret_5s": 0.0004749820901011702,
+   "ret_15s": 0.0004865632403594336,
+   "ret_30s": 0.0005730443046213857,
+   "ret_60s": 0.0007011203646134647,
+   "sigma_per_sqrt_s": 43.754919532134764,
+   "hi": 77806.09,
+   "lo": 77702.83
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269145.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.7,
+  "qty_target": 16.67,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.06
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269160.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.75,
+  "qty_target": 20.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.01
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269190.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.59,
+  "qty_target": 12.2,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.17
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269220.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.72,
+  "qty_target": 17.86,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.18
+ },
+ {
+  "market": "GEMI-BTC05M2609011330-UP",
+  "t": 1788269280.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.22
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269400.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "DOWN",
+  "won": true,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 250.0,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": 5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": 5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 77854.9,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": -3.9816075419427945e-05,
+   "ret_30s": -2.9541262722046392e-05,
+   "ret_60s": 0.00021711760322714073,
+   "sigma_per_sqrt_s": 91.47771388734093,
+   "hi": 77874.46,
+   "lo": 77702.83
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269415.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.54,
+  "mid": 0.59,
+  "spread": 0.1,
+  "spread_bucket": "6-10c",
+  "depth": 277.0,
+  "qty_target": 10.87,
+  "filled": 10.87,
+  "cash_risk": 5.8698,
+  "gross": -5.8698,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -5.8698,
+  "full_loss": -5.8698,
+  "breakeven_p": 0.54,
+  "btc": {
+   "btc": 77867.84,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": -0.00030824791040409634,
+   "ret_15s": 0.00016620662283301795,
+   "ret_30s": 0.00012638392971816008,
+   "ret_60s": -3.8526668288585085e-06,
+   "sigma_per_sqrt_s": 139.3297664959748,
+   "hi": 77891.85,
+   "lo": 77749.86
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269430.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.52,
+  "mid": 0.57,
+  "spread": 0.1,
+  "spread_bucket": "6-10c",
+  "depth": 288.0,
+  "qty_target": 10.42,
+  "filled": 10.42,
+  "cash_risk": 5.4184,
+  "gross": -5.4184,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -5.4184,
+  "full_loss": -5.4184,
+  "breakeven_p": 0.52,
+  "btc": {
+   "btc": 77881.33,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": -5.970265765410128e-05,
+   "ret_15s": 0.0001732422525140705,
+   "ret_30s": 0.0003394776693568108,
+   "ret_60s": 0.0003099263780357457,
+   "sigma_per_sqrt_s": 140.199708270563,
+   "hi": 77920.32,
+   "lo": 77749.86
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269445.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.5,
+  "mid": 0.555,
+  "spread": 0.11,
+  "spread_bucket": "11-20c",
+  "depth": 300.0,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": -5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 77862.11,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": -0.00018606359291501218,
+   "ret_15s": -0.00024678571873388866,
+   "ret_30s": -7.358621993361991e-05,
+   "ret_60s": 5.278840966889186e-05,
+   "sigma_per_sqrt_s": 120.42877142179641,
+   "hi": 77920.32,
+   "lo": 77749.86
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269460.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   80,
+   85
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.73,
+  "mid": 0.81,
+  "spread": 0.16,
+  "spread_bucket": "11-20c",
+  "depth": 100.0,
+  "qty_target": 18.52,
+  "filled": 18.52,
+  "cash_risk": 13.5196,
+  "gross": -13.5196,
+  "fees": 0.07,
+  "rebate": 0.07,
+  "net": -13.5196,
+  "full_loss": -13.5196,
+  "breakeven_p": 0.73,
+  "btc": {
+   "btc": 77940.5,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 1.0905873967945978e-05,
+   "ret_5s": 0.0005025586847980706,
+   "ret_15s": 0.0010067798059929204,
+   "ret_30s": 0.0007597456283810029,
+   "ret_60s": 0.0010994812144130405,
+   "sigma_per_sqrt_s": 121.94350204215903,
+   "hi": 77940.5,
+   "lo": 77749.86
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269490.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   85,
+   90
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.81,
+  "mid": 0.88,
+  "spread": 0.14,
+  "spread_bucket": "11-20c",
+  "depth": 100.0,
+  "qty_target": 26.32,
+  "filled": 26.32,
+  "cash_risk": 21.3192,
+  "gross": -21.3192,
+  "fees": 0.08,
+  "rebate": 0.0,
+  "net": -21.3992,
+  "full_loss": -21.3992,
+  "breakeven_p": 0.81,
+  "btc": {
+   "btc": 77947.56,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0002859149174696432,
+   "ret_5s": -0.0005395588439695547,
+   "ret_15s": -0.00015649098971055184,
+   "ret_30s": 9.05819182581286e-05,
+   "ret_60s": 0.0008503963658555385,
+   "sigma_per_sqrt_s": 121.0185404447889,
+   "hi": 77989.64,
+   "lo": 77749.86
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269520.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.61,
+  "mid": 0.71,
+  "spread": 0.2,
+  "spread_bucket": "11-20c",
+  "depth": 100.0,
+  "qty_target": 12.82,
+  "filled": 12.82,
+  "cash_risk": 7.8202,
+  "gross": -7.8202,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": -7.8202,
+  "full_loss": -7.8202,
+  "breakeven_p": 0.61,
+  "btc": {
+   "btc": 77894.2,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": -0.00027889033731607807,
+   "ret_15s": -0.0008796505204150205,
+   "ret_30s": -0.0006845628009395109,
+   "ret_60s": -0.0005940428916930596,
+   "sigma_per_sqrt_s": 116.16421146058407,
+   "hi": 77989.64,
+   "lo": 77749.86
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011335-UP",
+  "t": 1788269580.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.46,
+  "mid": 0.58,
+  "spread": 0.24,
+  "spread_bucket": ">20c",
+  "depth": 326.0,
+  "qty_target": 9.26,
+  "filled": 9.26,
+  "cash_risk": 4.2596,
+  "gross": -4.2596,
+  "fees": 0.05,
+  "rebate": 0.04,
+  "net": -4.2696,
+  "full_loss": -4.2696,
+  "breakeven_p": 0.46,
+  "btc": {
+   "btc": 77886.2,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": -0.00032434248769794836,
+   "ret_5s": -0.0002949588225674552,
+   "ret_15s": -0.0003387129089149702,
+   "ret_30s": -0.0006834791152673231,
+   "ret_60s": -0.00010270341052350497,
+   "sigma_per_sqrt_s": 153.5725836881206,
+   "hi": 77989.64,
+   "lo": 77766.76
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011340-UP",
+  "t": 1788269715.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609011340-UP",
+  "t": 1788269730.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.46,
+  "qty_target": 9.26,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.11
+ },
+ {
+  "market": "GEMI-BTC05M2609011340-UP",
+  "t": 1788269760.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "DOWN",
+  "won": false,
+  "entry": 0.49,
+  "mid": 0.53,
+  "spread": 0.08,
+  "spread_bucket": "6-10c",
+  "depth": 55.16,
+  "qty_target": 9.8,
+  "filled": 9.8,
+  "cash_risk": 4.802,
+  "gross": -4.802,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": -4.802,
+  "full_loss": -4.802,
+  "breakeven_p": 0.49,
+  "btc": {
+   "btc": 77770.46,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": -0.00043108323479504394,
+   "ret_30s": 0.00010673571824654704,
+   "ret_60s": -0.00040564499482144124,
+   "sigma_per_sqrt_s": 117.89613525767969,
+   "hi": 77989.64,
+   "lo": 77744.31
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011340-UP",
+  "t": 1788269790.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   75,
+   80
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.68,
+  "qty_target": 15.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.18
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270000.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270015.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.53,
+  "qty_target": 10.64,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270030.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "UP",
+  "won": true,
+  "entry": 0.57,
+  "mid": 0.61,
+  "spread": 0.08,
+  "spread_bucket": "6-10c",
+  "depth": 56.19,
+  "qty_target": 11.63,
+  "filled": 11.63,
+  "cash_risk": 6.6291,
+  "gross": 5.0009,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": 5.0009,
+  "full_loss": -6.6291,
+  "breakeven_p": 0.57,
+  "btc": {
+   "btc": 77568.62,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": -0.00021679325399207616,
+   "ret_15s": 2.990989643688603e-05,
+   "ret_30s": -0.0006081234469984552,
+   "ret_60s": 0.0004798054775727968,
+   "sigma_per_sqrt_s": 179.97332291271553,
+   "hi": 77804.0,
+   "lo": 77525.27
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270045.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "UP",
+  "won": true,
+  "entry": 0.58,
+  "mid": 0.62,
+  "spread": 0.08,
+  "spread_bucket": "6-10c",
+  "depth": 258.0,
+  "qty_target": 11.9,
+  "filled": 11.9,
+  "cash_risk": 6.902,
+  "gross": 4.998,
+  "fees": 0.06,
+  "rebate": 0.06,
+  "net": 4.998,
+  "full_loss": -6.902,
+  "breakeven_p": 0.58,
+  "btc": {
+   "btc": 77618.0,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.0,
+   "ret_15s": 0.000636597634455849,
+   "ret_30s": 0.0006665265714620536,
+   "ret_60s": 0.000876724580693223,
+   "sigma_per_sqrt_s": 184.32525849408543,
+   "hi": 77794.17,
+   "lo": 77525.27
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270060.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "outcome": "UP",
+  "won": true,
+  "entry": 0.57,
+  "mid": 0.585,
+  "spread": 0.03,
+  "spread_bucket": "3-5c",
+  "depth": 56.19,
+  "qty_target": 11.63,
+  "filled": 11.63,
+  "cash_risk": 6.6291,
+  "gross": 5.0009,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": 5.0009,
+  "full_loss": -6.6291,
+  "breakeven_p": 0.57,
+  "btc": {
+   "btc": 77602.78,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 0.0,
+   "ret_5s": 0.000312457543026786,
+   "ret_15s": -0.0001960885361643068,
+   "ret_30s": 0.00044038426879327615,
+   "ret_60s": -0.00016800698620472151,
+   "sigma_per_sqrt_s": 183.5680433780546,
+   "hi": 77794.17,
+   "lo": 77525.27
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270090.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.57,
+  "qty_target": 11.63,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.19
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270120.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.54,
+  "qty_target": 10.87,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.21
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270180.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.62,
+  "qty_target": 13.16,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.19
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270240.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.62,
+  "qty_target": 13.16,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.19
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270270.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.62,
+  "qty_target": 13.16,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.19
+ },
+ {
+  "market": "GEMI-BTC05M2609011345-UP",
+  "t": 1788270285.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   70,
+   75
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.62,
+  "qty_target": 13.16,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.19
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270300.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270315.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270330.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270345.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270360.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270390.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270420.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270480.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270540.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270570.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011350-UP",
+  "t": 1788270585.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270600.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270615.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270630.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270645.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270660.0,
+  "phase": [
+   60,
+   90
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270690.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270720.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270780.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270840.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270870.0,
+  "phase": [
+   270,
+   285
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011355-UP",
+  "t": 1788270885.0,
+  "phase": [
+   285,
+   300
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "<=2c",
+  "spread": 0.02
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788270900.0,
+  "phase": [
+   0,
+   15
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "outcome": "DOWN",
+  "won": true,
+  "entry": 0.5,
+  "mid": 0.49,
+  "spread": 0.02,
+  "spread_bucket": "<=2c",
+  "depth": 250.0,
+  "qty_target": 10.0,
+  "filled": 10.0,
+  "cash_risk": 5.0,
+  "gross": 5.0,
+  "fees": 0.05,
+  "rebate": 0.05,
+  "net": 5.0,
+  "full_loss": -5.0,
+  "breakeven_p": 0.5,
+  "btc": {
+   "btc": 78012.76,
+   "dist": null,
+   "dist_pct": null,
+   "dist_vol": null,
+   "crossings": 0,
+   "frac_above": null,
+   "max_exc": null,
+   "ret_1s": 1.807429303542293e-05,
+   "ret_5s": 0.00016487200624616932,
+   "ret_15s": 0.006565994704522489,
+   "ret_30s": 0.006565994704522489,
+   "ret_60s": 0.006565994704522489,
+   "sigma_per_sqrt_s": 3.73838962568311,
+   "hi": 78012.76,
+   "lo": 77999.9
+  },
+  "no_fill": false
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788270915.0,
+  "phase": [
+   15,
+   30
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.58,
+  "qty_target": 11.9,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.09
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788270930.0,
+  "phase": [
+   30,
+   45
+  ],
+  "band": [
+   55,
+   60
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.53,
+  "qty_target": 10.64,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788270945.0,
+  "phase": [
+   45,
+   60
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.49,
+  "qty_target": 9.8,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "6-10c",
+  "spread": 0.1
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788270990.0,
+  "phase": [
+   90,
+   120
+  ],
+  "band": [
+   51,
+   55
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.42,
+  "qty_target": 8.62,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.19
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788271020.0,
+  "phase": [
+   120,
+   180
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "UP",
+  "entry": 0.53,
+  "qty_target": 10.64,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": "11-20c",
+  "spread": 0.16
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788271080.0,
+  "phase": [
+   180,
+   240
+  ],
+  "band": [
+   65,
+   70
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.55,
+  "qty_target": 11.11,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.25
+ },
+ {
+  "market": "GEMI-BTC05M2609011400-UP",
+  "t": 1788271140.0,
+  "phase": [
+   240,
+   270
+  ],
+  "band": [
+   60,
+   65
+  ],
+  "mode": "maker",
+  "side": "DOWN",
+  "entry": 0.5,
+  "qty_target": 10.0,
+  "filled": 0.0,
+  "no_fill": true,
+  "spread_bucket": ">20c",
+  "spread": 0.29
+ }
+]
