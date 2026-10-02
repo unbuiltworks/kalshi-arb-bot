@@ -90,3 +90,11 @@ data/kalshi/census/*.json
 # scripts/pmus_incentive_census.py. Derived analysis is in
 # analysis/l5/pmus_rewards/.
 data/pmus/incentives/programs.json
+
+# PMUS reward shadow: the raw per-second tape is written continuously by a
+# running read-only collector, so a snapshot commit costs a fresh blob on
+# every stop-hook fire while the run is still in flight. Same rule already in
+# force for the policy_d_port and Gemini tapes: the RAW TAPE IS PRESERVED ON
+# DISK, and the completed tape is committed in its .gz form once the run
+# ends, alongside the derived SHADOW_RESULT.json.
+data/pmus/reward_shadow/*.jsonl
