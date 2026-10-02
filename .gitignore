@@ -85,3 +85,10 @@ data/gemini_hifi/*.jsonl
 # the raw JSONL grows large (Coinbase matches run ~4.7/s), so track the
 # gzipped tape and keep the raw file on disk for the running collector.
 data/gemini_infoedge/*.jsonl
+
+# info-edge derived outputs: regenerated from the tapes on every run, so they
+# churn continuously during multi-day collection. Same rule as data/l5/
+# normalized above -- keep the source of truth (the .gz tapes), not the
+# derived artifact.
+analysis/gemini/info_edge/ie_usable_windows.json
+analysis/gemini/info_edge/ie_diagnostics.json
