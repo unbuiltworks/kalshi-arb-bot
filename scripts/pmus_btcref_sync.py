@@ -230,8 +230,10 @@ def main():
             continue
         lo, hi = rows[0]["t"], rows[-1]["t"]
         ov = max(0.0, min(hi, ref_span[1]) - max(lo, ref_span[0]))
-        overlap[slug] = {"pmus_span_s": round(hi - lo, 1), "overlap_s": round(ov, 1),
-                         "covered": ov > 0.9 * (hi - lo)}
+        span = hi - lo
+        overlap[slug] = {"pmus_span_s": round(span, 1), "overlap_s": round(ov, 1),
+                         "long_enough": span >= 600.0,
+                         "covered": ov > 0.9 * span and span >= 600.0}
 
     covered = [s for s, v in overlap.items() if v["covered"]]
     res = {"ref_rows": len(rts),

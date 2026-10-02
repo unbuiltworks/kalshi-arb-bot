@@ -61,6 +61,7 @@ TTLS = (("TTL5", 5.0), ("TTL30", 30.0), ("WINDOW", None))
 CEILINGS = (D("0.99"), D("0.98"), D("0.97"), D("0.95"))
 Q = 25
 DEADLINE_S = 90
+MIN_SPAN_S = 600.0
 TAKER = D("0.07"); MAKER_REB = D("0.0125")
 BTC_TICK = 0.01
 # pre-registered coarse presence levels. Reported, never selected.
@@ -163,6 +164,19 @@ def resting_arm(rows, dead, ttl, life):
         if o is not None:
             ok = (px <= o["px"]) if consumed == "buy" else (px >= o["px"])
             if ok:                                 # evidenced queue consumption
+                # TRADE-THROUGH, the rule already established on the Gemini tape
+                # and missing from the first revision of this arm: a print
+                # STRICTLY through our price proves our level was cleared, so a
+                # quote there fills regardless of queue position. Without this
+                # the arm kept charging the queue measured AT PLACEMENT long
+                # after the market had traded past the order -- one toxic lot
+                # showed a 0.44 bid still "queued" behind 2383 shares while the
+                # book walked down to 0.37 over 424 s. That is not a resting
+                # order, it is an unreachable one, and it inflated both the
+                # quote ages and the toxic count.
+                through = (px < o["px"]) if consumed == "buy" else (px > o["px"])
+                if through:
+                    o["queue_ahead"] = D(0)
                 if o["queue_ahead"] > 0:
                     eat = min(o["queue_ahead"], avail)
                     o["queue_ahead"] -= eat; avail -= eat
@@ -412,8 +426,13 @@ def main():
             continue
         lo, hi = rows[0]["t"], rows[-1]["t"]
         ov = max(0.0, min(hi, span[1]) - max(lo, span[0]))
-        cov[slug] = {"pmus_span_s": round(hi - lo, 1), "overlap_s": round(ov, 1),
-                     "covered": ov > 0.9 * (hi - lo)}
+        # MIN_SPAN_S: the 1245z harvest arrived as a 0.7 s fragment and passed a
+        # pure overlap test trivially -- the same class of artifact as the 1345z
+        # tape truncation. A window must also BE a window to be scored.
+        wspan = hi - lo
+        cov[slug] = {"pmus_span_s": round(wspan, 1), "overlap_s": round(ov, 1),
+                     "long_enough": wspan >= MIN_SPAN_S,
+                     "covered": ov > 0.9 * wspan and wspan >= MIN_SPAN_S}
     covered = sorted(s for s, v in cov.items() if v["covered"])
     proof = {s_: coverage_proof(s_, sc[s_], bk.get(s_) or [], rts, meta)
              for s_ in covered}

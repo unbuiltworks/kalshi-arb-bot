@@ -1,13 +1,13 @@
 {
-  "ref_rows": 1998,
+  "ref_rows": 16516,
   "ref_span_utc": [
     1790944616.9436936,
-    1790944866.3756077
+    1790947074.4145854
   ],
   "ref_skew_s": {
-    "p10": -0.0431,
-    "p50": -0.0388,
-    "p90": -0.021
+    "p10": -0.0423,
+    "p50": -0.0109,
+    "p90": 0.0058
   },
   "clock_basis": "cross-feed comparison on LOCAL RECEIPT time; venue-clock basis reported via ref_skew_s",
   "rtt_p50": 0.266,
@@ -28,84 +28,806 @@
     0.25,
     0.5
   ],
-  "pmus_windows": 15,
+  "pmus_windows": 19,
   "overlap": {
     "cpc-btc-updown-15m-2026-09-30-1215z": {
       "pmus_span_s": 610.4,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-09-30-1230z": {
       "pmus_span_s": 878.0,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-09-30-1245z": {
       "pmus_span_s": 859.6,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-09-30-1300z": {
       "pmus_span_s": 873.8,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-09-30-1315z": {
       "pmus_span_s": 892.0,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-09-30-1330z": {
       "pmus_span_s": 893.7,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-09-30-1345z": {
       "pmus_span_s": 535.7,
       "overlap_s": 0.0,
+      "long_enough": false,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-0400z": {
       "pmus_span_s": 45.2,
       "overlap_s": 0.0,
+      "long_enough": false,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-1115z": {
       "pmus_span_s": 891.7,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-1130z": {
       "pmus_span_s": 890.6,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-1145z": {
       "pmus_span_s": 889.8,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-1200z": {
       "pmus_span_s": 891.6,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-1045z": {
       "pmus_span_s": 295.5,
       "overlap_s": 0.0,
+      "long_enough": false,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-1100z": {
       "pmus_span_s": 866.6,
       "overlap_s": 0.0,
+      "long_enough": true,
       "covered": false
     },
     "cpc-btc-updown-15m-2026-10-02-1215z": {
       "pmus_span_s": 217.6,
       "overlap_s": 0.0,
+      "long_enough": false,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1245z": {
+      "pmus_span_s": 0.7,
+      "overlap_s": 0.7,
+      "long_enough": false,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1300z": {
+      "pmus_span_s": 890.2,
+      "overlap_s": 890.2,
+      "long_enough": true,
+      "covered": true
+    },
+    "cpc-btc-updown-15m-2026-10-02-1315z": {
+      "pmus_span_s": 889.7,
+      "overlap_s": 169.6,
+      "long_enough": true,
+      "covered": false
+    },
+    "cpc-btc-updown-15m-2026-10-02-1330z": {
+      "pmus_span_s": 154.2,
+      "overlap_s": 0.0,
+      "long_enough": false,
       "covered": false
     }
   },
-  "synchronized_windows": [],
-  "status": "NO_OVERLAP -- reference feed does not span any PMUS window yet"
+  "synchronized_windows": [
+    "cpc-btc-updown-15m-2026-10-02-1300z"
+  ],
+  "lead_lag": {
+    "status": "MEASURED",
+    "n": 4142,
+    "best_lag_s": 0.0,
+    "best_corr": 0.5414,
+    "note": "positive lag = reference leads PMUS",
+    "curve": {
+      "-2.0": 0.1177,
+      "-1.95": 0.117,
+      "-1.9": 0.113,
+      "-1.85": 0.111,
+      "-1.8": 0.109,
+      "-1.75": 0.1068,
+      "-1.7": 0.1034,
+      "-1.65": 0.0987,
+      "-1.6": 0.095,
+      "-1.55": 0.0937,
+      "-1.5": 0.0888,
+      "-1.45": 0.0864,
+      "-1.4": 0.0811,
+      "-1.35": 0.0803,
+      "-1.3": 0.077,
+      "-1.25": 0.083,
+      "-1.2": 0.084,
+      "-1.15": 0.0933,
+      "-1.1": 0.0979,
+      "-1.05": 0.1131,
+      "-1.0": 0.1221,
+      "-0.95": 0.1398,
+      "-0.9": 0.1589,
+      "-0.85": 0.1832,
+      "-0.8": 0.2058,
+      "-0.75": 0.2381,
+      "-0.7": 0.2611,
+      "-0.65": 0.2937,
+      "-0.6": 0.3177,
+      "-0.55": 0.3463,
+      "-0.5": 0.3673,
+      "-0.45": 0.3951,
+      "-0.4": 0.4156,
+      "-0.35": 0.4409,
+      "-0.3": 0.4604,
+      "-0.25": 0.4826,
+      "-0.2": 0.4969,
+      "-0.15": 0.5149,
+      "-0.1": 0.5275,
+      "-0.05": 0.5343,
+      "0.0": 0.5414,
+      "0.05": 0.5409,
+      "0.1": 0.536,
+      "0.15": 0.5227,
+      "0.2": 0.5071,
+      "0.25": 0.4894,
+      "0.3": 0.4716,
+      "0.35": 0.4483,
+      "0.4": 0.4291,
+      "0.45": 0.4054,
+      "0.5": 0.3896,
+      "0.55": 0.3672,
+      "0.6": 0.3526,
+      "0.65": 0.3335,
+      "0.7": 0.3158,
+      "0.75": 0.2977,
+      "0.8": 0.2805,
+      "0.85": 0.2619,
+      "0.9": 0.2423,
+      "0.95": 0.2314,
+      "1.0": 0.2138,
+      "1.05": 0.2053,
+      "1.1": 0.1918,
+      "1.15": 0.1918,
+      "1.2": 0.1864,
+      "1.25": 0.1882,
+      "1.3": 0.1803,
+      "1.35": 0.192,
+      "1.4": 0.1851,
+      "1.45": 0.1931,
+      "1.5": 0.1866,
+      "1.55": 0.1979,
+      "1.6": 0.191,
+      "1.65": 0.1986,
+      "1.7": 0.1958,
+      "1.75": 0.2039,
+      "1.8": 0.1964,
+      "1.85": 0.2054,
+      "1.9": 0.2016,
+      "1.95": 0.2014,
+      "2.0": 0.1993
+    }
+  },
+  "fills": 16,
+  "toxic": 11,
+  "buckets": {
+    "ext1.0bps_q0.25": {
+      "TOX": {
+        "BOTH": 2,
+        "EXTERNAL": 2,
+        "QUEUE": 4,
+        "NEITHER": 3
+      },
+      "QUAL": {
+        "BOTH": 3,
+        "EXTERNAL": 1,
+        "QUEUE": 0,
+        "NEITHER": 1
+      },
+      "avoidable_toxic": 4,
+      "sacrificed_good": 4,
+      "toxic_signal_too_late": 4,
+      "lead_s": {
+        "p50": 5.0
+      }
+    },
+    "ext1.0bps_q0.5": {
+      "TOX": {
+        "BOTH": 1,
+        "EXTERNAL": 3,
+        "QUEUE": 0,
+        "NEITHER": 7
+      },
+      "QUAL": {
+        "BOTH": 3,
+        "EXTERNAL": 1,
+        "QUEUE": 0,
+        "NEITHER": 1
+      },
+      "avoidable_toxic": 4,
+      "sacrificed_good": 4,
+      "toxic_signal_too_late": 0,
+      "lead_s": {
+        "p50": 5.0
+      }
+    },
+    "ext2.0bps_q0.25": {
+      "TOX": {
+        "BOTH": 2,
+        "EXTERNAL": 2,
+        "QUEUE": 4,
+        "NEITHER": 3
+      },
+      "QUAL": {
+        "BOTH": 0,
+        "EXTERNAL": 1,
+        "QUEUE": 3,
+        "NEITHER": 1
+      },
+      "avoidable_toxic": 4,
+      "sacrificed_good": 4,
+      "toxic_signal_too_late": 4,
+      "lead_s": {
+        "p50": 5.0
+      }
+    },
+    "ext2.0bps_q0.5": {
+      "TOX": {
+        "BOTH": 1,
+        "EXTERNAL": 3,
+        "QUEUE": 0,
+        "NEITHER": 7
+      },
+      "QUAL": {
+        "BOTH": 0,
+        "EXTERNAL": 1,
+        "QUEUE": 3,
+        "NEITHER": 1
+      },
+      "avoidable_toxic": 4,
+      "sacrificed_good": 4,
+      "toxic_signal_too_late": 0,
+      "lead_s": {
+        "p50": 5.0
+      }
+    },
+    "ext5.0bps_q0.25": {
+      "TOX": {
+        "BOTH": 0,
+        "EXTERNAL": 0,
+        "QUEUE": 6,
+        "NEITHER": 5
+      },
+      "QUAL": {
+        "BOTH": 0,
+        "EXTERNAL": 0,
+        "QUEUE": 3,
+        "NEITHER": 2
+      },
+      "avoidable_toxic": 1,
+      "sacrificed_good": 3,
+      "toxic_signal_too_late": 5,
+      "lead_s": {
+        "p50": 0.5
+      }
+    },
+    "ext5.0bps_q0.5": {
+      "TOX": {
+        "BOTH": 0,
+        "EXTERNAL": 0,
+        "QUEUE": 1,
+        "NEITHER": 10
+      },
+      "QUAL": {
+        "BOTH": 0,
+        "EXTERNAL": 0,
+        "QUEUE": 3,
+        "NEITHER": 2
+      },
+      "avoidable_toxic": 1,
+      "sacrificed_good": 3,
+      "toxic_signal_too_late": 0,
+      "lead_s": {
+        "p50": 5.0
+      }
+    }
+  },
+  "note": "avoidable/sacrificed counts are reported at every pre-registered level; no level is selected and no cutoff is optimized.",
+  "status": "MEASURED",
+  "per_fill": [
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946012.3447807,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 8.436,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.3548624830110158,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": -0.6371574436205055,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": -0.6371574436205055,
+          "queue_gone_frac": 0.042989468443473754
+        },
+        "2.0": {
+          "ext_adverse_bps": -0.4793007462964875,
+          "queue_gone_frac": 0.05061319758943052
+        },
+        "5.0": {
+          "ext_adverse_bps": -1.0323971645726233,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946072.5943472,
+      "side": "sell",
+      "toxic": false,
+      "quote_age_s": 68.685,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 2.1987984470667565,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 2.349720541632324,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946130.0096323,
+      "side": "sell",
+      "toxic": false,
+      "quote_age_s": 57.415,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": 0.19907059348132702,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": 0.19907059348132702,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 0.4131090906607608,
+          "queue_gone_frac": 0.005494238235476277
+        },
+        "2.0": {
+          "ext_adverse_bps": 0.17663160423714944,
+          "queue_gone_frac": 0.584791877629049
+        },
+        "5.0": {
+          "ext_adverse_bps": 1.385603658545322,
+          "queue_gone_frac": 0.584791877629049
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946313.9290106,
+      "side": "sell",
+      "toxic": false,
+      "quote_age_s": 183.919,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.8189741035856574
+        },
+        "0.5": {
+          "ext_adverse_bps": 1.068891249118297,
+          "queue_gone_frac": 0.8189741035856574
+        },
+        "1.0": {
+          "ext_adverse_bps": 1.51078172310865,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 1.547032284073442,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": -0.9427127984342553,
+          "queue_gone_frac": 0.6193757133433158
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946315.5066483,
+      "side": "sell",
+      "toxic": false,
+      "quote_age_s": 185.497,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": 0.608055521854993,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": -0.582674459664614,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 1.0585360055858073,
+          "queue_gone_frac": 0.7758964143426295
+        },
+        "5.0": {
+          "ext_adverse_bps": 1.906101625192108,
+          "queue_gone_frac": 0.5288007455419315
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946321.1773639,
+      "side": "sell",
+      "toxic": false,
+      "quote_age_s": 191.168,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 0.0,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": -0.21975888998098997,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": -0.9284442708237406,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946436.2404783,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 423.896,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 1.0291438439413436,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 1.1904685761514335,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 3.8193279307790515,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946437.2004592,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 424.856,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.6060707138092062
+        },
+        "0.5": {
+          "ext_adverse_bps": -0.15098755948926232,
+          "queue_gone_frac": 0.6796853810686194
+        },
+        "1.0": {
+          "ext_adverse_bps": -0.1383090394445898,
+          "queue_gone_frac": 0.8567564617269277
+        },
+        "2.0": {
+          "ext_adverse_bps": 0.8908490384864045,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 2.8321886186940577,
+          "queue_gone_frac": 0.5677159590043924
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946464.4906538,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 27.29,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.038777555110220484
+        },
+        "0.5": {
+          "ext_adverse_bps": 0.14406906002257042,
+          "queue_gone_frac": 0.12949183303085304
+        },
+        "1.0": {
+          "ext_adverse_bps": 0.3175227005685623,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": -0.754413375883186,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": -0.7642117009346444,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946465.0601687,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 0.57,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": -0.11410433942729495,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 0.029966364485768046,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 0.20342198421306748,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": -0.3792052813969034,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946524.3046389,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 59.244,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": 1.1625827943978844,
+          "queue_gone_frac": 0.31824298809247825
+        },
+        "0.5": {
+          "ext_adverse_bps": 1.425956406656178,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 1.425956406656178,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 1.5677228911451346,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 2.383666444380269,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946609.535406,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 85.231,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.3156664068589244
+        },
+        "1.0": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 0.22479791964069698,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 0.21903399666943582,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946609.5355399,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 85.231,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.3156664068589244
+        },
+        "1.0": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 0.22479791964069698,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 0.21903399666943582,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946609.5388353,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 85.234,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.3156664068589244
+        },
+        "1.0": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 0.22479791964069698,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 0.21903399666943582,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946674.1378276,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 64.599,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": -0.0,
+          "queue_gone_frac": 0.0
+        },
+        "0.5": {
+          "ext_adverse_bps": 0.002306471074404695,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 1.0130150232957122,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 2.7059120373368777,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 4.21272479200912,
+          "queue_gone_frac": 0.0
+        }
+      }
+    },
+    {
+      "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+      "t": 1790946739.6415606,
+      "side": "buy",
+      "toxic": true,
+      "quote_age_s": 65.504,
+      "signals": {
+        "0.25": {
+          "ext_adverse_bps": 0.19145489515895253,
+          "queue_gone_frac": 0.3151669429315652
+        },
+        "0.5": {
+          "ext_adverse_bps": 0.5328261566447655,
+          "queue_gone_frac": 0.0
+        },
+        "1.0": {
+          "ext_adverse_bps": 0.5328261566447655,
+          "queue_gone_frac": 0.0
+        },
+        "2.0": {
+          "ext_adverse_bps": 0.5328261566447655,
+          "queue_gone_frac": 0.0
+        },
+        "5.0": {
+          "ext_adverse_bps": 0.5328261566447655,
+          "queue_gone_frac": 0.0
+        }
+      }
+    }
+  ]
 }

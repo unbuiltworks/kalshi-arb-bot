@@ -1,0 +1,581 @@
+{"ev": "PLACE", "t": 1790946003.9092066, "oid": 1, "side": "buy", "px": "0.4500", "qty": 25, "queue_ahead": "150.0000", "why": "no_resting_order"}
+{"ev": "PLACE", "t": 1790946003.9092066, "oid": 2, "side": "sell", "px": "0.4600", "qty": 25, "queue_ahead": "3004.6200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946008.0611734, "oid": 1, "side": "buy", "px": "0.4500", "qty": "25", "quote_age_s": 4.15196681022644, "queue0": "150.0000"}
+{"ev": "CANCEL", "t": 1790946008.0611734, "oid": 1, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946008.0611734, "oid": 3, "side": "buy", "px": "0.4400", "qty": 25, "queue_ahead": "2511.7000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946018.6258569, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 10.564683437347412, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946018.6956496, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 10.63447618484497, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946018.7750235, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 10.713850021362305, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946018.8166945, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 10.755521059036255, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946018.8898327, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 10.828659296035767, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946019.005434, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 10.944260597229004, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946019.0692945, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 11.008121013641357, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946019.1618292, "oid": 3, "side": "buy", "px": "0.4400", "qty": "0.2900", "quote_age_s": 11.100655794143677, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946019.2513838, "oid": 3, "side": "buy", "px": "0.4400", "qty": "15.9400", "quote_age_s": 11.190210342407227, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946021.0190134, "oid": 3, "side": "buy", "px": "0.4400", "qty": "1.0000", "quote_age_s": 12.957839965820312, "queue0": "2511.7000"}
+{"ev": "FILL", "t": 1790946021.0193923, "oid": 3, "side": "buy", "px": "0.4400", "qty": "5.7400", "quote_age_s": 12.958218812942505, "queue0": "2511.7000"}
+{"ev": "CANCEL", "t": 1790946021.0193923, "oid": 3, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946021.0193923, "oid": 4, "side": "buy", "px": "0.3800", "qty": 25, "queue_ahead": "1002.0800", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946034.192529, "oid": 2, "age_s": 30.28332233428955}
+{"ev": "PLACE", "t": 1790946034.192529, "oid": 5, "side": "sell", "px": "0.4000", "qty": 25, "queue_ahead": "1122.6700", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946051.9471939, "oid": 4, "age_s": 30.927801609039307}
+{"ev": "PLACE", "t": 1790946051.9471939, "oid": 6, "side": "buy", "px": "0.4200", "qty": 25, "queue_ahead": "5689.2300", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946052.5702548, "oid": 5, "side": "sell", "px": "0.4000", "qty": "2.2300", "quote_age_s": 18.377725839614868, "queue0": "1122.6700"}
+{"ev": "FILL", "t": 1790946053.4440777, "oid": 5, "side": "sell", "px": "0.4000", "qty": "21.3700", "quote_age_s": 19.251548767089844, "queue0": "1122.6700"}
+{"ev": "FILL", "t": 1790946054.3013577, "oid": 5, "side": "sell", "px": "0.4000", "qty": "1.4000", "quote_age_s": 20.10882878303528, "queue0": "1122.6700"}
+{"ev": "CANCEL", "t": 1790946054.3013577, "oid": 5, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946054.3013577, "oid": 7, "side": "sell", "px": "0.4500", "qty": 25, "queue_ahead": "592.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946059.1103818, "oid": 7, "side": "sell", "px": "0.4500", "qty": "5.0000", "quote_age_s": 4.809024095535278, "queue0": "592.0000"}
+{"ev": "FILL", "t": 1790946059.1108043, "oid": 7, "side": "sell", "px": "0.4500", "qty": "1.0000", "quote_age_s": 4.809446573257446, "queue0": "592.0000"}
+{"ev": "FILL", "t": 1790946059.1109447, "oid": 7, "side": "sell", "px": "0.4500", "qty": "14.2500", "quote_age_s": 4.809587001800537, "queue0": "592.0000"}
+{"ev": "FILL", "t": 1790946059.3426173, "oid": 7, "side": "sell", "px": "0.4500", "qty": "4.7500", "quote_age_s": 5.041259527206421, "queue0": "592.0000"}
+{"ev": "CANCEL", "t": 1790946059.3426173, "oid": 7, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946059.3426173, "oid": 8, "side": "sell", "px": "0.4700", "qty": 25, "queue_ahead": "35.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946059.9295237, "oid": 8, "side": "sell", "px": "0.4700", "qty": "25", "quote_age_s": 0.5869064331054688, "queue0": "35.0000"}
+{"ev": "CANCEL", "t": 1790946059.9295237, "oid": 8, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946059.9295237, "oid": 9, "side": "sell", "px": "0.4800", "qty": 25, "queue_ahead": "5122.1600", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946061.3438015, "oid": 9, "side": "sell", "px": "0.4800", "qty": "25", "quote_age_s": 1.4142777919769287, "queue0": "5122.1600"}
+{"ev": "CANCEL", "t": 1790946061.3438015, "oid": 9, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946061.3438015, "oid": 10, "side": "sell", "px": "0.4900", "qty": 25, "queue_ahead": "3854.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946072.0854979, "oid": 10, "side": "sell", "px": "0.4900", "qty": "5.0000", "quote_age_s": 10.74169635772705, "queue0": "3854.0000"}
+{"ev": "FILL", "t": 1790946072.2735481, "oid": 10, "side": "sell", "px": "0.4900", "qty": "3.9000", "quote_age_s": 10.929746627807617, "queue0": "3854.0000"}
+{"ev": "FILL", "t": 1790946072.2737613, "oid": 10, "side": "sell", "px": "0.4900", "qty": "16.1000", "quote_age_s": 10.929959774017334, "queue0": "3854.0000"}
+{"ev": "CANCEL", "t": 1790946072.2737613, "oid": 10, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946072.2737613, "oid": 11, "side": "sell", "px": "0.5200", "qty": 25, "queue_ahead": "2624.9000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946072.333434, "oid": 11, "side": "sell", "px": "0.5200", "qty": "9.1000", "quote_age_s": 0.05967283248901367, "queue0": "2624.9000"}
+{"ev": "FILL", "t": 1790946072.3945322, "oid": 11, "side": "sell", "px": "0.5200", "qty": "2.9600", "quote_age_s": 0.12077093124389648, "queue0": "2624.9000"}
+{"ev": "FILL", "t": 1790946072.3947237, "oid": 11, "side": "sell", "px": "0.5200", "qty": "12.9400", "quote_age_s": 0.12096238136291504, "queue0": "2624.9000"}
+{"ev": "CANCEL", "t": 1790946072.3947237, "oid": 11, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946072.3947237, "oid": 12, "side": "sell", "px": "0.5200", "qty": 25, "queue_ahead": "97.0400", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946072.5943472, "oid": 12, "side": "sell", "px": "0.5200", "qty": "25", "quote_age_s": 0.19962358474731445, "queue0": "97.0400"}
+{"ev": "CANCEL", "t": 1790946072.5943472, "oid": 12, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946072.5943472, "oid": 13, "side": "sell", "px": "0.5300", "qty": 25, "queue_ahead": "5101.9000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946072.912884, "oid": 13, "side": "sell", "px": "0.5300", "qty": "8.9600", "quote_age_s": 0.31853675842285156, "queue0": "5101.9000"}
+{"ev": "FILL", "t": 1790946074.2385795, "oid": 13, "side": "sell", "px": "0.5300", "qty": "16.0400", "quote_age_s": 1.6442322731018066, "queue0": "5101.9000"}
+{"ev": "CANCEL", "t": 1790946074.2385795, "oid": 13, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946074.2385795, "oid": 14, "side": "sell", "px": "0.5400", "qty": 25, "queue_ahead": "3475.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946074.8163233, "oid": 14, "side": "sell", "px": "0.5400", "qty": "25", "quote_age_s": 0.5777437686920166, "queue0": "3475.0000"}
+{"ev": "CANCEL", "t": 1790946074.8163233, "oid": 14, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946074.8163233, "oid": 15, "side": "sell", "px": "0.5500", "qty": 25, "queue_ahead": "3475.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946082.2041333, "oid": 6, "age_s": 30.25693941116333}
+{"ev": "PLACE", "t": 1790946082.2041333, "oid": 16, "side": "buy", "px": "0.5400", "qty": 25, "queue_ahead": "1878.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946082.9934144, "oid": 15, "side": "sell", "px": "0.5500", "qty": "8.5000", "quote_age_s": 8.177091121673584, "queue0": "3475.0000"}
+{"ev": "FILL", "t": 1790946085.2025096, "oid": 15, "side": "sell", "px": "0.5500", "qty": "0.2600", "quote_age_s": 10.386186361312866, "queue0": "3475.0000"}
+{"ev": "FILL", "t": 1790946088.7364242, "oid": 15, "side": "sell", "px": "0.5500", "qty": "16.2400", "quote_age_s": 13.920100927352905, "queue0": "3475.0000"}
+{"ev": "CANCEL", "t": 1790946088.7364242, "oid": 15, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946088.7364242, "oid": 17, "side": "sell", "px": "0.5600", "qty": 25, "queue_ahead": "281.5800", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946088.7372434, "oid": 17, "side": "sell", "px": "0.5600", "qty": "25", "quote_age_s": 0.0008192062377929688, "queue0": "281.5800"}
+{"ev": "CANCEL", "t": 1790946088.7372434, "oid": 17, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946088.7372434, "oid": 18, "side": "sell", "px": "0.5600", "qty": 25, "queue_ahead": "281.5800", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946088.7374377, "oid": 18, "side": "sell", "px": "0.5600", "qty": "25", "quote_age_s": 0.00019431114196777344, "queue0": "281.5800"}
+{"ev": "CANCEL", "t": 1790946088.7374377, "oid": 18, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946088.7374377, "oid": 19, "side": "sell", "px": "0.5600", "qty": 25, "queue_ahead": "281.5800", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946088.7396917, "oid": 19, "side": "sell", "px": "0.5600", "qty": "12.4000", "quote_age_s": 0.002254009246826172, "queue0": "281.5800"}
+{"ev": "FILL", "t": 1790946090.5730872, "oid": 19, "side": "sell", "px": "0.5600", "qty": "12.6000", "quote_age_s": 1.8356494903564453, "queue0": "281.5800"}
+{"ev": "CANCEL", "t": 1790946090.5730872, "oid": 19, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946090.5730872, "oid": 20, "side": "sell", "px": "0.5600", "qty": 25, "queue_ahead": "140.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946091.9978712, "oid": 20, "side": "sell", "px": "0.5600", "qty": "15.0000", "quote_age_s": 1.4247839450836182, "queue0": "140.0000"}
+{"ev": "FILL", "t": 1790946091.9981616, "oid": 20, "side": "sell", "px": "0.5600", "qty": "10.0000", "quote_age_s": 1.4250743389129639, "queue0": "140.0000"}
+{"ev": "CANCEL", "t": 1790946091.9981616, "oid": 20, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946091.9981616, "oid": 21, "side": "sell", "px": "0.5800", "qty": 25, "queue_ahead": "1131.3000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946092.6095476, "oid": 21, "side": "sell", "px": "0.5800", "qty": "1.7000", "quote_age_s": 0.6113860607147217, "queue0": "1131.3000"}
+{"ev": "FILL", "t": 1790946092.6154258, "oid": 21, "side": "sell", "px": "0.5800", "qty": "23.3000", "quote_age_s": 0.6172642707824707, "queue0": "1131.3000"}
+{"ev": "CANCEL", "t": 1790946092.6154258, "oid": 21, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946092.6154258, "oid": 22, "side": "sell", "px": "0.5800", "qty": 25, "queue_ahead": "3661.3000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946094.0099587, "oid": 22, "side": "sell", "px": "0.5800", "qty": "1.0000", "quote_age_s": 1.3945329189300537, "queue0": "3661.3000"}
+{"ev": "FILL", "t": 1790946094.010185, "oid": 22, "side": "sell", "px": "0.5800", "qty": "24.0000", "quote_age_s": 1.394759178161621, "queue0": "3661.3000"}
+{"ev": "CANCEL", "t": 1790946094.010185, "oid": 22, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946094.010185, "oid": 23, "side": "sell", "px": "0.6200", "qty": 25, "queue_ahead": "150.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946096.7467537, "oid": 23, "side": "sell", "px": "0.6200", "qty": "25", "quote_age_s": 2.7365686893463135, "queue0": "150.0000"}
+{"ev": "CANCEL", "t": 1790946096.7467537, "oid": 23, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946096.7467537, "oid": 24, "side": "sell", "px": "0.6200", "qty": 25, "queue_ahead": "184.4200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946099.9547398, "oid": 24, "side": "sell", "px": "0.6200", "qty": "1.5200", "quote_age_s": 3.2079861164093018, "queue0": "184.4200"}
+{"ev": "FILL", "t": 1790946100.315888, "oid": 24, "side": "sell", "px": "0.6200", "qty": "16.6500", "quote_age_s": 3.56913423538208, "queue0": "184.4200"}
+{"ev": "FILL", "t": 1790946101.983221, "oid": 24, "side": "sell", "px": "0.6200", "qty": "6.8300", "quote_age_s": 5.236467361450195, "queue0": "184.4200"}
+{"ev": "CANCEL", "t": 1790946101.983221, "oid": 24, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946101.983221, "oid": 25, "side": "sell", "px": "0.6400", "qty": 25, "queue_ahead": "1485.8300", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946109.5234137, "oid": 25, "side": "sell", "px": "0.6400", "qty": "2.9900", "quote_age_s": 7.540192604064941, "queue0": "1485.8300"}
+{"ev": "FILL", "t": 1790946110.0360944, "oid": 25, "side": "sell", "px": "0.6400", "qty": "22.0100", "quote_age_s": 8.052873373031616, "queue0": "1485.8300"}
+{"ev": "CANCEL", "t": 1790946110.0360944, "oid": 25, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946110.0360944, "oid": 26, "side": "sell", "px": "0.6500", "qty": 25, "queue_ahead": "139.2900", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946112.4835622, "oid": 16, "age_s": 30.279428958892822}
+{"ev": "PLACE", "t": 1790946112.4835622, "oid": 27, "side": "buy", "px": "0.6200", "qty": 25, "queue_ahead": "8409.9300", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946120.824372, "oid": 27, "side": "buy", "px": "0.6200", "qty": "0.8000", "quote_age_s": 8.34080982208252, "queue0": "8409.9300"}
+{"ev": "FILL", "t": 1790946120.8245478, "oid": 27, "side": "buy", "px": "0.6200", "qty": "18.0000", "quote_age_s": 8.340985536575317, "queue0": "8409.9300"}
+{"ev": "FILL", "t": 1790946120.8246408, "oid": 27, "side": "buy", "px": "0.6200", "qty": "6.2000", "quote_age_s": 8.341078519821167, "queue0": "8409.9300"}
+{"ev": "CANCEL", "t": 1790946120.8246408, "oid": 27, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946120.8246408, "oid": 28, "side": "buy", "px": "0.6100", "qty": 25, "queue_ahead": "1169.8000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946130.1664684, "oid": 26, "side": "sell", "px": "0.6500", "qty": "25", "quote_age_s": 20.13037395477295, "queue0": "139.2900"}
+{"ev": "CANCEL", "t": 1790946130.1664684, "oid": 26, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946130.1664684, "oid": 29, "side": "sell", "px": "0.6600", "qty": 25, "queue_ahead": "50.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946139.1917517, "oid": 29, "side": "sell", "px": "0.6600", "qty": "9.1300", "quote_age_s": 9.025283336639404, "queue0": "50.0000"}
+{"ev": "FILL", "t": 1790946141.2803895, "oid": 29, "side": "sell", "px": "0.6600", "qty": "15.8700", "quote_age_s": 11.113921165466309, "queue0": "50.0000"}
+{"ev": "CANCEL", "t": 1790946141.2803895, "oid": 29, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946141.2803895, "oid": 30, "side": "sell", "px": "0.6700", "qty": 25, "queue_ahead": "36.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946142.432417, "oid": 30, "side": "sell", "px": "0.6700", "qty": "14.3800", "quote_age_s": 1.1520273685455322, "queue0": "36.0000"}
+{"ev": "FILL", "t": 1790946143.2914484, "oid": 30, "side": "sell", "px": "0.6700", "qty": "10.6200", "quote_age_s": 2.011058807373047, "queue0": "36.0000"}
+{"ev": "CANCEL", "t": 1790946143.2914484, "oid": 30, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946143.2914484, "oid": 31, "side": "sell", "px": "0.6800", "qty": 25, "queue_ahead": "1023.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946148.9900968, "oid": 28, "side": "buy", "px": "0.6100", "qty": "1.5100", "quote_age_s": 28.16545605659485, "queue0": "1169.8000"}
+{"ev": "FILL", "t": 1790946149.6107395, "oid": 28, "side": "buy", "px": "0.6100", "qty": "1.0000", "quote_age_s": 28.78609871864319, "queue0": "1169.8000"}
+{"ev": "FILL", "t": 1790946149.6108918, "oid": 28, "side": "buy", "px": "0.6100", "qty": "1.2300", "quote_age_s": 28.786251068115234, "queue0": "1169.8000"}
+{"ev": "FILL", "t": 1790946150.5372894, "oid": 28, "side": "buy", "px": "0.6100", "qty": "1.0000", "quote_age_s": 29.712648630142212, "queue0": "1169.8000"}
+{"ev": "FILL", "t": 1790946150.537492, "oid": 28, "side": "buy", "px": "0.6100", "qty": "20.2600", "quote_age_s": 29.71285128593445, "queue0": "1169.8000"}
+{"ev": "CANCEL", "t": 1790946150.537492, "oid": 28, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946150.537492, "oid": 32, "side": "buy", "px": "0.5600", "qty": 25, "queue_ahead": "3706.0200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946152.9397564, "oid": 32, "side": "buy", "px": "0.5600", "qty": "12.8300", "quote_age_s": 2.402264356613159, "queue0": "3706.0200"}
+{"ev": "FILL", "t": 1790946153.3226118, "oid": 32, "side": "buy", "px": "0.5600", "qty": "0.1400", "quote_age_s": 2.7851197719573975, "queue0": "3706.0200"}
+{"ev": "FILL", "t": 1790946153.322834, "oid": 32, "side": "buy", "px": "0.5600", "qty": "1.0000", "quote_age_s": 2.78534197807312, "queue0": "3706.0200"}
+{"ev": "FILL", "t": 1790946153.322955, "oid": 32, "side": "buy", "px": "0.5600", "qty": "11.0300", "quote_age_s": 2.7854628562927246, "queue0": "3706.0200"}
+{"ev": "CANCEL", "t": 1790946153.322955, "oid": 32, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946153.322955, "oid": 33, "side": "buy", "px": "0.5500", "qty": 25, "queue_ahead": "111.1700", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946154.2187366, "oid": 33, "side": "buy", "px": "0.5500", "qty": "2.0800", "quote_age_s": 0.8957817554473877, "queue0": "111.1700"}
+{"ev": "FILL", "t": 1790946154.83678, "oid": 33, "side": "buy", "px": "0.5500", "qty": "8.9600", "quote_age_s": 1.5138251781463623, "queue0": "111.1700"}
+{"ev": "FILL", "t": 1790946155.6265702, "oid": 33, "side": "buy", "px": "0.5500", "qty": "0.6100", "quote_age_s": 2.3036153316497803, "queue0": "111.1700"}
+{"ev": "FILL", "t": 1790946155.7143846, "oid": 33, "side": "buy", "px": "0.5500", "qty": "1.8200", "quote_age_s": 2.3914296627044678, "queue0": "111.1700"}
+{"ev": "FILL", "t": 1790946158.8647752, "oid": 33, "side": "buy", "px": "0.5500", "qty": "11.5300", "quote_age_s": 5.541820287704468, "queue0": "111.1700"}
+{"ev": "CANCEL", "t": 1790946158.8647752, "oid": 33, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946158.8647752, "oid": 34, "side": "buy", "px": "0.5500", "qty": 25, "queue_ahead": "541.4300", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946173.9071412, "oid": 31, "age_s": 30.615692853927612}
+{"ev": "PLACE", "t": 1790946173.9071412, "oid": 35, "side": "sell", "px": "0.5800", "qty": 25, "queue_ahead": "4358.6500", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946189.6313455, "oid": 34, "age_s": 30.766570329666138}
+{"ev": "PLACE", "t": 1790946189.6313455, "oid": 36, "side": "buy", "px": "0.5700", "qty": 25, "queue_ahead": "293.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946192.0472143, "oid": 36, "side": "buy", "px": "0.5700", "qty": "2.0800", "quote_age_s": 2.4158687591552734, "queue0": "293.0000"}
+{"ev": "FILL", "t": 1790946196.2839024, "oid": 36, "side": "buy", "px": "0.5700", "qty": "18.0000", "quote_age_s": 6.652556896209717, "queue0": "293.0000"}
+{"ev": "FILL", "t": 1790946196.2841702, "oid": 36, "side": "buy", "px": "0.5700", "qty": "4.9200", "quote_age_s": 6.652824640274048, "queue0": "293.0000"}
+{"ev": "CANCEL", "t": 1790946196.2841702, "oid": 36, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946196.2841702, "oid": 37, "side": "buy", "px": "0.5600", "qty": 25, "queue_ahead": "3274.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946196.9740305, "oid": 37, "side": "buy", "px": "0.5600", "qty": "25", "quote_age_s": 0.6898603439331055, "queue0": "3274.0000"}
+{"ev": "CANCEL", "t": 1790946196.9740305, "oid": 37, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946196.9740305, "oid": 38, "side": "buy", "px": "0.5500", "qty": 25, "queue_ahead": "3274.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946199.9294255, "oid": 38, "side": "buy", "px": "0.5500", "qty": "12.0000", "quote_age_s": 2.955394983291626, "queue0": "3274.0000"}
+{"ev": "FILL", "t": 1790946199.9295957, "oid": 38, "side": "buy", "px": "0.5500", "qty": "13.0000", "quote_age_s": 2.9555652141571045, "queue0": "3274.0000"}
+{"ev": "CANCEL", "t": 1790946199.9295957, "oid": 38, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946199.9295957, "oid": 39, "side": "buy", "px": "0.5400", "qty": 25, "queue_ahead": "3675.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946205.5975757, "oid": 35, "age_s": 31.690434455871582}
+{"ev": "PLACE", "t": 1790946205.5975757, "oid": 40, "side": "sell", "px": "0.5600", "qty": 25, "queue_ahead": "2593.6300", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946210.4098887, "oid": 40, "side": "sell", "px": "0.5600", "qty": "3.3900", "quote_age_s": 4.812313079833984, "queue0": "2593.6300"}
+{"ev": "FILL", "t": 1790946210.6506352, "oid": 40, "side": "sell", "px": "0.5600", "qty": "1.0000", "quote_age_s": 5.0530595779418945, "queue0": "2593.6300"}
+{"ev": "FILL", "t": 1790946210.6508598, "oid": 40, "side": "sell", "px": "0.5600", "qty": "0.6700", "quote_age_s": 5.053284168243408, "queue0": "2593.6300"}
+{"ev": "FILL", "t": 1790946210.8801703, "oid": 40, "side": "sell", "px": "0.5600", "qty": "8.3700", "quote_age_s": 5.282594680786133, "queue0": "2593.6300"}
+{"ev": "FILL", "t": 1790946211.098627, "oid": 40, "side": "sell", "px": "0.5600", "qty": "7.5500", "quote_age_s": 5.501051425933838, "queue0": "2593.6300"}
+{"ev": "FILL", "t": 1790946212.7054884, "oid": 40, "side": "sell", "px": "0.5600", "qty": "1.6600", "quote_age_s": 7.10791277885437, "queue0": "2593.6300"}
+{"ev": "FILL", "t": 1790946214.1260655, "oid": 40, "side": "sell", "px": "0.5600", "qty": "2.3600", "quote_age_s": 8.528489828109741, "queue0": "2593.6300"}
+{"ev": "CANCEL", "t": 1790946214.1260655, "oid": 40, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946214.1260655, "oid": 41, "side": "sell", "px": "0.6200", "qty": 25, "queue_ahead": "2555.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946216.7270231, "oid": 41, "side": "sell", "px": "0.6200", "qty": "25", "quote_age_s": 2.6009576320648193, "queue0": "2555.0000"}
+{"ev": "CANCEL", "t": 1790946216.7270231, "oid": 41, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946216.7270231, "oid": 42, "side": "sell", "px": "0.6300", "qty": 25, "queue_ahead": "1361.8700", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946231.3249497, "oid": 39, "age_s": 31.39535403251648}
+{"ev": "PLACE", "t": 1790946231.3249497, "oid": 43, "side": "buy", "px": "0.6200", "qty": 25, "queue_ahead": "4789.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946231.9407551, "oid": 42, "side": "sell", "px": "0.6300", "qty": "10.0000", "quote_age_s": 15.21373200416565, "queue0": "1361.8700"}
+{"ev": "FILL", "t": 1790946233.186934, "oid": 42, "side": "sell", "px": "0.6300", "qty": "0.2300", "quote_age_s": 16.45991086959839, "queue0": "1361.8700"}
+{"ev": "FILL", "t": 1790946234.224226, "oid": 42, "side": "sell", "px": "0.6300", "qty": "0.7700", "quote_age_s": 17.49720287322998, "queue0": "1361.8700"}
+{"ev": "FILL", "t": 1790946234.2244205, "oid": 42, "side": "sell", "px": "0.6300", "qty": "2.2700", "quote_age_s": 17.497397422790527, "queue0": "1361.8700"}
+{"ev": "FILL", "t": 1790946236.2371087, "oid": 42, "side": "sell", "px": "0.6300", "qty": "1.0000", "quote_age_s": 19.510085582733154, "queue0": "1361.8700"}
+{"ev": "FILL", "t": 1790946236.2373059, "oid": 42, "side": "sell", "px": "0.6300", "qty": "0.3900", "quote_age_s": 19.51028275489807, "queue0": "1361.8700"}
+{"ev": "FILL", "t": 1790946236.4346788, "oid": 42, "side": "sell", "px": "0.6300", "qty": "10.3400", "quote_age_s": 19.707655668258667, "queue0": "1361.8700"}
+{"ev": "CANCEL", "t": 1790946236.4346788, "oid": 42, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946236.4346788, "oid": 44, "side": "sell", "px": "0.7000", "qty": 25, "queue_ahead": "4645.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946246.0320404, "oid": 44, "side": "sell", "px": "0.7000", "qty": "4.7000", "quote_age_s": 9.59736156463623, "queue0": "4645.0000"}
+{"ev": "FILL", "t": 1790946250.8886738, "oid": 44, "side": "sell", "px": "0.7000", "qty": "11.1800", "quote_age_s": 14.453994989395142, "queue0": "4645.0000"}
+{"ev": "FILL", "t": 1790946250.928641, "oid": 44, "side": "sell", "px": "0.7000", "qty": "9.1200", "quote_age_s": 14.493962287902832, "queue0": "4645.0000"}
+{"ev": "CANCEL", "t": 1790946250.928641, "oid": 44, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946250.928641, "oid": 45, "side": "sell", "px": "0.7100", "qty": 25, "queue_ahead": "882.7700", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946253.6239097, "oid": 45, "side": "sell", "px": "0.7100", "qty": "0.3600", "quote_age_s": 2.6952686309814453, "queue0": "882.7700"}
+{"ev": "FILL", "t": 1790946254.7023098, "oid": 45, "side": "sell", "px": "0.7100", "qty": "1.6400", "quote_age_s": 3.7736687660217285, "queue0": "882.7700"}
+{"ev": "FILL", "t": 1790946254.702522, "oid": 45, "side": "sell", "px": "0.7100", "qty": "9.4000", "quote_age_s": 3.773880958557129, "queue0": "882.7700"}
+{"ev": "FILL", "t": 1790946255.475852, "oid": 45, "side": "sell", "px": "0.7100", "qty": "13.6000", "quote_age_s": 4.547210931777954, "queue0": "882.7700"}
+{"ev": "CANCEL", "t": 1790946255.475852, "oid": 45, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946255.475852, "oid": 46, "side": "sell", "px": "0.7300", "qty": 25, "queue_ahead": "972.6500", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946261.954351, "oid": 43, "age_s": 30.629401206970215}
+{"ev": "PLACE", "t": 1790946261.954351, "oid": 47, "side": "buy", "px": "0.7200", "qty": 25, "queue_ahead": "9073.8900", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946270.6473053, "oid": 47, "side": "buy", "px": "0.7200", "qty": "20.3600", "quote_age_s": 8.692954301834106, "queue0": "9073.8900"}
+{"ev": "FILL", "t": 1790946271.181196, "oid": 47, "side": "buy", "px": "0.7200", "qty": "4.6400", "quote_age_s": 9.226845026016235, "queue0": "9073.8900"}
+{"ev": "CANCEL", "t": 1790946271.181196, "oid": 47, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946271.181196, "oid": 48, "side": "buy", "px": "0.7100", "qty": 25, "queue_ahead": "146.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946271.1816213, "oid": 48, "side": "buy", "px": "0.7100", "qty": "4.0000", "quote_age_s": 0.0004253387451171875, "queue0": "146.0000"}
+{"ev": "FILL", "t": 1790946271.2985258, "oid": 48, "side": "buy", "px": "0.7100", "qty": "21.0000", "quote_age_s": 0.11732983589172363, "queue0": "146.0000"}
+{"ev": "CANCEL", "t": 1790946271.2985258, "oid": 48, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946271.2985258, "oid": 49, "side": "buy", "px": "0.7100", "qty": 25, "queue_ahead": "4302.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946285.7069573, "oid": 46, "age_s": 30.2311053276062}
+{"ev": "PLACE", "t": 1790946285.7069573, "oid": 50, "side": "sell", "px": "0.7200", "qty": 25, "queue_ahead": "838.2300", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946290.8604712, "oid": 50, "side": "sell", "px": "0.7200", "qty": "2.6400", "quote_age_s": 5.1535139083862305, "queue0": "838.2300"}
+{"ev": "FILL", "t": 1790946290.9216254, "oid": 50, "side": "sell", "px": "0.7200", "qty": "3.9800", "quote_age_s": 5.214668035507202, "queue0": "838.2300"}
+{"ev": "FILL", "t": 1790946291.2030184, "oid": 50, "side": "sell", "px": "0.7200", "qty": "1.7600", "quote_age_s": 5.496061086654663, "queue0": "838.2300"}
+{"ev": "FILL", "t": 1790946291.930009, "oid": 50, "side": "sell", "px": "0.7200", "qty": "1.1600", "quote_age_s": 6.22305154800415, "queue0": "838.2300"}
+{"ev": "FILL", "t": 1790946292.3929496, "oid": 50, "side": "sell", "px": "0.7200", "qty": "15.4600", "quote_age_s": 6.685992240905762, "queue0": "838.2300"}
+{"ev": "CANCEL", "t": 1790946292.3929496, "oid": 50, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946292.3929496, "oid": 51, "side": "sell", "px": "0.7300", "qty": 25, "queue_ahead": "17.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946300.7734077, "oid": 49, "side": "buy", "px": "0.7100", "qty": "14.9000", "quote_age_s": 29.474881887435913, "queue0": "4302.0000"}
+{"ev": "FILL", "t": 1790946300.958968, "oid": 49, "side": "buy", "px": "0.7100", "qty": "1.0000", "quote_age_s": 29.660442113876343, "queue0": "4302.0000"}
+{"ev": "FILL", "t": 1790946300.959164, "oid": 49, "side": "buy", "px": "0.7100", "qty": "9.1000", "quote_age_s": 29.660638093948364, "queue0": "4302.0000"}
+{"ev": "CANCEL", "t": 1790946300.959164, "oid": 49, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946300.959164, "oid": 52, "side": "buy", "px": "0.6900", "qty": 25, "queue_ahead": "1.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946304.0972183, "oid": 51, "side": "sell", "px": "0.7300", "qty": "25", "quote_age_s": 11.70426869392395, "queue0": "17.0000"}
+{"ev": "CANCEL", "t": 1790946304.0972183, "oid": 51, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946304.0972183, "oid": 53, "side": "sell", "px": "0.7300", "qty": 25, "queue_ahead": "679.7500", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946304.1555476, "oid": 53, "side": "sell", "px": "0.7300", "qty": "25", "quote_age_s": 0.05832934379577637, "queue0": "679.7500"}
+{"ev": "CANCEL", "t": 1790946304.1555476, "oid": 53, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946304.1555476, "oid": 54, "side": "sell", "px": "0.7300", "qty": 25, "queue_ahead": "679.7500", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946304.205203, "oid": 54, "side": "sell", "px": "0.7300", "qty": "4.0000", "quote_age_s": 0.04965543746948242, "queue0": "679.7500"}
+{"ev": "FILL", "t": 1790946304.2141523, "oid": 54, "side": "sell", "px": "0.7300", "qty": "8.0000", "quote_age_s": 0.05860471725463867, "queue0": "679.7500"}
+{"ev": "FILL", "t": 1790946304.5180492, "oid": 54, "side": "sell", "px": "0.7300", "qty": "13.0000", "quote_age_s": 0.3625016212463379, "queue0": "679.7500"}
+{"ev": "CANCEL", "t": 1790946304.5180492, "oid": 54, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946304.5180492, "oid": 55, "side": "sell", "px": "0.7500", "qty": 25, "queue_ahead": "854.0200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946310.8164434, "oid": 52, "side": "buy", "px": "0.6900", "qty": "8.0000", "quote_age_s": 9.857279539108276, "queue0": "1.0000"}
+{"ev": "FILL", "t": 1790946310.8166118, "oid": 52, "side": "buy", "px": "0.6900", "qty": "17.0000", "quote_age_s": 9.857447862625122, "queue0": "1.0000"}
+{"ev": "CANCEL", "t": 1790946310.8166118, "oid": 52, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946310.8166118, "oid": 56, "side": "buy", "px": "0.6800", "qty": 25, "queue_ahead": "634.1400", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946326.4013858, "oid": 56, "side": "buy", "px": "0.6800", "qty": "25", "quote_age_s": 15.584774017333984, "queue0": "634.1400"}
+{"ev": "CANCEL", "t": 1790946326.4013858, "oid": 56, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946326.4013858, "oid": 57, "side": "buy", "px": "0.6400", "qty": 25, "queue_ahead": "1011.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946326.7363696, "oid": 57, "side": "buy", "px": "0.6400", "qty": "5.0000", "quote_age_s": 0.33498382568359375, "queue0": "1011.0000"}
+{"ev": "FILL", "t": 1790946326.8212562, "oid": 57, "side": "buy", "px": "0.6400", "qty": "5.0000", "quote_age_s": 0.41987037658691406, "queue0": "1011.0000"}
+{"ev": "FILL", "t": 1790946326.893857, "oid": 57, "side": "buy", "px": "0.6400", "qty": "2.2700", "quote_age_s": 0.49247121810913086, "queue0": "1011.0000"}
+{"ev": "FILL", "t": 1790946326.971836, "oid": 57, "side": "buy", "px": "0.6400", "qty": "12.7300", "quote_age_s": 0.5704503059387207, "queue0": "1011.0000"}
+{"ev": "CANCEL", "t": 1790946326.971836, "oid": 57, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946326.971836, "oid": 58, "side": "buy", "px": "0.5800", "qty": 25, "queue_ahead": "1011.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946333.8709466, "oid": 58, "side": "buy", "px": "0.5800", "qty": "4.4600", "quote_age_s": 6.899110555648804, "queue0": "1011.0000"}
+{"ev": "EXPIRE", "t": 1790946334.5721078, "oid": 55, "age_s": 30.05405855178833}
+{"ev": "PLACE", "t": 1790946334.5721078, "oid": 59, "side": "sell", "px": "0.6000", "qty": 25, "queue_ahead": "2176.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946339.6211107, "oid": 59, "side": "sell", "px": "0.6000", "qty": "7.9700", "quote_age_s": 5.0490028858184814, "queue0": "2176.0000"}
+{"ev": "FILL", "t": 1790946343.6914306, "oid": 58, "side": "buy", "px": "0.5800", "qty": "20.5400", "quote_age_s": 16.719594478607178, "queue0": "1011.0000"}
+{"ev": "CANCEL", "t": 1790946343.6914306, "oid": 58, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946343.6914306, "oid": 60, "side": "buy", "px": "0.5500", "qty": 25, "queue_ahead": "8072.1600", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946345.2666957, "oid": 60, "side": "buy", "px": "0.5500", "qty": "5.0000", "quote_age_s": 1.5752651691436768, "queue0": "8072.1600"}
+{"ev": "FILL", "t": 1790946346.403691, "oid": 60, "side": "buy", "px": "0.5500", "qty": "1.7800", "quote_age_s": 2.7122604846954346, "queue0": "8072.1600"}
+{"ev": "FILL", "t": 1790946347.6264613, "oid": 60, "side": "buy", "px": "0.5500", "qty": "18.2200", "quote_age_s": 3.935030698776245, "queue0": "8072.1600"}
+{"ev": "CANCEL", "t": 1790946347.6264613, "oid": 60, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946347.6264613, "oid": 61, "side": "buy", "px": "0.5000", "qty": 25, "queue_ahead": "638.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946347.6315196, "oid": 61, "side": "buy", "px": "0.5000", "qty": "2.0000", "quote_age_s": 0.00505828857421875, "queue0": "638.0000"}
+{"ev": "FILL", "t": 1790946347.6317818, "oid": 61, "side": "buy", "px": "0.5000", "qty": "1.0000", "quote_age_s": 0.005320549011230469, "queue0": "638.0000"}
+{"ev": "FILL", "t": 1790946347.6318915, "oid": 61, "side": "buy", "px": "0.5000", "qty": "22.0000", "quote_age_s": 0.0054302215576171875, "queue0": "638.0000"}
+{"ev": "CANCEL", "t": 1790946347.6318915, "oid": 61, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946347.6318915, "oid": 62, "side": "buy", "px": "0.5000", "qty": 25, "queue_ahead": "638.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946347.6319802, "oid": 62, "side": "buy", "px": "0.5000", "qty": "25", "quote_age_s": 8.869171142578125e-05, "queue0": "638.0000"}
+{"ev": "CANCEL", "t": 1790946347.6319802, "oid": 62, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946347.6319802, "oid": 63, "side": "buy", "px": "0.5000", "qty": 25, "queue_ahead": "638.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946347.6320572, "oid": 63, "side": "buy", "px": "0.5000", "qty": "25", "quote_age_s": 7.700920104980469e-05, "queue0": "638.0000"}
+{"ev": "CANCEL", "t": 1790946347.6320572, "oid": 63, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946347.6320572, "oid": 64, "side": "buy", "px": "0.5000", "qty": 25, "queue_ahead": "638.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946365.2179255, "oid": 59, "age_s": 30.645817756652832}
+{"ev": "PLACE", "t": 1790946365.2179255, "oid": 65, "side": "sell", "px": "0.5800", "qty": 25, "queue_ahead": "2349.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946373.2058532, "oid": 64, "side": "buy", "px": "0.5000", "qty": "7.5600", "quote_age_s": 25.573796033859253, "queue0": "638.0000"}
+{"ev": "FILL", "t": 1790946373.618883, "oid": 64, "side": "buy", "px": "0.5000", "qty": "17.4400", "quote_age_s": 25.986825704574585, "queue0": "638.0000"}
+{"ev": "CANCEL", "t": 1790946373.618883, "oid": 64, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946373.618883, "oid": 66, "side": "buy", "px": "0.4900", "qty": 25, "queue_ahead": "3259.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946376.7499013, "oid": 66, "side": "buy", "px": "0.4900", "qty": "25", "quote_age_s": 3.1310184001922607, "queue0": "3259.0000"}
+{"ev": "CANCEL", "t": 1790946376.7499013, "oid": 66, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946376.7499013, "oid": 67, "side": "buy", "px": "0.4800", "qty": 25, "queue_ahead": "2198.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946380.620027, "oid": 67, "side": "buy", "px": "0.4800", "qty": "6.1600", "quote_age_s": 3.8701257705688477, "queue0": "2198.0000"}
+{"ev": "FILL", "t": 1790946381.9912925, "oid": 67, "side": "buy", "px": "0.4800", "qty": "18.4000", "quote_age_s": 5.241391181945801, "queue0": "2198.0000"}
+{"ev": "FILL", "t": 1790946382.5963376, "oid": 67, "side": "buy", "px": "0.4800", "qty": "0.4400", "quote_age_s": 5.846436262130737, "queue0": "2198.0000"}
+{"ev": "CANCEL", "t": 1790946382.5963376, "oid": 67, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946382.5963376, "oid": 68, "side": "buy", "px": "0.4600", "qty": 25, "queue_ahead": "105.7200", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946395.2376537, "oid": 65, "age_s": 30.019728183746338}
+{"ev": "PLACE", "t": 1790946395.2376537, "oid": 69, "side": "sell", "px": "0.5100", "qty": 25, "queue_ahead": "2501.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946396.7813454, "oid": 69, "side": "sell", "px": "0.5100", "qty": "12.3900", "quote_age_s": 1.543691635131836, "queue0": "2501.0000"}
+{"ev": "FILL", "t": 1790946397.25966, "oid": 69, "side": "sell", "px": "0.5100", "qty": "0.3400", "quote_age_s": 2.0220062732696533, "queue0": "2501.0000"}
+{"ev": "FILL", "t": 1790946397.4372694, "oid": 69, "side": "sell", "px": "0.5100", "qty": "1.7300", "quote_age_s": 2.199615716934204, "queue0": "2501.0000"}
+{"ev": "FILL", "t": 1790946398.805855, "oid": 69, "side": "sell", "px": "0.5100", "qty": "10.5400", "quote_age_s": 3.5682013034820557, "queue0": "2501.0000"}
+{"ev": "CANCEL", "t": 1790946398.805855, "oid": 69, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946398.805855, "oid": 70, "side": "sell", "px": "0.5500", "qty": 25, "queue_ahead": "4117.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946413.255626, "oid": 68, "age_s": 30.65928840637207}
+{"ev": "PLACE", "t": 1790946413.255626, "oid": 71, "side": "buy", "px": "0.4800", "qty": 25, "queue_ahead": "218.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946414.9271305, "oid": 71, "side": "buy", "px": "0.4800", "qty": "20.3800", "quote_age_s": 1.6715044975280762, "queue0": "218.0000"}
+{"ev": "FILL", "t": 1790946414.9274025, "oid": 71, "side": "buy", "px": "0.4800", "qty": "4.6200", "quote_age_s": 1.671776533126831, "queue0": "218.0000"}
+{"ev": "CANCEL", "t": 1790946414.9274025, "oid": 71, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946414.9274025, "oid": 72, "side": "buy", "px": "0.4500", "qty": 25, "queue_ahead": "2703.3800", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946419.3952372, "oid": 72, "side": "buy", "px": "0.4500", "qty": "25", "quote_age_s": 4.467834711074829, "queue0": "2703.3800"}
+{"ev": "CANCEL", "t": 1790946419.3952372, "oid": 72, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946419.3952372, "oid": 73, "side": "buy", "px": "0.4200", "qty": 25, "queue_ahead": "3688.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946429.7150502, "oid": 70, "age_s": 30.90919518470764}
+{"ev": "PLACE", "t": 1790946429.7150502, "oid": 74, "side": "sell", "px": "0.4600", "qty": 25, "queue_ahead": "900.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946434.206122, "oid": 73, "side": "buy", "px": "0.4200", "qty": "24.0000", "quote_age_s": 14.810884714126587, "queue0": "3688.0000"}
+{"ev": "FILL", "t": 1790946434.2062848, "oid": 73, "side": "buy", "px": "0.4200", "qty": "1.0000", "quote_age_s": 14.811047554016113, "queue0": "3688.0000"}
+{"ev": "CANCEL", "t": 1790946434.2062848, "oid": 73, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946434.2062848, "oid": 75, "side": "buy", "px": "0.4100", "qty": 25, "queue_ahead": "63.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946434.2064567, "oid": 75, "side": "buy", "px": "0.4100", "qty": "5.0000", "quote_age_s": 0.00017189979553222656, "queue0": "63.0000"}
+{"ev": "FILL", "t": 1790946434.2065432, "oid": 75, "side": "buy", "px": "0.4100", "qty": "12.0000", "quote_age_s": 0.00025844573974609375, "queue0": "63.0000"}
+{"ev": "FILL", "t": 1790946434.2066188, "oid": 75, "side": "buy", "px": "0.4100", "qty": "5.0000", "quote_age_s": 0.00033402442932128906, "queue0": "63.0000"}
+{"ev": "FILL", "t": 1790946434.2066905, "oid": 75, "side": "buy", "px": "0.4100", "qty": "3.0000", "quote_age_s": 0.0004057884216308594, "queue0": "63.0000"}
+{"ev": "CANCEL", "t": 1790946434.2066905, "oid": 75, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946434.2066905, "oid": 76, "side": "buy", "px": "0.4100", "qty": 25, "queue_ahead": "63.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946435.117903, "oid": 76, "side": "buy", "px": "0.4100", "qty": "1.6100", "quote_age_s": 0.9112124443054199, "queue0": "63.0000"}
+{"ev": "FILL", "t": 1790946435.9491296, "oid": 76, "side": "buy", "px": "0.4100", "qty": "21.2800", "quote_age_s": 1.7424390316009521, "queue0": "63.0000"}
+{"ev": "FILL", "t": 1790946436.0957143, "oid": 76, "side": "buy", "px": "0.4100", "qty": "2.1100", "quote_age_s": 1.889023780822754, "queue0": "63.0000"}
+{"ev": "CANCEL", "t": 1790946436.0957143, "oid": 76, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946436.0957143, "oid": 77, "side": "buy", "px": "0.3700", "qty": 25, "queue_ahead": "8244.7000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946445.1048687, "oid": 77, "side": "buy", "px": "0.3700", "qty": "15.2400", "quote_age_s": 9.009154319763184, "queue0": "8244.7000"}
+{"ev": "FILL", "t": 1790946445.468562, "oid": 77, "side": "buy", "px": "0.3700", "qty": "7.8500", "quote_age_s": 9.372847557067871, "queue0": "8244.7000"}
+{"ev": "FILL", "t": 1790946445.7304504, "oid": 77, "side": "buy", "px": "0.3700", "qty": "1.9100", "quote_age_s": 9.634736061096191, "queue0": "8244.7000"}
+{"ev": "CANCEL", "t": 1790946445.7304504, "oid": 77, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946445.7304504, "oid": 78, "side": "buy", "px": "0.3600", "qty": 25, "queue_ahead": "5269.5800", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946448.1587641, "oid": 78, "side": "buy", "px": "0.3600", "qty": "12.0000", "quote_age_s": 2.428313732147217, "queue0": "5269.5800"}
+{"ev": "FILL", "t": 1790946448.163197, "oid": 78, "side": "buy", "px": "0.3600", "qty": "3.2400", "quote_age_s": 2.432746648788452, "queue0": "5269.5800"}
+{"ev": "FILL", "t": 1790946448.9557319, "oid": 78, "side": "buy", "px": "0.3600", "qty": "0.3300", "quote_age_s": 3.2252814769744873, "queue0": "5269.5800"}
+{"ev": "EXPIRE", "t": 1790946460.027562, "oid": 74, "age_s": 30.312511682510376}
+{"ev": "FILL", "t": 1790946460.027562, "oid": 78, "side": "buy", "px": "0.3600", "qty": "1.0000", "quote_age_s": 14.297111511230469, "queue0": "5269.5800"}
+{"ev": "PLACE", "t": 1790946460.027562, "oid": 79, "side": "sell", "px": "0.3700", "qty": 25, "queue_ahead": "6646.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946460.0277865, "oid": 78, "side": "buy", "px": "0.3600", "qty": "8.4300", "quote_age_s": 14.297336101531982, "queue0": "5269.5800"}
+{"ev": "CANCEL", "t": 1790946460.0277865, "oid": 78, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946460.0277865, "oid": 80, "side": "buy", "px": "0.3600", "qty": 25, "queue_ahead": "163.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946464.1320212, "oid": 79, "side": "sell", "px": "0.3700", "qty": "4.0000", "quote_age_s": 4.104459285736084, "queue0": "6646.0000"}
+{"ev": "FILL", "t": 1790946464.132236, "oid": 79, "side": "sell", "px": "0.3700", "qty": "8.6000", "quote_age_s": 4.1046741008758545, "queue0": "6646.0000"}
+{"ev": "FILL", "t": 1790946464.1328454, "oid": 79, "side": "sell", "px": "0.3700", "qty": "2.5900", "quote_age_s": 4.105283498764038, "queue0": "6646.0000"}
+{"ev": "FILL", "t": 1790946464.498603, "oid": 80, "side": "buy", "px": "0.3600", "qty": "25", "quote_age_s": 4.470816612243652, "queue0": "163.0000"}
+{"ev": "CANCEL", "t": 1790946464.498603, "oid": 80, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946464.498603, "oid": 81, "side": "buy", "px": "0.3700", "qty": 25, "queue_ahead": "959.3000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946464.498791, "oid": 81, "side": "buy", "px": "0.3700", "qty": "20.0000", "quote_age_s": 0.00018787384033203125, "queue0": "959.3000"}
+{"ev": "FILL", "t": 1790946464.4988947, "oid": 81, "side": "buy", "px": "0.3700", "qty": "5.0000", "quote_age_s": 0.00029158592224121094, "queue0": "959.3000"}
+{"ev": "CANCEL", "t": 1790946464.4988947, "oid": 81, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946464.4988947, "oid": 82, "side": "buy", "px": "0.3700", "qty": 25, "queue_ahead": "959.3000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946464.498994, "oid": 82, "side": "buy", "px": "0.3700", "qty": "18.9700", "quote_age_s": 9.942054748535156e-05, "queue0": "959.3000"}
+{"ev": "FILL", "t": 1790946464.7109807, "oid": 79, "side": "sell", "px": "0.3700", "qty": "7.7500", "quote_age_s": 4.6834187507629395, "queue0": "6646.0000"}
+{"ev": "FILL", "t": 1790946465.0526836, "oid": 82, "side": "buy", "px": "0.3700", "qty": "5.0000", "quote_age_s": 0.5537889003753662, "queue0": "959.3000"}
+{"ev": "FILL", "t": 1790946465.053067, "oid": 82, "side": "buy", "px": "0.3700", "qty": "1.0300", "quote_age_s": 0.5541722774505615, "queue0": "959.3000"}
+{"ev": "CANCEL", "t": 1790946465.053067, "oid": 82, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946465.053067, "oid": 83, "side": "buy", "px": "0.3600", "qty": 25, "queue_ahead": "3771.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946466.637195, "oid": 79, "side": "sell", "px": "0.3700", "qty": "2.0600", "quote_age_s": 6.609633207321167, "queue0": "6646.0000"}
+{"ev": "CANCEL", "t": 1790946466.637195, "oid": 79, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946466.637195, "oid": 84, "side": "sell", "px": "0.3700", "qty": 25, "queue_ahead": "6566.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946473.6608226, "oid": 84, "side": "sell", "px": "0.3700", "qty": "7.1900", "quote_age_s": 7.023627519607544, "queue0": "6566.0000"}
+{"ev": "FILL", "t": 1790946473.8976457, "oid": 84, "side": "sell", "px": "0.3700", "qty": "7.1900", "quote_age_s": 7.260450601577759, "queue0": "6566.0000"}
+{"ev": "FILL", "t": 1790946474.1266158, "oid": 84, "side": "sell", "px": "0.3700", "qty": "10.6200", "quote_age_s": 7.489420652389526, "queue0": "6566.0000"}
+{"ev": "CANCEL", "t": 1790946474.1266158, "oid": 84, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946474.1266158, "oid": 85, "side": "sell", "px": "0.4000", "qty": 25, "queue_ahead": "5529.8100", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946480.532973, "oid": 85, "side": "sell", "px": "0.4000", "qty": "25", "quote_age_s": 6.406357288360596, "queue0": "5529.8100"}
+{"ev": "CANCEL", "t": 1790946480.532973, "oid": 85, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946480.532973, "oid": 86, "side": "sell", "px": "0.4100", "qty": 25, "queue_ahead": "3944.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946498.2802181, "oid": 83, "age_s": 33.2271511554718}
+{"ev": "PLACE", "t": 1790946498.2802181, "oid": 87, "side": "buy", "px": "0.4300", "qty": 25, "queue_ahead": "331.4900", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946498.281004, "oid": 86, "side": "sell", "px": "0.4100", "qty": "25", "quote_age_s": 17.7480309009552, "queue0": "3944.0000"}
+{"ev": "CANCEL", "t": 1790946498.281004, "oid": 86, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946498.281004, "oid": 88, "side": "sell", "px": "0.4400", "qty": 25, "queue_ahead": "4473.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946509.7953532, "oid": 88, "side": "sell", "px": "0.4400", "qty": "25", "quote_age_s": 11.514349222183228, "queue0": "4473.0000"}
+{"ev": "CANCEL", "t": 1790946509.7953532, "oid": 88, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946509.7953532, "oid": 89, "side": "sell", "px": "0.4500", "qty": 25, "queue_ahead": "5477.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946519.6634254, "oid": 87, "side": "buy", "px": "0.4300", "qty": "7.0700", "quote_age_s": 21.383207321166992, "queue0": "331.4900"}
+{"ev": "FILL", "t": 1790946519.984886, "oid": 87, "side": "buy", "px": "0.4300", "qty": "17.9300", "quote_age_s": 21.704667806625366, "queue0": "331.4900"}
+{"ev": "CANCEL", "t": 1790946519.984886, "oid": 87, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946519.984886, "oid": 90, "side": "buy", "px": "0.3100", "qty": 25, "queue_ahead": "1240.9300", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946524.0173237, "oid": 90, "side": "buy", "px": "0.3100", "qty": "18.0000", "quote_age_s": 4.032437801361084, "queue0": "1240.9300"}
+{"ev": "FILL", "t": 1790946524.0175133, "oid": 90, "side": "buy", "px": "0.3100", "qty": "7.0000", "quote_age_s": 4.03262734413147, "queue0": "1240.9300"}
+{"ev": "CANCEL", "t": 1790946524.0175133, "oid": 90, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946524.0175133, "oid": 91, "side": "buy", "px": "0.3100", "qty": 25, "queue_ahead": "326.0600", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946524.0334268, "oid": 91, "side": "buy", "px": "0.3100", "qty": "4.0000", "quote_age_s": 0.01591348648071289, "queue0": "326.0600"}
+{"ev": "FILL", "t": 1790946524.0513494, "oid": 91, "side": "buy", "px": "0.3100", "qty": "21.0000", "quote_age_s": 0.03383612632751465, "queue0": "326.0600"}
+{"ev": "CANCEL", "t": 1790946524.0513494, "oid": 91, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946524.0513494, "oid": 92, "side": "buy", "px": "0.3000", "qty": 25, "queue_ahead": "6858.6900", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946524.9531524, "oid": 92, "side": "buy", "px": "0.3000", "qty": "6.6000", "quote_age_s": 0.9018030166625977, "queue0": "6858.6900"}
+{"ev": "FILL", "t": 1790946529.091003, "oid": 92, "side": "buy", "px": "0.3000", "qty": "18.4000", "quote_age_s": 5.039653539657593, "queue0": "6858.6900"}
+{"ev": "CANCEL", "t": 1790946529.091003, "oid": 92, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946529.091003, "oid": 93, "side": "buy", "px": "0.2700", "qty": 25, "queue_ahead": "1339.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946530.7507305, "oid": 93, "side": "buy", "px": "0.2700", "qty": "25", "quote_age_s": 1.6597275733947754, "queue0": "1339.0000"}
+{"ev": "CANCEL", "t": 1790946530.7507305, "oid": 93, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946530.7507305, "oid": 94, "side": "buy", "px": "0.2600", "qty": 25, "queue_ahead": "891.5200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946531.2534592, "oid": 94, "side": "buy", "px": "0.2600", "qty": "25", "quote_age_s": 0.5027287006378174, "queue0": "891.5200"}
+{"ev": "CANCEL", "t": 1790946531.2534592, "oid": 94, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946531.2534592, "oid": 95, "side": "buy", "px": "0.2600", "qty": 25, "queue_ahead": "891.5200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946531.4977446, "oid": 95, "side": "buy", "px": "0.2600", "qty": "13.0700", "quote_age_s": 0.24428534507751465, "queue0": "891.5200"}
+{"ev": "FILL", "t": 1790946531.8973017, "oid": 95, "side": "buy", "px": "0.2600", "qty": "11.9300", "quote_age_s": 0.6438424587249756, "queue0": "891.5200"}
+{"ev": "CANCEL", "t": 1790946531.8973017, "oid": 95, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946531.8973017, "oid": 96, "side": "buy", "px": "0.2500", "qty": 25, "queue_ahead": "891.5200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946539.0695868, "oid": 96, "side": "buy", "px": "0.2500", "qty": "25", "quote_age_s": 7.172285079956055, "queue0": "891.5200"}
+{"ev": "CANCEL", "t": 1790946539.0695868, "oid": 96, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946539.0695868, "oid": 97, "side": "buy", "px": "0.2400", "qty": 25, "queue_ahead": "339.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946539.5708952, "oid": 97, "side": "buy", "px": "0.2400", "qty": "5.2500", "quote_age_s": 0.5013084411621094, "queue0": "339.0000"}
+{"ev": "EXPIRE", "t": 1790946539.8139853, "oid": 89, "age_s": 30.018632173538208}
+{"ev": "FILL", "t": 1790946539.8139853, "oid": 97, "side": "buy", "px": "0.2400", "qty": "12.7500", "quote_age_s": 0.7443985939025879, "queue0": "339.0000"}
+{"ev": "PLACE", "t": 1790946539.8139853, "oid": 98, "side": "sell", "px": "0.2400", "qty": 25, "queue_ahead": "1356.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946540.0088353, "oid": 97, "side": "buy", "px": "0.2400", "qty": "7.0000", "quote_age_s": 0.9392485618591309, "queue0": "339.0000"}
+{"ev": "CANCEL", "t": 1790946540.0088353, "oid": 97, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946540.0088353, "oid": 99, "side": "buy", "px": "0.2300", "qty": 25, "queue_ahead": "4815.2500", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946540.9763484, "oid": 98, "side": "sell", "px": "0.2400", "qty": "25", "quote_age_s": 1.162363052368164, "queue0": "1356.0000"}
+{"ev": "CANCEL", "t": 1790946540.9763484, "oid": 98, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946540.9763484, "oid": 100, "side": "sell", "px": "0.2400", "qty": 25, "queue_ahead": "50.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946541.0177195, "oid": 100, "side": "sell", "px": "0.2400", "qty": "24.0000", "quote_age_s": 0.04137110710144043, "queue0": "50.0000"}
+{"ev": "FILL", "t": 1790946541.2520244, "oid": 100, "side": "sell", "px": "0.2400", "qty": "1.0000", "quote_age_s": 0.27567601203918457, "queue0": "50.0000"}
+{"ev": "CANCEL", "t": 1790946541.2520244, "oid": 100, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946541.2520244, "oid": 101, "side": "sell", "px": "0.2600", "qty": 25, "queue_ahead": "50.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946546.60291, "oid": 99, "side": "buy", "px": "0.2300", "qty": "1.7600", "quote_age_s": 6.594074726104736, "queue0": "4815.2500"}
+{"ev": "FILL", "t": 1790946547.512513, "oid": 99, "side": "buy", "px": "0.2300", "qty": "0.0500", "quote_age_s": 7.503677606582642, "queue0": "4815.2500"}
+{"ev": "FILL", "t": 1790946547.9001575, "oid": 99, "side": "buy", "px": "0.2300", "qty": "23.1900", "quote_age_s": 7.891322135925293, "queue0": "4815.2500"}
+{"ev": "CANCEL", "t": 1790946547.9001575, "oid": 99, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946547.9001575, "oid": 102, "side": "buy", "px": "0.2300", "qty": 25, "queue_ahead": "1129.0600", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946551.3330626, "oid": 102, "side": "buy", "px": "0.2300", "qty": "7.3400", "quote_age_s": 3.4329051971435547, "queue0": "1129.0600"}
+{"ev": "FILL", "t": 1790946557.3863585, "oid": 101, "side": "sell", "px": "0.2600", "qty": "1.8300", "quote_age_s": 16.134334087371826, "queue0": "50.0000"}
+{"ev": "FILL", "t": 1790946557.3865442, "oid": 101, "side": "sell", "px": "0.2600", "qty": "1.3000", "quote_age_s": 16.134519815444946, "queue0": "50.0000"}
+{"ev": "FILL", "t": 1790946557.3939004, "oid": 101, "side": "sell", "px": "0.2600", "qty": "0.8700", "quote_age_s": 16.141875982284546, "queue0": "50.0000"}
+{"ev": "FILL", "t": 1790946557.415788, "oid": 101, "side": "sell", "px": "0.2600", "qty": "21.0000", "quote_age_s": 16.163763523101807, "queue0": "50.0000"}
+{"ev": "CANCEL", "t": 1790946557.415788, "oid": 101, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946557.415788, "oid": 103, "side": "sell", "px": "0.2600", "qty": 25, "queue_ahead": "4308.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946557.4160326, "oid": 103, "side": "sell", "px": "0.2600", "qty": "18.0000", "quote_age_s": 0.0002446174621582031, "queue0": "4308.0000"}
+{"ev": "FILL", "t": 1790946557.416174, "oid": 103, "side": "sell", "px": "0.2600", "qty": "7.0000", "quote_age_s": 0.0003859996795654297, "queue0": "4308.0000"}
+{"ev": "CANCEL", "t": 1790946557.416174, "oid": 103, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946557.416174, "oid": 104, "side": "sell", "px": "0.2600", "qty": 25, "queue_ahead": "4308.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946558.235156, "oid": 104, "side": "sell", "px": "0.2600", "qty": "25", "quote_age_s": 0.8189821243286133, "queue0": "4308.0000"}
+{"ev": "CANCEL", "t": 1790946558.235156, "oid": 104, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946558.235156, "oid": 105, "side": "sell", "px": "0.2800", "qty": 25, "queue_ahead": "6597.3100", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946559.3193922, "oid": 105, "side": "sell", "px": "0.2800", "qty": "15.8600", "quote_age_s": 1.0842361450195312, "queue0": "6597.3100"}
+{"ev": "FILL", "t": 1790946561.235873, "oid": 105, "side": "sell", "px": "0.2800", "qty": "9.1400", "quote_age_s": 3.0007169246673584, "queue0": "6597.3100"}
+{"ev": "CANCEL", "t": 1790946561.235873, "oid": 105, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946561.235873, "oid": 106, "side": "sell", "px": "0.3100", "qty": 25, "queue_ahead": "6734.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946562.367253, "oid": 106, "side": "sell", "px": "0.3100", "qty": "25", "quote_age_s": 1.1313800811767578, "queue0": "6734.0000"}
+{"ev": "CANCEL", "t": 1790946562.367253, "oid": 106, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946562.367253, "oid": 107, "side": "sell", "px": "0.3200", "qty": 25, "queue_ahead": "6734.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946578.418839, "oid": 102, "age_s": 30.518681526184082}
+{"ev": "PLACE", "t": 1790946578.418839, "oid": 108, "side": "buy", "px": "0.2900", "qty": 25, "queue_ahead": "791.7600", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946587.1425312, "oid": 108, "side": "buy", "px": "0.2900", "qty": "13.2700", "quote_age_s": 8.723692178726196, "queue0": "791.7600"}
+{"ev": "FILL", "t": 1790946589.5204017, "oid": 108, "side": "buy", "px": "0.2900", "qty": "10.0000", "quote_age_s": 11.101562738418579, "queue0": "791.7600"}
+{"ev": "FILL", "t": 1790946589.520626, "oid": 108, "side": "buy", "px": "0.2900", "qty": "1.7300", "quote_age_s": 11.101787090301514, "queue0": "791.7600"}
+{"ev": "CANCEL", "t": 1790946589.520626, "oid": 108, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946589.520626, "oid": 109, "side": "buy", "px": "0.2200", "qty": 25, "queue_ahead": "13.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946590.046863, "oid": 109, "side": "buy", "px": "0.2200", "qty": "1.0000", "quote_age_s": 0.5262370109558105, "queue0": "13.0000"}
+{"ev": "FILL", "t": 1790946590.0471344, "oid": 109, "side": "buy", "px": "0.2200", "qty": "24.0000", "quote_age_s": 0.5265083312988281, "queue0": "13.0000"}
+{"ev": "CANCEL", "t": 1790946590.0471344, "oid": 109, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946590.0471344, "oid": 110, "side": "buy", "px": "0.2100", "qty": 25, "queue_ahead": "5445.4700", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946592.4427814, "oid": 107, "age_s": 30.075528383255005}
+{"ev": "PLACE", "t": 1790946592.4427814, "oid": 111, "side": "sell", "px": "0.2200", "qty": 25, "queue_ahead": "138.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946592.506966, "oid": 111, "side": "sell", "px": "0.2200", "qty": "25", "quote_age_s": 0.06418466567993164, "queue0": "138.0000"}
+{"ev": "CANCEL", "t": 1790946592.506966, "oid": 111, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946592.506966, "oid": 112, "side": "sell", "px": "0.2200", "qty": 25, "queue_ahead": "138.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946601.6336393, "oid": 112, "side": "sell", "px": "0.2200", "qty": "25", "quote_age_s": 9.126673221588135, "queue0": "138.0000"}
+{"ev": "CANCEL", "t": 1790946601.6336393, "oid": 112, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946601.6336393, "oid": 113, "side": "sell", "px": "0.2400", "qty": 25, "queue_ahead": "1152.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946609.2373555, "oid": 110, "side": "buy", "px": "0.2100", "qty": "10.0000", "quote_age_s": 19.190221071243286, "queue0": "5445.4700"}
+{"ev": "FILL", "t": 1790946609.5349548, "oid": 110, "side": "buy", "px": "0.2100", "qty": "15.0000", "quote_age_s": 19.487820386886597, "queue0": "5445.4700"}
+{"ev": "CANCEL", "t": 1790946609.5349548, "oid": 110, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946609.5349548, "oid": 114, "side": "buy", "px": "0.2000", "qty": 25, "queue_ahead": "2634.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946609.5355399, "oid": 114, "side": "buy", "px": "0.2000", "qty": "1.0000", "quote_age_s": 0.0005850791931152344, "queue0": "2634.0000"}
+{"ev": "FILL", "t": 1790946609.5388353, "oid": 114, "side": "buy", "px": "0.2000", "qty": "24.0000", "quote_age_s": 0.0038805007934570312, "queue0": "2634.0000"}
+{"ev": "CANCEL", "t": 1790946609.5388353, "oid": 114, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946609.5388353, "oid": 115, "side": "buy", "px": "0.2000", "qty": 25, "queue_ahead": "2634.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946609.5389647, "oid": 115, "side": "buy", "px": "0.2000", "qty": "25", "quote_age_s": 0.00012946128845214844, "queue0": "2634.0000"}
+{"ev": "CANCEL", "t": 1790946609.5389647, "oid": 115, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946609.5389647, "oid": 116, "side": "buy", "px": "0.2000", "qty": 25, "queue_ahead": "2634.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946609.5392578, "oid": 116, "side": "buy", "px": "0.2000", "qty": "25", "quote_age_s": 0.0002930164337158203, "queue0": "2634.0000"}
+{"ev": "CANCEL", "t": 1790946609.5392578, "oid": 116, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946609.5392578, "oid": 117, "side": "buy", "px": "0.2000", "qty": 25, "queue_ahead": "2634.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946609.539385, "oid": 117, "side": "buy", "px": "0.2000", "qty": "25", "quote_age_s": 0.00012731552124023438, "queue0": "2634.0000"}
+{"ev": "CANCEL", "t": 1790946609.539385, "oid": 117, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946609.539385, "oid": 118, "side": "buy", "px": "0.2000", "qty": 25, "queue_ahead": "2634.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946609.539475, "oid": 118, "side": "buy", "px": "0.2000", "qty": "25", "quote_age_s": 8.988380432128906e-05, "queue0": "2634.0000"}
+{"ev": "CANCEL", "t": 1790946609.539475, "oid": 118, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946609.539475, "oid": 119, "side": "buy", "px": "0.2000", "qty": 25, "queue_ahead": "2634.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946631.9161952, "oid": 113, "age_s": 30.28255581855774}
+{"ev": "PLACE", "t": 1790946631.9161952, "oid": 120, "side": "sell", "px": "0.2200", "qty": 25, "queue_ahead": "557.0800", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946639.3054764, "oid": 120, "side": "sell", "px": "0.2200", "qty": "3.0000", "quote_age_s": 7.389281272888184, "queue0": "557.0800"}
+{"ev": "FILL", "t": 1790946639.3056688, "oid": 120, "side": "sell", "px": "0.2200", "qty": "22.0000", "quote_age_s": 7.3894736766815186, "queue0": "557.0800"}
+{"ev": "CANCEL", "t": 1790946639.3056688, "oid": 120, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946639.3056688, "oid": 121, "side": "sell", "px": "0.2400", "qty": 25, "queue_ahead": "410.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946639.8665218, "oid": 119, "age_s": 30.327046871185303}
+{"ev": "FILL", "t": 1790946639.8665218, "oid": 121, "side": "sell", "px": "0.2400", "qty": "20.0000", "quote_age_s": 0.5608530044555664, "queue0": "410.0000"}
+{"ev": "PLACE", "t": 1790946639.8665218, "oid": 122, "side": "buy", "px": "0.2400", "qty": 25, "queue_ahead": "3749.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946641.5891566, "oid": 122, "side": "buy", "px": "0.2400", "qty": "0.0600", "quote_age_s": 1.7226347923278809, "queue0": "3749.0000"}
+{"ev": "FILL", "t": 1790946642.0211694, "oid": 122, "side": "buy", "px": "0.2400", "qty": "19.0000", "quote_age_s": 2.1546475887298584, "queue0": "3749.0000"}
+{"ev": "FILL", "t": 1790946642.0213454, "oid": 122, "side": "buy", "px": "0.2400", "qty": "5.9400", "quote_age_s": 2.1548235416412354, "queue0": "3749.0000"}
+{"ev": "CANCEL", "t": 1790946642.0213454, "oid": 122, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946642.0213454, "oid": 123, "side": "buy", "px": "0.2200", "qty": 25, "queue_ahead": "443.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946659.3467603, "oid": 123, "side": "buy", "px": "0.2200", "qty": "5.0000", "quote_age_s": 17.325414896011353, "queue0": "443.0000"}
+{"ev": "FILL", "t": 1790946660.2086148, "oid": 123, "side": "buy", "px": "0.2200", "qty": "5.0000", "quote_age_s": 18.18726944923401, "queue0": "443.0000"}
+{"ev": "FILL", "t": 1790946660.4108353, "oid": 123, "side": "buy", "px": "0.2200", "qty": "1.7800", "quote_age_s": 18.389489889144897, "queue0": "443.0000"}
+{"ev": "FILL", "t": 1790946660.4320414, "oid": 123, "side": "buy", "px": "0.2200", "qty": "4.0000", "quote_age_s": 18.410696029663086, "queue0": "443.0000"}
+{"ev": "FILL", "t": 1790946661.5659366, "oid": 123, "side": "buy", "px": "0.2200", "qty": "1.7900", "quote_age_s": 19.544591188430786, "queue0": "443.0000"}
+{"ev": "FILL", "t": 1790946666.0109932, "oid": 123, "side": "buy", "px": "0.2200", "qty": "7.4300", "quote_age_s": 23.98964786529541, "queue0": "443.0000"}
+{"ev": "CANCEL", "t": 1790946666.0109932, "oid": 123, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946666.0109932, "oid": 124, "side": "buy", "px": "0.1600", "qty": 25, "queue_ahead": "440.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946666.9440248, "oid": 124, "side": "buy", "px": "0.1600", "qty": "11.7500", "quote_age_s": 0.9330315589904785, "queue0": "440.0000"}
+{"ev": "FILL", "t": 1790946667.408599, "oid": 124, "side": "buy", "px": "0.1600", "qty": "13.2500", "quote_age_s": 1.3976056575775146, "queue0": "440.0000"}
+{"ev": "CANCEL", "t": 1790946667.408599, "oid": 124, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946667.408599, "oid": 125, "side": "buy", "px": "0.1500", "qty": 25, "queue_ahead": "4642.0000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946670.6251614, "oid": 121, "age_s": 31.31949257850647}
+{"ev": "PLACE", "t": 1790946670.6251614, "oid": 126, "side": "sell", "px": "0.1800", "qty": 25, "queue_ahead": "6204.6600", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946672.5456455, "oid": 125, "side": "buy", "px": "0.1500", "qty": "11.3600", "quote_age_s": 5.137046575546265, "queue0": "4642.0000"}
+{"ev": "FILL", "t": 1790946673.0192845, "oid": 125, "side": "buy", "px": "0.1500", "qty": "7.9100", "quote_age_s": 5.610685586929321, "queue0": "4642.0000"}
+{"ev": "FILL", "t": 1790946673.1204615, "oid": 125, "side": "buy", "px": "0.1500", "qty": "1.2600", "quote_age_s": 5.711862564086914, "queue0": "4642.0000"}
+{"ev": "FILL", "t": 1790946673.146414, "oid": 125, "side": "buy", "px": "0.1500", "qty": "1.2600", "quote_age_s": 5.7378151416778564, "queue0": "4642.0000"}
+{"ev": "FILL", "t": 1790946673.1466734, "oid": 125, "side": "buy", "px": "0.1500", "qty": "1.2600", "quote_age_s": 5.738074541091919, "queue0": "4642.0000"}
+{"ev": "FILL", "t": 1790946673.1469927, "oid": 125, "side": "buy", "px": "0.1500", "qty": "0.8800", "quote_age_s": 5.738393783569336, "queue0": "4642.0000"}
+{"ev": "FILL", "t": 1790946674.1376603, "oid": 125, "side": "buy", "px": "0.1500", "qty": "1.0700", "quote_age_s": 6.7290613651275635, "queue0": "4642.0000"}
+{"ev": "CANCEL", "t": 1790946674.1376603, "oid": 125, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946674.1376603, "oid": 127, "side": "buy", "px": "0.1000", "qty": 25, "queue_ahead": "3572.7300", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946681.4885986, "oid": 127, "side": "buy", "px": "0.1000", "qty": "25", "quote_age_s": 7.350938320159912, "queue0": "3572.7300"}
+{"ev": "CANCEL", "t": 1790946681.4885986, "oid": 127, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946681.4885986, "oid": 128, "side": "buy", "px": "0.0800", "qty": 25, "queue_ahead": "5196.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946681.7174556, "oid": 128, "side": "buy", "px": "0.0800", "qty": "2.1300", "quote_age_s": 0.22885704040527344, "queue0": "5196.0000"}
+{"ev": "FILL", "t": 1790946682.6058981, "oid": 128, "side": "buy", "px": "0.0800", "qty": "20.6900", "quote_age_s": 1.1172995567321777, "queue0": "5196.0000"}
+{"ev": "FILL", "t": 1790946684.3878658, "oid": 128, "side": "buy", "px": "0.0800", "qty": "2.1800", "quote_age_s": 2.8992671966552734, "queue0": "5196.0000"}
+{"ev": "CANCEL", "t": 1790946684.3878658, "oid": 128, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946684.3878658, "oid": 129, "side": "buy", "px": "0.0900", "qty": 25, "queue_ahead": "5417.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946692.4564412, "oid": 129, "side": "buy", "px": "0.0900", "qty": "2.5300", "quote_age_s": 8.068575382232666, "queue0": "5417.0000"}
+{"ev": "FILL", "t": 1790946692.6898694, "oid": 129, "side": "buy", "px": "0.0900", "qty": "18.3000", "quote_age_s": 8.302003622055054, "queue0": "5417.0000"}
+{"ev": "FILL", "t": 1790946692.6903913, "oid": 129, "side": "buy", "px": "0.0900", "qty": "4.1700", "quote_age_s": 8.302525520324707, "queue0": "5417.0000"}
+{"ev": "CANCEL", "t": 1790946692.6903913, "oid": 129, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946692.6903913, "oid": 130, "side": "buy", "px": "0.0800", "qty": 25, "queue_ahead": "5904.3000", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946701.3580327, "oid": 126, "age_s": 30.732871294021606}
+{"ev": "PLACE", "t": 1790946701.3580327, "oid": 131, "side": "sell", "px": "0.1100", "qty": 25, "queue_ahead": "1924.6700", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946704.6936462, "oid": 130, "side": "buy", "px": "0.0800", "qty": "1.2700", "quote_age_s": 12.003254890441895, "queue0": "5904.3000"}
+{"ev": "FILL", "t": 1790946704.7732463, "oid": 130, "side": "buy", "px": "0.0800", "qty": "23.7300", "quote_age_s": 12.082854986190796, "queue0": "5904.3000"}
+{"ev": "CANCEL", "t": 1790946704.7732463, "oid": 130, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946704.7732463, "oid": 132, "side": "buy", "px": "0.0500", "qty": 25, "queue_ahead": "2730.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946713.2787707, "oid": 132, "side": "buy", "px": "0.0500", "qty": "25", "quote_age_s": 8.505524396896362, "queue0": "2730.0000"}
+{"ev": "CANCEL", "t": 1790946713.2787707, "oid": 132, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946713.2787707, "oid": 133, "side": "buy", "px": "0.0500", "qty": 25, "queue_ahead": "168.9200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946713.2788744, "oid": 133, "side": "buy", "px": "0.0500", "qty": "25", "quote_age_s": 0.00010371208190917969, "queue0": "168.9200"}
+{"ev": "CANCEL", "t": 1790946713.2788744, "oid": 133, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946713.2788744, "oid": 134, "side": "buy", "px": "0.0500", "qty": 25, "queue_ahead": "168.9200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946713.278953, "oid": 134, "side": "buy", "px": "0.0500", "qty": "25", "quote_age_s": 7.867813110351562e-05, "queue0": "168.9200"}
+{"ev": "CANCEL", "t": 1790946713.278953, "oid": 134, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946713.278953, "oid": 135, "side": "buy", "px": "0.0500", "qty": 25, "queue_ahead": "168.9200", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946715.0974169, "oid": 135, "side": "buy", "px": "0.0500", "qty": "5.2700", "quote_age_s": 1.8184638023376465, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946718.5872908, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.308337688446045, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946718.6865613, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.407608270645142, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946718.7556207, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.476667642593384, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946718.8308542, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.55190110206604, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.0603714, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.781418323516846, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.0658264, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.7868733406066895, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.1036625, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.5100", "quote_age_s": 5.824709415435791, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.1530476, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.874094486236572, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.1816869, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.5100", "quote_age_s": 5.90273380279541, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.197337, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.918383836746216, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.247816, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.5100", "quote_age_s": 5.968863010406494, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.2567546, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 5.977801561355591, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.350978, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 6.072024822235107, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.3867736, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.5100", "quote_age_s": 6.107820510864258, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.4064753, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 6.127522230148315, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.4859197, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 6.2069666385650635, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.486145, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.5100", "quote_age_s": 6.2071919441223145, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.5279884, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.5100", "quote_age_s": 6.249035358428955, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.528202, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2800", "quote_age_s": 6.24924898147583, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.5813231, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.2100", "quote_age_s": 6.302370071411133, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.5815077, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.0700", "quote_age_s": 6.302554607391357, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.5874372, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.5100", "quote_age_s": 6.308484077453613, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946719.6541996, "oid": 135, "side": "buy", "px": "0.0500", "qty": "0.4200", "quote_age_s": 6.375246524810791, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946720.1657293, "oid": 135, "side": "buy", "px": "0.0500", "qty": "1.7300", "quote_age_s": 6.8867762088775635, "queue0": "168.9200"}
+{"ev": "FILL", "t": 1790946720.6097248, "oid": 135, "side": "buy", "px": "0.0500", "qty": "3.0900", "quote_age_s": 7.3307716846466064, "queue0": "168.9200"}
+{"ev": "CANCEL", "t": 1790946720.6097248, "oid": 135, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946720.6097248, "oid": 136, "side": "buy", "px": "0.0400", "qty": 25, "queue_ahead": "177.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946721.826743, "oid": 136, "side": "buy", "px": "0.0400", "qty": "2.0000", "quote_age_s": 1.2170181274414062, "queue0": "177.0000"}
+{"ev": "FILL", "t": 1790946721.8712718, "oid": 136, "side": "buy", "px": "0.0400", "qty": "23.0000", "quote_age_s": 1.2615470886230469, "queue0": "177.0000"}
+{"ev": "CANCEL", "t": 1790946721.8712718, "oid": 136, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946721.8712718, "oid": 137, "side": "buy", "px": "0.0400", "qty": 25, "queue_ahead": "299.3600", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946731.6119926, "oid": 131, "age_s": 30.253959894180298}
+{"ev": "PLACE", "t": 1790946731.6119926, "oid": 138, "side": "sell", "px": "0.0500", "qty": 25, "queue_ahead": "3681.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946739.4258235, "oid": 137, "side": "buy", "px": "0.0400", "qty": "25", "quote_age_s": 17.554551601409912, "queue0": "299.3600"}
+{"ev": "CANCEL", "t": 1790946739.4258235, "oid": 137, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946739.4258235, "oid": 139, "side": "buy", "px": "0.0200", "qty": 25, "queue_ahead": "8446.0000", "why": "no_resting_order"}
+{"ev": "FILL", "t": 1790946743.0594435, "oid": 139, "side": "buy", "px": "0.0200", "qty": "10.0900", "quote_age_s": 3.633620023727417, "queue0": "8446.0000"}
+{"ev": "FILL", "t": 1790946749.4576535, "oid": 139, "side": "buy", "px": "0.0200", "qty": "9.0000", "quote_age_s": 10.031830072402954, "queue0": "8446.0000"}
+{"ev": "FILL", "t": 1790946750.487408, "oid": 139, "side": "buy", "px": "0.0200", "qty": "5.9100", "quote_age_s": 11.06158447265625, "queue0": "8446.0000"}
+{"ev": "CANCEL", "t": 1790946750.487408, "oid": 139, "why": "fully_filled"}
+{"ev": "PLACE", "t": 1790946750.487408, "oid": 140, "side": "buy", "px": "0.0100", "qty": 25, "queue_ahead": "7219.2100", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946761.8213334, "oid": 138, "age_s": 30.209340810775757}
+{"ev": "PLACE", "t": 1790946761.8213334, "oid": 141, "side": "sell", "px": "0.0100", "qty": 25, "queue_ahead": "12057.8900", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946781.4241414, "oid": 140, "age_s": 30.93673348426819}
+{"ev": "PLACE", "t": 1790946781.4241414, "oid": 142, "side": "buy", "px": "0.0100", "qty": 25, "queue_ahead": "1215.2100", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946794.6401684, "oid": 141, "age_s": 32.81883502006531}
+{"ev": "PLACE", "t": 1790946794.6401684, "oid": 143, "side": "sell", "px": "0.0100", "qty": 25, "queue_ahead": "6308.6900", "why": "no_resting_order"}
+{"ev": "EXPIRE", "t": 1790946815.9029145, "oid": 142, "age_s": 34.47877311706543}
+{"ev": "EXPIRE", "t": 1790946824.8079674, "oid": 143, "age_s": 30.16779899597168}
