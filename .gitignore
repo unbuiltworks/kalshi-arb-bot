@@ -98,3 +98,9 @@ data/pmus/incentives/programs.json
 # DISK, and the completed tape is committed in its .gz form once the run
 # ends, alongside the derived SHADOW_RESULT.json.
 data/pmus/reward_shadow/*.jsonl
+
+# BTC 15m replay: the Coinbase 1-minute candle cache is written by a running
+# fetcher and is regenerable via scripts/btc15m_fetch_coinbase.py. Same rule as
+# the other in-flight collector files: the raw JSONL stays on disk, and the
+# completed cache is committed gzipped once the fetch ends.
+data/btc15m/coinbase_1m.jsonl
