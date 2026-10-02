@@ -1911,5 +1911,20 @@
    "klass": "UNUSABLE",
    "reason": "late-window checkpoints not covered by tape: T-300,180,120,60,30"
   }
- ]
+ ],
+ "reserved_denylist": {
+  "rule": "Never read, score, or consume. Enforced by name as well as by tape membership, so a window reserved by the active PMUS experiment stays excluded even if it later appears in a tape we harvest.",
+  "oos_tape_slugs": "all cpc- slugs present in data/pmus_btc15m_tape_oos/ (51 windows, 2026-09-28 02:30z-15:00z)",
+  "post_fix_all": "every window with start >= 2026-10-02T17:12:46Z (the ddc2195c seen-retention fix)",
+  "named_explicitly": [
+   "cpc-btc-updown-15m-2026-10-02-1715z",
+   "cpc-btc-updown-15m-2026-10-02-1730z"
+  ],
+  "note": "The 1715z late longshot state (bid null / ask 0.01 with shares_traded 559k->633k in 90s) MOTIVATES the hypothesis and is cited only as motivation. Its outcome, prices, fills, calibration result and P&L are not used anywhere in this lane."
+ },
+ "depth_capability": {
+  "historical_committed_auth_tape": "TOP OF BOOK ONLY (bid/ask/bid_qty/ask_qty). No depth beyond the touch, so queue-ahead is observable only AT the touch and no capacity curve can be built from it.",
+  "current_recorder_post_ddc2195c": "FULL L2 LADDER at ~2s cadence, observed live 2026-10-02T17:26-17:27Z on pmus-btc15m-tape (39-43 price levels per book row, plus ~2s bbo). Forward clean data should therefore support genuine capacity analysis.",
+  "do_not_conflate": "The top-of-book limit is a property of the HISTORICAL tape this lane must use for discovery, NOT a limit of the current recorder. Phase 3 forward requirements assume full-L2 forward capture."
+ }
 }
