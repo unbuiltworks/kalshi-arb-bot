@@ -119,3 +119,4 @@ data/gemini_shadow/merged/
 # Authenticated PMUS tape: raw JSONL is harvested from the existing
 # pmus-ws-evidence-recorder Railway logs and is regenerable; the .gz is tracked.
 data/pmus_ws_tape/*.jsonl
+data/btc_ref/*.jsonl

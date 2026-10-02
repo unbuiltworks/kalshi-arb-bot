@@ -1,0 +1,804 @@
+{
+  "tape": "data/pmus_ws_tape/pmus_btc15m_auth_tape.jsonl",
+  "windows": 15,
+  "q": 25,
+  "rtt_p50": 0.266,
+  "rtt_p90": 0.612,
+  "ttls": {
+    "TTL5": 5.0,
+    "TTL30": 30.0,
+    "WINDOW": null
+  },
+  "toxicity_label": "MAE > MFE over remainder of window (NOT the frozen FORCED label)",
+  "summary": {
+    "PEG": {
+      "replaces": 5911,
+      "fills": 876,
+      "toxic": 460,
+      "toxic_rate": 0.5251,
+      "impossible_fills": 379,
+      "impossible_rate": 0.4326,
+      "chase_fraction": 0.8389,
+      "quote_lifetime_s": {
+        "p10": 0.2736,
+        "p50": 1.4724,
+        "p90": 6.1725
+      },
+      "lifetime_below_rtt_p50": 0.0956,
+      "age_at_fill_s": {
+        "p50": 0.3957,
+        "p90": 4.7748
+      }
+    },
+    "TTL5": {
+      "placed": 3298,
+      "expired": 2908,
+      "fills": 697,
+      "toxic": 366,
+      "toxic_rate": 0.5251,
+      "age_at_fill_s": {
+        "p50": 1.1427,
+        "p90": 4.1826
+      }
+    },
+    "TTL30": {
+      "placed": 842,
+      "expired": 546,
+      "fills": 517,
+      "toxic": 258,
+      "toxic_rate": 0.499,
+      "age_at_fill_s": {
+        "p50": 4.6959,
+        "p90": 23.1048
+      }
+    },
+    "WINDOW": {
+      "placed": 230,
+      "expired": 0,
+      "fills": 367,
+      "toxic": 198,
+      "toxic_rate": 0.5395,
+      "age_at_fill_s": {
+        "p50": 16.7463,
+        "p90": 168.0547
+      }
+    }
+  },
+  "per_window": {
+    "cpc-btc-updown-15m-2026-09-30-1215z": {
+      "PEG": {
+        "replaces": 508,
+        "fills": 82,
+        "toxic": 52,
+        "impossible_fills": 36,
+        "chase_fraction": 0.8484,
+        "quote_lifetime_s": {
+          "p10": 0.2093,
+          "p50": 1.1393,
+          "p90": 4.9811
+        },
+        "age_at_fill_s": {
+          "p10": 0.0014,
+          "p50": 0.3939,
+          "p90": 1.7824
+        }
+      },
+      "TTL5": {
+        "placed": 201,
+        "expired": 160,
+        "fills": 83,
+        "toxic": 51,
+        "age_at_fill_s": {
+          "p50": 0.8492,
+          "p90": 3.259
+        }
+      },
+      "TTL30": {
+        "placed": 51,
+        "expired": 31,
+        "fills": 47,
+        "toxic": 28,
+        "age_at_fill_s": {
+          "p50": 1.6397,
+          "p90": 23.5415
+        }
+      },
+      "WINDOW": {
+        "placed": 9,
+        "expired": 0,
+        "fills": 24,
+        "toxic": 15,
+        "age_at_fill_s": {
+          "p50": 50.9081,
+          "p90": 113.6208
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-09-30-1230z": {
+      "PEG": {
+        "replaces": 175,
+        "fills": 54,
+        "toxic": 27,
+        "impossible_fills": 12,
+        "chase_fraction": 0.7714,
+        "quote_lifetime_s": {
+          "p10": 0.3212,
+          "p50": 1.9255,
+          "p90": 8.6161
+        },
+        "age_at_fill_s": {
+          "p10": 0.0436,
+          "p50": 3.2918,
+          "p90": 22.0132
+        }
+      },
+      "TTL5": {
+        "placed": 216,
+        "expired": 204,
+        "fills": 20,
+        "toxic": 6,
+        "age_at_fill_s": {
+          "p50": 1.9754,
+          "p90": 4.2132
+        }
+      },
+      "TTL30": {
+        "placed": 59,
+        "expired": 46,
+        "fills": 20,
+        "toxic": 13,
+        "age_at_fill_s": {
+          "p50": 9.2208,
+          "p90": 23.1048
+        }
+      },
+      "WINDOW": {
+        "placed": 16,
+        "expired": 0,
+        "fills": 19,
+        "toxic": 12,
+        "age_at_fill_s": {
+          "p50": 22.0132,
+          "p90": 201.0747
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-09-30-1245z": {
+      "PEG": {
+        "replaces": 319,
+        "fills": 88,
+        "toxic": 36,
+        "impossible_fills": 27,
+        "chase_fraction": 0.8213,
+        "quote_lifetime_s": {
+          "p10": 0.2849,
+          "p50": 1.3267,
+          "p90": 6.2054
+        },
+        "age_at_fill_s": {
+          "p10": 0.0006,
+          "p50": 1.0151,
+          "p90": 15.1325
+        }
+      },
+      "TTL5": {
+        "placed": 241,
+        "expired": 208,
+        "fills": 58,
+        "toxic": 33,
+        "age_at_fill_s": {
+          "p50": 0.7363,
+          "p90": 4.1288
+        }
+      },
+      "TTL30": {
+        "placed": 75,
+        "expired": 40,
+        "fills": 63,
+        "toxic": 35,
+        "age_at_fill_s": {
+          "p50": 5.1034,
+          "p90": 17.4972
+        }
+      },
+      "WINDOW": {
+        "placed": 30,
+        "expired": 0,
+        "fills": 55,
+        "toxic": 38,
+        "age_at_fill_s": {
+          "p50": 5.2387,
+          "p90": 144.018
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-09-30-1300z": {
+      "PEG": {
+        "replaces": 560,
+        "fills": 100,
+        "toxic": 54,
+        "impossible_fills": 40,
+        "chase_fraction": 0.8268,
+        "quote_lifetime_s": {
+          "p10": 0.2892,
+          "p50": 1.505,
+          "p90": 6.2607
+        },
+        "age_at_fill_s": {
+          "p10": 0.0004,
+          "p50": 0.4916,
+          "p90": 3.5087
+        }
+      },
+      "TTL5": {
+        "placed": 294,
+        "expired": 256,
+        "fills": 73,
+        "toxic": 34,
+        "age_at_fill_s": {
+          "p50": 2.5015,
+          "p90": 4.066
+        }
+      },
+      "TTL30": {
+        "placed": 70,
+        "expired": 43,
+        "fills": 38,
+        "toxic": 18,
+        "age_at_fill_s": {
+          "p50": 15.0894,
+          "p90": 20.9444
+        }
+      },
+      "WINDOW": {
+        "placed": 14,
+        "expired": 0,
+        "fills": 22,
+        "toxic": 18,
+        "age_at_fill_s": {
+          "p50": 53.6443,
+          "p90": 119.6973
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-09-30-1315z": {
+      "PEG": {
+        "replaces": 587,
+        "fills": 100,
+        "toxic": 45,
+        "impossible_fills": 40,
+        "chase_fraction": 0.8433,
+        "quote_lifetime_s": {
+          "p10": 0.4107,
+          "p50": 1.6462,
+          "p90": 6.1743
+        },
+        "age_at_fill_s": {
+          "p10": 0.0003,
+          "p50": 0.5167,
+          "p90": 2.9069
+        }
+      },
+      "TTL5": {
+        "placed": 298,
+        "expired": 250,
+        "fills": 101,
+        "toxic": 57,
+        "age_at_fill_s": {
+          "p50": 1.4116,
+          "p90": 4.0811
+        }
+      },
+      "TTL30": {
+        "placed": 74,
+        "expired": 44,
+        "fills": 56,
+        "toxic": 33,
+        "age_at_fill_s": {
+          "p50": 6.535,
+          "p90": 24.6323
+        }
+      },
+      "WINDOW": {
+        "placed": 34,
+        "expired": 0,
+        "fills": 53,
+        "toxic": 36,
+        "age_at_fill_s": {
+          "p50": 6.9753,
+          "p90": 120.739
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-09-30-1330z": {
+      "PEG": {
+        "replaces": 525,
+        "fills": 60,
+        "toxic": 30,
+        "impossible_fills": 25,
+        "chase_fraction": 0.8229,
+        "quote_lifetime_s": {
+          "p10": 0.2619,
+          "p50": 1.1322,
+          "p90": 4.7054
+        },
+        "age_at_fill_s": {
+          "p10": 0.0052,
+          "p50": 0.358,
+          "p90": 5.3336
+        }
+      },
+      "TTL5": {
+        "placed": 296,
+        "expired": 261,
+        "fills": 65,
+        "toxic": 32,
+        "age_at_fill_s": {
+          "p50": 0.9272,
+          "p90": 4.2826
+        }
+      },
+      "TTL30": {
+        "placed": 72,
+        "expired": 45,
+        "fills": 58,
+        "toxic": 33,
+        "age_at_fill_s": {
+          "p50": 4.4458,
+          "p90": 23.9046
+        }
+      },
+      "WINDOW": {
+        "placed": 23,
+        "expired": 0,
+        "fills": 32,
+        "toxic": 21,
+        "age_at_fill_s": {
+          "p50": 8.1043,
+          "p90": 55.1563
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-09-30-1345z": {
+      "PEG": {
+        "replaces": 514,
+        "fills": 120,
+        "toxic": 64,
+        "impossible_fills": 58,
+        "chase_fraction": 0.8327,
+        "quote_lifetime_s": {
+          "p10": 0.3083,
+          "p50": 1.2604,
+          "p90": 4.9781
+        },
+        "age_at_fill_s": {
+          "p10": 0.0003,
+          "p50": 0.3323,
+          "p90": 3.8359
+        }
+      },
+      "TTL5": {
+        "placed": 208,
+        "expired": 161,
+        "fills": 92,
+        "toxic": 51,
+        "age_at_fill_s": {
+          "p50": 1.3911,
+          "p90": 4.3334
+        }
+      },
+      "TTL30": {
+        "placed": 56,
+        "expired": 28,
+        "fills": 58,
+        "toxic": 30,
+        "age_at_fill_s": {
+          "p50": 4.5731,
+          "p90": 16.752
+        }
+      },
+      "WINDOW": {
+        "placed": 20,
+        "expired": 0,
+        "fills": 32,
+        "toxic": 8,
+        "age_at_fill_s": {
+          "p50": 6.4033,
+          "p90": 39.9425
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-0400z": {
+      "PEG": {
+        "replaces": 59,
+        "fills": 5,
+        "toxic": 3,
+        "impossible_fills": 3,
+        "chase_fraction": 0.9153,
+        "quote_lifetime_s": {
+          "p10": 0.1159,
+          "p50": 0.7096,
+          "p90": 4.83
+        },
+        "age_at_fill_s": {
+          "p10": 0.0066,
+          "p50": 0.2045,
+          "p90": 1.1035
+        }
+      },
+      "TTL5": {
+        "placed": 18,
+        "expired": 15,
+        "fills": 1,
+        "toxic": 0,
+        "age_at_fill_s": {
+          "p50": 4.682,
+          "p90": 4.682
+        }
+      },
+      "TTL30": {
+        "placed": 6,
+        "expired": 2,
+        "fills": 2,
+        "toxic": 1,
+        "age_at_fill_s": {
+          "p50": 11.6238,
+          "p90": 11.6238
+        }
+      },
+      "WINDOW": {
+        "placed": 3,
+        "expired": 0,
+        "fills": 1,
+        "toxic": 0,
+        "age_at_fill_s": {
+          "p50": 11.6238,
+          "p90": 11.6238
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1045z": {
+      "PEG": {
+        "replaces": 82,
+        "fills": 8,
+        "toxic": 1,
+        "impossible_fills": 5,
+        "chase_fraction": 0.7927,
+        "quote_lifetime_s": {
+          "p10": 0.4622,
+          "p50": 2.4181,
+          "p90": 6.9589
+        },
+        "age_at_fill_s": {
+          "p10": 0.0262,
+          "p50": 0.2341,
+          "p90": 17.7819
+        }
+      },
+      "TTL5": {
+        "placed": 72,
+        "expired": 70,
+        "fills": 2,
+        "toxic": 1,
+        "age_at_fill_s": {
+          "p50": 2.1766,
+          "p90": 2.1766
+        }
+      },
+      "TTL30": {
+        "placed": 16,
+        "expired": 14,
+        "fills": 3,
+        "toxic": 0,
+        "age_at_fill_s": {
+          "p50": 0.0581,
+          "p90": 5.2575
+        }
+      },
+      "WINDOW": {
+        "placed": 3,
+        "expired": 0,
+        "fills": 2,
+        "toxic": 2,
+        "age_at_fill_s": {
+          "p50": 168.1584,
+          "p90": 168.1584
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1100z": {
+      "PEG": {
+        "replaces": 270,
+        "fills": 23,
+        "toxic": 5,
+        "impossible_fills": 3,
+        "chase_fraction": 0.8556,
+        "quote_lifetime_s": {
+          "p10": 0.4562,
+          "p50": 3.021,
+          "p90": 8.3122
+        },
+        "age_at_fill_s": {
+          "p10": 0.0184,
+          "p50": 4.0329,
+          "p90": 15.4181
+        }
+      },
+      "TTL5": {
+        "placed": 265,
+        "expired": 238,
+        "fills": 40,
+        "toxic": 3,
+        "age_at_fill_s": {
+          "p50": 1.0753,
+          "p90": 4.161
+        }
+      },
+      "TTL30": {
+        "placed": 76,
+        "expired": 45,
+        "fills": 44,
+        "toxic": 2,
+        "age_at_fill_s": {
+          "p50": 5.2836,
+          "p90": 25.3485
+        }
+      },
+      "WINDOW": {
+        "placed": 24,
+        "expired": 0,
+        "fills": 42,
+        "toxic": 16,
+        "age_at_fill_s": {
+          "p50": 25.3487,
+          "p90": 142.4274
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1115z": {
+      "PEG": {
+        "replaces": 471,
+        "fills": 42,
+        "toxic": 38,
+        "impossible_fills": 22,
+        "chase_fraction": 0.8684,
+        "quote_lifetime_s": {
+          "p10": 0.3452,
+          "p50": 2.1353,
+          "p90": 7.1697
+        },
+        "age_at_fill_s": {
+          "p10": 0.0002,
+          "p50": 0.2072,
+          "p90": 6.5211
+        }
+      },
+      "TTL5": {
+        "placed": 271,
+        "expired": 256,
+        "fills": 27,
+        "toxic": 20,
+        "age_at_fill_s": {
+          "p50": 1.2902,
+          "p90": 4.3435
+        }
+      },
+      "TTL30": {
+        "placed": 61,
+        "expired": 50,
+        "fills": 18,
+        "toxic": 11,
+        "age_at_fill_s": {
+          "p50": 11.9846,
+          "p90": 21.1428
+        }
+      },
+      "WINDOW": {
+        "placed": 11,
+        "expired": 0,
+        "fills": 21,
+        "toxic": 8,
+        "age_at_fill_s": {
+          "p50": 52.3125,
+          "p90": 239.7097
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1130z": {
+      "PEG": {
+        "replaces": 353,
+        "fills": 18,
+        "toxic": 8,
+        "impossible_fills": 7,
+        "chase_fraction": 0.8159,
+        "quote_lifetime_s": {
+          "p10": 0.3618,
+          "p50": 2.6309,
+          "p90": 10.0822
+        },
+        "age_at_fill_s": {
+          "p10": 0.0003,
+          "p50": 0.3957,
+          "p90": 2.3482
+        }
+      },
+      "TTL5": {
+        "placed": 263,
+        "expired": 252,
+        "fills": 17,
+        "toxic": 10,
+        "age_at_fill_s": {
+          "p50": 0.8525,
+          "p90": 2.2786
+        }
+      },
+      "TTL30": {
+        "placed": 55,
+        "expired": 50,
+        "fills": 8,
+        "toxic": 4,
+        "age_at_fill_s": {
+          "p50": 17.4383,
+          "p90": 26.0388
+        }
+      },
+      "WINDOW": {
+        "placed": 7,
+        "expired": 0,
+        "fills": 9,
+        "toxic": 6,
+        "age_at_fill_s": {
+          "p50": 93.0138,
+          "p90": 317.5566
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1145z": {
+      "PEG": {
+        "replaces": 631,
+        "fills": 57,
+        "toxic": 44,
+        "impossible_fills": 28,
+        "chase_fraction": 0.8463,
+        "quote_lifetime_s": {
+          "p10": 0.2693,
+          "p50": 1.4393,
+          "p90": 5.8558
+        },
+        "age_at_fill_s": {
+          "p10": 0.0105,
+          "p50": 0.2961,
+          "p90": 3.1567
+        }
+      },
+      "TTL5": {
+        "placed": 287,
+        "expired": 255,
+        "fills": 50,
+        "toxic": 27,
+        "age_at_fill_s": {
+          "p50": 1.3829,
+          "p90": 4.2754
+        }
+      },
+      "TTL30": {
+        "placed": 69,
+        "expired": 47,
+        "fills": 37,
+        "toxic": 24,
+        "age_at_fill_s": {
+          "p50": 4.6959,
+          "p90": 23.8945
+        }
+      },
+      "WINDOW": {
+        "placed": 10,
+        "expired": 0,
+        "fills": 20,
+        "toxic": 7,
+        "age_at_fill_s": {
+          "p50": 327.5954,
+          "p90": 354.0292
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1200z": {
+      "PEG": {
+        "replaces": 743,
+        "fills": 109,
+        "toxic": 49,
+        "impossible_fills": 71,
+        "chase_fraction": 0.8573,
+        "quote_lifetime_s": {
+          "p10": 0.1585,
+          "p50": 1.1775,
+          "p90": 5.2497
+        },
+        "age_at_fill_s": {
+          "p10": 0.0002,
+          "p50": 0.039,
+          "p90": 1.4327
+        }
+      },
+      "TTL5": {
+        "placed": 291,
+        "expired": 251,
+        "fills": 64,
+        "toxic": 39,
+        "age_at_fill_s": {
+          "p50": 1.1042,
+          "p90": 4.2365
+        }
+      },
+      "TTL30": {
+        "placed": 86,
+        "expired": 48,
+        "fills": 62,
+        "toxic": 23,
+        "age_at_fill_s": {
+          "p50": 1.0653,
+          "p90": 28.3957
+        }
+      },
+      "WINDOW": {
+        "placed": 23,
+        "expired": 0,
+        "fills": 33,
+        "toxic": 9,
+        "age_at_fill_s": {
+          "p50": 13.1839,
+          "p90": 88.0439
+        }
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1215z": {
+      "PEG": {
+        "replaces": 114,
+        "fills": 10,
+        "toxic": 4,
+        "impossible_fills": 2,
+        "chase_fraction": 0.8333,
+        "quote_lifetime_s": {
+          "p10": 0.4143,
+          "p50": 3.2794,
+          "p90": 8.4814
+        },
+        "age_at_fill_s": {
+          "p10": 0.0002,
+          "p50": 2.9354,
+          "p90": 4.9874
+        }
+      },
+      "TTL5": {
+        "placed": 77,
+        "expired": 71,
+        "fills": 4,
+        "toxic": 2,
+        "age_at_fill_s": {
+          "p50": 4.6945,
+          "p90": 4.9874
+        }
+      },
+      "TTL30": {
+        "placed": 16,
+        "expired": 13,
+        "fills": 3,
+        "toxic": 3,
+        "age_at_fill_s": {
+          "p50": 16.2,
+          "p90": 16.2154
+        }
+      },
+      "WINDOW": {
+        "placed": 3,
+        "expired": 0,
+        "fills": 2,
+        "toxic": 2,
+        "age_at_fill_s": {
+          "p50": 45.5554,
+          "p90": 45.5554
+        }
+      }
+    }
+  }
+}
