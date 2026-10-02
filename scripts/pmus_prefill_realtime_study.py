@@ -83,14 +83,24 @@ def actionability(h):
 
 # ----------------------------------------------------------------- reference
 def load_ref():
+    """Returns receipt ts, venue ts, mids, skews, and the session/error rows.
+
+    Session and error rows are loaded because coverage has to be PROVEN rather
+    than assumed: a restart or a reconnect is a candidate gap, and a gap that is
+    not reported is a gap that silently becomes a fill.
+    """
     rows = []
     skews = []
     seen = set()
+    meta = []
     for p in sorted(glob.glob(REF_GLOB)):
         for line in open(p):
             try:
                 r = json.loads(line)
             except Exception:
+                continue
+            if r.get("kind") in ("session", "error", "clock"):
+                meta.append(r)
                 continue
             if r.get("kind") != "ref_bbo" or r.get("ev_ns") is None:
                 continue
@@ -108,7 +118,8 @@ def load_ref():
             if r.get("skew_ns") is not None:
                 skews.append(r["skew_ns"] / 1e9)
     rows.sort()
-    return ([r[0] for r in rows], [r[1] for r in rows], [r[2] for r in rows], skews)
+    return ([r[0] for r in rows], [r[1] for r in rows], [r[2] for r in rows],
+            skews, meta)
 
 
 def ref_at(ts, mids, t):
@@ -303,11 +314,93 @@ def features(lot, rows, rts, mids, skew_bound):
     return out
 
 
+def coverage_proof(slug, rows, books, rts, meta, max_gap_s=2.0):
+    """PROVE continuous overlapping coverage over one window; never assume it.
+
+    A gap is any inter-arrival longer than max_gap_s on either feed inside the
+    window span, and every reference restart (session row) or reconnect (error
+    row) inside the span is listed whether or not it produced a visible gap.
+    """
+    lo, hi = rows[0]["t"], rows[-1]["t"]
+    out = {"window": slug, "span_utc": [lo, hi], "span_s": round(hi - lo, 1)}
+
+    def gaps(ts):
+        g = []
+        for a, b in zip(ts, ts[1:]):
+            if b - a > max_gap_s:
+                g.append({"from": a, "to": b, "gap_s": round(b - a, 3)})
+        return g
+
+    ref_in = [t for t in rts if lo <= t <= hi]
+    bk_in = sorted(b["t"] for b in books if lo <= b["t"] <= hi)
+    tr_in = sorted(x["t"] for x in rows)
+    out["ref_rows_in_window"] = len(ref_in)
+    out["pmus_book_rows_in_window"] = len(bk_in)
+    out["pmus_trades_in_window"] = len(tr_in)
+    out["ref_gaps"] = gaps(ref_in)
+    out["pmus_book_gaps"] = gaps(bk_in)
+    out["ref_starts_before_window"] = bool(ref_in and ref_in[0] - lo < max_gap_s)
+    out["ref_covers_to_window_end"] = bool(ref_in and hi - ref_in[-1] < max_gap_s)
+    out["ref_restarts_in_window"] = [m for m in meta if m.get("kind") == "session"
+                                     and lo <= m.get("t_ns", 0) / 1e9 <= hi]
+    out["ref_errors_in_window"] = [m for m in meta if m.get("kind") == "error"
+                                   and lo <= m.get("t_ns", 0) / 1e9 <= hi]
+    out["continuous"] = bool(ref_in and not out["ref_gaps"]
+                             and not out["pmus_book_gaps"]
+                             and out["ref_starts_before_window"]
+                             and out["ref_covers_to_window_end"])
+    out["max_gap_s_threshold"] = max_gap_s
+    return out
+
+
+def event_sequence(lot, rows, rts, mids, back_s=5.0):
+    """Item 7: the ordered BTC -> PMUS book/queue -> trade/fill chain per fill.
+
+    One list, sorted by the clock each event was OBSERVED on (receipt), with the
+    source named on every row so the two feeds are never silently merged.
+    """
+    t = lot["t"]; i = lot["idx"]
+    seq = []
+    j = bisect.bisect_right(rts, t - back_s)
+    k = bisect.bisect_right(rts, t)
+    last = None
+    for n in range(j, k):
+        m = mids[n]
+        if last is None or abs(m - last) >= 0.01:     # only actual moves
+            seq.append({"src": "BTC_REF", "t_recv": round(rts[n], 6),
+                        "dt_to_fill_s": round(t - rts[n], 3), "mid": round(m, 2)})
+            last = m
+    qk = "bid_qty" if lot["side"] == "buy" else "ask_qty"
+    pk = "bid" if lot["side"] == "buy" else "ask"
+    prevb = None
+    for y in rows[:i + 1]:
+        if y["t"] < t - back_s:
+            continue
+        b = y["book"]
+        st = (b.get(pk), b.get(qk))
+        if st != prevb:
+            seq.append({"src": "PMUS_BOOK", "t_recv": round(b["t"], 6),
+                        "dt_to_fill_s": round(t - b["t"], 3),
+                        "our_level_px": str(b.get(pk)), "queue_ahead": str(b.get(qk))})
+            prevb = st
+        seq.append({"src": "PMUS_TRADE", "t_recv": round(y["t"], 6),
+                    "t_venue": y.get("trade_time"),
+                    "dt_to_fill_s": round(t - y["t"], 3),
+                    "px": str(y["px"]), "qty": str(y["qty"]), "dir": y["dir"],
+                    "consumed": "sell" if y["dir"] == "buy" else "buy"})
+    seq.sort(key=lambda r: r["t_recv"])
+    seq.append({"src": "SHADOW_FILL", "t_recv": round(t, 6), "dt_to_fill_s": 0.0,
+                "side": lot["side"], "px": str(lot["px"]),
+                "quote_age_s": round(lot["quote_age_s"], 3),
+                "queue_at_place": str(lot["queue0"])})
+    return seq
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=OUT)
     a = ap.parse_args()
-    rts, vts, mids, skews = load_ref()
+    rts, vts, mids, skews, meta = load_ref()
     skew_bound = round(sorted(skews)[len(skews) * 9 // 10], 3) if skews else 1.0
     tr, bk = pou.load()
     sc, dropped = pou.scorable(tr, bk)
@@ -322,6 +415,8 @@ def main():
         cov[slug] = {"pmus_span_s": round(hi - lo, 1), "overlap_s": round(ov, 1),
                      "covered": ov > 0.9 * (hi - lo)}
     covered = sorted(s for s, v in cov.items() if v["covered"])
+    proof = {s_: coverage_proof(s_, sc[s_], bk.get(s_) or [], rts, meta)
+             for s_ in covered}
 
     res = {"frozen_refs": {"prefill_study": "4cfc293f", "preregistration": "82714061"},
            "ref_rows": len(rts), "ref_span_recv": span,
@@ -332,6 +427,7 @@ def main():
            "horizons": {str(h): actionability(h) for h in HORIZONS},
            "levels": {k: list(v) for k, v in LEVELS.items()},
            "coverage": cov, "synchronized_windows": covered,
+           "coverage_proof": proof,
            "ttls": {k: v for k, v in TTLS}, "ceilings": [str(c) for c in CEILINGS]}
 
     if not covered:
@@ -372,10 +468,13 @@ def main():
         if ttl is None:        # the strictest arm carries the pre-fill study
             for l in allots:
                 rows = sc[l["slug"]]
-                per_fill.append({"slug": l["slug"], "t": l["t"], "side": l["side"],
-                                 "ceiling": l["ceiling"], "label": l["label"],
-                                 "quote_age_s": round(l["quote_age_s"], 3),
-                                 "f": features(l, rows, rts, mids, skew_bound)})
+                rec = {"slug": l["slug"], "t": l["t"], "side": l["side"],
+                       "ceiling": l["ceiling"], "label": l["label"],
+                       "quote_age_s": round(l["quote_age_s"], 3),
+                       "f": features(l, rows, rts, mids, skew_bound)}
+                if l["label"] == "TOXIC":
+                    rec["sequence"] = event_sequence(l, rows, rts, mids)
+                per_fill.append(rec)
 
     # P(signal | label) at every pre-registered level, plus lead time
     cond = {}

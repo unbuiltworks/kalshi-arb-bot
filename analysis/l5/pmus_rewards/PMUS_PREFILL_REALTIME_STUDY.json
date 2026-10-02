@@ -3,10 +3,10 @@
     "prefill_study": "4cfc293f",
     "preregistration": "82714061"
   },
-  "ref_rows": 3384,
+  "ref_rows": 8941,
   "ref_span_recv": [
     1790944616.9436936,
-    1790945026.5882192
+    1790945731.2990482
   ],
   "ref_skew_s_p90": -0.018,
   "clock_note": "venue and receipt clocks kept separate; cross-feed claims only above the reference feed's own p90 receipt-venue skew",
@@ -123,6 +123,7 @@
     }
   },
   "synchronized_windows": [],
+  "coverage_proof": {},
   "ttls": {
     "TTL5": 5.0,
     "TTL30": 30.0,
