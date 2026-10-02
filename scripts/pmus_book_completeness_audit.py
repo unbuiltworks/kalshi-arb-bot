@@ -70,6 +70,8 @@ def main(paths):
     dup_rows = 0
     seen_ids: dict = {}
     first_emit_rows: dict = {}
+    dup_trade_rows = 0
+    seen_trade_ids: dict = {}
     caps, sizes, stamps = set(), [], []
     row_ts = {}
     for ts, nbytes, o in books:
@@ -113,6 +115,22 @@ def main(paths):
                                      "lost": max(0, g - n)})
                 prev[slug] = bu
 
+    # duplicate_previously_emitted_trade_rows: the same diagnostic for the trade
+    # stream, which carried the identical set-trim defect. The identity mirrors
+    # the recorder's _trade_row_key so a legitimate repeat print at the same
+    # instant is not miscounted as a re-emission.
+    for _ts, _nb, o in trades:
+        for slug, arr in (o.get("markets") or {}).items():
+            ids = seen_trade_ids.setdefault(slug, set())
+            for x in arr:
+                k = "|".join((slug, str(x.get("t")), str(x.get("px")),
+                              str(x.get("qty")), str(x.get("trade_time")),
+                              str(x.get("dir"))))
+                if k in ids:
+                    dup_trade_rows += 1
+                else:
+                    ids.add(k)
+
     lost = sum(r["lost"] for r in rows)
     gen = [r["generated"] for r in rows]
     cad = []
@@ -136,7 +154,9 @@ def main(paths):
         "rows_emitted": emitted,
         "rows_generated": generated,
         "rows_lost_to_cap": lost,
-        "duplicate_previously_emitted_rows": dup_rows,
+        "duplicate_previously_emitted_book_rows": dup_rows,
+        "duplicate_previously_emitted_trade_rows": dup_trade_rows,
+        "trade_rows_unique": sum(len(v) for v in seen_trade_ids.values()),
         "rows_emitted_unique": sum(len(v) for v in seen_ids.values()),
         "rows_generated_unique": generated,
         "first_emission_rows_not_in_generated": sum(first_emit_rows.values()),
