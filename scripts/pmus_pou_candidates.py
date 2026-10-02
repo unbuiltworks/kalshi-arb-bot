@@ -172,6 +172,21 @@ def main(q=25):
                         fr += 1; sacrificed += D(str(b["pnl"]))
                     else:
                         avoided += -D(str(b["pnl"]))
+        # ---- decomposition, reported for every config and read closely for
+        # B5-1c: where each component of the net sits.
+        dec = {
+            "gross_profitable_exits_preserved": sum(
+                D(str(l["pnl"])) for l in allots
+                if l["kind"] in ("PAIR_TAKER", "PAIR_MAKER") and D(str(l["pnl"])) > 0),
+            "early_guard_pnl": sum(D(str(l["pnl"])) for l in allots
+                                   if l["kind"] == "GUARD_CLOSE"),
+            "early_guard_losses": sum(D(str(l["pnl"])) for l in allots
+                                      if l["kind"] == "GUARD_CLOSE" and D(str(l["pnl"])) < 0),
+            "forced_losses_remaining": sum(D(str(l["pnl"])) for l in allots
+                                           if l["kind"] == "FORCED"),
+            "unresolved_cash": sum(D(str(l["pnl"])) for l in allots
+                                   if l["kind"] == "UNRESOLVED"),
+        }
         net = sum(D(str(l["pnl"])) for l in allots)
         cap = max([sum(float(l["px"]) * float(l["qty"]) for l in allots)], default=0)
         res.append({"name": name, "A": A, "h": h, "X": str(X) if X else None,
@@ -185,6 +200,8 @@ def main(q=25):
             "net_per_accepted_leg": str(net / len(allots)) if allots else None,
             "net_per_window": str(net / len(new)),
             "worst_lot": str(min([D(str(l["pnl"])) for l in allots] or [D(0)])),
+            "decomposition": {k: str(v) for k, v in dec.items()},
+            "net_vs_baseline": None,
             "capital_required": round(cap, 2)})
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump({"q": q, "ceiling": str(CEIL), "new_windows": new,
