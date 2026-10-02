@@ -1,0 +1,455 @@
+{
+  "note": "DESCRIPTIVE ONLY. Two windows cannot support a regime filter and none is constructed. No threshold is searched or fitted.",
+  "windows": {
+    "cpc-btc-updown-15m-2026-10-02-1815z": {
+      "span_s": 886.9,
+      "scorable_trades": 5983,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.515,
+        "mid_close": 0.015,
+        "mid_high": 0.515,
+        "mid_low": 0.01,
+        "range": 0.505,
+        "total_abs_path": 2.32
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7798,
+        "longest_same_direction_run": 159,
+        "buy_share": 0.5223
+      },
+      "sweeps": {
+        "count": 409,
+        "share_of_trades": 0.0684,
+        "median_size": 46.21,
+        "total_size": 48784.74
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1131.4,
+        "median_ask_depth": 1021.5
+      },
+      "fill_time_distribution_quartiles": [
+        43,
+        62,
+        39,
+        1
+      ],
+      "settlement": {
+        "final_mid": 0.015,
+        "distance_from_0.50": 0.485,
+        "direction": "DOWN",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 145,
+        "peak_concurrent_open_lots": 121,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.8414,
+        "baseline_net": "-224.2519120625000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1830z": {
+      "span_s": 892.9,
+      "scorable_trades": 4927,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.595,
+        "mid_close": 0.01,
+        "mid_high": 0.595,
+        "mid_low": 0.01,
+        "range": 0.585,
+        "total_abs_path": 4.025
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7456,
+        "longest_same_direction_run": 177,
+        "buy_share": 0.6684
+      },
+      "sweeps": {
+        "count": 297,
+        "share_of_trades": 0.0603,
+        "median_size": 49.0,
+        "total_size": 36804.77
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1513.0,
+        "median_ask_depth": 1216.5
+      },
+      "fill_time_distribution_quartiles": [
+        95,
+        54,
+        8,
+        0
+      ],
+      "settlement": {
+        "final_mid": 0.01,
+        "distance_from_0.50": 0.49,
+        "direction": "DOWN",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 157,
+        "peak_concurrent_open_lots": 72,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.3885,
+        "baseline_net": "-273.8248317725000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1900z": {
+      "span_s": 894.9,
+      "scorable_trades": 5137,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.475,
+        "mid_close": 0.01,
+        "mid_high": 0.615,
+        "mid_low": 0.01,
+        "range": 0.605,
+        "total_abs_path": 5.435
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7342,
+        "longest_same_direction_run": 135,
+        "buy_share": 0.5342
+      },
+      "sweeps": {
+        "count": 361,
+        "share_of_trades": 0.0703,
+        "median_size": 45.0,
+        "total_size": 41999.42
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1459.3,
+        "median_ask_depth": 1512.7
+      },
+      "fill_time_distribution_quartiles": [
+        92,
+        27,
+        50,
+        0
+      ],
+      "settlement": {
+        "final_mid": 0.01,
+        "distance_from_0.50": 0.49,
+        "direction": "DOWN",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 169,
+        "peak_concurrent_open_lots": 43,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.2485,
+        "baseline_net": "-11.2934992125000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1915z": {
+      "span_s": 895.2,
+      "scorable_trades": 7849,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.515,
+        "mid_close": 0.99,
+        "mid_high": 0.99,
+        "mid_low": 0.095,
+        "range": 0.895,
+        "total_abs_path": 13.405
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7076,
+        "longest_same_direction_run": 135,
+        "buy_share": 0.4917
+      },
+      "sweeps": {
+        "count": 817,
+        "share_of_trades": 0.1041,
+        "median_size": 52.0,
+        "total_size": 96310.29
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1649.1,
+        "median_ask_depth": 1051.4
+      },
+      "fill_time_distribution_quartiles": [
+        103,
+        15,
+        20,
+        9
+      ],
+      "settlement": {
+        "final_mid": 0.99,
+        "distance_from_0.50": 0.49,
+        "direction": "UP",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 147,
+        "peak_concurrent_open_lots": 55,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.034,
+        "baseline_net": "37.9190174300000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1945z": {
+      "span_s": 894.0,
+      "scorable_trades": 4444,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.655,
+        "mid_close": 0.99,
+        "mid_high": 0.99,
+        "mid_low": 0.455,
+        "range": 0.535,
+        "total_abs_path": 5.935
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7155,
+        "longest_same_direction_run": 130,
+        "buy_share": 0.4446
+      },
+      "sweeps": {
+        "count": 340,
+        "share_of_trades": 0.0765,
+        "median_size": 28.74,
+        "total_size": 27914.45
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1635.1,
+        "median_ask_depth": 1947.4
+      },
+      "fill_time_distribution_quartiles": [
+        77,
+        4,
+        39,
+        23
+      ],
+      "settlement": {
+        "final_mid": 0.99,
+        "distance_from_0.50": 0.49,
+        "direction": "UP",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 143,
+        "peak_concurrent_open_lots": 47,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.3357,
+        "baseline_net": "-25.4392374900000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-2000z": {
+      "span_s": 893.7,
+      "scorable_trades": 5028,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.545,
+        "mid_close": 0.99,
+        "mid_high": 0.99,
+        "mid_low": 0.545,
+        "range": 0.445,
+        "total_abs_path": 4.015
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7398,
+        "longest_same_direction_run": 195,
+        "buy_share": 0.4576
+      },
+      "sweeps": {
+        "count": 293,
+        "share_of_trades": 0.0583,
+        "median_size": 40.64,
+        "total_size": 26915.42
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1426.5,
+        "median_ask_depth": 1084.8
+      },
+      "fill_time_distribution_quartiles": [
+        58,
+        36,
+        12,
+        34
+      ],
+      "settlement": {
+        "final_mid": 0.99,
+        "distance_from_0.50": 0.49,
+        "direction": "UP",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 140,
+        "peak_concurrent_open_lots": 81,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.5857,
+        "baseline_net": "-172.1341666200000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-2015z": {
+      "span_s": 895.1,
+      "scorable_trades": 7534,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.495,
+        "mid_close": 0.01,
+        "mid_high": 0.99,
+        "mid_low": 0.01,
+        "range": 0.98,
+        "total_abs_path": 7.945
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7478,
+        "longest_same_direction_run": 140,
+        "buy_share": 0.4942
+      },
+      "sweeps": {
+        "count": 567,
+        "share_of_trades": 0.0753,
+        "median_size": 35.23,
+        "total_size": 52393.66
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1147.3,
+        "median_ask_depth": 1384.0
+      },
+      "fill_time_distribution_quartiles": [
+        116,
+        3,
+        88,
+        3
+      ],
+      "settlement": {
+        "final_mid": 0.01,
+        "distance_from_0.50": 0.49,
+        "direction": "DOWN",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 210,
+        "peak_concurrent_open_lots": 61,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.1,
+        "baseline_net": "18.0183779750000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-2030z": {
+      "span_s": 894.5,
+      "scorable_trades": 6950,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.475,
+        "mid_close": 0.01,
+        "mid_high": 0.925,
+        "mid_low": 0.01,
+        "range": 0.915,
+        "total_abs_path": 6.615
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7299,
+        "longest_same_direction_run": 163,
+        "buy_share": 0.5188
+      },
+      "sweeps": {
+        "count": 703,
+        "share_of_trades": 0.1012,
+        "median_size": 31.46,
+        "total_size": 66164.87
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1065.8,
+        "median_ask_depth": 1050.0
+      },
+      "fill_time_distribution_quartiles": [
+        88,
+        7,
+        43,
+        99
+      ],
+      "settlement": {
+        "final_mid": 0.01,
+        "distance_from_0.50": 0.49,
+        "direction": "DOWN",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 237,
+        "peak_concurrent_open_lots": 69,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.2616,
+        "baseline_net": "-29.8353280150000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-2045z": {
+      "span_s": 893.0,
+      "scorable_trades": 5270,
+      "btc": {
+        "status": "INSUFFICIENT"
+      },
+      "pmus_price_path": {
+        "mid_open": 0.515,
+        "mid_close": 0.99,
+        "mid_high": 0.99,
+        "mid_low": 0.465,
+        "range": 0.525,
+        "total_abs_path": 3.295
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7352,
+        "longest_same_direction_run": 138,
+        "buy_share": 0.3939
+      },
+      "sweeps": {
+        "count": 465,
+        "share_of_trades": 0.0882,
+        "median_size": 40.0,
+        "total_size": 47245.19
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 900.9,
+        "median_ask_depth": 1225.0
+      },
+      "fill_time_distribution_quartiles": [
+        76,
+        64,
+        0,
+        23
+      ],
+      "settlement": {
+        "final_mid": 0.99,
+        "distance_from_0.50": 0.49,
+        "direction": "UP",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 163,
+        "peak_concurrent_open_lots": 78,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.4847,
+        "baseline_net": "-98.5597955700000000"
+      }
+    }
+  }
+}

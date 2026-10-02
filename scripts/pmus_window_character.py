@@ -28,9 +28,13 @@ from __future__ import annotations
 import bisect, glob, json, os, statistics
 from decimal import Decimal as D
 
-OUT = "analysis/l5/pmus_rewards/WINDOW_CHARACTER_1730Z_1745Z.json"
-WINDOWS = ("cpc-btc-updown-15m-2026-10-02-1730z",
-           "cpc-btc-updown-15m-2026-10-02-1745z")
+OUT = os.environ.get("CHAR_OUT") or "analysis/l5/pmus_rewards/WINDOW_CHARACTER_1730Z_1745Z.json"
+import sys
+# INPUT SELECTION ONLY: which windows are described, never how. Defaults to the
+# original pair so earlier output is reproducible.
+WINDOWS = tuple(a for a in sys.argv[1:] if a.startswith("cpc-")) or (
+    "cpc-btc-updown-15m-2026-10-02-1730z",
+    "cpc-btc-updown-15m-2026-10-02-1745z")
 
 import importlib.util
 _a = importlib.util.spec_from_file_location("aud", "scripts/pmus_imbalance_mechanism_audit.py")
