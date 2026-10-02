@@ -206,3 +206,121 @@ instrumentation defects, which are documented separately in
 > **Can a causal H1/H3 state model place passive orders before L5-like flow
 > arrives, and do those orders fill often enough — without adverse selection
 > erasing the pair-cost edge — to reproduce L5-like economics?**
+
+---
+
+# ADDENDUM — frozen before prospective scored collection (2026-10-02)
+
+Everything below is frozen at the same moment as the hash recorded in
+`PROSPECTIVE_SAMPLE.md`. The sections above are unchanged.
+
+## D. (revised) Resting-order lifetime is NOT the decision cadence
+
+The earlier build repriced on every 5-second decision. That was wrong as a
+default: it forfeits queue position every cycle and would destroy the maker
+mechanism this experiment exists to reproduce. Decision cadence stays 5 s;
+**lifetime is now a separate, parallel experimental dimension.**
+
+| arm | rule |
+|---|---|
+| **R1_STICKY** | rest until defensibly filled, behaviourally/economically invalidated, side reversal, or window expiry |
+| **R2_MATERIAL_CHANGE** | reprice only when the predicted side changes, OR the price violates the frozen pair-cost rule (projected matched-pair cost > 0.96), OR the quote is no longer passive |
+| **R3_FIXED_8** | fixed rest of **8 s** |
+| **R3_FIXED_20** | fixed rest of **20 s** |
+| **R3_FIXED_120** | fixed rest of **120 s** |
+| **R4_REPRICE_5S** | reprice every decision — the **control arm**, i.e. the old behaviour |
+
+**Derivation of the R3 durations, which is not P&L-based.** They come from L5's
+own observed inter-action timing in the canonical corpus, measured in
+`analysis/l5/next_action/`: gap to his next action has **p75 = 8 s** and
+**p90 = 20 s**; 120 s is the long-rest outer bound. No prospective result was
+consulted, and **all three run in parallel** rather than one being chosen later.
+
+Side reversal and loss of passivity override every arm, including R1.
+
+## Cancellation record — required fields, all captured
+
+For every cancellation or reprice: original placement time, order age, queue
+ahead at placement, **remaining observable queue immediately before
+cancellation**, original and current bid/ask, price movement, side-model state
+(`p_up`, confidence), pair cost at placement and at cancellation, and the
+cancellation reason.
+
+## Ghosts
+
+Every cancelled order is preserved as a **GHOST** and keeps being observed for
+up to 300 s to answer exactly one question:
+
+> **Would this cancelled quote later have received a defensible fill?**
+
+A ghost **never** affects active shadow inventory or economics and is never
+promoted to a fill; its outcome is recorded as
+`WOULD_HAVE_FILLED:<evidence>` or left null. This quantifies the cost of
+forfeiting queue position, which is the whole reason the lifetime arms exist.
+
+## Queue rules — frozen hierarchy
+
+Queue ahead is **initialized from the actual Polymarket L2 ladder** at the
+hypothetical placement price.
+
+1. **TRADE_THROUGH** — a print strictly through our level.
+2. **QUEUE_CONSUMED** — executed volume at our level since placement exceeds
+   the queue ahead observed at placement.
+3. **DEPLETION_CORROBORATED** — only when depletion is corroborated by a
+   contemporaneous print at that level.
+4. Otherwise **UNKNOWN**.
+
+**Disappearing displayed size is never treated as execution on its own**,
+because an upstream cancellation is indistinguishable from a trade. An unknown
+or censored queue can never fill. **No touch = fill.**
+
+## Restart semantics
+
+A restart is an observation gap. Any hypothetical order whose queue state spans
+the gap is marked **`CENSORED_OBSERVATION_GAP`**, its queue-ahead is set to
+unknown, and it can no longer fill. **Queue accounting restarts fresh after
+recovery.** The collector persists a session marker and emits the prior
+session id, the prior last heartbeat and the measured gap in its
+`PROSPECTIVE_SAMPLE_START` record, so restarts are detected rather than assumed
+away.
+
+## Label causality
+
+Every L5 label retains **both** timestamps: the exchange `event_t` and our
+`recv_t`. A label may enter a **feature** only when `event_t < tau` **AND**
+`recv_t <= tau`. A label arriving later may **score** an earlier prediction but
+can **never alter** the earlier state or features. Scoring uses `event_t`.
+
+## PROSPECTIVE BOUNDARY — binding
+
+The 25-minute local run and everything affected by defects **D1–D4** are
+**`ENGINEERING_ONLY`**. They may not enter side accuracy, fill rate,
+calibration, adverse selection, economics, or discovery/validation results.
+
+**This boundary does not move because early results look bad.**
+
+## Sample split — by whole windows and days, never by placements
+
+Thousands of 5-second observations from one BTC15m market are not thousands of
+independent samples. Recorded separately at every checkpoint: **decisions,
+placements, fills, unique windows, unique days.** The first 3 distinct UTC
+collection days are `DISCOVERY`; later days are `VALIDATION` and are not
+inspected until discovery analysis is frozen.
+
+## Side prediction — calibration, not headline accuracy
+
+The question is **not** unconditional ~60% accuracy. It is whether the model is
+**calibrated**: when it says 0.55, 0.60, 0.70, how often does L5 subsequently
+choose that side? **Coverage is reported alongside accuracy** for every
+confidence bin. ABSTAIN remains legitimate. **No confidence cutoff is chosen
+retrospectively from P&L.**
+
+## Price test — now that real L2 exists
+
+At every hypothetical placement the price is classified against the **actual**
+same-outcome bid as: **behind bid · exactly at bid · improving bid while
+passive**. Those prospective states are then compared with L5's subsequent
+fills.
+
+**The historical result is NOT rewritten as "L5 rests at the bid" unless this
+prospective evidence establishes it.**

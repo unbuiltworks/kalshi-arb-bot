@@ -32,9 +32,35 @@ SIDE_MODELS = ("S0_PRIOR", "S1_FLOW", "S2_CHEAP_H1", "S3_PAIRCOST_H3",
 CONF_BINS = ((0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.01))
 ABSTAIN_BELOW = 0.50               # ABSTAIN is a first-class outcome
 
-# ---- order lifecycle
-MAX_REST_S = 120.0                 # then EXPIRED; no silent reprice
+# ---- order lifetime arms, FROZEN. Decision cadence and resting-order lifetime
+# are different things: constant repricing forfeits queue position and would
+# destroy the maker mechanism the experiment exists to reproduce.
+#
+# R3 durations are derived from L5's OWN observed inter-action timing in the
+# canonical corpus (p75 = 8s, p90 = 20s, outer bound 120s), measured in
+# analysis/l5/next_action/. They are NOT derived from any prospective P&L, and
+# all three run in parallel rather than one being selected afterwards.
+LIFETIME_ARMS = (
+    "R1_STICKY",            # rest until filled, invalidated, side-reversed, or window end
+    "R2_MATERIAL_CHANGE",   # reprice only on side change / rule violation / no longer passive
+    "R3_FIXED_8",           # L5 inter-action p75
+    "R3_FIXED_20",          # L5 inter-action p90
+    "R3_FIXED_120",         # long rest, the outer bound
+    "R4_REPRICE_5S",        # control arm: the previous every-decision behaviour
+)
+R3_DURATIONS = {"R3_FIXED_8": 8.0, "R3_FIXED_20": 20.0, "R3_FIXED_120": 120.0}
+MAX_REST_S = 900.0                 # hard ceiling: one window
+WINDOW_END_CANCEL = True           # all arms cancel at window expiry
+
+# ---- which side models carry resting orders (the rest are scored on
+# calibration only, which needs no order)
+EXECUTION_MODELS = ("S1_FLOW", "S5_FULL")
+
 DISCOVERY_DAYS = 3                 # first 3 distinct UTC days are DISCOVERY
+
+# ---- ghosts: a cancelled order keeps being observed to price the cost of
+# forfeiting queue position. A ghost NEVER affects inventory or economics.
+GHOST_OBSERVE_S = 300.0
 
 # ---- output, entirely our own
 OUT_DIR = "data/l5_latent_quote"
