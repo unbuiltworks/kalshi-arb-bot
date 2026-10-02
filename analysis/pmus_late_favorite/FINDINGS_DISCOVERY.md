@@ -1,6 +1,11 @@
 # PMUS BTC15m late-favorite / opposite-longshot — DISCOVERY findings
 
 **EVERY NUMBER IN THIS FILE IS `DISCOVERY`.** No order was placed, prepared or
+
+> **CLOSED 2026-10-02: `NOT_PROMOTED` at discovery stage. See `CLOSURE.md`.** Not
+> proven unprofitable; it failed the discovery-stage promotion test, and
+> structural evidence makes further dedicated validation low priority absent
+> materially new evidence. No OOS windows consumed; no accrual begun.
 previewed. No executor was built. No production service, variable or deployment
 was changed. Gemini untouched. No reserved window read. No threshold optimized.
 
