@@ -212,3 +212,112 @@ Only a *different* claim, not more of the same measurement:
 
 Neither is a measurement debt. **The measurement debt is paid, and the answer
 did not change.**
+
+---
+
+# 11. SCOPE OF THIS CONCLUSION — READ NARROWLY
+
+> ## GEMINI BTC5M PASSIVE BACK-OF-QUEUE L5-STYLE MAKER HABITAT: REJECTED ON CURRENT EVIDENCE.
+
+**This must NOT be generalized.** It is not a finding about:
+
+- other Gemini strategies (taker, cross-venue basis, settlement, directional);
+- other Gemini prediction markets (other assets, other durations, sports,
+  politics, or any non-BTC05M series);
+- Gemini as a venue;
+- Gemini maker economics under a structure other than passive
+  back-of-queue resting;
+- ETH5m, which was collected concurrently but is **not analysed here**.
+
+It is a rejection **on current evidence** of one specific structure in one
+specific series — not a proof of impossibility.
+
+# 12. EVIDENCE CHAIN THAT CAUSED REJECTION
+
+Each link is measured, not assumed, and each is auditable from the committed
+scripts and tapes:
+
+1. **Real flow exists.** 42 well-covered BTC5m windows carry 267 trades /
+   52,537.5 contracts; p50 216.5 contracts per window, max 23,522.3. The
+   venue is not quiet. *(`p3_hifi_capture.py`)*
+2. **Event-level book fidelity established.** The `@depth` diff stream gives
+   p50 97.7 book events/min against the legacy ~12/min sampling ceiling,
+   p50 299.0 s in-window coverage against a legacy median of 0 s, book age
+   before a trade p50 0.447 s, and 0.0% desync with the `u`→`U` chain
+   verified. The measurement debt that previously blocked a verdict is paid.
+   *(`lane_recorder.py`, `p2_reconstruct.py`)*
+3. **Realistic queue capture remains very small.** DEFENSIBLE 0.06% (q1) to
+   1.30% (q25) of flow; 33–38 fills in 20/42 windows. The unreachable
+   ZERO_QUEUE ceiling reaches only 0.18%–3.32%. The legacy ~5 s cohort's
+   corrected figure was 0.08%–1.80% — **eight times the fidelity returned the
+   same answer.** *(`p3_hifi_capture.py`, `p1b_tiered_capture.py`)*
+4. **Defensible fills are dominated by through-price executions.** 29 of 33
+   contracts at q1. Benign same-price FIFO fills are the small residue, not
+   the mechanism. *(`p3_hifi_capture.py`)*
+5. **Fixed post-fill horizons show adverse selection.** 5/15/30 s, nothing
+   fitted: ~+0.030 / +0.045 / +0.085 on a contract worth at most $1, adverse
+   in **all 12 cells** across four clips and three horizons. This is
+   structural: a through-price fill *is* being swept through, which is
+   adverse selection by definition. *(`p3_hifi_capture.py`)*
+6. **Earlier arrival does not rescue it.** Queues are posted atomically and
+   complete (`size_0ms/size_1000ms` = 1.000), so the latency curve is flat
+   from 500 ms to 25 ms (q1 capture 0.06%→0.07%); and pre-window placement
+   fills **nothing at any horizon**, because the pre-window book is a
+   placeholder pair at 0.02/0.98 × ~2,500 and the real blocking size arrives
+   a median of +52.8 s *after* T=0. *(`p6_latency_sensitivity.py`,
+   `p7_prewindow.py`)*
+7. **Therefore: insufficient evidence to justify further strategy
+   optimization or a live probe.** No economics were computed from 33–38
+   fills and none is claimed.
+
+# 13. FROZEN RERUN WITH THE FINAL SEGMENT — NOTHING MATERIAL CHANGED
+
+Scripts unchanged since `3ab236ef` (verified empty diff). Only the input tape
+grew, by the completed 90.0 min segment 3.
+
+| measure | 35-window run | **42-window final** | material change? |
+|---|---|---|---|
+| windows with in-window book events | 39 | 42+ (42 qualified) | no |
+| qualified (≥240 s coverage) | 35 | **42** | no |
+| windows with ≥1 DEFENSIBLE fill | 18/35 (51.4%) | **20/42 (47.6%)** | no |
+| trades / contracts | 250 / 51,288.0 | **267 / 52,537.5** | no |
+| DEFENSIBLE q1 | 30 fills, 30.00, 0.06% | **33, 33.00, 0.06%** | no |
+| DEFENSIBLE q5 | 150.00, 0.29% | **165.00, 0.31%** | no |
+| DEFENSIBLE q10 | 279.00, 0.54% | **309.00, 0.59%** | no |
+| DEFENSIBLE q25 | 624.00, 1.22% | **684.00, 1.30%** | no |
+| ZERO_QUEUE q1 → q25 | 0.17% → 3.02% | **0.18% → 3.32%** | no |
+| through vs same-price (q1) | 26 / 4 | **29 / 4** | no |
+| adverse 5 / 15 / 30 s (q1) | +0.0300 / +0.0350 / +0.0850 | **+0.0300 / +0.0450 / +0.0850** | no |
+| book events/min (p50) | 100.2 | 97.7 | no |
+| book desync | 0.0% | **0.0%** | no |
+
+**Adding the final segment changed nothing material. The decision gate stands.**
+
+# 14. PRESERVED AS UNRESOLVED — NOT DISPROVEN
+
+The historical **300 / 1,390 defensible fills** result (net ≈ −$99.19 before
+compensation, ≈ +$17.92 modeled compensation, ~$5.54 trading cost per $1,
+57/98 positive windows, ~9–11% defensibly captured passive exit) is retained
+as **UNRESOLVED AND UNREPRODUCED**.
+
+- It is **not deleted**.
+- It is **not averaged into** this cohort, and the two are never pooled.
+- It is **not claimed disproven**. Its queue rule is identified
+  (`continuous_inventory.py` STRICT/SUPPORTED/OPTIMISTIC) but its data went
+  to the Railway volume `/state/gemini-5m`, readable only by the
+  `gemini-5m-collector` container, and no such service remains in the
+  projects enumerated. **I did not prove it is permanently gone.**
+- Recovering that volume remains the one open route to reconciling it.
+
+# 15. DISPLAYED QUEUE AHEAD ≠ PROVEN QUEUE POSITION
+
+Preserved explicitly across every analysis in this lane. Every `q_ahead`
+figure reported anywhere here is **displayed size**, which is a **proxy and
+an upper bound on the visible queue only**. Hidden, iceberg and refreshing
+size are unobservable from public market data; our actual position inside a
+level is never established. Where ordering or cause could not be
+established from venue sequencing, cases are labelled **UNKNOWN** (16.8% of
+trades for trade↔book ordering; 41.6% for disappearance cause) and are
+**not scored as fills in either direction**. Level *presence* surviving to
+T=0 (100% in P7) does **not** mean priority survived, and that was never
+claimed.
