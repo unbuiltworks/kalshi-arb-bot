@@ -80,3 +80,8 @@ analysis/gemini/p10_capture/
 # blob on every snapshot commit. Same rule as data/policy_d_port above:
 # track the gzipped tape, keep the raw file on disk for the running recorder.
 data/gemini_hifi/*.jsonl
+
+# gemini_infoedge raw tapes: same rule as the other high-rate tapes above --
+# the raw JSONL grows large (Coinbase matches run ~4.7/s), so track the
+# gzipped tape and keep the raw file on disk for the running collector.
+data/gemini_infoedge/*.jsonl
