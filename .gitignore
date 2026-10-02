@@ -115,3 +115,7 @@ data/gemini_shadow/*.jsonl
 # Merged shadow tape is derived from the raw L2 + raw trade tapes by
 # scripts/gemini_tape_merge.py and is regenerable; the raws are the evidence.
 data/gemini_shadow/merged/
+
+# Authenticated PMUS tape: raw JSONL is harvested from the existing
+# pmus-ws-evidence-recorder Railway logs and is regenerable; the .gz is tracked.
+data/pmus_ws_tape/*.jsonl
