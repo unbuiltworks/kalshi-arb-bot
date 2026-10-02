@@ -85,6 +85,7 @@ def actionability(h):
 def load_ref():
     rows = []
     skews = []
+    seen = set()
     for p in sorted(glob.glob(REF_GLOB)):
         for line in open(p):
             try:
@@ -95,6 +96,13 @@ def load_ref():
                 continue
             if not r.get("bid") or not r.get("ask"):
                 continue
+            # the same feed can reach disk twice (a local run and the harvested
+            # copy of the deployed collector overlap in time), so dedupe on the
+            # venue event plus receipt instant rather than counting it twice
+            k = (r["ev"], r["t_ns"], r["bid"], r["ask"])
+            if k in seen:
+                continue
+            seen.add(k)
             rows.append((r["t_ns"] / 1e9, r["ev_ns"] / 1e9,
                          (float(r["bid"]) + float(r["ask"])) / 2))
             if r.get("skew_ns") is not None:

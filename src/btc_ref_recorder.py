@@ -97,6 +97,12 @@ def parse_ev_ns(s: str | None) -> int | None:
 
 
 def commit() -> str:
+    # Railway injects the deployed SHA; the image has no .git, so without this
+    # the provenance row read commit=UNKNOWN on the deployed collector.
+    env = (os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+           or os.environ.get("BTC_REF_COMMIT") or "")
+    if env:
+        return env[:8]
     try:
         return subprocess.run(["git", "rev-parse", "--short", "HEAD"],
                               capture_output=True, text=True,
