@@ -29,8 +29,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import signal
+import ssl
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +40,39 @@ from typing import Any, Dict, Set
 
 import httpx
 import websockets
+
+# --- egress proxy discovery -------------------------------------------------
+# Outbound traffic leaves through a local agent proxy whose PORT ROTATES
+# between sessions. A long-lived recorder that captured HTTPS_PROXY once at
+# launch dies the moment the port changes: observed as
+#   ConnectionRefusedError [Errno 111] Connect call failed ('127.0.0.1', 42405)
+# after 13 minutes, when the live proxy had already moved to :39161.
+# /root/.ccr/README.md is rewritten with the current port each session (it is
+# the documented `readmePath` from the proxy status endpoint), so the URL is
+# re-read before EVERY connect instead of being cached.
+CCR_README = Path("/root/.ccr/README.md")
+CA_BUNDLE = "/root/.ccr/ca-bundle.crt"
+_PORT_RE = re.compile(r"http://127\.0\.0\.1:(\d+)")
+
+
+def proxy_url() -> str | None:
+    env = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    live = None
+    try:
+        m = _PORT_RE.search(CCR_README.read_text())
+        if m:
+            live = f"http://127.0.0.1:{m.group(1)}"
+    except Exception:
+        pass
+    # the README is authoritative: a stale env var is exactly the failure mode
+    return live or env
+
+
+def ssl_ctx():
+    try:
+        return ssl.create_default_context(cafile=CA_BUNDLE)
+    except Exception:
+        return None
 
 GEMINI_REST = "https://api.gemini.com"
 GEMINI_WS = "wss://ws.gemini.com"
@@ -124,34 +159,37 @@ async def vol_task(sink: Sink, stop: asyncio.Event, series_re: re.Pattern) -> No
     nanosecond trade stream lets the field's units, update cadence and lag be
     measured directly instead of assumed.
     """
-    async with httpx.AsyncClient(timeout=20.0,
-                                 headers={"User-Agent": "gemini-microstructure-readonly/1.0"}) as http:
-        while not stop.is_set():
-            try:
+    while not stop.is_set():
+        # client rebuilt per poll: holding one for the task's lifetime
+        # pins a proxy port that rotates out from under it
+        try:
+            async with httpx.AsyncClient(
+                    timeout=20.0, proxy=proxy_url(), verify=CA_BUNDLE,
+                    headers={"User-Agent": "gemini-microstructure-readonly/1.0"}) as http:
                 r = await http.get(EVENTS)
-                t = now_s()
-                for ev in r.json().get("data", []):
-                    tick = ev.get("ticker") or ""
-                    if not series_re.match(tick):
-                        continue
-                    sink.write({"t": t, "kind": "vol", "window": tick,
-                                "volume": ev.get("volume"),
-                                "volume24h": ev.get("volume24h"),
-                                "status": ev.get("status"),
-                                "expiry_iso": ev.get("expiryDate"),
-                                "prices": [
-                                    {"sym": c.get("instrumentSymbol"),
-                                     "prices": c.get("prices"),
-                                     "marketState": c.get("marketState")}
-                                    for c in ev.get("contracts", [])],
-                                })
-            except Exception as exc:
-                sink.write({"t": now_s(), "kind": "error", "where": "vol",
-                            "error": type(exc).__name__})
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=VOL_POLL_S)
-            except asyncio.TimeoutError:
-                pass
+            t = now_s()
+            for ev in r.json().get("data", []):
+                tick = ev.get("ticker") or ""
+                if not series_re.match(tick):
+                    continue
+                sink.write({"t": t, "kind": "vol", "window": tick,
+                            "volume": ev.get("volume"),
+                            "volume24h": ev.get("volume24h"),
+                            "status": ev.get("status"),
+                            "expiry_iso": ev.get("expiryDate"),
+                            "prices": [
+                                {"sym": c.get("instrumentSymbol"),
+                                 "prices": c.get("prices"),
+                                 "marketState": c.get("marketState")}
+                                for c in ev.get("contracts", [])],
+                            })
+        except Exception as exc:
+            sink.write({"t": now_s(), "kind": "error", "where": "vol",
+                        "error": type(exc).__name__})
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=VOL_POLL_S)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def snapshot_task(sink: Sink, stop: asyncio.Event,
@@ -180,9 +218,10 @@ async def ws_session(sink: Sink, stop: asyncio.Event, series_re: re.Pattern,
 
     async with websockets.connect(GEMINI_WS, open_timeout=10,
                                   ping_interval=15, ping_timeout=10,
-                                  max_queue=10000) as ws:
+                                  max_queue=10000,
+                                  proxy=proxy_url(), ssl=ssl_ctx()) as ws:
         sink.write({"t": now_s(), "kind": "ws_open"})
-        async with httpx.AsyncClient(timeout=20.0,
+        async with httpx.AsyncClient(timeout=20.0, proxy=proxy_url(), verify=CA_BUNDLE,
                                      headers={"User-Agent": "gemini-microstructure-readonly/1.0"}) as http:
             while not stop.is_set() and time.monotonic() < deadline:
                 if time.monotonic() - last_discover >= DISCOVER_S:
