@@ -1,0 +1,121 @@
+{
+  "note": "DESCRIPTIVE ONLY. Two windows cannot support a regime filter and none is constructed. No threshold is searched or fitted.",
+  "windows": {
+    "cpc-btc-updown-15m-2026-10-02-1730z": {
+      "span_s": 895.0,
+      "scorable_trades": 12068,
+      "btc": {
+        "n_ref_rows": 18246,
+        "open": 84614.71,
+        "close": 84591.76,
+        "high": 84771.05,
+        "low": 84481.68,
+        "displacement_bps": -2.71,
+        "range_bps": 34.2,
+        "realized_vol_1s_bps": 0.834,
+        "n_1s_samples": 883
+      },
+      "pmus_price_path": {
+        "mid_open": 0.465,
+        "mid_close": 0.01,
+        "mid_high": 0.695,
+        "mid_low": 0.01,
+        "range": 0.685,
+        "total_abs_path": 10.205
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.7433,
+        "longest_same_direction_run": 159,
+        "buy_share": 0.5325
+      },
+      "sweeps": {
+        "count": 1382,
+        "share_of_trades": 0.1145,
+        "median_size": 62.02,
+        "total_size": 181358.54
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 1009.0,
+        "median_ask_depth": 1068.7
+      },
+      "fill_time_distribution_quartiles": [
+        174,
+        84,
+        29,
+        138
+      ],
+      "settlement": {
+        "final_mid": 0.01,
+        "distance_from_0.50": 0.49,
+        "direction": "DOWN",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 425,
+        "peak_concurrent_open_lots": 74,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.1765,
+        "baseline_net": "59.7164787825000000"
+      }
+    },
+    "cpc-btc-updown-15m-2026-10-02-1745z": {
+      "span_s": 877.4,
+      "scorable_trades": 11074,
+      "btc": {
+        "n_ref_rows": 11764,
+        "open": 84591.15,
+        "close": 84783.76,
+        "high": 84808.89,
+        "low": 84562.1,
+        "displacement_bps": 22.77,
+        "range_bps": 29.18,
+        "realized_vol_1s_bps": 0.678,
+        "n_1s_samples": 868
+      },
+      "pmus_price_path": {
+        "mid_open": 0.505,
+        "mid_close": 0.99,
+        "mid_high": 0.99,
+        "mid_low": 0.385,
+        "range": 0.605,
+        "total_abs_path": 7.385
+      },
+      "flow_persistence": {
+        "same_direction_share": 0.723,
+        "longest_same_direction_run": 120,
+        "buy_share": 0.5189
+      },
+      "sweeps": {
+        "count": 1210,
+        "share_of_trades": 0.1093,
+        "median_size": 60.7,
+        "total_size": 132459.29
+      },
+      "spread_depth": {
+        "median_spread": 0.01,
+        "median_bid_depth": 697.5,
+        "median_ask_depth": 979.1
+      },
+      "fill_time_distribution_quartiles": [
+        90,
+        217,
+        96,
+        62
+      ],
+      "settlement": {
+        "final_mid": 0.99,
+        "distance_from_0.50": 0.49,
+        "direction": "UP",
+        "strike": "NOT_IN_TAPE -- the authenticated rows carry no strike field"
+      },
+      "inventory_trajectory_c97": {
+        "first_legs": 465,
+        "peak_concurrent_open_lots": 190,
+        "closing_open_lots": 0,
+        "forced_exit_share": 0.3892,
+        "baseline_net": "-108.2170214225000000"
+      }
+    }
+  }
+}
