@@ -742,3 +742,109 @@ Before adding a new strategy, venue behavior, or risk increase, answer:
 If the answer is unclear, it is probably not the priority.
 
 The target remains **real, executable, settled, source-accounted profit**. The historical $480/day objective is a target to measure against, never an assumption.
+
+## 13. VERIFIED STATE→NEXT ACTION FINDINGS, 2026-10-02 — and two corrections that must not regress
+
+Source-verified against `analysis/l5/l5_canonical_sequence.csv.gz` (71,984 fills,
+2,216 settled windows). Full work: `analysis/l5/next_action/L5_DECISION_POLICY.md`,
+`analysis/l5/next_action/MAKER_TAKER_GAP.md`, and the bucket-semantics warning in
+`analysis/l5/tte/README_BUCKET_SEMANTICS.md`. Earlier documents are left as
+written; nothing below edits historical evidence.
+
+### 13a. Two interpretations that were WRONG and are retired
+
+1. **"L5 places no fills in the final 60 seconds" is FALSE.** There are **4,261**
+   (2,652 on BTC15m). `btc15m_segments.json` buckets **windows by the TTE of the
+   window's FIRST fill**, so its empty `<60` bucket means he never *initiates*
+   that late. He trades there: median EXTEND 12 shares at price 0.15.
+2. **"98.4% pair completion" is a bucket figure, not a population figure.** It is
+   487/495 inside the `>600 s` first-fill bucket. Across all 556 BTC15m windows
+   the two-sided rate is **0.9335**.
+
+Also retired: quoting **1,779** as "the settled subset". All 2,216 windows are
+settled; 1,779 is the count containing ≥1 heavy-side EXTEND.
+
+### 13b. The economics are pair construction plus maker compensation — residual is a COST
+
+Eight-component decomposition over 2,216 windows, with the `Σ(won−price)·q`
+identity holding exactly:
+
+| component | total | class |
+|---|---|---|
+| matched-pair economics, pre fee/rebate | **+$21,442.28** | ACTUAL |
+| directional residual P&L | **−$18,702.12** | ACTUAL |
+| maker spread/basis | **NOT IDENTIFIABLE** (no book data) | — |
+| modeled PMUS maker rebate | +$2,256.34 | MODELED, **not cash-confirmed** |
+| modeled PMUS taker fees | −$3,759.87 | MODELED |
+| liquidity rewards | **UNVERIFIED**, counted at zero | — |
+
+The directional residual is **not a secondary profit source — it is a drag
+consuming 87% of pair income.** Median effective pair cost **0.9646**; 63.8% of
+windows close below 1.00. This supersedes any reading in which residual
+directional exposure is an income line.
+
+**`+$1,237` is a MODELED PMUS COUNTERFACTUAL and must never be called realized L5
+profit.** L5 traded on Polymarket; he paid no PMUS fee and received no PMUS
+rebate. It is also convention-sensitive: rating the 5,269 `unknown` maker/taker
+fills as taker gives **+$422**, not +$1,237.
+
+### 13c. The decision policy
+
+P(EXTEND) base **0.5115** over 69,560 in-window decision points. Drivers, by
+out-of-sample incremental log-loss over a time+index base:
+
+| hypothesis | OOS gain | verdict |
+|---|---|---|
+| H3 pair-cost optimization | **+0.0200** | SUPPORTED |
+| H1 cheap-side accumulation | **+0.0192** | SUPPORTED (near-redundant with H3) |
+| H2 inventory control | +0.0019 | **NOT SUPPORTED** — no preferred inventory band |
+| H5 maker compensation | +0.0001 | not a decision driver; decisive for economics |
+| H4 directional prediction | — | **REFUTED**: EXTEND edge `E[won]−price` = **−0.0146**, CI [−0.0371, +0.0081] |
+
+Strongest features: `px_vs_own_side_mean −0.293` (he averages **down relative to
+his own basis** — the raw price move is flat), `pair_cost −0.265`, `opp_px
++0.233`. Own-run persistence is the largest conditional effect: P(EXTEND) rises
+0.341 at run 0 → **0.817** at run 8+, while size falls 18→8 and price falls
+0.53→0.16.
+
+**Caveat carried forward:** total OOS gain is +0.0198 on a 0.6929 base (~2.9%).
+This describes a **distribution of actions**, not a deterministic rule. And the
+registered 2026-08-29 DEV/OOS boundary splits **three consecutive days of one
+week**, not a regime change.
+
+### 13d. L5's 83.4% maker share is INFERRED, and is an upper bound
+
+Polymarket's public `/activity` feed does not label maker-ness. `taker` is
+positively fingerprinted against the `takerOnly` feed; **`maker` is asserted by
+ABSENCE** within the feed's coverage span. The walk covered 9 distinct offsets
+(0…4000) three times, its deepest page returned a **full 500 rows so the feed was
+not exhausted**, and the recorded span is **2026-08-28 → 08-31, 3.96 days**. Every
+missed taker fill becomes a false maker, so **83.4% is a ceiling.**
+
+### 13e. The clone's maker gap is a TRIGGER problem, not latency
+
+On 16,620 authenticated PMUS prints, targeting the price that just printed is
+**MARKETABLE 48.8%** and **AT-TOUCH 45.7%** at the receipt instant — so under
+no-touch=fill, **94.5% cannot become a defensible maker post** and only 5.4%
+rest cleanly. A printed price becomes postable only once the market moves away:
+median **4.20 s**, never in-window for **20.2%**. L5's own median gap to his next
+action is **2.00 s**, and **65.6%** of his next actions arrive inside that 4.20 s
+wait.
+
+**Faithfulness to L5's actions and maker-ness are mutually exclusive for a
+follower, at any latency.** L5's maker share comes from resting a state-derived
+quote *before* the print exists. **Zero latency everywhere leaves the ceiling at
+~5.4%**, so data transport, decision-loop and submission latency are NOT the
+bottleneck. The lever is pricing policy plus H1/H3 state-driven quoting.
+
+**Modeled breakeven maker share is ~71–72%, not 83%.** Holding L5's prices and
+behaviour fixed: 60% → −$2,019; 70% → −$166; 75% → +$806; 83.4% → +$2,474.
+
+### 13f. Open tension for owner decision, not for inference
+
+Pricing from state reduces action-level fidelity by construction — P36 measured
+a maker-only translation reproducing **3.9%** of L5's actions. Replicating L5's
+*actions* and replicating his *economics* are, on this evidence, different
+objectives, and only the second is profitable. Phase order in §0 currently
+mandates the first. That conflict is an owner decision and is recorded here
+unresolved.
