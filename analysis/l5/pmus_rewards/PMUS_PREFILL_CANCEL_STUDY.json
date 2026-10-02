@@ -1,0 +1,300 @@
+{
+  "windows": [
+    "cpc-btc-updown-15m-2026-10-02-1045z",
+    "cpc-btc-updown-15m-2026-10-02-1100z",
+    "cpc-btc-updown-15m-2026-10-02-1115z",
+    "cpc-btc-updown-15m-2026-10-02-1130z",
+    "cpc-btc-updown-15m-2026-10-02-1145z",
+    "cpc-btc-updown-15m-2026-10-02-1200z"
+  ],
+  "first_legs": 236,
+  "toxic": 19,
+  "qualifying": 217,
+  "rtt_p50": 0.266,
+  "rtt_p90": 0.612,
+  "external_btc": "UNAVAILABLE -- 1-minute candles only",
+  "separation": {
+    "adverse_mid_move": {
+      "0.1": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.015263157894736847,
+        "qual_mean": -0.0005529953917050663,
+        "sigma": -1.3307819566172479,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.25": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.011315789473684218,
+        "qual_mean": 0.001382488479262676,
+        "sigma": -1.0784576094519833,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.5": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.01315789473684212,
+        "qual_mean": 0.0034562211981566874,
+        "sigma": -1.289316366847765,
+        "actionability": "OPTIMISTIC_ONLY"
+      },
+      "1.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0031578947368420965,
+        "qual_mean": 0.006635944700460832,
+        "sigma": -0.2806145581464177,
+        "actionability": "ACTIONABLE"
+      },
+      "2.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0015789473684210424,
+        "qual_mean": 0.005806451612903226,
+        "sigma": -0.339302387937254,
+        "actionability": "ACTIONABLE"
+      },
+      "5.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.008684210526315798,
+        "qual_mean": 0.012004608294930875,
+        "sigma": -1.6705618928937582,
+        "actionability": "ACTIONABLE"
+      }
+    },
+    "spread_change": {
+      "0.1": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.008421052631578954,
+        "qual_mean": -0.0002764976958525321,
+        "sigma": -2.075077546767333,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.25": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.00894736842105264,
+        "qual_mean": -0.000460829493087554,
+        "sigma": -2.1769226014275698,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.5": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0,
+        "qual_mean": -0.00036866359447004413,
+        "sigma": 0.46250572729802997,
+        "actionability": "OPTIMISTIC_ONLY"
+      },
+      "1.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.0021052631578947433,
+        "qual_mean": -0.00036866359447004733,
+        "sigma": -1.3909585353091982,
+        "actionability": "ACTIONABLE"
+      },
+      "2.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.0021052631578947433,
+        "qual_mean": 9.592940880977736e-19,
+        "sigma": -1.6928682906267762,
+        "actionability": "ACTIONABLE"
+      },
+      "5.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -0.0015789473684210585,
+        "qual_mean": 0.0001382488479262647,
+        "sigma": -1.4726651832699384,
+        "actionability": "ACTIONABLE"
+      }
+    },
+    "adverse_flow": {
+      "0.1": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 695.938947368421,
+        "qual_mean": 315.56571428571425,
+        "sigma": 1.4896003225215697,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.25": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 704.0515789473684,
+        "qual_mean": 312.25230414746545,
+        "sigma": 1.5407293413847507,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.5": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 710.1036842105264,
+        "qual_mean": 310.2488479262673,
+        "sigma": 1.5788972360560338,
+        "actionability": "OPTIMISTIC_ONLY"
+      },
+      "1.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 701.5526315789474,
+        "qual_mean": 317.18976958525343,
+        "sigma": 1.52248534123668,
+        "actionability": "ACTIONABLE"
+      },
+      "2.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 719.7226315789474,
+        "qual_mean": 291.79447004608295,
+        "sigma": 1.7027586479445902,
+        "actionability": "ACTIONABLE"
+      },
+      "5.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 735.0415789473684,
+        "qual_mean": 288.1541013824885,
+        "sigma": 1.7882435086943316,
+        "actionability": "ACTIONABLE"
+      }
+    },
+    "queue_depletion": {
+      "0.1": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -735.5857894736843,
+        "qual_mean": -521.1875115207373,
+        "sigma": -0.5402334593134871,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.25": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -985.4668421052631,
+        "qual_mean": -614.1429953917051,
+        "sigma": -0.8429169329158933,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.5": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -1308.683157894737,
+        "qual_mean": -953.2968202764977,
+        "sigma": -0.6506450589526148,
+        "actionability": "OPTIMISTIC_ONLY"
+      },
+      "1.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -3859.3657894736843,
+        "qual_mean": -1263.6632258064517,
+        "sigma": -3.728665181187626,
+        "actionability": "ACTIONABLE"
+      },
+      "2.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -2973.9726315789476,
+        "qual_mean": -1101.2544239631336,
+        "sigma": -3.5933744636437526,
+        "actionability": "ACTIONABLE"
+      },
+      "5.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": -3038.6394736842103,
+        "qual_mean": -1020.842396313364,
+        "sigma": -3.648018846520079,
+        "actionability": "ACTIONABLE"
+      }
+    },
+    "quote_staleness": {
+      "0.1": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0,
+        "qual_mean": 0.0,
+        "sigma": 0.0,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.25": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0,
+        "qual_mean": 0.0,
+        "sigma": 0.0,
+        "actionability": "NOT_ACTIONABLE"
+      },
+      "0.5": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0,
+        "qual_mean": 0.0,
+        "sigma": 0.0,
+        "actionability": "OPTIMISTIC_ONLY"
+      },
+      "1.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0,
+        "qual_mean": 0.0,
+        "sigma": 0.0,
+        "actionability": "ACTIONABLE"
+      },
+      "2.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0,
+        "qual_mean": 0.0,
+        "sigma": 0.0,
+        "actionability": "ACTIONABLE"
+      },
+      "5.0": {
+        "n_tox": 19,
+        "n_qual": 217,
+        "tox_mean": 0.0,
+        "qual_mean": 0.0,
+        "sigma": 0.0,
+        "actionability": "ACTIONABLE"
+      }
+    }
+  },
+  "sweep": {
+    "0.1": {
+      "tox_pct": 42.10526315789473,
+      "qual_pct": 27.64976958525346,
+      "actionability": "NOT_ACTIONABLE"
+    },
+    "0.25": {
+      "tox_pct": 52.63157894736842,
+      "qual_pct": 32.25806451612903,
+      "actionability": "NOT_ACTIONABLE"
+    },
+    "0.5": {
+      "tox_pct": 57.89473684210527,
+      "qual_pct": 36.86635944700461,
+      "actionability": "OPTIMISTIC_ONLY"
+    },
+    "1.0": {
+      "tox_pct": 57.89473684210527,
+      "qual_pct": 43.77880184331797,
+      "actionability": "ACTIONABLE"
+    },
+    "2.0": {
+      "tox_pct": 57.89473684210527,
+      "qual_pct": 50.23041474654379,
+      "actionability": "ACTIONABLE"
+    },
+    "5.0": {
+      "tox_pct": 57.89473684210527,
+      "qual_pct": 62.21198156682027,
+      "actionability": "ACTIONABLE"
+    }
+  }
+}
