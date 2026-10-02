@@ -198,17 +198,35 @@ def classify(fill, rows, ts, mids):
     return res
 
 
+_CLASSIFY_CACHE: dict = {}
+
+
+def _classify_cached(fill, rows, ts, mids):
+    """classify() is a pure function of its inputs, so repeat calls for the
+    same fill return the same dict. onset() asked for it once per horizon per
+    level -- about thirty recomputations per lot -- which is why the unmemoised
+    version did not finish inside the run limit on a two-window tape. The
+    values are identical by construction; this is speed, not analysis."""
+    k = (fill["slug"] if "slug" in fill else None, fill["t"], fill["side"],
+         fill["idx"])
+    hit = _CLASSIFY_CACHE.get(k)
+    if hit is None:
+        hit = classify(fill, rows, ts, mids)
+        _CLASSIFY_CACHE[k] = hit
+    return hit
+
+
 def onset(fill, rows, ts, mids, ext_bps, qfrac):
     """Earliest pre-fill instant at which each signal was already present."""
     t = fill["t"]
     lead_ext = lead_q = None
     for lb in sorted(LOOKBACKS, reverse=True):
-        c = classify(fill, rows, ts, mids)[str(lb)]
+        c = _classify_cached(fill, rows, ts, mids)[str(lb)]
         if c["ext_adverse_bps"] is not None and c["ext_adverse_bps"] >= ext_bps:
             lead_ext = lb
             break
     for lb in sorted(LOOKBACKS, reverse=True):
-        c = classify(fill, rows, ts, mids)[str(lb)]
+        c = _classify_cached(fill, rows, ts, mids)[str(lb)]
         if c["queue_gone_frac"] is not None and c["queue_gone_frac"] >= qfrac:
             lead_q = lb
             break
@@ -268,8 +286,9 @@ def main():
     for s in covered:
         rows = sc[s]
         dead = pou.window_end(s) - DEADLINE_S
+        _CLASSIFY_CACHE.clear()
         for f in fills_resting(rows, dead):
-            c = classify(f, rows, rts, mids)
+            c = _classify_cached(f, rows, rts, mids)
             per_fill.append({"slug": s, "t": f["t"], "side": f["side"],
                              "toxic": f["toxic"], "quote_age_s": round(f["quote_age_s"], 3),
                              "signals": c})
