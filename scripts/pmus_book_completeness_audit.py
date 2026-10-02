@@ -67,6 +67,9 @@ def main(paths):
 
     prev, rows = {}, []
     emitted = generated = cap_hits = 0
+    dup_rows = 0
+    seen_ids: dict = {}
+    first_emit_rows: dict = {}
     caps, sizes, stamps = set(), [], []
     row_ts = {}
     for ts, nbytes, o in books:
@@ -76,11 +79,27 @@ def main(paths):
         for slug, arr in (o.get("markets") or {}).items():
             n = len(arr)
             emitted += n
+            # duplicate_previously_emitted_rows: the diagnostic for the
+            # _BOOK_LOG_SEEN retention defect. Before the fix a 400-row
+            # document carried 349-365 rows already emitted earlier.
+            ids = seen_ids.setdefault(slug, set())
+            for x in arr:
+                k = str(x.get("t"))
+                if k in ids:
+                    dup_rows += 1
+                else:
+                    ids.add(k)
             # a row can appear in two documents; count DISTINCT receipt
             # timestamps. An earlier revision extended a list and reported
             # 9,814 rows for a window that actually held 7,914.
             row_ts.setdefault(slug, set()).update(
                 float(x["t"]) for x in arr if x.get("t") is not None)
+            if slug not in first_emit_rows:
+                # `generated` sums CONSECUTIVE book_updates deltas, so it cannot
+                # account for a slug's FIRST emission -- there is no prior value
+                # to difference against. Those rows are counted here instead, so
+                # the invariant below is not failed by a boundary artifact.
+                first_emit_rows[slug] = n
             bu = ((o.get("identity") or {}).get(slug) or {}).get("book_updates")
             cap = o.get("cap_per_market") or 0
             if cap and n >= cap:
@@ -117,6 +136,20 @@ def main(paths):
         "rows_emitted": emitted,
         "rows_generated": generated,
         "rows_lost_to_cap": lost,
+        "duplicate_previously_emitted_rows": dup_rows,
+        "rows_emitted_unique": sum(len(v) for v in seen_ids.values()),
+        "rows_generated_unique": generated,
+        "first_emission_rows_not_in_generated": sum(first_emit_rows.values()),
+        "invariant_emitted_unique_le_generated_unique":
+            sum(len(v) for v in seen_ids.values())
+            <= generated + sum(first_emit_rows.values()),
+        "invariant_note": ("rows_emitted_unique <= rows_generated_unique + "
+                           "first_emission_rows_not_in_generated. The allowance "
+                           "is a WINDOW-BOUNDARY artifact: `generated` sums "
+                           "consecutive book_updates deltas and so omits each "
+                           "slug's first emission. It is not a duplicate "
+                           "allowance -- duplicates are counted separately as "
+                           "duplicate_previously_emitted_rows, which must be 0."),
         "cap_induced_loss": lost > 0,
         "market_emissions_at_cap": cap_hits,
         "generated_per_market_per_emission": {

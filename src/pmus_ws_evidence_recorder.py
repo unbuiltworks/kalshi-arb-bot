@@ -1197,7 +1197,17 @@ BOOK_LOG_MARKETS_ENV = "PMUS_WS_BOOK_LOG_MARKETS"
 #: parseable, rather than one oversized line.
 BOOK_LOG_MARKETS_PER_DOC = 8
 
+#: per-slug emitted-row identities, used as an ORDERED set: a dict keyed by the
+#: same identity string as before (str(h["t"])), with insertion order carrying
+#: recency. It must not be a plain set. A set has no order, so the old bound
+#: `set(list(seen)[-2000:])` retained 2,000 ARBITRARY identities and dropped
+#: recent ones, after which already-emitted rows stopped being recognised and
+#: re-entered `fresh`. That produced periodic bursts of ~350 duplicate rows that
+#: clipped at the cap and made emissions look censored when nothing was lost.
+#: Insertion-ordered dict slicing retains the NEWEST identities deterministically.
 _BOOK_LOG_SEEN: dict = {}
+BOOK_LOG_SEEN_MAX = 4000
+BOOK_LOG_SEEN_KEEP = 2000
 
 #: a snapshot older than this at emission is reported STALE rather than fresh
 BOOK_STALE_S = 15.0
@@ -1262,13 +1272,13 @@ def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
             hist = list((s or {}).get("bbo_history") or [])
             if not hist:
                 continue
-            seen = _BOOK_LOG_SEEN.setdefault(slug, set())
+            seen = _BOOK_LOG_SEEN.setdefault(slug, {})
             fresh = []
             for h in hist:
                 k = str(h.get("t"))
                 if k in seen:
                     continue
-                seen.add(k)
+                seen[k] = None          # ordered set: order == emission order
                 fresh.append({
                     # every field comes from THIS history entry. Reading depth
                     # from the live snapshot `s` would backdate present depth
@@ -1283,8 +1293,11 @@ def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
                         {"bid": h.get("bid"), "ask": h.get("ask"),
                          "t": h.get("t")}, now, connected),
                 })
-            if len(seen) > 4000:
-                _BOOK_LOG_SEEN[slug] = set(list(seen)[-2000:])
+            if len(seen) > BOOK_LOG_SEEN_MAX:
+                # keep the NEWEST identities; insertion order makes this
+                # deterministic, which `set` slicing was not
+                keep = list(seen)[-BOOK_LOG_SEEN_KEEP:]
+                _BOOK_LOG_SEEN[slug] = {kk: None for kk in keep}
             if fresh:
                 out[slug] = fresh[-cap:]
                 total += len(out[slug])
