@@ -101,9 +101,9 @@ on:
         required: false
         default: "false"
       ci15m_cohort:
-        description: "CI15M-1 cohort id (durable, one per grant)"
+        description: "CI15M cohort id (durable, one per grant)"
         required: false
-        default: "CI15M-1"
+        default: "CI15M-2"
       r2_runner:
         description: "Run the continuous R2 execution-validation runner. Without r2_runner_live it is a DRY RUN that sends nothing."
         required: false
@@ -218,7 +218,7 @@ jobs:
         if: ${{ github.event.inputs.ci15m_run == 'true' }}
         uses: actions/checkout@v4
         with:
-          ref: 730318b72b599445258ae5f5e7ce8d751cf84aee
+          ref: 9301473ff97e4e84d0c3447ef6717fa81decafbd
           path: ci15m
           fetch-depth: 0
 
@@ -238,13 +238,16 @@ jobs:
           print("authorization      :", arming.EXPECTED_AUTH_ID)
           print("policy fingerprint :", fingerprint())
           assert arming.EXPECTED_AUTH_ID == P.PROBE_AUTH_ID == \
-              "OWNER-2026-10-03-GEMINI-CI15M-1"
+              "OWNER-2026-10-03-GEMINI-CI15M-2"
           assert fingerprint() == P.AUTHORIZED_POLICY_FINGERPRINT == \
               "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329"
-          # CI15M is maker-or-cancel only: the taker path must be SHUT.
-          assert payload.SEMANTICS_PROBE_AUTH_ID != arming.EXPECTED_AUTH_ID, \
-              "the taker path must not be reachable under CI15M-1"
-          print("taker path shut    : True")
+          # CI15M-2 is TREATMENT T: a capped marketable limit, so the
+          # taker gate must be OPEN -- and open only under this exact
+          # authorization, which means the two constants must AGREE.
+          assert payload.SEMANTICS_PROBE_AUTH_ID == arming.EXPECTED_AUTH_ID, \
+              "Treatment T needs the taker gate under THIS authorization"
+          assert P.TREATMENT == "T", "CI15M-2 is Treatment T only"
+          print("treatment          : T (capped marketable LIMIT)")
           PY
           # the gates are a precondition, not documentation
           python -m pytest tests/test_ci15m_probe.py -q
@@ -260,7 +263,7 @@ jobs:
           # them. They are an arm flag and an authorization label, not
           # secrets, and they are the owner's granted values verbatim.
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-CI15M-1"
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-CI15M-2"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-10-04T00:00:00Z"
           GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
         run: |
@@ -269,17 +272,17 @@ jobs:
           # must never reset the budget.
           python -m src.gemini_execution.ci15m_runner \
             --cohort "${{ github.event.inputs.ci15m_cohort }}" --create \
-            --recover-only
+            --profile MECHANICS --recover-only
           # THE COMPLETE PREFLIGHT, inside the credentialed environment, and
           # it SENDS NOTHING. Non-zero exit here stops the step.
           python -m src.gemini_execution.ci15m_runner \
             --cohort "${{ github.event.inputs.ci15m_cohort }}" \
-            --preflight-only --runtime-s 3000
+            --preflight-only --runtime-s 1500
           # Only now, and only if every condition above passed.
           python -m src.gemini_execution.ci15m_runner \
             --cohort "${{ github.event.inputs.ci15m_cohort }}" --live \
             --durable-branch research/gemini-btc5m-information-edge \
-            --max-windows 3 --runtime-s 3000
+            --max-windows 1 --runtime-s 1500
 
       - name: CI15M-1 evidence (always, even on failure)
         if: ${{ always() && github.event.inputs.ci15m_run == 'true' }}
