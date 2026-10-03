@@ -51,7 +51,9 @@ from decimal import Decimal as D
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-sys.path.insert(0, "analysis/gemini/favorite_inventory")
+_FI = (Path(__file__).resolve().parent.parent / "favorite_inventory")
+if str(_FI) not in sys.path:
+    sys.path.insert(0, str(_FI))
 from fi_core import Inventory, make_fill, maker_fee, rebate, taker_fee  # noqa
 
 from src.gemini_execution.continuous_probe import (COMPLETE, EXTEND,  # noqa
@@ -265,6 +267,124 @@ def maker_counterfactual(side: str, bid: D, qty: D) -> Dict[str, Any]:
                        "until credited.")}
 
 
+# ------------------------------------------------------------- THE DECISION
+#
+# ONE decision function. The shadow replay below and the LIVE probe in
+# src/gemini_execution/ci15m_probe.py both call THIS, with no second copy of
+# the policy anywhere. It is PURE: it reads an inventory and a book and
+# returns what to do. It mutates nothing and it cannot reach a venue.
+
+def decide_once(inv: Inventory, *, bid: Optional[D], ask: Optional[D],
+                bid_size: Any, ask_size: Any, tte: float, qty: D,
+                n_extends: int, actions: int,
+                allow_extend: bool = True) -> Dict[str, Any]:
+    """The next action for this inventory at this book, or HOLD with reasons.
+
+    `qty` is supplied by the caller and used for EVERY size decision in here,
+    so the shadow lot and the live q=1 exercise the same code path with the
+    only difference being the number. There is no size progression: this
+    function never derives a size, it is told one.
+    """
+    out: Dict[str, Any] = {"action": HOLD, "side": None, "price": None,
+                           "qty": None, "reason": "", "refusals": [],
+                           "detail": {}, "stop": None}
+    if not coherent(bid, ask):
+        out["reason"] = "book not coherent (two-sided, uncrossed) -- never "\
+                        "trade into an unreadable book"
+        return out
+    if locked(inv):
+        out["stop"] = "LOCKED"
+        out["reason"] = ("LOCKED: both outcomes positive after fees; a locked "
+                         "book is never unlocked for another trade")
+        return out
+    blocked = risk_block(inv, actions, 0)
+    if blocked:
+        out["stop"] = "RISK_BLOCK"
+        out["reason"] = "RISK_BLOCK: " + "; ".join(blocked)
+        return out
+
+    cands = []
+    if ask <= HARD_MAX_PRICE:
+        cands.append(("UP", ask, ask_size))
+    dn = D("1") - bid
+    if dn <= HARD_MAX_PRICE:
+        cands.append(("DOWN", dn, bid_size))
+    if not cands:
+        out["reason"] = ("neither side is offered at or below the hard max "
+                         "price %s" % HARD_MAX_PRICE)
+        return out
+
+    from src.gemini_execution.continuous_probe import Inventory as CPInv
+    from src.gemini_execution.continuous_probe import classify
+
+    for side, px, sz in cands:
+        if sz is None or D(str(sz)) < qty:
+            out["refusals"].append(
+                "%s @ %s REFUSED: displayed size %r < q %s, not actually "
+                "executable for our lot" % (side, px, sz, qty))
+            continue
+        act = classify("Up" if side == "UP" else "Down",
+                       CPInv(yes_qty=inv.q_up, no_qty=inv.q_down))
+        eff = inv.incremental_effect(side, px, qty, mode="taker")
+        mc = maker_counterfactual(side,
+                                  bid if side == "UP" else D("1") - ask, qty)
+
+        if act == OPEN:
+            if inv.fills:
+                continue                   # one bounded OPEN per market
+            if not (OPEN_TTE_LO <= tte <= OPEN_TTE_HI):
+                out["refusals"].append(
+                    "OPEN %s @ %s REFUSED: tte %.1f outside the [%s, %s] "
+                    "open band" % (side, px, tte, OPEN_TTE_LO, OPEN_TTE_HI))
+                continue
+            out.update({"action": OPEN, "side": side, "price": px, "qty": qty,
+                        "reason": "book coherent, %s executable for %s at "
+                                  "<= hard max %s" % (side, qty,
+                                                      HARD_MAX_PRICE),
+                        "detail": {"maker_counterfactual": mc,
+                                   "incremental": eff}})
+            return out
+
+        if act == EXTEND:
+            if not allow_extend:
+                out["refusals"].append(
+                    "EXTEND %s @ %s REFUSED: extensions disabled in this arm"
+                    % (side, px))
+                continue
+            d = want_extend_avg(inv, side, px, qty, n_extends)
+            if not d["accept"]:
+                out["refusals"].append("EXTEND %s @ %s %s"
+                                       % (side, px, d["why"]))
+                continue
+            out.update({"action": EXTEND, "side": side, "price": px,
+                        "qty": qty, "reason": "EXTEND: " + d["why"],
+                        "detail": {"maker_counterfactual": mc,
+                                   "incremental": eff, "extend_rule": d,
+                                   "required_complement_before":
+                                       required_complement_price(inv, qty)}})
+            return out
+
+        if act == COMPLETE:
+            d = want_complement(eff)
+            if not d["accept"]:
+                out["refusals"].append("COMPLEMENT %s @ %s %s"
+                                       % (side, px, d["why"]))
+                continue
+            out.update({"action": COMPLETE, "side": side, "price": px,
+                        "qty": qty, "reason": "COMPLEMENT: " + d["why"],
+                        "detail": {"maker_counterfactual": mc,
+                                   "incremental": eff,
+                                   "complement_rule": d}})
+            return out
+
+    if out["refusals"]:
+        out["reason"] = ("WAIT (price not good enough yet): "
+                         + " | ".join(out["refusals"]))
+    else:
+        out["reason"] = "no candidate action at this book"
+    return out
+
+
 # ------------------------------------------------------------------ replay
 def _apply(book, rows):
     for px, sz in rows or []:
@@ -382,128 +502,63 @@ def shadow_window(tk: str, w: Dict[str, Any],
             ledger.append(r)
             return r
 
-        if not coherent(bid, ask):
-            continue                      # never trade into an unreadable book
-        if locked(inv):
-            row(HOLD, reason="LOCKED: both outcomes positive after fees; a "
-                             "locked book is never unlocked for another trade")
+        dec = decide_once(inv, bid=bid, ask=ask, bid_size=bsz,
+                          ask_size=asz, tte=tte, qty=LOT,
+                          n_extends=n_extends, actions=actions,
+                          allow_extend=allow_extend)
+        act = dec["action"]
+
+        if dec["stop"]:
+            row(HOLD, reason=dec["reason"])
             break
-        blocked = risk_block(inv, actions, run_len)
-        if blocked:
-            row(HOLD, reason="RISK_BLOCK: " + "; ".join(blocked))
-            break
-
-        # the two candidate buys, marketable limit, hard max price.
-        # UP costs the ask; DOWN costs 1 - bid.
-        cands = []
-        if ask <= HARD_MAX_PRICE:
-            cands.append(("UP", ask, asz))
-        dn = D("1") - bid
-        if dn <= HARD_MAX_PRICE:
-            cands.append(("DOWN", dn, bsz))
-        if not cands:
-            continue
-
-        acted = False
-        refusals = []
-        for side, px, sz in cands:
-            if sz is None or D(str(sz)) < LOT:
-                continue                  # not actually executable for our lot
-            outcome = "Up" if side == "UP" else "Down"
-            from src.gemini_execution.continuous_probe import Inventory as CPInv
-            cp = CPInv(yes_qty=inv.q_up, no_qty=inv.q_down)
-            act = __import__(
-                "src.gemini_execution.continuous_probe",
-                fromlist=["classify"]).classify(outcome, cp)
-            eff = inv.incremental_effect(side, px, LOT, mode="taker")
-            mc = maker_counterfactual(side, bid if side == "UP" else D("1") - ask,
-                                      LOT)
-
-            if act == OPEN:
-                if inv.fills:
-                    continue              # one bounded OPEN per market
-                if not (OPEN_TTE_LO <= tte <= OPEN_TTE_HI):
-                    continue
-                inv.add(make_fill(t, side, "taker", px, LOT, "shadow OPEN"))
-                inv.assert_identities()
-                actions += 1
-                run_leg, run_len = side, 1
-                row(OPEN, side, px, LOT,
-                    "book coherent, %s executable for %s at <= hard max %s"
-                    % (side, LOT, HARD_MAX_PRICE),
-                    {"maker_counterfactual": mc, "incremental": eff})
-                acted = True
-                break
-
-            if act == EXTEND:
-                if not allow_extend:
-                    refusals.append("EXTEND %s @ %s REFUSED: extensions "
-                                    "disabled in this arm" % (side, px))
-                    continue
-                d = want_extend_avg(inv, side, px, LOT, n_extends)
-                if not d["accept"]:
-                    refusals.append("EXTEND %s @ %s %s" % (side, px, d["why"]))
-                    continue
-                before = inv.snapshot()
-                req_before = required_complement_price(inv, LOT)
-                inv.add(make_fill(t, side, "taker", px, LOT, "shadow EXTEND"))
-                inv.assert_identities()
-                actions += 1
-                n_extends += 1
-                run_len = run_len + 1 if run_leg == side else 1
-                run_leg = side
-                req_after = required_complement_price(inv, LOT)
-                d["required_complement_price_for_0.96_after"] = (
-                    None if req_after is None else str(req_after))
-                r = row(EXTEND, side, px, LOT, "EXTEND: " + d["why"],
-                        {"maker_counterfactual": mc, "incremental": eff,
-                         "extend_rule": d,
-                         "before": before, "after": inv.snapshot()})
-                extends.append({
-                    "t": r["t"], "tte": r["tte"], "side": side,
-                    "old_avg": d["residual_avg_before"],
-                    "extension_price": str(px),
-                    "new_avg": d["residual_avg_after"],
-                    "req_complement_before":
-                        None if req_before is None else str(req_before),
-                    "req_complement_after":
-                        None if req_after is None else str(req_after),
-                    "opportunity_set_widened_by":
-                        (None if (req_before is None or req_after is None)
-                         else str(req_after - req_before)),
-                    "additional_residual_risk": str(LOT * px),
-                    "residual_principal_after": d["residual_principal_after"],
-                    "why": d["why"],
-                    "d_worst_case": str(eff["worst_case_after"]
-                                        - eff["worst_case_before"]),
-                    "d_up": str(eff["d_up_settlement_pnl"]),
-                    "d_down": str(eff["d_down_settlement_pnl"])})
-                acted = True
-                break
-
-            if act == COMPLETE:
-                d = want_complement(eff)
-                if not d["accept"]:
-                    refusals.append("COMPLEMENT %s @ %s %s"
-                                    % (side, px, d["why"]))
-                    continue
-                inv.add(make_fill(t, side, "taker", px, LOT,
-                                  "shadow COMPLEMENT"))
-                inv.assert_identities()
-                actions += 1
-                n_extends = 0          # a complement re-opens the extend budget
-                run_leg, run_len = side, 1
-                row(COMPLETE, side, px, LOT, "COMPLEMENT: " + d["why"],
-                    {"maker_counterfactual": mc, "incremental": eff})
-                acted = True
-                break
-        if not acted:
-            if refusals and (last_wait[0] is None
-                             or t - last_wait[0] >= WAIT_EVERY):
+        if act == HOLD:
+            if dec["refusals"] and (last_wait[0] is None
+                                    or t - last_wait[0] >= WAIT_EVERY):
                 last_wait[0] = t
-                row(HOLD, reason="WAIT (price not good enough yet): "
-                                 + " | ".join(refusals))
+                row(HOLD, reason=dec["reason"])
             continue
+
+        side, px = dec["side"], dec["price"]
+        before = inv.snapshot()
+        req_before = required_complement_price(inv, LOT)
+        inv.add(make_fill(t, side, "taker", px, LOT, "shadow " + act))
+        inv.assert_identities()
+        actions += 1
+        extra = {"maker_counterfactual": dec["detail"]["maker_counterfactual"],
+                 "incremental": dec["detail"]["incremental"]}
+
+        if act == EXTEND:
+            n_extends += 1
+            req_after = required_complement_price(inv, LOT)
+            d = dict(dec["detail"]["extend_rule"])
+            d["required_complement_price_for_0.96_after"] = (
+                None if req_after is None else str(req_after))
+            extra.update({"extend_rule": d, "before": before,
+                          "after": inv.snapshot()})
+            eff = dec["detail"]["incremental"]
+            extends.append({
+                "t": round(t, 2), "tte": round(tte, 1), "side": side,
+                "old_avg": d["residual_avg_before"],
+                "extension_price": str(px),
+                "new_avg": d["residual_avg_after"],
+                "req_complement_before":
+                    None if req_before is None else str(req_before),
+                "req_complement_after":
+                    None if req_after is None else str(req_after),
+                "opportunity_set_widened_by":
+                    (None if (req_before is None or req_after is None)
+                     else str(req_after - req_before)),
+                "additional_residual_risk": str(LOT * px),
+                "residual_principal_after": d["residual_principal_after"],
+                "why": d["why"],
+                "d_worst_case": str(eff["worst_case_after"]
+                                    - eff["worst_case_before"]),
+                "d_up": str(eff["d_up_settlement_pnl"]),
+                "d_down": str(eff["d_down_settlement_pnl"])})
+        elif act == COMPLETE:
+            n_extends = 0          # a complement re-opens the extend budget
+
+        row(act, side, px, LOT, dec["reason"], extra)
 
     # ---- settlement decomposition
     s = w.get("settled") or {}

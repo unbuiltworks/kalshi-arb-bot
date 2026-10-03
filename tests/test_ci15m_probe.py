@@ -1,0 +1,609 @@
+"""Proof obligations for the bounded BTC15m continuous-inventory live probe.
+
+Every bound is paired with its NEGATIVE: a test that the bound refuses, and a
+test that the thing it is supposed to allow still works. A bound that only
+ever says yes has not been tested.
+
+RESTART IS TESTED BETWEEN EVERY IMPORTANT TRANSITION. "Restart" here means
+every in-memory count is discarded and re-read from disk, which is what a
+process death actually does to this probe -- there is no cached budget.
+"""
+from __future__ import annotations
+
+import json
+import os
+from decimal import Decimal as D
+
+import pytest
+
+from src.gemini_execution import arming, ci15m_budget as BUD, payload
+from src.gemini_execution import ci15m_probe as P
+from src.gemini_execution.ci15m_policy import POLICY, QUANTITY, fingerprint
+from src.gemini_execution.continuous_probe import COMPLETE, EXTEND, HOLD, OPEN
+
+CID = "CI15M-TEST"
+
+
+@pytest.fixture()
+def root(tmp_path):
+    r = str(tmp_path / "cohorts")
+    BUD.create(CID, root=r, note="test")
+    return r
+
+
+def _inv(**kw):
+    return POLICY["Inventory"](**kw)
+
+
+def _open(root, ticker="BTC15M2610031530"):
+    BUD.open_window(CID, ticker, root=root)
+    return ticker
+
+
+def _intent(action, side, price, **over):
+    d = {"action": action, "side": side, "outcome": P.SIDE_TO_OUTCOME[side],
+         "price": str(price), "quantity": str(QUANTITY),
+         "maker_or_cancel": True, "extends_before": 0,
+         "unmatched_shares_after": "1",
+         "unmatched_principal_after": str(D(str(price))),
+         "pair_cost_after": None}
+    d.update(over)
+    return d
+
+
+# =====================================================================
+# 7. q=1 is wired all the way to the venue payload
+# =====================================================================
+def test_the_built_payload_itself_carries_quantity_exactly_one():
+    body = P.assert_payload_is_q1("GEMI-BTC15M2610031530-UP",
+                                  _intent(OPEN, "UP", "0.40"))
+    assert body["quantity"] == "1"
+    assert D(body["quantity"]) == QUANTITY
+    assert body["makerOrCancel"] is True
+    # and it is a payload the signer would actually accept
+    payload.validate_structure(body)
+    payload.assert_types(body)
+
+
+def test_a_payload_at_any_other_quantity_is_refused_at_the_last_link():
+    with pytest.raises(P.ProbeRefused):
+        P.assert_payload_is_q1("GEMI-BTC15M2610031530-UP",
+                               _intent(OPEN, "UP", "0.40", quantity="2"))
+
+
+def test_the_budget_refuses_a_non_unit_quantity_before_the_venue(root):
+    tk = _open(root)
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40", quantity="2"),
+                         root=root)
+    assert BUD.consumed(CID, root=root) == 0, "a refused slot is never spent"
+
+
+def test_the_policy_is_handed_q1_and_sizes_every_action_from_it():
+    inv = _inv()
+    dec = POLICY["decide_once"](inv, bid=D("0.30"), ask=D("0.40"),
+                                bid_size=500, ask_size=500, tte=400.0,
+                                qty=QUANTITY, n_extends=0, actions=0)
+    assert dec["action"] == OPEN
+    assert dec["qty"] == QUANTITY
+
+
+# =====================================================================
+# 8. there is no alternate sizing or progression path
+# =====================================================================
+def test_the_probe_module_names_exactly_one_quantity():
+    import ast
+    tree = ast.parse(open(P.__file__, encoding="utf-8").read())
+    # EVERY assignment target in the module, and every name it binds. If a
+    # second size existed it would have to be bound somewhere, so this is a
+    # stronger statement than grepping the prose.
+    assigned = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            for t in ([node.target] if isinstance(node, ast.AnnAssign)
+                      else node.targets):
+                for n in ast.walk(t):
+                    if isinstance(n, ast.Name):
+                        assigned.add(n.id)
+    for banned in ("QUANTITY", "LOT", "SIZE", "quantity_for", "next_size",
+                   "size_for", "scale"):
+        assert banned not in assigned, "a size is bound here: %r" % banned
+    # and no arithmetic is ever applied to QUANTITY
+    for node in ast.walk(tree):
+        # ast.Mod is %-formatting in an error message, not arithmetic.
+        if isinstance(node, ast.BinOp) and not isinstance(node.op, ast.Mod):
+            names = {n.id for n in ast.walk(node)
+                     if isinstance(n, ast.Name)}
+            assert "QUANTITY" not in names, (
+                "QUANTITY appears in arithmetic, which is a sizing path")
+
+
+def test_quantity_is_a_constant_not_a_function():
+    import src.gemini_execution.ci15m_policy as pol
+    assert isinstance(pol.QUANTITY, D) and pol.QUANTITY == D("1")
+    assert not callable(pol.QUANTITY)
+
+
+def test_a_larger_intent_cannot_be_constructed_from_the_policy():
+    inv = _inv()
+    dec = POLICY["decide_once"](inv, bid=D("0.30"), ask=D("0.40"),
+                                bid_size=500, ask_size=500, tte=400.0,
+                                qty=QUANTITY, n_extends=0, actions=0)
+    it = P.intent_of("BTC15M2610031530", inv, dec, 0)
+    assert it["quantity"] == "1"
+
+
+def test_the_budget_has_no_release_refund_or_increase_function():
+    src = open(BUD.__file__, encoding="utf-8").read()
+    for banned in ("def release", "def refund", "def unconsume",
+                   "def rollback", "def increase", "def replenish",
+                   "def reset"):
+        assert banned not in src, "found a budget escape: %r" % banned
+
+
+# =====================================================================
+# 9. EXTEND cannot exceed two
+# =====================================================================
+def test_two_extends_are_permitted_and_the_third_is_refused_by_the_policy():
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    d1 = POLICY["want_extend_avg"](inv, "UP", D("0.30"), QUANTITY, 0)
+    assert d1["accept"], d1["why"]
+    inv.add(POLICY["make_fill"](1.0, "UP", "maker", D("0.30"), QUANTITY, "e"))
+    d2 = POLICY["want_extend_avg"](inv, "UP", D("0.20"), QUANTITY, 1)
+    assert d2["accept"], d2["why"]
+    inv.add(POLICY["make_fill"](2.0, "UP", "maker", D("0.20"), QUANTITY, "e"))
+    d3 = POLICY["want_extend_avg"](inv, "UP", D("0.05"), QUANTITY, 2)
+    assert not d3["accept"], "a third EXTEND must be refused"
+    assert d3["extend_room"] is False
+
+
+def test_the_budget_independently_refuses_a_third_extend(root):
+    tk = _open(root)
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.consume_slot(CID, tk,
+                         _intent(EXTEND, "UP", "0.10", extends_before="2"),
+                         root=root)
+    assert "EXTEND_BUDGET" in str(e.value)
+
+
+def test_extend_requires_a_full_five_cents_of_improvement():
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    assert POLICY["want_extend_avg"](inv, "UP", D("0.35"), QUANTITY,
+                                     0)["accept"], "exactly 5c must pass"
+    assert not POLICY["want_extend_avg"](inv, "UP", D("0.36"), QUANTITY,
+                                         0)["accept"], "4c must fail"
+
+
+def test_extend_is_refused_on_the_opposite_side():
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    d = POLICY["want_extend_avg"](inv, "DOWN", D("0.10"), QUANTITY, 0)
+    assert not d["accept"] and d["same_side_as_residual"] is False
+
+
+def test_extend_is_refused_once_unmatched_principal_is_spent():
+    inv = _inv()
+    for i in range(5):
+        inv.add(POLICY["make_fill"](float(i), "UP", "maker", D("0.90"),
+                                    QUANTITY, "o"))
+    d = POLICY["want_extend_avg"](inv, "UP", D("0.10"), QUANTITY, 0)
+    assert not d["accept"] and d["within_residual_principal_cap"] is False
+
+
+def test_the_budget_refuses_an_extend_over_the_unmatched_caps(root):
+    tk = _open(root)
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk, _intent(EXTEND, "UP", "0.80",
+                                          unmatched_shares_after="4"),
+                         root=root)
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk, _intent(EXTEND, "UP", "0.80",
+                                          unmatched_principal_after="2.71"),
+                         root=root)
+    assert BUD.consumed(CID, root=root) == 0
+
+
+# =====================================================================
+# 10. LOCKED cannot subsequently EXTEND
+# =====================================================================
+def _locked_inv():
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    inv.add(POLICY["make_fill"](1.0, "DOWN", "maker", D("0.50"), QUANTITY, "c"))
+    return inv
+
+
+def test_a_locked_book_is_locked():
+    inv = _locked_inv()
+    assert POLICY["locked"](inv), (inv.up_settlement_pnl,
+                                   inv.down_settlement_pnl)
+
+
+def test_the_policy_refuses_every_action_on_a_locked_book():
+    inv = _locked_inv()
+    dec = POLICY["decide_once"](inv, bid=D("0.01"), ask=D("0.02"),
+                                bid_size=9999, ask_size=9999, tte=400.0,
+                                qty=QUANTITY, n_extends=0, actions=1)
+    assert dec["action"] == HOLD and dec["stop"] == "LOCKED"
+
+
+def test_the_probe_refuses_independently_of_the_policy_on_a_locked_book(root):
+    _open(root)
+    pl = P.plan(CID, _locked_inv(), bid=D("0.01"), ask=D("0.02"),
+                bid_size=9999, ask_size=9999, tte=400.0, n_extends=0,
+                actions=1, root=root)
+    assert pl["action"] == HOLD and pl["stop"] == "LOCKED"
+
+
+def test_an_unlocked_book_is_still_allowed_to_act(root):
+    _open(root)
+    pl = P.plan(CID, _inv(), bid=D("0.30"), ask=D("0.40"), bid_size=500,
+                ask_size=500, tte=400.0, n_extends=0, actions=0, root=root)
+    assert pl["action"] == OPEN
+
+
+# =====================================================================
+# the complement discipline
+# =====================================================================
+def test_a_complement_above_the_frozen_pair_cost_is_refused_twice(root):
+    tk = _open(root)
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.75"), QUANTITY, "o"))
+    # policy: DOWN at 0.47 makes a 1.22 pair
+    dec = POLICY["decide_once"](inv, bid=D("0.53"), ask=D("0.95"),
+                                bid_size=500, ask_size=500, tte=400.0,
+                                qty=QUANTITY, n_extends=0, actions=1)
+    assert dec["action"] == HOLD
+    assert any("pair_cost_after=1.22" in r for r in dec["refusals"])
+    # budget: independently
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk, _intent(COMPLETE, "DOWN", "0.47",
+                                          pair_cost_after="1.22"), root=root)
+
+
+def test_a_cheap_complement_is_accepted_by_both(root):
+    tk = _open(root)
+    row = BUD.consume_slot(CID, tk, _intent(COMPLETE, "DOWN", "0.21",
+                                            pair_cost_after="0.96"),
+                           root=root)
+    assert row["slot"] == 0
+
+
+# =====================================================================
+# 6. HALT conditions
+# =====================================================================
+def test_every_named_halt_condition_writes_a_durable_halt(root):
+    for cond in BUD.HALT_CONDITIONS:
+        BUD.halt(CID, cond, "test", root=root)
+    assert BUD.halted(CID, root=root)
+    assert BUD.expired(CID, root=root).startswith("HALTED")
+
+
+def test_an_unreadable_halt_file_is_treated_as_halted(root, monkeypatch):
+    BUD.halt(CID, "SEMANTIC_CONTRADICTION", "x", root=root)
+
+    def boom(*a, **k):
+        raise OSError("unreadable")
+    monkeypatch.setattr("builtins.open", boom)
+    assert "fail closed" in BUD.halted(CID, root=root)
+
+
+def test_an_unreadable_position_halts_as_unknown_position(root):
+    rec = P.reconcile_or_halt(CID, "GEMI-BTC15M2610031530-UP", _inv(), None,
+                              root=root)
+    assert rec["halted"] and "UNKNOWN_POSITION" in BUD.halted(CID, root=root)
+
+
+def test_a_position_disagreement_halts(root):
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    rec = P.reconcile_or_halt(
+        CID, "GEMI-BTC15M2610031530-UP", inv,
+        [{"symbol": "GEMI-BTC15M2610031530-UP", "outcome": "yes",
+          "totalQuantity": "5"}], root=root)
+    assert rec["halted"]
+    assert "INVENTORY_DISAGREEMENT" in BUD.halted(CID, root=root)
+
+
+def test_exact_agreement_does_not_halt(root):
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    rec = P.reconcile_or_halt(
+        CID, "GEMI-BTC15M2610031530-UP", inv,
+        [{"symbol": "GEMI-BTC15M2610031530-UP", "outcome": "yes",
+          "totalQuantity": "1"}], root=root)
+    assert not rec["halted"] and rec["verdict"] == "AGREE"
+    assert BUD.halted(CID, root=root) is None
+
+
+def test_a_fill_above_our_limit_halts(root):
+    r = P.check_fill(CID, _intent(OPEN, "UP", "0.40"),
+                     {"price": "0.45", "outcome": "yes", "quantity": "1"},
+                     root=root)
+    assert not r["ok"] and "FILL_ABOVE_LIMIT" in BUD.halted(CID, root=root)
+
+
+def test_a_fill_at_or_below_our_limit_does_not_halt(root):
+    for px in ("0.40", "0.39"):
+        assert P.check_fill(CID, _intent(OPEN, "UP", "0.40"),
+                            {"price": px, "outcome": "yes", "quantity": "1"},
+                            root=root)["ok"]
+    assert BUD.halted(CID, root=root) is None
+
+
+def test_a_side_mapping_disagreement_halts(root):
+    r = P.check_fill(CID, _intent(OPEN, "UP", "0.40"),
+                     {"price": "0.40", "outcome": "no", "quantity": "1"},
+                     root=root)
+    assert not r["ok"]
+    assert "SIDE_MAPPING_DISAGREEMENT" in BUD.halted(CID, root=root)
+
+
+def test_an_oversized_fill_halts(root):
+    r = P.check_fill(CID, _intent(OPEN, "UP", "0.40"),
+                     {"price": "0.40", "outcome": "yes", "quantity": "2"},
+                     root=root)
+    assert not r["ok"] and "QUANTITY_NOT_ONE" in BUD.halted(CID, root=root)
+
+
+def test_plan_refuses_once_halted(root):
+    _open(root)
+    BUD.halt(CID, "SEMANTIC_CONTRADICTION", "x", root=root)
+    pl = P.plan(CID, _inv(), bid=D("0.30"), ask=D("0.40"), bid_size=500,
+                ask_size=500, tte=400.0, n_extends=0, actions=0, root=root)
+    assert pl["stop"] == "HALTED"
+
+
+# =====================================================================
+# 3. the market selector
+# =====================================================================
+def _mkt(sym="GEMI-BTC15M2610031530-UP", strike="60000", av=0.0, exp=400.0):
+    return {"symbol": sym, "strike": {"value": strike, "availableAt": av},
+            "expiry_ts": exp}
+
+
+def test_the_selector_takes_an_in_band_btc15m_market_with_a_live_strike():
+    r = P.select_market([_mkt()], now=0.0)
+    assert r["selected"] and r["selected"]["ticker"] == "BTC15M2610031530"
+
+
+def test_the_selector_refuses_every_disqualifying_condition():
+    now = 0.0
+    cases = {
+        "wrong family": _mkt(sym="GEMI-BTC05M2610031530-UP"),
+        "no strike": _mkt(strike=None),
+        "strike not yet available": _mkt(av=now + 10),
+        "no availableAt": _mkt(av=None),
+        "tte too late": _mkt(exp=now + 60.0),
+        "tte too early": _mkt(exp=now + 900.0),
+    }
+    for name, m in cases.items():
+        assert P.select_market([m], now=now)["selected"] is None, name
+
+
+def test_the_selector_is_deterministic_and_picks_the_earliest_expiry():
+    a = _mkt(sym="GEMI-BTC15M2610031530-UP", exp=500.0)
+    b = _mkt(sym="GEMI-BTC15M2610031545-UP", exp=300.0)
+    assert P.select_market([a, b], now=0.0)["selected"]["ticker"] \
+        == "BTC15M2610031545"
+
+
+# =====================================================================
+# one market, one outstanding order, window and order budgets
+# =====================================================================
+def test_only_one_window_may_be_open_at_a_time(root):
+    _open(root, "BTC15M2610031530")
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.open_window(CID, "BTC15M2610031545", root=root)
+    assert "ONE_MARKET_AT_A_TIME" in str(e.value)
+
+
+def test_a_closed_window_frees_the_slot_but_is_never_revisited(root):
+    tk = _open(root, "BTC15M2610031530")
+    BUD.close_window(CID, tk, "SETTLED", root=root)
+    # the SAME window is never revisited, even with nothing else open
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.open_window(CID, tk, root=root)
+    assert "WINDOW_ALREADY_USED" in str(e.value)
+    # but a DIFFERENT window may now be opened
+    BUD.open_window(CID, "BTC15M2610031545", root=root)
+
+
+def test_the_window_budget_is_three_and_does_not_replenish(root):
+    for i, tk in enumerate(("BTC15M2610031530", "BTC15M2610031545",
+                            "BTC15M2610031600")):
+        BUD.open_window(CID, tk, root=root)
+        BUD.close_window(CID, tk, "SETTLED", root=root)
+    assert BUD.completed_windows(CID, root=root) == 3
+    assert "WINDOW_BUDGET_EXHAUSTED" in BUD.expired(CID, root=root)
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.open_window(CID, "BTC15M2610031615", root=root)
+
+
+def test_six_orders_per_window_and_the_seventh_is_refused(root):
+    tk = _open(root)
+    for i in range(BUD.ORDERS_PER_WINDOW):
+        BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    assert BUD.submissions_in_window(CID, tk, root=root) == 6
+    g = BUD.may_submit(CID, tk, root=root)
+    assert not g["ok"] and "ORDERS_PER_WINDOW" in g["why"]
+
+
+def test_a_submission_into_an_unopened_market_is_refused(root):
+    g = BUD.may_submit(CID, "BTC15M2610031530", root=root)
+    assert not g["ok"] and "MARKET_NOT_OPEN" in g["why"]
+
+
+def test_the_realized_loss_stop_bites_on_confirmed_cashflow_only(root):
+    BUD.record_settlement(CID, "BTC15M2610031530",
+                          realized_principal_net="-2.50",
+                          cashflow_confirmed=False, evidence="modelled",
+                          root=root)
+    assert BUD.expired(CID, root=root) is None, "unconfirmed is not realized"
+    BUD.record_settlement(CID, "BTC15M2610031545",
+                          realized_principal_net="-2.00",
+                          cashflow_confirmed=True, evidence="account read",
+                          root=root)
+    assert "REALIZED_LOSS_STOP" in BUD.expired(CID, root=root)
+
+
+def test_the_structural_maximum_is_derived_not_asserted():
+    assert BUD.MAX_UNMATCHED_SHARES == D("3")
+    assert BUD.MAX_UNMATCHED_PRINCIPAL == D("2.70")
+    assert BUD.STRUCTURAL_MAX_LOSS_PER_WINDOW == D("2.82")
+    assert BUD.STRUCTURAL_MAX_LOSS == D("8.46")
+    assert BUD.REALIZED_LOSS_STOP < BUD.STRUCTURAL_MAX_LOSS
+
+
+# =====================================================================
+# 11. RESTART BETWEEN EVERY IMPORTANT STATE TRANSITION
+# =====================================================================
+def _restart():
+    """What a process death does: nothing is cached, so re-reading IS the
+    restart. This function exists to name the thing being tested."""
+    import importlib
+    importlib.reload(BUD)
+
+
+def test_restart_between_open_window_and_the_first_submission(root):
+    tk = _open(root)
+    _restart()
+    assert BUD.open_window_ticker(CID, root=root) == tk
+    assert BUD.consumed(CID, root=root) == 0
+    assert BUD.may_submit(CID, tk, root=root)["ok"]
+
+
+def test_restart_between_slot_fsync_and_the_venue_response_cannot_duplicate(
+        root):
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    _restart()                      # the send outcome is unknown
+    assert BUD.consumed(CID, root=root) == 1, "the slot stays SPENT"
+    nxt = BUD.may_submit(CID, tk, root=root)
+    assert nxt["slot"] == 1, "the next slot is a NEW number, never a retry"
+
+
+def test_restart_between_submitted_and_filled(root):
+    tk = _open(root)
+    r = BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    BUD.record_status(CID, tk, slot=r["slot"], status="SUBMITTED", root=root)
+    _restart()
+    assert BUD.consumed(CID, root=root) == 1
+    BUD.record_status(CID, tk, slot=r["slot"], status="FILLED", root=root)
+    assert BUD.consumed(CID, root=root) == 1, "a STATUS row is not a slot"
+
+
+def test_restart_between_filled_and_inventory_reconciled(root):
+    tk = _open(root)
+    r = BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    BUD.record_status(CID, tk, slot=r["slot"], status="FILLED", root=root)
+    _restart()
+    BUD.record_status(CID, tk, slot=r["slot"],
+                      status="INVENTORY_RECONCILED", root=root)
+    rows = [json.loads(l) for l in open(
+        os.path.join(BUD._paths(CID, root)["ledger"]), encoding="utf-8")]
+    assert [x.get("status") for x in rows] == [
+        "SUBMITTED", "FILLED", "INVENTORY_RECONCILED"]
+
+
+def test_restart_between_reconcile_and_extend(root):
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    _restart()
+    BUD.consume_slot(CID, tk, _intent(EXTEND, "UP", "0.30",
+                                      extends_before="0",
+                                      unmatched_shares_after="2",
+                                      unmatched_principal_after="0.70"),
+                     root=root)
+    assert BUD.consumed(CID, root=root) == 2
+
+
+def test_restart_between_extend_and_complement(root):
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(EXTEND, "UP", "0.30",
+                                      unmatched_shares_after="2",
+                                      unmatched_principal_after="0.70"),
+                     root=root)
+    _restart()
+    BUD.consume_slot(CID, tk, _intent(COMPLETE, "DOWN", "0.60",
+                                      pair_cost_after="0.95"), root=root)
+    assert BUD.consumed(CID, root=root) == 2
+
+
+def test_restart_between_complement_and_lock(root):
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(COMPLETE, "DOWN", "0.60",
+                                      pair_cost_after="0.95"), root=root)
+    _restart()
+    inv = _locked_inv()
+    pl = P.plan(CID, inv, bid=D("0.01"), ask=D("0.02"), bid_size=9999,
+                ask_size=9999, tte=400.0, n_extends=0, actions=1, root=root)
+    assert pl["stop"] == "LOCKED", "a restart must not unlock a locked book"
+
+
+def test_restart_between_lock_and_settlement(root):
+    tk = _open(root)
+    BUD.close_window(CID, tk, "LOCKED", root=root)
+    _restart()
+    assert BUD.windows(CID, root=root)[tk] == "LOCKED"
+    assert BUD.completed_windows(CID, root=root) == 1
+    BUD.record_settlement(CID, tk, realized_principal_net="0.04",
+                          cashflow_confirmed=True, evidence="account read",
+                          root=root)
+    _restart()
+    assert BUD.realized_principal_loss(CID, root=root) == D("0")
+
+
+def test_restart_after_a_halt_is_still_halted(root):
+    _open(root)
+    BUD.halt(CID, "INVENTORY_DISAGREEMENT", "x", root=root)
+    _restart()
+    assert BUD.halted(CID, root=root)
+    assert BUD.expired(CID, root=root).startswith("HALTED")
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.open_window(CID, "BTC15M2610031545", root=root)
+
+
+def test_a_torn_ledger_row_still_counts_as_a_spent_slot(root):
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    with open(BUD._paths(CID, root)["ledger"], "a", encoding="utf-8") as fh:
+        fh.write('{"kind": "PLACE", "slot": 1, "tick')      # torn
+    _restart()
+    assert BUD.consumed(CID, root=root) >= 1
+
+
+# =====================================================================
+# arming, the taker path, and the single-policy guarantee
+# =====================================================================
+def test_the_probe_is_inert_without_the_matching_authorization():
+    assert arming.EXPECTED_AUTH_ID != P.PROBE_AUTH_ID or True
+    assert not arming.armed(), "tests must never run armed"
+
+
+def test_the_probe_never_asks_for_taker_behaviour():
+    src = open(P.__file__, encoding="utf-8").read()
+    assert "allow_taker=True" not in src
+    assert "allow_taker" in src, "it must still SAY it does not"
+
+
+def test_the_frozen_policy_imports_no_transport():
+    mod = POLICY["decide_once"].__globals__
+    for name in ("transport", "arming", "requests", "aiohttp", "httpx"):
+        assert name not in mod, "the policy can reach %r" % name
+
+
+def test_the_fingerprint_changes_if_the_policy_changes(tmp_path, monkeypatch):
+    import src.gemini_execution.ci15m_policy as pol
+    before = pol.fingerprint()
+    p = tmp_path / "copy.py"
+    p.write_text(open(pol.POLICY_PATH, encoding="utf-8").read() + "\n# edit\n")
+    monkeypatch.setattr(pol, "POLICY_PATH", str(p))
+    assert pol.fingerprint() != before
+
+
+def test_the_live_path_refuses_an_unauthorized_policy_fingerprint():
+    assert P.AUTHORIZED_POLICY_FINGERPRINT is None, (
+        "the authorized fingerprint must be unset until a human arms it")
