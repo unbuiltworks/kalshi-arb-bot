@@ -80,7 +80,7 @@ def test_a_second_dispatch_of_an_exhausted_cohort_refuses(remote, tmp_path):
     fresh = str(tmp_path / "second-dispatch")
     BUD.create("CI15M-1", root=fresh)
     why = BUD.expired("CI15M-1", root=fresh, remote=bare)
-    assert why and "TOTAL_ORDER_BUDGET_EXHAUSTED" in why
+    assert why and "ORDER_BUDGET_EXHAUSTED" in why
     g = BUD.may_submit("CI15M-1", "BTC15M2610031745", root=fresh,
                        remote=bare)
     assert g["ok"] is False and "EXHAUSTED" in g["why"]
@@ -147,3 +147,61 @@ def test_a_genuinely_separate_process_agrees(remote, tmp_path):
     assert p.returncode == 0, p.stderr[-800:]
     got = json.loads(p.stdout.strip().splitlines()[-1])
     assert got["consumed"] == 12 and got["local"] == 0
+
+
+# =====================================================================
+# the MECHANICS profile: one window, three orders, and the three slots
+# cannot be spent retrying an OPEN.
+# =====================================================================
+def test_the_mechanics_profile_is_one_window_and_three_orders(tmp_path):
+    root = str(tmp_path / "mech")
+    BUD.create("CI15M-2-MECH", root=root, profile=BUD.MECHANICS)
+    prof = BUD.profile_of("CI15M-2-MECH", root=root)
+    assert prof["name"] == BUD.MECHANICS
+    assert prof["windows"] == 1
+    assert prof["orders_total"] == 3
+    assert prof["orders_per_window"] == 3
+    st = BUD.state("CI15M-2-MECH", root=root)
+    assert st["profile"]["orders_total"] == 3
+
+
+def test_the_mechanics_profile_cannot_be_widened_at_runtime(tmp_path):
+    root = str(tmp_path / "nowiden")
+    BUD.create("CI15M-2-MECH", root=root, profile=BUD.MECHANICS)
+    src = open(BUD.__file__, encoding="utf-8").read()
+    i = src.index("PROFILES = {")
+    assert "MECHANICS" in src[i:i + 300]
+    # the profile is read from the manifest on every call, never cached
+    assert BUD.profile_of("CI15M-2-MECH", root=root)["orders_total"] == 3
+    # no function exists that mutates a profile or widens a bound
+    for banned in ("def set_profile", "def widen_profile", "def set_bound",
+                   "def raise_budget", "def replenish"):
+        assert banned not in src, banned
+    # and PROFILES is never assigned into
+    assert "PROFILES[MECHANICS] =" not in src
+    assert "PROFILES[FULL] =" not in src
+
+
+def test_three_slots_cannot_be_spent_retrying_an_open(tmp_path):
+    """A cancelled OPEN ends that market's live experiment. The slots are
+    OPEN plus two INVENTORY actions, not three attempts at an OPEN."""
+    root = str(tmp_path / "noretry")
+    BUD.create("CI15M-2-MECH", root=root, profile=BUD.MECHANICS)
+    BUD.open_window("CI15M-2-MECH", "BTC15M2610031745", root=root)
+    intent = {"action": "OPEN", "side": "UP", "price": "0.40",
+              "quantity": "1", "unmatched_shares_after": "1",
+              "unmatched_principal_after": "0.40",
+              BUD.RECONCILED_KEY: "0"}
+    BUD.consume_slot("CI15M-2-MECH", "BTC15M2610031745", intent, root=root,
+                     remote=None)
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.consume_slot("CI15M-2-MECH", "BTC15M2610031745", dict(intent),
+                         root=root, remote=None)
+    assert "OPEN_ALREADY_ATTEMPTED" in str(e.value)
+
+
+def test_the_full_profile_is_unchanged(tmp_path):
+    root = str(tmp_path / "full")
+    BUD.create("CI15M-1-LIKE", root=root, profile=BUD.FULL)
+    prof = BUD.profile_of("CI15M-1-LIKE", root=root)
+    assert prof["windows"] == 3 and prof["orders_total"] == 12

@@ -144,3 +144,113 @@ def test_the_taker_payload_is_refused_by_the_validator_without_optin():
     with pytest.raises(payload.PayloadViolation):
         payload.assert_types(two)                     # no opt-in
     assert payload.assert_types(two, allow_taker=True)
+
+
+# =====================================================================
+# the BOOK ADAPTER: price comes from the EXECUTABLE ladder, and the
+# contract price is telemetry that prices nothing.
+# =====================================================================
+def test_the_adapter_prices_from_the_ladder_not_the_contract(monkeypatch):
+    """THE CI15M-1 ROOT CAUSE, as a regression. The contract said the ask
+    was 0.70; the executable ladder said 0.82. A limit at 0.70 rests."""
+    from src.gemini_execution import ci15m_probe as P
+    from src.gemini_execution import metadata
+
+    monkeypatch.setattr(metadata, "contract_depth", lambda sym, **k: {
+        "readable": True,
+        "bids": {"best": "0.63", "best_qty": "500"},
+        "asks": {"best": "0.82", "best_qty": "400"},
+        "snapshot_age_s": 0.2, "venue_ts": "1"})
+    monkeypatch.setattr(metadata, "outcome_book", lambda sym: {
+        "readable": True, "identity_consistent": True,
+        "yes": {"bid": "0.60", "ask": "0.70"},
+        "no": {"bid": "0.30", "ask": "0.40"}})
+    bk = P.book_from_venue("GEMI-BTC15M2610031715-UP")
+    assert bk["readable"] is True
+    assert bk["ask"] == D("0.82"), "the price must come from the ladder"
+    assert bk["bid"] == D("0.63")
+    assert "EXECUTABLE ladder" in bk["source"]
+    tel = bk["contract_price_telemetry"]
+    assert tel["read"] is True
+    assert tel["contract_ask"] == "0.70" and tel["ladder_ask"] == "0.82"
+    assert tel["ask_gap_contract_minus_ladder"] == "-0.12"
+    assert tel["contract_ask_would_have"] == "RESTED"
+
+
+def test_the_adapter_still_works_when_the_contract_price_is_unreadable(
+        monkeypatch):
+    """Telemetry must never be able to block a decision."""
+    from src.gemini_execution import ci15m_probe as P
+    from src.gemini_execution import metadata
+    monkeypatch.setattr(metadata, "contract_depth", lambda sym, **k: {
+        "readable": True,
+        "bids": {"best": "0.63", "best_qty": "500"},
+        "asks": {"best": "0.82", "best_qty": "400"}})
+    monkeypatch.setattr(metadata, "outcome_book",
+                        lambda sym: {"readable": False, "why": "no prices"})
+    bk = P.book_from_venue("S")
+    assert bk["readable"] is True and bk["ask"] == D("0.82")
+    assert bk["contract_price_telemetry"]["read"] is False
+
+
+def test_an_unreadable_or_one_sided_ladder_fails_closed(monkeypatch):
+    from src.gemini_execution import ci15m_probe as P
+    from src.gemini_execution import metadata
+    for dep in ({"readable": False, "why": "503"},
+                {"readable": True, "bids": {"best": None},
+                 "asks": {"best": "0.82"}},
+                {"readable": True, "bids": {"best": "0.90"},
+                 "asks": {"best": "0.80"}}):
+        monkeypatch.setattr(metadata, "contract_depth", lambda s, _d=dep,
+                            **k: _d)
+        bk = P.book_from_venue("S")
+        assert bk["readable"] is False, dep
+
+
+# =====================================================================
+# the two TREATMENTS
+# =====================================================================
+def test_the_maker_treatment_never_crosses():
+    from src.gemini_execution.ci15m_treatments import maker_price
+    for b in range(1, 99):
+        for a in range(b + 1, 100):
+            bid, ask = D(b) / 100, D(a) / 100
+            r = maker_price("UP", bid, ask, ceiling=D("0.90"))
+            if r["ok"]:
+                assert r["price"] < ask, (bid, ask, r)
+                assert r["crosses"] is False
+
+
+def test_the_taker_treatment_always_crosses_and_is_capped():
+    from src.gemini_execution.ci15m_treatments import taker_price
+    r = taker_price("UP", D("0.60"), D("0.70"), ceiling=D("0.90"))
+    assert r["ok"] and r["price"] == D("0.70") and r["crosses"] is True
+    assert r["maker_or_cancel"] is False
+    over = taker_price("UP", D("0.60"), D("0.95"), ceiling=D("0.90"))
+    assert over["ok"] is False and "ceiling" in over["why"]
+
+
+def test_the_maker_treatment_is_labelled_as_an_experiment():
+    """It must never be described as an immediately executable
+    acquisition -- that mislabel is what CI15M-1 acted on."""
+    from src.gemini_execution.ci15m_treatments import maker_price
+    r = maker_price("UP", D("0.60"), D("0.70"), ceiling=D("0.90"))
+    assert "MAKER EXPERIMENT" in r["labels"]
+    assert "NOT an immediately" in r["labels"]
+
+
+def test_both_treatments_price_the_same_decision():
+    from src.gemini_execution.ci15m_treatments import both
+    r = both("UP", D("0.60"), D("0.70"), ceiling=D("0.90"))
+    assert r["side"] == "UP"
+    assert r["M"]["price"] == D("0.61") and r["T"]["price"] == D("0.70")
+    assert r["differ"] is True and r["improvement"] == "0.09"
+
+
+def test_the_treatments_cannot_read_or_change_a_policy_parameter():
+    import src.gemini_execution.ci15m_treatments as T
+    src = open(T.__file__, encoding="utf-8").read()
+    for banned in ("EXTEND_MIN_AVG_IMPROVEMENT", "MAX_PAIR_COST",
+                   "OPEN_SIDE_RULE", "decide_once", "want_extend",
+                   "want_complement", "Inventory"):
+        assert banned not in src, banned

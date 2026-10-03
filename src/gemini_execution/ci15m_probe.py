@@ -758,37 +758,79 @@ def verify_runtime(cohort_id: str, *,
 
 
 def book_from_venue(symbol: str) -> Dict[str, Any]:
-    """The decision book: UP bid/ask from the presented contract, and the
-    DISPLAYED SIZE from the venue's own ladder.
+    """The decision book, PRICED FROM THE EXECUTABLE LADDER.
 
-    TWO READS, DELIBERATELY. `outcome_book` publishes prices only and carries
-    no depth at all, so "is there anything to trade against for q=1?" cannot
-    be answered from it. The ladder answers that, and the complement identity
-    between the two is CHECKED rather than assumed -- a book that violates it
-    is not one we understand well enough to send an order into.
+    WHAT CHANGED AND WHY. CI15M-1 took the PRICE from the contract object's
+    `prices.buy.yes` / `bestAsk` and only the SIZE from `/v1/book`. Measured
+    against the real ladder over 372 instants on 15 BTC15m symbols, that
+    contract price agreed with the executable best ask only 23.1% of the
+    time: it sat BELOW it 39.5% of the time (to 12c) and ABOVE it 60.5%
+    (to 5c). A limit at a price below the real ask does not cross -- it
+    rests. That is the whole explanation for CI15M-1's four accidental
+    maker fills and eight instant cancellations, and the tape's 39.5/60.5
+    split predicted the live 33/67 outcome.
+
+    So the frozen policy's "immediately executable acquisition price" is now
+    taken from the SAME authoritative ladder that was already supplying
+    size. The contract price is still read and is carried through as
+    TELEMETRY, so `contract price <-> executable ladder price` keeps being
+    measured rather than forgotten.
+
+    Nothing about the policy changes. This is the market-state INPUT.
     """
     from src.gemini_execution import metadata
-    ob = metadata.outcome_book(symbol)
-    if not ob.get("readable"):
-        return {"readable": False, "why": ob.get("why"), "stage": "prices"}
-    if not ob.get("identity_consistent"):
-        return {"readable": False, "stage": "identity",
-                "why": "the complement identity does not hold: %s"
-                       % ob.get("complement_identity"),
-                "semantic_contradiction": True}
     dep = metadata.contract_depth(symbol)
     if not dep.get("readable"):
-        return {"readable": False, "why": dep.get("why"), "stage": "depth"}
+        return {"readable": False, "why": dep.get("why"), "stage": "ladder"}
+    bids, asks = dep.get("bids") or {}, dep.get("asks") or {}
+    best_bid, best_ask = bids.get("best"), asks.get("best")
+    if best_bid is None or best_ask is None:
+        return {"readable": False, "stage": "ladder",
+                "why": ("the executable ladder is one-sided (bid %r, ask "
+                        "%r); nothing is derived in its place"
+                        % (best_bid, best_ask))}
+    bid, ask = D(str(best_bid)), D(str(best_ask))
+    if not (bid < ask):
+        return {"readable": False, "stage": "ladder",
+                "semantic_contradiction": True,
+                "why": "the executable ladder is crossed or locked: bid %s "
+                       ">= ask %s" % (bid, ask)}
+
+    # ---- TELEMETRY ONLY. Never used to price an order.
+    tel: Dict[str, Any] = {"read": False}
+    try:
+        ob = metadata.outcome_book(symbol)
+        if ob.get("readable"):
+            c_ask = D(ob["yes"]["ask"])
+            c_bid = D(ob["yes"]["bid"])
+            tel = {"read": True,
+                   "contract_ask": str(c_ask), "contract_bid": str(c_bid),
+                   "ladder_ask": str(ask), "ladder_bid": str(bid),
+                   "ask_gap_contract_minus_ladder": str(c_ask - ask),
+                   "bid_gap_contract_minus_ladder": str(c_bid - bid),
+                   "contract_ask_would_have": (
+                       "CROSSED" if c_ask >= ask else "RESTED"),
+                   "identity_consistent": ob.get("identity_consistent"),
+                   "labels": ("TELEMETRY. The contract price is recorded so "
+                              "the disagreement keeps being measured; it "
+                              "prices nothing.")}
+        else:
+            tel = {"read": False, "why": ob.get("why")}
+    except Exception as exc:                                   # noqa: BLE001
+        tel = {"read": False, "why": "%s: %s" % (type(exc).__name__, exc)}
+
     return {
         "readable": True,
-        "bid": D(ob["yes"]["bid"]), "ask": D(ob["yes"]["ask"]),
-        "bid_size": dep["bids"].get("best_qty"),
-        "ask_size": dep["asks"].get("best_qty"),
-        "up_acquisition": ob["yes"]["ask"],
-        "down_acquisition": str(D("1") - D(ob["yes"]["bid"])),
+        "source": "contract_depth /v1/book -- the EXECUTABLE ladder",
+        "bid": bid, "ask": ask,
+        "bid_size": bids.get("best_qty"),
+        "ask_size": asks.get("best_qty"),
+        "up_acquisition": str(ask),
+        "down_acquisition": str(D("1") - bid),
         "snapshot_age_s": dep.get("snapshot_age_s"),
-        "raw": {"prices": ob, "depth": {"bids": dep["bids"],
-                                        "asks": dep["asks"]}},
+        "venue_ts": dep.get("venue_ts"),
+        "contract_price_telemetry": tel,
+        "levels": {"bids": bids.get("levels"), "asks": asks.get("levels")},
     }
 
 

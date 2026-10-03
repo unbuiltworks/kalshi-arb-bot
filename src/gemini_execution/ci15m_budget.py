@@ -57,6 +57,29 @@ WINDOW_BUDGET = 3
 #: attempts; a maker-or-cancel CANCELLATION still spends one.
 ORDERS_PER_WINDOW = 6
 
+# ---------------------------------------------------------------- profiles
+#
+# CI15M-2 STARTS SMALLER, DELIBERATELY. CI15M-1 had a 12-order budget and
+# spent all of it without once reaching an EXTEND or a COMPLEMENT, because
+# the executor could not see its own fills. There is no point buying a wider
+# budget until the mechanics are proven, so the first CI15M-2 cohort exists
+# to prove exactly one chain:
+#
+#   OPEN fill -> terminal detection -> authoritative reconciliation ->
+#   correct next inventory decision
+#
+# A CANCELLED OR UNFILLED OPEN ENDS THAT MARKET'S EXPERIMENT. The three
+# slots are not three attempts at an OPEN; they are OPEN plus two
+# subsequent INVENTORY actions. `may_open` already forbids a second OPEN
+# intent, so the budget cannot be spent retrying one.
+MECHANICS = "MECHANICS"
+FULL = "FULL"
+
+PROFILES = {
+    MECHANICS: {"windows": 1, "orders_total": 3, "orders_per_window": 3},
+    FULL: {"windows": 3, "orders_total": 12, "orders_per_window": 6},
+}
+
 #: THE TOTAL ORDER CEILING, AND IT IS NOT MINE TO SET. The pre-existing live
 #: envelope caps mutations at `continuous_probe.MAX_ACTIONS`, and
 #: `cohort.create` refuses a budget above it. 3 windows x 6 orders would be
@@ -234,10 +257,33 @@ def halt(cohort_id: str, condition: str, detail: Any = None, *,
 
 
 # ------------------------------------------------------------- the counts
+def profile_of(cohort_id: str, *,
+               root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+    """The bounds this cohort was CREATED with, read from its manifest.
+
+    A profile is chosen once, by the human who creates the cohort, and is
+    then read from disk like every other bound. Nothing here can widen one.
+    """
+    try:
+        note = str(cohort.load(cohort_id, root=root).note or "")
+    except Exception:                                          # noqa: BLE001
+        note = ""
+    name = MECHANICS if ("profile=" + MECHANICS) in note else FULL
+    out = dict(PROFILES[name])
+    out["name"] = name
+    # the pre-existing envelope still binds, and is never raised
+    out["orders_total"] = min(out["orders_total"], CP_MAX_ACTIONS)
+    return out
+
+
 def create(cohort_id: str, *, root: str = cohort.COHORT_ROOT,
-           note: str = "") -> Dict[str, Any]:
+           note: str = "", profile: str = FULL) -> Dict[str, Any]:
     """Bring the cohort into being ONCE. A second call is a refusal."""
-    cohort.create(cohort_id, TOTAL_ORDER_BUDGET, root=root,
+    if profile not in PROFILES:
+        raise BudgetRefused("unknown profile %r; expected one of %s"
+                            % (profile, sorted(PROFILES)))
+    note = (note or "") + " profile=%s" % profile
+    cohort.create(cohort_id, PROFILES[profile]["orders_total"], root=root,
                   note=note or ("BTC15m CONTINUOUS-INVENTORY EXECUTION "
                                 "VALIDATION ONLY. Not a profitability "
                                 "estimate and never pooled with the "
@@ -391,10 +437,17 @@ def expired(cohort_id: str, *, root: str = cohort.COHORT_ROOT,
     h = halted(cohort_id, root=root)
     if h:
         return "HALTED: %s" % h
+    prof = profile_of(cohort_id, root=root)
     dur = durable_consumed(cohort_id, root=root, remote=remote)
     if dur["readable"] is False:
         return "DURABLE_BUDGET_UNREADABLE: %s" % dur["why"]
     used = dur["consumed"]
+    if used >= prof["orders_total"]:
+        return ("ORDER_BUDGET_EXHAUSTED: %d of %d order slots consumed "
+                "(profile %s; disk %d, latch refs %s). There is no "
+                "replenishment."
+                % (used, prof["orders_total"], prof["name"], dur["local"],
+                   (dur["latch"] or {}).get("count")))
     if used >= TOTAL_ORDER_BUDGET:
         return ("TOTAL_ORDER_BUDGET_EXHAUSTED: %d of %d order slots "
                 "consumed (disk %d, latch refs %s). This is the pre-existing "
@@ -402,6 +455,10 @@ def expired(cohort_id: str, *, root: str = cohort.COHORT_ROOT,
                 % (used, TOTAL_ORDER_BUDGET, dur["local"],
                    (dur["latch"] or {}).get("count")))
     done = completed_windows(cohort_id, root=root)
+    if done >= prof["windows"]:
+        return ("WINDOW_BUDGET_EXHAUSTED: %d of %d live windows completed "
+                "(profile %s). There is no replenishment."
+                % (done, prof["windows"], prof["name"]))
     if done >= WINDOW_BUDGET:
         return ("WINDOW_BUDGET_EXHAUSTED: %d of %d live windows completed. "
                 "There is no replenishment." % (done, WINDOW_BUDGET))
@@ -501,7 +558,14 @@ def may_submit(cohort_id: str, ticker: str, *,
         g = may_open(cohort_id, ticker, root=root)
         if not g["ok"]:
             return {"ok": False, "why": g["why"]}
+    prof = profile_of(cohort_id, root=root)
     n = submissions_in_window(cohort_id, ticker, root=root)
+    if n >= prof["orders_per_window"]:
+        return {"ok": False,
+                "why": "ORDERS_PER_WINDOW: %d of %d already submitted into "
+                       "%s (profile %s)"
+                       % (n, prof["orders_per_window"], ticker,
+                          prof["name"])}
     if n >= ORDERS_PER_WINDOW:
         return {"ok": False,
                 "why": "ORDERS_PER_WINDOW: %d of %d already submitted into "
@@ -625,6 +689,7 @@ def state(cohort_id: str, *,
         "windows": w,
         "window_open": open_window_ticker(cohort_id, root=root),
         "windows_completed": completed_windows(cohort_id, root=root),
+        "profile": profile_of(cohort_id, root=root),
         "orders_per_window": ORDERS_PER_WINDOW,
         "total_order_budget": TOTAL_ORDER_BUDGET,
         "total_order_budget_source": ("continuous_probe.MAX_ACTIONS, the "
