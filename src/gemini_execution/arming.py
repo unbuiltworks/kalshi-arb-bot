@@ -53,7 +53,24 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: inside run_window on a stale ledger row and sent NOTHING. No
 #: authorization is in force, and this sentinel matches no environment
 #: value, so the transport cannot arm at all until a human installs one.
-EXPECTED_AUTH_ID = "NO-AUTHORIZATION-IN-FORCE"
+#: INSTALLED 2026-10-03 at the owner's explicit instruction: the bounded
+#: EXECUTION-SEMANTICS probe. This is NOT a strategy authorization. It exists
+#: to answer one question -- when our parser says the favored side is or is
+#: not executable, does Gemini agree? -- and it is the only authorization
+#: under which `transport.place(allow_taker=True)` can build a crossing
+#: order. Every strategy stays maker-only; see `payload.SEMANTICS_PROBE_AUTH_ID`,
+#: which must equal this value for taker behaviour to be reachable at all.
+#:
+#: BOUNDS, from the owner: one market, ONE order per probe, at most 5 probes,
+#: $5 maximum cash per market, $15 aggregate realized loss, no EXTEND, no
+#: averaging, no chasing, no FLIP, no complement, no automatic price
+#: selection. Enforced in `semantics_probe` and proved in
+#: tests/test_gemini_semantics_probe_gates.py.
+#:
+#: Spending this id does not re-arm it: the latch is one-shot and git-bound,
+#: and any semantic or reconciliation anomaly writes a HALT file that blocks
+#: every later submission until a human clears it.
+EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
 
 
 class NotArmed(Exception):

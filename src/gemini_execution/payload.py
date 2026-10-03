@@ -39,6 +39,16 @@ from src.gemini_execution import spec
 ALLOWED_ORDER_FIELDS = ("symbol", "orderType", "side", "quantity", "price",
                         "outcome", "timeInForce", "makerOrCancel")
 
+#: THE ONE AUTHORIZATION THAT MAY SEND A CROSSING ORDER. `makerOrCancel`
+#: False is refused for every other authorization, so an ordinary strategy
+#: cannot obtain taker behaviour merely by passing a flag: it would also have
+#: to be running under this exact id, and an authorization is one-shot and is
+#: spent once consumed. The execution-semantics probe exists to test whether
+#: "no executable offer" really means "cannot buy", which a post-only order
+#: cannot test -- the venue cancels it rather than crossing. Nothing else in
+#: this repository needs taker behaviour, and nothing else may have it.
+SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
+
 #: fields that must never appear, with the reason, so a refusal explains itself
 FORBIDDEN = {
     "clientOrderId": ("not in the documented OrderRequest schema -- it is a "
@@ -67,9 +77,19 @@ def _is_decimal_string(v: Any) -> bool:
 
 
 def build_order(*, symbol: str, price: str, quantity: str,
-                side: str = spec.SIDE_BUY, outcome: str = spec.OUTCOME_YES
+                side: str = spec.SIDE_BUY, outcome: str = spec.OUTCOME_YES,
+                maker_or_cancel: bool = True
                 ) -> Dict[str, Any]:
-    """The order body, in a fixed field order so the rendering is stable."""
+    """The order body, in a fixed field order so the rendering is stable.
+
+    `maker_or_cancel` DEFAULTS TO TRUE and every pre-existing caller omits it,
+    so ordinary execution is post-only exactly as before. False is reachable
+    only through `transport.place(allow_taker=True)`, which additionally
+    requires the live authorization to be SEMANTICS_PROBE_AUTH_ID.
+    """
+    if type(maker_or_cancel) is not bool:
+        raise PayloadViolation(
+            "maker_or_cancel must be a real bool, got %r" % (maker_or_cancel,))
     return {
         "symbol": symbol,
         "orderType": spec.ORDER_TYPE_LIMIT,
@@ -78,12 +98,20 @@ def build_order(*, symbol: str, price: str, quantity: str,
         "price": str(price),
         "outcome": outcome,
         "timeInForce": spec.TIME_IN_FORCE_GTC,
-        "makerOrCancel": True,
+        "makerOrCancel": maker_or_cancel,
     }
 
 
-def assert_types(order: Mapping[str, Any]) -> Dict[str, str]:
-    """Every field's type and admissible value, stated rather than trusted."""
+def assert_types(order: Mapping[str, Any], *,
+                 allow_taker: bool = False) -> Dict[str, str]:
+    """Every field's type and admissible value, stated rather than trusted.
+
+    `allow_taker` DEFAULTS TO FALSE, so makerOrCancel must still be exactly
+    boolean True for every caller that does not opt in -- the pre-existing
+    guarantee, unchanged. Opting in widens that ONE value and nothing else:
+    the order is still a LIMIT order and every other field is checked
+    identically.
+    """
     checks: Dict[str, Any] = {
         "symbol": (isinstance(order.get("symbol"), str)
                    and bool(order.get("symbol"))),
@@ -95,8 +123,12 @@ def assert_types(order: Mapping[str, Any]) -> Dict[str, str]:
         "timeInForce": order.get("timeInForce") == spec.TIME_IN_FORCE_GTC,
         # `type(...) is bool`, NOT isinstance: True is an int and "true" is
         # truthy, and either would quietly send something else.
+        # `type(...) is bool` either way: True is an int and "true" is truthy.
+        # allow_taker widens the admissible VALUE, never the type.
         "makerOrCancel": (type(order.get("makerOrCancel")) is bool
-                          and order.get("makerOrCancel") is True),
+                          and (order.get("makerOrCancel") is True
+                               or (allow_taker
+                                   and order.get("makerOrCancel") is False))),
     }
     bad = [k for k, ok in checks.items() if not ok]
     if bad:

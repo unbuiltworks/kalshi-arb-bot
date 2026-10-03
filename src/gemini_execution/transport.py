@@ -72,7 +72,8 @@ async def _post(path: str, params: Optional[Dict[str, Any]] = None,
 
 async def place(*, symbol: str, side: str, outcome: str, price: str,
                 quantity: str, client_order_id: Optional[str] = None,
-                now: Optional[float] = None) -> Dict[str, Any]:
+                now: Optional[float] = None,
+                allow_taker: bool = False) -> Dict[str, Any]:
     """POST /v1/prediction-markets/order. ARM-GATED.
 
     `makerOrCancel` is sent as the BOOLEAN the prediction-markets API
@@ -96,6 +97,20 @@ async def place(*, symbol: str, side: str, outcome: str, price: str,
     below, and the next rejection body will say whether it was the cause.
     """
     arming.require(now)                      # structural: no arm, no request
+    if allow_taker:
+        # TWO independent facts, not one flag. A caller asking for taker
+        # behaviour must ALSO be running under the one authorization that
+        # grants it, which is one-shot and spent once consumed. An ordinary
+        # strategy therefore cannot reach `makerOrCancel: False` by passing
+        # this argument -- it would have to be the semantics probe's own
+        # authorization, and that authorization places exactly one order.
+        live = arming.auth_id()
+        if live != payload.SEMANTICS_PROBE_AUTH_ID:
+            raise VenueError(
+                "allow_taker is refused: a crossing order requires the "
+                "execution-semantics authorization %r, and the live "
+                "authorization is %r. Every strategy stays maker-only."
+                % (payload.SEMANTICS_PROBE_AUTH_ID, live))
     if client_order_id:
         # Refused outright rather than dropped quietly: the OrderRequest
         # schema does not admit it, and a caller passing one has a wrong
@@ -110,10 +125,11 @@ async def place(*, symbol: str, side: str, outcome: str, price: str,
     # wire without having been checked field by field.
     body = payload.build_order(symbol=symbol, price=str(price),
                                quantity=str(quantity), side=side,
-                               outcome=outcome)
+                               outcome=outcome,
+                               maker_or_cancel=not allow_taker)
     try:
         payload.validate_structure(body)
-        payload.assert_types(body)
+        payload.assert_types(body, allow_taker=allow_taker)
     except payload.PayloadViolation as exc:
         raise VenueError(str(exc)) from exc
     res = await _post(spec.PLACE_PATH, body)

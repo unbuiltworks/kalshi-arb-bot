@@ -96,6 +96,30 @@ on:
         description: "Entry band LO:HI for the UNARMED production-path proof. Default 90:300 (the standing rule) so routine runs do not wait. Set 240:280 to prove the armed window's own band read-only."
         required: false
         default: "90:300"
+      semantics_probe_preflight:
+        description: "PUBLIC-ONLY preflight for the execution-semantics probe. No credentials, no arm, no mutation. Set true to print the A/B classification and the full book for semantics_symbol."
+        required: false
+        default: "false"
+      semantics_probe_armed:
+        description: "ARMED execution-semantics probe. ONE order. Requires the owner to ALSO set semantics_symbol, semantics_favored and semantics_limit_price. Leave false."
+        required: false
+        default: "false"
+      semantics_symbol:
+        description: "Instrument for the semantics probe, e.g. GEMI-BTC05M2610031210-UP. Designated at dispatch because a BTC5m window lives 5 minutes."
+        required: false
+        default: ""
+      semantics_favored:
+        description: "Predicted side for the semantics probe: yes (UP) or no (DOWN)."
+        required: false
+        default: "yes"
+      semantics_limit_price:
+        description: "PREDECLARED limit price. 0.99 crosses any visible ask (case A); 0.01 rests below any bid (case B). The probe refuses if it no longer does what the case needs -- it never reprices."
+        required: false
+        default: ""
+      semantics_quantity:
+        description: "PREDECLARED quantity. 1 contract. Never sized from the book."
+        required: false
+        default: "1"
 
 # One at a time. A second run could commit evidence over the first.
 concurrency:
@@ -989,3 +1013,77 @@ jobs:
             echo "::error::refusing to commit files outside analysis/gemini/"
             git diff --cached --name-only; exit 1
           fi
+
+      # ==================================================================
+      # EXECUTION-SEMANTICS PROBE -- PUBLIC PREFLIGHT.
+      #
+      # NO CREDENTIAL IS IN SCOPE in this step, deliberately: /v1/book and
+      # the contract's own prices are PUBLIC on this venue, so the entire
+      # A/B classification, the price/quantity arithmetic and the cash
+      # figure can be stated before any secret exists in the job.
+      # ==================================================================
+      - name: Semantics probe PREFLIGHT (public reads only; no arm, no secret)
+        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' }}
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          test -n "${{ github.event.inputs.semantics_symbol }}" \
+            || { echo "::error::semantics_symbol is required"; exit 1; }
+          mkdir -p analysis/gemini/info_edge
+          python -m src.gemini_execution.semantics_probe \
+            --symbol      "${{ github.event.inputs.semantics_symbol }}" \
+            --favored     "${{ github.event.inputs.semantics_favored }}" \
+            --limit-price "${{ github.event.inputs.semantics_limit_price }}" \
+            --quantity    "${{ github.event.inputs.semantics_quantity }}" \
+            --preflight-only \
+            --out analysis/gemini/info_edge/semantics_preflight_$(date -u +%Y%m%dT%H%M%SZ).json
+
+      # ==================================================================
+      # EXECUTION-SEMANTICS PROBE -- ARMED. ONE ORDER.
+      #
+      # This is the ONLY step in the repository that can reach
+      # `makerOrCancel: False`, and it cannot do so by setting a flag: the
+      # transport additionally requires the live authorization to equal
+      # payload.SEMANTICS_PROBE_AUTH_ID. Every strategy stays maker-only.
+      #
+      # The authorization below is ONE-SHOT and git-bound: the latch is
+      # consumed and persisted BEFORE the venue sees anything, so a retried
+      # workflow places exactly one order rather than a second. Any semantic
+      # or reconciliation anomaly writes a HALT file that blocks every later
+      # submission until a human clears it.
+      #
+      # BOUNDS: one market, one order, $5 maximum cash, no EXTEND, no
+      # averaging, no chasing, no FLIP, no complement, no automatic price
+      # selection. Proved in tests/test_gemini_semantics_probe_gates.py,
+      # which this step runs FIRST and fails closed on.
+      # ==================================================================
+      - name: Semantics probe ARMED (one order; owner-authorized)
+        if: ${{ github.event.inputs.semantics_probe_armed == 'true' }}
+        timeout-minutes: 20
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          # NOT YET AUTHORIZED AT THE TIME OF WRITING. The sentinel below
+          # matches no environment value, so this step is inert until the
+          # owner replaces it with the granted id. Installing the id is the
+          # authorization; nothing else here needs to change.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-03T23:00:00Z"
+        run: |
+          set -o pipefail
+          # The gates are a precondition, not documentation.
+          python -m pytest tests/test_gemini_semantics_probe_gates.py -q
+          test -n "${{ github.event.inputs.semantics_symbol }}" \
+            || { echo "::error::semantics_symbol is required"; exit 1; }
+          test -n "${{ github.event.inputs.semantics_limit_price }}" \
+            || { echo "::error::a PREDECLARED limit price is required"; exit 1; }
+          mkdir -p analysis/gemini/info_edge
+          python -m src.gemini_execution.semantics_probe \
+            --symbol      "${{ github.event.inputs.semantics_symbol }}" \
+            --favored     "${{ github.event.inputs.semantics_favored }}" \
+            --limit-price "${{ github.event.inputs.semantics_limit_price }}" \
+            --quantity    "${{ github.event.inputs.semantics_quantity }}" \
+            --auth-id     "${GEMINI_CANARY_AUTH}" \
+            --out analysis/gemini/info_edge/semantics_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/semantics.txt
