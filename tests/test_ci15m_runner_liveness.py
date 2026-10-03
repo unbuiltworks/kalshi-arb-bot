@@ -374,3 +374,36 @@ def test_an_empty_cohort_directory_fails_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(BUD.cohort, "directory", lambda cid, **k: str(d))
     hook = R_mod.git_slot_hook("b")
     assert hook({"cohort_id": "X", "slot": 0, "ticker": "T"}) is False
+
+
+# ---------------------------------------------------------------------------
+# CI15M-4: the preflight's budget condition must follow the AUTHORIZATION,
+# not a magic number. It read `orders_total == 3` -- CI15M-3's MECHANICS
+# shape -- so the CI15M-4 preflight failed on a cohort that was correctly
+# configured at the authorized 6. No order was submitted; the whole run
+# died at the checklist. The replacement compares against
+# P.AUTHORIZED_BOUNDS, so it fails in BOTH directions.
+# ---------------------------------------------------------------------------
+
+def test_preflight_budget_condition_names_no_magic_number():
+    import inspect
+    from src.gemini_execution import ci15m_runner as R
+    src = inspect.getsource(R.preflight)
+    assert "durable_slots_zero_of_three" not in src
+    assert "durable_slots_zero_of_authorized_total" in src
+    cond = src.split("durable_slots_zero_of_authorized_total", 1)[1]
+    cond = cond.split("conditions[", 1)[0]
+    assert "AUTHORIZED_BOUNDS" in cond
+    # no bare integer budget comparison survives in the condition
+    assert "== 3" not in cond and "== 6" not in cond
+
+
+def test_authorized_bounds_profile_equals_mechanics2():
+    from src.gemini_execution import ci15m_probe as P
+    from src.gemini_execution import ci15m_budget as B
+    ab = P.AUTHORIZED_BOUNDS
+    prof = B.PROFILES[ab["profile"]]
+    assert ab["profile"] == "MECHANICS2"
+    assert prof["windows"] == ab["windows"] == 2
+    assert prof["orders_total"] == ab["orders_total"] == 6
+    assert prof["orders_per_window"] == ab["orders_per_window"] == 3

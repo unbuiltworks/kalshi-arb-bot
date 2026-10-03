@@ -247,9 +247,21 @@ def preflight(cohort_id: str, *, probe_seconds: float) -> Dict[str, Any]:
     prof = BUD.profile_of(cohort_id)
     conditions["zero_cohort_inventory"] = (
         BUD.consumed(cohort_id) == 0 and not BUD.windows(cohort_id))
-    conditions["durable_slots_zero_of_three"] = (
-        (v["checks"]["consumed_slots_zero"]
-         and prof["orders_total"] == 3))
+    # Nothing durably consumed yet, AND the cohort's order budget is the
+    # one the authorization names. This was `orders_total == 3`, which was
+    # CI15M-3's MECHANICS shape written as a magic number: CI15M-4 is
+    # authorized at 6 and the condition failed the whole preflight before
+    # anything could be submitted. The fix binds it to the AUTHORIZED
+    # BOUNDS literal instead, which TIGHTENS it -- a cohort whose profile
+    # disagrees with the grant now fails too, in either direction, and a
+    # future grant cannot silently inherit a stale constant.
+    conditions["durable_slots_zero_of_authorized_total"] = bool(
+        v["checks"]["consumed_slots_zero"]
+        and v["checks"]["authorized_bounds_installed"]
+        and prof["orders_total"] == P.AUTHORIZED_BOUNDS["orders_total"]
+        and prof["windows"] == P.AUTHORIZED_BOUNDS["windows"]
+        and prof["orders_per_window"]
+        == P.AUTHORIZED_BOUNDS["orders_per_window"])
     conditions["fresh_run_recovery_operational"] = bool(
         BUD.latch_slots(cohort_id)["readable"])
     failed = [k for k, ok in conditions.items() if not ok]
