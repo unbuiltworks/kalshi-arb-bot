@@ -26,6 +26,7 @@ import pytest
 from src.gemini_execution import ci15m_budget as BUD
 from src.gemini_execution import ci15m_probe as P
 from src.gemini_execution import ci15m_runner as R
+from src.gemini_execution import ci15m_runner as R_mod
 
 CID = "CI15M-LIVENESS"
 
@@ -269,3 +270,107 @@ def test_a_green_run_that_sent_nothing_is_never_silent(env, monkeypatch):
     assert out["exit"] is not None
     assert out["exit"]["reason"]
     assert BUD.exits(CID, root=env)
+
+
+# =====================================================================
+# THE LATCH REF: an orphan commit of the cohort files only.
+#
+# CI15M-3 assembled the whole chain, consumed slot 0, and was refused at
+# the push because the latch commit was built on the pinned tree, which
+# contains .github/workflows/ -- and the job's GITHUB_TOKEN carries
+# Contents: write only:
+#
+#   ! [remote rejected] HEAD -> ci15m-latch/CI15M-3-slot0
+#     (refusing to allow a GitHub App to create or update workflow
+#      `.github/workflows/gemini-settlement-gate.yml` without `workflows`
+#      permission)
+# =====================================================================
+def test_the_latch_commit_carries_no_workflow_file(tmp_path, monkeypatch):
+    """Built from the cohort files alone, so the pushed tree cannot contain
+    a workflow file and cannot need `workflows` permission."""
+    import subprocess
+    root = str(tmp_path / "cohorts")
+    monkeypatch.setattr(BUD, "latch_slots",
+                        lambda c, **k: {"readable": True, "slots": [],
+                                        "count": 0, "why": None})
+    BUD.create(CID, root=root, profile=BUD.MECHANICS)
+    BUD.open_window(CID, "BTC15M2610031945", root=root)
+    BUD.consume_slot(CID, "BTC15M2610031945",
+                     {"action": "OPEN", "side": "UP", "price": "0.59",
+                      "quantity": "1", "unmatched_shares_after": "1",
+                      "unmatched_principal_after": "0.59",
+                      BUD.RECONCILED_KEY: "0"}, root=root, remote=None)
+
+    monkeypatch.setattr(BUD.cohort, "directory",
+                        lambda cid, **k: str(pathlib.Path(root) / cid))
+    pushed = {}
+    real = subprocess.run
+
+    def fake(cmd, *a, **k):
+        if cmd[:2] == ["git", "push"]:
+            pushed["spec"] = cmd[-1]
+
+            class R:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+            return R()
+        return real(cmd, *a, **k)
+    monkeypatch.setattr(subprocess, "run", fake)
+
+    hook = R_mod.git_slot_hook("some-branch")
+    assert hook({"cohort_id": CID, "slot": 0, "ticker": "BTC15M2610031945"})
+    sha, ref = pushed["spec"].split(":")
+    assert ref == "refs/heads/ci15m-latch/%s-slot0" % CID
+
+    # the pushed commit must be PARENTLESS and contain ONLY cohort files
+    out = real(["git", "cat-file", "-p", sha], capture_output=True,
+               text=True, timeout=30).stdout
+    assert "parent " not in out, "the latch commit must be an orphan"
+    tree = real(["git", "ls-tree", "-r", "--name-only", sha],
+                capture_output=True, text=True, timeout=30).stdout.split()
+    assert tree, "the latch tree is empty"
+    assert not any(t.startswith(".github/") for t in tree), tree
+    assert all(t in ("ledger.jsonl", "windows.jsonl", "cohort.json",
+                     "exits.jsonl", "settled.jsonl", "HALT") for t in tree), \
+        tree
+    # and the ledger really is in there, with the consumed slot
+    blob = real(["git", "show", "%s:ledger.jsonl" % sha],
+                capture_output=True, text=True, timeout=30).stdout
+    assert '"kind": "PLACE"' in blob and '"slot": 0' in blob
+
+
+def test_the_latch_hook_fails_closed_when_the_push_is_rejected(tmp_path,
+                                                               monkeypatch):
+    """A rejected push must return False so the probe stops with the slot
+    spent -- it must never be read as success."""
+    import subprocess
+    root = str(tmp_path / "cohorts")
+    monkeypatch.setattr(BUD, "latch_slots",
+                        lambda c, **k: {"readable": True, "slots": [],
+                                        "count": 0, "why": None})
+    BUD.create(CID, root=root, profile=BUD.MECHANICS)
+    monkeypatch.setattr(BUD.cohort, "directory",
+                        lambda cid, **k: str(pathlib.Path(root) / cid))
+    real = subprocess.run
+
+    def fake(cmd, *a, **k):
+        if cmd[:2] == ["git", "push"]:
+            class R:
+                returncode = 1
+                stdout = ""
+                stderr = "! [remote rejected] ... without `workflows` permission"
+            return R()
+        return real(cmd, *a, **k)
+    monkeypatch.setattr(subprocess, "run", fake)
+    hook = R_mod.git_slot_hook("b")
+    assert hook({"cohort_id": CID, "slot": 0, "ticker": "T"}) is False
+
+
+def test_an_empty_cohort_directory_fails_closed(tmp_path, monkeypatch):
+    import subprocess
+    d = tmp_path / "empty"
+    d.mkdir()
+    monkeypatch.setattr(BUD.cohort, "directory", lambda cid, **k: str(d))
+    hook = R_mod.git_slot_hook("b")
+    assert hook({"cohort_id": "X", "slot": 0, "ticker": "T"}) is False

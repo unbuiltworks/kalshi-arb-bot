@@ -22,6 +22,7 @@ import argparse
 import asyncio
 import json
 import os
+import pathlib
 import re
 import sys
 import time
@@ -125,41 +126,83 @@ def git_slot_hook(branch: str):
     failure here stops the probe with the slot already spent -- which costs
     one order slot and never risks an order nobody recorded.
 
-    IT PUSHES TO A UNIQUE NEW REF PER SLOT, NOT TO `branch`. This matters
-    and it is not a style choice: the Actions step checks out a PINNED SHA,
-    so its HEAD is behind the branch tip, and `HEAD:branch` would be
-    rejected non-fast-forward. The hook would then fail, the slot would be
-    spent, and the probe would stop having bought nothing. Creating a fresh
-    ref always succeeds and is just as durable, and `branch` is kept only to
-    name the family of refs so they are easy to find.
+    IT PUSHES AN ORPHAN COMMIT CONTAINING ONLY THE COHORT FILES, and that
+    detail is the whole fix. CI15M-3 assembled the entire chain correctly,
+    consumed slot 0, and was then refused at the push:
 
-    A FORCE PUSH TO `branch` WOULD BE THE WRONG FIX -- it would discard
-    whatever else the branch had gained, including other latches.
+        ! [remote rejected] HEAD -> ci15m-latch/CI15M-3-slot0
+          (refusing to allow a GitHub App to create or update workflow
+           `.github/workflows/gemini-settlement-gate.yml` without
+           `workflows` permission)
+
+    The job's GITHUB_TOKEN carries Contents: write and nothing else. The
+    latch commit was built on the pinned tree, which contains
+    `.github/workflows/`, so the pushed ref looked like a workflow change
+    and GitHub refused it. No order was sent -- the hook runs strictly
+    before `transport.place`.
+
+    The latch does not need the repository tree; it needs the cohort's own
+    files. So the commit is built with `git mktree` / `git commit-tree`
+    from those files ALONE, with no parent. It carries no workflow file, so
+    it needs no `workflows` permission, and granting the job that
+    permission to work around this would have been a privilege increase for
+    no reason.
     """
     import subprocess
 
+    def _git(*args, **kw):
+        return subprocess.run(["git", *args], capture_output=True, text=True,
+                              timeout=60, **kw)
+
     def hook(slot_row: Dict[str, Any]) -> bool:
-        d = cohort.directory(slot_row["cohort_id"])
+        cid = slot_row["cohort_id"]
         slot = slot_row.get("slot")
-        ref = ("refs/heads/ci15m-latch/%s-slot%s"
-               % (slot_row.get("cohort_id"), slot))
+        d = pathlib.Path(cohort.directory(cid))
+        ref = "refs/heads/ci15m-latch/%s-slot%s" % (cid, slot)
+
+        # 1. hash each cohort file into the object store
+        entries = []
+        for f in sorted(d.rglob("*")):
+            if not f.is_file():
+                continue
+            h = _git("hash-object", "-w", str(f))
+            if h.returncode != 0:
+                print("  SLOT HOOK FAILED at hash-object (%s): %s"
+                      % (f, (h.stderr or "")[-200:]))
+                return False
+            entries.append("100644 blob %s\t%s"
+                           % (h.stdout.strip(), f.relative_to(d).as_posix()))
+        if not entries:
+            print("  SLOT HOOK FAILED: the cohort directory %s is empty" % d)
+            return False
+
+        # 2. a tree of ONLY those files -- no workflow file anywhere in it
+        t = subprocess.run(["git", "mktree"], input="\n".join(entries) + "\n",
+                           capture_output=True, text=True, timeout=60)
+        if t.returncode != 0:
+            print("  SLOT HOOK FAILED at mktree: %s"
+                  % (t.stderr or "")[-200:])
+            return False
+
+        # 3. a PARENTLESS commit, so no repository history is pushed either
         msg = ("latch(ci15m): slot %s consumed for %s [skip ci]"
                % (slot, slot_row.get("ticker")))
-        steps = [
-            ["git", "add", "-f", d],
+        c = subprocess.run(
             ["git", "-c", "user.name=gemini-ci15m[bot]",
              "-c", "user.email=gemini-ci15m@users.noreply.github.com",
-             "commit", "-m", msg],
-            # a NEW ref: always a fast-forward, never clobbers anything
-            ["git", "push", "origin", "HEAD:%s" % ref],
-        ]
-        for cmd in steps:
-            r = subprocess.run(cmd, capture_output=True, text=True,
-                               timeout=60)
-            if r.returncode != 0 and cmd[1] != "commit":
-                print("  SLOT HOOK FAILED at %s (%s): %s"
-                      % (cmd[1], ref, (r.stderr or "")[-300:]))
-                return False
+             "commit-tree", t.stdout.strip(), "-m", msg],
+            capture_output=True, text=True, timeout=60)
+        if c.returncode != 0:
+            print("  SLOT HOOK FAILED at commit-tree: %s"
+                  % (c.stderr or "")[-200:])
+            return False
+
+        # 4. a NEW ref: always a fast-forward, never clobbers anything
+        pu = _git("push", "origin", "%s:%s" % (c.stdout.strip(), ref))
+        if pu.returncode != 0:
+            print("  SLOT HOOK FAILED at push (%s): %s"
+                  % (ref, (pu.stderr or "")[-300:]))
+            return False
         print("  slot %s durable at %s (family: %s)" % (slot, ref, branch))
         return True
     return hook
