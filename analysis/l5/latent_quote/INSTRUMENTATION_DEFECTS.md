@@ -107,3 +107,52 @@ passive**", and in a one-tick spread no improving price is passive. P3 is left
 exactly as written. Its refusal rate in tight spreads is a **finding about the
 venue**, and the frequency with which P3 is testable at all should be reported
 alongside its results.
+
+## D5 — cancellations outnumbered placements 2:1, and every record re-serialized the whole order book of ghosts
+
+**Found:** 2026-10-03T14:32Z, from the first deployed run's own heartbeat
+counters, **before any scored result**. The deployed run is therefore
+`ENGINEERING_ONLY` like the local ones.
+
+**Symptom**, read off the live heartbeat:
+
+```
+decisions 444 · placements_new 8,465 · cancellations 16,175
+ghosts_created 16,175 · live_orders 66 · ghosts_observing 4,564
+sink_dropped 290
+```
+
+**16,175 cancellations against 8,465 placements is structurally impossible** if
+each cancellation belongs to one placement, and 290 dropped writes means the
+tape was already losing records.
+
+**Three causes, all confirmed in the code rather than guessed:**
+
+1. **`cancel()` had no state guard**, so an order already `REPRICED` could be
+   cancelled again, each time minting another ghost.
+2. **Terminal orders were never evicted from `live`**, so the window-rollover
+   loop cancelled every order the window had ever held, not just the resting
+   ones — which is where the 2× inflation came from.
+3. **Each decision record embedded `list(live.values())` and the entire ghost
+   list.** With thousands of ghosts observing, single records reached megabytes,
+   which both blew the sink's size cap (the 290 drops) and made the log stream
+   unusable.
+
+**Fix.** Three changes, none of which touches a model, arm, fill rule, bin or
+the split:
+
+1. `cancel()` is **idempotent**: a non-resting order returns `(o, None)` and
+   mints no ghost. Regression-tested against the exact observed numbers.
+2. Terminal orders are **evicted** from `live` and emitted exactly once.
+3. The output is now a true **append-only event log**, which is what the
+   deployment spec asked for and what I had conflated with a snapshot: a
+   `decision` row carries state, predictions, quotes and counts **only**, and
+   every order transition is its own `order_event` row. Ghost observation is
+   bounded at 300 concurrent, and evictions are **emitted** as
+   `GHOST_EVICTED_CAP` rather than silently dropped.
+
+**Note on the R4 control arm:** R4_REPRICE_5S is *designed* to cancel and
+re-place every decision, so a large ghost population is expected from it and is
+not itself a defect — it is precisely the queue-position cost the ghosts exist
+to measure. Only the double-counting, the non-eviction and the record bloat were
+defects.

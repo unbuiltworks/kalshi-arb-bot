@@ -221,3 +221,19 @@ def test_label_receipt_time_cannot_leak_backwards():
     assert feat == [], "a label received after tau must not enter the state at tau"
     assert late[0]["t"] == 100.0 and late[0]["recv_t"] == 200.0, \
         "both timestamps must be retained so it can still SCORE the prediction"
+
+
+def test_cancel_is_idempotent_and_cannot_inflate_counts():
+    """Defect D5: re-cancelling a terminal order must be a no-op, or cancel and
+    ghost counts exceed placement counts (observed live: 16,175 vs 8,465)."""
+    bk = {"bids": [{"p": 0.30, "q": 3.0}], "asks": [{"p": 0.32, "q": 9.0}]}
+    o = L.place(100.0, "s", "S5_FULL", "P1_AT_BID", "R4_REPRICE_5S", "up", _q(), _st())
+    o, g1 = L.cancel(o, 110.0, "CONTROL_EVERY_DECISION", _st(), bk)
+    assert g1 is not None
+    o, g2 = L.cancel(o, 120.0, "WINDOW_END", _st(), bk)
+    assert g2 is None, "a terminal order must never be cancelled twice"
+    assert [e[1] for e in o["events"]] == [L.PLACED, L.REPRICED]
+
+
+def test_ghost_cap_is_bounded():
+    assert isinstance(C.GHOST_MAX_OBSERVING, int) and C.GHOST_MAX_OBSERVING > 0

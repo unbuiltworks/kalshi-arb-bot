@@ -142,7 +142,14 @@ def should_reprice(o, now, pred_side, s, passive_ok, rule_ok):
 
 
 def cancel(o, now, reason, s, bk, make_ghost=True):
-    """Explicit cancellation with the full required record, plus a ghost."""
+    """Explicit cancellation with the full required record, plus a ghost.
+
+    IDEMPOTENT (defect D5): an order that is already terminal is never
+    cancelled again, so cancellation and ghost counts cannot be inflated by
+    re-visiting it.
+    """
+    if o["state"] not in (RESTING, PARTIAL):
+        return o, None
     rem_q = None
     rows = bk["bids"] if o["side"] in ("up", "dn") else bk["bids"]
     for r in rows:

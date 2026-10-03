@@ -142,6 +142,26 @@ def main(argv=None):
     print(f"PROSPECTIVE_SAMPLE_START={_utc(started)}\nCODE_SHA={sha}\n"
           f"PREREG_HASH={ph}\nSESSION_ID={session_id}", flush=True)
 
+    def emit_order(o, now, phase):
+        sink.write({"kind": "order_event", **prov, "day": _day(now), "t": now,
+                    "utc": _utc(now), "phase": phase,
+                    "oid": o["oid"], "slug": o["slug"],
+                    "side_model": o["side_model"], "price_arm": o["price_arm"],
+                    "lifetime_arm": o["lifetime_arm"], "side": o["side"],
+                    "price": o["price"], "size": o["size"],
+                    "queue_ahead_at_place": o["queue_ahead_at_place"],
+                    "bid_at_place": o["bid_at_place"], "ask_at_place": o["ask_at_place"],
+                    "pair_cost_at_place": o["pair_cost_at_place"],
+                    "placed_t": o["placed_t"], "state": o["state"],
+                    "is_ghost": o["is_ghost"], "parent_oid": o.get("parent_oid"),
+                    "filled_q": o["filled_q"], "vol_at_level": o["vol_at_level"],
+                    "vol_through": o["vol_through"], "evidence": o["evidence"],
+                    "first_fill_t": o["first_fill_t"], "full_fill_t": o["full_fill_t"],
+                    "queue_censored": o["queue_censored"],
+                    "bid_at_fill": o["bid_at_fill"], "ask_at_fill": o["ask_at_fill"],
+                    "cancel": o["cancel"], "ghost_outcome": o["ghost_outcome"],
+                    "events": o["events"]})
+
     live, ghosts = {}, []
     by_key = {}
     shadow_fills = []
@@ -164,11 +184,16 @@ def main(argv=None):
             if nm is None:
                 time.sleep(5); continue
             if mkt is not None:
+                bkz = {"bids": [], "asks": []}
                 for o in list(live.values()):
-                    bkz = {"bids": [], "asks": []}
+                    if o["state"] not in (L.RESTING, L.PARTIAL):
+                        continue
                     oc, g = L.cancel(o, now, "WINDOW_END", prev_dec or {}, bkz)
+                    if g is None:
+                        continue
                     n_cancel += 1
-                    if g: ghosts.append(g); n_ghost += 1
+                    emit_order(oc, now, "CANCELLED")
+                    ghosts.append(g); n_ghost += 1
             mkt = nm
             live, by_key, shadow_fills, prev_dec = {}, {}, [], None
             d = _day(now)
@@ -238,12 +263,16 @@ def main(argv=None):
                         if not rep:
                             continue
                         oc, g = L.cancel(cur, now, why, s, bk)
+                        if g is None:
+                            continue
                         n_cancel += 1
-                        if g: ghosts.append(g); n_ghost += 1
+                        emit_order(oc, now, L.REPRICED)
+                        ghosts.append(g); n_ghost += 1
                     o = L.place(now, mkt["slug"], mname, arm, lt, p["side"], q, s)
                     live[o["oid"]] = o
                     by_key[key] = o
                     n_place += 1
+                    emit_order(o, now, L.PLACED)
 
         for o in list(live.values()):
             bk = bk_up if o["side"] == "up" else bk_dn
@@ -258,14 +287,27 @@ def main(argv=None):
             bk = bk_up if g["side"] == "up" else bk_dn
             L.observe(g, now, trades, bk)
 
+        # D5: terminal orders are evicted and emitted once, never re-serialized
+        for oid, o in list(live.items()):
+            if o["state"] not in (L.RESTING, L.PARTIAL):
+                emit_order(o, now, o["state"])
+                live.pop(oid, None)
+        # D5: bound the observing ghost set; evictions are emitted, not dropped
+        if len(ghosts) > C.GHOST_MAX_OBSERVING:
+            ghosts.sort(key=lambda g: g.get("ghost_from_t", 0))
+            for g in ghosts[:len(ghosts) - C.GHOST_MAX_OBSERVING]:
+                emit_order(g, now, "GHOST_EVICTED_CAP")
+            ghosts = ghosts[len(ghosts) - C.GHOST_MAX_OBSERVING:]
+
         rec["counts"] = {"decisions": n_dec, "placements_new": n_place,
                          "cancellations": n_cancel, "ghosts_created": n_ghost,
                          "live_orders": sum(1 for o in live.values()
                                             if o["state"] in (L.RESTING, L.PARTIAL)),
                          "ghosts_observing": len(ghosts),
                          "unique_days": len(day_seen), "sink_dropped": sink.dropped}
-        rec["orders"] = list(live.values())
-        rec["ghost_orders"] = ghosts
+        # D5: the decision record carries state/predictions/quotes/counts ONLY.
+        # Orders live in their own append-only `order_event` rows, so a record
+        # never re-serializes thousands of objects.
         rec["fill_state_is_provisional"] = True
         sink.write(rec)
         prev_dec = s
