@@ -887,3 +887,46 @@ def test_the_frozen_policy_file_is_not_in_the_allowed_diff_set():
     block = src[i:src.index("}", i)]
     assert "btc15m_shadow_policy" not in block
     assert "arming.py" in block and "ci15m_probe.py" in block
+
+
+def test_the_widened_diff_set_still_excludes_every_bound_bearing_file():
+    """The allowed-diff set grew to admit the runner CLI and the workflow.
+    It must still exclude every file that carries a decision rule or a
+    bound, so nothing substantive can change through that door."""
+    src = open(P.__file__, encoding="utf-8").read()
+    i = src.index("AUTH_ONLY = {")
+    block = src[i:src.index("}", i)]
+    for excluded in ("btc15m_shadow_policy",      # the frozen policy
+                     "ci15m_budget",              # every risk bound
+                     "ci15m_policy",              # the loader/fingerprint
+                     "payload.py", "transport.py", "cohort.py"):
+        assert excluded not in block, "%r must not be in AUTH_ONLY" % excluded
+    assert "ci15m_runner.py" in block
+    assert "gemini-settlement-gate.yml" in block
+
+
+def test_the_runner_cli_cannot_submit_without_live_and_a_durable_branch():
+    from src.gemini_execution import ci15m_runner as R
+    # --live without --durable-branch is refused: a consumed slot must
+    # outlive the host.
+    rc = R.main(["--cohort", "CI15M-NOPE", "--recover-only"])
+    assert rc == 2, "an absent cohort must refuse"
+
+
+def test_the_runner_prints_presence_only_never_a_value():
+    from src.gemini_execution import ci15m_runner as R
+    src = open(R.__file__, encoding="utf-8").read()
+    # the only env reads are presence/label reads, never printed as values
+    assert "credential_presence" in src
+    for banned in ("print(os.getenv", "print(os.environ",
+                   "GEMINI_API_KEY\"))", "[:4]", "[:8]", "len(os.getenv"):
+        assert banned not in src, "a credential could leak via %r" % banned
+    pres = R.credential_presence()
+    assert set(pres.values()) <= {True, False}, "presence must be boolean"
+
+
+def test_the_runner_refuses_more_windows_than_authorized():
+    from src.gemini_execution import ci15m_runner as R
+    import src.gemini_execution.ci15m_budget as B
+    assert B.WINDOW_BUDGET == 3
+    assert R.main(["--cohort", "CI15M-NOPE", "--max-windows", "4"]) == 2

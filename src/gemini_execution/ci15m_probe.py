@@ -506,7 +506,23 @@ def verify_runtime(cohort_id: str, *,
     # and is additionally checked exactly, by fingerprint, above.
     AUTH_ONLY = {"src/gemini_execution/arming.py",
                  "src/gemini_execution/ci15m_probe.py",
-                 "tests/test_ci15m_probe.py"}
+                 "tests/test_ci15m_probe.py",
+                 # WIDENED 2026-10-03, and the widening is stated rather than
+                 # quiet. The owner's instruction was explicit: "Add the
+                 # minimal ci15m workflow path/step required to run the
+                 # already-authorized CI15M probe." The CLI entry point and
+                 # the workflow step ARE that path, and they did not exist at
+                 # the authorized commit, so a descendant carrying them must
+                 # pass or the authorized probe cannot run at all.
+                 #
+                 # This DOES widen the gate, and it is the weakest link in
+                 # the SHA condition: ci15m_runner.py is execution code.
+                 # What it does NOT widen is the substantive protection --
+                 # the FROZEN POLICY FILE is still excluded, and is checked
+                 # separately and EXACTLY by fingerprint, so no decision
+                 # rule, threshold or bound can change through this door.
+                 "src/gemini_execution/ci15m_runner.py",
+                 ".github/workflows/gemini-settlement-gate.yml"}
     sha_ok = checks["head_is_authorized_sha"] or (
         checks["head_is_authorized_or_descendant"]
         and bool(diff_files) and set(diff_files) <= AUTH_ONLY)
