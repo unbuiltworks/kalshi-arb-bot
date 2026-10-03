@@ -58,7 +58,11 @@ RTT = {"p50": 0.266, "p90": 0.612, "conservative_1s": 1.0}
 CEILINGS = (D("0.99"), D("0.98"), D("0.97"), D("0.95"))
 Q = 25
 DEADLINE_S = 90
-TAKER = D("0.07"); MAKER_REB = D("0.0125")
+import sys as _sys
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_sys.path.insert(0, _ROOT)
+from src import pmus_fees as _F                                   # noqa: E402
+TAKER = _F.taker_theta(); MAKER_REB = _F.maker_theta()
 
 import importlib.util
 _s = importlib.util.spec_from_file_location("pou", "scripts/pmus_pair_or_unwind.py")

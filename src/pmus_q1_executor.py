@@ -22,8 +22,9 @@ invocation, no auto-restart or scale; maker-first entry only inside the
 capped at $1.00; residual cap 1 contract; $1.00 daily realized-loss stop
 (authoritative ledger only). Complement (opposite outcomeSide BUY) only
 when the all-in pair cost locks >= 1c pre-rebate after fees; late taker
-completion under the identical all-in rule. Fees taker 0.06*p*(1-p),
-maker rebate -0.0125*p*(1-p) tracked separately, never loosening bounds.
+completion under the identical all-in rule. Fees taker
+theta*p*(1-p) from `src/pmus_fees.py` (0.0695 from 2026-09-17), maker
+rebate -0.0125*p*(1-p) tracked separately, never loosening bounds.
 
 Order flow: read-auth preflight (balances, flat position in the target
 market, no open orders, current public BBO in-band and two-sided) ->

@@ -40,7 +40,8 @@ and reported separately as instructed, and the fact that they coincide is a
 property of the data, not of the strategy. If PMUS exposes a separate NO-token
 book, this tape does not show it.
 
-Fees: taker 0.07*p*(1-p) per share; maker rebate 0.0125*p*(1-p) per share.
+Fees: the authoritative schedule in `src/pmus_fees.py` (taker theta 0.0695 from
+2026-09-17, maker rebate 0.0125), never a local copy of the numbers.
 No parameter is fitted. Ceilings are the pre-registered .99/.98/.97/.95.
 """
 from __future__ import annotations
@@ -55,8 +56,14 @@ CEILINGS = (D("0.99"), D("0.98"), D("0.97"), D("0.95"))
 QS = (5, 25, 100)
 DEADLINE_S = 90
 FRESH_MS = 2000
-TAKER = D("0.07")
-MAKER_REB = D("0.0125")
+import sys as _sys
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_sys.path.insert(0, _ROOT)
+from src import pmus_fees as _F                                   # noqa: E402
+
+# authoritative, not transcribed: 0.0695 from 2026-09-17, 0.06 before it.
+TAKER = _F.taker_theta()
+MAKER_REB = _F.maker_theta()
 
 
 def fee(p, q):
