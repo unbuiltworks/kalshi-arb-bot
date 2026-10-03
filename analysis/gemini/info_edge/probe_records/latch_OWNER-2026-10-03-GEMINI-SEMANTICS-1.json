@@ -1,0 +1,28 @@
+{
+  "authorization_id": "OWNER-2026-10-03-GEMINI-SEMANTICS-1",
+  "intent_id": null,
+  "symbol": null,
+  "side": "buy",
+  "outcome": "yes",
+  "price": "0.50",
+  "amount": null,
+  "created_at": 1791030784.8149872,
+  "state": "UNFILLED",
+  "venue_order_id": 145828836703726947,
+  "history": [
+    {
+      "state": "INTENT_PERSISTED",
+      "t": 1791030784.8149877
+    },
+    {
+      "state": "SUBMITTED",
+      "t": 1791030786.0106034
+    },
+    {
+      "state": "UNFILLED",
+      "t": 1791030798.7153718
+    }
+  ],
+  "envelope": {},
+  "labels": "consumed BEFORE the mutation. A lost order is preferred to a double order, because only one of them is recoverable."
+}

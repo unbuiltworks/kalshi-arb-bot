@@ -712,3 +712,59 @@ def _run_probe(monkeypatch, *, favored, ask, bid, limit, qty,
                               limit_price=limit, quantity=qty,
                               approved_ask=aa,
                               state_dir=state_dir or tempfile.mkdtemp()))
+
+
+# --------------------------------------------------------------------------
+# 16. REGRESSION: the acknowledgement is itself a fill report
+# --------------------------------------------------------------------------
+
+ACK_FILLED = {"status": "filled", "filledQuantity": "1",
+              "remainingQuantity": "0", "avgExecutionPrice": "0.5",
+              "price": "0.5", "quantity": "1"}
+
+
+def test_a_filled_ack_is_not_an_anomaly_even_with_an_empty_active_read():
+    """REGRESSION from the first armed probe (orderId 145828836703726947).
+
+    The venue answered 201 with status filled, filledQuantity 1,
+    remainingQuantity 0, avgExecutionPrice 0.5 -- and the probe reported "did
+    NOT trade", latched UNFILLED, cancelled the filled order (404
+    OrderNotFound) and raised a false SEMANTIC_CONTRADICTION. The cause: fill
+    status was read ONLY from active-orders, and a FILLED order is not an
+    ACTIVE order, so that read cannot ever see a fill.
+    """
+    rec = {"submitted_body": {"side": "buy", "outcome": "yes",
+                              "price": "0.50", "quantity": "1"},
+           # exactly what active-orders returned: no matching active order
+           "observations": [{"t_s": 2.72,
+                             "order": {"found": False, "resolved": True}}],
+           "classification": {"favored_ask": "0.5"}}
+    r = sp._reconcile(rec, "A", "yes", "0.50", "1", D("1"),
+                      ack_row=dict(ACK_FILLED))
+    assert not r["anomaly"], r
+    assert r["kind"] == "AGREES"
+
+
+def test_the_execution_price_is_checked_against_the_ack_when_only_it_has_one():
+    """The ack is where the execution price lives on a crossing order. A fill
+    above the limit must still be caught there."""
+    rec = {"submitted_body": {"side": "buy", "outcome": "yes",
+                              "price": "0.50", "quantity": "1"},
+           "observations": [{"t_s": 2.0,
+                             "order": {"found": False, "resolved": True}}],
+           "classification": {"favored_ask": "0.5"}}
+    bad = dict(ACK_FILLED); bad["avgExecutionPrice"] = "0.73"
+    r = sp._reconcile(rec, "A", "yes", "0.50", "1", D("1"), ack_row=bad)
+    assert r["anomaly"] and r["kind"] == "FILL_ABOVE_LIMIT"
+
+
+def test_case_a_genuinely_not_trading_is_still_an_anomaly():
+    """The mutation that matters: the fix must not make every case A pass.
+    With NO fill anywhere, the contradiction must still fire."""
+    rec = {"submitted_body": {"side": "buy", "outcome": "yes",
+                              "price": "0.50", "quantity": "1"},
+           "observations": [{"t_s": 2.0, "order": {"order": {}}}],
+           "classification": {"favored_ask": "0.5"}}
+    r = sp._reconcile(rec, "A", "yes", "0.50", "1", D("0"),
+                      ack_row={"status": "live", "filledQuantity": "0"})
+    assert r["anomaly"] and r["kind"] == "SEMANTIC_CONTRADICTION"

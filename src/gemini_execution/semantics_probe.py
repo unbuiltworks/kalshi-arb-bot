@@ -499,11 +499,33 @@ async def run(*, symbol: str, favored: str, auth_id: str,
         rec["positions_after"] = await metadata.positions()
         return _finish(rec, out)
 
-    order_id = ((ack.get("body") or {}).get("orderId")
-                or (ack.get("body") or {}).get("order_id"))
+    body = ack.get("body") or {}
+    order_id = body.get("orderId") or body.get("order_id")
     rec["order_id"] = order_id
     latch.advance(auth_id, latch.SUBMITTED, venue_order_id=order_id,
                   directory=state_dir)
+
+    # THE ACKNOWLEDGEMENT IS ITSELF A FILL REPORT, and on a crossing order it
+    # is the AUTHORITATIVE one.
+    #
+    # THIS WAS A REAL DEFECT. The first armed probe filled 1 @ 0.50 on the ack
+    # -- status 201, "status": "filled", filledQuantity "1",
+    # remainingQuantity "0", avgExecutionPrice "0.5" -- and the probe reported
+    # "did NOT trade", latched UNFILLED, tried to cancel the filled order
+    # (404 OrderNotFound) and raised a false SEMANTIC_CONTRADICTION. The cause:
+    # fill status was read ONLY from active-orders, and a filled order is not
+    # an active order, so that read is STRUCTURALLY INCAPABLE of seeing a fill.
+    # Absence from the active list means filled, cancelled or never accepted,
+    # and the venue's own words decide which -- never our inference.
+    rec["ack_fill"] = {k: body.get(k) for k in
+                       ("status", "filledQuantity", "remainingQuantity",
+                        "avgExecutionPrice", "price", "quantity")}
+    ack_filled = D("0")
+    try:
+        ack_filled = D(str(body.get("filledQuantity") or "0"))
+    except Exception:                                          # noqa: BLE001
+        ack_filled = D("0")
+    ack_status = body.get("status")
 
     # ---- 6. what the venue actually did ----------------------------------
     rec["observations"] = []
@@ -543,17 +565,30 @@ async def run(*, symbol: str, favored: str, auth_id: str,
         filled_qty = D(str(row.get("filledQuantity", "0") or "0"))
     except Exception:                                          # noqa: BLE001
         filled_qty = D("0")
+    # The ack wins where it is more informative: a filled order vanishes from
+    # the active list, so a 0 from there never overrides a fill the venue
+    # already reported.
+    if ack_filled > filled_qty:
+        filled_qty = ack_filled
+    if not status:
+        status = ack_status
     rec["venue_status"] = status
     rec["filled_quantity"] = str(filled_qty)
+    rec["fill_source"] = ("venue acknowledgement (201 + status/filledQuantity)"
+                          if ack_filled > 0 else "active-orders / history read")
 
-    if status not in ("filled",) and order_id is not None:
+    # NEVER CANCEL A FILLED ORDER. The first probe sent a cancel for an order
+    # the venue had already filled and got 404 OrderNotFound, which the
+    # fail-closed cancel correctly reported as OUTSTANDING -- noise standing in
+    # for a non-event.
+    if status not in ("filled",) and filled_qty == 0 and order_id is not None:
         rec["cancel"] = await transport.cancel_and_confirm(order_id, symbol)
         rec["mutations"].append("cancel")
 
     # ---- 8. semantic reconciliation. Disagreement is the VALUABLE result,
     #         and it stops the programme rather than feeding the next probe.
     rec["reconciliation"] = _reconcile(rec, case, favored, limit_price, qty,
-                                       filled_qty)
+                                       filled_qty, ack_row=rec["ack_fill"])
     if rec["reconciliation"]["anomaly"]:
         rec["halt"] = halt("%s on %s: %s" % (
             rec["reconciliation"]["kind"], symbol,
@@ -569,8 +604,8 @@ async def run(*, symbol: str, favored: str, auth_id: str,
     return _finish(rec, out)
 
 
-def _reconcile(rec, case, favored, limit_price, qty, filled_qty
-               ) -> Dict[str, Any]:
+def _reconcile(rec, case, favored, limit_price, qty, filled_qty,
+               ack_row: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Every way the venue could disagree with our model, checked explicitly.
 
     An anomaly here is not a probe failure -- it is the most valuable outcome
@@ -617,9 +652,15 @@ def _reconcile(rec, case, favored, limit_price, qty, filled_qty
     # limit. A fill ABOVE it would mean the venue priced us worse than the
     # limit we sent, which is a semantic contradiction, not a cost.
     if filled_qty > 0:
+        px_src = dict(row)
+        # the ack carries the execution price on a crossing order; the
+        # active-orders row usually does not, because the order is gone.
+        for k, v in (ack_row or {}).items():
+            if v not in (None, "") and k not in px_src:
+                px_src[k] = v
         for key in ("avgExecutionPrice", "averagePrice", "avgFillPrice",
                     "executedPrice"):
-            got = row.get(key)
+            got = px_src.get(key)
             if got in (None, ""):
                 continue
             try:
