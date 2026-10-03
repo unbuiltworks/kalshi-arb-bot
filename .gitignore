@@ -92,3 +92,4 @@ data/gemini_infoedge/*.jsonl
 # derived artifact.
 analysis/gemini/info_edge/ie_usable_windows.json
 analysis/gemini/info_edge/ie_diagnostics.json
+data/gemini_infoedge_15m/*.jsonl
