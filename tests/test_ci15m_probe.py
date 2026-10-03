@@ -17,6 +17,7 @@ from decimal import Decimal as D
 import pytest
 
 from src.gemini_execution import arming, ci15m_budget as BUD, payload
+from src.gemini_execution import position_ledger
 from src.gemini_execution import ci15m_probe as P
 from src.gemini_execution.ci15m_policy import POLICY, QUANTITY, fingerprint
 from src.gemini_execution.continuous_probe import COMPLETE, EXTEND, HOLD, OPEN
@@ -56,7 +57,9 @@ def _intent(action, side, price, **over):
          "maker_or_cancel": True, "extends_before": 0,
          "unmatched_shares_after": "1",
          "unmatched_principal_after": str(D(str(price))),
-         "pair_cost_after": None}
+         "pair_cost_after": None,
+         # the reconciliation stamp every live submission must carry
+         BUD.RECONCILED_KEY: "0"}
     d.update(over)
     return d
 
@@ -1124,3 +1127,159 @@ def test_the_slot_hook_ref_is_unique_per_slot(monkeypatch, root):
     assert all(x.startswith("HEAD:refs/heads/ci15m-latch/") for x in seen)
     assert not any("some-branch" in x for x in seen), (
         "the hook must not push to the branch tip")
+
+
+# =====================================================================
+# 2 + 3: THE EXACT CI15M-1 SEQUENCE CANNOT RECUR
+#
+# OPEN 0.70 rests -> later fills -> local inventory thinks FLAT -> venue
+# says 1 UP -> reconciliation corrects it -> another OPEN is prohibited ->
+# the next action is judged against the REAL inventory.
+# =====================================================================
+def test_an_ack_of_open_is_not_not_filled():
+    """The single belief that cost $2.86. `open` means RESTING, which is
+    where all four CI15M-1 fills began."""
+    a = P.classify_ack({"status": "open", "filledQuantity": "0"})
+    assert a["state"] == P.ACK_RESTING and a["terminal"] is False
+    assert "not NOT_FILLED" in a["why"]
+
+
+def test_ack_classification_covers_every_case():
+    assert P.classify_ack({"status": "cancelled", "filledQuantity": "0"}
+                          )["state"] == P.ACK_CANCELLED
+    assert P.classify_ack({"status": "filled", "filledQuantity": "1"}
+                          )["state"] == P.ACK_FILLED
+    for bad in ({}, {"status": "weird"}, {"status": "open",
+                                          "filledQuantity": "x"}):
+        a = P.classify_ack(bad)
+        assert a["terminal"] is False, bad
+        assert a["state"] in (P.ACK_UNRESOLVED, P.ACK_RESTING), bad
+
+
+def test_a_partial_fill_is_a_fill():
+    a = P.classify_ack({"status": "filled", "filledQuantity": "0.5"})
+    assert a["state"] == P.ACK_FILLED and a["filled"] == D("0.5")
+
+
+def test_an_unstamped_intent_is_refused_before_any_venue_write(root):
+    """3 -- the caps are computed from the caller's inventory, so an
+    inventory the venue never confirmed is not evidence."""
+    tk = _open(root)
+    bad = _intent(OPEN, "UP", "0.70")
+    del bad[BUD.RECONCILED_KEY]
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.consume_slot(CID, tk, bad, root=root)
+    assert "UNRECONCILED_INVENTORY" in str(e.value)
+    assert BUD.consumed(CID, root=root) == 0
+
+
+def test_a_null_reconciliation_stamp_is_also_refused(root):
+    tk = _open(root)
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk,
+                         _intent(OPEN, "UP", "0.70",
+                                 **{BUD.RECONCILED_KEY: None}), root=root)
+
+
+def test_the_late_fill_sequence_corrects_inventory_and_blocks_a_second_open(
+        root):
+    """THE FULL CI15M-1 SEQUENCE, as a regression."""
+    tk = _open(root)
+    # 1. OPEN 0.70 submitted; the ack says `open`
+    r = BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.70"), root=root)
+    ack = {"status": "open", "filledQuantity": "0", "orderId": 1}
+    assert P.classify_ack(ack)["state"] == P.ACK_RESTING, (
+        "CI15M-1 called this NOT_FILLED and never looked again")
+    BUD.record_status(CID, tk, slot=r["slot"], status="SUBMITTED",
+                      detail={"venue": {"body": ack}}, root=root)
+    # 2. a SECOND OPEN is already prohibited -- intent, not fill
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.71"), root=root)
+    assert "OPEN_ALREADY_ATTEMPTED" in str(e.value)
+    # 3. it later FILLS. Local inventory still thinks FLAT.
+    local = _inv()
+    assert local.q_up == D("0") and local.residual == D("0")
+    # 4. the venue says 1 UP -> our ledger disagrees -> HALT, not a decision
+    rec = P.reconcile_or_halt(
+        CID, "GEMI-BTC15M2610031715-UP", local,
+        [{"symbol": "GEMI-BTC15M2610031715-UP", "outcome": "yes",
+          "totalQuantity": "1"}], root=root)
+    assert rec["halted"], "a venue/ledger disagreement must never be ignored"
+    assert "INVENTORY_DISAGREEMENT" in BUD.halted(CID, root=root)
+    # 5. once inventory is CORRECTED to 1, the two agree
+    local.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.70"), QUANTITY,
+                                  "late fill"))
+    rec2 = position_ledger.reconcile(
+        P.LegView(local),
+        [{"symbol": "GEMI-BTC15M2610031715-UP", "outcome": "yes",
+          "totalQuantity": "1"}], "GEMI-BTC15M2610031715-UP")
+    assert rec2["verdict"] == "AGREE"
+    # 6. and the next action is judged against the REAL inventory: with 1 UP
+    #    held, the policy offers EXTEND/COMPLEMENT/HOLD -- never OPEN.
+    dec = POLICY["decide_once"](local, bid=D("0.30"), ask=D("0.40"),
+                                bid_size=500, ask_size=500, tte=400.0,
+                                qty=QUANTITY, n_extends=0, actions=1)
+    assert dec["action"] != OPEN
+
+
+def test_the_four_share_breach_is_arithmetically_unreachable(root):
+    """THE CAP PROOF. Walk the real inventory up one q=1 fill at a time and
+    show the gate refuses before 4 shares or $2.70 can be reached, at EVERY
+    price the policy may pay (0.01..0.90)."""
+    import itertools
+    for px in (D(c) / 100 for c in range(1, 91)):
+        inv = _inv()
+        allowed = 0
+        for step in range(6):
+            trial = _inv()
+            trial.q_up, trial.c_up = inv.q_up, inv.c_up
+            trial.add(POLICY["make_fill"](0.0, "UP", "maker", px, QUANTITY,
+                                          "t"))
+            shares = trial.residual
+            principal = trial.residual * trial.avg_up
+            over = (shares > BUD.MAX_UNMATCHED_SHARES
+                    or principal > BUD.MAX_UNMATCHED_PRINCIPAL)
+            if over:
+                break
+            inv = trial
+            allowed += 1
+        assert inv.residual <= BUD.MAX_UNMATCHED_SHARES, px
+        assert inv.residual * (inv.avg_up or D("0")) \
+            <= BUD.MAX_UNMATCHED_PRINCIPAL, px
+        assert allowed <= 3, "more than OPEN + 2 EXTENDs at %s" % px
+    # and the 4-share / $2.86 CI15M-1 state is refused outright
+    tk = _open(root)
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk, _intent(EXTEND, "UP", "0.72",
+                                          unmatched_shares_after="4",
+                                          unmatched_principal_after="2.86"),
+                         root=root)
+
+
+def test_restart_while_resting_does_not_forget_the_open(root):
+    tk = _open(root)
+    r = BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.70"), root=root)
+    BUD.record_status(CID, tk, slot=r["slot"], status="SUBMITTED",
+                      detail={"venue": {"body": {"status": "open",
+                                                 "filledQuantity": "0"}}},
+                      root=root)
+    _restart()
+    assert BUD.open_state(CID, tk, root=root) == BUD.OPEN_SUBMITTED
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.71"), root=root)
+
+
+def test_restart_after_a_fill_but_before_reconciliation(root):
+    """The most dangerous restart: the fill happened, the reconciliation
+    did not. The ledger must still show the fill, and the OPEN must still
+    be spent."""
+    tk = _open(root)
+    r = BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.70"), root=root)
+    BUD.record_status(CID, tk, slot=r["slot"], status="FILLED",
+                      detail={"price": "0.70", "quantity": "1"}, root=root)
+    _restart()
+    assert BUD.open_state(CID, tk, root=root) == BUD.OPEN_FILLED
+    rows = BUD._rows(BUD._paths(CID, root)["ledger"])
+    assert any(x.get("status") == "FILLED" for x in rows)
+    assert not any(x.get("status") == "INVENTORY_RECONCILED" for x in rows), (
+        "reconciliation must not be inferred from a fill")

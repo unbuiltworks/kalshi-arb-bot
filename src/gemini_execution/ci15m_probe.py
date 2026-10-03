@@ -266,7 +266,8 @@ def plan(cohort_id: str, inv: Any, *, bid: Optional[D], ask: Optional[D],
 
 
 def intent_of(ticker: str, inv: Any, dec: Mapping[str, Any],
-              n_extends: int) -> Dict[str, Any]:
+              n_extends: int, *, reconciled_signed: Any = None
+              ) -> Dict[str, Any]:
     """The submission intent, with every number the budget will re-check.
 
     The quantity is QUANTITY and is not derived from anything.
@@ -295,6 +296,10 @@ def intent_of(ticker: str, inv: Any, dec: Mapping[str, Any],
                 POLICY["required_complement_price"](trial, QUANTITY)),
         "reason": dec["reason"],
         "policy_fingerprint": fingerprint(),
+        # 3 -- THE STAMP. Every bound below is computed from `inv`, so the
+        # submission must carry proof that `inv` was reconciled against the
+        # venue. `consume_slot` refuses an unstamped intent.
+        RECONCILED: reconciled_signed,
     }
 
 
@@ -358,8 +363,143 @@ async def one_outstanding_order(symbol: str) -> Dict[str, Any]:
             "why": None}
 
 
+# ------------------------------------------------- the order lifecycle
+#
+# A PLACE ACK IS NOT A TERMINAL ORDER RESULT. CI15M-1 treated it as one and
+# therefore never learned about its own four fills: slots 2-5 acked
+# `status: open, filledQuantity: 0`, the engine recorded NOT_FILLED, and the
+# orders then rested and filled with nobody watching. Inventory stayed FLAT,
+# the risk gates were evaluated against that phantom-flat inventory, and 4
+# shares / $2.86 got past a 3-share / $2.70 cap.
+SUBMITTED = "SUBMITTED"
+ACK_FILLED = "ACK_FILLED"
+ACK_CANCELLED = "ACK_CANCELLED"
+ACK_RESTING = "ACK_RESTING"
+ACK_UNRESOLVED = "ACK_UNRESOLVED"
+TERMINAL_FILLED = "TERMINAL_FILLED"
+TERMINAL_CANCELLED = "TERMINAL_CANCELLED"
+
+#: venue statuses that are TERMINAL. Nothing else is, and absent is not.
+TERMINAL_STATUSES = ("filled", "cancelled", "canceled", "expired",
+                     "rejected", "closed")
+
 UNRESOLVED_STATUSES = ("open", "accepted", "pending", "partially_filled",
                        "partially filled", "")
+
+
+def classify_ack(body: Mapping[str, Any]) -> Dict[str, Any]:
+    """SUBMITTED -> ACK_CANCELLED | ACK_FILLED | ACK_RESTING | ACK_UNRESOLVED.
+
+    `open` IS NOT `NOT_FILLED`. It is a resting order whose fate is still
+    open, and it must be polled to a terminal state before anything else
+    happens.
+    """
+    st = str(body.get("status") or "").strip().lower()
+    try:
+        filled = D(str(body.get("filledQuantity")
+                       if body.get("filledQuantity") is not None
+                       else body.get("executedQuantity") or "0"))
+    except Exception:                                          # noqa: BLE001
+        return {"state": ACK_UNRESOLVED, "status": st, "filled": None,
+                "terminal": False,
+                "why": "the ack carried an unreadable filled quantity"}
+    if st == "filled" or (st in TERMINAL_STATUSES and filled > 0):
+        return {"state": ACK_FILLED, "status": st, "filled": filled,
+                "terminal": True, "why": None}
+    if st in ("cancelled", "canceled", "expired", "rejected") and filled <= 0:
+        return {"state": ACK_CANCELLED, "status": st, "filled": filled,
+                "terminal": True, "why": None}
+    if st in ("open", "accepted", "pending"):
+        return {"state": ACK_RESTING, "status": st, "filled": filled,
+                "terminal": False,
+                "why": ("the order is RESTING. `open` is not NOT_FILLED -- "
+                        "CI15M-1's four fills all began in this state. Its "
+                        "terminal state must be polled.")}
+    return {"state": ACK_UNRESOLVED, "status": st or "(absent)",
+            "filled": filled, "terminal": False,
+            "why": "unrecognised or absent order status -- fail closed"}
+
+
+async def poll_terminal(cohort_id: str, symbol: str, order_id: Any, *,
+                        attempts: int = 12, pause: float = 5.0,
+                        root: str = cohort.COHORT_ROOT,
+                        sleeper: Optional[Any] = None) -> Dict[str, Any]:
+    """Poll the AUTHORITATIVE order state until it is terminal.
+
+    Reads the venue's own order history, which is the only surface that can
+    show a FILLED order -- an active-orders read by construction cannot.
+    An unreadable or uninterpretable state HALTs rather than being guessed.
+    """
+    from src.gemini_execution import metadata
+    sleep = sleeper or asyncio.sleep
+    last: Dict[str, Any] = {}
+    for i in range(attempts):
+        try:
+            hist = await metadata.order_history(
+                symbol=symbol, statuses=("filled", "cancelled", "open"),
+                limit=100, include_rows=True)
+        except Exception as exc:                               # noqa: BLE001
+            last = {"error": str(exc)}
+            await sleep(pause)
+            continue
+        if hist.get("readable") is False:
+            last = {"unreadable": hist.get("why")}
+            await sleep(pause)
+            continue
+        for grp in (hist.get("per_status") or []):
+            for o in (grp.get("orders") or []):
+                if str(o.get("orderId")) != str(order_id):
+                    continue
+                st = str(o.get("status") or "").strip().lower()
+                if st in TERMINAL_STATUSES:
+                    try:
+                        f = D(str(o.get("filledQuantity") or "0"))
+                    except Exception:                          # noqa: BLE001
+                        break
+                    return {"resolved": True,
+                            "state": (TERMINAL_FILLED if f > 0
+                                      else TERMINAL_CANCELLED),
+                            "status": st, "filled": f, "row": o,
+                            "attempts": i + 1}
+                last = {"status": st, "row": o}
+        await sleep(pause)
+    BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
+             "order %s never reached a terminal state after %d polls: %r"
+             % (order_id, attempts, last), root=root)
+    return {"resolved": False, "state": ACK_UNRESOLVED, "last": last,
+            "attempts": attempts,
+            "why": ("the order's terminal state could not be established. "
+                    "An unreadable order state fails closed; the engine may "
+                    "not decide again.")}
+
+
+RECONCILED = "reconciled_venue_inventory"
+
+
+async def reconciled_inventory(cohort_id: str, symbol: str, *,
+                               root: str = cohort.COHORT_ROOT
+                               ) -> Dict[str, Any]:
+    """Inventory AS THE VENUE REPORTS IT, not as we inferred it.
+
+    THE RISK GATES RUN ON THIS. CI15M-1's gates ran on a locally inferred
+    fill list that was simply wrong, which is why the caps did not bite.
+    """
+    from src.gemini_execution import metadata
+    try:
+        got = await metadata.positions()
+    except Exception as exc:                                   # noqa: BLE001
+        BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                 "positions read failed: %s" % exc, root=root)
+        return {"ok": False, "why": str(exc), "signed": None}
+    rows = got.get("positions") if isinstance(got, Mapping) else None
+    if rows is None and isinstance(got, Mapping):
+        rows = got.get("result") or got.get("data")
+    v = position_ledger.venue_signed(rows, symbol)
+    if v.get("signed") is None:
+        BUD.halt(cohort_id, "UNKNOWN_POSITION", v.get("why"), root=root)
+        return {"ok": False, "why": v.get("why"), "signed": None}
+    return {"ok": True, "signed": v["signed"],
+            "representation": v["representation"], "rows": rows}
 
 
 def order_is_resolved(body: Mapping[str, Any]) -> Dict[str, Any]:
@@ -760,7 +900,23 @@ async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
             await asyncio.sleep(poll_s)
             continue
 
-        intent = intent_of(ticker, inv, pl, n_extends)
+        # 3 -- reconcile against the venue BEFORE building an intent, so
+        # every cap is evaluated on inventory the venue confirms.
+        rec0 = await reconciled_inventory(cohort_id, symbol, root=root)
+        if not rec0["ok"]:
+            ev("HALTED", why=rec0.get("why"))
+            break
+        ours = inv.q_up - inv.q_down
+        if D(str(rec0["signed"])) != ours:
+            BUD.halt(cohort_id, "INVENTORY_DISAGREEMENT",
+                     "venue signed %s != ours %s" % (rec0["signed"], ours),
+                     root=root)
+            ev("HALTED", why="venue %s != ours %s" % (rec0["signed"], ours),
+               labels="the engine may not decide against an inventory the "
+                      "venue does not confirm")
+            break
+        intent = intent_of(ticker, inv, pl, n_extends,
+                           reconciled_signed=str(rec0["signed"]))
         before = POLICY["Inventory"](
             q_up=inv.q_up, q_down=inv.q_down, c_up=inv.c_up,
             c_down=inv.c_down, fees=inv.fees, rebates=inv.rebates,
@@ -787,33 +943,57 @@ async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
         # order blocks the loop; it does not get a sibling.
         ack_body = ((res.get("venue") or {}).get("body")
                     if isinstance(res.get("venue"), Mapping) else None)
-        if isinstance(ack_body, Mapping):
-            rr = order_is_resolved(ack_body)
-            if not rr["resolved"]:
-                out = await one_outstanding_order(symbol)
-                ev("ORDER_UNRESOLVED", slot=res["slot"],
-                   ack_status=rr["status"], why=rr.get("why"),
-                   outstanding=out,
-                   labels="the engine may not submit again while any "
-                          "previous order is unresolved. CI15M-1 left four "
-                          "orders resting simultaneously through this hole.")
-                if not out["ok"]:
-                    ev("STOP", stop="ORDER_UNRESOLVED", reason=out["why"])
-                    break
-
-        # ---- what actually happened to it, read back from the venue
-        filled = await _settle_order(cohort_id, symbol, ticker, intent, res,
-                                     root=root)
-        if filled["halted"]:
-            ev("HALTED", why=filled["why"])
+        if not isinstance(ack_body, Mapping):
+            BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
+                     "the place ack carried no readable order object",
+                     root=root)
+            ev("HALTED", why="unreadable place ack")
             break
-        if not filled["filled"]:
-            ev("NOT_FILLED", slot=res["slot"], outcome=filled["outcome"],
+        ack = classify_ack(ack_body)
+        ev("ACK", slot=res["slot"], state=ack["state"],
+           status=ack["status"], filled=str(ack["filled"]),
+           why=ack.get("why"))
+
+        # 2 -- A PLACE ACK IS NOT A TERMINAL RESULT. `open` is not
+        # NOT_FILLED: CI15M-1's four fills all began exactly there.
+        order_id = ack_body.get("orderId") or ack_body.get("id")
+        if ack["terminal"]:
+            term = {"resolved": True, "filled": ack["filled"],
+                    "state": (TERMINAL_FILLED if ack["filled"] > 0
+                              else TERMINAL_CANCELLED),
+                    "row": ack_body, "from": "ack"}
+        else:
+            term = await poll_terminal(cohort_id, symbol, order_id, root=root)
+            ev("TERMINAL", slot=res["slot"], **{
+                k: str(term.get(k)) for k in ("resolved", "state", "filled",
+                                              "attempts")})
+        if not term["resolved"]:
+            ev("STOP", stop="ORDER_UNRESOLVED", reason=term.get("why"))
+            break
+
+        if term["state"] == TERMINAL_CANCELLED:
+            BUD.record_status(cohort_id, ticker, slot=res["slot"],
+                              status="SUBMITTED",
+                              detail={"terminal": "CANCELLED"}, root=root)
+            ev("NOT_FILLED", slot=res["slot"], outcome="CANCELLED",
                labels="a maker-or-cancel CANCELLATION is a normal outcome. "
                       "The slot is spent, nothing is repriced or chased, and "
-                      "the next decision comes from the next book.")
+                      "the OPEN lifecycle does not reset.")
             await asyncio.sleep(poll_s)
             continue
+
+        row = term.get("row") or ack_body
+        fill = {"price": str(row.get("avgExecutionPrice")
+                             or row.get("executedPrice")
+                             or row.get("price") or intent["price"]),
+                "quantity": str(term["filled"]),
+                "outcome": row.get("outcome") or intent["outcome"],
+                "orderId": order_id}
+        chk = check_fill(cohort_id, intent, fill, root=root)
+        if not chk["ok"]:
+            ev("HALTED", why=chk["halted"])
+            break
+        filled = {"filled": True, "halted": False, "fill": fill}
 
         BUD.record_status(cohort_id, ticker, slot=res["slot"], status="FILLED",
                           detail=filled["fill"], root=root)

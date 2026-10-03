@@ -114,6 +114,11 @@ WINDOWS = "windows.jsonl"
 SETTLED = "settled.jsonl"
 HALT = "HALT"
 
+#: the key an intent must carry to prove its inventory was reconciled
+#: against the venue. An intent without it is REFUSED: CI15M-1's caps were
+#: evaluated against a locally inferred, and wrong, fill list.
+RECONCILED_KEY = "reconciled_venue_inventory"
+
 #: the statuses this probe reports, in order. Nothing skips forward and
 #: nothing later is claimed on the evidence of something earlier.
 STATUSES = ("SUBMITTED", "FILLED", "INVENTORY_RECONCILED",
@@ -519,6 +524,17 @@ def consume_slot(cohort_id: str, ticker: str, intent: Dict[str, Any], *,
                       action=str(intent.get("action", "")), remote=remote)
     if not gate["ok"]:
         raise BudgetRefused(gate["why"])
+    # 3 -- NO SUBMISSION ON UNRECONCILED INVENTORY. The caps below are
+    # computed from the caller's inventory, so that inventory must have been
+    # confirmed against the venue. CI15M-1 reached 4 unmatched shares and
+    # $2.86 through a 3-share / $2.70 gate precisely because this did not
+    # exist: the engine believed it was flat.
+    if RECONCILED_KEY not in intent or intent[RECONCILED_KEY] is None:
+        raise BudgetRefused(
+            "UNRECONCILED_INVENTORY: the intent carries no %r stamp. Every "
+            "cap here is computed from the caller's inventory, and an "
+            "inventory that was not confirmed against the venue is not "
+            "evidence." % RECONCILED_KEY)
     q = D(str(intent.get("quantity", "0")))
     if q != QUANTITY:
         raise BudgetRefused("q must be exactly %s; got %r"
