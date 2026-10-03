@@ -523,3 +523,17 @@ def test_live_without_a_durable_branch_is_refused():
     with _p.raises(SystemExit) as e:
         R.main(["--cohort", "X", "--live"])
     assert "durable-branch" in str(e.value)
+
+
+def test_cli_passes_the_gate_through_and_refuses_an_arrived_gate(monkeypatch):
+    """Item 12 of the pre-submission proof. The CLI previously accepted no
+    gate value at all, so expired() saw None and the gate-arrival stop was
+    unreachable from the command line -- the bound existed but nothing used
+    it."""
+    import pytest as _p
+    with _p.raises(SystemExit) as e:
+        R.main(["--cohort", "X", "--stat-gate-windows", "100"])
+    assert "statistical gate has arrived" in str(e.value)
+    import inspect
+    src = inspect.getsource(R.main)
+    assert "stat_gate_fn=" in src, "the gate must reach run()"

@@ -354,6 +354,7 @@ jobs:
             --cohort        "${{ github.event.inputs.r2_cohort }}" \
             --outdir        analysis/gemini/info_edge/r2_probes \
             --max-runtime-s "${{ github.event.inputs.r2_runtime_s }}" \
+            --stat-gate-windows "${{ github.event.inputs.r2_stat_gate }}" \
             ${{ github.event.inputs.r2_runner_live == 'true' && format('--live --durable-branch {0}', github.event.inputs.r2_durable_branch) || '' }} \
             2>&1 | tail -200
 

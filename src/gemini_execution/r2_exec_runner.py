@@ -323,6 +323,13 @@ def main(argv=None) -> int:
                          "observes and records qualification only and sends "
                          "NOTHING.")
     ap.add_argument("--recover-only", action="store_true")
+    ap.add_argument("--stat-gate-windows", type=int, default=None,
+                    help="the BLIND independent-window count from "
+                         "r2_window_counter.py. The runner stops when it "
+                         "reaches 100. It is a value known at dispatch, not a "
+                         "live count: a run must therefore be SHORTER than "
+                         "the time remaining to the gate, and the runner "
+                         "refuses to start if the gate has already arrived.")
     ap.add_argument("--durable-branch", default=None,
                     help="push each consumed slot to this branch BEFORE the "
                          "venue is touched. REQUIRED with --live on an "
@@ -333,6 +340,12 @@ def main(argv=None) -> int:
         print(json.dumps(asyncio.run(recover(a.cohort)), indent=2,
                          default=str))
         return 0
+    gate = a.stat_gate_windows
+    if gate is not None and gate >= BUDGET.STAT_GATE_WINDOWS:
+        raise SystemExit(
+            "the statistical gate has arrived (%d >= %d): new probes stop "
+            "until the single statistical read is done."
+            % (gate, BUDGET.STAT_GATE_WINDOWS))
     hook = git_slot_hook(a.durable_branch) if a.durable_branch else None
     if a.live and hook is None:
         raise SystemExit("--live requires --durable-branch: on an ephemeral "
@@ -340,7 +353,9 @@ def main(argv=None) -> int:
                          "ten-slot budget would silently reset.")
     s = asyncio.run(run(cohort_id=a.cohort, outdir=a.outdir,
                         max_runtime_s=a.max_runtime_s,
-                        dry_run=not a.live, slot_hook=hook))
+                        dry_run=not a.live, slot_hook=hook,
+                        stat_gate_fn=(None if gate is None
+                                      else (lambda g=gate: g))))
     print(json.dumps({k: s.get(k) for k in
                       ("dry_run", "markets_seen", "probes", "stopped",
                        "rule_fingerprint")}, indent=2, default=str))
