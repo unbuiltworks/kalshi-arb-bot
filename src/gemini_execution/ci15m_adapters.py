@@ -330,6 +330,101 @@ class ExecutableBook:
 
 # ------------------------------------------------------- order history
 @dataclass(frozen=True)
+class HistoryRead:
+    """`metadata.order_history()` normalised PER STATUS BUCKET.
+
+    WHY THIS EXISTS, AND IT COST A REAL ORDER. `OrderHistory` below mirrors
+    the producer's TOP-LEVEL `readable`, which is `not unreadable` across
+    EVERY status asked for. CI15M-4's poller asked for
+    ("filled", "cancelled", "open"); the producer's own docstring says
+
+        "open" IS NOT A VALID STATUS HERE. The venue answers 400
+        InvalidStatus, "Use /orders/active for open orders"
+
+    so the `open` bucket 400'd, the whole read reported UNREADABLE, and the
+    `filled` bucket -- which had returned 200 CARRYING THE FILLED ROW -- was
+    thrown away twelve times. Order 145828836725658335 filled q1 @ 0.68
+    25.5s after ACK; the engine halted 67s later claiming it could not
+    establish a terminal state, and the cohort recorded NO_FILL against a
+    real $0.68 loss.
+
+    One unreadable bucket must not be able to discard a readable one. This
+    type reports each bucket on its own, so a caller can act on the evidence
+    it DID get while still knowing exactly what it could not read. It never
+    reports an absent bucket as an empty one: `any_readable` False means
+    UNKNOWN, and the caller must fail closed.
+    """
+    any_readable: bool
+    readable_statuses: Tuple[str, ...]
+    unreadable_statuses: Tuple[str, ...]
+    orders: Tuple[OrderState, ...]
+    total_rows: int
+    why: Optional[str] = None
+
+    def find(self, order_id: Any) -> Optional[OrderState]:
+        for o in self.orders:
+            if o.order_id is not None and str(o.order_id) == str(order_id):
+                return o
+        return None
+
+    @property
+    def fully_readable(self) -> bool:
+        return self.any_readable and not self.unreadable_statuses
+
+    @classmethod
+    def of(cls, hist: Any) -> "HistoryRead":
+        if not isinstance(hist, Mapping):
+            return cls(False, (), (), (), 0,
+                       "order_history returned %s" % type(hist).__name__)
+        per = hist.get("per_status")
+        if not isinstance(per, list):
+            # A read that failed before any bucket was attempted (e.g.
+            # NO_CREDENTIALS) carries no per_status at all. That is UNKNOWN,
+            # never an empty history.
+            return cls(False, (), (), (), 0,
+                       "per_status is %s, not a list (verdict %r)"
+                       % (type(per).__name__, hist.get("verdict")))
+        ok: List[str] = []
+        bad: List[str] = []
+        rows: List[Mapping[str, Any]] = []
+        for entry in per:
+            if not isinstance(entry, Mapping):
+                continue
+            st = str(entry.get("status_filter"))
+            n = entry.get("rows")
+            http = entry.get("http")
+            got = entry.get("orders")
+            # THE PRODUCER'S OWN SIGNALS, in its own words: it sets
+            # `unreadable` True for any bucket whose read did not return 200
+            # with a row list, and records the status code it got. Both are
+            # trusted here; `http` absent is not treated as a failure,
+            # because the explicit flag is the authoritative one and a
+            # producer that recorded no code still recorded that flag.
+            if entry.get("unreadable") is True or (http is not None
+                                                   and http != 200):
+                bad.append(st)
+                continue
+            if isinstance(got, list):
+                ok.append(st)
+                rows.extend(r for r in got if isinstance(r, Mapping))
+                continue
+            if n == 0:
+                ok.append(st)          # readable AND genuinely empty
+                continue
+            # THE include_rows TRAP, per bucket. A bucket that reports rows
+            # but carries none was asked for without include_rows=True, and
+            # a bucket with neither a count nor a row list says nothing at
+            # all. Believing either is empty is the exact substitution that
+            # makes a restart assume flat when it is not. Unusable is
+            # UNREADABLE, never empty.
+            bad.append(st)
+        return cls(bool(ok), tuple(ok), tuple(bad),
+                   tuple(OrderState.of(r) for r in rows), len(rows),
+                   None if ok else ("no status bucket was readable "
+                                    "(unreadable %r)" % (tuple(bad),)))
+
+
+@dataclass(frozen=True)
 class OrderHistory:
     """`metadata.order_history()` normalised.
 

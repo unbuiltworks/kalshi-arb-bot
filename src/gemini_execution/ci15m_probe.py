@@ -456,55 +456,184 @@ def classify_ack(body: Mapping[str, Any]) -> Dict[str, Any]:
             "terminal": o.terminal, "why": o.why, "order": o}
 
 
+TERMINAL_EXPIRED = "TERMINAL_EXPIRED"
+TERMINAL_DISAPPEARED = "TERMINAL_DISAPPEARED"
+
+# THE BUCKETS THE VENUE ACTUALLY ACCEPTS on the order-history path. The
+# producer documents the prohibition that cost CI15M-4 its order:
+#
+#   "open" IS NOT A VALID STATUS HERE. The venue answers 400 InvalidStatus,
+#   "Use /orders/active for open orders" -- measured 2026-09-18.
+#
+# The old poller asked for it anyway. RESTING is established on the
+# active-orders path, which is the surface that carries it.
+TERMINAL_HISTORY_STATUSES = ("filled", "cancelled")
+# Tried ONCE, at the end, and only if nothing terminal was found. If the
+# venue rejects it the tolerant per-bucket reader ignores that bucket
+# instead of discarding the readable ones -- which is the whole defect.
+LAST_CHANCE_STATUSES = ("expired",)
+
+
+async def _terminal_lookup(symbol: str, order_id: Any, statuses: tuple,
+                           limit: int = 100) -> Dict[str, Any]:
+    """One authoritative terminal-state lookup, read PER BUCKET.
+
+    Returns {"read": HistoryRead|None, "found": OrderState|None, "why": ...}.
+    A read that raises is UNKNOWN, never an empty history.
+    """
+    from src.gemini_execution import metadata
+    try:
+        hist = await metadata.order_history(
+            symbol=symbol, statuses=statuses, limit=limit, include_rows=True)
+    except Exception as exc:                                   # noqa: BLE001
+        return {"read": None, "found": None,
+                "why": "order history raised %s" % exc}
+    hr = AD.HistoryRead.of(hist)
+    return {"read": hr, "found": hr.find(order_id), "why": hr.why}
+
+
 async def poll_terminal(cohort_id: str, symbol: str, order_id: Any, *,
                         attempts: int = 12, pause: float = 5.0,
                         root: str = cohort.COHORT_ROOT,
                         sleeper: Optional[Any] = None) -> Dict[str, Any]:
     """Poll the AUTHORITATIVE order state until it is terminal.
 
-    Reads the venue's own order history, which is the only surface that can
-    show a FILLED order -- an active-orders read by construction cannot.
-    An unreadable or uninterpretable state HALTs rather than being guessed.
+    THE DEFECT THIS REPLACES, AND IT IS THE FOURTH OF ITS KIND -- a consumer
+    ignoring a contract the producer spells out. The old body asked
+    order_history for ("filled", "cancelled", "open"). `open` answers 400
+    InvalidStatus, the producer's top-level `readable` is `not unreadable`
+    ACROSS ALL BUCKETS, so one invalid bucket made the whole read UNREADABLE
+    and `OrderHistory.of` discarded the `filled` bucket that had returned
+    200 CARRYING THE ROW. Order 145828836725658335 filled q1 @ 0.68 at
+    21:34:42.776Z, 25.5s after its 21:34:17.262Z ack. The poller threw that
+    row away twelve times and halted at 21:35:49 -- 67s of budget still
+    unspent -- claiming SEMANTIC_CONTRADICTION. The venue never contradicted
+    itself; we asked it the wrong question. The cohort then recorded NO_FILL
+    and a zero realized loss against a real $0.68 principal loss, which is
+    the number REALIZED_LOSS_STOP exists to watch.
+
+    THE DISTINCTIONS THIS KEEPS SEPARATE, each on its own evidence:
+
+      FILLED (incl. a partial that later died)  -> terminal. The caller
+          reconciles authenticated fills and rebuilds inventory at once.
+      CANCELLED / EXPIRED                       -> terminal. The
+          authoritative filled quantity decides no-fill vs partial; it is
+          never assumed to be zero.
+      RESTING                                   -> readable NON-terminal.
+          Established on /orders/active, the surface that carries it.
+          Keep monitoring.
+      a real read failure                       -> UNKNOWN. Fail closed.
+      DISAPPEARANCE from the active book        -> NOT evidence of a
+          non-fill and NOT evidence of unreadability. The terminal state
+          must still be resolved; absent that, UNKNOWN.
+
+    Nothing here may conclude NO_FILL from an absence.
     """
-    from src.gemini_execution import metadata
     sleep = sleeper or asyncio.sleep
     last: Dict[str, Any] = {}
+    unreadable_polls = 0
+    disappeared = False
+    saw_resting = False
     for i in range(attempts):
-        try:
-            hist = await metadata.order_history(
-                symbol=symbol, statuses=("filled", "cancelled", "open"),
-                limit=100, include_rows=True)
-        except Exception as exc:                               # noqa: BLE001
-            last = {"error": str(exc)}
+        got = await _terminal_lookup(symbol, order_id,
+                                     TERMINAL_HISTORY_STATUSES)
+        hr = got["read"]
+        if hr is None or not hr.any_readable:
+            # UNKNOWN, and it stays UNKNOWN. A bucket we could not read is
+            # not a bucket that was empty.
+            unreadable_polls += 1
+            last = {"terminal_lookup_unreadable": got["why"],
+                    "labels": "UNREADABLE is not an empty history"}
             await sleep(pause)
             continue
-        h = AD.OrderHistory.of(hist)
-        if not h.readable:
-            last = {"unreadable": h.why}
-            await sleep(pause)
-            continue
-        found = h.find(order_id)
+
+        found = got["found"]
+        if found is not None and found.terminal:
+            state = (TERMINAL_FILLED if found.state == AD.FILLED
+                     else (TERMINAL_EXPIRED
+                           if str(found.status or "").lower() == "expired"
+                           else TERMINAL_CANCELLED))
+            return {"resolved": True, "state": state,
+                    "status": found.status, "filled": found.filled,
+                    "row": {"price": (None if found.price is None
+                                      else str(found.price)),
+                            "outcome": found.outcome,
+                            "orderId": found.order_id},
+                    "readable_statuses": list(hr.readable_statuses),
+                    "unreadable_statuses": list(hr.unreadable_statuses),
+                    "partial": bool(found.filled is not None
+                                    and found.filled > 0
+                                    and found.state != AD.FILLED),
+                    "attempts": i + 1}
         if found is not None:
-            if found.terminal:
-                return {"resolved": True,
-                        "state": (TERMINAL_FILLED if found.state == AD.FILLED
-                                  else TERMINAL_CANCELLED),
-                        "status": found.status, "filled": found.filled,
-                        "row": {"price": (None if found.price is None
-                                          else str(found.price)),
-                                "outcome": found.outcome,
-                                "orderId": found.order_id},
-                        "attempts": i + 1}
+            # present in a terminal bucket but not terminal: take it as
+            # still live and keep going rather than guessing.
+            saw_resting = True
             last = {"status": found.status, "why": found.why}
+            await sleep(pause)
+            continue
+
+        # NOT in any terminal bucket. RESTING lives on the ACTIVE path.
+        act = await one_outstanding_order(symbol)
+        if not act.get("readable"):
+            unreadable_polls += 1
+            last = {"active_orders_unreadable": act.get("why")}
+        elif act.get("open"):
+            saw_resting = True
+            last = {"resting": act.get("open"),
+                    "why": "readable NON-terminal: the order is still live "
+                           "on the active book; keep monitoring"}
+        else:
+            # Gone from the active book with no terminal row YET. This is
+            # the case the old code called NO_FILL by omission. It is
+            # neither a non-fill nor unreadable -- the terminal row simply
+            # has not landed in a bucket we have read. Keep resolving.
+            disappeared = True
+            last = {"disappeared_from_active": True,
+                    "why": "absent from the active book and from the "
+                           "terminal buckets read so far. This is NOT "
+                           "evidence of a non-fill and NOT evidence of an "
+                           "unreadable surface; the terminal state must be "
+                           "resolved before the engine may decide again."}
         await sleep(pause)
-    BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
-             "order %s never reached a terminal state after %d polls: %r"
-             % (order_id, attempts, last), root=root)
+
+    # LAST CHANCE, once: a bucket the routine poll does not pay for.
+    got = await _terminal_lookup(symbol, order_id,
+                                 TERMINAL_HISTORY_STATUSES
+                                 + LAST_CHANCE_STATUSES)
+    hr = got["read"]
+    found = got["found"] if hr is not None else None
+    if found is not None and found.terminal:
+        return {"resolved": True,
+                "state": (TERMINAL_FILLED if found.state == AD.FILLED
+                          else (TERMINAL_EXPIRED
+                                if str(found.status or "").lower() == "expired"
+                                else TERMINAL_CANCELLED)),
+                "status": found.status, "filled": found.filled,
+                "row": {"price": (None if found.price is None
+                                  else str(found.price)),
+                        "outcome": found.outcome,
+                        "orderId": found.order_id},
+                "readable_statuses": list(hr.readable_statuses),
+                "unreadable_statuses": list(hr.unreadable_statuses),
+                "partial": bool(found.filled is not None and found.filled > 0
+                                and found.state != AD.FILLED),
+                "from": "last_chance", "attempts": attempts}
+
+    # EVERY remaining path is UNKNOWN, and it HALTs as UNKNOWN. It is never
+    # recorded as a non-fill: CI15M-4 proved what that costs.
+    why = ("order %s never reached a terminal state after %d polls: %r"
+           % (order_id, attempts, last))
+    BUD.halt(cohort_id, "UNKNOWN_POSITION", why, root=root)
     return {"resolved": False, "state": ACK_UNRESOLVED, "last": last,
             "attempts": attempts,
+            "unreadable_polls": unreadable_polls,
+            "disappeared_from_active": disappeared,
+            "saw_resting": saw_resting,
+            "halt": "UNKNOWN_POSITION",
             "why": ("the order's terminal state could not be established. "
-                    "An unreadable order state fails closed; the engine may "
-                    "not decide again.")}
+                    "UNKNOWN fails closed; this is NOT a recorded non-fill "
+                    "and the engine may not decide again.")}
 
 
 def _position_rows(got: Any) -> Optional[List[Mapping[str, Any]]]:
@@ -1233,10 +1362,22 @@ async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
             ev("STOP", stop="ORDER_UNRESOLVED", reason=term.get("why"))
             break
 
-        if term["state"] == TERMINAL_CANCELLED:
+        # A DEAD ORDER IS A NON-FILL ONLY IF THE AUTHORITATIVE FILLED
+        # QUANTITY IS ZERO. A partial that later died reports FILLED with
+        # its partial quantity (see AD.OrderState), so it routes to the fill
+        # path below carrying the real quantity -- never assumed zero.
+        if term["state"] in (TERMINAL_CANCELLED, TERMINAL_EXPIRED) \
+                and not (term.get("filled") or 0) > 0:
             BUD.record_status(cohort_id, ticker, slot=res["slot"],
                               status="SUBMITTED",
-                              detail={"terminal": "CANCELLED"}, root=root)
+                              detail={"terminal": term["state"],
+                                      "venue_status": term.get("status"),
+                                      "authoritative_filled":
+                                          str(term.get("filled")),
+                                      "labels": "terminal NO-FILL on the "
+                                                "venue's own filled "
+                                                "quantity, not on an "
+                                                "absence"}, root=root)
             ev("NOT_FILLED", slot=res["slot"], outcome="CANCELLED",
                labels="a maker-or-cancel CANCELLATION is a normal outcome. "
                       "The slot is spent, nothing is repriced or chased, and "
