@@ -604,9 +604,51 @@ def test_the_fingerprint_changes_if_the_policy_changes(tmp_path, monkeypatch):
     assert pol.fingerprint() != before
 
 
-def test_the_live_path_refuses_an_unauthorized_policy_fingerprint():
-    assert P.AUTHORIZED_POLICY_FINGERPRINT is None, (
-        "the authorized fingerprint must be unset until a human arms it")
+def test_the_authorized_fingerprint_is_the_one_the_owner_granted():
+    """CI15M-1 was granted against these exact policy bytes."""
+    GRANTED = ("5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd8105"
+               "36329")
+    assert P.AUTHORIZED_POLICY_FINGERPRINT == GRANTED
+    assert fingerprint() == GRANTED, (
+        "the frozen policy on disk is not the one CI15M-1 authorizes")
+    assert P.AUTHORIZED_SHA == ("bf14f29523f02a72187cea5d39102aa09c4571"
+                                "22")
+
+
+def test_a_policy_edit_halts_the_live_path(root, monkeypatch):
+    """The enforcement, not just the constant: if the frozen policy changes,
+    `submit` must HALT rather than send."""
+    import src.gemini_execution.ci15m_policy as pol
+    tk = _open(root)
+    monkeypatch.setattr(pol, "fingerprint", lambda: "deadbeef")
+    monkeypatch.setattr(P, "fingerprint", lambda: "deadbeef")
+    import asyncio
+    with pytest.raises(P.ProbeRefused):
+        asyncio.run(P.submit(CID, "GEMI-BTC15M2610031530-UP", tk,
+                             _intent(OPEN, "UP", "0.40"), root=root))
+    assert "POLICY_FINGERPRINT_MISMATCH" in BUD.halted(CID, root=root)
+    assert BUD.consumed(CID, root=root) == 0, (
+        "a fingerprint mismatch must refuse BEFORE spending a slot")
+
+
+def test_the_runtime_gate_answers_every_owner_condition(root):
+    v = P.verify_runtime(CID, root=root)
+    for k in ("policy_fingerprint_matches", "authorization_installed",
+              "quantity_is_one", "consumed_slots_zero",
+              "confirmed_realized_loss_zero", "no_halt", "not_expired",
+              "taker_path_shut", "sha_condition"):
+        assert v["checks"][k] is True, k
+    # and it is NOT ok, because this environment holds no credentials
+    assert v["checks"]["arming_keys_present"] is False
+    assert v["ok"] is False and v["failed"] == ["arming_keys_present"]
+
+
+def test_the_runtime_gate_refuses_once_a_slot_is_spent(root):
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    v = P.verify_runtime(CID, root=root)
+    assert v["checks"]["consumed_slots_zero"] is False
+    assert "consumed_slots_zero" in v["failed"]
 
 
 # =====================================================================

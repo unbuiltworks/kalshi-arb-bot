@@ -90,7 +90,38 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: statistical gate, whichever comes first. An ambiguous send consumes its
 #: slot and is never retried. Any semantic or reconciliation contradiction
 #: HALTs the cohort.
-EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-R2-EXEC-1"
+#: MOVED 2026-10-03 on the owner's FINAL AUTHORIZATION -- CI15M-1, the
+#: bounded BTC15m CONTINUOUS-INVENTORY execution-validation probe, granted
+#: against SHA bf14f29523f02a72187cea5d39102aa09c457122 and frozen policy
+#: fingerprint 5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329.
+#:
+#: WHAT MOVING IT COSTS, stated rather than discovered later: R2-EXEC-1 is
+#: RETIRED by this line with 0 of its 10 slots consumed. The R2 q=1
+#: execution-validation runner can no longer arm. Exactly one authorization
+#: is current at a time, by design; re-opening R2 needs a new grant from the
+#: owner. Nothing about frozen R2 itself changes -- the statistical gate is
+#: untouched and still blind.
+#:
+#: IT ALSO SHUTS THE TAKER PATH. `payload.SEMANTICS_PROBE_AUTH_ID` is
+#: deliberately LEFT on R2-EXEC-1, so it no longer equals this value, and
+#: `transport.place(allow_taker=True)` is therefore unreachable under this
+#: authorization. CI15M is maker-or-cancel only and needs nothing else.
+#:
+#: BOUNDS, from the owner: BTC15m only; 3 completed live windows; q=1; OPEN
+#: -> max 2 EXTENDs -> partial/full COMPLEMENT -> LOCK; max acquisition
+#: price 0.90; MAX_PAIR_COST 0.96; EXTEND needs >=5c average improvement;
+#: OPEN_SIDE_RULE NATIVE_UP; maker-or-cancel only; one outstanding order;
+#: authoritative reconciliation after every fill; max 3 unmatched shares /
+#: $2.70 unmatched principal; $12 per-market spend cap; 6 orders per window;
+#: 12 orders total; no envelope increase; no martingale or quantity
+#: progression; no chasing outside the frozen policy; LOCKED never reopened.
+#: Stop at $2.00 CONFIRMED realized principal loss or any cohort limit.
+#: Enforced in src/gemini_execution/ci15m_budget.py and ci15m_probe.py,
+#: proved in tests/test_ci15m_probe.py.
+#:
+#: EXECUTION VALIDATION ONLY. Not scaling, and not a declaration of positive
+#: expectancy.
+EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-1"
 
 
 class NotArmed(Exception):

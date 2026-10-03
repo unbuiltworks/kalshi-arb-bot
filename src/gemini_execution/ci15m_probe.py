@@ -46,10 +46,19 @@ LABEL = "GEMINI_CI15M_PROBE_V1"
 #: `arming.EXPECTED_AUTH_ID` before anything is constructed.
 PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-1"
 
-#: the policy bytes the authorization was granted against. Set by the human
-#: who arms the probe; None means "whatever is on disk", which is refused for
-#: a live run.
-AUTHORIZED_POLICY_FINGERPRINT: Optional[str] = None
+#: the policy bytes the authorization was granted against. INSTALLED
+#: 2026-10-03 under the owner's FINAL AUTHORIZATION -- CI15M-1. None would
+#: mean "whatever is on disk", which is refused for a live run.
+#:
+#: If the frozen policy file changes by one byte this no longer matches,
+#: `submit` writes POLICY_FINGERPRINT_MISMATCH and the cohort HALTs. That is
+#: what makes "do not modify the frozen policy" enforceable.
+AUTHORIZED_POLICY_FINGERPRINT: Optional[str] = (
+    "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329")
+
+#: the commit the authorization names. Verified at runtime, before the first
+#: venue submission, by `verify_runtime()`.
+AUTHORIZED_SHA = "bf14f29523f02a72187cea5d39102aa09c457122"
 
 #: the ONE contract family. A symbol outside it is refused by name.
 SYMBOL_PREFIX = "GEMI-BTC15M"
@@ -422,3 +431,376 @@ def preflight(cohort_id: str, *,
                        "different process writing different files, and its "
                        "results are never pooled with these rows."),
     }
+
+
+# ================================================================= RUNTIME
+#
+# THE SEVEN CONDITIONS THE OWNER REQUIRED BEFORE THE FIRST VENUE SUBMISSION.
+# Checked at RUNTIME, in the credentialed environment, not here at authoring
+# time -- an authoring-time check proves nothing about the process that will
+# actually send the order.
+def head_sha() -> Optional[str]:
+    """The commit this process is running from, read from git."""
+    import subprocess
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"],
+                              capture_output=True, text=True,
+                              timeout=20).stdout.strip() or None
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
+def verify_runtime(cohort_id: str, *,
+                   root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+    """Every pre-submission condition, each answered independently.
+
+    `ok` is True only when ALL of them pass. The SHA check is reported as
+    `sha_is_authorized_or_descendant` because installing the authorization
+    itself necessarily advances HEAD past the authorized commit -- see
+    `sha_note`.
+    """
+    import subprocess
+    head = head_sha()
+    descendant = None
+    diff_files: List[str] = []
+    if head:
+        try:
+            descendant = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", AUTHORIZED_SHA, head],
+                capture_output=True, timeout=20).returncode == 0
+            diff_files = [x for x in subprocess.run(
+                ["git", "diff", "--name-only", AUTHORIZED_SHA, head],
+                capture_output=True, text=True,
+                timeout=20).stdout.split("\n") if x.strip()]
+        except Exception:                                      # noqa: BLE001
+            descendant = None
+
+    st = BUD.state(cohort_id, root=root)
+    checks = {
+        "head_known": head is not None,
+        "head_is_authorized_sha": head == AUTHORIZED_SHA,
+        "head_is_authorized_or_descendant": bool(descendant),
+        "policy_fingerprint_matches":
+            fingerprint() == AUTHORIZED_POLICY_FINGERPRINT,
+        "authorization_installed":
+            arming.EXPECTED_AUTH_ID == PROBE_AUTH_ID == "OWNER-2026-10-03-"
+                                                        "GEMINI-CI15M-1",
+        "quantity_is_one": QUANTITY == D("1"),
+        "consumed_slots_zero": st["order_slots_consumed"] == 0,
+        "confirmed_realized_loss_zero":
+            D(st["confirmed_realized_principal_loss"]) == D("0"),
+        "no_halt": st["halted"] is None,
+        "not_expired": st["expired"] is None,
+        "taker_path_shut":
+            payload.SEMANTICS_PROBE_AUTH_ID != arming.EXPECTED_AUTH_ID,
+        "arming_keys_present": arming.armed(),
+    }
+    # The SHA condition is satisfied by EITHER an exact match or a descendant
+    # whose diff touches only the two authorization constants.
+    AUTH_ONLY = {"src/gemini_execution/arming.py",
+                 "src/gemini_execution/ci15m_probe.py"}
+    sha_ok = checks["head_is_authorized_sha"] or (
+        checks["head_is_authorized_or_descendant"]
+        and bool(diff_files) and set(diff_files) <= AUTH_ONLY)
+    checks["sha_condition"] = bool(sha_ok)
+    required = [k for k in checks
+                if k not in ("head_is_authorized_sha",
+                             "head_is_authorized_or_descendant")]
+    failed = [k for k in required if not checks[k]]
+    return {
+        "ok": not failed, "failed": failed, "checks": checks,
+        "head": head, "authorized_sha": AUTHORIZED_SHA,
+        "diff_from_authorized_sha": diff_files,
+        "policy_fingerprint": fingerprint(),
+        "sha_note": ("the authorized SHA names the POLICY AND LOGIC commit. "
+                     "Installing the authorization id and the authorized "
+                     "fingerprint necessarily advances HEAD past it, so the "
+                     "condition is: HEAD is that commit, or a descendant of "
+                     "it whose diff touches ONLY arming.py and "
+                     "ci15m_probe.py. The frozen policy file is not in that "
+                     "set, and its fingerprint is checked separately and "
+                     "exactly."),
+        "labels": ("every condition is answered independently; `ok` requires "
+                   "all of them. Nothing may be submitted while `ok` is "
+                   "False."),
+    }
+
+
+def book_from_venue(symbol: str) -> Dict[str, Any]:
+    """The decision book: UP bid/ask from the presented contract, and the
+    DISPLAYED SIZE from the venue's own ladder.
+
+    TWO READS, DELIBERATELY. `outcome_book` publishes prices only and carries
+    no depth at all, so "is there anything to trade against for q=1?" cannot
+    be answered from it. The ladder answers that, and the complement identity
+    between the two is CHECKED rather than assumed -- a book that violates it
+    is not one we understand well enough to send an order into.
+    """
+    from src.gemini_execution import metadata
+    ob = metadata.outcome_book(symbol)
+    if not ob.get("readable"):
+        return {"readable": False, "why": ob.get("why"), "stage": "prices"}
+    if not ob.get("identity_consistent"):
+        return {"readable": False, "stage": "identity",
+                "why": "the complement identity does not hold: %s"
+                       % ob.get("complement_identity"),
+                "semantic_contradiction": True}
+    dep = metadata.contract_depth(symbol)
+    if not dep.get("readable"):
+        return {"readable": False, "why": dep.get("why"), "stage": "depth"}
+    return {
+        "readable": True,
+        "bid": D(ob["yes"]["bid"]), "ask": D(ob["yes"]["ask"]),
+        "bid_size": dep["bids"].get("best_qty"),
+        "ask_size": dep["asks"].get("best_qty"),
+        "up_acquisition": ob["yes"]["ask"],
+        "down_acquisition": str(D("1") - D(ob["yes"]["bid"])),
+        "snapshot_age_s": dep.get("snapshot_age_s"),
+        "raw": {"prices": ob, "depth": {"bids": dep["bids"],
+                                        "asks": dep["asks"]}},
+    }
+
+
+async def reconcile_after_fill(cohort_id: str, symbol: str, inv: Any, *,
+                               root: str = cohort.COHORT_ROOT
+                               ) -> Dict[str, Any]:
+    """AUTHORITATIVE reconciliation against the account, after every fill."""
+    from src.gemini_execution import metadata
+    try:
+        got = await metadata.positions()
+    except Exception as exc:                                   # noqa: BLE001
+        BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                 "positions read failed: %s" % exc, root=root)
+        return {"halted": True, "verdict": "UNREADABLE", "why": str(exc)}
+    rows = got.get("positions") if isinstance(got, Mapping) else None
+    if rows is None and isinstance(got, Mapping):
+        rows = got.get("result") or got.get("data")
+    return reconcile_or_halt(cohort_id, symbol, inv, rows, root=root)
+
+
+def _extend_report(inv_before: Any, inv_after: Any, px: D,
+                   req_before: Optional[D], req_after: Optional[D]
+                   ) -> Dict[str, Any]:
+    """Exactly the fields the owner asked for on every EXTEND."""
+    rs = inv_after.residual_side
+    avg_after = (inv_after.avg_up if rs == "UP" else inv_after.avg_down)
+    rs_b = inv_before.residual_side
+    avg_before = (inv_before.avg_up if rs_b == "UP"
+                  else (inv_before.avg_down if rs_b == "DOWN" else None))
+    return {
+        "old_avg": None if avg_before is None else str(avg_before),
+        "fill_price": str(px),
+        "new_avg": str(avg_after),
+        "complement_ceiling_before":
+            None if req_before is None else str(req_before),
+        "complement_ceiling_after":
+            None if req_after is None else str(req_after),
+        "ceiling_widened_by":
+            (None if (req_before is None or req_after is None)
+             else str(req_after - req_before)),
+        "residual_shares": str(inv_after.residual),
+        "residual_principal": str(inv_after.residual * avg_after),
+    }
+
+
+async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
+                     *, root: str = cohort.COHORT_ROOT, poll_s: float = 5.0,
+                     slot_hook: Optional[Any] = None,
+                     now_fn: Optional[Any] = None) -> Dict[str, Any]:
+    """ONE live BTC15m window, decided by the frozen policy and nothing else.
+
+    THE LOOP IS DELIBERATELY DULL. Read the book, ask the frozen policy, and
+    if it says act: build the payload, spend a durable slot, send ONE
+    maker-or-cancel order, read back what happened, reconcile against the
+    account, and go round again. Every bound lives in `plan` and
+    `consume_slot`; this function adds none of its own.
+
+    A MOC CANCELLATION IS A NORMAL OUTCOME. It spends its slot and the loop
+    continues. There is no reprice and no chase: the next decision is taken
+    from the next book by the same frozen rule.
+    """
+    import time
+    clock = now_fn or time.time
+    inv = new_inventory()
+    n_extends, actions = 0, 0
+    events: List[Dict[str, Any]] = []
+
+    def ev(kind: str, **kw) -> Dict[str, Any]:
+        row = {"utc": BUD._now(), "kind": kind, "ticker": ticker}
+        row.update(kw)
+        events.append(row)
+        return row
+
+    while True:
+        tte = expiry_ts - clock()
+        if tte <= 0:
+            ev("WINDOW_EXPIRED", tte=tte)
+            break
+        h = BUD.halted(cohort_id, root=root)
+        if h:
+            ev("HALTED", why=h)
+            break
+        why = BUD.expired(cohort_id, root=root)
+        if why:
+            ev("COHORT_STOP", why=why)
+            break
+
+        bk = book_from_venue(symbol)
+        if not bk["readable"]:
+            if bk.get("semantic_contradiction"):
+                BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION", bk["why"],
+                         root=root)
+                ev("HALTED", why=bk["why"])
+                break
+            ev("BOOK_UNREADABLE", stage=bk.get("stage"), why=bk.get("why"))
+            await asyncio.sleep(poll_s)
+            continue
+
+        pl = plan(cohort_id, inv, bid=bk["bid"], ask=bk["ask"],
+                  bid_size=bk["bid_size"], ask_size=bk["ask_size"],
+                  tte=tte, n_extends=n_extends, actions=actions, root=root)
+        if pl.get("stop") in ("LOCKED", "HALTED", "RISK_BLOCK"):
+            ev("STOP", stop=pl["stop"], reason=pl["reason"],
+               inventory=inv.snapshot())
+            break
+        if pl["action"] == HOLD:
+            ev("HOLD", tte=round(tte, 1), bid=str(bk["bid"]),
+               ask=str(bk["ask"]), reason=pl["reason"])
+            await asyncio.sleep(poll_s)
+            continue
+
+        intent = intent_of(ticker, inv, pl, n_extends)
+        before = POLICY["Inventory"](
+            q_up=inv.q_up, q_down=inv.q_down, c_up=inv.c_up,
+            c_down=inv.c_down, fees=inv.fees, rebates=inv.rebates,
+            fills=list(inv.fills))
+        req_before = POLICY["required_complement_price"](inv, QUANTITY)
+
+        try:
+            res = await submit(cohort_id, symbol, ticker, intent, root=root,
+                               slot_hook=slot_hook)
+        except Exception as exc:                               # noqa: BLE001
+            ev("SUBMIT_REFUSED", why=str(exc), intent=intent)
+            break
+        ev("SUBMITTED", status=res["status"], slot=res.get("slot"),
+           intent=intent, tte=round(tte, 1), venue=res.get("venue"))
+        if res["status"] in ("AMBIGUOUS", "REFUSED_SLOT_NOT_DURABLE"):
+            # the slot is spent and is NEVER retried. The window stops so a
+            # human can establish what the venue did with it.
+            ev("STOP", stop=res["status"], reason=res.get("why"))
+            break
+
+        # ---- what actually happened to it, read back from the venue
+        filled = await _settle_order(cohort_id, symbol, ticker, intent, res,
+                                     root=root)
+        if filled["halted"]:
+            ev("HALTED", why=filled["why"])
+            break
+        if not filled["filled"]:
+            ev("NOT_FILLED", slot=res["slot"], outcome=filled["outcome"],
+               labels="a maker-or-cancel CANCELLATION is a normal outcome. "
+                      "The slot is spent, nothing is repriced or chased, and "
+                      "the next decision comes from the next book.")
+            await asyncio.sleep(poll_s)
+            continue
+
+        BUD.record_status(cohort_id, ticker, slot=res["slot"], status="FILLED",
+                          detail=filled["fill"], root=root)
+        inv.add(POLICY["make_fill"](clock(), intent["side"], "maker",
+                                    D(str(filled["fill"]["price"])),
+                                    D(str(filled["fill"]["quantity"])),
+                                    "live " + pl["action"]))
+        inv.assert_identities()
+        actions += 1
+
+        rec = await reconcile_after_fill(cohort_id, symbol, inv, root=root)
+        if rec["halted"]:
+            ev("HALTED", why=rec.get("why"), reconcile=rec)
+            break
+        BUD.record_status(cohort_id, ticker, slot=res["slot"],
+                          status="INVENTORY_RECONCILED",
+                          detail={"verdict": rec["verdict"],
+                                  "venue_signed": rec.get("venue_signed"),
+                                  "ours": rec.get("our_signed")}, root=root)
+        ev("INVENTORY_RECONCILED", slot=res["slot"], verdict=rec["verdict"],
+           venue_signed=rec.get("venue_signed"), ours=rec.get("our_signed"),
+           inventory=inv.snapshot())
+
+        if pl["action"] == EXTEND:
+            n_extends += 1
+            ev("EXTEND_REPORT", slot=res["slot"], **_extend_report(
+                before, inv, D(str(filled["fill"]["price"])), req_before,
+                POLICY["required_complement_price"](inv, QUANTITY)))
+        elif pl["action"] == COMPLETE:
+            n_extends = 0
+            pc = inv.matched_pair_cost()
+            BUD.record_status(cohort_id, ticker, slot=res["slot"],
+                              status="COMPLEMENTED",
+                              detail={"matched_pair_cost": str(pc)},
+                              root=root)
+            ev("COMPLEMENT_REPORT", slot=res["slot"],
+               effective_matched_pair_cost=(None if pc is None else str(pc)),
+               matched=str(inv.matched), residual=str(inv.residual))
+
+        if POLICY["locked"](inv):
+            ev("LOCKED", inventory=inv.snapshot(),
+               labels="both settlement outcomes positive after modelled "
+                      "fees. NOT realized: settlement and confirmed cashflow "
+                      "decide that, and neither has happened.")
+            break
+
+    snap = inv.snapshot()
+    BUD.close_window(cohort_id, ticker,
+                     "LOCKED" if POLICY["locked"](inv) else
+                     ("RESIDUAL" if inv.fills else "NO_FILL"),
+                     detail={"actions": actions, "inventory": snap},
+                     root=root)
+    return {"ticker": ticker, "symbol": symbol, "events": events,
+            "inventory": snap, "n_actions": actions,
+            "halted": BUD.halted(cohort_id, root=root),
+            "labels": ("SUBMITTED / FILLED / INVENTORY_RECONCILED / "
+                       "COMPLEMENTED / RESIDUAL are recorded separately. "
+                       "Nothing here is SETTLED or REALIZED.")}
+
+
+async def _settle_order(cohort_id: str, symbol: str, ticker: str,
+                        intent: Mapping[str, Any], res: Mapping[str, Any], *,
+                        root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+    """Did that order fill? Read from the venue's ACK and its own records.
+
+    THE ACK IS AUTHORITATIVE ON A MAKER-OR-CANCEL ORDER's immediate fate --
+    it either rested, filled or was cancelled, and the venue says which. An
+    active-orders read alone CANNOT see a filled order, which produced a
+    false "venue disagrees" verdict once already; that lesson is why the ack
+    is read first here.
+    """
+    ack = res.get("venue") or {}
+    body = ack.get("order") if isinstance(ack.get("order"), Mapping) else ack
+    if not isinstance(body, Mapping):
+        BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
+                 "the place ack carried no readable order object: %r" % (ack,),
+                 root=root)
+        return {"filled": False, "halted": True, "outcome": "UNREADABLE",
+                "why": "unreadable place ack"}
+    try:
+        got = D(str(body.get("filledQuantity")
+                    if body.get("filledQuantity") is not None
+                    else body.get("executedQuantity") or "0"))
+    except Exception:                                          # noqa: BLE001
+        got = D("0")
+    status = str(body.get("status") or body.get("state") or "").upper()
+    if got <= 0:
+        return {"filled": False, "halted": False,
+                "outcome": status or "NO_FILL", "why": None}
+    price = (body.get("avgExecutionPrice") or body.get("executedPrice")
+             or body.get("price") or intent["price"])
+    fill = {"price": str(price), "quantity": str(got),
+            "outcome": body.get("outcome") or intent["outcome"],
+            "orderId": body.get("orderId") or body.get("id"),
+            "status": status}
+    chk = check_fill(cohort_id, intent, fill, root=root)
+    if not chk["ok"]:
+        return {"filled": True, "halted": True, "fill": fill,
+                "outcome": status, "why": chk["halted"]}
+    return {"filled": True, "halted": False, "fill": fill,
+            "outcome": status, "why": None}
