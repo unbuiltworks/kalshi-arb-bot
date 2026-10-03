@@ -18,6 +18,7 @@ milliseconds and nothing here touches a venue.
 from __future__ import annotations
 
 import asyncio
+import pathlib
 from decimal import Decimal as D
 
 import pytest
@@ -40,6 +41,27 @@ class FakeClock:
 
     async def sleep(self, s: float) -> None:
         self.t += float(s)
+
+
+@pytest.fixture(autouse=True)
+def _no_writes_to_the_real_cohort_root():
+    """These tests must never touch the real cohort directory.
+
+    They did, before `root` was threaded through `run()`: every budget
+    function binds cohort.COHORT_ROOT as a DEFAULT ARGUMENT at import time,
+    so the un-rooted calls wrote a CI15M-LIVENESS directory under the live
+    cohort root -- debris that represented nothing and sat next to real
+    authorized cohorts. This fails the test rather than leaving it to a
+    git-status check.
+    """
+    from src.gemini_execution import cohort as C
+    real = pathlib.Path(C.COHORT_ROOT)
+    before = {p.name for p in real.iterdir()} if real.exists() else set()
+    yield
+    after = {p.name for p in real.iterdir()} if real.exists() else set()
+    assert after == before, (
+        "these tests wrote into the REAL cohort root: %s"
+        % sorted(after - before))
 
 
 @pytest.fixture()
