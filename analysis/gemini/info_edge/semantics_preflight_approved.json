@@ -23,7 +23,7 @@
     },
     "crossing_pair_cost": "1.01",
     "identity_consistent": true,
-    "instrumentSymbol": "GEMI-BTC05M2610031235-UP",
+    "instrumentSymbol": "GEMI-BTC05M2610031245-UP",
     "labels": "a resting BUY joins the outcome's SELL side, so the passive pair cost is what a maker surface can reach. It is a cost basis, never a realized profit.",
     "last_trade_price": null,
     "no": {
@@ -33,7 +33,7 @@
     "passive_pair_cost": "0.99",
     "readable": true,
     "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
-    "ticker": "BTC05M2610031235",
+    "ticker": "BTC05M2610031245",
     "yes": {
       "ask": "0.5",
       "bid": "0.49"
@@ -57,48 +57,48 @@
   "depth": {
     "asks": {
       "best": "0.5",
-      "best_qty": "1000.0",
-      "levels": [
-        {
-          "price": "0.5",
-          "qty": "1000.0",
-          "venue_ts": "1791029318"
-        }
-      ],
-      "n_levels": 1,
-      "qty_shown": "1000.0"
-    },
-    "bids": {
-      "best": "0.49",
       "best_qty": "750.0",
       "levels": [
         {
-          "price": "0.49",
+          "price": "0.5",
           "qty": "750.0",
-          "venue_ts": "1791029318"
+          "venue_ts": "1791030666"
+        }
+      ],
+      "n_levels": 1,
+      "qty_shown": "750.0"
+    },
+    "bids": {
+      "best": "0.49",
+      "best_qty": "500.0",
+      "levels": [
+        {
+          "price": "0.49",
+          "qty": "500.0",
+          "venue_ts": "1791030666"
         },
         {
           "price": "0.48",
           "qty": "250.0",
-          "venue_ts": "1791029318"
+          "venue_ts": "1791030666"
         }
       ],
       "n_levels": 2,
-      "qty_shown": "1000.0"
+      "qty_shown": "750.0"
     },
-    "instrumentSymbol": "GEMI-BTC05M2610031235-UP",
+    "instrumentSymbol": "GEMI-BTC05M2610031245-UP",
     "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
     "levels_requested": 5,
     "no_side_depth": null,
     "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
-    "read_utc": "2026-10-03T12:08:38.595808+00:00",
+    "read_utc": "2026-10-03T12:31:05.966614+00:00",
     "readable": true,
-    "rtt_s": 0.262,
-    "snapshot_age_s": 0.596,
+    "rtt_s": 0.208,
+    "snapshot_age_s": -0.033,
     "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
-    "venue_ts": "1791029318"
+    "venue_ts": "1791030666"
   },
-  "generated_utc": "2026-10-03T12:08:36Z",
+  "generated_utc": "2026-10-03T12:31:05Z",
   "halt": null,
   "label": "GEMINI_SEMANTICS_PROBE_PREFLIGHT_PUBLIC_V1",
   "maker_or_cancel": false,
@@ -135,9 +135,9 @@
     ],
     "event_status": "active",
     "expired": false,
-    "expiryDate": "2026-10-03T12:35:00.000Z",
+    "expiryDate": "2026-10-03T12:45:00.000Z",
     "flapped": false,
-    "instrumentSymbol": "GEMI-BTC05M2610031235-UP",
+    "instrumentSymbol": "GEMI-BTC05M2610031245-UP",
     "is_terminal": false,
     "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred.",
     "marketState": "open",
@@ -149,7 +149,7 @@
     "observations": [
       {
         "event_status": "active",
-        "expiryDate": "2026-10-03T12:35:00.000Z",
+        "expiryDate": "2026-10-03T12:45:00.000Z",
         "marketState": "open",
         "readable": true,
         "resolutionSide": null,
@@ -159,7 +159,7 @@
       },
       {
         "event_status": "active",
-        "expiryDate": "2026-10-03T12:35:00.000Z",
+        "expiryDate": "2026-10-03T12:45:00.000Z",
         "marketState": "open",
         "readable": true,
         "resolutionSide": null,
@@ -169,7 +169,7 @@
       },
       {
         "event_status": "active",
-        "expiryDate": "2026-10-03T12:35:00.000Z",
+        "expiryDate": "2026-10-03T12:45:00.000Z",
         "marketState": "open",
         "readable": true,
         "resolutionSide": null,
@@ -191,16 +191,16 @@
       "available": false,
       "why": "not settled yet, or no strike published"
     },
-    "ticker": "BTC05M2610031235",
+    "ticker": "BTC05M2610031245",
     "verdict": "PENDING"
   },
-  "symbol": "GEMI-BTC05M2610031235-UP",
+  "symbol": "GEMI-BTC05M2610031245-UP",
   "taker_authorization": "OWNER-2026-10-03-GEMINI-SEMANTICS-1",
   "terms": {
     "contract_status": "active",
     "event_status": "active",
-    "expiry": "2026-10-03T12:35:00.000Z",
-    "instrumentSymbol": "GEMI-BTC05M2610031235-UP",
+    "expiry": "2026-10-03T12:45:00.000Z",
+    "instrumentSymbol": "GEMI-BTC05M2610031245-UP",
     "market_state": "open",
     "missing_fields": [],
     "priceIncrement": "0.01",
@@ -212,7 +212,7 @@
     "readable": true,
     "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
     "strike": null,
-    "ticker": "BTC05M2610031235",
+    "ticker": "BTC05M2610031245",
     "why": null
   },
   "terms_live": {
