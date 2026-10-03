@@ -490,27 +490,70 @@ RECONCILED = "reconciled_venue_inventory"
 
 
 async def reconciled_inventory(cohort_id: str, symbol: str, *,
-                               root: str = cohort.COHORT_ROOT
-                               ) -> Dict[str, Any]:
-    """Inventory AS THE VENUE REPORTS IT, not as we inferred it.
+                               root: str = cohort.COHORT_ROOT,
+                               ours: Any = None) -> Dict[str, Any]:
+    """Inventory AS THE VENUE'S AUTHENTICATED FILL RECORD REPORTS IT.
 
-    THE RISK GATES RUN ON THIS. CI15M-1's gates ran on a locally inferred
-    fill list that was simply wrong, which is why the caps did not bite.
+    THE RISK GATES RUN ON THIS. `positions()` is still read and still
+    reported, but only as TELEMETRY: for BTC15m it has never carried one of
+    these contracts, so a successful EMPTY positions result may not
+    contradict a successfully reconstructed fill ledger. An UNREADABLE fill
+    record still HALTs -- the authority moved, the fail-closed rule did not.
+
+    `ours` is the executor's durable belief. When supplied it must AGREE
+    with the reconstruction or the cohort HALTs: a reconstruction that
+    disagrees with our own ledger means we do not know what we hold.
     """
-    from src.gemini_execution import metadata
+    got = await authenticated_fills(cohort_id, symbol, root=root)
+    if not got["ok"]:
+        return {"ok": False, "why": got["why"], "signed": None}
+    rec = inventory_from_fills(got["rows"], symbol)
+    if not rec["ok"]:
+        BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION", rec["why"], root=root)
+        return {"ok": False, "why": rec["why"], "signed": None}
+    signed = rec["up_qty"] - rec["down_qty"]
+
+    if ours is not None:
+        mine = D(str(ours.q_up)) - D(str(ours.q_down))
+        if mine != signed:
+            BUD.halt(cohort_id, "INVENTORY_DISAGREEMENT",
+                     "authenticated fills reconstruct a signed position of "
+                     "%s; the executor's durable ledger holds %s"
+                     % (signed, mine), root=root)
+            return {"ok": False, "signed": signed,
+                    "why": "fill record %s != our ledger %s" % (signed, mine)}
+
+    # ---- TELEMETRY ONLY below. It can never block and never HALTs.
+    tel = {"read": False}
     try:
-        got = await metadata.positions()
+        from src.gemini_execution import metadata
+        pr = AD.PositionRead.of(await metadata.positions())
+        if pr.readable:
+            v = position_ledger.venue_signed(pr.rows, symbol)
+            tel = {"read": True, "rows_for_symbol": v.get("rows", 0),
+                   "representation": v.get("representation"),
+                   "positions_signed": (None if v.get("signed") is None
+                                        else str(v["signed"])),
+                   "agrees_with_fills": (v.get("signed") == signed),
+                   "labels": ("TELEMETRY. For BTC15m no contract has ever "
+                              "appeared in a positions row, so a successful "
+                              "EMPTY result here is NOT evidence of flat and "
+                              "does not contradict the fill record.")}
+        else:
+            tel = {"read": False, "why": pr.why}
     except Exception as exc:                                   # noqa: BLE001
-        BUD.halt(cohort_id, "UNKNOWN_POSITION",
-                 "positions read failed: %s" % exc, root=root)
-        return {"ok": False, "why": str(exc), "signed": None}
-    rows = _position_rows(got)
-    v = position_ledger.venue_signed(rows, symbol)
-    if v.get("signed") is None:
-        BUD.halt(cohort_id, "UNKNOWN_POSITION", v.get("why"), root=root)
-        return {"ok": False, "why": v.get("why"), "signed": None}
-    return {"ok": True, "signed": v["signed"],
-            "representation": v["representation"], "rows": rows}
+        tel = {"read": False, "why": "%s: %s" % (type(exc).__name__, exc)}
+
+    return {"ok": True, "signed": signed, "inventory": rec["inventory"],
+            "reconstruction": {k: (None if rec.get(k) is None
+                                   else str(rec[k]))
+                               for k in ("up_qty", "down_qty", "up_cost",
+                                         "down_cost", "matched",
+                                         "matched_pair_cost", "residual_qty",
+                                         "avg_up", "avg_down")},
+            "residual_side": rec["residual_side"],
+            "n_fills": rec["n_fills"], "source": got["source"],
+            "positions_telemetry": tel}
 
 
 def order_is_resolved(body: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1178,3 +1221,202 @@ async def _settle_order(cohort_id: str, symbol: str, ticker: str,
                 "outcome": status, "why": chk["halted"]}
     return {"filled": True, "halted": False, "fill": fill,
             "outcome": status, "why": None}
+
+
+# ================================================ AUTHENTICATED FILL GATE
+#
+# WHY THIS REPLACES positions() AS THE POST-FILL GATE FOR BTC15m.
+#
+# CI15M-3's OPEN filled -- venue ACK, filledQuantity 1, avgExecutionPrice
+# 0.34 -- and the probe then HALTED because `metadata.positions()` returned
+# a SUCCESSFUL EMPTY list while our ledger held 1 UP. The evidence says the
+# halt was the gate's fault, not the venue's:
+#
+#   * positions() IS a real prediction-inventory surface. It has returned
+#     rows carrying totalQuantity/avgPrice/outcome/instrumentId, e.g.
+#     GEMI-NFL-2609220015-NYG-LAR-S-LAR6 qty 1.81 avg 0.53, stable across
+#     four reads over two hours.
+#   * But across every committed authenticated artifact, NO BTC5m or BTC15m
+#     contract has ever appeared in a positions row -- not once, against
+#     hundreds of filled BTC orders in those same artifacts.
+#
+# So for these contracts positions() is not the authoritative current-
+# inventory surface, and `position_ledger` said as much itself: "model B or
+# C -- nothing is held, so it netted or was cashed out".
+#
+# THE AUTHORITATIVE SURFACE IS THE AUTHENTICATED FILL RECORD, and a proven
+# primitive for it already exists and is REUSED here rather than
+# reinterpreted -- otherwise this would be a FOURTH interpretation of held
+# inventory in one repository:
+#
+#   fill_reconciliation.authoritative_fills()  order history JOINED to
+#                                              mytrades on order_id
+#   continuous_probe.recover()                 fills -> Inventory, where
+#                                              UNREADABLE is not empty
+#
+# Every prior Gemini execution, the q10 both-outcomes trade included,
+# established held YES/NO this way.
+#
+# UNKNOWN HANDLING IS NOT WEAKENED ANYWHERE. Each of these HALTs:
+# unreadable order history, unreadable mytrades, an unjoinable order needed
+# for the reconstruction, an ambiguous fill quantity/side/price, and
+# authenticated fills disagreeing with our durable ledger. A successful
+# EMPTY positions() result is telemetry and may not contradict a
+# successfully reconstructed fill ledger -- but a successful empty FILL
+# record does still mean flat, because that surface is the authority.
+
+async def _mytrades(symbol: str) -> Dict[str, Any]:
+    """The authenticated trade record. `rows` is None iff UNREADABLE."""
+    from src.gemini_prediction_auth import private_rest_request
+    try:
+        r = await private_rest_request(
+            "POST", "/v1/mytrades",
+            params={"symbol": symbol, "limit_trades": 500}, timeout=20.0)
+    except Exception as exc:                                   # noqa: BLE001
+        return {"rows": None, "why": "mytrades raised %s" % exc}
+    if getattr(r, "status_code", None) != 200:
+        return {"rows": None,
+                "why": "mytrades returned %s" % getattr(r, "status_code",
+                                                        None)}
+    try:
+        body = r.json()
+    except ValueError:
+        return {"rows": None, "why": "mytrades body was not JSON"}
+    rows = body.get("trades") if isinstance(body, Mapping) else body
+    if not isinstance(rows, list):
+        return {"rows": None,
+                "why": "mytrades payload carried no trade list; the shape is "
+                       "unrecognised and is not read as empty"}
+    return {"rows": [t for t in rows if isinstance(t, Mapping)],
+            "status": 200}
+
+
+async def authenticated_fills(cohort_id: str, symbol: str, *,
+                              root: str = cohort.COHORT_ROOT
+                              ) -> Dict[str, Any]:
+    """The venue's own fill record for this symbol, or a HALT.
+
+    Order history is read WITH include_rows=True -- without it the producer
+    omits its `orders` key entirely and a caller sees "readable and empty"
+    on every call -- then joined to mytrades through the existing
+    `authoritative_fills`.
+    """
+    from src.gemini_execution import fill_reconciliation as FR
+    from src.gemini_execution import metadata
+
+    try:
+        hist = await metadata.order_history(
+            symbol=symbol, statuses=("filled",), limit=100,
+            include_rows=True)
+    except Exception as exc:                                   # noqa: BLE001
+        BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
+                 "order history read raised %s" % exc, root=root)
+        return {"ok": False, "why": "order history raised %s" % exc}
+    oh = AD.OrderHistory.of(hist)
+    if not oh.readable:
+        BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                 "order history unreadable: %s" % oh.why, root=root)
+        return {"ok": False, "why": oh.why}
+
+    orders_seen = []
+    for grp in (hist.get("per_status") or []):
+        for o in (grp.get("orders") or []):
+            if isinstance(o, Mapping) and o.get("symbol") == symbol:
+                orders_seen.append(o)
+
+    try:
+        tr = await _mytrades(symbol)
+    except Exception as exc:                                   # noqa: BLE001
+        BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
+                 "mytrades read raised %s" % exc, root=root)
+        return {"ok": False, "why": "mytrades raised %s" % exc}
+    if tr.get("rows") is None:
+        BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                 "mytrades unreadable: %s" % tr.get("why"), root=root)
+        return {"ok": False, "why": tr.get("why") or "mytrades unreadable"}
+
+    auth = FR.authoritative_fills({"orders_seen": orders_seen,
+                                   "trades": tr["rows"]})
+    if not auth.get("readable"):
+        BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                 "authoritative fills unreadable: %s" % auth.get("why"),
+                 root=root)
+        return {"ok": False, "why": auth.get("why")}
+
+    rows = auth.get("rows") or []
+    # every row must be fully determined: an unjoinable order, an
+    # unresolved side or an unreadable qty/price is UNKNOWN, never zero.
+    for r in rows:
+        if not r.get("leg_resolved"):
+            BUD.halt(cohort_id, "SIDE_MAPPING_DISAGREEMENT",
+                     "fill %r carries no resolvable side; its order could "
+                     "not be joined" % r.get("tid"), root=root)
+            return {"ok": False, "why": "unjoinable fill side"}
+        if r.get("order_id") is None:
+            BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                     "fill %r has no order_id to join on" % r.get("tid"),
+                     root=root)
+            return {"ok": False, "why": "fill without an order_id"}
+        for k in ("qty", "price"):
+            if AD._dec(r.get(k)) is None:
+                BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
+                         "fill %r has an unreadable %s: %r"
+                         % (r.get("tid"), k, r.get(k)), root=root)
+                return {"ok": False, "why": "unreadable fill %s" % k}
+    return {"ok": True, "rows": rows, "n": len(rows),
+            "orders_joined": auth.get("orders_joined"),
+            "source": auth.get("source")}
+
+
+def inventory_from_fills(rows: Sequence[Mapping[str, Any]], symbol: str,
+                         *, auth_id: str = "") -> Dict[str, Any]:
+    """Authenticated fills -> inventory, through the PROVEN primitive.
+
+    `continuous_probe.recover` does the reconstruction (and refuses a None
+    fill list), then the result is carried into the `fi_core.Inventory` the
+    frozen policy reasons about. BOTH reconstructions are compared: if the
+    proven primitive and the policy accounting disagree we do not
+    understand our own inventory and may not decide on it.
+    """
+    from src.gemini_execution import continuous_probe as CP
+    # THE TWO PRIMITIVES HAVE NEVER BEEN COMPOSED BEFORE, and composing
+    # them surfaced it: `authoritative_fills` emits `leg` lower-case
+    # ("yes"/"no"), while `CP.Inventory.apply_fill` raises "leg must be YES
+    # or NO". Neither producer is modified -- the mismatch is normalised
+    # HERE, at the boundary, which is the whole lesson of the adapter
+    # sweep. A row whose leg is neither is refused rather than guessed.
+    cp_rows = []
+    for r in rows:
+        leg = str(r.get("leg") or "").strip().lower()
+        if leg not in ("yes", "no"):
+            return {"ok": False,
+                    "why": "fill %r carries leg %r, which is neither yes nor "
+                           "no" % (r.get("tid"), r.get("leg"))}
+        cp_rows.append(dict(r, leg=leg.upper()))
+    cp_inv, why = CP.recover(auth_id, symbol, cp_rows)
+    if cp_inv is None:
+        return {"ok": False, "why": why}
+    inv = POLICY["Inventory"]()
+    for r in rows:
+        side = "UP" if str(r.get("leg")).lower() == "yes" else "DOWN"
+        inv.add(POLICY["make_fill"](0.0, side,
+                                    ("maker" if r.get("maker") == "maker"
+                                     else "taker"),
+                                    D(str(r["price"])), D(str(r["qty"])),
+                                    "authenticated venue fill"))
+    inv.assert_identities()
+    if (cp_inv.yes_qty != inv.q_up) or (cp_inv.no_qty != inv.q_down):
+        return {"ok": False,
+                "why": ("the proven primitive and the policy accounting "
+                        "disagree: CP yes/no %s/%s vs policy UP/DOWN %s/%s"
+                        % (cp_inv.yes_qty, cp_inv.no_qty, inv.q_up,
+                           inv.q_down))}
+    return {"ok": True, "inventory": inv, "cp": cp_inv,
+            "up_qty": inv.q_up, "down_qty": inv.q_down,
+            "up_cost": inv.c_up, "down_cost": inv.c_down,
+            "matched": inv.matched,
+            "matched_pair_cost": inv.matched_pair_cost(),
+            "residual_side": inv.residual_side,
+            "residual_qty": inv.residual,
+            "avg_up": inv.avg_up, "avg_down": inv.avg_down,
+            "n_fills": len(rows)}

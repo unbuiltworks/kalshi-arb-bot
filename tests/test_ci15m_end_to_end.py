@@ -116,12 +116,34 @@ def _run_chain(monkeypatch, env, *, ack_status, ack_filled, next_book):
     assert tel["contract_ask"] == "0.66" and tel["ladder_ask"] == "0.70"
     trace["ladder"] = (str(bk["bid"]), str(bk["ask"]))
 
-    # --- 3. positions succeeds with []
-    seen = {"n": 0}
+    # --- 3. the AUTHENTICATED FILL RECORD is the authority; positions is
+    #        telemetry only (for BTC15m it has never carried a contract).
+    state = {"filled": False}
+
+    async def hist(**kw):
+        assert kw.get("include_rows") is True
+        orders = [] if not state["filled"] else [{
+            "orderId": 145828836799999001, "symbol": SYMBOL, "side": "buy",
+            "outcome": "yes", "status": "filled", "price": "0.70",
+            "quantity": "1", "filledQuantity": "1",
+            "avgExecutionPrice": "0.70"}]
+        return {"readable": True, "verdict": "ORDERS_FOUND",
+                "total_rows": len(orders), "symbol": SYMBOL,
+                "unreadable_statuses": [],
+                "per_status": [{"status_filter": "filled",
+                                "orders": orders}]}
+
+    async def my(sym):
+        rows = [] if not state["filled"] else [{
+            "tid": 1, "order_id": "145828836799999001", "symbol": SYMBOL,
+            "price": "0.70", "amount": "1", "fee_amount": "0.02",
+            "aggressor": True, "timestampms": 1}]
+        return {"rows": rows, "status": 200}
 
     async def positions():
-        seen["n"] += 1
-        return POSITIONS_EMPTY if seen["n"] == 1 else POSITIONS_ONE_UP
+        return POSITIONS_EMPTY
+    monkeypatch.setattr(metadata, "order_history", hist)
+    monkeypatch.setattr(P, "_mytrades", my)
     monkeypatch.setattr(metadata, "positions", positions)
 
     inv = P.new_inventory()
@@ -161,12 +183,9 @@ def _run_chain(monkeypatch, env, *, ack_status, ack_filled, next_book):
 
     # --- 7. poll to terminal when the ack is not
     if not cls["terminal"]:
-        async def hist(**kw):
-            assert kw.get("include_rows") is True, (
-                "without include_rows the rows are absent, and an absent "
-                "row list is not an empty one")
-            return HISTORY_FILLED
-        monkeypatch.setattr(metadata, "order_history", hist)
+        state["filled"] = True
+        monkeypatch.setattr(metadata, "order_history",
+                            lambda **kw: _done(HISTORY_FILLED))
         term = asyncio.run(P.poll_terminal(
             CID, SYMBOL, 145828836799999001, attempts=2, pause=0,
             root=env, sleeper=_nosleep))
@@ -177,10 +196,13 @@ def _run_chain(monkeypatch, env, *, ack_status, ack_filled, next_book):
     assert filled_qty == D("1") and filled_px == D("0.70")
     trace["terminal"] = ("FILLED", str(filled_qty), str(filled_px))
 
-    # --- 8. inventory + authoritative reconciliation
+    # --- 8. inventory + authoritative reconciliation FROM THE FILL RECORD
+    state["filled"] = True
+    monkeypatch.setattr(metadata, "order_history", hist)
     inv.add(POLICY["make_fill"](0.0, "UP", "taker", filled_px, filled_qty,
                                 "e2e OPEN"))
-    rec1 = asyncio.run(P.reconciled_inventory(CID, SYMBOL, root=env))
+    rec1 = asyncio.run(P.reconciled_inventory(CID, SYMBOL, root=env,
+                                              ours=inv))
     assert rec1["ok"] and rec1["signed"] == D("1"), rec1
     assert BUD.halted(CID, root=env) is None
     assert inv.residual_side == "UP" and inv.residual == D("1")
@@ -203,6 +225,10 @@ def _run_chain(monkeypatch, env, *, ack_status, ack_filled, next_book):
 
 async def _nosleep(_s):
     return None
+
+
+async def _done(v):
+    return v
 
 
 # =====================================================================
@@ -267,33 +293,84 @@ def test_a_complement_reaching_the_pair_ceiling_is_taken(env, monkeypatch):
 # =====================================================================
 # 4. the safety behaviour that saved CI15M-2 must still hold
 # =====================================================================
-def test_an_unreadable_positions_read_still_halts(env, monkeypatch):
-    async def bad():
-        return {"ok": False, "rows": None, "status": 500, "why": "boom"}
-    monkeypatch.setattr(metadata, "positions", bad)
+def test_an_unreadable_fill_record_still_halts(env, monkeypatch):
+    """The AUTHORITY moved to the fill record; the fail-closed rule did
+    not. An unreadable fill record still HALTs."""
+    async def bad(**kw):
+        return {"readable": False, "verdict": "UNREADABLE",
+                "unreadable_statuses": ["filled"], "total_rows": 0}
+    monkeypatch.setattr(metadata, "order_history", bad)
     rec = asyncio.run(P.reconciled_inventory(CID, SYMBOL, root=env))
     assert rec["ok"] is False
     assert "UNKNOWN_POSITION" in BUD.halted(CID, root=env)
 
 
-def test_a_venue_ledger_disagreement_still_halts(env, monkeypatch):
-    async def two_up():
-        return {"ok": True, "status": 200, "rows": [
-            {"symbol": SYMBOL, "outcome": "yes", "totalQuantity": "2"}]}
-    monkeypatch.setattr(metadata, "positions", two_up)
+def test_a_fill_record_ledger_disagreement_still_halts(env, monkeypatch):
+    async def two(**kw):
+        return {"readable": True, "verdict": "ORDERS_FOUND", "total_rows": 2,
+                "symbol": SYMBOL, "unreadable_statuses": [],
+                "per_status": [{"status_filter": "filled", "orders": [
+                    {"orderId": 1, "symbol": SYMBOL, "outcome": "yes",
+                     "status": "filled", "price": "0.70",
+                     "filledQuantity": "1"},
+                    {"orderId": 2, "symbol": SYMBOL, "outcome": "yes",
+                     "status": "filled", "price": "0.70",
+                     "filledQuantity": "1"}]}]}
+
+    async def my(sym):
+        return {"rows": [
+            {"tid": 1, "order_id": "1", "price": "0.70", "amount": "1"},
+            {"tid": 2, "order_id": "2", "price": "0.70", "amount": "1"}],
+            "status": 200}
+    monkeypatch.setattr(metadata, "order_history", two)
+    monkeypatch.setattr(P, "_mytrades", my)
     inv = P.new_inventory()
     inv.add(POLICY["make_fill"](0.0, "UP", "taker", D("0.70"), QUANTITY, "x"))
-    rec = asyncio.run(P.reconcile_after_fill(CID, SYMBOL, inv, root=env))
-    assert rec["halted"]
+    rec = asyncio.run(P.reconciled_inventory(CID, SYMBOL, root=env,
+                                             ours=inv))
+    assert rec["ok"] is False
     assert "INVENTORY_DISAGREEMENT" in BUD.halted(CID, root=env)
 
 
-def test_a_successful_empty_read_is_not_treated_as_unknown(env, monkeypatch):
+def test_a_successful_empty_fill_record_is_flat_not_unknown(env,
+                                                            monkeypatch):
     """The fix is correct interpretation of SUCCESSFUL reads -- not
     assuming missing information means flat."""
-    async def empty():
-        return POSITIONS_EMPTY
-    monkeypatch.setattr(metadata, "positions", empty)
+    async def none(**kw):
+        return {"readable": True, "verdict": "NO_ORDERS_ON_RECORD",
+                "total_rows": 0, "symbol": SYMBOL,
+                "unreadable_statuses": [],
+                "per_status": [{"status_filter": "filled", "orders": []}]}
+
+    async def my(sym):
+        return {"rows": [], "status": 200}
+    monkeypatch.setattr(metadata, "order_history", none)
+    monkeypatch.setattr(P, "_mytrades", my)
     rec = asyncio.run(P.reconciled_inventory(CID, SYMBOL, root=env))
     assert rec["ok"] and rec["signed"] == D("0")
+    assert BUD.halted(CID, root=env) is None
+
+
+def test_a_successful_empty_positions_is_only_telemetry(env, monkeypatch):
+    """positions() empty must NOT contradict a reconstructed fill ledger."""
+    async def one(**kw):
+        return {"readable": True, "verdict": "ORDERS_FOUND", "total_rows": 1,
+                "symbol": SYMBOL, "unreadable_statuses": [],
+                "per_status": [{"status_filter": "filled", "orders": [
+                    {"orderId": 1, "symbol": SYMBOL, "outcome": "yes",
+                     "status": "filled", "price": "0.70",
+                     "filledQuantity": "1"}]}]}
+
+    async def my(sym):
+        return {"rows": [{"tid": 1, "order_id": "1", "price": "0.70",
+                          "amount": "1"}], "status": 200}
+
+    async def empty():
+        return POSITIONS_EMPTY
+    monkeypatch.setattr(metadata, "order_history", one)
+    monkeypatch.setattr(P, "_mytrades", my)
+    monkeypatch.setattr(metadata, "positions", empty)
+    rec = asyncio.run(P.reconciled_inventory(CID, SYMBOL, root=env))
+    assert rec["ok"] and rec["signed"] == D("1")
+    assert rec["positions_telemetry"]["agrees_with_fills"] is False
     assert BUD.halted(CID, root=env) is None
