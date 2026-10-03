@@ -14,12 +14,14 @@ WHAT THE POLICY IS, in full:
   OPEN        one bounded initial position, only when the book is COHERENT
               (two-sided, not crossed) and the chosen side is ACTUALLY
               EXECUTABLE. Fixed small size; no sizing optimisation.
-  EXTEND      a further same-side buy ONLY when incremental_effect() shows
-              acceptable incremental economics AND every cap still holds.
-              NEVER because the position is losing -- the policy has no access
-              to unrealised P&L as an input, which is enforced structurally:
-              `want_extend` is a function of the incremental deltas and the
-              caps, and is passed nothing else.
+  EXTEND      a further same-side buy ONLY when it improves the
+              weighted-average acquisition price of the existing residual
+              side by at least EXTEND_MIN_AVG_IMPROVEMENT, inside hard
+              residual-principal and total-capital bounds. It is NOT required
+              to improve instantaneous worst-case settlement P&L, which by
+              construction it cannot. NEVER because the position is losing:
+              `want_extend_avg` reads the residual AVERAGE and the OFFERED
+              PRICE and has no access to an unrealised mark.
   COMPLEMENT  the opposite side is evaluated on EVERY tick. Preferred when it
               reduces residual AND raises the worst-case settlement floor.
               PARTIAL complements are allowed; nothing must flatten at once.
@@ -68,9 +70,25 @@ OPEN_TTE_LO, OPEN_TTE_HI = 120.0, 840.0
 #: marketable limit: never pay more than this for either side.
 HARD_MAX_PRICE = D("0.90")
 
-#: EXTEND acceptance: the extra lot must not worsen the worst case by more
-#: than this per contract, and must improve the average entry.
-EXTEND_MAX_FLOOR_COST = D("0.05")
+#: EXTEND acceptance. FROZEN, PREREGISTERED, NOT FITTED.
+#:
+#: The worst-case-floor criterion that used to live here was structurally
+#: wrong and is GONE, not loosened: every same-side purchase necessarily
+#: worsens the opposite outcome's settlement P&L at that instant, so a gate
+#: demanding the floor be preserved can essentially never fire.
+#:
+#: The replacement concept: an EXTEND must IMPROVE THE WEIGHTED-AVERAGE
+#: ACQUISITION PRICE of the existing residual side by at least this much.
+#: That is a statement about future locking capacity, not about instantaneous
+#: P&L. 5 cents, chosen before looking at the windows and not tuned on them.
+EXTEND_MIN_AVG_IMPROVEMENT = D("0.05")
+
+#: EXTENDs permitted before a complement must intervene.
+MAX_EXTENDS_BEFORE_COMPLEMENT = 2
+
+#: hard residual principal at risk, dollars. A residual of n contracts bought
+#: at average A can lose n*A if it settles the other way.
+MAX_RESIDUAL_PRINCIPAL = D("4.00")
 
 #: COMPLEMENT acceptance: the matched pair cost after the complement must be
 #: MATERIALLY BELOW $1 (CLAUDE.md spring discipline). Raising the worst-case
@@ -82,7 +100,6 @@ MAX_PAIR_COST = D("0.96")
 # ------------------------------------------------------------------- risk
 MAX_TOTAL_COST = D("12.00")      # dollars per market
 MAX_RESIDUAL = D("6")            # directional residual, contracts
-MAX_SAME_SIDE_RUN = 2            # consecutive same-side extensions
 MAX_ACTIONS = 8                  # actions per market
 MAX_WORST_CASE_LOSS = D("-6.00")  # worst-case settlement floor
 
@@ -93,6 +110,10 @@ def coherent(bid: Optional[D], ask: Optional[D]) -> bool:
 
 
 def risk_block(inv: Inventory, actions: int, run_len: int) -> List[str]:
+    """Hard caps. The consecutive-same-side cap lives in the EXTEND rule
+    (MAX_EXTENDS_BEFORE_COMPLEMENT) rather than here, because a cap that
+    HALTS the window would also forbid the complement that is supposed to
+    follow the extensions."""
     hit = []
     if actions >= MAX_ACTIONS:
         hit.append("max_actions %d" % MAX_ACTIONS)
@@ -100,8 +121,10 @@ def risk_block(inv: Inventory, actions: int, run_len: int) -> List[str]:
         hit.append("total_cost %s > %s" % (inv.total_cost, MAX_TOTAL_COST))
     if inv.residual > MAX_RESIDUAL:
         hit.append("residual %s > %s" % (inv.residual, MAX_RESIDUAL))
-    if run_len >= MAX_SAME_SIDE_RUN:
-        hit.append("same_side_run %d >= %d" % (run_len, MAX_SAME_SIDE_RUN))
+    rp = inv.residual * (inv.avg_up if inv.residual_side == "UP"
+                         else inv.avg_down) if inv.residual_side else D("0")
+    if rp > MAX_RESIDUAL_PRINCIPAL:
+        hit.append("residual_principal %s > %s" % (rp, MAX_RESIDUAL_PRINCIPAL))
     wc = min(inv.up_settlement_pnl, inv.down_settlement_pnl)
     if inv.fills and wc < MAX_WORST_CASE_LOSS:
         hit.append("worst_case %s < %s" % (wc, MAX_WORST_CASE_LOSS))
@@ -112,26 +135,6 @@ def locked(inv: Inventory) -> bool:
     """BOTH outcomes positive after confirmed fees. Never unlocked."""
     return (bool(inv.fills)
             and inv.up_settlement_pnl > 0 and inv.down_settlement_pnl > 0)
-
-
-def want_extend(eff: Dict[str, Any]) -> Dict[str, Any]:
-    """EXTEND acceptance, from the INCREMENTAL DELTAS ONLY.
-
-    It is passed `eff` and nothing else -- no price history, no unrealised
-    P&L, no notion of whether the position is losing. That is the structural
-    guarantee that the policy cannot EXTEND because it is down.
-    """
-    floor_cost = eff["worst_case_before"] - eff["worst_case_after"]
-    ok = floor_cost <= EXTEND_MAX_FLOOR_COST * D(str(eff["qty"]))
-    return {"accept": bool(ok), "floor_cost": floor_cost,
-            "limit": str(EXTEND_MAX_FLOOR_COST * D(str(eff["qty"]))),
-            "why": ("the extra lot costs %s of worst-case floor, within the "
-                    "%s allowance" % (floor_cost,
-                                      EXTEND_MAX_FLOOR_COST * D(str(eff["qty"])))
-                    if ok else
-                    "REFUSED: costs %s of worst-case floor, over the %s "
-                    "allowance" % (floor_cost,
-                                   EXTEND_MAX_FLOOR_COST * D(str(eff["qty"]))))}
 
 
 def want_complement(eff: Dict[str, Any]) -> Dict[str, Any]:
@@ -163,6 +166,93 @@ def want_complement(eff: Dict[str, Any]) -> Dict[str, Any]:
                     "REFUSED: reduces_residual=%s raises_floor=%s "
                     "pair_cost_after=%s (needs <= %s)"
                     % (reduces, raises, pair, MAX_PAIR_COST))}
+
+
+def required_complement_price(inv: Inventory, qty: D,
+                              target: D = MAX_PAIR_COST) -> Optional[D]:
+    """The HIGHEST price we could pay for `qty` of the opposite side and
+    still land a matched book at or below `target`.
+
+    This is the number that gives EXTEND a measurable purpose: it is the
+    width of the complement opportunity set. Own 2 UP at 0.45 and DOWN must
+    come to <= 0.51; drop the UP average to 0.375 and DOWN as dear as 0.585
+    still locks a 0.96 book. The extension bought 7.5 cents of opportunity.
+
+    Solved on PRINCIPAL averages (fi_core `avg_up`/`avg_down` exclude fees),
+    which is the same basis the 0.96 discipline is written on.
+
+    Returns None when there is no residual side to complement.
+    """
+    rs = inv.residual_side
+    if rs is None:
+        return None
+    if rs == "UP":
+        own_avg, other_q, other_c = inv.avg_up, inv.q_down, inv.c_down
+    else:
+        own_avg, other_q, other_c = inv.avg_down, inv.q_up, inv.c_up
+    # need own_avg + (other_c + qty*p)/(other_q + qty) <= target
+    return ((target - own_avg) * (other_q + qty) - other_c) / qty
+
+
+def want_extend_avg(inv: Inventory, side: str, px: D,
+                    qty: D, n_extends: int) -> Dict[str, Any]:
+    """The FROZEN 5-cent average-improvement EXTEND rule.
+
+    Hard requirements, all of them:
+      * same side as the current residual
+      * the new price beats the existing residual average by >= 5 cents
+      * fewer than MAX_EXTENDS_BEFORE_COMPLEMENT extensions so far
+      * residual principal at risk stays within MAX_RESIDUAL_PRINCIPAL
+      * fixed qty (LOT is a constant; no progression exists in this file)
+
+    Deliberately NOT a requirement: that the instantaneous worst case be
+    preserved. By construction it cannot be.
+
+    Nothing here is a function of whether the position is losing. The rule
+    reads the residual AVERAGE and the offered PRICE; it has no access to an
+    unrealised mark, so "price moved against us" can never by itself be the
+    reason an extension is accepted -- only "this lot is 5c cheaper than what
+    we already own" can be.
+    """
+    rs = inv.residual_side
+    same = rs == side
+    avg = (inv.avg_up if side == "UP" else inv.avg_down)
+    improves = avg is not None and px <= avg - EXTEND_MIN_AVG_IMPROVEMENT
+    room = n_extends < MAX_EXTENDS_BEFORE_COMPLEMENT
+    new_resid = inv.residual + qty if same else None
+    new_avg = (((inv.c_up if side == "UP" else inv.c_down) + qty * px)
+               / ((inv.q_up if side == "UP" else inv.q_down) + qty))
+    within = (new_resid is not None
+              and new_resid * new_avg <= MAX_RESIDUAL_PRINCIPAL)
+    ok = bool(same and improves and room and within)
+    req_before = required_complement_price(inv, qty)
+    return {
+        "accept": ok,
+        "same_side_as_residual": same,
+        "residual_avg_before": (None if avg is None else str(avg)),
+        "extension_price": str(px),
+        "avg_improvement": (None if avg is None else str(avg - px)),
+        "required_improvement": str(EXTEND_MIN_AVG_IMPROVEMENT),
+        "improves_avg": bool(improves),
+        "residual_avg_after": str(new_avg),
+        "required_complement_price_for_0.96_before":
+            (None if req_before is None else str(req_before)),
+        "extends_so_far": n_extends,
+        "extend_room": bool(room),
+        "residual_principal_after": (None if new_resid is None
+                                     else str(new_resid * new_avg)),
+        "within_residual_principal_cap": bool(within),
+        "why": (("avg %s -> %s, a %s improvement >= %s; residual principal %s "
+                 "within %s" % (avg, new_avg, (avg - px) if avg else None,
+                                EXTEND_MIN_AVG_IMPROVEMENT,
+                                new_resid * new_avg, MAX_RESIDUAL_PRINCIPAL))
+                if ok else
+                ("REFUSED: same_side=%s improves_avg=%s (price %s vs avg %s, "
+                 "need <= %s) room=%s within_cap=%s"
+                 % (same, improves, px, avg,
+                    (None if avg is None
+                     else avg - EXTEND_MIN_AVG_IMPROVEMENT), room, within))),
+    }
 
 
 def maker_counterfactual(side: str, bid: D, qty: D) -> Dict[str, Any]:
@@ -246,13 +336,19 @@ def windows_from_tape(outdir="data/gemini_infoedge_15m"):
     return out
 
 
-def shadow_window(tk: str, w: Dict[str, Any]) -> Dict[str, Any]:
-    """Run the policy over ONE window. Returns the full sequential ledger."""
+def shadow_window(tk: str, w: Dict[str, Any],
+                  allow_extend: bool = True) -> Dict[str, Any]:
+    """Run the policy over ONE window. Returns the full sequential ledger.
+
+    `allow_extend=False` reproduces the previous OPEN -> COMPLEMENT -> LOCK
+    policy exactly, so the two can be settled side by side on the same tape.
+    """
     E = w["expiry"]
     inv = Inventory()
     ledger: List[Dict[str, Any]] = []
     actions = 0
     run_leg, run_len = None, 0
+    n_extends = 0
     extends: List[Dict[str, Any]] = []
     #: WAIT rows are sampled, not emitted every tick, so the ledger shows the
     #: state machine declining and why without drowning the trace.
@@ -340,27 +436,48 @@ def shadow_window(tk: str, w: Dict[str, Any]) -> Dict[str, Any]:
                 break
 
             if act == EXTEND:
-                d = want_extend(eff)
+                if not allow_extend:
+                    refusals.append("EXTEND %s @ %s REFUSED: extensions "
+                                    "disabled in this arm" % (side, px))
+                    continue
+                d = want_extend_avg(inv, side, px, LOT, n_extends)
                 if not d["accept"]:
                     refusals.append("EXTEND %s @ %s %s" % (side, px, d["why"]))
                     continue
-                if run_leg == side and run_len >= MAX_SAME_SIDE_RUN:
-                    continue
                 before = inv.snapshot()
+                req_before = required_complement_price(inv, LOT)
                 inv.add(make_fill(t, side, "taker", px, LOT, "shadow EXTEND"))
                 inv.assert_identities()
                 actions += 1
+                n_extends += 1
                 run_len = run_len + 1 if run_leg == side else 1
                 run_leg = side
+                req_after = required_complement_price(inv, LOT)
+                d["required_complement_price_for_0.96_after"] = (
+                    None if req_after is None else str(req_after))
                 r = row(EXTEND, side, px, LOT, "EXTEND: " + d["why"],
                         {"maker_counterfactual": mc, "incremental": eff,
+                         "extend_rule": d,
                          "before": before, "after": inv.snapshot()})
-                extends.append({"t": r["t"], "tte": r["tte"], "side": side,
-                                "price": str(px), "why": d["why"],
-                                "d_worst_case": str(eff["worst_case_after"]
-                                                    - eff["worst_case_before"]),
-                                "d_up": str(eff["d_up_settlement_pnl"]),
-                                "d_down": str(eff["d_down_settlement_pnl"])})
+                extends.append({
+                    "t": r["t"], "tte": r["tte"], "side": side,
+                    "old_avg": d["residual_avg_before"],
+                    "extension_price": str(px),
+                    "new_avg": d["residual_avg_after"],
+                    "req_complement_before":
+                        None if req_before is None else str(req_before),
+                    "req_complement_after":
+                        None if req_after is None else str(req_after),
+                    "opportunity_set_widened_by":
+                        (None if (req_before is None or req_after is None)
+                         else str(req_after - req_before)),
+                    "additional_residual_risk": str(LOT * px),
+                    "residual_principal_after": d["residual_principal_after"],
+                    "why": d["why"],
+                    "d_worst_case": str(eff["worst_case_after"]
+                                        - eff["worst_case_before"]),
+                    "d_up": str(eff["d_up_settlement_pnl"]),
+                    "d_down": str(eff["d_down_settlement_pnl"])})
                 acted = True
                 break
 
@@ -374,6 +491,7 @@ def shadow_window(tk: str, w: Dict[str, Any]) -> Dict[str, Any]:
                                   "shadow COMPLEMENT"))
                 inv.assert_identities()
                 actions += 1
+                n_extends = 0          # a complement re-opens the extend budget
                 run_leg, run_len = side, 1
                 row(COMPLETE, side, px, LOT, "COMPLEMENT: " + d["why"],
                     {"maker_counterfactual": mc, "incremental": eff})
@@ -390,8 +508,12 @@ def shadow_window(tk: str, w: Dict[str, Any]) -> Dict[str, Any]:
     # ---- settlement decomposition
     s = w.get("settled") or {}
     res = s.get("resolution_side")
-    out = {"ticker": tk, "ledger": ledger, "extends": extends,
+    out = {"ticker": tk, "arm": ("EXTEND" if allow_extend else "NO_EXTEND"),
+           "ledger": ledger, "extends": extends,
            "n_actions": actions, "final": inv.snapshot(),
+           "worst_exposure": str(min(
+               (D(r["worst_case"]) for r in ledger
+                if r["worst_case"] is not None), default=D("0"))),
            "resolution_side": res}
     if res in ("yes", "no"):
         oc = "UP" if res == "yes" else "DOWN"
@@ -411,53 +533,96 @@ def shadow_window(tk: str, w: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _print_ledger(r):
+    print("--- %s   arm=%s   actions=%d   resolution=%s"
+          % (r["ticker"], r["arm"], r["n_actions"], r["resolution_side"]))
+    if not r["ledger"]:
+        print("  (no coherent tradeable tick)")
+        return
+    print("  %-9s %6s %9s %-9s %-5s %-6s %-4s %6s %6s %9s %8s %9s %9s %9s"
+          % ("t(rel)", "tte", "bid/ask", "action", "side", "price", "qty",
+             "UPq", "DNq", "totcost", "resid", "ifUP", "ifDOWN", "worst"))
+    t0 = r["ledger"][0]["t"]
+    for x in r["ledger"]:
+        print("  %-9.1f %6.1f %9s %-9s %-5s %-6s %-4s %6s %6s %9s %8s "
+              "%9s %9s %9s"
+              % (x["t"] - t0, x["tte"], "%s/%s" % (x["ws_bid"], x["ws_ask"]),
+                 x["action"], x["side"] or "", x["price"] or "", x["qty"] or "",
+                 x["UP_qty"], x["DOWN_qty"], x["total_cost"], x["residual"],
+                 x["pnl_if_UP"], x["pnl_if_DOWN"], x["worst_case"]))
+        if x["action"] == HOLD:
+            print("      reason: %s" % x["reason"])
+    for e in r["extends"]:
+        print("  EXTEND @tte %.1f %s: old avg %s -> price %s -> new avg %s"
+              % (e["tte"], e["side"], e["old_avg"], e["extension_price"],
+                 e["new_avg"]))
+        print("      required complement price for 0.96: %s -> %s "
+              "(opportunity set widened by %s)"
+              % (e["req_complement_before"], e["req_complement_after"],
+                 e["opportunity_set_widened_by"]))
+        print("      additional residual risk %s | residual principal now %s"
+              % (e["additional_residual_risk"], e["residual_principal_after"]))
+    if r.get("settlement"):
+        st = r["settlement"]
+        print("  SETTLEMENT (%s): matched %s | residual %s | fees %s | "
+              "worst exposure %s | maker-cf rebate %s | NET %s"
+              % (st["outcome"], st["matched_pair_pnl"],
+                 st["directional_residual_pnl"], st["fees"],
+                 r["worst_exposure"],
+                 st["maker_counterfactual_rebates_NOT_REALIZED"],
+                 st["net_settlement_pnl"]))
+
+
 def main():
     ws = windows_from_tape()
     print("=" * 104)
     print("BTC15m CONTINUOUS-INVENTORY POLICY -- SHADOW. NO ORDER IS SENT.")
+    print("EXTEND rule FROZEN: new_price <= residual_avg - %s. Not fitted to "
+          "these windows." % EXTEND_MIN_AVG_IMPROVEMENT)
+    print("COMPLEMENT discipline FROZEN at MAX_PAIR_COST = %s." % MAX_PAIR_COST)
     print("=" * 104)
-    print("windows with a reconstructed WS book: %d" % len(ws))
     done = [(tk, w) for tk, w in ws.items() if w.get("settled")]
-    print("of which settled: %d\n" % len(done))
-    results = []
+    print("windows with a reconstructed WS book: %d | settled: %d" % (len(ws), len(done)))
+    print()
+
+    results, rows = [], []
     for tk, w in sorted(done, key=lambda x: x[0]):
-        r = shadow_window(tk, w)
-        results.append(r)
-        acts = [x for x in r["ledger"] if x["action"] != HOLD]
-        if not acts and not r["ledger"]:
+        a = shadow_window(tk, w, allow_extend=True)
+        b = shadow_window(tk, w, allow_extend=False)
+        results += [a, b]
+        if not a["ledger"] and not b["ledger"]:
             continue
-        print("--- %s   actions=%d   resolution=%s" % (tk, r["n_actions"],
-                                                       r["resolution_side"]))
-        print("  %-9s %6s %9s %-9s %-5s %-6s %-4s %6s %6s %9s %8s %9s %9s %9s"
-              % ("t(rel)", "tte", "bid/ask", "action", "side", "price", "qty",
-                 "UPq", "DNq", "totcost", "resid", "ifUP", "ifDOWN", "worst"))
-        t0 = r["ledger"][0]["t"] if r["ledger"] else 0
-        for x in r["ledger"]:
-            print("  %-9.1f %6.1f %9s %-9s %-5s %-6s %-4s %6s %6s %9s %8s "
-                  "%9s %9s %9s"
-                  % (x["t"] - t0, x["tte"],
-                     "%s/%s" % (x["ws_bid"], x["ws_ask"]),
-                     x["action"], x["side"] or "", x["price"] or "",
-                     x["qty"] or "", x["UP_qty"], x["DOWN_qty"],
-                     x["total_cost"], x["residual"], x["pnl_if_UP"],
-                     x["pnl_if_DOWN"], x["worst_case"]))
-            if x["action"] == HOLD:
-                print("      reason: %s" % x["reason"])
-        if r.get("settlement"):
-            st = r["settlement"]
-            print("  SETTLEMENT (%s): matched %s | residual %s | fees %s | "
-                  "maker-cf rebate %s | NET %s"
-                  % (st["outcome"], st["matched_pair_pnl"],
-                     st["directional_residual_pnl"], st["fees"],
-                     st["maker_counterfactual_rebates_NOT_REALIZED"],
-                     st["net_settlement_pnl"]))
-        if r["extends"]:
-            print("  EXTENDS and whether they helped:")
-            for e in r["extends"]:
-                print("    tte %.1f %s @ %s | d_worst %s | d_UP %s d_DOWN %s"
-                      % (e["tte"], e["side"], e["price"], e["d_worst_case"],
-                         e["d_up"], e["d_down"]))
+        _print_ledger(a)
         print()
+        _print_ledger(b)
+        print()
+        def g(r, k):
+            return (r.get("settlement") or {}).get(k, "-")
+        rows.append((tk, a["resolution_side"], len(a["extends"]),
+                     g(a, "matched_pair_pnl"), g(a, "directional_residual_pnl"),
+                     g(a, "fees"), a["worst_exposure"],
+                     g(a, "net_settlement_pnl"),
+                     g(b, "matched_pair_pnl"), g(b, "directional_residual_pnl"),
+                     g(b, "fees"), b["worst_exposure"],
+                     g(b, "net_settlement_pnl")))
+
+    print("=" * 104)
+    print("EXTEND arm vs NO-EXTEND arm, same tape, same complement discipline")
+    print("=" * 104)
+    print("%-20s %-4s %3s | %8s %8s %6s %8s %8s | %8s %8s %6s %8s %8s"
+          % ("window", "res", "ext", "matched", "resid", "fees", "worst",
+             "NET", "matched", "resid", "fees", "worst", "NET"))
+    tot_a = tot_b = D("0")
+    for r in rows:
+        print("%-20s %-4s %3d | %8s %8s %6s %8s %8s | %8s %8s %6s %8s %8s" % r)
+        if r[7] != "-":
+            tot_a += D(r[7])
+        if r[12] != "-":
+            tot_b += D(r[12])
+    print("%-20s %-4s %3s | %8s %8s %6s %8s %8s | %8s %8s %6s %8s %8s"
+          % ("TOTAL", "", "", "", "", "", "", tot_a, "", "", "", "", tot_b))
+    print()
+    print("SHADOW. n=%d windows. Nothing above is realized and no order was sent." % len(rows))
     Path("analysis/gemini/info_edge/btc15m_shadow_result.json").write_text(
         json.dumps(results, indent=2, default=str))
     print("wrote analysis/gemini/info_edge/btc15m_shadow_result.json")
