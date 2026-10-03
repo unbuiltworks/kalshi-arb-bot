@@ -176,6 +176,121 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # ==================================================================
+      # EXECUTION-SEMANTICS PROBE. DELIBERATELY EARLY IN THE JOB.
+      #
+      # It was appended at the END first, and run 37121919260 showed why
+      # that cannot work: this job spends ~17 minutes on UNCONDITIONAL
+      # read-only steps before reaching anything at the end, and a BTC5m
+      # window lives 5 minutes, so the approved window had already expired.
+      # Ordering the probe behind unrelated work makes it impossible, not
+      # merely slow. It therefore runs here, right after the interpreter is
+      # ready and BEFORE any credential is in scope.
+      #
+      # The probe gets its OWN tree: this job's checkout is pinned to the
+      # economic-viability branch by design, and repointing it would drag an
+      # unrelated tree into every other step.
+      #
+      # `ref` MUST be a FULL 40-character SHA. actions/checkout resolves
+      # anything shorter as a BRANCH OR TAG: the short SHA 49627ca5 made it
+      # fetch refs/heads/49627ca5*, which matched nothing, the checkout
+      # failed, the probe step was SKIPPED and nothing was submitted.
+      # ==================================================================
+      - name: Check out the semantics probe at its reviewed SHA (own tree)
+        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: 49627ca56197b9443ffa5650d4e86e775ac907da
+          path: semantics-probe
+
+      - name: Semantics probe provenance and gates (no credential in scope)
+        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
+        working-directory: semantics-probe
+        run: |
+          echo "probe tree HEAD: $(git rev-parse HEAD)"
+          python - <<'PY'
+          from src.gemini_execution import arming, payload
+          print("expected authorization:", arming.EXPECTED_AUTH_ID)
+          print("taker authorization   :", payload.SEMANTICS_PROBE_AUTH_ID)
+          assert arming.EXPECTED_AUTH_ID == payload.SEMANTICS_PROBE_AUTH_ID, \
+              "taker behaviour is only reachable when these agree"
+          PY
+          # The gates are a precondition, not documentation.
+          python -m pytest tests/test_gemini_semantics_probe_gates.py -q
+
+      # PUBLIC reads only, and still no credential in scope: /v1/book and the
+      # contract's own prices are public on this venue, so the whole A/B
+      # classification and the price and cash arithmetic are stated before
+      # any secret exists in the job.
+      - name: Semantics probe PREFLIGHT (public reads only; no arm, no secret)
+        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
+        working-directory: semantics-probe
+        run: |
+          set -o pipefail
+          test -n "${{ github.event.inputs.semantics_symbol }}" \
+            || { echo "::error::semantics_symbol is required"; exit 1; }
+          python -m src.gemini_execution.semantics_probe \
+            --symbol      "${{ github.event.inputs.semantics_symbol }}" \
+            --favored     "${{ github.event.inputs.semantics_favored }}" \
+            --limit-price "${{ github.event.inputs.semantics_limit_price }}" \
+            --quantity    "${{ github.event.inputs.semantics_quantity }}" \
+            --preflight-only
+
+      # ONE ORDER. The only path in the repository that can reach
+      # makerOrCancel: False, and not by setting a flag: the transport also
+      # requires the live authorization to equal
+      # payload.SEMANTICS_PROBE_AUTH_ID. Every strategy stays maker-only.
+      #
+      # AUTHORIZED 2026-10-03 by the owner, narrowly: ONE case-A probe. NOT
+      # five, and case B is NOT authorized -- a market classifying as B stops
+      # the run rather than becoming a fallback. The limit is tied to the ask
+      # recorded and approved at preflight (that ask, or at most one tick
+      # above), the live terms read must succeed, and the book is re-read
+      # immediately before submission to confirm the approved liquidity is
+      # still executable at or below the frozen limit with enough displayed
+      # size for the whole order. If it moved up or vanished the probe STOPS:
+      # no reprice, no retry, no other market.
+      #
+      # The latch is one-shot and spends itself before the venue sees
+      # anything, so a retried run places exactly one order, never a second.
+      - name: Semantics probe ARMED -- ONE order (owner-authorized)
+        if: ${{ github.event.inputs.semantics_probe_armed == 'true' }}
+        timeout-minutes: 20
+        working-directory: semantics-probe
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-03T23:00:00Z"
+          GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
+        run: |
+          set -o pipefail
+          test -n "${{ github.event.inputs.semantics_approved_ask }}" \
+            || { echo "::error::case A requires semantics_approved_ask -- the ask recorded at preflight. Without it the limit is untethered."; exit 1; }
+          test -n "${{ github.event.inputs.semantics_limit_price }}" \
+            || { echo "::error::an approved limit price is required"; exit 1; }
+          mkdir -p analysis/gemini/info_edge
+          python -m src.gemini_execution.semantics_probe \
+            --symbol       "${{ github.event.inputs.semantics_symbol }}" \
+            --favored      "${{ github.event.inputs.semantics_favored }}" \
+            --approved-ask "${{ github.event.inputs.semantics_approved_ask }}" \
+            --limit-price  "${{ github.event.inputs.semantics_limit_price }}" \
+            --quantity     "${{ github.event.inputs.semantics_quantity }}" \
+            --auth-id      "${GEMINI_CANARY_AUTH}" \
+            --out analysis/gemini/info_edge/semantics_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/semantics.txt
+
+      - name: Upload the semantics probe record
+        if: ${{ always() && (github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantics-probe-record
+          path: |
+            semantics-probe/analysis/gemini/info_edge/semantics_*.json
+            semantics-probe/analysis/gemini/canary_latch/latch_OWNER-2026-10-03-*.json
+          if-no-files-found: warn
+
       # The guards run BEFORE any credential is in scope: if the read-only
       # contract is broken, the job dies without ever holding a secret.
       - name: Structural guard -- no order transport, no credential read
@@ -1017,116 +1132,3 @@ jobs:
             echo "::error::refusing to commit files outside analysis/gemini/"
             git diff --cached --name-only; exit 1
           fi
-
-      # ==================================================================
-      # The semantics probe lives on its own branch, and this job's checkout
-      # is PINNED to the economic-viability branch by design ("evidence goes
-      # back where it came from"). Repointing that would drag an unrelated
-      # tree into every other step, so the probe gets its OWN tree in a
-      # subdirectory instead, pinned to an exact SHA rather than a moving
-      # branch: a one-shot authorization should spend itself on reviewed code,
-      # not on whatever the branch happens to hold at dispatch.
-      # ==================================================================
-      - name: Check out the semantics probe at its reviewed SHA (separate tree)
-        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
-        uses: actions/checkout@v4
-        with:
-          ref: 49627ca5
-          path: semantics-probe
-
-      - name: Probe tree provenance
-        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
-        working-directory: semantics-probe
-        run: |
-          echo "probe tree HEAD: $(git rev-parse HEAD)"
-          pip install -r requirements.txt
-
-      # ==================================================================
-      # EXECUTION-SEMANTICS PROBE -- PUBLIC PREFLIGHT.
-      #
-      # NO CREDENTIAL IS IN SCOPE in this step, deliberately: /v1/book and
-      # the contract's own prices are PUBLIC on this venue, so the entire
-      # A/B classification, the price/quantity arithmetic and the cash
-      # figure can be stated before any secret exists in the job.
-      # ==================================================================
-      - name: Semantics probe PREFLIGHT (public reads only; no arm, no secret)
-        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' }}
-        timeout-minutes: 10
-        working-directory: semantics-probe
-        run: |
-          set -o pipefail
-          test -n "${{ github.event.inputs.semantics_symbol }}" \
-            || { echo "::error::semantics_symbol is required"; exit 1; }
-          mkdir -p analysis/gemini/info_edge
-          python -m src.gemini_execution.semantics_probe \
-            --symbol      "${{ github.event.inputs.semantics_symbol }}" \
-            --favored     "${{ github.event.inputs.semantics_favored }}" \
-            --limit-price "${{ github.event.inputs.semantics_limit_price }}" \
-            --quantity    "${{ github.event.inputs.semantics_quantity }}" \
-            --preflight-only \
-            --out analysis/gemini/info_edge/semantics_preflight_$(date -u +%Y%m%dT%H%M%SZ).json
-
-      # ==================================================================
-      # EXECUTION-SEMANTICS PROBE -- ARMED. ONE ORDER.
-      #
-      # This is the ONLY step in the repository that can reach
-      # `makerOrCancel: False`, and it cannot do so by setting a flag: the
-      # transport additionally requires the live authorization to equal
-      # payload.SEMANTICS_PROBE_AUTH_ID. Every strategy stays maker-only.
-      #
-      # The authorization below is ONE-SHOT and git-bound: the latch is
-      # consumed and persisted BEFORE the venue sees anything, so a retried
-      # workflow places exactly one order rather than a second. Any semantic
-      # or reconciliation anomaly writes a HALT file that blocks every later
-      # submission until a human clears it.
-      #
-      # BOUNDS: one market, one order, $5 maximum cash, no EXTEND, no
-      # averaging, no chasing, no FLIP, no complement, no automatic price
-      # selection. Proved in tests/test_gemini_semantics_probe_gates.py,
-      # which this step runs FIRST and fails closed on.
-      # ==================================================================
-      - name: Semantics probe ARMED (one order; owner-authorized)
-        if: ${{ github.event.inputs.semantics_probe_armed == 'true' }}
-        timeout-minutes: 20
-        working-directory: semantics-probe
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
-          GEMINI_CANARY_LIVE: "YES"
-          # AUTHORIZED 2026-10-03 by the owner, explicitly and narrowly:
-          # ONE case-A probe. NOT five probes, and case B is NOT authorized --
-          # a market that classifies as B stops the run rather than becoming a
-          # fallback. The limit must be tied to the ask recorded and approved
-          # at preflight (that ask, or at most one tick above), the live terms
-          # read must succeed, and the book is re-read immediately before
-          # submission to confirm the approved liquidity is still executable
-          # at or below the frozen limit with enough displayed size for q=1.
-          # If it moved up or vanished the probe STOPS: no reprice, no retry,
-          # no other market.
-          #
-          # The latch is one-shot. Once this id is spent it never arms again,
-          # so a second probe needs a fresh grant.
-          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-03T23:00:00Z"
-        run: |
-          set -o pipefail
-          # The gates are a precondition, not documentation.
-          python -m pytest tests/test_gemini_semantics_probe_gates.py -q
-          test -n "${{ github.event.inputs.semantics_symbol }}" \
-            || { echo "::error::semantics_symbol is required"; exit 1; }
-          test -n "${{ github.event.inputs.semantics_limit_price }}" \
-            || { echo "::error::an approved limit price is required"; exit 1; }
-          test -n "${{ github.event.inputs.semantics_approved_ask }}" \
-            || { echo "::error::case A requires semantics_approved_ask -- the
-                 ask recorded at preflight. Without it the limit is
-                 untethered."; exit 1; }
-          mkdir -p analysis/gemini/info_edge
-          python -m src.gemini_execution.semantics_probe \
-            --symbol       "${{ github.event.inputs.semantics_symbol }}" \
-            --favored      "${{ github.event.inputs.semantics_favored }}" \
-            --limit-price  "${{ github.event.inputs.semantics_limit_price }}" \
-            --approved-ask "${{ github.event.inputs.semantics_approved_ask }}" \
-            --quantity     "${{ github.event.inputs.semantics_quantity }}" \
-            --auth-id      "${GEMINI_CANARY_AUTH}" \
-            --out analysis/gemini/info_edge/semantics_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
-            2>&1 | tee /tmp/semantics.txt
