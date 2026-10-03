@@ -100,10 +100,6 @@ on:
         description: "CI15M-4: bounded BTC15m continuous-inventory probe"
         required: false
         default: "false"
-      ci15m4_fill_read:
-        description: "P1: READ-ONLY authenticated-fill read for CI15M-4 order 145828836725658335 (submits nothing)"
-        required: false
-        default: "false"
       ci15m_cohort:
         description: "CI15M cohort id (durable, one per grant)"
         required: false
@@ -335,7 +331,13 @@ jobs:
       # executor, wrong for a read of a historical order in a cohort that is
       # already halted and must stay exactly as it is.
       - name: CI15M-4 authenticated-fill read (read-only; order 145828836725658335)
-        if: ${{ github.event.inputs.ci15m4_fill_read == 'true' }}
+        # RIDES THE EXISTING read-only forensics switch. workflow_dispatch
+        # admits at most 25 inputs and the file is AT that ceiling, so a
+        # 26th made the whole workflow unparseable -- "you may only define
+        # up to 25 `inputs`". Both steps are read-only reads of the same
+        # order record, so sharing one switch costs nothing and adds no
+        # input.
+        if: ${{ github.event.inputs.fill_forensics == 'true' }}
         timeout-minutes: 10
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
