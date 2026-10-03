@@ -1,0 +1,3993 @@
+{
+  "policies": {
+    "A": {
+      "opps": 65,
+      "fills": 65,
+      "fill_rate": 1.0,
+      "avg_px": 0.8104615384615385,
+      "corr_given_fill": 0.8615384615384616,
+      "gross": 3.32,
+      "fees": 0.87,
+      "rebate": 0.0,
+      "net": 2.45,
+      "ev_per_opp": 0.03769230769230769,
+      "ev_per_fill": 0.03769230769230769,
+      "windows_filled": 42,
+      "ev_per_window": 0.058333333333333334,
+      "t_fill_p50": 0.0
+    },
+    "B": {
+      "opps": 65,
+      "fills": 6,
+      "fill_rate": 0.09230769230769231,
+      "avg_px": 0.41,
+      "corr_given_fill": 0.16666666666666666,
+      "gross": -1.46,
+      "fees": 0.06,
+      "rebate": 0.0,
+      "net": -1.52,
+      "ev_per_opp": -0.023384615384615386,
+      "ev_per_fill": -0.25333333333333335,
+      "windows_filled": 6,
+      "ev_per_window": -0.03619047619047619,
+      "t_fill_p50": 140.0
+    },
+    "C": {
+      "opps": 65,
+      "fills": 6,
+      "fill_rate": 0.09230769230769231,
+      "avg_px": 0.42,
+      "corr_given_fill": 0.16666666666666666,
+      "gross": -1.52,
+      "fees": 0.06,
+      "rebate": 0.0,
+      "net": -1.58,
+      "ev_per_opp": -0.024307692307692308,
+      "ev_per_fill": -0.2633333333333333,
+      "windows_filled": 6,
+      "ev_per_window": -0.03761904761904762,
+      "t_fill_p50": 140.0
+    },
+    "D5": {
+      "opps": 65,
+      "fills": 38,
+      "fill_rate": 0.5846153846153846,
+      "avg_px": 0.8471052631578947,
+      "corr_given_fill": 0.8157894736842105,
+      "gross": -1.19,
+      "fees": 0.49,
+      "rebate": 0.0,
+      "net": -1.68,
+      "ev_per_opp": -0.025846153846153845,
+      "ev_per_fill": -0.04421052631578947,
+      "windows_filled": 28,
+      "ev_per_window": -0.04,
+      "t_fill_p50": 5.01
+    },
+    "D15": {
+      "opps": 65,
+      "fills": 33,
+      "fill_rate": 0.5076923076923077,
+      "avg_px": 0.8151515151515152,
+      "corr_given_fill": 0.7878787878787878,
+      "gross": -0.9,
+      "fees": 0.47,
+      "rebate": 0.0,
+      "net": -1.37,
+      "ev_per_opp": -0.021076923076923076,
+      "ev_per_fill": -0.04151515151515151,
+      "windows_filled": 24,
+      "ev_per_window": -0.03261904761904762,
+      "t_fill_p50": 15.01
+    }
+  },
+  "n_opportunities": 65,
+  "n_windows": 42,
+  "rows": [
+    {
+      "ticker": "BTC05M2610030245",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.67",
+      "maker_bid": "0.33",
+      "t0": 1790995260.326616,
+      "tte_at_q": 239.7,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.67,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.67",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 479.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.33",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.34",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.67",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 6.01
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.67",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.01
+      }
+    },
+    {
+      "ticker": "BTC05M2610030315",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.89",
+      "maker_bid": "0.6",
+      "t0": 1790997060.2662835,
+      "tte_at_q": 239.7,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.89,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.6",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.61",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030610",
+      "side": "DOWN",
+      "correct": false,
+      "taker_price": "0.89",
+      "maker_bid": "0.62",
+      "t0": 1791007560.759468,
+      "tte_at_q": 239.2,
+      "size_at_touch": 1363.0,
+      "depth": 1363.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.89,
+        "size": 1363.0,
+        "depth": 1363.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 241.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.62",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.63",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.94",
+        "ceiling": "0.89"
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.82",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030710",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.85",
+      "maker_bid": "0.52",
+      "t0": 1791011160.8011312,
+      "tte_at_q": 239.2,
+      "size_at_touch": 999.0,
+      "depth": 999.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.85,
+        "size": 999.0,
+        "depth": 999.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.85",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 288.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.52",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.53",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.85",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.85",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.03
+      }
+    },
+    {
+      "ticker": "BTC05M2610030850",
+      "side": "UP",
+      "correct": false,
+      "taker_price": "0.91",
+      "maker_bid": "0.61",
+      "t0": 1791017160.0808063,
+      "tte_at_q": 239.9,
+      "size_at_touch": 1666.0,
+      "depth": 1666.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.91,
+        "size": 1666.0,
+        "depth": 1666.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.91",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.61",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.62",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.91",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.91",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 16.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030920",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.87",
+      "maker_bid": "0.54",
+      "t0": 1791018960.178771,
+      "tte_at_q": 239.8,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.87,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.87",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.54",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.55",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.88",
+        "ceiling": "0.87"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.88",
+        "ceiling": "0.87"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031000",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.81",
+      "maker_bid": "0.44",
+      "t0": 1791021360.9291325,
+      "tte_at_q": 239.1,
+      "size_at_touch": 789.0,
+      "depth": 789.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.81,
+        "size": 789.0,
+        "depth": 789.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 340.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.44",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.45",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.99
+      }
+    },
+    {
+      "ticker": "BTC05M2610031045",
+      "side": "UP",
+      "correct": false,
+      "taker_price": "0.5",
+      "maker_bid": "0.18",
+      "t0": 1791024060.0448012,
+      "tte_at_q": 240.0,
+      "size_at_touch": 300.0,
+      "depth": 300.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.5,
+        "size": 300.0,
+        "depth": 300.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.5",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 71.0,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 202.83,
+        "fill_price": 0.18,
+        "filled": true,
+        "px": "0.18",
+        "fee": "0.01",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 71.0,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 202.83,
+        "fill_price": 0.19,
+        "filled": true,
+        "px": "0.19",
+        "fee": "0.01",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.5",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.5",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 16.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610031115",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.86",
+      "maker_bid": "0.55",
+      "t0": 1791025860.865688,
+      "tte_at_q": 239.1,
+      "size_at_touch": 1096.0,
+      "depth": 1096.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.86,
+        "size": 1096.0,
+        "depth": 1096.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.86",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.55",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.56",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.86",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.86",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610031140",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.84",
+      "maker_bid": "0.53",
+      "t0": 1791027360.6113636,
+      "tte_at_q": 239.4,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.84,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.84",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.53",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.54",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.85",
+        "ceiling": "0.84"
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.84",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.02
+      }
+    },
+    {
+      "ticker": "BTC05M2610030155",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.89",
+      "maker_bid": "0.61",
+      "t0": 1790992320.692722,
+      "tte_at_q": 179.3,
+      "size_at_touch": 1363.0,
+      "depth": 1363.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.89,
+        "size": 1363.0,
+        "depth": 1363.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 245.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.61",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.62",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.95",
+        "ceiling": "0.89"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030215",
+      "side": "DOWN",
+      "correct": false,
+      "taker_price": "0.62",
+      "maker_bid": "0.29",
+      "t0": 1790993520.5724704,
+      "tte_at_q": 179.4,
+      "size_at_touch": 394.0,
+      "depth": 394.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.62,
+        "size": 394.0,
+        "depth": 394.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.62",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 517.0,
+        "through_qty": 25.0,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 23.47,
+        "fill_price": 0.29,
+        "filled": true,
+        "px": "0.29",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 25.0,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 23.47,
+        "fill_price": 0.3,
+        "filled": true,
+        "px": "0.30",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.61",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.6",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030245",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.81",
+      "maker_bid": "0.46",
+      "t0": 1790995320.3612177,
+      "tte_at_q": 179.6,
+      "size_at_touch": 814.0,
+      "depth": 814.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.81,
+        "size": 814.0,
+        "depth": 814.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 351.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.46",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.47",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 16.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030250",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.99",
+      "maker_bid": "0.71",
+      "t0": 1790995620.4110181,
+      "tte_at_q": 179.6,
+      "size_at_touch": 15000.0,
+      "depth": 15000.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.99,
+        "size": 15000.0,
+        "depth": 15000.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 211.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.71",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.72",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030305",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.79",
+      "maker_bid": "0.48",
+      "t0": 1790996520.8910716,
+      "tte_at_q": 179.1,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.79,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.79",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.48",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.49",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.8",
+        "ceiling": "0.79"
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.79",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030505",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.94",
+      "maker_bid": "0.64",
+      "t0": 1791003720.5332298,
+      "tte_at_q": 179.5,
+      "size_at_touch": 2525.0,
+      "depth": 2525.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.94,
+        "size": 2525.0,
+        "depth": 2525.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 259.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.64",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.65",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.01
+      }
+    },
+    {
+      "ticker": "BTC05M2610030520",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.81",
+      "maker_bid": "0.48",
+      "t0": 1791004620.9657254,
+      "tte_at_q": 179.0,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.81,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.48",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.49",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.82",
+        "ceiling": "0.81"
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.01
+      }
+    },
+    {
+      "ticker": "BTC05M2610030535",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.99",
+      "maker_bid": "0.69",
+      "t0": 1791005520.7228992,
+      "tte_at_q": 179.3,
+      "size_at_touch": 14999.0,
+      "depth": 14999.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.99,
+        "size": 14999.0,
+        "depth": 14999.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 217.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.69",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.70",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.02
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.03
+      }
+    },
+    {
+      "ticker": "BTC05M2610030540",
+      "side": "DOWN",
+      "correct": false,
+      "taker_price": "0.79",
+      "maker_bid": "0.43",
+      "t0": 1791005820.5394378,
+      "tte_at_q": 179.5,
+      "size_at_touch": 714.0,
+      "depth": 714.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.79,
+        "size": 714.0,
+        "depth": 714.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.79",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 348.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.43",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.44",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.79",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.79",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 16.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030545",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.8",
+      "maker_bid": "0.47",
+      "t0": 1791006120.5895984,
+      "tte_at_q": 179.4,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.8,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.8",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.47",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.48",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.81",
+        "ceiling": "0.8"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.81",
+        "ceiling": "0.8"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030710",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.91",
+      "maker_bid": "0.59",
+      "t0": 1791011220.8588815,
+      "tte_at_q": 179.1,
+      "size_at_touch": 1664.81,
+      "depth": 1664.81,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.91,
+        "size": 1664.81,
+        "depth": 1664.81
+      },
+      "A": {
+        "filled": true,
+        "px": "0.91",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 254.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.59",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.60",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.91",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.91",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.01
+      }
+    },
+    {
+      "ticker": "BTC05M2610030735",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.99",
+      "maker_bid": "0.66",
+      "t0": 1791012720.3656375,
+      "tte_at_q": 179.6,
+      "size_at_touch": 14999.0,
+      "depth": 14999.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.99,
+        "size": 14999.0,
+        "depth": 14999.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 252.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.66",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.67",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030810",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.99",
+      "maker_bid": "0.66",
+      "t0": 1791014820.1771777,
+      "tte_at_q": 179.8,
+      "size_at_touch": 14999.0,
+      "depth": 14999.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.99,
+        "size": 14999.0,
+        "depth": 14999.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.66",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.67",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030850",
+      "side": "UP",
+      "correct": false,
+      "taker_price": "0.97",
+      "maker_bid": "0.65",
+      "t0": 1791017220.113166,
+      "tte_at_q": 179.9,
+      "size_at_touch": 4999.0,
+      "depth": 4999.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.97,
+        "size": 4999.0,
+        "depth": 4999.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 230.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.65",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.66",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030915",
+      "side": "UP",
+      "correct": false,
+      "taker_price": "0.97",
+      "maker_bid": "0.63",
+      "t0": 1791018720.6490166,
+      "tte_at_q": 179.4,
+      "size_at_touch": 4999.0,
+      "depth": 4999.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.97,
+        "size": 4999.0,
+        "depth": 4999.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 1.0,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 140.0,
+        "fill_price": 0.63,
+        "filled": true,
+        "px": "0.63",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 1.0,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 140.0,
+        "fill_price": 0.64,
+        "filled": true,
+        "px": "0.64",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.03
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030920",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.97",
+      "maker_bid": "0.69",
+      "t0": 1791019020.290184,
+      "tte_at_q": 179.7,
+      "size_at_touch": 5000.0,
+      "depth": 5000.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.97,
+        "size": 5000.0,
+        "depth": 5000.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 217.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.69",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.70",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030930",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.59",
+      "maker_bid": "0.23",
+      "t0": 1791019620.060979,
+      "tte_at_q": 179.9,
+      "size_at_touch": 365.0,
+      "depth": 365.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.59,
+        "size": 365.0,
+        "depth": 365.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.59",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 652.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.23",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.24",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.59",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 5.98
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.59",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.98
+      }
+    },
+    {
+      "ticker": "BTC05M2610030935",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.81",
+      "maker_bid": "0.5",
+      "t0": 1791019920.176015,
+      "tte_at_q": 179.8,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.81,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.81",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.5",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.51",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.82",
+        "ceiling": "0.81"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.82",
+        "ceiling": "0.81"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030940",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.5",
+      "maker_bid": "0.18",
+      "t0": 1791020220.313326,
+      "tte_at_q": 179.7,
+      "size_at_touch": 300.0,
+      "depth": 300.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.5,
+        "size": 300.0,
+        "depth": 300.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.5",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 833.0,
+        "through_qty": 26.35,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 143.41,
+        "fill_price": 0.18,
+        "filled": true,
+        "px": "0.18",
+        "fee": "0.01",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 26.35,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 143.41,
+        "fill_price": 0.19,
+        "filled": true,
+        "px": "0.19",
+        "fee": "0.01",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.49",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.49",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.01
+      }
+    },
+    {
+      "ticker": "BTC05M2610031025",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.73",
+      "maker_bid": "0.39",
+      "t0": 1791022920.2500203,
+      "tte_at_q": 179.7,
+      "size_at_touch": 555.0,
+      "depth": 555.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.73,
+        "size": 555.0,
+        "depth": 555.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.73",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 384.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.39",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.40",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.73",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.72",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 16.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610031115",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.99",
+      "maker_bid": "0.69",
+      "t0": 1791025920.9297438,
+      "tte_at_q": 179.1,
+      "size_at_touch": 15000.0,
+      "depth": 15000.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.99,
+        "size": 15000.0,
+        "depth": 15000.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 217.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.69",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.70",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.01
+      }
+    },
+    {
+      "ticker": "BTC05M2610031140",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.9",
+      "maker_bid": "0.59",
+      "t0": 1791027420.6499157,
+      "tte_at_q": 179.4,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.9,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.9",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 254.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.59",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.60",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.9",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.97",
+        "ceiling": "0.9"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031150",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.94",
+      "maker_bid": "0.62",
+      "t0": 1791028020.0310214,
+      "tte_at_q": 180.0,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.94,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 241.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.62",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.63",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030200",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.83",
+      "maker_bid": "0.51",
+      "t0": 1790992680.5140111,
+      "tte_at_q": 119.5,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.83,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.83",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 294.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.51",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.52",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.83",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.9",
+        "ceiling": "0.83"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030215",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.92",
+      "maker_bid": "0.59",
+      "t0": 1790993580.5735662,
+      "tte_at_q": 119.4,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.92,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.92",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.59",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.60",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.92",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.91",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 16.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030520",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.94",
+      "maker_bid": "0.63",
+      "t0": 1791004680.9960103,
+      "tte_at_q": 119.0,
+      "size_at_touch": 2499.0,
+      "depth": 2499.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.94,
+        "size": 2499.0,
+        "depth": 2499.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 263.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.63",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.64",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030530",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.99",
+      "maker_bid": "0.64",
+      "t0": 1791005280.350024,
+      "tte_at_q": 119.6,
+      "size_at_touch": 14999.0,
+      "depth": 14999.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.99,
+        "size": 14999.0,
+        "depth": 14999.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 259.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.64",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.65",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.02
+      }
+    },
+    {
+      "ticker": "BTC05M2610030545",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.86",
+      "maker_bid": "0.53",
+      "t0": 1791006180.5902503,
+      "tte_at_q": 119.4,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.86,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.86",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.53",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.54",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.92",
+        "ceiling": "0.86"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.93",
+        "ceiling": "0.86"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030555",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.97",
+      "maker_bid": "0.68",
+      "t0": 1791006780.775786,
+      "tte_at_q": 119.2,
+      "size_at_touch": 5000.0,
+      "depth": 5000.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.97,
+        "size": 5000.0,
+        "depth": 5000.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 220.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.68",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.69",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.99
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030625",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.92",
+      "maker_bid": "0.57",
+      "t0": 1791008580.984943,
+      "tte_at_q": 119.0,
+      "size_at_touch": 1875.0,
+      "depth": 1875.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.92,
+        "size": 1875.0,
+        "depth": 1875.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.92",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 263.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.57",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.58",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.92",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.92",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 16.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030645",
+      "side": "DOWN",
+      "correct": false,
+      "taker_price": "0.89",
+      "maker_bid": "0.53",
+      "t0": 1791009780.3031573,
+      "tte_at_q": 119.7,
+      "size_at_touch": 1363.0,
+      "depth": 1363.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.89,
+        "size": 1363.0,
+        "depth": 1363.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 283.0,
+        "through_qty": 214.83,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 67.66,
+        "fill_price": 0.53,
+        "filled": true,
+        "px": "0.53",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 214.83,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 67.66,
+        "fill_price": 0.54,
+        "filled": true,
+        "px": "0.54",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 6.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.01
+      }
+    },
+    {
+      "ticker": "BTC05M2610030935",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.89",
+      "maker_bid": "0.54",
+      "t0": 1791019980.205313,
+      "tte_at_q": 119.8,
+      "size_at_touch": 1363.0,
+      "depth": 1363.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.89,
+        "size": 1363.0,
+        "depth": 1363.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.89",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 277.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.54",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.55",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.99",
+        "ceiling": "0.89"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.99",
+        "ceiling": "0.89"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030940",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.45",
+      "maker_bid": "0.12",
+      "t0": 1791020280.3818688,
+      "tte_at_q": 119.6,
+      "size_at_touch": 297.0,
+      "depth": 297.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.45,
+        "size": 297.0,
+        "depth": 297.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.45",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 1250.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.12",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.13",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.45",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.44",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.05
+      }
+    },
+    {
+      "ticker": "BTC05M2610031020",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.8",
+      "maker_bid": "0.41",
+      "t0": 1791022680.0761511,
+      "tte_at_q": 119.9,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.8,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.8",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 350.19,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.41",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.42",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.86",
+        "ceiling": "0.8"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.87",
+        "ceiling": "0.8"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031025",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.78",
+      "maker_bid": "0.33",
+      "t0": 1791022980.2709963,
+      "tte_at_q": 119.7,
+      "size_at_touch": 681.0,
+      "depth": 681.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.78,
+        "size": 681.0,
+        "depth": 681.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.78",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 454.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.33",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.34",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031055",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.88",
+      "maker_bid": "0.49",
+      "t0": 1791024780.246081,
+      "tte_at_q": 119.8,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.88,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.88",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 306.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.49",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.50",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.89",
+        "ceiling": "0.88"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.89",
+        "ceiling": "0.88"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030200",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.98",
+      "maker_bid": "0.6",
+      "t0": 1790992710.5471165,
+      "tte_at_q": 89.5,
+      "size_at_touch": 7499.0,
+      "depth": 7499.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.98,
+        "size": 7499.0,
+        "depth": 7499.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 250.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.6",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.61",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.01
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030215",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.98",
+      "maker_bid": "0.65",
+      "t0": 1790993610.5719795,
+      "tte_at_q": 89.4,
+      "size_at_touch": 7499.0,
+      "depth": 7499.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.98,
+        "size": 7499.0,
+        "depth": 7499.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 25.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.65",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.66",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610030625",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.98",
+      "maker_bid": "0.64",
+      "t0": 1791008610.9910407,
+      "tte_at_q": 89.0,
+      "size_at_touch": 7500.0,
+      "depth": 7500.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.98,
+        "size": 7500.0,
+        "depth": 7500.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 234.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.64",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.65",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030935",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.99",
+      "maker_bid": "0.65",
+      "t0": 1791020010.2178938,
+      "tte_at_q": 89.8,
+      "size_at_touch": 15000.0,
+      "depth": 15000.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.99,
+        "size": 15000.0,
+        "depth": 15000.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.99",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 230.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.65",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.66",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030940",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.42",
+      "maker_bid": "0.06",
+      "t0": 1791020310.393971,
+      "tte_at_q": 89.6,
+      "size_at_touch": 258.0,
+      "depth": 258.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.42,
+        "size": 258.0,
+        "depth": 258.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.42",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 2499.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.06",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.07",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.39",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 5.0
+      },
+      "D15": {
+        "filled": true,
+        "tier": "TAKER_FALLBACK",
+        "leg": "TAKER",
+        "px": "0.37",
+        "fee": "0.02",
+        "rebate": "0",
+        "fill_t_s": 15.0
+      }
+    },
+    {
+      "ticker": "BTC05M2610031005",
+      "side": "DOWN",
+      "correct": false,
+      "taker_price": "0.97",
+      "maker_bid": "0.65",
+      "t0": 1791021810.0189025,
+      "tte_at_q": 90.0,
+      "size_at_touch": 5000.0,
+      "depth": 5000.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.97,
+        "size": 5000.0,
+        "depth": 5000.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.97",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 230.0,
+        "through_qty": 12.75,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 41.27,
+        "fill_price": 0.65,
+        "filled": true,
+        "px": "0.65",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 12.75,
+        "same_price_qty": 0.0,
+        "tier": "THROUGH",
+        "fill_t_s": 41.27,
+        "fill_price": 0.66,
+        "filled": true,
+        "px": "0.66",
+        "fee": "0.01",
+        "rebate": "0.00"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031020",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.87",
+      "maker_bid": "0.41",
+      "t0": 1791022710.1190765,
+      "tte_at_q": 89.9,
+      "size_at_touch": 1153.0,
+      "depth": 1153.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.87,
+        "size": 1153.0,
+        "depth": 1153.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.87",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 350.19,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.41",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.42",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.97",
+        "ceiling": "0.87"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.97",
+        "ceiling": "0.87"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031055",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.94",
+      "maker_bid": "0.55",
+      "t0": 1791024810.2894297,
+      "tte_at_q": 89.7,
+      "size_at_touch": 25.0,
+      "depth": 25.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.94,
+        "size": 25.0,
+        "depth": 25.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.94",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 272.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.55",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.56",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_ABOVE_CEILING",
+        "leg": "MAKER_THEN_NONE",
+        "fallback_price": "0.95",
+        "ceiling": "0.94"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030940",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.21",
+      "maker_bid": null,
+      "t0": 1791020340.4057176,
+      "tte_at_q": 59.6,
+      "size_at_touch": 189.0,
+      "depth": 189.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.21,
+        "size": 189.0,
+        "depth": 189.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.21",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031025",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.95",
+      "maker_bid": "0.31",
+      "t0": 1791023040.297863,
+      "tte_at_q": 59.7,
+      "size_at_touch": 3000.0,
+      "depth": 3000.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.95,
+        "size": 3000.0,
+        "depth": 3000.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.95",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 483.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.31",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.32",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030940",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.18",
+      "maker_bid": null,
+      "t0": 1791020355.4126668,
+      "tte_at_q": 44.6,
+      "size_at_touch": 182.0,
+      "depth": 182.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.18,
+        "size": 182.0,
+        "depth": 182.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.18",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031145",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.49",
+      "maker_bid": null,
+      "t0": 1791027855.9194965,
+      "tte_at_q": 44.1,
+      "size_at_touch": 294.0,
+      "depth": 294.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.49,
+        "size": 294.0,
+        "depth": 294.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.49",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030415",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.98",
+      "maker_bid": "0.27",
+      "t0": 1791000870.4057782,
+      "tte_at_q": 29.6,
+      "size_at_touch": 7500.0,
+      "depth": 7500.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.98,
+        "size": 7500.0,
+        "depth": 7500.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.98",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "q_ahead_at_placement": 555.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.27",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "C": {
+        "q_ahead_at_placement": 0.0,
+        "through_qty": 0.0,
+        "same_price_qty": 0.0,
+        "tier": "NO_FILL",
+        "why": "no print at or through our price",
+        "filled": false,
+        "px": "0.28",
+        "fee": "0",
+        "rebate": "0"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "FALLBACK_NOT_EXECUTABLE",
+        "leg": "MAKER_THEN_NONE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030500",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.43",
+      "maker_bid": null,
+      "t0": 1791003570.4442456,
+      "tte_at_q": 29.6,
+      "size_at_touch": 263.0,
+      "depth": 263.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.43,
+        "size": 263.0,
+        "depth": 263.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.43",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030605",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.92",
+      "maker_bid": null,
+      "t0": 1791007480.7127411,
+      "tte_at_q": 19.3,
+      "size_at_touch": 0.62,
+      "depth": 0.62,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.92,
+        "size": 0.62,
+        "depth": 0.62
+      },
+      "A": {
+        "filled": true,
+        "px": "0.92",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030750",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.66",
+      "maker_bid": null,
+      "t0": 1791013780.8978915,
+      "tte_at_q": 19.1,
+      "size_at_touch": 0.55,
+      "depth": 0.55,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.66,
+        "size": 0.55,
+        "depth": 0.55
+      },
+      "A": {
+        "filled": true,
+        "px": "0.66",
+        "fee": "0.02",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030900",
+      "side": "DOWN",
+      "correct": true,
+      "taker_price": "0.84",
+      "maker_bid": null,
+      "t0": 1791017980.1938205,
+      "tte_at_q": 19.8,
+      "size_at_touch": 2.29,
+      "depth": 2.29,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.84,
+        "size": 2.29,
+        "depth": 2.29
+      },
+      "A": {
+        "filled": true,
+        "px": "0.84",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610030635",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.83",
+      "maker_bid": null,
+      "t0": 1791009295.593419,
+      "tte_at_q": 4.4,
+      "size_at_touch": 9.0,
+      "depth": 9.0,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.83,
+        "size": 9.0,
+        "depth": 9.0
+      },
+      "A": {
+        "filled": true,
+        "px": "0.83",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    },
+    {
+      "ticker": "BTC05M2610031145",
+      "side": "UP",
+      "correct": true,
+      "taker_price": "0.16",
+      "maker_bid": null,
+      "t0": 1791027895.950333,
+      "tte_at_q": 4.0,
+      "size_at_touch": 73.98,
+      "depth": 73.98,
+      "first_exec": {
+        "t_s": 0.0,
+        "price": 0.16,
+        "size": 73.98,
+        "depth": 73.98
+      },
+      "A": {
+        "filled": true,
+        "px": "0.16",
+        "fee": "0.01",
+        "rebate": "0",
+        "tier": "TAKER",
+        "fill_t_s": 0.0
+      },
+      "B": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "C": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D5": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      },
+      "D15": {
+        "filled": false,
+        "tier": "NO_VALID_PRICE"
+      }
+    }
+  ]
+}
