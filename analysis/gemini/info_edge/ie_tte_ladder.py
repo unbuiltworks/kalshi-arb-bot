@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SYM = re.compile(r"^GEMI-(BTC05M\d{10})-UP$")
-TTES = (60, 45, 30, 20, 15, 10, 5, 2, 1)
+TTES = (120, 90, 60, 45, 30, 20, 15, 10, 5, 2, 1)
 
 
 def pct(v, q):
@@ -207,8 +207,10 @@ def report(rows):
     print("EXECUTABLE-BOOK LADDER AT FIXED TTE  --  DESCRIPTIVE, NO STRATEGY FITTED")
     print("=" * 86)
     print(f"settled windows with book coverage: {len(tickers)}")
-    print("NOTE: PREVIEW at small n. The full descriptive read is due at 100")
-    print("usable windows; nothing here is a result.\n")
+    print("Preregistered n=100 DESCRIPTIVE read (PREREG_POWERED_COHORT.md).")
+    print("Predictor is the PLACEHOLDER sign(coinbase - strike): mechanical, not")
+    print("fitted, not the model. No edge is computed -- P(correct|state) must be")
+    print("estimated on DEV and applied out-of-sample, so it stays None here.\n")
 
     print("--- Q: does an EXECUTABLE UP ask even EXIST at each TTE? ---")
     print(f"  {'TTE':>5s} {'n':>5s} {'has_ask':>8s} {'has_ask%':>9s} "
@@ -253,6 +255,36 @@ def report(rows):
         print(f"  {tte:5d} {len(g):5d} {fmt(pct([r['cb_dist'] for r in g], .5), 2):>11s} "
               f"{fmt(wr(g),1):>7s}% {len(pos):7d} {fmt(wr(pos),1):>7s}% "
               f"{len(neg):8d} {fmt(wr(neg),1):>7s}%")
+
+    print()
+    print("--- THE PREDICTED SIDE, SIDE-SYMMETRICALLY (prereg 9a59a418) ---")
+    print("  predicted UP   -> best UP ask    + ask size")
+    print("  predicted DOWN -> 1 - best UP bid + bid size")
+    print("  Predictor: sign(coinbase - strike). PLACEHOLDER, not the model.")
+    print(f"  {'TTE':>5s} {'n':>5s} {'avail':>6s} {'avail%':>7s} "
+          f"{'px_p50':>7s} {'px_p10':>7s} {'px_p90':>7s} {'sz_p50':>7s} "
+          f"{'correct%':>9s} {'corr|avail%':>12s}")
+    for tte in TTES:
+        g = [r for r in rows if r["tte"] == tte and r.get("observed")
+             and r.get("cb_dist") is not None]
+        if len(g) < 3:
+            continue
+        recs = []
+        for r in g:
+            up = r["cb_dist"] > 0
+            px = r["up_ask"] if up else r["down_price"]
+            sz = r["up_ask_sz"] if up else r["down_sz"]
+            correct = (r["up_won"] is True) if up else (r["up_won"] is False)
+            recs.append({"px": px, "sz": sz, "correct": correct})
+        av = [x for x in recs if x["px"] is not None]
+        wr = lambda s: (sum(1 for x in s if x["correct"]) / len(s) * 100) if s else None
+        print(f"  {tte:5d} {len(recs):5d} {len(av):6d} "
+              f"{len(av)/len(recs)*100:6.1f}% "
+              f"{fmt(pct([x['px'] for x in av], .5) if av else None, 2):>7s} "
+              f"{fmt(pct([x['px'] for x in av], .1) if av else None, 2):>7s} "
+              f"{fmt(pct([x['px'] for x in av], .9) if av else None, 2):>7s} "
+              f"{fmt(pct([x['sz'] for x in av], .5) if av else None, 1):>7s} "
+              f"{fmt(wr(recs),1):>8s}% {fmt(wr(av),1):>11s}%")
 
     print()
     print("--- THE CROSS-TAB THAT MATTERS: executable price CONDITIONAL on distance ---")
