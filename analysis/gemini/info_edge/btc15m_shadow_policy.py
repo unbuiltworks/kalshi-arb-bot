@@ -274,6 +274,30 @@ def maker_counterfactual(side: str, bid: D, qty: D) -> Dict[str, Any]:
 # the policy anywhere. It is PURE: it reads an inventory and a book and
 # returns what to do. It mutates nothing and it cannot reach a venue.
 
+#: WHICH SIDE TO OPEN ON, stated explicitly because it was never stated
+#: before and must not be decided by iteration order.
+#:
+#: "NATIVE_UP" -- open the natively quoted instrument. This venue lists ONE
+#: contract per window, the UP side; DOWN is SYNTHESIZED as 1 - UP bid. The
+#: two sides are therefore not symmetric, and opening on the one the venue
+#: actually quotes is a real asymmetry rather than an artifact. It also
+#: reproduces exactly what every shadow window to date did.
+#:
+#: "CHEAPER" -- open whichever side costs less. This is a DIFFERENT POLICY
+#: with materially different measured results, and it is not in force.
+#: Switching it is an owner decision, not a refactor.
+OPEN_SIDE_RULE = "NATIVE_UP"
+NATIVE_SIDE = "UP"
+
+
+def _rank_within(kind: str):
+    """Tie-break inside one action kind. Side-invariant by construction:
+    the key is a property of the candidate, never its position."""
+    if kind == OPEN and OPEN_SIDE_RULE == "NATIVE_UP":
+        return lambda c: (c["side"] != NATIVE_SIDE, c["price"])
+    return lambda c: (c["price"], c["side"])
+
+
 def decide_once(inv: Inventory, *, bid: Optional[D], ask: Optional[D],
                 bid_size: Any, ask_size: Any, tte: float, qty: D,
                 n_extends: int, actions: int,
@@ -303,6 +327,26 @@ def decide_once(inv: Inventory, *, bid: Optional[D], ask: Optional[D],
         out["reason"] = "RISK_BLOCK: " + "; ".join(blocked)
         return out
 
+    # CANDIDATE ENUMERATION IS SIDE-INVARIANT. Both sides are evaluated in
+    # full before anything is chosen, and the choice is made by an explicit
+    # ECONOMIC PRIORITY rather than by which side this loop happened to reach
+    # first. The earlier version iterated UP then DOWN and returned the first
+    # acceptable action, so an EXTEND beat a simultaneously valid COMPLEMENT
+    # for no reason other than iteration order. That was a defect, not a
+    # policy, and it is corrected here.
+    #
+    # THE PRIORITY, in force:
+    #
+    #   LOCKED / RISK_BLOCK   already returned above
+    #   valid COMPLEMENT      reduce residual and lock, in preference to
+    #                         carrying more directional inventory
+    #   valid EXTEND          improve the residual average
+    #   OPEN                  begin a position
+    #   HOLD                  with every refusal reason recorded
+    #
+    # A complement that satisfies the frozen MAX_PAIR_COST and reduces
+    # residual is therefore ALWAYS taken ahead of adding same-side
+    # inventory, whichever side happens to be UP and whichever DOWN.
     cands = []
     if ask <= HARD_MAX_PRICE:
         cands.append(("UP", ask, ask_size))
@@ -317,6 +361,16 @@ def decide_once(inv: Inventory, *, bid: Optional[D], ask: Optional[D],
     from src.gemini_execution.continuous_probe import Inventory as CPInv
     from src.gemini_execution.continuous_probe import classify
 
+    #: the accepted candidates for each action kind.
+    #:
+    #: WITHIN A KIND, ONLY `OPEN` HAS A REAL CHOICE. An EXTEND's side is
+    #: forced -- it must match the residual. A COMPLEMENT's side is forced --
+    #: it must reduce the residual. So the only place a two-candidate
+    #: tie-break can arise is the first leg, and it is resolved by
+    #: OPEN_SIDE_RULE below rather than by enumeration order.
+    accepted: Dict[str, List[Dict[str, Any]]] = {OPEN: [], EXTEND: [],
+                                                 COMPLETE: []}
+
     for side, px, sz in cands:
         if sz is None or D(str(sz)) < qty:
             out["refusals"].append(
@@ -328,6 +382,8 @@ def decide_once(inv: Inventory, *, bid: Optional[D], ask: Optional[D],
         eff = inv.incremental_effect(side, px, qty, mode="taker")
         mc = maker_counterfactual(side,
                                   bid if side == "UP" else D("1") - ask, qty)
+        base = {"side": side, "price": px, "qty": qty,
+                "detail": {"maker_counterfactual": mc, "incremental": eff}}
 
         if act == OPEN:
             if inv.fills:
@@ -337,15 +393,11 @@ def decide_once(inv: Inventory, *, bid: Optional[D], ask: Optional[D],
                     "OPEN %s @ %s REFUSED: tte %.1f outside the [%s, %s] "
                     "open band" % (side, px, tte, OPEN_TTE_LO, OPEN_TTE_HI))
                 continue
-            out.update({"action": OPEN, "side": side, "price": px, "qty": qty,
-                        "reason": "book coherent, %s executable for %s at "
-                                  "<= hard max %s" % (side, qty,
-                                                      HARD_MAX_PRICE),
-                        "detail": {"maker_counterfactual": mc,
-                                   "incremental": eff}})
-            return out
+            accepted[OPEN].append(dict(
+                base, reason="book coherent, %s executable for %s at <= hard "
+                             "max %s" % (side, qty, HARD_MAX_PRICE)))
 
-        if act == EXTEND:
+        elif act == EXTEND:
             if not allow_extend:
                 out["refusals"].append(
                     "EXTEND %s @ %s REFUSED: extensions disabled in this arm"
@@ -356,25 +408,33 @@ def decide_once(inv: Inventory, *, bid: Optional[D], ask: Optional[D],
                 out["refusals"].append("EXTEND %s @ %s %s"
                                        % (side, px, d["why"]))
                 continue
-            out.update({"action": EXTEND, "side": side, "price": px,
-                        "qty": qty, "reason": "EXTEND: " + d["why"],
-                        "detail": {"maker_counterfactual": mc,
-                                   "incremental": eff, "extend_rule": d,
-                                   "required_complement_before":
-                                       required_complement_price(inv, qty)}})
-            return out
+            c = dict(base, reason="EXTEND: " + d["why"])
+            c["detail"] = dict(base["detail"], extend_rule=d,
+                               required_complement_before=
+                                   required_complement_price(inv, qty))
+            accepted[EXTEND].append(c)
 
-        if act == COMPLETE:
+        elif act == COMPLETE:
             d = want_complement(eff)
             if not d["accept"]:
                 out["refusals"].append("COMPLEMENT %s @ %s %s"
                                        % (side, px, d["why"]))
                 continue
-            out.update({"action": COMPLETE, "side": side, "price": px,
-                        "qty": qty, "reason": "COMPLEMENT: " + d["why"],
-                        "detail": {"maker_counterfactual": mc,
-                                   "incremental": eff,
-                                   "complement_rule": d}})
+            c = dict(base, reason="COMPLEMENT: " + d["why"])
+            c["detail"] = dict(base["detail"], complement_rule=d)
+            accepted[COMPLETE].append(c)
+
+    for kind in (COMPLETE, EXTEND, OPEN):
+        if accepted[kind]:
+            chosen = sorted(accepted[kind], key=_rank_within(kind))[0]
+            out.update(action=kind, **chosen)
+            if kind == COMPLETE and accepted[EXTEND]:
+                out["reason"] += (" | PRIORITY: a valid EXTEND at %s was "
+                                  "available on this same tick and was NOT "
+                                  "taken -- a complement that reaches the "
+                                  "frozen pair cost is preferred to adding "
+                                  "same-side residual"
+                                  % accepted[EXTEND][0]["price"])
             return out
 
     if out["refusals"]:

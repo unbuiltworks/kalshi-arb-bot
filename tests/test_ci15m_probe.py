@@ -607,3 +607,211 @@ def test_the_fingerprint_changes_if_the_policy_changes(tmp_path, monkeypatch):
 def test_the_live_path_refuses_an_unauthorized_policy_fingerprint():
     assert P.AUTHORIZED_POLICY_FINGERPRINT is None, (
         "the authorized fingerprint must be unset until a human arms it")
+
+
+# =====================================================================
+# SIDE/ORDER INVARIANCE: a valid COMPLEMENT beats a valid EXTEND on the
+# same tick, whichever side is UP and whichever is DOWN.
+#
+# This is the corrected policy rule, and it is the one defect the dry run
+# found: the earlier decide_once iterated UP then DOWN and returned the
+# first acceptable action, so an EXTEND won by iteration order.
+# =====================================================================
+def _tick(inv, bid, ask, **kw):
+    kw.setdefault("bid_size", 9999)
+    kw.setdefault("ask_size", 9999)
+    kw.setdefault("tte", 400.0)
+    kw.setdefault("n_extends", 0)
+    kw.setdefault("actions", 1)
+    return POLICY["decide_once"](inv, bid=D(bid), ask=D(ask), qty=QUANTITY,
+                                 **kw)
+
+
+def test_simultaneous_extend_and_complement_is_unreachable_as_frozen():
+    """THE HONEST FINDING, proved rather than asserted.
+
+    Under the frozen thresholds the two can never both qualify on a coherent
+    book, so the old UP-before-DOWN iteration could not in fact have changed
+    any decision. For an UP residual at weighted average A:
+
+        EXTEND     price = ask,     needs  ask <= A - 0.05
+        COMPLEMENT price = 1 - bid, needs  A + (1 - bid) <= 0.96
+                                     i.e.  bid >= 0.04 + A
+        coherent                     needs  bid < ask
+
+    which together require 0.04 + A < A - 0.05, i.e. 0.04 < -0.05. The
+    complement would have to be reachable across a NEGATIVE spread.
+
+    Enumerated here over every 1-cent coherent book and every average, so
+    the claim does not rest on my algebra.
+    """
+    hits = []
+    for a in range(1, 100):
+        A = D(a) / 100
+        for bid in range(1, 100):
+            for ask in range(bid + 1, 100):
+                b, k = D(bid) / 100, D(ask) / 100
+                if (k <= A - POLICY["EXTEND_MIN_AVG_IMPROVEMENT"]
+                        and A + (1 - b) <= POLICY["MAX_PAIR_COST"]):
+                    hits.append((A, b, k))
+    assert hits == [], (
+        "the frozen thresholds now admit a simultaneous EXTEND and "
+        "COMPLEMENT; the priority rule below is what decides it: %r"
+        % hits[:5])
+
+
+@pytest.fixture()
+def both_qualify(monkeypatch):
+    """Relax ONLY the pair-cost ceiling so that both actions can qualify at
+    once, which is the only way to exercise the priority rule at all.
+
+    This does NOT change the probe: the frozen 0.96 is restored when the
+    fixture tears down, and `ci15m_budget` re-checks the pair cost against
+    the real constant on every submission regardless.
+    """
+    import src.gemini_execution.ci15m_policy as pol
+    monkeypatch.setattr(pol.MODULE, "MAX_PAIR_COST", D("1.30"))
+    yield D("1.30")
+
+
+def test_the_frozen_pair_cost_is_0_96_outside_that_fixture():
+    """The relaxation above must not leak. Asserted in its own test so it is
+    checked after the fixture has been torn down, not during it."""
+    import src.gemini_execution.ci15m_policy as pol
+    assert pol.MODULE.MAX_PAIR_COST == D("0.96")
+    assert POLICY["MAX_PAIR_COST"] == D("0.96")
+    import src.gemini_execution.ci15m_budget as b
+    assert b.MAX_PAIR_COST == D("0.96")
+
+
+def test_complement_beats_extend_when_the_residual_is_UP(both_qualify):
+    """UP residual: the EXTEND candidate is the ASK, the COMPLEMENT is
+    1 - BID. Both qualify here, and COMPLEMENT must win."""
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    # ask 0.30 is 10c under the 0.40 avg        -> EXTEND qualifies
+    # bid 0.20 -> DOWN costs 0.80 -> pair 1.20  -> COMPLEMENT qualifies (1.30)
+    assert POLICY["want_extend_avg"](inv, "UP", D("0.30"), QUANTITY,
+                                     0)["accept"], "EXTEND must qualify"
+    eff = inv.incremental_effect("DOWN", D("0.80"), QUANTITY, mode="taker")
+    assert POLICY["want_complement"](eff)["accept"], "COMPLEMENT must qualify"
+
+    dec = _tick(inv, "0.20", "0.30")
+    assert dec["action"] == COMPLETE, dec["reason"]
+    assert dec["side"] == "DOWN"
+    assert "was available on this same tick and was NOT taken" in dec["reason"]
+    # and it was NOT chosen for being cheaper -- the EXTEND was cheaper
+    assert dec["price"] == D("0.80") > D("0.30")
+
+
+def test_complement_beats_extend_when_the_residual_is_DOWN(both_qualify):
+    """THE MIRROR IMAGE. DOWN residual: the EXTEND candidate is now 1 - BID
+    and the COMPLEMENT is the ASK. The roles of the two book sides are
+    exchanged, and COMPLEMENT must still win -- which is what makes the rule
+    side-invariant rather than UP-shaped."""
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "DOWN", "maker", D("0.40"), QUANTITY,
+                                "o"))
+    # bid 0.70 -> DOWN costs 0.30, 10c under the avg -> EXTEND qualifies
+    # ask 0.80 -> UP costs 0.80 -> pair 1.20         -> COMPLEMENT qualifies
+    assert POLICY["want_extend_avg"](inv, "DOWN", D("0.30"), QUANTITY,
+                                     0)["accept"], "EXTEND must qualify"
+    eff = inv.incremental_effect("UP", D("0.80"), QUANTITY, mode="taker")
+    assert POLICY["want_complement"](eff)["accept"], "COMPLEMENT must qualify"
+
+    dec = _tick(inv, "0.70", "0.80")
+    assert dec["action"] == COMPLETE, dec["reason"]
+    assert dec["side"] == "UP"
+    assert "was available on this same tick and was NOT taken" in dec["reason"]
+    assert dec["price"] == D("0.80") > D("0.30")
+
+
+def test_the_two_mirrored_ticks_choose_the_same_action_kind(both_qualify):
+    """The invariance stated directly: relabelling UP as DOWN and reflecting
+    the book must not change WHAT is done, nor at what price."""
+    up = _inv()
+    up.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    dn = _inv()
+    dn.add(POLICY["make_fill"](0.0, "DOWN", "maker", D("0.40"), QUANTITY, "o"))
+    a = _tick(up, "0.20", "0.30")
+    b = _tick(dn, "0.70", "0.80")
+    assert a["action"] == b["action"] == COMPLETE
+    assert a["price"] == b["price"] == D("0.80")
+    assert {a["side"], b["side"]} == {"DOWN", "UP"}
+
+
+def test_extend_is_still_taken_when_no_complement_qualifies():
+    """The negative. The priority must not have disabled EXTEND."""
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    # bid 0.10 -> DOWN costs 0.90 -> pair 1.30, refused at 0.96. ask 0.30.
+    dec = _tick(inv, "0.10", "0.30")
+    assert dec["action"] == EXTEND and dec["side"] == "UP", dec["reason"]
+
+
+def test_open_is_only_reached_when_neither_other_action_qualifies():
+    dec = _tick(_inv(), "0.30", "0.40", actions=0)
+    assert dec["action"] == OPEN
+
+
+def test_the_open_side_rule_is_explicit_and_not_an_iteration_artifact():
+    """WITHIN a kind, only OPEN has a real choice: an EXTEND's side is forced
+    by the residual and a COMPLEMENT's side is forced by reducing it.
+
+    The first leg goes on the NATIVELY QUOTED instrument. This venue lists
+    one contract per window -- the UP side -- and DOWN is synthesized as
+    1 - UP bid, so the sides are genuinely asymmetric. The rule is named,
+    and it reproduces every shadow window measured to date.
+
+    `OPEN_SIDE_RULE = "CHEAPER"` is a DIFFERENT POLICY with materially
+    different results and is deliberately not in force.
+    """
+    import src.gemini_execution.ci15m_policy as pol
+    assert pol.MODULE.OPEN_SIDE_RULE == "NATIVE_UP"
+    # UP costs the ask 0.85; DOWN costs 1 - 0.30 = 0.70. UP is DEARER and is
+    # still chosen, which is only true because the rule is the native side.
+    dec = _tick(_inv(), "0.30", "0.85", actions=0)
+    assert dec["action"] == OPEN
+    assert dec["side"] == "UP" and dec["price"] == D("0.85")
+
+
+def test_the_open_side_rule_does_not_depend_on_candidate_order(monkeypatch):
+    """Side-invariance of the OPEN rule itself: the ranking key is a
+    property of the candidate, so reversing the enumeration cannot change
+    the answer."""
+    import src.gemini_execution.ci15m_policy as pol
+    key = pol.MODULE._rank_within(OPEN)
+    up = {"side": "UP", "price": D("0.85")}
+    dn = {"side": "DOWN", "price": D("0.70")}
+    assert sorted([up, dn], key=key)[0]["side"] == "UP"
+    assert sorted([dn, up], key=key)[0]["side"] == "UP"
+
+
+def test_extend_and_complement_sides_are_forced_not_chosen():
+    """There is no within-kind tie-break to get wrong for these two."""
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.40"), QUANTITY, "o"))
+    # an EXTEND can only be UP (same side as the residual)
+    assert not POLICY["want_extend_avg"](inv, "DOWN", D("0.01"), QUANTITY,
+                                         0)["accept"]
+    # a COMPLEMENT can only be DOWN (it must reduce the residual)
+    eff_up = inv.incremental_effect("UP", D("0.01"), QUANTITY, mode="taker")
+    assert not POLICY["want_complement"](eff_up)["accept"]
+
+
+def test_decide_once_never_returns_before_enumerating_both_sides():
+    """Structural: the candidate loop must COLLECT, and the choice must be
+    made after it. A `return` inside the per-side loop is what caused the
+    original iteration-order dependence, so its absence is asserted on the
+    source itself rather than inferred from behaviour."""
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(POLICY["decide_once"]).lstrip())
+    loops = [n for n in ast.walk(tree)
+             if isinstance(n, ast.For) and isinstance(n.target, ast.Tuple)]
+    assert loops, "the candidate loop was not found"
+    for loop in loops:
+        for node in ast.walk(loop):
+            assert not isinstance(node, ast.Return), (
+                "decide_once returns from inside the per-side candidate "
+                "loop, which reintroduces iteration-order dependence")
