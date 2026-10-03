@@ -156,3 +156,31 @@ re-place every decision, so a large ghost population is expected from it and is
 not itself a defect — it is precisely the queue-position cost the ghosts exist
 to measure. Only the double-counting, the non-eviction and the record bloat were
 defects.
+
+## D6 — the ghost cap silently truncated the preregistered 300 s ghost observation
+
+**Found:** 2026-10-03T14:38Z from the second deployment's own event stream,
+**before any scored result.**
+
+**Symptom.** `GHOST_EVICTED_CAP` rows were already streaming within the first
+window. With 2 execution models × 5 price arms × 6 lifetime arms = 60 keys, the
+R4 control arm alone mints ~10 ghosts per 5-second decision and R3_FIXED_8 adds
+more, so the cap of 300 was reached in roughly 20 decisions — about **100 s**.
+
+**Why that is a defect and not just a resource bound.** The preregistration sets
+`GHOST_OBSERVE_S = 300`, and the ghosts exist specifically to answer whether a
+cancelled quote *would later* have filled. A cap that evicts at ~100 s means the
+collected data **does not implement the frozen specification**: every ghost
+answer is truncated at a third of its intended horizon, which biases the
+measured cost of forfeiting queue position *downward* (late fills are never
+seen).
+
+**Fix.** `GHOST_MAX_OBSERVING` raised from 300 to **2,500**, sized so the frozen
+300 s horizon is actually reachable: ~16 ghosts per decision at a 5 s cadence is
+~960 ghosts over 300 s, so 2,500 leaves headroom. Evictions remain **emitted**
+as `GHOST_EVICTED_CAP`, never silent, so any residual truncation stays visible
+in the tape rather than being assumed away.
+
+**Nothing else changed:** no model, no price arm, no lifetime arm, no fill rule,
+no confidence bin, no discovery/validation split, and the preregistration hash
+is unchanged at `82d0155e…`.

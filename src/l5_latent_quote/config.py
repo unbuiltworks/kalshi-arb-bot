@@ -61,7 +61,10 @@ DISCOVERY_DAYS = 3                 # first 3 distinct UTC days are DISCOVERY
 # ---- ghosts: a cancelled order keeps being observed to price the cost of
 # forfeiting queue position. A ghost NEVER affects inventory or economics.
 GHOST_OBSERVE_S = 300.0
-GHOST_MAX_OBSERVING = 300          # bounded; evictions are emitted, not dropped
+GHOST_MAX_OBSERVING = 2500         # bounded; evictions are emitted, not dropped.
+                                   # Sized so the 300s observation in GHOST_OBSERVE_S
+                                   # is actually reachable: ~16 ghosts/decision at a 5s
+                                   # cadence is ~960 over 300s, so 2500 leaves headroom.
 
 # ---- output, entirely our own
 OUT_DIR = "data/l5_latent_quote"
