@@ -196,7 +196,7 @@ jobs:
         if: ${{ github.event.inputs.r2_runner == 'true' }}
         uses: actions/checkout@v4
         with:
-          ref: 4b3d4ebffc4ea05ef6541c0167a6380a9c41ee22
+          ref: 743475241631e65b78b5a952454fae10776a5e39
           path: semantics-probe
 
       - name: Provenance and gates (no credential in scope)
