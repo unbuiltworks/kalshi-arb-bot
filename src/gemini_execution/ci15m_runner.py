@@ -265,6 +265,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--runtime-s", type=float, default=3000.0)
     a = ap.parse_args(argv)
 
+    # A -- THE DURABLE BUDGET IS RECONSTRUCTED BEFORE A COHORT IS CREATED
+    # OR ACCEPTED. A fresh runner's disk is empty; the latch refs are not.
+    # CI15M-1 spent 12 of 12 slots and a second dispatch would have spent
+    # twelve more, because nothing read the refs back.
+    lat = BUD.latch_slots(a.cohort)
+    print(json.dumps({"durable_latch_refs": lat}, indent=2, default=str))
+    if not lat["readable"]:
+        print("REFUSED: the durable latch refs could not be read, and an "
+              "unreadable budget is never an empty one. %s" % lat["why"])
+        return 2
+    if lat["count"] >= BUD.TOTAL_ORDER_BUDGET:
+        print("REFUSED: cohort %s has already consumed %d of %d order slots "
+              "according to git. There is no replenishment; a further probe "
+              "needs a NEW cohort and a NEW authorization."
+              % (a.cohort, lat["count"], BUD.TOTAL_ORDER_BUDGET))
+        return 2
     if a.create and not cohort.exists(a.cohort):
         BUD.create(a.cohort)
     if not cohort.exists(a.cohort):

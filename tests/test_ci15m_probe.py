@@ -24,6 +24,16 @@ from src.gemini_execution.continuous_probe import COMPLETE, EXTEND, HOLD, OPEN
 CID = "CI15M-TEST"
 
 
+@pytest.fixture(autouse=True)
+def _no_network_latch(monkeypatch):
+    """Tests must not reach git. The DURABLE path is proved separately, in
+    `test_ci15m_durable_budget.py`, against real refs in a real repo."""
+    monkeypatch.setattr(BUD, "latch_slots",
+                        lambda cohort_id, **k: {"readable": True,
+                                                "slots": [], "count": 0,
+                                                "why": None})
+
+
 @pytest.fixture()
 def root(tmp_path):
     r = str(tmp_path / "cohorts")
@@ -423,12 +433,140 @@ def test_the_window_budget_is_three_and_does_not_replenish(root):
 
 
 def test_six_orders_per_window_and_the_seventh_is_refused(root):
+    """The per-window ceiling. Only ONE of them may be an OPEN now, so the
+    rest are complements -- which is what a real window looks like."""
     tk = _open(root)
-    for i in range(BUD.ORDERS_PER_WINDOW):
-        BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    for i in range(BUD.ORDERS_PER_WINDOW - 1):
+        BUD.consume_slot(CID, tk, _intent(COMPLETE, "DOWN", "0.50",
+                                          pair_cost_after="0.90"), root=root)
     assert BUD.submissions_in_window(CID, tk, root=root) == 6
     g = BUD.may_submit(CID, tk, root=root)
     assert not g["ok"] and "ORDERS_PER_WINDOW" in g["why"]
+
+
+# =====================================================================
+# C: ONE OPEN INTENT PER MARKET. A cancellation does not reset it.
+# =====================================================================
+def test_a_market_gets_one_open_intent_not_one_open_fill(root):
+    """THE CI15M-1 DEFECT, as a regression. Six OPENs went into one market
+    because the only gate was `if inv.fills` -- a test on whether an OPEN
+    had FILLED. Nothing filled, so it re-opened at the re-read ask every
+    cycle: 0.70, 0.70, 0.70, 0.71, 0.73, 0.72."""
+    tk = _open(root)
+    assert BUD.open_state(CID, tk, root=root) == BUD.OPEN_NOT_ATTEMPTED
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.70"), root=root)
+    assert BUD.open_state(CID, tk, root=root) == BUD.OPEN_SUBMITTED
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.71"), root=root)
+    assert "OPEN_ALREADY_ATTEMPTED" in str(e.value)
+
+
+def test_a_cancellation_does_not_reset_the_market_to_never_attempted(root):
+    tk = _open(root)
+    r = BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.70"), root=root)
+    BUD.record_status(CID, tk, slot=r["slot"], status="SUBMITTED",
+                      detail={"venue": {"body": {
+                          "status": "cancelled",
+                          "cancelledAt": "2026-10-03T17:04:37.503Z"}}},
+                      root=root)
+    assert BUD.open_state(CID, tk, root=root) == BUD.OPEN_CANCELLED
+    with pytest.raises(BUD.BudgetRefused):
+        BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.71"), root=root)
+
+
+def test_a_filled_open_is_recorded_as_filled(root):
+    tk = _open(root)
+    r = BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.70"), root=root)
+    BUD.record_status(CID, tk, slot=r["slot"], status="FILLED",
+                      detail={"price": "0.70"}, root=root)
+    assert BUD.open_state(CID, tk, root=root) == BUD.OPEN_FILLED
+
+
+def test_extends_and_complements_are_not_blocked_by_the_open_gate(root):
+    """The negative: the OPEN gate must not freeze the window."""
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    BUD.consume_slot(CID, tk, _intent(EXTEND, "UP", "0.30",
+                                      unmatched_shares_after="2",
+                                      unmatched_principal_after="0.70"),
+                     root=root)
+    BUD.consume_slot(CID, tk, _intent(COMPLETE, "DOWN", "0.60",
+                                      pair_cost_after="0.95"), root=root)
+    assert BUD.submissions_in_window(CID, tk, root=root) == 3
+
+
+# =====================================================================
+# B: one outstanding order is a HARD invariant, and unreadable fails closed
+# =====================================================================
+class _FakeTransport:
+    def __init__(self, res):
+        self._res = res
+
+    async def active_orders(self, symbol):
+        if isinstance(self._res, Exception):
+            raise self._res
+        return self._res
+
+
+def _outstanding(monkeypatch, res):
+    import asyncio
+    monkeypatch.setattr(P.transport, "active_orders",
+                        _FakeTransport(res).active_orders)
+    return asyncio.run(P.one_outstanding_order("GEMI-BTC15M2610031530-UP"))
+
+
+def test_a_recognised_empty_order_list_permits_a_submission(monkeypatch):
+    r = _outstanding(monkeypatch, {"ok": True, "status": 200,
+                                   "body": {"orders": []}})
+    assert r["ok"] is True and r["readable"] is True
+
+
+def test_a_resting_order_blocks_the_next_submission(monkeypatch):
+    """The exact CI15M-1 state: one order with status `open`."""
+    r = _outstanding(monkeypatch, {"ok": True, "status": 200, "body": {
+        "orders": [{"orderId": 145828836710194348, "status": "open",
+                    "price": "0.70", "filledQuantity": "0"}]}})
+    assert r["ok"] is False and r["open"] == 1
+
+
+def test_a_failed_read_fails_closed(monkeypatch):
+    """THE ROOT CAUSE. The old code never checked res['ok'], and
+    `_orders_of` returns [] for an error body, so a failed read read as
+    'zero outstanding orders'."""
+    r = _outstanding(monkeypatch, {"ok": False, "status": 500,
+                                   "classification": "SERVER_ERROR",
+                                   "body": {"error": "boom"}})
+    assert r["ok"] is False and r["readable"] is False
+    assert "never an empty one" in r["why"]
+
+
+def test_an_unrecognised_shape_fails_closed(monkeypatch):
+    """Succeeded, but we could not find the list. An empty list we could
+    not find is not an empty order book."""
+    r = _outstanding(monkeypatch, {"ok": True, "status": 200,
+                                   "body": {"activeOrders": [
+                                       {"orderId": 1, "status": "open"}]}})
+    assert r["ok"] is False and r["readable"] is False
+    assert "not recognised" in r["why"]
+
+
+def test_an_exception_fails_closed(monkeypatch):
+    r = _outstanding(monkeypatch, RuntimeError("socket reset"))
+    assert r["ok"] is False and r["readable"] is False
+
+
+def test_order_resolution_states():
+    resolved = ("filled", "cancelled", "canceled", "expired", "rejected",
+                "closed")
+    for st in resolved:
+        assert P.order_is_resolved({"status": st})["resolved"] is True
+    for st in ("open", "accepted", "pending", "partially_filled"):
+        assert P.order_is_resolved({"status": st})["resolved"] is False
+    # absent and unrecognised both fail closed
+    assert P.order_is_resolved({})["resolved"] is False
+    assert P.order_is_resolved({"status": "weird"})["resolved"] is False
+    assert "fail closed" in P.order_is_resolved({"status": "weird"})["why"]
 
 
 def test_a_submission_into_an_unopened_market_is_refused(root):
@@ -636,11 +774,29 @@ def test_the_runtime_gate_answers_every_owner_condition(root):
     for k in ("policy_fingerprint_matches", "authorization_installed",
               "quantity_is_one", "consumed_slots_zero",
               "confirmed_realized_loss_zero", "no_halt", "not_expired",
-              "taker_path_shut", "sha_condition"):
+              "taker_path_shut"):
         assert v["checks"][k] is True, k
     # and it is NOT ok, because this environment holds no credentials
     assert v["checks"]["arming_keys_present"] is False
-    assert v["ok"] is False and v["failed"] == ["arming_keys_present"]
+    assert "arming_keys_present" in v["failed"]
+
+
+def test_the_execution_defect_fixes_leave_the_ci15m_1_lineage(root):
+    """CI15M-1 IS CLOSED, and the gate must say so. The defect fixes touch
+    ci15m_budget.py, which is NOT in the authorization's allowed diff, so
+    sha_condition is now False. That is correct: these changes need a NEW
+    authorization (CI15M-2), not CI15M-1's."""
+    v = P.verify_runtime(CID, root=root)
+    assert v["checks"]["sha_condition"] is False, (
+        "a tree carrying the execution-defect fixes must NOT satisfy the "
+        "CI15M-1 authorization: %r" % (v["diff_from_authorized_sha"],))
+    extra = set(v["diff_from_authorized_sha"]) - {
+        ".github/workflows/gemini-settlement-gate.yml",
+        "src/gemini_execution/arming.py",
+        "src/gemini_execution/ci15m_probe.py",
+        "src/gemini_execution/ci15m_runner.py",
+        "tests/test_ci15m_probe.py"}
+    assert extra, "the diff must carry something outside the five files"
 
 
 def test_the_runtime_gate_refuses_once_a_slot_is_spent(root):

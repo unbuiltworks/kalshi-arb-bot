@@ -299,20 +299,87 @@ def intent_of(ticker: str, inv: Any, dec: Mapping[str, Any],
 
 
 async def one_outstanding_order(symbol: str) -> Dict[str, Any]:
-    """Established FROM THE VENUE. Unreadable refuses, same as non-empty."""
+    """B -- THE HARD INVARIANT. No submission while ANY previous order has
+    an unresolved status.
+
+    THE DEFECT THIS REPLACES, exactly. The previous version caught
+    exceptions and then called `transport._orders_of(res)` without ever
+    checking `res["ok"]`. `_orders_of` returns `[]` for any body shape it
+    does not recognise -- an error body included -- so a FAILED or
+    UNRECOGNISED active-orders read was read as "zero outstanding orders"
+    and the probe submitted anyway. Its docstring claimed "Unreadable
+    refuses"; the code did the opposite. CI15M-1 left FOUR orders resting
+    simultaneously (slots 2,3,4,5 at 0.70/0.71/0.73/0.72, all status
+    `open`) through that hole.
+
+    THREE THINGS MUST NOW HOLD, and each is checked positively:
+      1. the read SUCCEEDED (`res["ok"]`);
+      2. the response SHAPE was recognised, so an empty list means "the
+         venue said none" and not "we could not find the list";
+      3. the recognised list is empty.
+    Anything else refuses. An unreadable order state fails closed.
+    """
     try:
         res = await transport.active_orders(symbol)
     except Exception as exc:                                   # noqa: BLE001
-        return {"ok": False, "readable": False,
+        return {"ok": False, "readable": False, "read": None,
                 "why": "active orders could not be read (%s); an account "
                        "whose orders cannot be read is not an account with "
                        "none" % exc}
+    read = {k: res.get(k) for k in ("ok", "status", "classification",
+                                    "request_shape")}
+    if not res.get("ok"):
+        return {"ok": False, "readable": False, "read": read,
+                "why": "the active-orders read did not succeed (%s); an "
+                       "unreadable order book is never an empty one" % read}
+    body = res.get("body")
+    recognised = isinstance(body, list) or (
+        isinstance(body, dict)
+        and any(isinstance(body.get(k), list)
+                for k in ("orders", "results", "data")))
+    if not recognised:
+        return {"ok": False, "readable": False, "read": read,
+                "why": "the active-orders response shape was not recognised "
+                       "(body type %s, keys %s); an empty list we could not "
+                       "find is not an empty order book"
+                       % (type(body).__name__,
+                          sorted(body)[:8] if isinstance(body, dict)
+                          else None)}
     orders = transport._orders_of(res)
     if orders:
         return {"ok": False, "readable": True, "open": len(orders),
+                "read": read,
+                "order_ids": [str(o.get(payload.spec.ORDER_ID_FIELD)
+                                  or o.get("orderId")) for o in orders][:10],
                 "why": "%d order(s) already outstanding on %s; the probe "
-                       "allows exactly one" % (len(orders), symbol)}
-    return {"ok": True, "readable": True, "open": 0, "why": None}
+                       "allows exactly one, and an unresolved order blocks "
+                       "the next decision" % (len(orders), symbol)}
+    return {"ok": True, "readable": True, "open": 0, "read": read,
+            "why": None}
+
+
+UNRESOLVED_STATUSES = ("open", "accepted", "pending", "partially_filled",
+                       "partially filled", "")
+
+
+def order_is_resolved(body: Mapping[str, Any]) -> Dict[str, Any]:
+    """Is this order's fate SETTLED? submit ACK -> venue order status.
+
+    `filled` and `cancelled` are resolved. `open` is NOT: the order is
+    resting and the engine may not decide again until it is gone. An
+    unreadable or unrecognised status is NOT resolved either -- fail closed.
+    """
+    st = str(body.get("status") or "").strip().lower()
+    if st in ("filled", "closed", "cancelled", "canceled", "expired",
+              "rejected"):
+        return {"resolved": True, "status": st}
+    if st in UNRESOLVED_STATUSES:
+        return {"resolved": False, "status": st or "(absent)",
+                "why": "the order is still live or its status is absent; "
+                       "the engine may not submit again while any previous "
+                       "order is unresolved"}
+    return {"resolved": False, "status": st,
+            "why": "unrecognised order status %r -- fail closed" % st}
 
 
 def assert_payload_is_q1(symbol: str, intent: Mapping[str, Any]
@@ -713,6 +780,26 @@ async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
             # human can establish what the venue did with it.
             ev("STOP", stop=res["status"], reason=res.get("why"))
             break
+
+        # ---- B: the order's fate must be RESOLVED before the next
+        # decision. submit ACK -> venue order status -> active_orders ->
+        # next decision, in that order and with no step skipped. A resting
+        # order blocks the loop; it does not get a sibling.
+        ack_body = ((res.get("venue") or {}).get("body")
+                    if isinstance(res.get("venue"), Mapping) else None)
+        if isinstance(ack_body, Mapping):
+            rr = order_is_resolved(ack_body)
+            if not rr["resolved"]:
+                out = await one_outstanding_order(symbol)
+                ev("ORDER_UNRESOLVED", slot=res["slot"],
+                   ack_status=rr["status"], why=rr.get("why"),
+                   outstanding=out,
+                   labels="the engine may not submit again while any "
+                          "previous order is unresolved. CI15M-1 left four "
+                          "orders resting simultaneously through this hole.")
+                if not out["ok"]:
+                    ev("STOP", stop="ORDER_UNRESOLVED", reason=out["why"])
+                    break
 
         # ---- what actually happened to it, read back from the venue
         filled = await _settle_order(cohort_id, symbol, ticker, intent, res,

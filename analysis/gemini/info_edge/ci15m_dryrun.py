@@ -27,6 +27,8 @@ from src.gemini_execution.ci15m_policy import (POLICY,        # noqa: E402
                                                QUANTITY, fingerprint)
 from src.gemini_execution.continuous_probe import (COMPLETE,  # noqa: E402
                                                    EXTEND, HOLD, OPEN)
+from src.gemini_execution.ci15m_sim import simulate  # noqa: E402
+from src.gemini_execution.ci15m_sim import CANCELLED, FILLED, RESTING  # noqa
 
 CID = "CI15M-DRYRUN"
 SYMBOL = "GEMI-BTC15M2610031530-UP"
@@ -138,24 +140,56 @@ def main():
             body = P.assert_payload_is_q1(SYMBOL, intent)
             assert body["quantity"] == "1" and body["makerOrCancel"] is True
 
-            # --- the slot is spent DURABLY before the (stub) venue
-            row = BUD.consume_slot(CID, TICKER, intent, root=root)
+            # --- the slot is spent DURABLY before the venue.
+            # remote=None keeps this dry run offline; the DURABLE git path
+            # is proved separately in tests/test_ci15m_durable_budget.py
+            # against real refs, because a mocked read is exactly what
+            # failed to catch the original defect.
+            try:
+                row = BUD.consume_slot(CID, TICKER, intent, root=root,
+                                       remote=None)
+            except BUD.BudgetRefused as exc:
+                line(act, intent["side"], intent["price"],
+                     "REFUSED (no slot spent) -- %s" % str(exc)[:150])
+                continue
             BUD.record_status(CID, TICKER, slot=row["slot"],
                               status="SUBMITTED",
                               detail={"payload": body}, root=root)
             line(act, intent["side"], intent["price"],
                  "SUBMITTED slot %d | %s" % (row["slot"], pl["reason"][:110]))
 
-            # --- the stub venue fills it AT our limit (never above)
-            fill = {"price": intent["price"], "outcome": intent["outcome"],
-                    "quantity": str(QUANTITY)}
+            # --- THE SIMULATOR, not a stub that fills anything.
+            #
+            # The old stub filled at the limit unconditionally, which is why
+            # this dry run reported a clean LOCK while the live probe filled
+            # NOTHING: the policy picks a crossing price and the transport
+            # sent post-only, so the venue cancelled every order. The
+            # simulator now refuses exactly as the venue does.
+            sim = simulate(side=intent["side"], price=D(intent["price"]),
+                           qty=QUANTITY,
+                           maker_or_cancel=intent["maker_or_cancel"],
+                           bid=D(bid), ask=D(ask), bid_size=D(str(bsz)),
+                           ask_size=D(str(asz)))
+            if sim["outcome"] != FILLED:
+                BUD.record_status(CID, TICKER, slot=row["slot"],
+                                  status="SUBMITTED",
+                                  detail={"sim": sim}, root=root)
+                line("", status="%s -- %s" % (sim["outcome"],
+                                              sim["why"][:120]))
+                continue
+            fill = {"price": str(sim["fill_price"]),
+                    "outcome": intent["outcome"],
+                    "quantity": str(sim["filled_qty"])}
             chk = P.check_fill(CID, intent, fill, root=root)
             assert chk["ok"], chk
             BUD.record_status(CID, TICKER, slot=row["slot"], status="FILLED",
                               detail=fill, root=root)
 
-            inv.add(POLICY["make_fill"](0.0, intent["side"], "maker",
-                                        D(intent["price"]), QUANTITY,
+            inv.add(POLICY["make_fill"](0.0, intent["side"],
+                                        ("maker" if intent["maker_or_cancel"]
+                                         else "taker"),
+                                        D(fill["price"]),
+                                        D(fill["quantity"]),
                                         "dryrun " + act))
             inv.assert_identities()
             actions += 1
@@ -202,6 +236,9 @@ def main():
         print()
 
         # --- a LOCKED book must refuse, and the negative cases must HALT
+        # the CI15M-1 reality check: under maker-or-cancel the frozen
+        # policy's crossing price can never fill, so this walk must show
+        # CANCELLED throughout rather than a LOCK.
         locked_now = POLICY["locked"](inv)
         pl = P.plan(CID, inv, bid=D("0.10"), ask=D("0.20"), bid_size=9999,
                     ask_size=9999, tte=240.0, n_extends=0, actions=actions,
@@ -211,8 +248,14 @@ def main():
         print("LOCKED CHECK        : offered UP at 0.20 against a %s average "
               "-- action=%s stop=%s"
               % (inv.avg_up, pl["action"], pl["stop"]))
-        assert locked_now and pl["action"] == HOLD and pl["stop"] == "LOCKED", (
-            "a LOCKED book must refuse even a cheap EXTEND")
+        if locked_now:
+            assert pl["action"] == HOLD and pl["stop"] == "LOCKED", (
+                "a LOCKED book must refuse even a cheap EXTEND")
+        else:
+            print("NOT LOCKED           : nothing filled. Under "
+                  "maker-or-cancel the frozen policy's crossing price "
+                  "cannot fill -- which is exactly what CI15M-1 measured "
+                  "live, twelve orders for zero fills.")
         bad = P.check_fill(CID, {"price": "0.40", "side": "UP"},
                            {"price": "0.99", "outcome": "yes",
                             "quantity": "1"}, root=root)

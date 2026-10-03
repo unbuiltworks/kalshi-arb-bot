@@ -91,6 +91,25 @@ STRUCTURAL_MAX_LOSS = STRUCTURAL_MAX_LOSS_PER_WINDOW * WINDOW_BUDGET   # 8.46
 #: the stop that bites first, on CONFIRMED realized principal loss only.
 REALIZED_LOSS_STOP = D("2.00")
 
+#: C -- THE OPEN LIFECYCLE, DURABLE AND PER MARKET.
+#:
+#: CI15M-1 submitted SIX OPENs into one market because the only thing
+#: stopping a second OPEN was `if inv.fills: continue` in the policy -- a
+#: test on whether an OPEN had FILLED, not on whether one had been
+#: ATTEMPTED. Nothing filled, so inventory stayed flat, so the policy kept
+#: returning OPEN and the loop kept re-submitting at the re-read ask (0.70,
+#: 0.70, 0.70, 0.71, 0.73, 0.72). There was no chase logic; the chase was
+#: emergent, and that is worse, because nothing named it.
+#:
+#: A market now gets ONE OPEN INTENT. A cancellation does NOT return it to
+#: never-attempted.
+OPEN_NOT_ATTEMPTED = "OPEN_NOT_ATTEMPTED"
+OPEN_SUBMITTED = "OPEN_SUBMITTED"
+OPEN_CANCELLED = "OPEN_CANCELLED"
+OPEN_FILLED = "OPEN_FILLED"
+OPEN_STATES = (OPEN_NOT_ATTEMPTED, OPEN_SUBMITTED, OPEN_CANCELLED,
+               OPEN_FILLED)
+
 WINDOWS = "windows.jsonl"
 SETTLED = "settled.jsonl"
 HALT = "HALT"
@@ -222,8 +241,89 @@ def create(cohort_id: str, *, root: str = cohort.COHORT_ROOT,
 
 
 def consumed(cohort_id: str, *, root: str = cohort.COHORT_ROOT) -> int:
-    """Order slots spent, READ FROM DISK every time. Never cached."""
+    """Order slots spent on THIS disk, read every time. Never cached.
+
+    NOT SUFFICIENT ON ITS OWN. A fresh Actions runner has an empty disk, so
+    this returns 0 for a cohort that has already spent every slot. Use
+    `durable_consumed`, which is what every bound below actually consults.
+    """
     return cohort._consumed_in(_paths(cohort_id, root)["ledger"])
+
+
+LATCH_REF_PREFIX = "refs/heads/ci15m-latch/"
+
+
+def latch_slots(cohort_id: str, *, remote: str = "origin",
+                timeout: float = 60.0) -> Dict[str, Any]:
+    """Slots this cohort has spent ACCORDING TO GIT, which outlives the host.
+
+    THIS IS THE FIX FOR THE WORST DEFECT CI15M-1 EXPOSED. The slot hook
+    pushes `refs/heads/ci15m-latch/<cohort>-slot<N>` before the venue is
+    touched, and the refs survived -- but nothing ever read them back. The
+    restart recovery that was tested covered a process dying on the SAME
+    filesystem; a NEW runner starts with an empty disk, counts zero consumed
+    slots and would happily spend the budget again. A second dispatch of an
+    exhausted cohort would therefore have sent twelve more orders.
+
+    `readable` False means the refs could not be listed. That is NOT zero:
+    callers must fail closed on it, and `durable_consumed` does.
+    """
+    import subprocess
+    pat = "%s%s-slot*" % (LATCH_REF_PREFIX, cohort_id)
+    try:
+        r = subprocess.run(["git", "ls-remote", remote, pat],
+                           capture_output=True, text=True, timeout=timeout)
+    except Exception as exc:                                   # noqa: BLE001
+        return {"readable": False, "why": "git ls-remote failed: %s" % exc,
+                "slots": [], "count": None}
+    if r.returncode != 0:
+        return {"readable": False,
+                "why": "git ls-remote rc=%d: %s" % (r.returncode,
+                                                    (r.stderr or "")[-200:]),
+                "slots": [], "count": None}
+    slots = []
+    for line in (r.stdout or "").splitlines():
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+        ref = parts[1]
+        tail = ref.rsplit("-slot", 1)
+        if len(tail) != 2:
+            continue
+        try:
+            slots.append(int(tail[1]))
+        except ValueError:
+            continue
+    return {"readable": True, "slots": sorted(set(slots)),
+            "count": len(set(slots)), "why": None, "ref_pattern": pat}
+
+
+def durable_consumed(cohort_id: str, *, root: str = cohort.COHORT_ROOT,
+                     remote: Optional[str] = "origin") -> Dict[str, Any]:
+    """The authoritative consumed-slot count: the MAXIMUM of this disk and
+    git. Fails closed when git cannot be read.
+
+    `remote=None` disables the git read and is for tests and offline
+    inspection ONLY -- `may_submit` refuses when the git side is unreadable,
+    so a live path cannot reach the venue on a local count alone.
+    """
+    local = consumed(cohort_id, root=root)
+    if remote is None:
+        return {"consumed": local, "local": local, "latch": None,
+                "readable": None,
+                "why": "git side not consulted (remote=None)"}
+    lat = latch_slots(cohort_id, remote=remote)
+    if not lat["readable"]:
+        return {"consumed": None, "local": local, "latch": lat,
+                "readable": False,
+                "why": "the durable latch refs could not be read, and an "
+                       "unreadable budget is never an empty one: %s"
+                       % lat["why"]}
+    n = max(local, lat["count"])
+    return {"consumed": n, "local": local, "latch": lat, "readable": True,
+            "why": None,
+            "note": ("the maximum of this disk and git. A fresh runner has "
+                     "local=0 and must still see the spent slots.")}
 
 
 def submissions_in_window(cohort_id: str, ticker: str, *,
@@ -280,17 +380,22 @@ def realized_principal_loss(cohort_id: str, *,
     return tot
 
 
-def expired(cohort_id: str, *,
-            root: str = cohort.COHORT_ROOT) -> Optional[str]:
+def expired(cohort_id: str, *, root: str = cohort.COHORT_ROOT,
+            remote: Optional[str] = "origin") -> Optional[str]:
     """Why this probe is over, or None. Checked before every submission."""
     h = halted(cohort_id, root=root)
     if h:
         return "HALTED: %s" % h
-    used = consumed(cohort_id, root=root)
+    dur = durable_consumed(cohort_id, root=root, remote=remote)
+    if dur["readable"] is False:
+        return "DURABLE_BUDGET_UNREADABLE: %s" % dur["why"]
+    used = dur["consumed"]
     if used >= TOTAL_ORDER_BUDGET:
         return ("TOTAL_ORDER_BUDGET_EXHAUSTED: %d of %d order slots "
-                "consumed. This is the pre-existing live envelope's ceiling "
-                "and is not raised here." % (used, TOTAL_ORDER_BUDGET))
+                "consumed (disk %d, latch refs %s). This is the pre-existing "
+                "live envelope's ceiling and is not raised here."
+                % (used, TOTAL_ORDER_BUDGET, dur["local"],
+                   (dur["latch"] or {}).get("count")))
     done = completed_windows(cohort_id, root=root)
     if done >= WINDOW_BUDGET:
         return ("WINDOW_BUDGET_EXHAUSTED: %d of %d live windows completed. "
@@ -333,10 +438,53 @@ def close_window(cohort_id: str, ticker: str, outcome: str, detail: Any = None,
                      "detail": detail})
 
 
+def open_state(cohort_id: str, ticker: str, *,
+               root: str = cohort.COHORT_ROOT) -> str:
+    """Has this market had its ONE OPEN intent? Derived from the durable
+    ledger, so a restart cannot forget that an OPEN was attempted.
+
+    A CANCELLATION DOES NOT RETURN THE MARKET TO NEVER-ATTEMPTED. That is
+    the entire point: CI15M-1 re-opened six times because the only state it
+    consulted was "did an OPEN fill".
+    """
+    rows = _rows(_paths(cohort_id, root)["ledger"])
+    slots = {r["slot"] for r in rows
+             if r.get("kind") == "PLACE" and r.get("ticker") == ticker
+             and (r.get("intent") or {}).get("action") == "OPEN"}
+    if not slots:
+        return OPEN_NOT_ATTEMPTED
+    state = OPEN_SUBMITTED
+    for r in rows:
+        if r.get("kind") != "STATUS" or r.get("slot") not in slots:
+            continue
+        if r.get("status") == "FILLED":
+            return OPEN_FILLED
+        b = ((r.get("detail") or {}).get("venue") or {}).get("body") or {}
+        if b.get("cancelledAt") or str(b.get("status", "")).lower() \
+                == "cancelled":
+            state = OPEN_CANCELLED
+    return state
+
+
+def may_open(cohort_id: str, ticker: str, *,
+             root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+    """ONE OPEN INTENT PER MARKET, not one open FILL."""
+    st = open_state(cohort_id, ticker, root=root)
+    if st == OPEN_NOT_ATTEMPTED:
+        return {"ok": True, "open_state": st}
+    return {"ok": False, "open_state": st,
+            "why": ("OPEN_ALREADY_ATTEMPTED: %s is in state %s. A market "
+                    "gets one OPEN intent; a cancellation does not reset it "
+                    "to never-attempted, and the price is never re-offered."
+                    % (ticker, st))}
+
+
 def may_submit(cohort_id: str, ticker: str, *,
-               root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+               root: str = cohort.COHORT_ROOT,
+               action: Optional[str] = None,
+               remote: Optional[str] = "origin") -> Dict[str, Any]:
     """Every budget bound, answered before any venue write."""
-    why = expired(cohort_id, root=root)
+    why = expired(cohort_id, root=root, remote=remote)
     if why:
         return {"ok": False, "why": why}
     cur = open_window_ticker(cohort_id, root=root)
@@ -344,6 +492,10 @@ def may_submit(cohort_id: str, ticker: str, *,
         return {"ok": False,
                 "why": "MARKET_NOT_OPEN: the open window is %r, not %s"
                        % (cur, ticker)}
+    if str(action) == "OPEN":
+        g = may_open(cohort_id, ticker, root=root)
+        if not g["ok"]:
+            return {"ok": False, "why": g["why"]}
     n = submissions_in_window(cohort_id, ticker, root=root)
     if n >= ORDERS_PER_WINDOW:
         return {"ok": False,
@@ -355,14 +507,16 @@ def may_submit(cohort_id: str, ticker: str, *,
 
 
 def consume_slot(cohort_id: str, ticker: str, intent: Dict[str, Any], *,
-                 root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+                 root: str = cohort.COHORT_ROOT,
+                 remote: Optional[str] = "origin") -> Dict[str, Any]:
     """Spend ONE numbered slot, durably, BEFORE the venue is touched.
 
     An AMBIGUOUS send therefore finds its slot already spent, which is the
     whole point: it is never retried. There is deliberately NO release,
     refund, unconsume or rollback function in this module.
     """
-    gate = may_submit(cohort_id, ticker, root=root)
+    gate = may_submit(cohort_id, ticker, root=root,
+                      action=str(intent.get("action", "")), remote=remote)
     if not gate["ok"]:
         raise BudgetRefused(gate["why"])
     q = D(str(intent.get("quantity", "0")))
@@ -462,6 +616,10 @@ def state(cohort_id: str, *,
                                       "before the per-window cap and is not "
                                       "widened here"),
         "order_slots_consumed": consumed(cohort_id, root=root),
+        "durable_consumed": durable_consumed(cohort_id, root=root,
+                                             remote=None),
+        "open_states": {tk: open_state(cohort_id, tk, root=root)
+                        for tk in w},
         "quantity_fixed": str(QUANTITY),
         "max_acquisition_price": str(MAX_ACQUISITION_PRICE),
         "max_extends": str(MAX_EXTENDS),
@@ -477,7 +635,7 @@ def state(cohort_id: str, *,
         "halted": halted(cohort_id, root=root),
         "halt_conditions": HALT_CONDITIONS,
         "statuses": list(STATUSES),
-        "expired": expired(cohort_id, root=root),
+        "expired": expired(cohort_id, root=root, remote=None),
         "no_replenishment": ("no function in this module raises any bound. A "
                              "further probe needs a new cohort, created by a "
                              "human."),
