@@ -73,10 +73,16 @@ ORDERS_PER_WINDOW = 6
 # subsequent INVENTORY actions. `may_open` already forbids a second OPEN
 # intent, so the budget cannot be spent retrying one.
 MECHANICS = "MECHANICS"
+#: CI15M-4. TWO windows, because OPEN is no longer the experiment: we need
+#: enough opportunity to observe at least one POST-FILL state transition
+#: without changing the policy to force one. Still tiny: 6 orders total,
+#: 3 per window, q=1.
+MECHANICS2 = "MECHANICS2"
 FULL = "FULL"
 
 PROFILES = {
     MECHANICS: {"windows": 1, "orders_total": 3, "orders_per_window": 3},
+    MECHANICS2: {"windows": 2, "orders_total": 6, "orders_per_window": 3},
     FULL: {"windows": 3, "orders_total": 12, "orders_per_window": 6},
 }
 
@@ -136,6 +142,7 @@ OPEN_STATES = (OPEN_NOT_ATTEMPTED, OPEN_SUBMITTED, OPEN_CANCELLED,
 WINDOWS = "windows.jsonl"
 SETTLED = "settled.jsonl"
 EXITS = "exits.jsonl"
+TELEMETRY = "telemetry.jsonl"
 HALT = "HALT"
 
 #: the key an intent must carry to prove its inventory was reconciled
@@ -211,6 +218,7 @@ def _paths(cohort_id: str, root: str) -> Dict[str, str]:
             "windows": os.path.join(d, WINDOWS),
             "settled": os.path.join(d, SETTLED),
             "exits": os.path.join(d, EXITS),
+            "telemetry": os.path.join(d, TELEMETRY),
             "halt": os.path.join(d, HALT)}
 
 
@@ -273,7 +281,11 @@ def profile_of(cohort_id: str, *,
         note = str(cohort.load(cohort_id, root=root).note or "")
     except Exception:                                          # noqa: BLE001
         note = ""
-    name = MECHANICS if ("profile=" + MECHANICS) in note else FULL
+    name = FULL
+    for cand in (MECHANICS2, MECHANICS):      # longest first: MECHANICS is
+        if ("profile=" + cand) in note:       # a prefix of MECHANICS2
+            name = cand
+            break
     out = dict(PROFILES[name])
     out["name"] = name
     # the pre-existing envelope still binds, and is never raised
@@ -723,6 +735,24 @@ def record_exit(cohort_id: str, reason: str, detail: Any = None, *,
            "known_reason": reason in EXIT_REASONS, "detail": detail}
     _append_durable(_paths(cohort_id, root)["exits"], row)
     return row
+
+
+def record_telemetry(cohort_id: str, row: Dict[str, Any], *,
+                    root: str = cohort.COHORT_ROOT) -> None:
+    """One durable row per DECISION, including every HOLD.
+
+    A HOLD is a result, and the opposite side's executable ask at that
+    moment is the datum that later answers "how long until the complement
+    became reachable, and at what pair cost" -- which cannot be
+    reconstructed after the fact. So it is written on every tick the engine
+    decides on, not only when it acts.
+    """
+    _append_durable(_paths(cohort_id, root)["telemetry"], row)
+
+
+def telemetry(cohort_id: str, *,
+              root: str = cohort.COHORT_ROOT) -> List[Dict[str, Any]]:
+    return _rows(_paths(cohort_id, root)["telemetry"])
 
 
 def exits(cohort_id: str, *,

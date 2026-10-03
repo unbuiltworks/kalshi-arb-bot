@@ -58,7 +58,7 @@ ALLOWED_ORDER_FIELDS = ("symbol", "orderType", "side", "quantity", "price",
 #: It is still a LIMIT order with an explicit price: `orderType` stays
 #: "limit" and the price is bounded by the policy's own 0.90 ceiling, so
 #: this is not and cannot become an unrestricted market order.
-SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-3"
+SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-4"
 
 #: fields that must never appear, with the reason, so a refusal explains itself
 FORBIDDEN = {

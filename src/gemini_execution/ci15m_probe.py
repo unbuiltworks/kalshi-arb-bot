@@ -46,7 +46,7 @@ LABEL = "GEMINI_CI15M_PROBE_V1"
 
 #: the authorization these bounds were granted against. It must match
 #: `arming.EXPECTED_AUTH_ID` before anything is constructed.
-PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-3"
+PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-4"
 
 #: THE EXECUTION TREATMENT, fixed for this cohort. T = capped marketable
 #: limit at the REAL executable ask. M is implemented and tested but is NOT
@@ -66,7 +66,7 @@ AUTHORIZED_POLICY_FINGERPRINT: Optional[str] = (
 
 #: the commit the authorization names. Verified at runtime, before the first
 #: venue submission, by `verify_runtime()`.
-AUTHORIZED_SHA = "f52027bc7c4888d1a7429b8a6db0e065f82a0607"
+AUTHORIZED_SHA = "dfcee7b78a69db37272bbd2c5452f12385d202b9"
 
 #: the ONE contract family. A symbol outside it is refused by name.
 SYMBOL_PREFIX = "GEMI-BTC15M"
@@ -545,6 +545,8 @@ async def reconciled_inventory(cohort_id: str, symbol: str, *,
         tel = {"read": False, "why": "%s: %s" % (type(exc).__name__, exc)}
 
     return {"ok": True, "signed": signed, "inventory": rec["inventory"],
+            "fills": got["rows"],
+            "attribution": got.get("attribution"),
             "reconstruction": {k: (None if rec.get(k) is None
                                    else str(rec[k]))
                                for k in ("up_qty", "down_qty", "up_cost",
@@ -766,7 +768,7 @@ def verify_runtime(cohort_id: str, *,
             fingerprint() == AUTHORIZED_POLICY_FINGERPRINT,
         "authorization_installed":
             arming.EXPECTED_AUTH_ID == PROBE_AUTH_ID
-            == "OWNER-2026-10-03-GEMINI-CI15M-3",
+            == "OWNER-2026-10-03-GEMINI-CI15M-4",
         "quantity_is_one": QUANTITY == D("1"),
         "consumed_slots_zero": st["order_slots_consumed"] == 0,
         "confirmed_realized_loss_zero":
@@ -933,6 +935,67 @@ async def reconcile_after_fill(cohort_id: str, symbol: str, inv: Any, *,
     return reconcile_or_halt(cohort_id, symbol, inv, rows, root=root)
 
 
+def decision_telemetry(ticker: str, inv: Any, bk: Mapping[str, Any],
+                       tte: float, dec: Mapping[str, Any], *,
+                       t: float, n_extends: int) -> Dict[str, Any]:
+    """Every field the owner named, on EVERY decision including HOLD.
+
+    THE OPPOSITE EXECUTABLE ASK IS PRESERVED ON EVERY TICK. With an UP
+    residual the complement costs `1 - bid`, and recording it even while
+    the policy HOLDs is the only way to answer, afterwards, how long the
+    complement took to become reachable and at what pair cost it first
+    could have been taken. That cannot be reconstructed later.
+    """
+    bid, ask = bk.get("bid"), bk.get("ask")
+    rs = inv.residual_side
+    req = POLICY["required_complement_price"](inv, QUANTITY)
+    down_acq = None if bid is None else D("1") - bid
+    down_bid = None if ask is None else D("1") - ask
+    opp_acq = (down_acq if rs == "UP" else (ask if rs == "DOWN" else None))
+    return {
+        "kind": "DECISION", "utc": BUD._now(), "t": round(t, 3),
+        "ticker": ticker, "tte": round(tte, 1),
+        "up_bid": None if bid is None else str(bid),
+        "up_ask": None if ask is None else str(ask),
+        "down_bid": None if down_bid is None else str(down_bid),
+        "down_ask": None if down_acq is None else str(down_acq),
+        "up_size": None if bk.get("ask_size") is None else str(bk["ask_size"]),
+        "down_size": (None if bk.get("bid_size") is None
+                      else str(bk["bid_size"])),
+        "up_qty": str(inv.q_up), "up_cost": str(inv.c_up),
+        "up_avg": None if inv.avg_up is None else str(inv.avg_up),
+        "down_qty": str(inv.q_down), "down_cost": str(inv.c_down),
+        "down_avg": None if inv.avg_down is None else str(inv.avg_down),
+        "matched_qty": str(inv.matched),
+        "matched_cost": str(inv.matched_cost),
+        "matched_pair_cost": (None if inv.matched_pair_cost() is None
+                              else str(inv.matched_pair_cost())),
+        "residual_side": rs, "residual_qty": str(inv.residual),
+        "residual_principal": str(
+            inv.residual * ((inv.avg_up if rs == "UP" else inv.avg_down)
+                            or D("0"))),
+        "required_complement_price_for_0.96": (None if req is None
+                                               else str(req)),
+        "opposite_executable_ask": (None if opp_acq is None
+                                    else str(opp_acq)),
+        "complement_reachable_at_0.96": (
+            None if (req is None or opp_acq is None)
+            else bool(opp_acq <= req)),
+        "policy_action": dec.get("action"),
+        "policy_stop": dec.get("stop"),
+        "policy_side": dec.get("side"),
+        "submitted_price": (None if dec.get("price") is None
+                            else str(dec["price"])),
+        "extends_so_far": n_extends,
+        "locked": bool(POLICY["locked"](inv)),
+        "reason": str(dec.get("reason") or "")[:300],
+        "labels": ("one row per DECISION, HOLD included. The opposite "
+                   "executable ask is preserved on every tick so time to "
+                   "first executable complement and best executable pair "
+                   "cost can be computed later."),
+    }
+
+
 def _extend_report(inv_before: Any, inv_after: Any, px: D,
                    req_before: Optional[D], req_after: Optional[D]
                    ) -> Dict[str, Any]:
@@ -1014,6 +1077,16 @@ async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
         pl = plan(cohort_id, inv, bid=bk["bid"], ask=bk["ask"],
                   bid_size=bk["bid_size"], ask_size=bk["ask_size"],
                   tte=tte, n_extends=n_extends, actions=actions, root=root)
+
+        # MANDATORY TELEMETRY, written on EVERY decision including HOLD.
+        # The opposite executable ask is preserved on every tick so time to
+        # first executable complement and best executable pair cost can be
+        # computed later, even across windows the policy never acted in.
+        tel = decision_telemetry(ticker, inv, bk, tte, pl, t=clock(),
+                                 n_extends=n_extends)
+        BUD.record_telemetry(cohort_id, tel, root=root)
+        events.append(tel)
+
         if pl.get("stop") in ("LOCKED", "HALTED", "RISK_BLOCK"):
             ev("STOP", stop=pl["stop"], reason=pl["reason"],
                inventory=inv.snapshot())
@@ -1134,6 +1207,20 @@ async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
         if rec["halted"]:
             ev("HALTED", why=rec.get("why"), reconcile=rec)
             break
+        # THE ACTUAL VENUE FEE, from /v1/mytrades `fee_amount`. The model
+        # is NOT substituted when authenticated fee data exists -- CI15M-3
+        # measured $0.02 on a taker fill against $0.00 on CI15M-1's maker
+        # fills, so the model would have been wrong either way.
+        fees = [AD._dec(f.get("fee_amount")) for f in (rec.get("fills") or [])
+                if f.get("fee_amount") is not None]
+        BUD.record_status(cohort_id, ticker, slot=res["slot"],
+                          status="FILLED",
+                          detail={"fill": fill,
+                                  "actual_venue_fees": [str(x) for x in fees
+                                                        if x is not None],
+                                  "fee_source": "/v1/mytrades fee_amount",
+                                  "fee_model_substituted": False},
+                          root=root)
         BUD.record_status(cohort_id, ticker, slot=res["slot"],
                           status="INVENTORY_RECONCILED",
                           detail={"verdict": rec["verdict"],

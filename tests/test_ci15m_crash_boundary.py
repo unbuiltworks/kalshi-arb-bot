@@ -314,3 +314,78 @@ def test_attribution_reads_the_ledger_not_memory(env, monkeypatch):
         {"leg": "yes", "price": "0.34", "qty": "1", "tid": 1,
          "order_id": OID, "leg_resolved": True}], root=env)
     assert att["ok"] and att["n_attributed"] == 1
+
+
+# =====================================================================
+# CI15M-4: the MECHANICS2 profile and the per-decision telemetry
+# =====================================================================
+def test_the_mechanics2_profile_is_two_windows_and_six_orders(tmp_path,
+                                                              monkeypatch):
+    root = str(tmp_path / "m2")
+    monkeypatch.setattr(BUD, "latch_slots",
+                        lambda c, **k: {"readable": True, "slots": [],
+                                        "count": 0, "why": None})
+    BUD.create("CI15M-4", root=root, profile=BUD.MECHANICS2)
+    prof = BUD.profile_of("CI15M-4", root=root)
+    assert prof["name"] == BUD.MECHANICS2
+    assert prof["windows"] == 2
+    assert prof["orders_total"] == 6
+    assert prof["orders_per_window"] == 3
+
+
+def test_mechanics_is_not_mistaken_for_mechanics2(tmp_path, monkeypatch):
+    """MECHANICS is a PREFIX of MECHANICS2; a substring match would have
+    read a MECHANICS2 cohort as the one-window profile."""
+    root = str(tmp_path / "m1")
+    monkeypatch.setattr(BUD, "latch_slots",
+                        lambda c, **k: {"readable": True, "slots": [],
+                                        "count": 0, "why": None})
+    BUD.create("CI15M-X", root=root, profile=BUD.MECHANICS)
+    assert BUD.profile_of("CI15M-X", root=root)["name"] == BUD.MECHANICS
+    assert BUD.profile_of("CI15M-X", root=root)["windows"] == 1
+
+
+def test_decision_telemetry_carries_every_required_field(env):
+    inv = P.new_inventory()
+    inv.add(POLICY["make_fill"](0.0, "UP", "taker", D("0.34"), D("1"), "x"))
+    bk = {"bid": D("0.40"), "ask": D("0.55"), "bid_size": D("500"),
+          "ask_size": D("400")}
+    dec = {"action": "HOLD", "stop": None, "side": None, "price": None,
+           "reason": "waiting"}
+    row = P.decision_telemetry("BTC15M2610032000", inv, bk, 300.0, dec,
+                               t=1.0, n_extends=0)
+    for k in ("utc", "tte", "up_bid", "up_ask", "down_bid", "down_ask",
+              "up_qty", "up_cost", "up_avg", "down_qty", "down_cost",
+              "down_avg", "matched_qty", "matched_cost",
+              "matched_pair_cost", "residual_side", "residual_qty",
+              "residual_principal",
+              "required_complement_price_for_0.96",
+              "opposite_executable_ask", "complement_reachable_at_0.96",
+              "policy_action", "submitted_price", "locked"):
+        assert k in row, k
+    # DOWN is synthesized: acquisition 1-bid, bid 1-ask
+    assert row["down_ask"] == "0.60" and row["down_bid"] == "0.45"
+    assert row["residual_side"] == "UP" and row["residual_qty"] == "1"
+    assert row["residual_principal"] == "0.34"
+    # holding 1 UP at 0.34, a 0.96 pair needs DOWN at <= 0.62
+    assert row["required_complement_price_for_0.96"] == "0.62"
+    assert row["opposite_executable_ask"] == "0.60"
+    assert row["complement_reachable_at_0.96"] is True
+
+
+def test_the_opposite_ask_is_preserved_even_on_a_hold(env):
+    """The datum that later answers 'how long until the complement became
+    reachable' is written on every HOLD, not only when we act."""
+    inv = P.new_inventory()
+    inv.add(POLICY["make_fill"](0.0, "UP", "taker", D("0.34"), D("1"), "x"))
+    bk = {"bid": D("0.10"), "ask": D("0.25"), "bid_size": D("9"),
+          "ask_size": D("9")}
+    row = P.decision_telemetry("T", inv, bk, 200.0,
+                               {"action": "HOLD", "reason": "too dear"},
+                               t=2.0, n_extends=0)
+    assert row["policy_action"] == "HOLD"
+    assert row["opposite_executable_ask"] == "0.90"      # 1 - 0.10
+    assert row["complement_reachable_at_0.96"] is False  # 0.90 > 0.62
+    BUD.record_telemetry(CID, row, root=env)
+    assert BUD.telemetry(CID, root=env)[-1]["opposite_executable_ask"] \
+        == "0.90"

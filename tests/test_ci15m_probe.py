@@ -789,7 +789,7 @@ def test_the_authorized_fingerprint_is_the_one_the_owner_granted():
     rc = subprocess.run(["git", "cat-file", "-e", P.AUTHORIZED_SHA],
                         capture_output=True, timeout=30).returncode
     assert rc == 0, "AUTHORIZED_SHA is not a commit in this repository"
-    assert P.PROBE_AUTH_ID == "OWNER-2026-10-03-GEMINI-CI15M-3"
+    assert P.PROBE_AUTH_ID == "OWNER-2026-10-03-GEMINI-CI15M-4"
 
 
 def test_a_policy_edit_halts_the_live_path(root, monkeypatch):
@@ -824,7 +824,8 @@ def test_ci15m_1_and_2_are_permanently_closed_and_not_reused():
     """CI15M-1 must not be reset, reused or modified. Its id is gone from
     the build and its budget is read from immutable git refs."""
     for closed in ("OWNER-2026-10-03-GEMINI-CI15M-1",
-                   "OWNER-2026-10-03-GEMINI-CI15M-2"):
+                   "OWNER-2026-10-03-GEMINI-CI15M-2",
+                   "OWNER-2026-10-03-GEMINI-CI15M-3"):
         assert arming.EXPECTED_AUTH_ID != closed, closed
         assert P.PROBE_AUTH_ID != closed, closed
     src = open(BUD.__file__, encoding="utf-8").read()

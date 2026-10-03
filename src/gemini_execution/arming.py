@@ -176,7 +176,33 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #:
 #: UNKNOWN_POSITION still HALTs. The fix was correct interpretation of
 #: SUCCESSFUL reads, not treating absence as flat.
-EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-3"
+#: MOVED 2026-10-03 to CI15M-4, the continuous-mechanics probe, authorized
+#: against SHA dfcee7b78a69db37272bbd2c5452f12385d202b9 and frozen policy
+#: fingerprint
+#: 5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329.
+#:
+#: CI15M-1, -2 and -3 are HISTORICAL RECORDS and are never cleared or
+#: reused. CI15M-3 proved live OPEN execution: a capped marketable limit
+#: filled 1 @ 0.34 at the limit, settled UP, actual venue fee $0.02.
+#:
+#: WHAT CI15M-4 IS FOR. OPEN is no longer the experiment. The acceptance
+#: criterion is a POST-FILL STATE TRANSITION: OPEN -> authenticated and
+#: ATTRIBUTED fill -> recovered inventory -> next frozen-policy decision ->
+#: keep observing -> if naturally triggered, EXTEND or COMPLEMENT ->
+#: attributed fill -> recover again. HOLD is expected and valid, and no
+#: activity is manufactured to produce a transition.
+#:
+#: BOUNDS: BTC15m only; TWO windows; q=1; SIX submitted orders, THREE per
+#: window; one outstanding/unresolved order; one OPEN intent per market;
+#: max 2 EXTENDs before a complement; acquisition <= 0.90; MAX_PAIR_COST
+#: 0.96; EXTEND needs >= 5c average improvement; unmatched <= 3 shares and
+#: <= $2.70; NATIVE_UP; no progression; no chasing.
+#:
+#: STOPS: UNATTRIBUTABLE_FILL, an authenticated-fill/local-state ambiguity
+#: that cannot be crash-recovered, unreadable authoritative fills,
+#: unresolved-order ambiguity, a risk-cap violation, a fill above limit, or
+#: any fingerprint/provenance failure.
+EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-4"
 
 
 class NotArmed(Exception):
