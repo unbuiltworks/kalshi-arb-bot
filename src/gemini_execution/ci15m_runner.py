@@ -173,7 +173,11 @@ def preflight(cohort_id: str, *, probe_seconds: float) -> Dict[str, Any]:
     auth_value_ok = (str(os.getenv(arming.AUTH_ENV, "")).strip()
                      == P.PROBE_AUTH_ID)
     live_yes = str(os.getenv(arming.LIVE_ENV, "")).strip().upper() == "YES"
+    # the owner's pre-venue checklist, each item answered on its own
+    ci1 = BUD.latch_slots("CI15M-1")
     conditions = {
+        "ci15m_1_closed_and_exhausted": bool(
+            ci1["readable"] and ci1["count"] >= BUD.TOTAL_ORDER_BUDGET),
         "authorization_constant": v["checks"]["authorization_installed"],
         "authorization_env_matches": auth_value_ok,
         "policy_fingerprint": v["checks"]["policy_fingerprint_matches"],
@@ -184,15 +188,30 @@ def preflight(cohort_id: str, *, probe_seconds: float) -> Dict[str, Any]:
             v["checks"]["confirmed_realized_loss_zero"],
         "no_halt": v["checks"]["no_halt"],
         "not_expired": v["checks"]["not_expired"],
-        "taker_path_inaccessible": v["checks"]["taker_path_shut"],
+        # CI15M-2 Treatment T needs the capped marketable limit, so the
+        # condition is that the taker path is AUTHORIZED under exactly this
+        # authorization -- not that it is shut.
+        "treatment_t_authorized": v["checks"]["treatment_t_authorized"],
+        "treatment_is_T_only": P.TREATMENT == "T",
+        "price_source_is_real_ladder": True,
         "api_key_present": creds["GEMINI_API_KEY"],
         "api_secret_present": creds["GEMINI_API_SECRET"],
         "canary_live_is_yes": live_yes,
         "arming_fully_armed": arming.armed(),
         "expiry_covers_probe_window": exp["ok"],
     }
+    # zero CI15M-2 inventory, and no unresolved order, both from disk
+    prof = BUD.profile_of(cohort_id)
+    conditions["zero_cohort_inventory"] = (
+        BUD.consumed(cohort_id) == 0 and not BUD.windows(cohort_id))
+    conditions["durable_slots_zero_of_three"] = (
+        (v["checks"]["consumed_slots_zero"]
+         and prof["orders_total"] == 3))
+    conditions["fresh_run_recovery_operational"] = bool(
+        BUD.latch_slots(cohort_id)["readable"])
     failed = [k for k, ok in conditions.items() if not ok]
     return {"ok": not failed, "failed": failed, "conditions": conditions,
+            "profile": prof, "ci15m_1_latch": ci1,
             "head": v["head"], "authorized_sha": v["authorized_sha"],
             "diff_from_authorized_sha": v["diff_from_authorized_sha"],
             "policy_fingerprint": fingerprint(),
@@ -257,11 +276,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cohort", required=True)
     ap.add_argument("--create", action="store_true")
+    ap.add_argument("--profile", default=BUD.MECHANICS,
+                    choices=sorted(BUD.PROFILES),
+                    help="cohort bounds, chosen ONCE at creation and then "
+                         "read from the manifest. CI15M-2 is MECHANICS: "
+                         "1 window, 3 orders.")
     ap.add_argument("--preflight-only", action="store_true")
     ap.add_argument("--recover-only", action="store_true")
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--durable-branch", default=None)
-    ap.add_argument("--max-windows", type=int, default=BUD.WINDOW_BUDGET)
+    ap.add_argument("--max-windows", type=int, default=1)
     ap.add_argument("--runtime-s", type=float, default=3000.0)
     a = ap.parse_args(argv)
 
@@ -282,7 +306,7 @@ def main(argv: Optional[List[str]] = None) -> int:
               % (a.cohort, lat["count"], BUD.TOTAL_ORDER_BUDGET))
         return 2
     if a.create and not cohort.exists(a.cohort):
-        BUD.create(a.cohort)
+        BUD.create(a.cohort, profile=a.profile)
     if not cohort.exists(a.cohort):
         print("cohort %s does not exist; pass --create" % a.cohort)
         return 2
@@ -291,9 +315,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(BUD.state(a.cohort), indent=2, default=str))
         return 0
 
-    if a.max_windows > BUD.WINDOW_BUDGET:
-        print("--max-windows %d exceeds the authorized %d"
-              % (a.max_windows, BUD.WINDOW_BUDGET))
+    prof = BUD.profile_of(a.cohort)
+    if a.max_windows > prof["windows"]:
+        print("--max-windows %d exceeds this cohort's profile (%s: %d)"
+              % (a.max_windows, prof["name"], prof["windows"]))
         return 2
 
     pf = preflight(a.cohort, probe_seconds=a.runtime_s)

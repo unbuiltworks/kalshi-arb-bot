@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from src.gemini_execution import (arming, ci15m_budget as BUD, cohort,
                                   payload, position_ledger, spec, transport)
 from src.gemini_execution.ci15m_policy import POLICY, QUANTITY, fingerprint
+from src.gemini_execution import ci15m_treatments as TREAT
 from src.gemini_execution.continuous_probe import (COMPLETE, EXTEND, HOLD,
                                                    OPEN)
 
@@ -44,7 +45,13 @@ LABEL = "GEMINI_CI15M_PROBE_V1"
 
 #: the authorization these bounds were granted against. It must match
 #: `arming.EXPECTED_AUTH_ID` before anything is constructed.
-PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-1"
+PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-2"
+
+#: THE EXECUTION TREATMENT, fixed for this cohort. T = capped marketable
+#: limit at the REAL executable ask. M is implemented and tested but is NOT
+#: authorized here, so it is not selectable at runtime: a probe that could
+#: switch treatment mid-cohort would not be a controlled experiment.
+TREATMENT = TREAT.TAKER
 
 #: the policy bytes the authorization was granted against. INSTALLED
 #: 2026-10-03 under the owner's FINAL AUTHORIZATION -- CI15M-1. None would
@@ -58,7 +65,7 @@ AUTHORIZED_POLICY_FINGERPRINT: Optional[str] = (
 
 #: the commit the authorization names. Verified at runtime, before the first
 #: venue submission, by `verify_runtime()`.
-AUTHORIZED_SHA = "bf14f29523f02a72187cea5d39102aa09c457122"
+AUTHORIZED_SHA = "13f83d4c49c5eb060320084be291cd75b04027f7"
 
 #: the ONE contract family. A symbol outside it is refused by name.
 SYMBOL_PREFIX = "GEMI-BTC15M"
@@ -266,13 +273,27 @@ def plan(cohort_id: str, inv: Any, *, bid: Optional[D], ask: Optional[D],
 
 
 def intent_of(ticker: str, inv: Any, dec: Mapping[str, Any],
-              n_extends: int, *, reconciled_signed: Any = None
-              ) -> Dict[str, Any]:
+              n_extends: int, *, reconciled_signed: Any = None,
+              ladder_bid: Any = None, ladder_ask: Any = None,
+              telemetry: Any = None) -> Dict[str, Any]:
     """The submission intent, with every number the budget will re-check.
 
     The quantity is QUANTITY and is not derived from anything.
     """
-    side, px = dec["side"], D(str(dec["price"]))
+    side = dec["side"]
+    # TREATMENT T. The frozen policy already chose the side and the
+    # acquisition price FROM THE LADDER; the treatment restates it as a
+    # capped marketable limit and asserts the cap. It changes no decision.
+    t = TREAT.taker_price(side, D(str(ladder_bid)), D(str(ladder_ask)),
+                          ceiling=POLICY["HARD_MAX_PRICE"])
+    if not t["ok"]:
+        raise ProbeRefused("Treatment T refused: %s" % t["why"])
+    px = D(str(t["price"]))
+    if px != D(str(dec["price"])):
+        raise ProbeRefused(
+            "Treatment T price %s disagrees with the frozen policy's "
+            "acquisition %s -- the treatment must restate the decision, "
+            "never change it" % (px, dec["price"]))
     trial = POLICY["Inventory"](
         q_up=inv.q_up, q_down=inv.q_down, c_up=inv.c_up, c_down=inv.c_down,
         fees=inv.fees, rebates=inv.rebates, fills=list(inv.fills))
@@ -285,7 +306,12 @@ def intent_of(ticker: str, inv: Any, dec: Mapping[str, Any],
         "action": dec["action"], "side": side,
         "outcome": SIDE_TO_OUTCOME[side],
         "price": str(px), "quantity": str(QUANTITY),
-        "maker_or_cancel": True,
+        # TREATMENT T: a crossing LIMIT. Not post-only, never a market order.
+        "maker_or_cancel": False,
+        "treatment": TREATMENT,
+        "ladder_bid": str(ladder_bid), "ladder_ask": str(ladder_ask),
+        "price_source": "/v1/book executable ladder",
+        "contract_price_telemetry": telemetry,
         "extends_before": n_extends,
         "unmatched_shares_after": str(trial.residual),
         "unmatched_principal_after": str(trial.residual * avg),
@@ -531,17 +557,32 @@ def assert_payload_is_q1(symbol: str, intent: Mapping[str, Any]
     the transport call passes something else, so the body itself is built,
     structurally validated and read back.
     """
+    # the intent's own flag is GUARDED, not ignored: under Treatment T a
+    # post-only intent is a contradiction, and silently overriding it would
+    # hide a caller that had the wrong model of the order.
+    if intent.get("maker_or_cancel") is not False:
+        raise ProbeRefused(
+            "Treatment T requires maker_or_cancel False in the intent; got "
+            "%r" % (intent.get("maker_or_cancel"),))
     body = payload.build_order(symbol=symbol, price=str(intent["price"]),
                                quantity=str(intent["quantity"]),
                                outcome=intent["outcome"],
-                               maker_or_cancel=True)
+                               maker_or_cancel=False)
     payload.validate_structure(body)
-    payload.assert_types(body)                 # allow_taker stays FALSE
+    payload.assert_types(body, allow_taker=True)
     if D(str(body["quantity"])) != QUANTITY:
         raise ProbeRefused("payload quantity %r is not q=%s"
                            % (body["quantity"], QUANTITY))
-    if body["makerOrCancel"] is not True:
-        raise ProbeRefused("payload is not maker-or-cancel")
+    if body["makerOrCancel"] is not False:
+        raise ProbeRefused("Treatment T requires makerOrCancel false")
+    if body["orderType"] != payload.spec.ORDER_TYPE_LIMIT:
+        raise ProbeRefused("not a LIMIT order -- there is no unrestricted "
+                           "market order on this path")
+    if not str(body.get("price") or "").strip():
+        raise ProbeRefused("a marketable limit must carry an explicit price")
+    if D(str(body["price"])) > POLICY["HARD_MAX_PRICE"]:
+        raise ProbeRefused("payload price %s exceeds the ceiling %s"
+                           % (body["price"], POLICY["HARD_MAX_PRICE"]))
     return body
 
 
@@ -591,7 +632,8 @@ async def submit(cohort_id: str, symbol: str, ticker: str,
         res = await transport.place(symbol=symbol, side=payload.spec.SIDE_BUY,
                                     outcome=intent["outcome"],
                                     price=str(intent["price"]),
-                                    quantity=str(intent["quantity"]))
+                                    quantity=str(intent["quantity"]),
+                                    allow_taker=True)
     except Exception as exc:                                   # noqa: BLE001
         BUD.record_status(cohort_id, ticker, slot=row["slot"],
                           status="SUBMITTED",
@@ -629,11 +671,16 @@ def preflight(cohort_id: str, *,
         "symbol_family": SYMBOL_PREFIX,
         "side_mapping": SIDE_TO_OUTCOME,
         "maker_or_cancel": True,
-        "taker_path_reachable": False,
-        "taker_note": ("transport.place is called WITHOUT allow_taker, and "
-                       "allow_taker additionally requires the semantics "
-                       "authorization, so a crossing order is not "
-                       "constructible under this probe."),
+        "treatment": TREATMENT,
+        "taker_path_reachable": True,
+        "taker_note": ("Treatment T is a CAPPED MARKETABLE LIMIT: "
+                       "orderType limit, explicit price from the /v1/book "
+                       "executable ladder, bounded by the 0.90 ceiling, "
+                       "makerOrCancel false. allow_taker is reachable ONLY "
+                       "because arming.EXPECTED_AUTH_ID equals "
+                       "payload.SEMANTICS_PROBE_AUTH_ID under THIS "
+                       "authorization. There is no unrestricted market "
+                       "order on this path."),
         "separation": ("the prospective EXTEND-vs-NO-EXTEND shadow is a "
                        "different process writing different files, and its "
                        "results are never pooled with these rows."),
@@ -690,16 +737,19 @@ def verify_runtime(cohort_id: str, *,
         "policy_fingerprint_matches":
             fingerprint() == AUTHORIZED_POLICY_FINGERPRINT,
         "authorization_installed":
-            arming.EXPECTED_AUTH_ID == PROBE_AUTH_ID == "OWNER-2026-10-03-"
-                                                        "GEMINI-CI15M-1",
+            arming.EXPECTED_AUTH_ID == PROBE_AUTH_ID
+            == "OWNER-2026-10-03-GEMINI-CI15M-2",
         "quantity_is_one": QUANTITY == D("1"),
         "consumed_slots_zero": st["order_slots_consumed"] == 0,
         "confirmed_realized_loss_zero":
             D(st["confirmed_realized_principal_loss"]) == D("0"),
         "no_halt": st["halted"] is None,
         "not_expired": st["expired"] is None,
-        "taker_path_shut":
-            payload.SEMANTICS_PROBE_AUTH_ID != arming.EXPECTED_AUTH_ID,
+        # CI15M-2 Treatment T REQUIRES the taker path, so the condition
+        # inverts: the two constants must AGREE, and both must be CI15M-2.
+        "treatment_t_authorized":
+            (payload.SEMANTICS_PROBE_AUTH_ID == arming.EXPECTED_AUTH_ID
+             == PROBE_AUTH_ID),
         "arming_keys_present": arming.armed(),
     }
     # The SHA condition is satisfied by EITHER an exact match or a descendant
@@ -712,6 +762,13 @@ def verify_runtime(cohort_id: str, *,
     # about those constants stale. The FROZEN POLICY FILE IS NOT IN THIS SET,
     # and is additionally checked exactly, by fingerprint, above.
     AUTH_ONLY = {"src/gemini_execution/arming.py",
+                 # payload.py carries SEMANTICS_PROBE_AUTH_ID, the constant
+                 # that gates `allow_taker`. Treatment T needs
+                 # makerOrCancel false, so the owner's authorization of T
+                 # necessarily moves it. It is an AUTHORIZATION CONSTANT,
+                 # the same category as arming.py -- and a test asserts the
+                 # diff on this file touches nothing but that constant.
+                 "src/gemini_execution/payload.py",
                  "src/gemini_execution/ci15m_probe.py",
                  "tests/test_ci15m_probe.py",
                  # WIDENED 2026-10-03, and the widening is stated rather than
@@ -958,7 +1015,9 @@ async def run_window(cohort_id: str, symbol: str, ticker: str, expiry_ts: float,
                       "venue does not confirm")
             break
         intent = intent_of(ticker, inv, pl, n_extends,
-                           reconciled_signed=str(rec0["signed"]))
+                           reconciled_signed=str(rec0["signed"]),
+                           ladder_bid=bk["bid"], ladder_ask=bk["ask"],
+                           telemetry=bk.get("contract_price_telemetry"))
         before = POLICY["Inventory"](
             q_up=inv.q_up, q_down=inv.q_down, c_up=inv.c_up,
             c_down=inv.c_down, fees=inv.fees, rebates=inv.rebates,

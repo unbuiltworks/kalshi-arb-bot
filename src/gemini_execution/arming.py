@@ -121,7 +121,38 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #:
 #: EXECUTION VALIDATION ONLY. Not scaling, and not a declaration of positive
 #: expectancy.
-EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-1"
+#: MOVED 2026-10-03 on the owner's authorization of the CI15M-2 MECHANICS
+#: probe, granted against SHA 13f83d4c49c5eb060320084be291cd75b04027f7 and
+#: frozen policy fingerprint
+#: 5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329.
+#:
+#: CI15M-1 IS PERMANENTLY CLOSED at 12/12 and is not reset, reused or
+#: modified. Its latch refs stand, its audit is committed, and a fresh
+#: runner reading those refs refuses it.
+#:
+#: WHAT THIS PROBE IS. A MECHANICS probe, not a profitability test and not
+#: an endorsement of taker execution. Its success criterion is one chain:
+#: OPEN fill -> terminal fill detection -> authoritative venue inventory
+#: reconciliation -> correct next frozen-policy decision. If the frozen
+#: policy then naturally calls for an EXTEND or a COMPLEMENT, good; no
+#: action is manufactured to use a remaining slot.
+#:
+#: BOUNDS, from the owner: BTC15m only; ONE market/window; q=1; THREE
+#: submitted orders total; one outstanding/unresolved order; one OPEN
+#: intent; OPEN + at most 2 subsequent inventory actions; max 2 EXTENDs;
+#: acquisition <= 0.90; MAX_PAIR_COST 0.96; unmatched <= 3 shares and
+#: <= $2.70; frozen 5c EXTEND threshold; OPEN_SIDE_RULE NATIVE_UP; no
+#: progression; no retry or chase after a cancelled or unfilled OPEN.
+#:
+#: TREATMENT T ONLY, priced from the REAL /v1/book executable ladder.
+#: `contract.prices.buy.yes` is telemetry and may never determine an
+#: executable price. This is also the ONE authorization under which
+#: `transport.place(allow_taker=True)` is reachable, which is why
+#: `payload.SEMANTICS_PROBE_AUTH_ID` moves to this same value -- the two
+#: must AGREE for a crossing order to be constructible at all. The order is
+#: still a LIMIT with an explicit price; there is no unrestricted market
+#: order anywhere in this repository.
+EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-2"
 
 
 class NotArmed(Exception):

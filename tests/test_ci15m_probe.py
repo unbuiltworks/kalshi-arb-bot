@@ -68,20 +68,27 @@ def _intent(action, side, price, **over):
 # 7. q=1 is wired all the way to the venue payload
 # =====================================================================
 def test_the_built_payload_itself_carries_quantity_exactly_one():
-    body = P.assert_payload_is_q1("GEMI-BTC15M2610031530-UP",
-                                  _intent(OPEN, "UP", "0.40"))
+    body = P.assert_payload_is_q1(
+        "GEMI-BTC15M2610031530-UP",
+        _intent(OPEN, "UP", "0.40", maker_or_cancel=False))
     assert body["quantity"] == "1"
     assert D(body["quantity"]) == QUANTITY
-    assert body["makerOrCancel"] is True
-    # and it is a payload the signer would actually accept
+    assert body["makerOrCancel"] is False       # Treatment T
+    # and it is a payload the signer would actually accept. allow_taker is
+    # REQUIRED here: without it the validator refuses makerOrCancel False,
+    # which is the guard that keeps every other strategy post-only.
     payload.validate_structure(body)
-    payload.assert_types(body)
+    with pytest.raises(payload.PayloadViolation):
+        payload.assert_types(body)
+    payload.assert_types(body, allow_taker=True)
 
 
 def test_a_payload_at_any_other_quantity_is_refused_at_the_last_link():
     with pytest.raises(P.ProbeRefused):
-        P.assert_payload_is_q1("GEMI-BTC15M2610031530-UP",
-                               _intent(OPEN, "UP", "0.40", quantity="2"))
+        P.assert_payload_is_q1(
+            "GEMI-BTC15M2610031530-UP",
+            _intent(OPEN, "UP", "0.40", quantity="2",
+                    maker_or_cancel=False))
 
 
 def test_the_budget_refuses_a_non_unit_quantity_before_the_venue(root):
@@ -142,7 +149,9 @@ def test_a_larger_intent_cannot_be_constructed_from_the_policy():
     dec = POLICY["decide_once"](inv, bid=D("0.30"), ask=D("0.40"),
                                 bid_size=500, ask_size=500, tte=400.0,
                                 qty=QUANTITY, n_extends=0, actions=0)
-    it = P.intent_of("BTC15M2610031530", inv, dec, 0)
+    it = P.intent_of("BTC15M2610031530", inv, dec, 0,
+                     reconciled_signed="0", ladder_bid=D("0.30"),
+                     ladder_ask=D("0.40"))
     assert it["quantity"] == "1"
 
 
@@ -724,10 +733,32 @@ def test_the_probe_is_inert_without_the_matching_authorization():
     assert not arming.armed(), "tests must never run armed"
 
 
-def test_the_probe_never_asks_for_taker_behaviour():
-    src = open(P.__file__, encoding="utf-8").read()
-    assert "allow_taker=True" not in src
-    assert "allow_taker" in src, "it must still SAY it does not"
+def test_treatment_t_is_a_capped_limit_and_never_a_market_order():
+    """CI15M-2 AUTHORIZES the capped marketable limit, so the taker path is
+    deliberately reachable. What must remain impossible is an unrestricted
+    market order and a fill above our limit."""
+    assert P.TREATMENT == "T"
+    body = P.assert_payload_is_q1(
+        "GEMI-BTC15M2610031745-UP",
+        _intent(OPEN, "UP", "0.70", maker_or_cancel=False))
+    assert body["makerOrCancel"] is False
+    assert body["orderType"] == "limit", "always a LIMIT"
+    assert body["price"] == "0.70", "always an explicit price"
+    assert body["quantity"] == "1"
+
+
+def test_a_price_above_the_ceiling_is_refused_at_the_payload():
+    with pytest.raises(P.ProbeRefused):
+        P.assert_payload_is_q1(
+            "GEMI-BTC15M2610031745-UP",
+            _intent(OPEN, "UP", "0.95", maker_or_cancel=False))
+
+
+def test_a_post_only_payload_is_refused_under_treatment_t():
+    with pytest.raises(P.ProbeRefused):
+        P.assert_payload_is_q1(
+            "GEMI-BTC15M2610031745-UP",
+            _intent(OPEN, "UP", "0.70", maker_or_cancel=True))
 
 
 def test_the_frozen_policy_imports_no_transport():
@@ -751,9 +782,10 @@ def test_the_authorized_fingerprint_is_the_one_the_owner_granted():
                "36329")
     assert P.AUTHORIZED_POLICY_FINGERPRINT == GRANTED
     assert fingerprint() == GRANTED, (
-        "the frozen policy on disk is not the one CI15M-1 authorizes")
-    assert P.AUTHORIZED_SHA == ("bf14f29523f02a72187cea5d39102aa09c4571"
-                                "22")
+        "the frozen policy on disk is not the one CI15M-2 authorizes")
+    assert P.AUTHORIZED_SHA == ("13f83d4c49c5eb060320084be291cd75b0402"
+                                "7f7")
+    assert P.PROBE_AUTH_ID == "OWNER-2026-10-03-GEMINI-CI15M-2"
 
 
 def test_a_policy_edit_halts_the_live_path(root, monkeypatch):
@@ -777,29 +809,41 @@ def test_the_runtime_gate_answers_every_owner_condition(root):
     for k in ("policy_fingerprint_matches", "authorization_installed",
               "quantity_is_one", "consumed_slots_zero",
               "confirmed_realized_loss_zero", "no_halt", "not_expired",
-              "taker_path_shut"):
+              "treatment_t_authorized"):
         assert v["checks"][k] is True, k
     # and it is NOT ok, because this environment holds no credentials
     assert v["checks"]["arming_keys_present"] is False
     assert "arming_keys_present" in v["failed"]
 
 
-def test_the_execution_defect_fixes_leave_the_ci15m_1_lineage(root):
-    """CI15M-1 IS CLOSED, and the gate must say so. The defect fixes touch
-    ci15m_budget.py, which is NOT in the authorization's allowed diff, so
-    sha_condition is now False. That is correct: these changes need a NEW
-    authorization (CI15M-2), not CI15M-1's."""
-    v = P.verify_runtime(CID, root=root)
-    assert v["checks"]["sha_condition"] is False, (
-        "a tree carrying the execution-defect fixes must NOT satisfy the "
-        "CI15M-1 authorization: %r" % (v["diff_from_authorized_sha"],))
-    extra = set(v["diff_from_authorized_sha"]) - {
-        ".github/workflows/gemini-settlement-gate.yml",
-        "src/gemini_execution/arming.py",
-        "src/gemini_execution/ci15m_probe.py",
-        "src/gemini_execution/ci15m_runner.py",
-        "tests/test_ci15m_probe.py"}
-    assert extra, "the diff must carry something outside the five files"
+def test_ci15m_1_is_permanently_closed_and_not_reused():
+    """CI15M-1 must not be reset, reused or modified. Its id is gone from
+    the build and its budget is read from immutable git refs."""
+    assert arming.EXPECTED_AUTH_ID != "OWNER-2026-10-03-GEMINI-CI15M-1"
+    assert P.PROBE_AUTH_ID != "OWNER-2026-10-03-GEMINI-CI15M-1"
+    src = open(BUD.__file__, encoding="utf-8").read()
+    for banned in ("def reset", "def reopen", "def clear_latch",
+                   "def delete_slots"):
+        assert banned not in src, banned
+
+
+def test_the_payload_diff_touches_only_the_authorization_constant():
+    """payload.py is in AUTH_ONLY because Treatment T needs the taker gate
+    moved. That is an authorization constant, and nothing else in that file
+    may change under cover of it."""
+    import subprocess
+    d = subprocess.run(
+        ["git", "diff", "-U0", P.AUTHORIZED_SHA, "HEAD", "--",
+         "src/gemini_execution/payload.py"],
+        capture_output=True, text=True, timeout=60).stdout
+    changed = [l for l in d.splitlines()
+               if (l.startswith("+") or l.startswith("-"))
+               and not l.startswith(("+++", "---"))]
+    code = [l for l in changed if not l[1:].lstrip().startswith("#")]
+    for l in code:
+        assert "SEMANTICS_PROBE_AUTH_ID" in l, (
+            "payload.py changed something other than the authorization "
+            "constant: %r" % l)
 
 
 def test_the_runtime_gate_refuses_once_a_slot_is_spent(root):
@@ -1033,6 +1077,11 @@ def test_the_sha_gate_refuses_a_diff_outside_the_authorization_files(root,
                           "src/gemini_execution/arming.py\n")
                 returncode = 0
             return R()
+        if cmd[:2] == ["git", "rev-parse"]:
+            class R:
+                stdout = "deadbeef" * 5 + "\n"   # a DIFFERENT head
+                returncode = 0
+            return R()
         return real(cmd, *a, **k)
     monkeypatch.setattr(subprocess, "run", fake)
     v = P.verify_runtime(CID, root=root)
@@ -1058,10 +1107,13 @@ def test_the_widened_diff_set_still_excludes_every_bound_bearing_file():
     for excluded in ("btc15m_shadow_policy",      # the frozen policy
                      "ci15m_budget",              # every risk bound
                      "ci15m_policy",              # the loader/fingerprint
-                     "payload.py", "transport.py", "cohort.py"):
+                     "transport.py", "cohort.py"):
         assert excluded not in block, "%r must not be in AUTH_ONLY" % excluded
     assert "ci15m_runner.py" in block
     assert "gemini-settlement-gate.yml" in block
+    # payload.py is admitted ONLY as an authorization constant; a separate
+    # test asserts its diff touches nothing but that constant.
+    assert "payload.py" in block
 
 
 def test_the_runner_cli_cannot_submit_without_live_and_a_durable_branch():

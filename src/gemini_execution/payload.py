@@ -51,7 +51,14 @@ ALLOWED_ORDER_FIELDS = ("symbol", "orderType", "side", "quantity", "price",
 #: arming.EXPECTED_AUTH_ID must AGREE for a crossing order to be constructible
 #: at all; the launcher asserts it before anything else runs. SEMANTICS-1 is
 #: spent, so leaving this on the old id would have shut the taker path.
-SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-R2-EXEC-1"
+#: MOVED 2026-10-03 to CI15M-2, whose Treatment T is a CAPPED MARKETABLE
+#: LIMIT and therefore needs `makerOrCancel: false`. This constant and
+#: `arming.EXPECTED_AUTH_ID` must AGREE for a crossing order to be
+#: constructible, and CI15M-2 is the only authorization that grants it.
+#: It is still a LIMIT order with an explicit price: `orderType` stays
+#: "limit" and the price is bounded by the policy's own 0.90 ceiling, so
+#: this is not and cannot become an unrestricted market order.
+SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-2"
 
 #: fields that must never appear, with the reason, so a refusal explains itself
 FORBIDDEN = {
