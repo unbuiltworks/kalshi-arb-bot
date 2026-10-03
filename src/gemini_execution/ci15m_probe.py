@@ -755,7 +755,7 @@ def verify_runtime(cohort_id: str, *,
                  # diff on this file touches nothing but that constant.
                  "src/gemini_execution/payload.py",
                  "src/gemini_execution/ci15m_probe.py",
-                 "tests/test_ci15m_probe.py",
+
                  # WIDENED 2026-10-03, and the widening is stated rather than
                  # quiet. The owner's instruction was explicit: "Add the
                  # minimal ci15m workflow path/step required to run the
@@ -772,9 +772,19 @@ def verify_runtime(cohort_id: str, *,
                  # rule, threshold or bound can change through this door.
                  "src/gemini_execution/ci15m_runner.py",
                  ".github/workflows/gemini-settlement-gate.yml"}
+    def _permitted(f: str) -> bool:
+        if f in AUTH_ONLY:
+            return True
+        # A TEST FILE IS ADMITTED BY RULE, because it is imported by no
+        # execution path and cannot change what is sent. Nothing else is:
+        # any other .py, and the frozen policy above all, is refused -- and
+        # the frozen policy is additionally pinned EXACTLY by fingerprint.
+        return (f.startswith("tests/test_ci15m_") and f.endswith(".py"))
+
+    not_permitted = sorted(f for f in diff_files if not _permitted(f))
     sha_ok = checks["head_is_authorized_sha"] or (
         checks["head_is_authorized_or_descendant"]
-        and bool(diff_files) and set(diff_files) <= AUTH_ONLY)
+        and bool(diff_files) and not not_permitted)
     checks["sha_condition"] = bool(sha_ok)
     required = [k for k in checks
                 if k not in ("head_is_authorized_sha",
@@ -784,6 +794,7 @@ def verify_runtime(cohort_id: str, *,
         "ok": not failed, "failed": failed, "checks": checks,
         "head": head, "authorized_sha": AUTHORIZED_SHA,
         "diff_from_authorized_sha": diff_files,
+        "diff_paths_not_permitted": not_permitted,
         "policy_fingerprint": fingerprint(),
         "sha_note": ("the authorized SHA names the POLICY AND LOGIC commit. "
                      "Installing the authorization id and the authorized "

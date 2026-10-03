@@ -1163,27 +1163,37 @@ def test_the_slot_hook_pushes_a_new_ref_never_the_branch_tip():
             "return hook")[0].replace('"git", "add", "-f", d', ""), banned
 
 
-def test_the_slot_hook_ref_is_unique_per_slot(monkeypatch, root):
+def test_the_slot_hook_ref_is_unique_per_slot(monkeypatch, tmp_path):
+    """Each slot gets its own ref and the hook never pushes the branch tip.
+    The commit's SHAPE -- orphan, cohort files only, no workflow file -- is
+    covered in test_ci15m_runner_liveness.py."""
     import subprocess
-    from src.gemini_execution import ci15m_runner as R
+    from src.gemini_execution import ci15m_runner as RUN
+    d = tmp_path / "CI15M-X"
+    d.mkdir()
+    (d / "ledger.jsonl").write_text('{"kind": "PLACE", "slot": 0}' + chr(10))
+    monkeypatch.setattr(BUD.cohort, "directory", lambda cid, **k: str(d))
     seen = []
+    real = subprocess.run
 
     def fake(cmd, *a, **k):
         if cmd[:2] == ["git", "push"]:
             seen.append(cmd[-1])
 
-        class R:
-            returncode = 0
-            stderr = ""
-            stdout = ""
-        return R()
+            class Z:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+            return Z()
+        return real(cmd, *a, **k)
     monkeypatch.setattr(subprocess, "run", fake)
-    hook = R.git_slot_hook("some-branch")
+    hook = RUN.git_slot_hook("some-branch")
     for n in (0, 1, 2):
-        assert hook({"cohort_id": "CI15M-1", "slot": n, "ticker": "T"})
-    assert len(set(seen)) == 3, "each slot must get its own ref: %r" % seen
-    assert all(x.startswith("HEAD:refs/heads/ci15m-latch/") for x in seen)
-    assert not any("some-branch" in x for x in seen), (
+        assert hook({"cohort_id": "CI15M-X", "slot": n, "ticker": "T"})
+    refs = [x.split(":")[1] for x in seen]
+    assert len(set(refs)) == 3, "each slot must get its own ref: %r" % refs
+    assert all(r.startswith("refs/heads/ci15m-latch/") for r in refs)
+    assert not any("some-branch" in r for r in refs), (
         "the hook must not push to the branch tip")
 
 
