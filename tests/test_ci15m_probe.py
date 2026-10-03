@@ -930,3 +930,41 @@ def test_the_runner_refuses_more_windows_than_authorized():
     import src.gemini_execution.ci15m_budget as B
     assert B.WINDOW_BUDGET == 3
     assert R.main(["--cohort", "CI15M-NOPE", "--max-windows", "4"]) == 2
+
+
+def test_the_slot_hook_pushes_a_new_ref_never_the_branch_tip():
+    """The Actions step checks out a PINNED SHA, so its HEAD is behind the
+    branch tip and `HEAD:branch` would be rejected non-fast-forward -- the
+    hook would fail, the slot would already be spent, and the probe would
+    stop having bought nothing. It must push a fresh per-slot ref, and it
+    must never force-push."""
+    from src.gemini_execution import ci15m_runner as R
+    src = open(R.__file__, encoding="utf-8").read()
+    assert "refs/heads/ci15m-latch/" in src
+    for banned in ("--force", "-f ", "+HEAD:", "--force-with-lease"):
+        assert banned not in src.split("def git_slot_hook")[1].split(
+            "return hook")[0].replace('"git", "add", "-f", d', ""), banned
+
+
+def test_the_slot_hook_ref_is_unique_per_slot(monkeypatch, root):
+    import subprocess
+    from src.gemini_execution import ci15m_runner as R
+    seen = []
+
+    def fake(cmd, *a, **k):
+        if cmd[:2] == ["git", "push"]:
+            seen.append(cmd[-1])
+
+        class R:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+        return R()
+    monkeypatch.setattr(subprocess, "run", fake)
+    hook = R.git_slot_hook("some-branch")
+    for n in (0, 1, 2):
+        assert hook({"cohort_id": "CI15M-1", "slot": n, "ticker": "T"})
+    assert len(set(seen)) == 3, "each slot must get its own ref: %r" % seen
+    assert all(x.startswith("HEAD:refs/heads/ci15m-latch/") for x in seen)
+    assert not any("some-branch" in x for x in seen), (
+        "the hook must not push to the branch tip")

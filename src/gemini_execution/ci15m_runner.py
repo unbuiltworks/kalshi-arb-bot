@@ -124,27 +124,43 @@ def git_slot_hook(branch: str):
     Called AFTER the slot is fsynced and BEFORE the venue is touched. A
     failure here stops the probe with the slot already spent -- which costs
     one order slot and never risks an order nobody recorded.
+
+    IT PUSHES TO A UNIQUE NEW REF PER SLOT, NOT TO `branch`. This matters
+    and it is not a style choice: the Actions step checks out a PINNED SHA,
+    so its HEAD is behind the branch tip, and `HEAD:branch` would be
+    rejected non-fast-forward. The hook would then fail, the slot would be
+    spent, and the probe would stop having bought nothing. Creating a fresh
+    ref always succeeds and is just as durable, and `branch` is kept only to
+    name the family of refs so they are easy to find.
+
+    A FORCE PUSH TO `branch` WOULD BE THE WRONG FIX -- it would discard
+    whatever else the branch had gained, including other latches.
     """
     import subprocess
 
     def hook(slot_row: Dict[str, Any]) -> bool:
         d = cohort.directory(slot_row["cohort_id"])
+        slot = slot_row.get("slot")
+        ref = ("refs/heads/ci15m-latch/%s-slot%s"
+               % (slot_row.get("cohort_id"), slot))
         msg = ("latch(ci15m): slot %s consumed for %s [skip ci]"
-               % (slot_row.get("slot"), slot_row.get("ticker")))
+               % (slot, slot_row.get("ticker")))
         steps = [
             ["git", "add", "-f", d],
             ["git", "-c", "user.name=gemini-ci15m[bot]",
              "-c", "user.email=gemini-ci15m@users.noreply.github.com",
              "commit", "-m", msg],
-            ["git", "push", "origin", "HEAD:%s" % branch],
+            # a NEW ref: always a fast-forward, never clobbers anything
+            ["git", "push", "origin", "HEAD:%s" % ref],
         ]
         for cmd in steps:
-            p = subprocess.run(cmd, capture_output=True, text=True,
+            r = subprocess.run(cmd, capture_output=True, text=True,
                                timeout=60)
-            if p.returncode != 0 and cmd[1] != "commit":
-                print("  SLOT HOOK FAILED at %s: %s"
-                      % (cmd[1], (p.stderr or "")[-300:]))
+            if r.returncode != 0 and cmd[1] != "commit":
+                print("  SLOT HOOK FAILED at %s (%s): %s"
+                      % (cmd[1], ref, (r.stderr or "")[-300:]))
                 return False
+        print("  slot %s durable at %s (family: %s)" % (slot, ref, branch))
         return True
     return hook
 
