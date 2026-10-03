@@ -96,6 +96,14 @@ on:
         description: "Entry band LO:HI for the UNARMED production-path proof. Default 90:300 (the standing rule) so routine runs do not wait. Set 240:280 to prove the armed window's own band read-only."
         required: false
         default: "90:300"
+      ci15m_run:
+        description: "CI15M-1: bounded BTC15m continuous-inventory probe"
+        required: false
+        default: "false"
+      ci15m_cohort:
+        description: "CI15M-1 cohort id (durable, one per grant)"
+        required: false
+        default: "CI15M-1"
       r2_runner:
         description: "Run the continuous R2 execution-validation runner. Without r2_runner_live it is a DRY RUN that sends nothing."
         required: false
@@ -192,6 +200,96 @@ jobs:
       # fetch refs/heads/49627ca5*, which matched nothing, the checkout
       # failed, the probe step was SKIPPED and nothing was submitted.
       # ==================================================================
+      # ==================================================================
+      # CI15M-1 -- the bounded BTC15m CONTINUOUS-INVENTORY probe.
+      # DELIBERATELY EARLY, for the reason documented below: this job spends
+      # ~17 minutes on unconditional read-only steps, and a BTC15m window
+      # lives 15 minutes. Ordering it behind unrelated work makes it
+      # impossible, not merely slow.
+      #
+      # It gets its OWN tree at a FULL 40-character SHA. Anything shorter is
+      # resolved by actions/checkout as a branch or tag, which once made the
+      # probe step SKIP silently.
+      #
+      # EXECUTION VALIDATION ONLY. Not scaling, and not a declaration of
+      # positive expectancy.
+      # ==================================================================
+      - name: Check out the CI15M tree at its authorized SHA
+        if: ${{ github.event.inputs.ci15m_run == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: fd9d057f0e96ee939eca0bfed22bf4e1e2203176
+          path: ci15m
+          fetch-depth: 0
+
+      # NO CREDENTIAL IS IN SCOPE IN THIS STEP. The authorization constants,
+      # the policy fingerprint and the gate tests are all provable without
+      # one, so they are proved before any secret exists in the job.
+      - name: CI15M provenance and gates (no credential in scope)
+        if: ${{ github.event.inputs.ci15m_run == 'true' }}
+        working-directory: ci15m
+        run: |
+          set -o pipefail
+          echo "ci15m tree HEAD: $(git rev-parse HEAD)"
+          python - <<'PY'
+          from src.gemini_execution import arming, payload
+          from src.gemini_execution import ci15m_probe as P
+          from src.gemini_execution.ci15m_policy import fingerprint
+          print("authorization      :", arming.EXPECTED_AUTH_ID)
+          print("policy fingerprint :", fingerprint())
+          assert arming.EXPECTED_AUTH_ID == P.PROBE_AUTH_ID == \
+              "OWNER-2026-10-03-GEMINI-CI15M-1"
+          assert fingerprint() == P.AUTHORIZED_POLICY_FINGERPRINT == \
+              "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329"
+          # CI15M is maker-or-cancel only: the taker path must be SHUT.
+          assert payload.SEMANTICS_PROBE_AUTH_ID != arming.EXPECTED_AUTH_ID, \
+              "the taker path must not be reachable under CI15M-1"
+          print("taker path shut    : True")
+          PY
+          # the gates are a precondition, not documentation
+          python -m pytest tests/test_ci15m_probe.py -q
+
+      - name: CI15M-1 bounded live probe
+        if: ${{ github.event.inputs.ci15m_run == 'true' }}
+        timeout-minutes: 60
+        working-directory: ci15m
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          # NON-CREDENTIAL authorization values, exactly as the R2 step sets
+          # them. They are an arm flag and an authorization label, not
+          # secrets, and they are the owner's granted values verbatim.
+          GEMINI_CANARY_LIVE: "YES"
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-CI15M-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-04T00:00:00Z"
+          GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
+        run: |
+          set -o pipefail
+          # RECOVER FIRST. Consumed slots are re-read from disk; a restart
+          # must never reset the budget.
+          python -m src.gemini_execution.ci15m_runner \
+            --cohort "${{ github.event.inputs.ci15m_cohort }}" --create \
+            --recover-only
+          # THE COMPLETE PREFLIGHT, inside the credentialed environment, and
+          # it SENDS NOTHING. Non-zero exit here stops the step.
+          python -m src.gemini_execution.ci15m_runner \
+            --cohort "${{ github.event.inputs.ci15m_cohort }}" \
+            --preflight-only --runtime-s 3000
+          # Only now, and only if every condition above passed.
+          python -m src.gemini_execution.ci15m_runner \
+            --cohort "${{ github.event.inputs.ci15m_cohort }}" --live \
+            --durable-branch research/gemini-btc5m-information-edge \
+            --max-windows 3 --runtime-s 3000
+
+      - name: CI15M-1 evidence (always, even on failure)
+        if: ${{ always() && github.event.inputs.ci15m_run == 'true' }}
+        working-directory: ci15m
+        run: |
+          python -m src.gemini_execution.ci15m_runner \
+            --cohort "${{ github.event.inputs.ci15m_cohort }}" \
+            --recover-only || true
+          find analysis/gemini/cohorts -type f 2>/dev/null | head -40 || true
+
       - name: Check out the reviewed probe/runner tree at its pinned SHA
         if: ${{ github.event.inputs.r2_runner == 'true' }}
         uses: actions/checkout@v4

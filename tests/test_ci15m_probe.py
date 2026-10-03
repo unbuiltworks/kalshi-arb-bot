@@ -604,9 +604,51 @@ def test_the_fingerprint_changes_if_the_policy_changes(tmp_path, monkeypatch):
     assert pol.fingerprint() != before
 
 
-def test_the_live_path_refuses_an_unauthorized_policy_fingerprint():
-    assert P.AUTHORIZED_POLICY_FINGERPRINT is None, (
-        "the authorized fingerprint must be unset until a human arms it")
+def test_the_authorized_fingerprint_is_the_one_the_owner_granted():
+    """CI15M-1 was granted against these exact policy bytes."""
+    GRANTED = ("5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd8105"
+               "36329")
+    assert P.AUTHORIZED_POLICY_FINGERPRINT == GRANTED
+    assert fingerprint() == GRANTED, (
+        "the frozen policy on disk is not the one CI15M-1 authorizes")
+    assert P.AUTHORIZED_SHA == ("bf14f29523f02a72187cea5d39102aa09c4571"
+                                "22")
+
+
+def test_a_policy_edit_halts_the_live_path(root, monkeypatch):
+    """The enforcement, not just the constant: if the frozen policy changes,
+    `submit` must HALT rather than send."""
+    import src.gemini_execution.ci15m_policy as pol
+    tk = _open(root)
+    monkeypatch.setattr(pol, "fingerprint", lambda: "deadbeef")
+    monkeypatch.setattr(P, "fingerprint", lambda: "deadbeef")
+    import asyncio
+    with pytest.raises(P.ProbeRefused):
+        asyncio.run(P.submit(CID, "GEMI-BTC15M2610031530-UP", tk,
+                             _intent(OPEN, "UP", "0.40"), root=root))
+    assert "POLICY_FINGERPRINT_MISMATCH" in BUD.halted(CID, root=root)
+    assert BUD.consumed(CID, root=root) == 0, (
+        "a fingerprint mismatch must refuse BEFORE spending a slot")
+
+
+def test_the_runtime_gate_answers_every_owner_condition(root):
+    v = P.verify_runtime(CID, root=root)
+    for k in ("policy_fingerprint_matches", "authorization_installed",
+              "quantity_is_one", "consumed_slots_zero",
+              "confirmed_realized_loss_zero", "no_halt", "not_expired",
+              "taker_path_shut", "sha_condition"):
+        assert v["checks"][k] is True, k
+    # and it is NOT ok, because this environment holds no credentials
+    assert v["checks"]["arming_keys_present"] is False
+    assert v["ok"] is False and v["failed"] == ["arming_keys_present"]
+
+
+def test_the_runtime_gate_refuses_once_a_slot_is_spent(root):
+    tk = _open(root)
+    BUD.consume_slot(CID, tk, _intent(OPEN, "UP", "0.40"), root=root)
+    v = P.verify_runtime(CID, root=root)
+    assert v["checks"]["consumed_slots_zero"] is False
+    assert "consumed_slots_zero" in v["failed"]
 
 
 # =====================================================================
@@ -815,3 +857,114 @@ def test_decide_once_never_returns_before_enumerating_both_sides():
             assert not isinstance(node, ast.Return), (
                 "decide_once returns from inside the per-side candidate "
                 "loop, which reintroduces iteration-order dependence")
+
+
+def test_the_sha_gate_refuses_a_diff_outside_the_authorization_files(root,
+                                                                    monkeypatch):
+    """The allowed-diff set must actually bite. A descendant that changed the
+    frozen policy, or any execution module other than the two carrying the
+    authorization constants, must fail the SHA condition."""
+    import subprocess
+    real = subprocess.run
+
+    def fake(cmd, *a, **k):
+        if cmd[:2] == ["git", "diff"]:
+            class R:
+                stdout = ("analysis/gemini/info_edge/btc15m_shadow_policy.py\n"
+                          "src/gemini_execution/arming.py\n")
+                returncode = 0
+            return R()
+        return real(cmd, *a, **k)
+    monkeypatch.setattr(subprocess, "run", fake)
+    v = P.verify_runtime(CID, root=root)
+    assert v["checks"]["sha_condition"] is False
+    assert "sha_condition" in v["failed"]
+
+
+def test_the_frozen_policy_file_is_not_in_the_allowed_diff_set():
+    src = open(P.__file__, encoding="utf-8").read()
+    i = src.index("AUTH_ONLY = {")
+    block = src[i:src.index("}", i)]
+    assert "btc15m_shadow_policy" not in block
+    assert "arming.py" in block and "ci15m_probe.py" in block
+
+
+def test_the_widened_diff_set_still_excludes_every_bound_bearing_file():
+    """The allowed-diff set grew to admit the runner CLI and the workflow.
+    It must still exclude every file that carries a decision rule or a
+    bound, so nothing substantive can change through that door."""
+    src = open(P.__file__, encoding="utf-8").read()
+    i = src.index("AUTH_ONLY = {")
+    block = src[i:src.index("}", i)]
+    for excluded in ("btc15m_shadow_policy",      # the frozen policy
+                     "ci15m_budget",              # every risk bound
+                     "ci15m_policy",              # the loader/fingerprint
+                     "payload.py", "transport.py", "cohort.py"):
+        assert excluded not in block, "%r must not be in AUTH_ONLY" % excluded
+    assert "ci15m_runner.py" in block
+    assert "gemini-settlement-gate.yml" in block
+
+
+def test_the_runner_cli_cannot_submit_without_live_and_a_durable_branch():
+    from src.gemini_execution import ci15m_runner as R
+    # --live without --durable-branch is refused: a consumed slot must
+    # outlive the host.
+    rc = R.main(["--cohort", "CI15M-NOPE", "--recover-only"])
+    assert rc == 2, "an absent cohort must refuse"
+
+
+def test_the_runner_prints_presence_only_never_a_value():
+    from src.gemini_execution import ci15m_runner as R
+    src = open(R.__file__, encoding="utf-8").read()
+    # the only env reads are presence/label reads, never printed as values
+    assert "credential_presence" in src
+    for banned in ("print(os.getenv", "print(os.environ",
+                   "GEMINI_API_KEY\"))", "[:4]", "[:8]", "len(os.getenv"):
+        assert banned not in src, "a credential could leak via %r" % banned
+    pres = R.credential_presence()
+    assert set(pres.values()) <= {True, False}, "presence must be boolean"
+
+
+def test_the_runner_refuses_more_windows_than_authorized():
+    from src.gemini_execution import ci15m_runner as R
+    import src.gemini_execution.ci15m_budget as B
+    assert B.WINDOW_BUDGET == 3
+    assert R.main(["--cohort", "CI15M-NOPE", "--max-windows", "4"]) == 2
+
+
+def test_the_slot_hook_pushes_a_new_ref_never_the_branch_tip():
+    """The Actions step checks out a PINNED SHA, so its HEAD is behind the
+    branch tip and `HEAD:branch` would be rejected non-fast-forward -- the
+    hook would fail, the slot would already be spent, and the probe would
+    stop having bought nothing. It must push a fresh per-slot ref, and it
+    must never force-push."""
+    from src.gemini_execution import ci15m_runner as R
+    src = open(R.__file__, encoding="utf-8").read()
+    assert "refs/heads/ci15m-latch/" in src
+    for banned in ("--force", "-f ", "+HEAD:", "--force-with-lease"):
+        assert banned not in src.split("def git_slot_hook")[1].split(
+            "return hook")[0].replace('"git", "add", "-f", d', ""), banned
+
+
+def test_the_slot_hook_ref_is_unique_per_slot(monkeypatch, root):
+    import subprocess
+    from src.gemini_execution import ci15m_runner as R
+    seen = []
+
+    def fake(cmd, *a, **k):
+        if cmd[:2] == ["git", "push"]:
+            seen.append(cmd[-1])
+
+        class R:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+        return R()
+    monkeypatch.setattr(subprocess, "run", fake)
+    hook = R.git_slot_hook("some-branch")
+    for n in (0, 1, 2):
+        assert hook({"cohort_id": "CI15M-1", "slot": n, "ticker": "T"})
+    assert len(set(seen)) == 3, "each slot must get its own ref: %r" % seen
+    assert all(x.startswith("HEAD:refs/heads/ci15m-latch/") for x in seen)
+    assert not any("some-branch" in x for x in seen), (
+        "the hook must not push to the branch tip")
