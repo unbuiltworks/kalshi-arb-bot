@@ -97,13 +97,13 @@ on:
         required: false
         default: "90:300"
       ci15m_run:
-        description: "CI15M-1: bounded BTC15m continuous-inventory probe"
+        description: "CI15M-4: bounded BTC15m continuous-inventory probe"
         required: false
         default: "false"
       ci15m_cohort:
         description: "CI15M cohort id (durable, one per grant)"
         required: false
-        default: "CI15M-3"
+        default: "CI15M-4"
       r2_runner:
         description: "Run the continuous R2 execution-validation runner. Without r2_runner_live it is a DRY RUN that sends nothing."
         required: false
@@ -218,7 +218,7 @@ jobs:
         if: ${{ github.event.inputs.ci15m_run == 'true' }}
         uses: actions/checkout@v4
         with:
-          ref: b562976a72282bea2fbd01fddb490be1a2d01d9d
+          ref: 9483691a7bfc101a6dc873457608f7c18ff0633d
           path: ci15m
           fetch-depth: 0
 
@@ -238,7 +238,7 @@ jobs:
           print("authorization      :", arming.EXPECTED_AUTH_ID)
           print("policy fingerprint :", fingerprint())
           assert arming.EXPECTED_AUTH_ID == P.PROBE_AUTH_ID == \
-              "OWNER-2026-10-03-GEMINI-CI15M-3"
+              "OWNER-2026-10-03-GEMINI-CI15M-4"
           assert fingerprint() == P.AUTHORIZED_POLICY_FINGERPRINT == \
               "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329"
           # CI15M-2 is TREATMENT T: a capped marketable limit, so the
@@ -246,14 +246,25 @@ jobs:
           # authorization, which means the two constants must AGREE.
           assert payload.SEMANTICS_PROBE_AUTH_ID == arming.EXPECTED_AUTH_ID, \
               "Treatment T needs the taker gate under THIS authorization"
-          assert P.TREATMENT == "T", "CI15M-3 is Treatment T only"
+          assert P.TREATMENT == "T", "CI15M-4 is Treatment T only"
           print("treatment          : T (capped marketable LIMIT)")
           # the retired authorizations must be GONE from the build
           for closed in ("OWNER-2026-10-03-GEMINI-CI15M-1",
-                         "OWNER-2026-10-03-GEMINI-CI15M-2"):
+                         "OWNER-2026-10-03-GEMINI-CI15M-2",
+                         "OWNER-2026-10-03-GEMINI-CI15M-3"):
               assert arming.EXPECTED_AUTH_ID != closed, closed
           assert P.AUTHORIZED_SHA == \
-              "f52027bc7c4888d1a7429b8a6db0e065f82a0607"
+              "dfcee7b78a69db37272bbd2c5452f12385d202b9"
+          # CI15M-4's authorized BOUNDS, proved before any credential
+          # exists. ci15m_budget.py is admitted through the provenance
+          # gate ONLY while these literals hold, so a loosened cap stops
+          # the probe here rather than at the venue.
+          bm = P.bounds_match()
+          assert bm["ok"], bm["mismatched"]
+          assert bm["authorized"]["windows"] == 2
+          assert bm["authorized"]["orders_total"] == 6
+          assert bm["authorized"]["orders_per_window"] == 3
+          print("bounds             : 2 windows / 6 orders / 3 per window")
           # the executable price source must be the REAL /v1/book ladder
           import inspect
           src = inspect.getsource(P.book_from_venue)
@@ -269,11 +280,13 @@ jobs:
                            tests/test_ci15m_durable_budget.py \
                            tests/test_ci15m_runner_liveness.py \
                            tests/test_ci15m_execution_semantics.py \
+                           tests/test_ci15m_fill_reconciliation.py \
+                           tests/test_ci15m_crash_boundary.py \
                            tests/test_ci15m_probe.py -q
 
-      - name: CI15M-1 bounded live probe
+      - name: CI15M-4 bounded live probe
         if: ${{ github.event.inputs.ci15m_run == 'true' }}
-        timeout-minutes: 60
+        timeout-minutes: 75
         working-directory: ci15m
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -282,7 +295,7 @@ jobs:
           # them. They are an arm flag and an authorization label, not
           # secrets, and they are the owner's granted values verbatim.
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-CI15M-3"
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-CI15M-4"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-10-04T00:00:00Z"
           GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
         run: |
@@ -291,19 +304,19 @@ jobs:
           # must never reset the budget.
           python -m src.gemini_execution.ci15m_runner \
             --cohort "${{ github.event.inputs.ci15m_cohort }}" --create \
-            --profile MECHANICS --recover-only
+            --profile MECHANICS2 --recover-only
           # THE COMPLETE PREFLIGHT, inside the credentialed environment, and
           # it SENDS NOTHING. Non-zero exit here stops the step.
           python -m src.gemini_execution.ci15m_runner \
             --cohort "${{ github.event.inputs.ci15m_cohort }}" \
-            --preflight-only --runtime-s 1500
+            --profile MECHANICS2 --preflight-only --runtime-s 2400
           # Only now, and only if every condition above passed.
           python -m src.gemini_execution.ci15m_runner \
             --cohort "${{ github.event.inputs.ci15m_cohort }}" --live \
             --durable-branch research/gemini-btc5m-information-edge \
-            --max-windows 1 --runtime-s 1500
+            --profile MECHANICS2 --max-windows 2 --runtime-s 2400
 
-      - name: CI15M-1 evidence (always, even on failure)
+      - name: CI15M-4 evidence (always, even on failure)
         if: ${{ always() && github.event.inputs.ci15m_run == 'true' }}
         working-directory: ci15m
         run: |
