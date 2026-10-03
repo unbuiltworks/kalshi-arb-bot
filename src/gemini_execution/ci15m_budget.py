@@ -135,6 +135,7 @@ OPEN_STATES = (OPEN_NOT_ATTEMPTED, OPEN_SUBMITTED, OPEN_CANCELLED,
 
 WINDOWS = "windows.jsonl"
 SETTLED = "settled.jsonl"
+EXITS = "exits.jsonl"
 HALT = "HALT"
 
 #: the key an intent must carry to prove its inventory was reconciled
@@ -206,6 +207,7 @@ def _paths(cohort_id: str, root: str) -> Dict[str, str]:
             "ledger": os.path.join(d, cohort.LEDGER),
             "windows": os.path.join(d, WINDOWS),
             "settled": os.path.join(d, SETTLED),
+            "exits": os.path.join(d, EXITS),
             "halt": os.path.join(d, HALT)}
 
 
@@ -403,10 +405,25 @@ def open_window_ticker(cohort_id: str, *,
     return None
 
 
+#: a window we merely LOOKED at. It consumed no slot, nothing was sent, and
+#: it must NOT consume the one-window budget. CI15M-2 opened
+#: BTC15M2610031845, halted on an adapter defect before any submission, and
+#: closed NO_FILL -- which counted as a completed window and would have made
+#: a retry refuse at "WINDOW BUDGET reached". A cancelled or unfilled OPEN
+#: still ends that market's experiment; a window with ZERO submissions is a
+#: different thing and is not an experiment at all.
+NOT_ATTEMPTED = "NOT_ATTEMPTED"
+
+#: window dispositions that do NOT count against the window budget
+UNCOUNTED_WINDOWS = ("OPEN", NOT_ATTEMPTED)
+
+
 def completed_windows(cohort_id: str, *,
                       root: str = cohort.COHORT_ROOT) -> int:
+    """Windows that actually ran an experiment. A window nothing was
+    submitted into is not one of them."""
     return sum(1 for v in windows(cohort_id, root=root).values()
-               if v not in ("OPEN",))
+               if v not in UNCOUNTED_WINDOWS)
 
 
 def realized_principal_loss(cohort_id: str, *,
@@ -675,6 +692,41 @@ def record_settlement(cohort_id: str, ticker: str, *,
                      "evidence": evidence})
 
 
+#: every reason the probe may stop before submitting anything. A green
+#: workflow that tells us nothing is itself a defect: CI15M-2 exited 0 in
+#: seven seconds and the only way to learn why was the Actions log.
+EXIT_REASONS = (
+    "NO_ELIGIBLE_WINDOW_TIMEOUT",   # the deadline passed, never saw a market
+    "WINDOW_BUDGET_REACHED",
+    "COHORT_EXPIRED",
+    "HALTED",
+    "WINDOW_EXPIRED",
+    "BOOK_UNREADABLE_AT_DEADLINE",
+    "POLICY_HOLD_ALL_WINDOW",       # a legitimate, successful HOLD
+    "SUBMITTED",                    # at least one order went out
+    "NOT_LIVE",
+)
+
+
+def record_exit(cohort_id: str, reason: str, detail: Any = None, *,
+                root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+    """Write WHY the probe stopped, durably, whether or not it traded.
+
+    Called on EVERY termination path, including the ones that send nothing.
+    `reason` outside EXIT_REASONS is recorded rather than refused -- losing
+    an unexpected reason is worse than recording an unexpected one.
+    """
+    row = {"utc": _now(), "kind": "EXIT", "reason": reason,
+           "known_reason": reason in EXIT_REASONS, "detail": detail}
+    _append_durable(_paths(cohort_id, root)["exits"], row)
+    return row
+
+
+def exits(cohort_id: str, *,
+          root: str = cohort.COHORT_ROOT) -> List[Dict[str, Any]]:
+    return _rows(_paths(cohort_id, root)["exits"])
+
+
 def state(cohort_id: str, *,
           root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
     """Everything a report needs. Opens no mutation path."""
@@ -714,6 +766,7 @@ def state(cohort_id: str, *,
             str(realized_principal_loss(cohort_id, root=root)),
         "policy_fingerprint": POLICY["fingerprint"],
         "halted": halted(cohort_id, root=root),
+        "exits": exits(cohort_id, root=root),
         "halt_conditions": HALT_CONDITIONS,
         "statuses": list(STATUSES),
         "expired": expired(cohort_id, root=root, remote=None),

@@ -227,49 +227,114 @@ def preflight(cohort_id: str, *, probe_seconds: float) -> Dict[str, Any]:
 
 
 async def run(cohort_id: str, *, live: bool, durable_branch: Optional[str],
-              max_windows: int, runtime_s: float) -> Dict[str, Any]:
-    deadline = time.time() + runtime_s
+              max_windows: int, runtime_s: float,
+              now_fn: Optional[Any] = None,
+              sleeper: Optional[Any] = None,
+              root: Optional[str] = None) -> Dict[str, Any]:
+    """Stay alive until an eligible window runs, or the deadline passes.
+
+    "NO ELIGIBLE MARKET RIGHT NOW" IS NOT A TERMINATION. It sleeps and polls.
+    The loop ends only on: an experiment having run, a cohort stop, a HALT,
+    or the runtime deadline -- and EVERY one of those writes a durable exit
+    reason, because a green workflow that says nothing is itself a defect.
+    """
+    clock = now_fn or time.time
+    sleep = sleeper or asyncio.sleep
+    # `root` is threaded explicitly because every budget function binds
+    # cohort.COHORT_ROOT as a DEFAULT ARGUMENT at import time, so patching
+    # the module attribute later cannot redirect it. Without this the
+    # liveness tests would silently exercise the real cohort directory.
+    rk = {} if root is None else {"root": root}
+    deadline = clock() + runtime_s
     hook = git_slot_hook(durable_branch) if (live and durable_branch) else None
     done: List[Dict[str, Any]] = []
-    while time.time() < deadline:
-        why = BUD.expired(cohort_id)
+    polls = 0
+    exit_reason, exit_detail = None, None
+    while clock() < deadline:
+        why = BUD.expired(cohort_id, **rk)
         if why:
+            exit_reason, exit_detail = (
+                "HALTED" if "HALT" in why else "COHORT_EXPIRED"), why
             print("COHORT STOP: %s" % why)
             break
-        if BUD.completed_windows(cohort_id) >= max_windows:
+        if BUD.completed_windows(cohort_id, **rk) >= max_windows:
+            exit_reason = "WINDOW_BUDGET_REACHED"
+            exit_detail = {"max_windows": max_windows,
+                           "windows": BUD.windows(cohort_id, **rk)}
             print("WINDOW BUDGET reached: %d" % max_windows)
             break
-        now = time.time()
+        now = clock()
         sel = P.select_market(discover(now), now)
         if not sel["selected"]:
-            print("%s no eligible BTC15m window yet (%d considered)"
+            polls += 1
+            # NOT a termination. The job stays alive and keeps looking.
+            print("%s no eligible BTC15m window yet (%d considered, poll %d, "
+                  "%.0fs left)"
                   % (datetime.now(timezone.utc).strftime("%H:%M:%SZ"),
-                     len(sel["considered"])))
-            await asyncio.sleep(POLL_S * 4)
+                     len(sel["considered"]), polls, deadline - now))
+            await sleep(POLL_S * 4)
             continue
         s = sel["selected"]
-        seen = BUD.windows(cohort_id)
+        seen = BUD.windows(cohort_id, **rk)
         if s["ticker"] in seen:
-            await asyncio.sleep(POLL_S * 4)
+            polls += 1
+            print("%s %s already dispositioned as %s; waiting for the next "
+                  "window" % (datetime.now(timezone.utc).strftime("%H:%M:%SZ"),
+                              s["ticker"], seen[s["ticker"]]))
+            await sleep(POLL_S * 4)
             continue
         if not live:
+            exit_reason, exit_detail = "NOT_LIVE", {"would_open": s["ticker"]}
             print("WOULD OPEN %s (tte %.0fs) -- not live, nothing sent"
                   % (s["ticker"], s["tte"]))
             break
-        BUD.open_window(cohort_id, s["ticker"])
+        BUD.open_window(cohort_id, s["ticker"], **rk)
         print("=" * 78)
         print("WINDOW OPEN %s  tte %.0fs" % (s["ticker"], s["tte"]))
         print("=" * 78)
         rep = await P.run_window(cohort_id, s["symbol"], s["ticker"],
                                  now + s["tte"], poll_s=POLL_S,
-                                 slot_hook=hook)
+                                 slot_hook=hook, **rk)
         for e in rep["events"]:
             print(json.dumps(e, sort_keys=True, default=str))
         done.append(rep)
+        # A WINDOW NOTHING WAS SUBMITTED INTO MUST NOT CONSUME THE BUDGET.
+        # run_window already closed it; if it closed it as an experiment
+        # while no slot was spent, correct the record.
+        if BUD.submissions_in_window(cohort_id, s["ticker"], **rk) == 0:
+            BUD.close_window(cohort_id, s["ticker"], BUD.NOT_ATTEMPTED,
+                             detail={"why": "zero submissions in this "
+                                            "window; it is not an "
+                                            "experiment and does not "
+                                            "consume the window budget"},
+                             **rk)
+            print("WINDOW %s: zero submissions -- NOT_ATTEMPTED, budget "
+                  "not consumed" % s["ticker"])
         if rep["halted"]:
+            exit_reason, exit_detail = "HALTED", rep["halted"]
             print("HALTED: %s" % rep["halted"])
             break
-    return {"windows": done, "budget": BUD.state(cohort_id)}
+        if BUD.submissions_in_window(cohort_id, s["ticker"], **rk) > 0:
+            exit_reason = "SUBMITTED"
+            exit_detail = {"ticker": s["ticker"],
+                           "submissions": BUD.submissions_in_window(
+                               cohort_id, s["ticker"])}
+            break
+        # nothing was sent and we are not halted: keep looking
+        await sleep(POLL_S)
+
+    if exit_reason is None:
+        # H -- THE DEADLINE PATH, now explicit. CI15M-2 fell out of a loop
+        # with no reason recorded at all.
+        exit_reason = "NO_ELIGIBLE_WINDOW_TIMEOUT"
+        exit_detail = {"runtime_s": runtime_s, "polls": polls,
+                       "windows_seen": BUD.windows(cohort_id, **rk),
+                       "why": ("the runtime deadline passed. This is a "
+                               "RESULT, not a success: no eligible BTC15m "
+                               "window was traded.")}
+    row = BUD.record_exit(cohort_id, exit_reason, exit_detail, **rk)
+    print("EXIT: %s" % json.dumps(row, default=str))
+    return {"windows": done, "exit": row, "budget": BUD.state(cohort_id, **rk)}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
