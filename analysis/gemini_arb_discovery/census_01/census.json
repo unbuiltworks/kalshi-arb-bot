@@ -1,0 +1,186 @@
+{
+  "at": 1791028722.7849312,
+  "discovery": {
+    "pages": 20,
+    "errors": [],
+    "total_claimed": 1000
+  },
+  "active_events": 768,
+  "active_contracts": 7589,
+  "quotes_full_coverage": {
+    "Crypto": {
+      "events": 93,
+      "contracts": 255,
+      "two_sided": 195,
+      "bid_only": 35,
+      "ask_only": 20,
+      "no_quote": 5,
+      "two_sided_pct": 76.5,
+      "spread_median": "0.03",
+      "spread_p25": "0.01",
+      "spread_p75": "0.03",
+      "spread_n": 195
+    },
+    "Sports": {
+      "events": 608,
+      "contracts": 6883,
+      "two_sided": 3847,
+      "bid_only": 384,
+      "ask_only": 542,
+      "no_quote": 2110,
+      "two_sided_pct": 55.9,
+      "spread_median": "0.03",
+      "spread_p25": "0.01",
+      "spread_p75": "0.05",
+      "spread_n": 3847
+    },
+    "Economics": {
+      "events": 1,
+      "contracts": 5,
+      "two_sided": 5,
+      "bid_only": 0,
+      "ask_only": 0,
+      "no_quote": 0,
+      "two_sided_pct": 100.0,
+      "spread_median": "0.01",
+      "spread_p25": "0.01",
+      "spread_p75": "0.01",
+      "spread_n": 5
+    },
+    "Commodities": {
+      "events": 17,
+      "contracts": 124,
+      "two_sided": 0,
+      "bid_only": 1,
+      "ask_only": 0,
+      "no_quote": 123,
+      "two_sided_pct": 0.0,
+      "spread_median": null,
+      "spread_p25": null,
+      "spread_p75": null,
+      "spread_n": 0
+    },
+    "Weather": {
+      "events": 49,
+      "contracts": 322,
+      "two_sided": 0,
+      "bid_only": 3,
+      "ask_only": 3,
+      "no_quote": 316,
+      "two_sided_pct": 0.0,
+      "spread_median": null,
+      "spread_p25": null,
+      "spread_p75": null,
+      "spread_n": 0
+    }
+  },
+  "books_sampled": {
+    "Crypto": {
+      "population_contracts": 255,
+      "sampled": 40,
+      "readable": 40,
+      "unreadable": 0,
+      "two_sided_pct_of_sample": 67.5,
+      "touch_qty_bid_median": "178.0",
+      "touch_qty_ask_median": "178.0",
+      "ladder_qty_bid_median": "649.0",
+      "ladder_qty_ask_median": "450.0",
+      "ladder_qty_ask_p90": "1812.0"
+    },
+    "Sports": {
+      "population_contracts": 6883,
+      "sampled": 40,
+      "readable": 40,
+      "unreadable": 0,
+      "two_sided_pct_of_sample": 62.5,
+      "touch_qty_bid_median": "278.0",
+      "touch_qty_ask_median": "294.0",
+      "ladder_qty_bid_median": "454.0",
+      "ladder_qty_ask_median": "271.0",
+      "ladder_qty_ask_p90": "3471.0"
+    },
+    "Economics": {
+      "population_contracts": 5,
+      "sampled": 5,
+      "readable": 5,
+      "unreadable": 0,
+      "two_sided_pct_of_sample": 100.0,
+      "touch_qty_bid_median": "1250.0",
+      "touch_qty_ask_median": "500.0",
+      "ladder_qty_bid_median": "6250.0",
+      "ladder_qty_ask_median": "500.0",
+      "ladder_qty_ask_p90": "500.0"
+    },
+    "Commodities": {
+      "population_contracts": 124,
+      "sampled": 40,
+      "readable": 40,
+      "unreadable": 0,
+      "two_sided_pct_of_sample": 0.0,
+      "touch_qty_bid_median": null,
+      "touch_qty_ask_median": null,
+      "ladder_qty_bid_median": "0",
+      "ladder_qty_ask_median": "0",
+      "ladder_qty_ask_p90": "0"
+    },
+    "Weather": {
+      "population_contracts": 322,
+      "sampled": 40,
+      "readable": 40,
+      "unreadable": 0,
+      "two_sided_pct_of_sample": 0.0,
+      "touch_qty_bid_median": null,
+      "touch_qty_ask_median": null,
+      "ladder_qty_bid_median": "0",
+      "ladder_qty_ask_median": "0",
+      "ladder_qty_ask_p90": "0"
+    }
+  },
+  "tape_sampled": {
+    "Crypto": {
+      "sampled": 25,
+      "total_prints_seen": 78,
+      "contracts_with_under_2_prints": 16,
+      "trades_per_min_median": "0.0056",
+      "trades_per_min_p90": "0.0748",
+      "tape_span_min_median": "384.89",
+      "caveat": "rate is over each contract's OWN tape span, capped at 500 prints; it is not a rate over a chosen wall-clock window"
+    },
+    "Sports": {
+      "sampled": 25,
+      "total_prints_seen": 3,
+      "contracts_with_under_2_prints": 24,
+      "trades_per_min_median": "0.0013",
+      "trades_per_min_p90": "0.0013",
+      "tape_span_min_median": "2340.98",
+      "caveat": "rate is over each contract's OWN tape span, capped at 500 prints; it is not a rate over a chosen wall-clock window"
+    },
+    "Economics": {
+      "sampled": 5,
+      "total_prints_seen": 0,
+      "contracts_with_under_2_prints": 5,
+      "trades_per_min_median": null,
+      "trades_per_min_p90": null,
+      "tape_span_min_median": null,
+      "caveat": "rate is over each contract's OWN tape span, capped at 500 prints; it is not a rate over a chosen wall-clock window"
+    },
+    "Commodities": {
+      "sampled": 25,
+      "total_prints_seen": 2,
+      "contracts_with_under_2_prints": 25,
+      "trades_per_min_median": null,
+      "trades_per_min_p90": null,
+      "tape_span_min_median": null,
+      "caveat": "rate is over each contract's OWN tape span, capped at 500 prints; it is not a rate over a chosen wall-clock window"
+    },
+    "Weather": {
+      "sampled": 25,
+      "total_prints_seen": 8,
+      "contracts_with_under_2_prints": 24,
+      "trades_per_min_median": "0.0464",
+      "trades_per_min_p90": "0.0464",
+      "tape_span_min_median": "172.45",
+      "caveat": "rate is over each contract's OWN tape span, capped at 500 prints; it is not a rate over a chosen wall-clock window"
+    }
+  }
+}
