@@ -96,30 +96,6 @@ on:
         description: "Entry band LO:HI for the UNARMED production-path proof. Default 90:300 (the standing rule) so routine runs do not wait. Set 240:280 to prove the armed window's own band read-only."
         required: false
         default: "90:300"
-      semantics_probe_preflight:
-        description: "PUBLIC-ONLY preflight for the execution-semantics probe. No credentials, no arm, no mutation. Set true to print the A/B classification and the full book for semantics_symbol."
-        required: false
-        default: "false"
-      semantics_probe_armed:
-        description: "ARMED execution-semantics probe. ONE order. Requires the owner to ALSO set semantics_symbol, semantics_favored and semantics_limit_price. Leave false."
-        required: false
-        default: "false"
-      semantics_symbol:
-        description: "Instrument for the semantics probe, e.g. GEMI-BTC05M2610031210-UP. Designated at dispatch because a BTC5m window lives 5 minutes."
-        required: false
-        default: ""
-      semantics_favored:
-        description: "Predicted side for the semantics probe: yes (UP) or no (DOWN)."
-        required: false
-        default: "yes"
-      semantics_limit_price:
-        description: "The approved limit. CASE A: must equal semantics_approved_ask or be at most ONE TICK above it. The probe refuses rather than repricing."
-        required: false
-        default: ""
-      semantics_approved_ask:
-        description: "CASE A, REQUIRED: the favored-side ask recorded at preflight and approved by the owner. The limit is tied to it, and the book is re-read immediately before submission to confirm it is still executable at or below the limit with enough size for the whole order."
-        required: false
-        default: ""
       r2_runner:
         description: "Run the continuous R2 execution-validation runner. Without r2_runner_live it is a DRY RUN that sends nothing."
         required: false
@@ -144,10 +120,6 @@ on:
         description: "Independent prospective R2 windows, for the gate-arrival stop. Blind count from r2_window_counter.py."
         required: false
         default: "42"
-      semantics_quantity:
-        description: "PREDECLARED quantity. 1 contract. Never sized from the book."
-        required: false
-        default: "1"
 
 # One at a time. A second run could commit evidence over the first.
 concurrency:
@@ -220,15 +192,15 @@ jobs:
       # fetch refs/heads/49627ca5*, which matched nothing, the checkout
       # failed, the probe step was SKIPPED and nothing was submitted.
       # ==================================================================
-      - name: Check out the semantics probe at its reviewed SHA (own tree)
-        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
+      - name: Check out the reviewed probe/runner tree at its pinned SHA
+        if: ${{ github.event.inputs.r2_runner == 'true' }}
         uses: actions/checkout@v4
         with:
           ref: 4b3d4ebffc4ea05ef6541c0167a6380a9c41ee22
           path: semantics-probe
 
-      - name: Semantics probe provenance and gates (no credential in scope)
-        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
+      - name: Provenance and gates (no credential in scope)
+        if: ${{ github.event.inputs.r2_runner == 'true' }}
         working-directory: semantics-probe
         run: |
           echo "probe tree HEAD: $(git rev-parse HEAD)"
@@ -240,94 +212,14 @@ jobs:
               "taker behaviour is only reachable when these agree"
           PY
           # The gates are a precondition, not documentation.
-          python -m pytest tests/test_gemini_semantics_probe_gates.py -q
+          python -m pytest tests/test_gemini_semantics_probe_gates.py \
+                           tests/test_r2_exec_budget.py \
+                           tests/test_r2_exec_runner.py -q
 
       # PUBLIC reads only, and still no credential in scope: /v1/book and the
       # contract's own prices are public on this venue, so the whole A/B
       # classification and the price and cash arithmetic are stated before
       # any secret exists in the job.
-      - name: Semantics probe PREFLIGHT (public reads only; no arm, no secret)
-        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
-        working-directory: semantics-probe
-        run: |
-          set -o pipefail
-          test -n "${{ github.event.inputs.semantics_symbol }}" \
-            || { echo "::error::semantics_symbol is required"; exit 1; }
-          python -m src.gemini_execution.semantics_probe \
-            --symbol      "${{ github.event.inputs.semantics_symbol }}" \
-            --favored     "${{ github.event.inputs.semantics_favored }}" \
-            --limit-price "${{ github.event.inputs.semantics_limit_price }}" \
-            --quantity    "${{ github.event.inputs.semantics_quantity }}" \
-            --preflight-only
-
-      # ONE ORDER. The only path in the repository that can reach
-      # makerOrCancel: False, and not by setting a flag: the transport also
-      # requires the live authorization to equal
-      # payload.SEMANTICS_PROBE_AUTH_ID. Every strategy stays maker-only.
-      #
-      # AUTHORIZED 2026-10-03 by the owner, narrowly: ONE case-A probe. NOT
-      # five, and case B is NOT authorized -- a market classifying as B stops
-      # the run rather than becoming a fallback. The limit is tied to the ask
-      # recorded and approved at preflight (that ask, or at most one tick
-      # above), the live terms read must succeed, and the book is re-read
-      # immediately before submission to confirm the approved liquidity is
-      # still executable at or below the frozen limit with enough displayed
-      # size for the whole order. If it moved up or vanished the probe STOPS:
-      # no reprice, no retry, no other market.
-      #
-      # The latch is one-shot and spends itself before the venue sees
-      # anything, so a retried run places exactly one order, never a second.
-      - name: Semantics probe ARMED -- ONE order (owner-authorized)
-        if: ${{ github.event.inputs.semantics_probe_armed == 'true' }}
-        timeout-minutes: 20
-        working-directory: semantics-probe
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
-          GEMINI_CANARY_LIVE: "YES"
-          # R2 EXECUTION-VALIDATION COHORT, authorized 2026-10-03 against the
-          # protocol at 49d7fc58. SEMANTICS-1 is spent and never arms again.
-          # The cohort's own 10-slot durable budget bounds how many times this
-          # can touch the venue; the expiry below bounds how long it may try.
-          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-R2-EXEC-1"
-          # Bounded to the end of the UTC day: long enough for ten naturally
-          # arriving R2 opportunities, short enough that a stale workflow
-          # input cannot resurrect this tomorrow.
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-04T00:00:00Z"
-          GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
-        run: |
-          set -o pipefail
-          test -n "${{ github.event.inputs.semantics_approved_ask }}" \
-            || { echo "::error::case A requires semantics_approved_ask -- the ask recorded at preflight. Without it the limit is untethered."; exit 1; }
-          test -n "${{ github.event.inputs.semantics_limit_price }}" \
-            || { echo "::error::an approved limit price is required"; exit 1; }
-          mkdir -p analysis/gemini/info_edge
-          python -m src.gemini_execution.semantics_probe \
-            --symbol       "${{ github.event.inputs.semantics_symbol }}" \
-            --favored      "${{ github.event.inputs.semantics_favored }}" \
-            --approved-ask "${{ github.event.inputs.semantics_approved_ask }}" \
-            --limit-price  "${{ github.event.inputs.semantics_limit_price }}" \
-            --quantity     "${{ github.event.inputs.semantics_quantity }}" \
-            --auth-id      "${GEMINI_CANARY_AUTH}" \
-            --out analysis/gemini/info_edge/semantics_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
-            2>&1 | tee /tmp/semantics.txt
-
-      # ==================================================================
-      # THE CONTINUOUSLY RUNNING R2 EXECUTION-VALIDATION RUNNER.
-      #
-      # It stays alive across BTC5m windows and probes the FIRST qualifying
-      # opportunity in each distinct market. Everything it may do is bounded
-      # by the cohort's durable 10-slot ledger, not by this step.
-      #
-      # --durable-branch IS MANDATORY WITH --live, and the runner refuses
-      # without it: this host's disk is discarded when the job ends, so an
-      # fsynced slot alone would die with it and the ten-slot budget would
-      # silently reset. Each consumed slot is pushed to git BEFORE the venue
-      # is touched, the ordering run_canary established.
-      #
-      # WITHOUT r2_runner_live=true this step is a DRY RUN: it observes and
-      # records qualification and sends NOTHING.
-      # ==================================================================
       - name: R2 execution-validation runner
         if: ${{ github.event.inputs.r2_runner == 'true' }}
         timeout-minutes: 330
@@ -368,18 +260,6 @@ jobs:
             semantics-probe/analysis/gemini/cohorts/**
           if-no-files-found: warn
 
-      - name: Upload the semantics probe record
-        if: ${{ always() && (github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true') }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: semantics-probe-record
-          path: |
-            semantics-probe/analysis/gemini/info_edge/semantics_*.json
-            semantics-probe/analysis/gemini/canary_latch/latch_OWNER-2026-10-03-*.json
-          if-no-files-found: warn
-
-      # The guards run BEFORE any credential is in scope: if the read-only
-      # contract is broken, the job dies without ever holding a secret.
       - name: Structural guard -- no order transport, no credential read
         run: |
           python -m pytest tests/test_gemini_settlement_probe.py \
