@@ -70,7 +70,27 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: Spending this id does not re-arm it: the latch is one-shot and git-bound,
 #: and any semantic or reconciliation anomaly writes a HALT file that blocks
 #: every later submission until a human clears it.
-EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
+#: MOVED 2026-10-03. SEMANTICS-1 is SPENT: it placed one order
+#: (145828836703726947), filled 1 @ 0.50, settled NO, realized principal
+#: -$0.50, and its latch is on disk. A spent authorization never arms again,
+#: so the identifier moves rather than the latch being cleared.
+#:
+#: R2-EXEC-1 is the bounded R2 EXECUTION-VALIDATION cohort, authorized by the
+#: owner against the protocol at 49d7fc58 and immutable R2 at 6bc5c1f7
+#: (fingerprint 64b178378806b5c257b58b29d0ba49da). It is an execution-model
+#: audit, NOT a profitability estimate: ten q=1 fills cannot distinguish
+#: +0.04/contract from zero.
+#:
+#: BOUNDS, enforced in src/gemini_execution/r2_exec_budget.py and proved in
+#: tests/test_r2_exec_budget.py: 10 submitted probes total, 1 per distinct
+#: market, q=1, 1 outstanding order, no revisit after SUBMITTED or MISSED, no
+#: chasing/repricing/substitution, no EXTEND/FLIP/complement/averaging, $8.00
+#: cumulative CONFIRMED realized-principal-loss stop, $10.20 structural
+#: maximum, expiry at the 10th submission or the 100-independent-window
+#: statistical gate, whichever comes first. An ambiguous send consumes its
+#: slot and is never retried. Any semantic or reconciliation contradiction
+#: HALTs the cohort.
+EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-R2-EXEC-1"
 
 
 class NotArmed(Exception):

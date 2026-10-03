@@ -261,8 +261,15 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
-          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-03T23:00:00Z"
+          # R2 EXECUTION-VALIDATION COHORT, authorized 2026-10-03 against the
+          # protocol at 49d7fc58. SEMANTICS-1 is spent and never arms again.
+          # The cohort's own 10-slot durable budget bounds how many times this
+          # can touch the venue; the expiry below bounds how long it may try.
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-R2-EXEC-1"
+          # Bounded to the end of the UTC day: long enough for ten naturally
+          # arriving R2 opportunities, short enough that a stale workflow
+          # input cannot resurrect this tomorrow.
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-04T00:00:00Z"
           GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
         run: |
           set -o pipefail

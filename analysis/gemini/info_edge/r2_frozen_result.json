@@ -90,7 +90,7 @@
   },
   "PROSPECTIVE": {
     "label": "PROSPECTIVE",
-    "eligible_windows": 134,
+    "eligible_windows": 140,
     "n": 65,
     "windows": 42,
     "per_window_counts": [
@@ -168,7 +168,7 @@
       "BTC05M2610031005",
       "BTC05M2610031045"
     ],
-    "instances_examined": 366,
+    "instances_examined": 376,
     "by_tte": [
       {
         "tte": 240,

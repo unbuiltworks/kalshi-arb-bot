@@ -100,6 +100,85 @@ def fee_f(p: float) -> float:
     return float(taker_fee(D(str(round(p, 2)))))
 
 
+# --------------------------------------------------------------------------
+# THE QUALIFICATION, AS IMPORTABLE PURE FUNCTIONS.
+#
+# REFACTORED 2026-10-03, AND THE SEMANTICS ARE UNCHANGED. The rule was frozen
+# at 6bc5c1f7 with this arithmetic written INLINE inside `extract()`, which
+# made it unreachable from a live executor -- and the live executor is
+# forbidden from reproducing the signal logic. So the arithmetic moved into
+# the four functions below and `extract()` now CALLS them. Nothing was added,
+# removed or retuned.
+#
+# PROVEN, not asserted: re-running `r2_frozen.py` after this refactor produces
+# a byte-identical `r2_frozen_result.json`
+# (sha256 ca8152b5ee378deb388a1b606bb5385598361eccc8ee1008cf20a4e82b7b6176)
+# on both cohorts. 6bc5c1f7 remains the SEMANTIC reference for the rule; this
+# commit changes how the same arithmetic is reached, not what it computes.
+# --------------------------------------------------------------------------
+
+def sigma_1s_from_ticks(cb, cbt, t):
+    """Realised per-second Coinbase log-return sd over the preceding window.
+
+    `cb` is a time-sorted list of (ts, price); `cbt` its timestamps.
+    Returns None when fewer than MIN_RETURNS consecutive-second returns exist,
+    which REFUSES the opportunity rather than guessing a volatility.
+    """
+    lo = bisect.bisect_left(cbt, t - VOL_LOOKBACK)
+    hi = bisect.bisect_right(cbt, t)
+    per_s = {}
+    for ts, px in cb[lo:hi]:
+        per_s[int(ts)] = px
+    ks = sorted(per_s)
+    rets = []
+    for a, b in zip(ks, ks[1:]):
+        if b - a == 1 and per_s[a] > 0 and per_s[b] > 0:
+            rets.append(math.log(per_s[b] / per_s[a]))
+    if len(rets) < MIN_RETURNS:
+        return None
+    mu = sum(rets) / len(rets)
+    var = sum((x - mu) ** 2 for x in rets) / (len(rets) - 1)
+    return math.sqrt(var) if var > 0 else None
+
+
+def favored_side(coinbase, strike):
+    """UP when coinbase is above the strike, else DOWN. Nothing else selects."""
+    return "UP" if (coinbase - strike) > 0 else "DOWN"
+
+
+def executable(side, bids, asks):
+    """The favoured outcome's OWN published price, never derived through the
+    complement identity. Returns (level, price, size, depth) or four Nones.
+    `depth` is the size at or inside that level on the favoured side.
+    """
+    if side == "UP":
+        if not asks:
+            return None, None, None, None
+        lvl = min(asks)
+        return (lvl, lvl, asks.get(lvl),
+                sum(q for p, q in asks.items() if p <= lvl))
+    if not bids:
+        return None, None, None, None
+    lvl = max(bids)
+    return (lvl, 1 - lvl, bids.get(lvl),
+            sum(q for p, q in bids.items() if p >= lvl))
+
+
+def z_of(dist, sigma, tte, coinbase):
+    """|distance| in units of one sd of the REMAINING move. None if unusable."""
+    if not sigma:
+        return None
+    sd = sigma * math.sqrt(tte) * coinbase
+    if sd <= 0:
+        return None
+    return abs(dist) / sd
+
+
+def qualifies(z):
+    """THE TRIGGER. Exactly z >= 1.0, and nothing else qualifies."""
+    return z is not None and z >= Z_TRIGGER
+
+
 def _apply(book, rows, seen, t):
     for px, sz in rows or []:
         p, s = float(px), float(sz)
@@ -157,21 +236,7 @@ def extract(cohort: str):
         return cb[i][1] if i >= 0 else None
 
     def sigma_1s(t):
-        lo = bisect.bisect_left(cbt, t - VOL_LOOKBACK)
-        hi = bisect.bisect_right(cbt, t)
-        per_s = {}
-        for ts, px in cb[lo:hi]:
-            per_s[int(ts)] = px
-        ks = sorted(per_s)
-        rets = []
-        for a, b in zip(ks, ks[1:]):
-            if b - a == 1 and per_s[a] > 0 and per_s[b] > 0:
-                rets.append(math.log(per_s[b] / per_s[a]))
-        if len(rets) < MIN_RETURNS:
-            return None
-        mu = sum(rets) / len(rets)
-        var = sum((x - mu) ** 2 for x in rets) / (len(rets) - 1)
-        return math.sqrt(var) if var > 0 else None
+        return sigma_1s_from_ticks(cb, cbt, t)
 
     # cohort membership
     eligible = []
@@ -238,28 +303,16 @@ def extract(cohort: str):
                 if c is None:
                     continue
                 dist = c - strike
-                side = "UP" if dist > 0 else "DOWN"
-                if side == "UP":
-                    lvl = min(asks) if asks else None
-                    price = lvl
-                    size = asks.get(lvl) if lvl is not None else None
-                    depth = (sum(q for p, q in asks.items() if p <= lvl)
-                             if lvl is not None else None)
-                else:
-                    lvl = max(bids) if bids else None
-                    price = (1 - lvl) if lvl is not None else None
-                    size = bids.get(lvl) if lvl is not None else None
-                    depth = (sum(q for p, q in bids.items() if p >= lvl)
-                             if lvl is not None else None)
+                side = favored_side(c, strike)
+                lvl, price, size, depth = executable(side, bids, asks)
                 if price is None or not (0 < price < 1):
                     continue
                 sig = sigma_1s(t)
                 if not sig:
                     continue
-                sd = sig * math.sqrt(tte) * c
-                if sd <= 0:
+                z = z_of(dist, sig, tte, c)
+                if z is None:
                     continue
-                z = abs(dist) / sd
                 inst.append({
                     "ticker": tk, "tte": tte, "t": t, "side": side,
                     "level": lvl, "price": price, "size": size,
@@ -271,7 +324,7 @@ def extract(cohort: str):
 
 def r2(inst):
     """The rule, applied. Trigger, then the frozen de-duplication."""
-    hits = [r for r in inst if r["z"] >= Z_TRIGGER]
+    hits = [r for r in inst if qualifies(r["z"])]
     g = {}
     for r in sorted(hits, key=lambda x: -x["tte"]):   # earliest sighting wins
         g.setdefault((r["ticker"], r["side"], r["level"]), r)

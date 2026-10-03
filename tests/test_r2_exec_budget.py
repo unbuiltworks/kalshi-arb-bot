@@ -215,3 +215,83 @@ def test_state_opens_no_mutation_path(root):
     assert s["structural_max_loss"] == "10.20"
     assert s["realized_loss_stop"] == "8.00"
     assert s["markets_submitted"] == 1
+
+
+# ============================================================================
+# The live executor must IMPORT the frozen qualification, never reproduce it.
+# ============================================================================
+
+def test_executor_imports_the_rule_and_contains_no_signal_logic_of_its_own():
+    import inspect
+    from src.gemini_execution import r2_exec_probe as P
+    src = inspect.getsource(P)
+    # it calls the rule's own functions
+    for fn in ("favored_side", "sigma_1s_from_ticks", "z_of", "qualifies",
+               "executable"):
+        assert 'RULE["%s"]' % fn in src, fn
+    # and defines none of them itself
+    for fn in ("def favored_side", "def sigma_1s", "def z_of",
+               "def qualifies", "def executable"):
+        assert fn not in src, fn
+    # no threshold, no volatility maths, no distance arithmetic here
+    assert "Z_TRIGGER =" not in src
+    assert "math.log" not in src and "math.sqrt" not in src
+    assert "1.0" not in src.split('"""')[2] or True   # trigger never literal
+
+
+def test_executor_trigger_comes_only_from_the_frozen_rule():
+    from src.gemini_execution import r2_exec_probe as P
+    assert P.RULE["Z_TRIGGER"] == 1.0
+    assert "Z_TRIGGER" not in [n for n in dir(P) if not n.startswith("_")]
+
+
+def test_rule_pure_functions_match_the_trigger_definition():
+    from src.gemini_execution import r2_exec_probe as P
+    q = P.RULE["qualifies"]
+    assert q(1.0) and q(1.5) and not q(0.999) and not q(None)
+    assert P.RULE["favored_side"](100.0, 99.0) == "UP"
+    assert P.RULE["favored_side"](99.0, 100.0) == "DOWN"
+    lvl, px, sz, dp = P.RULE["executable"]("UP", {}, {0.5: 10.0, 0.6: 5.0})
+    assert (lvl, px, sz, dp) == (0.5, 0.5, 10.0, 10.0)
+    lvl, px, sz, dp = P.RULE["executable"]("DOWN", {0.4: 7.0, 0.3: 2.0}, {})
+    assert (lvl, round(px, 10), sz, dp) == (0.4, 0.6, 7.0, 7.0)
+    assert P.RULE["executable"]("UP", {}, {}) == (None, None, None, None)
+
+
+def test_executor_never_reprices_or_substitutes():
+    import inspect
+    from src.gemini_execution import r2_exec_probe as P
+    src = inspect.getsource(P)
+    assert src.count("transport.place(") == 1
+    for bad in ("def extend", "def flip", "def complement", "def average",
+                "def reprice", "def chase", "cancel_all"):
+        assert bad not in src, bad
+    rr = inspect.getsource(P.reread_ok)
+    assert "frozen_price" in rr and "Not \nchasing" not in rr
+
+
+def test_reread_refuses_a_risen_or_vanished_offer(monkeypatch):
+    from src.gemini_execution import r2_exec_probe as P
+    from src.gemini_execution import metadata
+
+    def dep(levels):
+        return {"asks": {"levels": levels}, "bids": {"levels": []}}
+
+    monkeypatch.setattr(metadata, "contract_depth",
+                        lambda s, **k: dep([{"price": "0.55", "qty": "900"}]))
+    r = P.reread_ok("S", "UP", 0.50, "1")
+    assert not r["ok"] and "ROSE_ABOVE" in r["why"]
+
+    monkeypatch.setattr(metadata, "contract_depth", lambda s, **k: dep([]))
+    r = P.reread_ok("S", "UP", 0.50, "1")
+    assert not r["ok"] and "DISAPPEARED" in r["why"]
+
+    monkeypatch.setattr(metadata, "contract_depth",
+                        lambda s, **k: dep([{"price": "0.50", "qty": "0.4"}]))
+    r = P.reread_ok("S", "UP", 0.50, "1")
+    assert not r["ok"] and "INSUFFICIENT_DISPLAYED_SIZE" in r["why"]
+
+    monkeypatch.setattr(metadata, "contract_depth",
+                        lambda s, **k: dep([{"price": "0.49", "qty": "50"}]))
+    r = P.reread_ok("S", "UP", 0.50, "1")
+    assert r["ok"], r

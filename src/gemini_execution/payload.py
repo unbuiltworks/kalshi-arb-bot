@@ -47,7 +47,11 @@ ALLOWED_ORDER_FIELDS = ("symbol", "orderType", "side", "quantity", "price",
 #: "no executable offer" really means "cannot buy", which a post-only order
 #: cannot test -- the venue cancels it rather than crossing. Nothing else in
 #: this repository needs taker behaviour, and nothing else may have it.
-SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
+#: MOVED 2026-10-03 to the R2 execution-validation cohort. This constant and
+#: arming.EXPECTED_AUTH_ID must AGREE for a crossing order to be constructible
+#: at all; the launcher asserts it before anything else runs. SEMANTICS-1 is
+#: spent, so leaving this on the old id would have shut the taker path.
+SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-R2-EXEC-1"
 
 #: fields that must never appear, with the reason, so a refusal explains itself
 FORBIDDEN = {
