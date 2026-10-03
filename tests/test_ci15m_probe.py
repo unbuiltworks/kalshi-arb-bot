@@ -857,3 +857,33 @@ def test_decide_once_never_returns_before_enumerating_both_sides():
             assert not isinstance(node, ast.Return), (
                 "decide_once returns from inside the per-side candidate "
                 "loop, which reintroduces iteration-order dependence")
+
+
+def test_the_sha_gate_refuses_a_diff_outside_the_authorization_files(root,
+                                                                    monkeypatch):
+    """The allowed-diff set must actually bite. A descendant that changed the
+    frozen policy, or any execution module other than the two carrying the
+    authorization constants, must fail the SHA condition."""
+    import subprocess
+    real = subprocess.run
+
+    def fake(cmd, *a, **k):
+        if cmd[:2] == ["git", "diff"]:
+            class R:
+                stdout = ("analysis/gemini/info_edge/btc15m_shadow_policy.py\n"
+                          "src/gemini_execution/arming.py\n")
+                returncode = 0
+            return R()
+        return real(cmd, *a, **k)
+    monkeypatch.setattr(subprocess, "run", fake)
+    v = P.verify_runtime(CID, root=root)
+    assert v["checks"]["sha_condition"] is False
+    assert "sha_condition" in v["failed"]
+
+
+def test_the_frozen_policy_file_is_not_in_the_allowed_diff_set():
+    src = open(P.__file__, encoding="utf-8").read()
+    i = src.index("AUTH_ONLY = {")
+    block = src[i:src.index("}", i)]
+    assert "btc15m_shadow_policy" not in block
+    assert "arming.py" in block and "ci15m_probe.py" in block

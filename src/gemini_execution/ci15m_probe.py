@@ -497,8 +497,16 @@ def verify_runtime(cohort_id: str, *,
     }
     # The SHA condition is satisfied by EITHER an exact match or a descendant
     # whose diff touches only the two authorization constants.
+    # The ONLY files a descendant of the authorized commit may differ in.
+    # arming.py and ci15m_probe.py carry the two authorization constants and
+    # the runtime gate itself. The test file is included because it is not
+    # imported by any execution path -- it cannot change what is sent -- and
+    # installing the authorization necessarily made its pre-arm assertions
+    # about those constants stale. The FROZEN POLICY FILE IS NOT IN THIS SET,
+    # and is additionally checked exactly, by fingerprint, above.
     AUTH_ONLY = {"src/gemini_execution/arming.py",
-                 "src/gemini_execution/ci15m_probe.py"}
+                 "src/gemini_execution/ci15m_probe.py",
+                 "tests/test_ci15m_probe.py"}
     sha_ok = checks["head_is_authorized_sha"] or (
         checks["head_is_authorized_or_descendant"]
         and bool(diff_files) and set(diff_files) <= AUTH_ONLY)
