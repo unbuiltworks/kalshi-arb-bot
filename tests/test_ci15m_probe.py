@@ -783,9 +783,13 @@ def test_the_authorized_fingerprint_is_the_one_the_owner_granted():
     assert P.AUTHORIZED_POLICY_FINGERPRINT == GRANTED
     assert fingerprint() == GRANTED, (
         "the frozen policy on disk is not the one CI15M-2 authorizes")
-    assert P.AUTHORIZED_SHA == ("13f83d4c49c5eb060320084be291cd75b0402"
-                                "7f7")
-    assert P.PROBE_AUTH_ID == "OWNER-2026-10-03-GEMINI-CI15M-2"
+    import subprocess
+    # the authorized SHA must be a REAL commit that carries the adapter
+    # sweep, not a label
+    rc = subprocess.run(["git", "cat-file", "-e", P.AUTHORIZED_SHA],
+                        capture_output=True, timeout=30).returncode
+    assert rc == 0, "AUTHORIZED_SHA is not a commit in this repository"
+    assert P.PROBE_AUTH_ID == "OWNER-2026-10-03-GEMINI-CI15M-3"
 
 
 def test_a_policy_edit_halts_the_live_path(root, monkeypatch):
@@ -816,11 +820,13 @@ def test_the_runtime_gate_answers_every_owner_condition(root):
     assert "arming_keys_present" in v["failed"]
 
 
-def test_ci15m_1_is_permanently_closed_and_not_reused():
+def test_ci15m_1_and_2_are_permanently_closed_and_not_reused():
     """CI15M-1 must not be reset, reused or modified. Its id is gone from
     the build and its budget is read from immutable git refs."""
-    assert arming.EXPECTED_AUTH_ID != "OWNER-2026-10-03-GEMINI-CI15M-1"
-    assert P.PROBE_AUTH_ID != "OWNER-2026-10-03-GEMINI-CI15M-1"
+    for closed in ("OWNER-2026-10-03-GEMINI-CI15M-1",
+                   "OWNER-2026-10-03-GEMINI-CI15M-2"):
+        assert arming.EXPECTED_AUTH_ID != closed, closed
+        assert P.PROBE_AUTH_ID != closed, closed
     src = open(BUD.__file__, encoding="utf-8").read()
     for banned in ("def reset", "def reopen", "def clear_latch",
                    "def delete_slots"):

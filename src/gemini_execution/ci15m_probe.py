@@ -46,7 +46,7 @@ LABEL = "GEMINI_CI15M_PROBE_V1"
 
 #: the authorization these bounds were granted against. It must match
 #: `arming.EXPECTED_AUTH_ID` before anything is constructed.
-PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-2"
+PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-3"
 
 #: THE EXECUTION TREATMENT, fixed for this cohort. T = capped marketable
 #: limit at the REAL executable ask. M is implemented and tested but is NOT
@@ -66,7 +66,7 @@ AUTHORIZED_POLICY_FINGERPRINT: Optional[str] = (
 
 #: the commit the authorization names. Verified at runtime, before the first
 #: venue submission, by `verify_runtime()`.
-AUTHORIZED_SHA = "13f83d4c49c5eb060320084be291cd75b04027f7"
+AUTHORIZED_SHA = "f52027bc7c4888d1a7429b8a6db0e065f82a0607"
 
 #: the ONE contract family. A symbol outside it is refused by name.
 SYMBOL_PREFIX = "GEMI-BTC15M"
@@ -723,7 +723,7 @@ def verify_runtime(cohort_id: str, *,
             fingerprint() == AUTHORIZED_POLICY_FINGERPRINT,
         "authorization_installed":
             arming.EXPECTED_AUTH_ID == PROBE_AUTH_ID
-            == "OWNER-2026-10-03-GEMINI-CI15M-2",
+            == "OWNER-2026-10-03-GEMINI-CI15M-3",
         "quantity_is_one": QUANTITY == D("1"),
         "consumed_slots_zero": st["order_slots_consumed"] == 0,
         "confirmed_realized_loss_zero":

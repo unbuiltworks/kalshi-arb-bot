@@ -152,7 +152,31 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: must AGREE for a crossing order to be constructible at all. The order is
 #: still a LIMIT with an explicit price; there is no unrestricted market
 #: order anywhere in this repository.
-EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-2"
+#: PREPARED 2026-10-03 for CI15M-3, the SAME mechanics experiment after the
+#: venue-adapter contract sweep. Authorized SHA f52027bc7c4888d1a7429b8a6db0e065f82a0607, frozen policy
+#: fingerprint 5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329
+#: -- unchanged, because no strategy changed.
+#:
+#: CI15M-2 IS CLOSED: 0 of 3 submissions, HALTED UNKNOWN_POSITION before its
+#: first order. Its record is preserved and it is never cleared or reused.
+#: CI15M-1 IS CLOSED at 12/12. Neither is reset.
+#:
+#: WHY A THIRD ATTEMPT IS DIFFERENT. CI15M-1 and CI15M-2 both died of the
+#: same failure class -- a consumer guessing the shape its producer returns.
+#: Every venue surface on this path is now normalized once, at the boundary,
+#: into an explicit type, and each contract is asserted against the
+#: producer's own source. 68 contract tests plus a 10-case end-to-end chain.
+#:
+#: BOUNDS, unchanged from CI15M-2: Treatment T; BTC15m only; ONE window;
+#: q=1; THREE submitted orders; one outstanding/unresolved order; one OPEN
+#: intent; OPEN + at most 2 subsequent inventory actions; max 2 EXTENDs;
+#: acquisition <= 0.90; MAX_PAIR_COST 0.96; 5c EXTEND threshold; unmatched
+#: <= 3 shares and <= $2.70; OPEN_SIDE_RULE NATIVE_UP; no chase or retry
+#: after a failed OPEN.
+#:
+#: UNKNOWN_POSITION still HALTs. The fix was correct interpretation of
+#: SUCCESSFUL reads, not treating absence as flat.
+EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-3"
 
 
 class NotArmed(Exception):
