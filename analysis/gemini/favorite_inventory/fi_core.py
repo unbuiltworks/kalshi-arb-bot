@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal as D, ROUND_CEILING, ROUND_FLOOR
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 
 ONE = D("1")
 CENT = D("0.01")
@@ -202,6 +202,120 @@ class Inventory:
         self.fees += f.fee
         self.rebates += f.rebate
         self.fills.append(f)
+
+
+    # ---- the continuous-inventory report ------------------------------
+    #
+    # EVERY FIELD THE OWNER NAMED, as one snapshot. There is deliberately NO
+    # assumption anywhere here of "one first leg plus one complement": the
+    # state is a function of the fill LIST, so
+    # OPEN -> EXTEND -> EXTEND -> COMPLEMENT -> EXTEND opposite -> COMPLEMENT
+    # -> LOCK is just six calls to add() and the snapshot stays coherent.
+    @property
+    def total_cost(self) -> D:
+        """Cash out of pocket INCLUDING fees, minus credited rebates. This is
+        the number that has to come back at settlement to break even."""
+        return self.cash + self.fees - self.rebates
+
+    @property
+    def matched_cost(self) -> D:
+        """Cost attributable to the matched book at its own average prices."""
+        pc = self.matched_pair_cost()
+        return (self.matched * pc) if (self.matched and pc is not None) else D("0")
+
+    @property
+    def residual_side(self) -> Optional[str]:
+        if self.q_up > self.q_down:
+            return "UP"
+        if self.q_down > self.q_up:
+            return "DOWN"
+        return None          # flat: LOCKED
+
+    @property
+    def residual_qty(self) -> D:
+        return self.residual
+
+    @property
+    def up_settlement_pnl(self) -> D:
+        """Settlement P&L if UP wins, net of fees and credited rebates."""
+        return self.net_if("UP")
+
+    @property
+    def down_settlement_pnl(self) -> D:
+        return self.net_if("DOWN")
+
+    def incremental_effect(self, side: str, price, qty, mode: str = "taker"
+                           ) -> Dict[str, Any]:
+        """WHAT WOULD ONE MORE FILL DO -- the question an EXTEND or a
+        COMPLEMENT decision actually turns on.
+
+        Returns the deltas, not a recommendation. It mutates nothing: a copy
+        is advanced and discarded, so calling this can never move real state.
+        """
+        import copy
+        before = {"up": self.up_settlement_pnl,
+                  "down": self.down_settlement_pnl,
+                  "matched": self.matched, "residual": self.residual,
+                  "residual_side": self.residual_side,
+                  "total_cost": self.total_cost,
+                  "matched_pair_cost": self.matched_pair_cost()}
+        trial = copy.deepcopy(self)
+        trial.add(make_fill(0.0, side, mode, price, qty, "incremental trial"))
+        trial.assert_identities()
+        after = {"up": trial.up_settlement_pnl,
+                 "down": trial.down_settlement_pnl,
+                 "matched": trial.matched, "residual": trial.residual,
+                 "residual_side": trial.residual_side,
+                 "total_cost": trial.total_cost,
+                 "matched_pair_cost": trial.matched_pair_cost()}
+        return {
+            "side": side, "price": str(_q(price)), "qty": str(_q(qty)),
+            "mode": mode,
+            "d_up_settlement_pnl": after["up"] - before["up"],
+            "d_down_settlement_pnl": after["down"] - before["down"],
+            "d_total_cost": after["total_cost"] - before["total_cost"],
+            "d_matched": after["matched"] - before["matched"],
+            "d_residual": after["residual"] - before["residual"],
+            "residual_side_before": before["residual_side"],
+            "residual_side_after": after["residual_side"],
+            "matched_pair_cost_before": before["matched_pair_cost"],
+            "matched_pair_cost_after": after["matched_pair_cost"],
+            "locks": after["residual"] == D("0") and before["residual"] > 0,
+            "worst_case_before": min(before["up"], before["down"]),
+            "worst_case_after": min(after["up"], after["down"]),
+            "labels": ("deltas only, nothing recommended. A COMPLEMENT that "
+                       "RAISES worst_case is improving the floor; one that "
+                       "lowers it is paying for the privilege."),
+        }
+
+    def snapshot(self) -> Dict[str, Any]:
+        """The full state the owner asked for, in one dict."""
+        return {
+            "UP_qty": str(self.q_up), "DOWN_qty": str(self.q_down),
+            "UP_cost": str(self.c_up), "DOWN_cost": str(self.c_down),
+            "total_cost": str(self.total_cost),
+            "cash_ex_fees": str(self.cash),
+            "fees": str(self.fees), "rebates_NOT_REALIZED": str(self.rebates),
+            "matched_qty": str(self.matched),
+            "matched_cost": str(self.matched_cost),
+            "matched_pair_cost": (None if self.matched_pair_cost() is None
+                                  else str(self.matched_pair_cost())),
+            "matched_pnl": str(self.matched_pnl()),
+            "residual_side": self.residual_side,
+            "residual_qty": str(self.residual_qty),
+            "UP_settlement_PnL": str(self.up_settlement_pnl),
+            "DOWN_settlement_PnL": str(self.down_settlement_pnl),
+            "residual_pnl_if_UP": str(self.residual_pnl_if("UP")),
+            "residual_pnl_if_DOWN": str(self.residual_pnl_if("DOWN")),
+            "worst_case": str(min(self.up_settlement_pnl,
+                                  self.down_settlement_pnl)),
+            "n_fills": len(self.fills),
+            "state": ("LOCKED" if self.residual == 0 and self.matched > 0
+                      else ("FLAT" if not self.fills else "OPEN_RESIDUAL")),
+            "labels": ("matched and residual are kept apart and never summed "
+                       "into one number. Rebates are reported but are NOT "
+                       "realized until credited."),
+        }
 
     def assert_identities(self) -> None:
         """Invariants that must hold after every mutation."""
