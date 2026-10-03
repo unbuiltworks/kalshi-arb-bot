@@ -124,15 +124,19 @@ by nearly 7 minutes, from the venue's own metadata rather than our inference.
 Positions went **0 rows → 1 row (12:33, avgPrice 0.5) → 0 rows (13:00,
 FLAT_NO_ROWS)**. The position settled and closed. The account is flat.
 
-**REALIZED: −$0.50.** Confirmed from the authenticated fill (1 @ 0.50), the
+**REALIZED PRINCIPAL P&L: −$0.50. FROZEN.** Confirmed from the authenticated fill (1 @ 0.50), the
 authoritative resolution (`no`, payout $0.00) and the authenticated flat
 account. This is realized settlement cashflow, not a mark.
 
 **One line NOT confirmed, stated rather than papered over:** the venue's order
 surface carries **no fee field**, and this run captured no fee ledger. The
-taker fee remains formula-derived — `ceil(0.07 · 1 · 0.5 · 0.5, cent) = $0.02`
-— so the total is **−$0.50 realized plus an unconfirmed $0.02 fee, i.e.
-−$0.50 to −$0.52**. The fee is not called realized.
+taker fee remains formula-derived — `ceil(0.07 · 1 · 0.5 · 0.5, cent) = $0.02`.
+
+**The frozen figure is therefore: realized principal P&L −$0.50, plus a
+formula-derived and UNCONFIRMED $0.02 fee.** −$0.52 is **not** to be reported
+as realized unless and until account cashflow proves it. If a fee or cashflow
+surface is later located and confirms the charge, this line may be updated to
+−$0.52 realized **citing that evidence** — and not otherwise.
 
 ## What this establishes
 
