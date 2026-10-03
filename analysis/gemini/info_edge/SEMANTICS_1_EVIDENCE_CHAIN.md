@@ -93,12 +93,46 @@ BTC finished **$74.27 below strike**. UP resolved **NO** → payout **$0.00**.
 `ceil(0.07 · 1 · 0.5 · 0.5, cent) = $0.02`; payout $0.00. **Expected ≈
 −$0.52.** *Labelled expected, not realized, pending the account read.*
 
-**10. Authenticated reconciliation — PENDING.** Read-only fill-forensics run
-[37123964457](https://github.com/unbuiltworks/kalshi-arb-bot/actions/runs/37123964457)
-over 12:00–13:30Z, for the venue's own fee figure, confirmation that the
-position closed, and that the account is flat. **Nothing here is labelled
-realized until that confirms the cashflow.** Resolution side alone is not
-cash.
+**10. Authenticated reconciliation — COMPLETE.** Read-only run
+[37123964457](https://github.com/unbuiltworks/kalshi-arb-bot/actions/runs/37123964457),
+evidence committed by `gemini-settlement-gate[bot]` at `3c319285`.
+
+*The order, from the venue's own order surface* (`fill_forensics_20261003T130017Z.json`,
+raw row preserved verbatim):
+
+```json
+{"orderId":145828836703726947,"status":"filled","side":"buy","outcome":"yes",
+ "orderType":"limit","timeInForce":"good-til-cancel","quantity":"1",
+ "filledQuantity":"1","remainingQuantity":"0","price":"0.5",
+ "avgExecutionPrice":"0.5","createdAt":"2026-10-03T12:33:05.968Z"}
+```
+
+The same row's `contractMetadata` independently confirms the exclusion
+rationale: `startTime` **12:40:00Z** and `strike.availableAt` **12:40:00Z**,
+against a fill at **12:33:05.968Z**. The fill preceded the window's own start
+by nearly 7 minutes, from the venue's own metadata rather than our inference.
+
+*The account, authenticated at 13:00:11Z* (`continuous_unarmed_20261003T130011Z.json`):
+
+```json
+"position_gate": {"read": {"path":"/v1/prediction-markets/positions",
+                           "status":200,"ok":true,"total":0},
+                  "n_rows_for_symbol":0, "n_rows_on_account":0,
+                  "venue_representation":"FLAT_NO_ROWS"}
+```
+
+Positions went **0 rows → 1 row (12:33, avgPrice 0.5) → 0 rows (13:00,
+FLAT_NO_ROWS)**. The position settled and closed. The account is flat.
+
+**REALIZED: −$0.50.** Confirmed from the authenticated fill (1 @ 0.50), the
+authoritative resolution (`no`, payout $0.00) and the authenticated flat
+account. This is realized settlement cashflow, not a mark.
+
+**One line NOT confirmed, stated rather than papered over:** the venue's order
+surface carries **no fee field**, and this run captured no fee ledger. The
+taker fee remains formula-derived — `ceil(0.07 · 1 · 0.5 · 0.5, cent) = $0.02`
+— so the total is **−$0.50 realized plus an unconfirmed $0.02 fee, i.e.
+−$0.50 to −$0.52**. The fee is not called realized.
 
 ## What this establishes
 

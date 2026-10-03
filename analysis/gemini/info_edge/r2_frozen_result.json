@@ -1,0 +1,238 @@
+{
+  "DEV": {
+    "label": "DEV",
+    "eligible_windows": 48,
+    "n": 16,
+    "windows": 12,
+    "per_window_counts": [
+      2,
+      2,
+      2,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "correct": 0.9375,
+    "wins": 15,
+    "losses": 1,
+    "price_p10": 0.64,
+    "price_p50": 0.9299999999999999,
+    "price_p90": 0.98,
+    "price_mean": 0.873125,
+    "fee_mean": 0.0125,
+    "ev_gross": 0.06437499999999996,
+    "ev_net": 0.05187499999999996,
+    "total_q1_net": 0.8300000000000001,
+    "boot_ev_p05": -0.04923076923076928,
+    "boot_ev_p50": 0.055263157894736695,
+    "boot_ev_p95": 0.13250000000000012,
+    "boot_correct_p05": 0.8125,
+    "boot_share_ev_le_0": 0.18125,
+    "size_p10": 25.0,
+    "size_p50": 1071.0,
+    "size_p90": 7500.0,
+    "depth_p50": 1071.0,
+    "worst_loss_per_contract": 0.99,
+    "losing_windows": [
+      "BTC05M2610022100"
+    ],
+    "instances_examined": 142,
+    "by_tte": [
+      {
+        "tte": 240,
+        "n": 2,
+        "windows": 2,
+        "correct": 1.0,
+        "price_p50": 0.92
+      },
+      {
+        "tte": 180,
+        "n": 8,
+        "windows": 8,
+        "correct": 1.0,
+        "price_p50": 0.94
+      },
+      {
+        "tte": 120,
+        "n": 3,
+        "windows": 3,
+        "correct": 0.6666666666666666,
+        "price_p50": 0.98
+      },
+      {
+        "tte": 90,
+        "n": 1,
+        "windows": 1,
+        "correct": 1.0,
+        "price_p50": 0.93
+      },
+      {
+        "tte": 45,
+        "n": 1,
+        "windows": 1,
+        "correct": 1.0,
+        "price_p50": 0.94
+      },
+      {
+        "tte": 15,
+        "n": 1,
+        "windows": 1,
+        "correct": 1.0,
+        "price_p50": 0.51
+      }
+    ]
+  },
+  "PROSPECTIVE": {
+    "label": "PROSPECTIVE",
+    "eligible_windows": 134,
+    "n": 65,
+    "windows": 42,
+    "per_window_counts": [
+      5,
+      3,
+      3,
+      3,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "correct": 0.8615384615384616,
+    "wins": 56,
+    "losses": 9,
+    "price_p10": 0.49,
+    "price_p50": 0.88,
+    "price_p90": 0.98,
+    "price_mean": 0.8104615384615382,
+    "fee_mean": 0.013384615384615392,
+    "ev_gross": 0.05107692307692335,
+    "ev_net": 0.03769230769230796,
+    "total_q1_net": 2.4500000000000006,
+    "boot_ev_p05": -0.08084507042253501,
+    "boot_ev_p50": 0.03484375000000019,
+    "boot_ev_p95": 0.14726027397260238,
+    "boot_correct_p05": 0.7741935483870968,
+    "boot_share_ev_le_0": 0.3155,
+    "size_p10": 25.0,
+    "size_p50": 681.0,
+    "size_p90": 7500.0,
+    "depth_p50": 681.0,
+    "worst_loss_per_contract": 1.0,
+    "losing_windows": [
+      "BTC05M2610030215",
+      "BTC05M2610030540",
+      "BTC05M2610030610",
+      "BTC05M2610030645",
+      "BTC05M2610030850",
+      "BTC05M2610030915",
+      "BTC05M2610031005",
+      "BTC05M2610031045"
+    ],
+    "instances_examined": 366,
+    "by_tte": [
+      {
+        "tte": 240,
+        "n": 10,
+        "windows": 10,
+        "correct": 0.7,
+        "price_p50": 0.86
+      },
+      {
+        "tte": 180,
+        "n": 23,
+        "windows": 23,
+        "correct": 0.8260869565217391,
+        "price_p50": 0.9
+      },
+      {
+        "tte": 120,
+        "n": 13,
+        "windows": 13,
+        "correct": 0.9230769230769231,
+        "price_p50": 0.89
+      },
+      {
+        "tte": 90,
+        "n": 8,
+        "windows": 8,
+        "correct": 0.875,
+        "price_p50": 0.98
+      },
+      {
+        "tte": 60,
+        "n": 2,
+        "windows": 2,
+        "correct": 1.0,
+        "price_p50": 0.95
+      },
+      {
+        "tte": 45,
+        "n": 2,
+        "windows": 2,
+        "correct": 1.0,
+        "price_p50": 0.49
+      },
+      {
+        "tte": 30,
+        "n": 2,
+        "windows": 2,
+        "correct": 1.0,
+        "price_p50": 0.98
+      },
+      {
+        "tte": 20,
+        "n": 3,
+        "windows": 3,
+        "correct": 1.0,
+        "price_p50": 0.84
+      },
+      {
+        "tte": 5,
+        "n": 2,
+        "windows": 2,
+        "correct": 1.0,
+        "price_p50": 0.83
+      }
+    ]
+  }
+}
