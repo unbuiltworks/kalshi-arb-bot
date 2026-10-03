@@ -89,6 +89,22 @@ def env(tmp_path, monkeypatch):
     return root
 
 
+def _authorize(root, ticker, specs):
+    """Seed the DURABLE authorized submissions a fill presupposes.
+
+    Written straight to the ledger rather than through `consume_slot`
+    because these tests are about RECONSTRUCTION, not about the budget
+    gates (which have their own suite). A venue fill cannot exist without
+    an authorization, so every reconstruction test must carry one.
+    """
+    for slot, (action, side, outcome, price, qty) in enumerate(specs):
+        BUD._append_durable(BUD._paths(CID, root)["ledger"], {
+            "kind": "PLACE", "slot": slot, "utc": "2026-10-03T19:00:00+00:00",
+            "cohort_id": CID, "ticker": ticker, "status": "SUBMITTED",
+            "intent": {"action": action, "side": side, "outcome": outcome,
+                       "price": price, "quantity": qty}})
+
+
 def _wire(monkeypatch, symbol, orders, trades, positions=None):
     async def hist(**kw):
         assert kw.get("include_rows") is True, (
@@ -111,6 +127,7 @@ def _wire(monkeypatch, symbol, orders, trades, positions=None):
 # 1. THE REQUIRED CI15M-3 LIVE-STATE INVARIANT
 # =====================================================================
 def test_the_ci15m_3_fill_reconstructs_up_q1_at_0_34(env, monkeypatch):
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [CI15M3_ORDER], [CI15M3_TRADE])
     rec = asyncio.run(P.reconciled_inventory(CID, CI15M3_SYMBOL, root=env))
     assert rec["ok"], rec
@@ -133,6 +150,7 @@ def test_the_ci15m_3_fill_reconstructs_up_q1_at_0_34(env, monkeypatch):
 
 def test_the_frozen_policy_may_then_decide_and_never_opens_again(env,
                                                                  monkeypatch):
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [CI15M3_ORDER], [CI15M3_TRADE])
     rec = asyncio.run(P.reconciled_inventory(CID, CI15M3_SYMBOL, root=env))
     inv = rec["inventory"]
@@ -153,6 +171,11 @@ def test_the_ci15m_1_four_fills_reconstruct_up_q4_cost_2_86(env,
     orders = [_order(o, px, CI15M1_SYMBOL) for o, px in CI15M1]
     trades = [_trade(o, px, 8800000 + i, CI15M1_SYMBOL)
               for i, (o, px) in enumerate(CI15M1)]
+    _authorize(env, "BTC15M2610031715",
+               [("OPEN", "UP", "yes", "0.70", "1"),
+                ("OPEN", "UP", "yes", "0.71", "1"),
+                ("OPEN", "UP", "yes", "0.73", "1"),
+                ("OPEN", "UP", "yes", "0.72", "1")])
     _wire(monkeypatch, CI15M1_SYMBOL, orders, trades)
     rec = asyncio.run(P.reconciled_inventory(CID, CI15M1_SYMBOL, root=env))
     assert rec["ok"], rec
@@ -169,6 +192,11 @@ def test_the_reconstructed_ci15m_1_position_breaches_the_caps(env,
     orders = [_order(o, px, CI15M1_SYMBOL) for o, px in CI15M1]
     trades = [_trade(o, px, 8800000 + i, CI15M1_SYMBOL)
               for i, (o, px) in enumerate(CI15M1)]
+    _authorize(env, "BTC15M2610031715",
+               [("OPEN", "UP", "yes", "0.70", "1"),
+                ("OPEN", "UP", "yes", "0.71", "1"),
+                ("OPEN", "UP", "yes", "0.73", "1"),
+                ("OPEN", "UP", "yes", "0.72", "1")])
     _wire(monkeypatch, CI15M1_SYMBOL, orders, trades)
     inv = asyncio.run(P.reconciled_inventory(CID, CI15M1_SYMBOL,
                                              root=env))["inventory"]
@@ -190,6 +218,7 @@ def test_the_reconstructed_ci15m_1_position_breaches_the_caps(env,
 def test_restart_reconstructs_from_venue_evidence_alone(env, monkeypatch):
     """Mandatory for continuous operation: we cannot depend on having
     witnessed the fill in THIS process."""
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [CI15M3_ORDER], [CI15M3_TRADE])
     import importlib
     importlib.reload(BUD)
@@ -206,6 +235,7 @@ def test_restart_reconstructs_from_venue_evidence_alone(env, monkeypatch):
 def test_a_stale_local_belief_that_disagrees_halts(env, monkeypatch):
     """`ours` is checked against the reconstruction. A disagreement means we
     do not know what we hold."""
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [CI15M3_ORDER], [CI15M3_TRADE])
     wrong = P.new_inventory()            # believes FLAT while holding 1
     rec = asyncio.run(P.reconciled_inventory(CID, CI15M3_SYMBOL, root=env,
@@ -215,6 +245,7 @@ def test_a_stale_local_belief_that_disagrees_halts(env, monkeypatch):
 
 
 def test_an_agreeing_local_belief_passes(env, monkeypatch):
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [CI15M3_ORDER], [CI15M3_TRADE])
     mine = P.new_inventory()
     mine.add(POLICY["make_fill"](0.0, "UP", "taker", D("0.34"), D("1"), "x"))
@@ -228,6 +259,9 @@ def test_an_agreeing_local_belief_passes(env, monkeypatch):
 # =====================================================================
 def test_two_sided_fills_reconstruct_a_matched_pair_at_0_94(env,
                                                             monkeypatch):
+    _authorize(env, "BTC15M2610032000",
+               [("OPEN", "UP", "yes", "0.34", "1"),
+                ("COMPLETE", "DOWN", "no", "0.60", "1")])
     orders = [_order("1", "0.34"), _order("2", "0.60", outcome="no")]
     trades = [_trade("1", "0.34", 1), _trade("2", "0.60", 2)]
     _wire(monkeypatch, CI15M3_SYMBOL, orders, trades)
@@ -246,6 +280,10 @@ def test_two_sided_fills_reconstruct_a_matched_pair_at_0_94(env,
 
 
 def test_a_further_up_fill_makes_the_residual_reappear(env, monkeypatch):
+    _authorize(env, "BTC15M2610032000",
+               [("OPEN", "UP", "yes", "0.34", "1"),
+                ("COMPLETE", "DOWN", "no", "0.60", "1"),
+                ("EXTEND", "UP", "yes", "0.40", "1")])
     orders = [_order("1", "0.34"), _order("2", "0.60", outcome="no"),
               _order("3", "0.40")]
     trades = [_trade("1", "0.34", 1), _trade("2", "0.60", 2),
@@ -276,6 +314,7 @@ def test_unreadable_order_history_halts(env, monkeypatch):
 
 
 def test_unreadable_mytrades_halts(env, monkeypatch):
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [CI15M3_ORDER], [CI15M3_TRADE])
 
     async def bad(sym):
@@ -288,6 +327,7 @@ def test_unreadable_mytrades_halts(env, monkeypatch):
 
 def test_an_unjoinable_order_halts(env, monkeypatch):
     """A trade whose order is absent cannot have its SIDE resolved."""
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [], [CI15M3_TRADE])
     rec = asyncio.run(P.authenticated_fills(CID, CI15M3_SYMBOL, root=env))
     assert rec["ok"] is False
@@ -296,6 +336,7 @@ def test_an_unjoinable_order_halts(env, monkeypatch):
 
 @pytest.mark.parametrize("bad", [{"amount": "oops"}, {"price": "oops"}])
 def test_an_ambiguous_fill_quantity_or_price_halts(env, monkeypatch, bad):
+    _authorize(env, "BTC15M2610032000", [("OPEN", "UP", "yes", "0.34", "1")])
     _wire(monkeypatch, CI15M3_SYMBOL, [CI15M3_ORDER],
           [dict(CI15M3_TRADE, **bad)])
     rec = asyncio.run(P.authenticated_fills(CID, CI15M3_SYMBOL, root=env))

@@ -176,6 +176,9 @@ def _run_chain(monkeypatch, env, *, ack_status, ack_filled, next_book):
 
     # --- 6. submit; the ACK may be terminal or not
     row = BUD.consume_slot(CID, TICKER, intent, root=env, remote=None)
+    assert P.authorized_intents(CID, root=env), (
+        "the submission must be durably authorized before the venue fill "
+        "can be attributed back to it")
     ack = AD.PlaceAck.of(_ack(ack_status, ack_filled))
     assert ack.ok
     cls = P.classify_ack(_ack(ack_status, ack_filled)["body"])
@@ -305,7 +308,22 @@ def test_an_unreadable_fill_record_still_halts(env, monkeypatch):
     assert "UNKNOWN_POSITION" in BUD.halted(CID, root=env)
 
 
+def _authorize(root, specs):
+    """Seed the DURABLE authorized submissions a venue fill presupposes.
+    A fill matching no authorization is FOREIGN and halts on its own; these
+    tests exercise what happens when the fills ARE ours."""
+    for slot, (outcome, price) in enumerate(specs):
+        BUD._append_durable(BUD._paths(CID, root)["ledger"], {
+            "kind": "PLACE", "slot": slot, "cohort_id": CID,
+            "utc": "2026-10-03T19:00:00+00:00", "ticker": TICKER,
+            "status": "SUBMITTED",
+            "intent": {"action": "OPEN", "side": "UP", "outcome": outcome,
+                       "price": price, "quantity": "1"}})
+
+
 def test_a_fill_record_ledger_disagreement_still_halts(env, monkeypatch):
+    _authorize(env, [("yes", "0.70"), ("yes", "0.70")])
+
     async def two(**kw):
         return {"readable": True, "verdict": "ORDERS_FOUND", "total_rows": 2,
                 "symbol": SYMBOL, "unreadable_statuses": [],
@@ -353,6 +371,8 @@ def test_a_successful_empty_fill_record_is_flat_not_unknown(env,
 
 def test_a_successful_empty_positions_is_only_telemetry(env, monkeypatch):
     """positions() empty must NOT contradict a reconstructed fill ledger."""
+    _authorize(env, [("yes", "0.70")])
+
     async def one(**kw):
         return {"readable": True, "verdict": "ORDERS_FOUND", "total_rows": 1,
                 "symbol": SYMBOL, "unreadable_statuses": [],

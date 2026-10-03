@@ -168,6 +168,9 @@ HALT_CONDITIONS = {
     "EXTEND_BUDGET_EXCEEDED": "a third EXTEND was reached before a complement",
     "LOCKED_MUTATION": "an action was proposed on an inventory that is "
                        "already LOCKED",
+    "UNATTRIBUTABLE_FILL": "the venue reports a fill on this symbol that "
+                           "matches no authorized submission in this "
+                           "cohort's durable ledger",
 }
 
 

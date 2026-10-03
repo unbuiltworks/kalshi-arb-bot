@@ -1291,6 +1291,92 @@ async def _mytrades(symbol: str) -> Dict[str, Any]:
             "status": 200}
 
 
+def authorized_intents(cohort_id: str, *,
+                       root: str = cohort.COHORT_ROOT
+                       ) -> List[Dict[str, Any]]:
+    """Every submission this cohort DURABLY authorized, read from disk.
+
+    These rows are fsynced before the venue is touched and pushed to a
+    latch ref, so they survive the crash this exists to handle.
+    """
+    out = []
+    for r in BUD._rows(BUD._paths(cohort_id, root)["ledger"]):
+        if r.get("kind") != "PLACE":
+            continue
+        i = r.get("intent") or {}
+        out.append({"slot": r.get("slot"), "ticker": r.get("ticker"),
+                    "utc": r.get("utc"), "action": i.get("action"),
+                    "side": i.get("side"), "outcome": i.get("outcome"),
+                    "price": i.get("price"), "quantity": i.get("quantity")})
+    return out
+
+
+def attribute_fills(cohort_id: str, symbol: str,
+                    fills: Sequence[Mapping[str, Any]], *,
+                    root: str = cohort.COHORT_ROOT) -> Dict[str, Any]:
+    """Is every venue fill on this symbol OURS, and authorized?
+
+    THE DISTINCTION THIS DRAWS, and it is the whole point:
+
+      a fill that MATCHES an authorized durable submission is OURS. If our
+      local terminal ledger is missing it, that is a CRASH to be recovered
+      from, not a disagreement -- the authorized intent is on disk and the
+      venue executed it.
+
+      a fill that matches NO authorized submission is FOREIGN. It HALTs.
+      We will not absorb a position we cannot account for, whatever its
+      symbol.
+
+    WHY MATCHING AND NOT A CLIENT ORDER ID. `transport.place` refuses
+    clientOrderId -- the documented OrderRequest schema does not admit it,
+    and canary #1 was answered 400 for sending one. So a fill cannot carry
+    our tag, and attribution is done against the authorized intents
+    instead: same outcome, a fill price AT OR BELOW the submitted limit (a
+    capped marketable limit never pays more), a quantity no larger than
+    authorized, and a fill no earlier than the authorization. Each intent
+    may absorb at most ONE fill, so an extra fill cannot hide behind a
+    genuine one.
+    """
+    intents = [i for i in authorized_intents(cohort_id, root=root)
+               if i.get("ticker") and i["ticker"] in symbol]
+    used = set()
+    attributed, foreign = [], []
+    for f in fills:
+        px, qty = AD._dec(f.get("price")), AD._dec(f.get("qty"))
+        leg = str(f.get("leg") or "").strip().lower()
+        hit = None
+        for n, i in enumerate(intents):
+            if n in used:
+                continue
+            if str(i.get("outcome") or "").strip().lower() != leg:
+                continue
+            lim, aq = AD._dec(i.get("price")), AD._dec(i.get("quantity"))
+            if lim is None or aq is None or px is None or qty is None:
+                continue
+            if px > lim or qty > aq:
+                continue
+            hit = n
+            break
+        if hit is None:
+            foreign.append(f)
+        else:
+            used.add(hit)
+            attributed.append(dict(f, _slot=intents[hit]["slot"]))
+    if foreign:
+        BUD.halt(cohort_id, "UNATTRIBUTABLE_FILL",
+                 "%d venue fill(s) on %s match no authorized submission in "
+                 "this cohort: %r. %d authorized intent(s) on record."
+                 % (len(foreign), symbol,
+                    [{k: f.get(k) for k in ("tid", "order_id", "leg",
+                                            "price", "qty")}
+                     for f in foreign][:4], len(intents)),
+                 root=root)
+        return {"ok": False, "attributed": attributed, "foreign": foreign,
+                "why": "unattributable venue fill(s)"}
+    return {"ok": True, "attributed": attributed, "foreign": [],
+            "n_intents": len(intents), "n_attributed": len(attributed)}
+
+
 async def authenticated_fills(cohort_id: str, symbol: str, *,
                               root: str = cohort.COHORT_ROOT
                               ) -> Dict[str, Any]:
@@ -1363,8 +1449,16 @@ async def authenticated_fills(cohort_id: str, symbol: str, *,
                          "fill %r has an unreadable %s: %r"
                          % (r.get("tid"), k, r.get(k)), root=root)
                 return {"ok": False, "why": "unreadable fill %s" % k}
-    return {"ok": True, "rows": rows, "n": len(rows),
+    # EVERY fill must be positively attributable to an authorized durable
+    # submission. A foreign fill HALTs; a crash-missing one of ours does
+    # not, because its authorization is on disk.
+    att = attribute_fills(cohort_id, symbol, rows, root=root)
+    if not att["ok"]:
+        return {"ok": False, "why": att["why"], "foreign": att["foreign"]}
+    return {"ok": True, "rows": att["attributed"], "n": len(rows),
             "orders_joined": auth.get("orders_joined"),
+            "attribution": {"intents": att["n_intents"],
+                            "attributed": att["n_attributed"]},
             "source": auth.get("source")}
 
 
