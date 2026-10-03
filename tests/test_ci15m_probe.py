@@ -11,6 +11,7 @@ process death actually does to this probe -- there is no cached budget.
 from __future__ import annotations
 
 import json
+import pathlib
 import os
 from decimal import Decimal as D
 
@@ -1414,3 +1415,53 @@ def test_a_successful_read_no_longer_halts(root):
                               root=root)
     assert rec["halted"] is False and rec["verdict"] == "AGREE"
     assert BUD.halted(CID, root=root) is None
+
+
+# ---------------------------------------------------------------------------
+# CI15M-4: the bound-bearing file is admitted BY ITS NUMBERS, not its name.
+# ci15m_budget.py carries every risk bound and is deliberately absent from
+# AUTH_ONLY. It is admitted through the provenance gate ONLY while the
+# installed bounds equal the authorized literals -- so a silent loosening of
+# any cap re-closes the gate and nothing can be submitted.
+# ---------------------------------------------------------------------------
+
+def test_authorized_bounds_literal_matches_installed_bounds():
+    bm = P.bounds_match()
+    assert bm["ok"] is True, bm["mismatched"]
+    assert bm["mismatched"] == {}
+    # The authorized literal is the owner's message, transcribed.
+    assert bm["authorized"]["windows"] == 2
+    assert bm["authorized"]["orders_total"] == 6
+    assert bm["authorized"]["orders_per_window"] == 3
+    assert bm["authorized"]["quantity"] == "1"
+    assert bm["authorized"]["treatment"] == "T"
+
+
+def test_budget_file_is_not_in_the_name_based_allowlist():
+    src = pathlib.Path(P.__file__).read_text()
+    auth_only = src.split("AUTH_ONLY = {", 1)[1].split("}", 1)[0]
+    assert "ci15m_budget.py" not in auth_only
+
+
+def test_bounds_mismatch_refuses_the_budget_file_and_fails_provenance(
+        monkeypatch):
+    """A loosened cap closes the provenance gate. This is the whole point."""
+    real = P.bounds_match()
+    assert "src/gemini_execution/ci15m_budget.py" not in \
+        P.verify_runtime("CI15M-4")["diff_paths_not_permitted"]
+
+    monkeypatch.setattr(P, "bounds_match", lambda: {
+        "ok": False,
+        "installed": dict(real["installed"], max_unmatched_principal="99.00"),
+        "authorized": real["authorized"],
+        "mismatched": {"max_unmatched_principal": {
+            "installed": "99.00", "authorized": "2.70"}},
+    })
+    out = P.verify_runtime("CI15M-4")
+    assert "src/gemini_execution/ci15m_budget.py" in \
+        out["diff_paths_not_permitted"]
+    assert out["checks"]["authorized_bounds_installed"] is False
+    assert out["checks"]["sha_condition"] is False
+    assert out["ok"] is False
+    assert "authorized_bounds_installed" in out["failed"]
+    assert "sha_condition" in out["failed"]

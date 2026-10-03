@@ -68,6 +68,59 @@ AUTHORIZED_POLICY_FINGERPRINT: Optional[str] = (
 #: venue submission, by `verify_runtime()`.
 AUTHORIZED_SHA = "dfcee7b78a69db37272bbd2c5452f12385d202b9"
 
+#: THE BOUNDS CI15M-4 WAS AUTHORIZED WITH, as literals.
+#:
+#: WHY THIS EXISTS. The authorization names new cohort bounds -- two
+#: windows, six orders, three per window -- which cannot be installed
+#: without changing `ci15m_budget.py`, and that file is deliberately
+#: EXCLUDED from the allowed-diff set because it carries every risk bound.
+#: Widening the file list would have thrown away the protection. So the
+#: file is admitted ONLY while the bounds it defines equal these literals:
+#: provenance is tied to the authorized NUMBERS, not to a filename. Change
+#: any of them and the probe refuses, whatever the diff looks like.
+AUTHORIZED_BOUNDS = {
+    "profile": "MECHANICS2",
+    "windows": 2,
+    "orders_total": 6,
+    "orders_per_window": 3,
+    "quantity": "1",
+    "max_acquisition_price": "0.90",
+    "max_pair_cost": "0.96",
+    "max_extends": "2",
+    "extend_min_avg_improvement": "0.05",
+    "max_unmatched_shares": "3",
+    "max_unmatched_principal": "2.70",
+    "open_side_rule": "NATIVE_UP",
+    "treatment": "T",
+}
+
+
+def bounds_match() -> Dict[str, Any]:
+    """Do the installed bounds equal what CI15M-4 authorized?"""
+    got = {
+        "profile": None, "windows": None, "orders_total": None,
+        "orders_per_window": None,
+        "quantity": str(QUANTITY),
+        "max_acquisition_price": str(POLICY["HARD_MAX_PRICE"]),
+        "max_pair_cost": str(POLICY["MAX_PAIR_COST"]),
+        "max_extends": str(POLICY["MAX_EXTENDS_BEFORE_COMPLEMENT"]),
+        "extend_min_avg_improvement":
+            str(POLICY["EXTEND_MIN_AVG_IMPROVEMENT"]),
+        "max_unmatched_shares": str(BUD.MAX_UNMATCHED_SHARES),
+        "max_unmatched_principal": str(BUD.MAX_UNMATCHED_PRINCIPAL),
+        "open_side_rule": POLICY["decide_once"].__globals__["OPEN_SIDE_RULE"],
+        "treatment": TREATMENT,
+    }
+    prof = BUD.PROFILES.get(BUD.MECHANICS2) or {}
+    got["profile"] = BUD.MECHANICS2
+    got["windows"] = prof.get("windows")
+    got["orders_total"] = prof.get("orders_total")
+    got["orders_per_window"] = prof.get("orders_per_window")
+    bad = {k: (AUTHORIZED_BOUNDS[k], got[k]) for k in AUTHORIZED_BOUNDS
+           if got[k] != AUTHORIZED_BOUNDS[k]}
+    return {"ok": not bad, "installed": got, "authorized": AUTHORIZED_BOUNDS,
+            "mismatched": bad}
+
 #: the ONE contract family. A symbol outside it is refused by name.
 SYMBOL_PREFIX = "GEMI-BTC15M"
 WINDOW_SECONDS = 900.0
@@ -760,6 +813,7 @@ def verify_runtime(cohort_id: str, *,
             descendant = None
 
     st = BUD.state(cohort_id, root=root)
+    bm = bounds_match()
     checks = {
         "head_known": head is not None,
         "head_is_authorized_sha": head == AUTHORIZED_SHA,
@@ -777,6 +831,7 @@ def verify_runtime(cohort_id: str, *,
         "not_expired": st["expired"] is None,
         # CI15M-2 Treatment T REQUIRES the taker path, so the condition
         # inverts: the two constants must AGREE, and both must be CI15M-2.
+        "authorized_bounds_installed": bool(bm["ok"]),
         "treatment_t_authorized":
             (payload.SEMANTICS_PROBE_AUTH_ID == arming.EXPECTED_AUTH_ID
              == PROBE_AUTH_ID),
@@ -820,6 +875,13 @@ def verify_runtime(cohort_id: str, *,
     def _permitted(f: str) -> bool:
         if f in AUTH_ONLY:
             return True
+        # ci15m_budget.py carries every risk bound and is NOT in AUTH_ONLY.
+        # CI15M-4's authorization names new cohort bounds, so the file must
+        # change -- and it is admitted ONLY while the installed bounds equal
+        # the authorized literals. The numbers are the provenance here, not
+        # the filename.
+        if f == "src/gemini_execution/ci15m_budget.py":
+            return bool(bm["ok"])
         # A TEST FILE IS ADMITTED BY RULE, because it is imported by no
         # execution path and cannot change what is sent. Nothing else is:
         # any other .py, and the frozen policy above all, is refused -- and
@@ -841,6 +903,7 @@ def verify_runtime(cohort_id: str, *,
         "diff_from_authorized_sha": diff_files,
         "diff_paths_not_permitted": not_permitted,
         "policy_fingerprint": fingerprint(),
+        "bounds": bm,
         "sha_note": ("the authorized SHA names the POLICY AND LOGIC commit. "
                      "Installing the authorization id and the authorized "
                      "fingerprint necessarily advances HEAD past it, so the "
