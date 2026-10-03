@@ -1019,6 +1019,29 @@ jobs:
           fi
 
       # ==================================================================
+      # The semantics probe lives on its own branch, and this job's checkout
+      # is PINNED to the economic-viability branch by design ("evidence goes
+      # back where it came from"). Repointing that would drag an unrelated
+      # tree into every other step, so the probe gets its OWN tree in a
+      # subdirectory instead, pinned to an exact SHA rather than a moving
+      # branch: a one-shot authorization should spend itself on reviewed code,
+      # not on whatever the branch happens to hold at dispatch.
+      # ==================================================================
+      - name: Check out the semantics probe at its reviewed SHA (separate tree)
+        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: 49627ca5
+          path: semantics-probe
+
+      - name: Probe tree provenance
+        if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
+        working-directory: semantics-probe
+        run: |
+          echo "probe tree HEAD: $(git rev-parse HEAD)"
+          pip install -r requirements.txt
+
+      # ==================================================================
       # EXECUTION-SEMANTICS PROBE -- PUBLIC PREFLIGHT.
       #
       # NO CREDENTIAL IS IN SCOPE in this step, deliberately: /v1/book and
@@ -1029,6 +1052,7 @@ jobs:
       - name: Semantics probe PREFLIGHT (public reads only; no arm, no secret)
         if: ${{ github.event.inputs.semantics_probe_preflight == 'true' }}
         timeout-minutes: 10
+        working-directory: semantics-probe
         run: |
           set -o pipefail
           test -n "${{ github.event.inputs.semantics_symbol }}" \
@@ -1064,6 +1088,7 @@ jobs:
       - name: Semantics probe ARMED (one order; owner-authorized)
         if: ${{ github.event.inputs.semantics_probe_armed == 'true' }}
         timeout-minutes: 20
+        working-directory: semantics-probe
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
