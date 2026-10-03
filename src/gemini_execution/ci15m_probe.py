@@ -499,6 +499,31 @@ async def poll_terminal(cohort_id: str, symbol: str, order_id: Any, *,
                     "not decide again.")}
 
 
+def _position_rows(got: Any) -> Optional[List[Mapping[str, Any]]]:
+    """The rows out of `metadata.positions()`, READ FROM ITS OWN CONTRACT.
+
+    THE DEFECT THIS REPLACES, AND IT IS THE THIRD OF ITS KIND. The previous
+    code looked for `positions`, `result` or `data`. `metadata.positions()`
+    returns neither: its contract is {"ok": bool, "rows": list|None,
+    "status": int, "why": str}, where `rows` is None iff the read failed.
+    So a SUCCESSFUL read was thrown away, `venue_signed(None, ...)` said
+    UNREADABLE, and CI15M-2 wrote an UNKNOWN_POSITION halt and stopped
+    before placing a single order -- on its only authorized window.
+
+    Fail-closed behaved correctly; the adapter did not. Three times now I
+    have written a reader against a shape I guessed rather than the one the
+    producer documents: the place ack, the active-orders body, and now this.
+    So this function reads `ok` FIRST and returns None on anything else,
+    rather than hunting for a key that might happen to be there.
+    """
+    if not isinstance(got, Mapping):
+        return None
+    if got.get("ok") is not True:
+        return None                 # an unsuccessful read is UNREADABLE
+    rows = got.get("rows")
+    return rows if isinstance(rows, list) else None
+
+
 RECONCILED = "reconciled_venue_inventory"
 
 
@@ -517,9 +542,7 @@ async def reconciled_inventory(cohort_id: str, symbol: str, *,
         BUD.halt(cohort_id, "UNKNOWN_POSITION",
                  "positions read failed: %s" % exc, root=root)
         return {"ok": False, "why": str(exc), "signed": None}
-    rows = got.get("positions") if isinstance(got, Mapping) else None
-    if rows is None and isinstance(got, Mapping):
-        rows = got.get("result") or got.get("data")
+    rows = _position_rows(got)
     v = position_ledger.venue_signed(rows, symbol)
     if v.get("signed") is None:
         BUD.halt(cohort_id, "UNKNOWN_POSITION", v.get("why"), root=root)
@@ -902,9 +925,7 @@ async def reconcile_after_fill(cohort_id: str, symbol: str, inv: Any, *,
         BUD.halt(cohort_id, "UNKNOWN_POSITION",
                  "positions read failed: %s" % exc, root=root)
         return {"halted": True, "verdict": "UNREADABLE", "why": str(exc)}
-    rows = got.get("positions") if isinstance(got, Mapping) else None
-    if rows is None and isinstance(got, Mapping):
-        rows = got.get("result") or got.get("data")
+    rows = _position_rows(got)
     return reconcile_or_halt(cohort_id, symbol, inv, rows, root=root)
 
 

@@ -1335,3 +1335,65 @@ def test_restart_after_a_fill_but_before_reconciliation(root):
     assert any(x.get("status") == "FILLED" for x in rows)
     assert not any(x.get("status") == "INVENTORY_RECONCILED" for x in rows), (
         "reconciliation must not be inferred from a fill")
+
+
+# =====================================================================
+# THE CI15M-2 DEFECT: the positions adapter must read metadata.positions()'
+# OWN CONTRACT, not a guessed key. This is the test that was missing --
+# the earlier ones handed rows straight to reconcile_or_halt and so never
+# exercised the extraction at all.
+# =====================================================================
+def test_the_positions_adapter_reads_the_documented_contract():
+    """metadata.positions() returns {"ok", "rows", "status", "why"}. The
+    old code looked for "positions"/"result"/"data" and therefore discarded
+    every successful read."""
+    rows = [{"symbol": "GEMI-BTC15M2610031845-UP", "outcome": "yes",
+             "totalQuantity": "1"}]
+    got = {"path": "/v1/prediction-markets/positions", "rows": rows,
+           "status": 200, "ok": True}
+    assert P._position_rows(got) == rows
+
+
+def test_a_successful_empty_positions_read_is_empty_not_unreadable():
+    """An authenticated read that says the account holds nothing is a FACT,
+    and must be distinguishable from a failed read."""
+    got = {"rows": [], "status": 200, "ok": True, "total": 0}
+    assert P._position_rows(got) == []
+
+
+def test_every_unsuccessful_positions_read_is_unreadable():
+    for got in ({"ok": False, "status": 500, "rows": None, "why": "boom"},
+                {"ok": False, "status": 200, "rows": [],
+                 "why": "unrecognised shape"},
+                {"rows": [{"x": 1}]},          # no ok key at all
+                {"ok": True, "rows": None},
+                {"ok": True, "rows": {"not": "a list"}},
+                None, [], "nope"):
+        assert P._position_rows(got) is None, got
+
+
+def test_the_adapter_shape_matches_the_real_producer():
+    """Asserted against metadata.positions' ACTUAL source, so the two
+    cannot drift apart silently again."""
+    import inspect
+    from src.gemini_execution import metadata
+    src = inspect.getsource(metadata.positions)
+    assert '"rows"' in src and 'out["ok"] = True' in src
+    for guessed in ('out["positions"]', 'out["result"]', 'out["data"]'):
+        assert guessed not in src, (
+            "metadata.positions does not emit %s; the adapter must not look "
+            "for it" % guessed)
+
+
+def test_a_successful_read_no_longer_halts(root):
+    """End to end: a good read with a matching position must NOT halt."""
+    inv = _inv()
+    inv.add(POLICY["make_fill"](0.0, "UP", "maker", D("0.70"), QUANTITY, "f"))
+    got = {"ok": True, "status": 200,
+           "rows": [{"symbol": "GEMI-BTC15M2610031845-UP", "outcome": "yes",
+                     "totalQuantity": "1"}]}
+    rows = P._position_rows(got)
+    rec = P.reconcile_or_halt(CID, "GEMI-BTC15M2610031845-UP", inv, rows,
+                              root=root)
+    assert rec["halted"] is False and rec["verdict"] == "AGREE"
+    assert BUD.halted(CID, root=root) is None
