@@ -93,3 +93,10 @@ data/gemini_infoedge/*.jsonl
 analysis/gemini/info_edge/ie_usable_windows.json
 analysis/gemini/info_edge/ie_diagnostics.json
 data/gemini_infoedge_15m/*.jsonl
+
+# Prospective SHADOW output must stay OFF the authorized execution lineage.
+# A `git add -A` once swept these into an execution commit, whose diff from
+# the authorized baseline then carried paths the authorization never covered
+# and correctly failed the SHA condition. The fix was to re-cut the commit,
+# not to widen the gate, and this keeps it from happening again.
+data/gemini_15m_shadow/

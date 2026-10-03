@@ -218,7 +218,7 @@ jobs:
         if: ${{ github.event.inputs.ci15m_run == 'true' }}
         uses: actions/checkout@v4
         with:
-          ref: fd9d057f0e96ee939eca0bfed22bf4e1e2203176
+          ref: 730318b72b599445258ae5f5e7ce8d751cf84aee
           path: ci15m
           fetch-depth: 0
 
