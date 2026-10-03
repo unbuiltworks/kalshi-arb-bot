@@ -103,7 +103,7 @@ on:
       ci15m_cohort:
         description: "CI15M cohort id (durable, one per grant)"
         required: false
-        default: "CI15M-2"
+        default: "CI15M-3"
       r2_runner:
         description: "Run the continuous R2 execution-validation runner. Without r2_runner_live it is a DRY RUN that sends nothing."
         required: false
@@ -218,7 +218,7 @@ jobs:
         if: ${{ github.event.inputs.ci15m_run == 'true' }}
         uses: actions/checkout@v4
         with:
-          ref: 9301473ff97e4e84d0c3447ef6717fa81decafbd
+          ref: a130ea531a1c813e794da5559118933c50c24aeb
           path: ci15m
           fetch-depth: 0
 
@@ -238,7 +238,7 @@ jobs:
           print("authorization      :", arming.EXPECTED_AUTH_ID)
           print("policy fingerprint :", fingerprint())
           assert arming.EXPECTED_AUTH_ID == P.PROBE_AUTH_ID == \
-              "OWNER-2026-10-03-GEMINI-CI15M-2"
+              "OWNER-2026-10-03-GEMINI-CI15M-3"
           assert fingerprint() == P.AUTHORIZED_POLICY_FINGERPRINT == \
               "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329"
           # CI15M-2 is TREATMENT T: a capped marketable limit, so the
@@ -246,11 +246,30 @@ jobs:
           # authorization, which means the two constants must AGREE.
           assert payload.SEMANTICS_PROBE_AUTH_ID == arming.EXPECTED_AUTH_ID, \
               "Treatment T needs the taker gate under THIS authorization"
-          assert P.TREATMENT == "T", "CI15M-2 is Treatment T only"
+          assert P.TREATMENT == "T", "CI15M-3 is Treatment T only"
           print("treatment          : T (capped marketable LIMIT)")
+          # the retired authorizations must be GONE from the build
+          for closed in ("OWNER-2026-10-03-GEMINI-CI15M-1",
+                         "OWNER-2026-10-03-GEMINI-CI15M-2"):
+              assert arming.EXPECTED_AUTH_ID != closed, closed
+          assert P.AUTHORIZED_SHA == \
+              "f52027bc7c4888d1a7429b8a6db0e065f82a0607"
+          # the executable price source must be the REAL /v1/book ladder
+          import inspect
+          src = inspect.getsource(P.book_from_venue)
+          assert "contract_depth" in src, "price must come from the ladder"
+          assert "ExecutableBook" in src
+          print("price source       : /v1/book executable ladder")
           PY
-          # the gates are a precondition, not documentation
-          python -m pytest tests/test_ci15m_probe.py -q
+          # THE GATES ARE A PRECONDITION, NOT DOCUMENTATION. The adapter
+          # contract sweep runs here, with no credential in scope: CI15M-1
+          # and CI15M-2 both died of a consumer guessing a producer's shape.
+          python -m pytest tests/test_ci15m_adapter_contracts.py \
+                           tests/test_ci15m_end_to_end.py \
+                           tests/test_ci15m_durable_budget.py \
+                           tests/test_ci15m_runner_liveness.py \
+                           tests/test_ci15m_execution_semantics.py \
+                           tests/test_ci15m_probe.py -q
 
       - name: CI15M-1 bounded live probe
         if: ${{ github.event.inputs.ci15m_run == 'true' }}
@@ -263,7 +282,7 @@ jobs:
           # them. They are an arm flag and an authorization label, not
           # secrets, and they are the owner's granted values verbatim.
           GEMINI_CANARY_LIVE: "YES"
-          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-CI15M-2"
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-CI15M-3"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-10-04T00:00:00Z"
           GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
         run: |
