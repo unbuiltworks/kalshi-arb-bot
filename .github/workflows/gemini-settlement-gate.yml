@@ -120,6 +120,30 @@ on:
         description: "CASE A, REQUIRED: the favored-side ask recorded at preflight and approved by the owner. The limit is tied to it, and the book is re-read immediately before submission to confirm it is still executable at or below the limit with enough size for the whole order."
         required: false
         default: ""
+      r2_runner:
+        description: "Run the continuous R2 execution-validation runner. Without r2_runner_live it is a DRY RUN that sends nothing."
+        required: false
+        default: "false"
+      r2_runner_live:
+        description: "ARM the runner's venue-order path. Requires r2_durable_branch. Leave false unless a live probe is intended."
+        required: false
+        default: "false"
+      r2_cohort:
+        description: "Cohort id owning the durable 10-slot budget."
+        required: false
+        default: "COHORT-2026-10-03-R2-EXEC-1"
+      r2_durable_branch:
+        description: "Branch each consumed slot is pushed to BEFORE the venue is touched. Mandatory with r2_runner_live."
+        required: false
+        default: "research/gemini-btc5m-information-edge"
+      r2_runtime_s:
+        description: "How long the runner stays alive, seconds. 18000 = 5 h."
+        required: false
+        default: "18000"
+      r2_stat_gate:
+        description: "Independent prospective R2 windows, for the gate-arrival stop. Blind count from r2_window_counter.py."
+        required: false
+        default: "42"
       semantics_quantity:
         description: "PREDECLARED quantity. 1 contract. Never sized from the book."
         required: false
@@ -287,6 +311,61 @@ jobs:
             --auth-id      "${GEMINI_CANARY_AUTH}" \
             --out analysis/gemini/info_edge/semantics_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/semantics.txt
+
+      # ==================================================================
+      # THE CONTINUOUSLY RUNNING R2 EXECUTION-VALIDATION RUNNER.
+      #
+      # It stays alive across BTC5m windows and probes the FIRST qualifying
+      # opportunity in each distinct market. Everything it may do is bounded
+      # by the cohort's durable 10-slot ledger, not by this step.
+      #
+      # --durable-branch IS MANDATORY WITH --live, and the runner refuses
+      # without it: this host's disk is discarded when the job ends, so an
+      # fsynced slot alone would die with it and the ten-slot budget would
+      # silently reset. Each consumed slot is pushed to git BEFORE the venue
+      # is touched, the ordering run_canary established.
+      #
+      # WITHOUT r2_runner_live=true this step is a DRY RUN: it observes and
+      # records qualification and sends NOTHING.
+      # ==================================================================
+      - name: R2 execution-validation runner
+        if: ${{ github.event.inputs.r2_runner == 'true' }}
+        timeout-minutes: 330
+        working-directory: semantics-probe
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-R2-EXEC-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-04T00:00:00Z"
+          GEMINI_CANARY_STATE_DIR: "analysis/gemini/canary_latch"
+        run: |
+          set -o pipefail
+          # the gates are a precondition, not documentation
+          python -m pytest tests/test_r2_exec_budget.py \
+                           tests/test_r2_exec_runner.py -q
+          # the owner-required pre-submission proof, printed before anything
+          python -m src.gemini_execution.r2_exec_runner \
+            --cohort "${{ github.event.inputs.r2_cohort }}" --recover-only
+          python -m src.gemini_execution.r2_exec_probe \
+            --cohort "${{ github.event.inputs.r2_cohort }}" --preflight-only \
+            --stat-gate-windows "${{ github.event.inputs.r2_stat_gate }}"
+          python -m src.gemini_execution.r2_exec_runner \
+            --cohort        "${{ github.event.inputs.r2_cohort }}" \
+            --outdir        analysis/gemini/info_edge/r2_probes \
+            --max-runtime-s "${{ github.event.inputs.r2_runtime_s }}" \
+            ${{ github.event.inputs.r2_runner_live == 'true' && format('--live --durable-branch {0}', github.event.inputs.r2_durable_branch) || '' }} \
+            2>&1 | tail -200
+
+      - name: Upload the R2 runner records
+        if: ${{ always() && github.event.inputs.r2_runner == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: r2-exec-runner-records
+          path: |
+            semantics-probe/analysis/gemini/info_edge/r2_probes/*.json
+            semantics-probe/analysis/gemini/cohorts/**
+          if-no-files-found: warn
 
       - name: Upload the semantics probe record
         if: ${{ always() && (github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true') }}

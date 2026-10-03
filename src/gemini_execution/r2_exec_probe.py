@@ -200,7 +200,8 @@ def reread_ok(symbol: str, side: str, frozen_price: float,
 
 async def probe(*, symbol: str, cohort_id: str, cb_ticks,
                 stat_gate_windows: Optional[int] = None,
-                out: Optional[str] = None) -> Dict[str, Any]:
+                out: Optional[str] = None,
+                slot_hook=None) -> Dict[str, Any]:
     """ONE market. At most one order. Records the full chain either way."""
     ticker = (metadata.event_ticker(symbol) or symbol)
     rec: Dict[str, Any] = {
@@ -289,6 +290,32 @@ async def probe(*, symbol: str, cohort_id: str, cb_ticks,
                                stat_gate_windows=stat_gate_windows)
     rec["slot"] = slot["slot"]
     _record_probe_window(ticker)
+
+    # DURABILITY BEYOND THIS DISK, BEFORE THE VENUE IS TOUCHED.
+    #
+    # An fsync makes the slot survive a process death. It does NOT make it
+    # survive an EPHEMERAL HOST -- and the credentialed runner is an Actions
+    # job whose disk is discarded. A retried job would then start with an
+    # empty ledger and the ten-slot budget would silently reset, which is
+    # exactly what the authorization forbids. So the caller may supply a hook
+    # that pushes the ledger somewhere that outlives the host (git), and it is
+    # called HERE: after the slot is spent, before anything reaches Gemini.
+    #
+    # A FAILING HOOK STOPS THE PROBE. The slot stays spent -- that is the safe
+    # direction, costing one probe rather than risking an unrecorded order.
+    if slot_hook is not None:
+        try:
+            rec["slot_durable"] = slot_hook(cohort_id, ticker, slot)
+        except Exception as exc:                               # noqa: BLE001
+            rec["slot_durable"] = {"ok": False,
+                                   "error": "%s: %s" % (type(exc).__name__,
+                                                        exc)}
+        if not (rec["slot_durable"] or {}).get("ok"):
+            rec["state"] = "REFUSED_SLOT_NOT_DURABLE"
+            rec["why"] = ("the slot could not be made durable beyond this "
+                          "host, so nothing was sent. The slot is SPENT: a "
+                          "retry on a fresh disk must not resurrect it.")
+            return _finish(rec, out)
 
     t0 = time.monotonic()
     ack = await transport.place(symbol=symbol, side="buy",
