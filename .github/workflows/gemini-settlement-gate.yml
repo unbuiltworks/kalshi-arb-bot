@@ -224,7 +224,7 @@ jobs:
         if: ${{ github.event.inputs.semantics_probe_preflight == 'true' || github.event.inputs.semantics_probe_armed == 'true' }}
         uses: actions/checkout@v4
         with:
-          ref: ac9db3c12d9f027377ec1e894c1978c335820e1c
+          ref: 4b3d4ebffc4ea05ef6541c0167a6380a9c41ee22
           path: semantics-probe
 
       - name: Semantics probe provenance and gates (no credential in scope)
