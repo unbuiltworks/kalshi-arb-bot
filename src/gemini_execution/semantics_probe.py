@@ -163,15 +163,121 @@ def _cash(price: str, qty: str) -> D:
     return (D(price) * D(qty)).quantize(D("0.0001"))
 
 
+def limit_is_tied_to_the_approved_ask(limit_price: str, approved_ask: str,
+                                      tick: Optional[str]) -> Dict[str, Any]:
+    """CASE A ONLY. The approved limit must be the ask the human actually saw
+    and approved, or at most ONE TICK above it.
+
+    WHY THIS REPLACED A UNIVERSAL 0.99. A limit of 0.99 crosses any ask on the
+    grid, so a fill proves only that SOME liquidity exists somewhere in the
+    book -- it does not prove that the specific offer we recorded was takeable
+    at the price we recorded. Tying the limit to the observed ask makes the
+    claim the probe can support the one we actually want:
+
+        visible ask -> marketable limit BUY -> fill at or below that ask.
+
+    One tick of headroom is allowed because the venue may round or the touch
+    may tick once between approval and submission; more than that would be
+    chasing by another name.
+    """
+    if tick in (None, ""):
+        return {"ok": False,
+                "why": "no priceIncrement in the live terms, so 'one tick "
+                       "above' is undefined. Refusing rather than assuming."}
+    p, a, t = D(limit_price), D(approved_ask), D(str(tick))
+    ceiling = a + t
+    ok = a <= p <= ceiling
+    return {"ok": ok, "limit": str(p), "approved_ask": str(a),
+            "tick": str(t), "max_allowed_limit": str(ceiling),
+            "why": ("the limit is the approved ask, or one tick above it"
+                    if ok else
+                    "the limit %s is not tied to the approved ask %s: it must "
+                    "lie in [%s, %s]. A limit further above would prove only "
+                    "that some liquidity exists somewhere in the book."
+                    % (p, a, a, ceiling))}
+
+
+def still_executable_at_the_frozen_limit(book: Dict[str, Any],
+                                         depth: Dict[str, Any],
+                                         favored: str, limit_price: str,
+                                         qty: str) -> Dict[str, Any]:
+    """CASE A ONLY, immediately before submission. The approved liquidity must
+    STILL be there: an ask at or below the frozen limit, with enough displayed
+    size for the whole order.
+
+    If it moved above the limit or disappeared, this returns ok=False and the
+    probe STOPS. It does not pick another price, and it does not move to
+    another market.
+    """
+    side = book.get(favored) or {}
+    ask = side.get("ask")
+    if ask is None:
+        return {"ok": False, "current_ask": None,
+                "why": "the approved offer DISAPPEARED before submission. "
+                       "Stopping rather than chasing."}
+    if D(str(ask)) > D(limit_price):
+        return {"ok": False, "current_ask": str(ask),
+                "limit": str(limit_price),
+                "why": "the ask MOVED UP to %s, above the frozen limit %s. "
+                       "Stopping rather than chasing." % (ask, limit_price)}
+    asks = (depth or {}).get("asks") or {}
+    levels = asks.get("levels") or []
+    takeable = D("0")
+    for lv in levels:
+        try:
+            if D(str(lv.get("price"))) <= D(limit_price):
+                takeable += D(str(lv.get("qty") or "0"))
+        except Exception:                                      # noqa: BLE001
+            continue
+    want = D(str(qty))
+    if takeable < want:
+        return {"ok": False, "current_ask": str(ask),
+                "displayed_size_at_or_below_limit": str(takeable),
+                "required": str(want),
+                "why": "insufficient displayed size: %s available at or below "
+                       "%s, %s required. Stopping rather than taking a "
+                       "partial we did not approve." % (takeable, limit_price,
+                                                        want)}
+    return {"ok": True, "current_ask": str(ask), "limit": str(limit_price),
+            "displayed_size_at_or_below_limit": str(takeable),
+            "required": str(want),
+            "why": "the approved liquidity is still executable at or below "
+                   "the frozen limit, with enough displayed size for the "
+                   "whole order"}
+
+
+def terms_are_live(terms: Dict[str, Any]) -> Dict[str, Any]:
+    """A successful LIVE terms read is a hard pre-submit requirement.
+
+    Nothing is defaulted and nothing is inferred: the instrument must publish
+    its own quantity minimum/increment and price minimum/increment through the
+    proven `metadata.terms_for` path, and must be open for trading.
+    """
+    missing = list(terms.get("missing_fields") or [])
+    needed = {k: terms.get(k) for k in
+              ("quantityMinimum", "quantityIncrement",
+               "priceMinimum", "priceIncrement")}
+    blank = [k for k, v in needed.items() if v in (None, "")]
+    status = terms.get("contract_status")
+    state = terms.get("market_state")
+    ok = (bool(terms.get("readable")) and not missing and not blank
+          and status == "active" and state == "open")
+    return {"ok": ok, "readable": terms.get("readable"),
+            "missing_fields": missing, "blank_required": blank,
+            "contract_status": status, "market_state": state,
+            "terms": needed, "tick": needed.get("priceIncrement"),
+            "why": (None if ok else
+                    "the live terms read did not succeed: readable=%r "
+                    "missing=%s blank=%s status=%r state=%r. Nothing is "
+                    "defaulted, so this is a hard pre-submit failure."
+                    % (terms.get("readable"), missing, blank, status, state))}
+
+
 def price_does_what_the_case_needs(case: str, limit_price: str,
                                   cls: Dict[str, Any]) -> Dict[str, Any]:
-    """Does the PREDECLARED price still do what this case requires?
-
-    Case A needs the limit at or above the visible ask, so it crosses.
-    Case B needs it strictly below the favored outcome's own bid, so it rests.
-
-    If the book has moved, this returns ok=False and the probe stops. It never
-    adjusts the price -- that would be chasing, and chasing is refused.
+    """Case B only: the limit must rest, strictly below the favored outcome's
+    own bid. Case A's price rule is `limit_is_tied_to_the_approved_ask` plus
+    `still_executable_at_the_frozen_limit`.
     """
     p = D(limit_price)
     if case == "A":
@@ -182,9 +288,9 @@ def price_does_what_the_case_needs(case: str, limit_price: str,
         return {"ok": ok, "limit": str(p), "visible_ask": ask,
                 "why": ("crosses the visible ask, so it should trade "
                         "immediately" if ok else
-                        "the book MOVED: the predeclared limit %s is below "
-                        "the visible ask %s and would rest instead of "
-                        "crossing. Refusing rather than chasing." % (p, ask))}
+                        "the book MOVED: the limit %s is below the visible "
+                        "ask %s and would rest instead of crossing. Refusing "
+                        "rather than chasing." % (p, ask))}
     bid = cls.get("favored_bid")
     if bid is None:
         return {"ok": False, "why": "case B but no bid to rest behind"}
@@ -203,6 +309,8 @@ def price_does_what_the_case_needs(case: str, limit_price: str,
 async def run(*, symbol: str, favored: str, auth_id: str,
               limit_price: Optional[str] = None,
               quantity: Optional[str] = None,
+              approved_ask: Optional[str] = None,
+              case_b_authorized: bool = False,
               state_dir: str = latch.DEFAULT_DIR,
               out: Optional[str] = None) -> Dict[str, Any]:
     """ONE probe. Records the full chronological chain and returns it.
@@ -255,6 +363,20 @@ async def run(*, symbol: str, favored: str, auth_id: str,
     rec["classification"] = classify(rec["book"], favored)
     case = rec["classification"]["case"]
 
+    # ONLY CASE A IS AUTHORIZED. Case B is explicitly NOT authorized, so a
+    # market that classifies as B is not a fallback -- it is a stop.
+    if case != "A" and not case_b_authorized:
+        rec["stop"] = ("CASE_B_NOT_AUTHORIZED: this market classifies as case "
+                       "%s and only case A is authorized. Not selecting "
+                       "another market." % case)
+        return _finish(rec, out)
+
+    # A SUCCESSFUL LIVE TERMS READ IS A HARD PRE-SUBMIT REQUIREMENT.
+    rec["terms_live"] = terms_are_live(rec["terms"])
+    if not rec["terms_live"]["ok"]:
+        rec["stop"] = "TERMS_READ_FAILED: %s" % rec["terms_live"]["why"]
+        return _finish(rec, out)
+
     # ---- 3. the one order, fully specified before it is built -------------
     # PREDECLARED quantity, or the contract's own minimum. Either way it is a
     # constant, never sized from the book or from any signal.
@@ -269,6 +391,20 @@ async def run(*, symbol: str, favored: str, auth_id: str,
         rec["stop"] = ("NO_PREDECLARED_LIMIT_PRICE: the price must be stated "
                        "before the book is read, never chosen from it")
         return _finish(rec, out)
+
+    # CASE A: the limit must be TIED to the ask the human approved.
+    if case == "A":
+        if approved_ask is None:
+            rec["stop"] = ("NO_APPROVED_ASK: case A requires the ask that was "
+                           "recorded and approved at preflight. Without it "
+                           "the limit is untethered.")
+            return _finish(rec, out)
+        rec["limit_tied_to_approved_ask"] = limit_is_tied_to_the_approved_ask(
+            limit_price, approved_ask, rec["terms_live"]["tick"])
+        if not rec["limit_tied_to_approved_ask"]["ok"]:
+            rec["stop"] = ("LIMIT_NOT_TIED_TO_APPROVED_ASK: %s"
+                           % rec["limit_tied_to_approved_ask"]["why"])
+            return _finish(rec, out)
 
     fit = price_does_what_the_case_needs(case, limit_price, rec["classification"])
     pv = metadata.price_is_valid(limit_price, rec["terms"])
@@ -313,6 +449,31 @@ async def run(*, symbol: str, favored: str, auth_id: str,
     except latch.AlreadyConsumed as exc:
         rec["stop"] = "AUTHORIZATION_ALREADY_SPENT: %s" % exc
         return _finish(rec, out)
+
+    # ---- 4b. IMMEDIATELY BEFORE SUBMISSION: re-read the book -------------
+    # The approved liquidity must still be executable at or below the frozen
+    # limit, with enough displayed size for the whole order. If it moved up or
+    # vanished we STOP: no reprice, no retry, no other market.
+    #
+    # The latch is already spent at this point, deliberately. A refusal here
+    # costs the authorization and sends nothing, which is the safe direction:
+    # the alternative is checking after the venue could already have seen an
+    # order.
+    if case == "A":
+        rec["book_at_submission"] = metadata.outcome_book(symbol)
+        rec["depth_at_submission"] = metadata.contract_depth(symbol)
+        rec["still_executable"] = still_executable_at_the_frozen_limit(
+            rec["book_at_submission"], rec["depth_at_submission"],
+            favored, limit_price, qty)
+        if not rec["still_executable"]["ok"]:
+            latch.advance(auth_id, latch.REJECTED, directory=state_dir)
+            rec["stop"] = ("APPROVED_LIQUIDITY_GONE: %s"
+                           % rec["still_executable"]["why"])
+            rec["authorization_note"] = (
+                "the one-shot authorization was consumed and is now SPENT. "
+                "Nothing was submitted. A further probe needs a fresh "
+                "authorization from the owner.")
+            return _finish(rec, out)
 
     # ---- 5. the single order ---------------------------------------------
     t0 = time.monotonic()
@@ -452,6 +613,23 @@ def _reconcile(rec, case, favored, limit_price, qty, filled_qty
         return {"anomaly": True, "kind": "UNEXPLAINED_PARTIAL",
                 "detail": "filled %s of %s" % (filled_qty, want)}
 
+    # THE CLAIM THIS PROBE EXISTS TO SUPPORT: a fill at or below the approved
+    # limit. A fill ABOVE it would mean the venue priced us worse than the
+    # limit we sent, which is a semantic contradiction, not a cost.
+    if filled_qty > 0:
+        for key in ("avgExecutionPrice", "averagePrice", "avgFillPrice",
+                    "executedPrice"):
+            got = row.get(key)
+            if got in (None, ""):
+                continue
+            try:
+                if D(str(got)) > D(str(limit_price)):
+                    return {"anomaly": True, "kind": "FILL_ABOVE_LIMIT",
+                            "detail": "filled at %s (%s) against a limit of "
+                                      "%s" % (got, key, limit_price)}
+            except Exception:                                  # noqa: BLE001
+                pass
+
     # case A crossed a visible offer and did not trade
     if case == "A" and filled_qty == 0:
         return {"anomaly": True, "kind": "SEMANTIC_CONTRADICTION",
@@ -471,9 +649,13 @@ def _verdict(rec: Dict[str, Any], case: str) -> str:
     agreed = not (rec.get("reconciliation") or {}).get("anomaly")
     if case == "A":
         if rec.get("filled"):
-            return ("Our book said the favored side WAS executable. A crossing "
-                    "LIMIT buy filled immediately. Gemini AGREES: a visible "
-                    "offer is a takeable offer.")
+            return ("Our book said the favored side WAS executable at a "
+                    "recorded ask. A marketable LIMIT buy tied to that ask "
+                    "filled immediately at or below it. Gemini AGREES: the "
+                    "visible offer we recorded was the offer we took."
+                    if agreed else
+                    "A marketable LIMIT buy tied to the approved ask filled, "
+                    "but the reconciliation found an anomaly. Halted.")
         return ("Our book said the favored side WAS executable, but a crossing "
                 "LIMIT buy did NOT trade. Gemini DISAGREES with our "
                 "interpretation. Halted for investigation.")
@@ -522,6 +704,14 @@ def preflight(symbol: str, favored: str,
     }
     out["classification"] = classify(out["book"], favored)
     case = out["classification"]["case"]
+    out["terms_live"] = terms_are_live(out["terms"])
+    # what a human would approve: the ask we actually observed, and the only
+    # two limits tied to it.
+    ask = out["classification"].get("favored_ask")
+    tick = out["terms_live"].get("tick")
+    if case == "A" and ask is not None and tick:
+        out["approved_ask_candidate"] = ask
+        out["allowed_limits"] = [str(D(ask)), str(D(ask) + D(str(tick)))]
     qty = quantity if quantity is not None else \
         metadata.smallest_valid_quantity(out["terms"])
     out["quantity"] = qty
@@ -550,6 +740,14 @@ def main(argv=None) -> int:
     ap.add_argument("--quantity", default=None,
                     help="PREDECLARED quantity. Omitted means the contract's "
                          "own minimum. Never sized from the book.")
+    ap.add_argument("--approved-ask", default=None,
+                    help="CASE A: the favored-side ask recorded and approved "
+                         "at preflight. The limit must equal it or be at most "
+                         "one tick above. Required for case A.")
+    ap.add_argument("--authorize-case-b", action="store_true",
+                    help="NOT AUTHORIZED as of 2026-10-03. Without it, a "
+                         "market that classifies as case B stops the probe "
+                         "rather than becoming a fallback.")
     ap.add_argument("--state-dir", default=latch.DEFAULT_DIR)
     ap.add_argument("--out", default=None)
     ap.add_argument("--preflight-only", action="store_true",
@@ -564,6 +762,8 @@ def main(argv=None) -> int:
     rec = asyncio.run(run(symbol=a.symbol, favored=a.favored,
                           auth_id=a.auth_id, limit_price=a.limit_price,
                           quantity=a.quantity,
+                          approved_ask=a.approved_ask,
+                          case_b_authorized=a.authorize_case_b,
                           state_dir=a.state_dir, out=a.out))
     print(json.dumps({k: rec.get(k) for k in
                       ("stop", "classification", "intended_action",

@@ -113,7 +113,11 @@ on:
         required: false
         default: "yes"
       semantics_limit_price:
-        description: "PREDECLARED limit price. 0.99 crosses any visible ask (case A); 0.01 rests below any bid (case B). The probe refuses if it no longer does what the case needs -- it never reprices."
+        description: "The approved limit. CASE A: must equal semantics_approved_ask or be at most ONE TICK above it. The probe refuses rather than repricing."
+        required: false
+        default: ""
+      semantics_approved_ask:
+        description: "CASE A, REQUIRED: the favored-side ask recorded at preflight and approved by the owner. The limit is tied to it, and the book is re-read immediately before submission to confirm it is still executable at or below the limit with enough size for the whole order."
         required: false
         default: ""
       semantics_quantity:
@@ -1064,11 +1068,20 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
           GEMINI_CANARY_LIVE: "YES"
-          # NOT YET AUTHORIZED AT THE TIME OF WRITING. The sentinel below
-          # matches no environment value, so this step is inert until the
-          # owner replaces it with the granted id. Installing the id is the
-          # authorization; nothing else here needs to change.
-          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          # AUTHORIZED 2026-10-03 by the owner, explicitly and narrowly:
+          # ONE case-A probe. NOT five probes, and case B is NOT authorized --
+          # a market that classifies as B stops the run rather than becoming a
+          # fallback. The limit must be tied to the ask recorded and approved
+          # at preflight (that ask, or at most one tick above), the live terms
+          # read must succeed, and the book is re-read immediately before
+          # submission to confirm the approved liquidity is still executable
+          # at or below the frozen limit with enough displayed size for q=1.
+          # If it moved up or vanished the probe STOPS: no reprice, no retry,
+          # no other market.
+          #
+          # The latch is one-shot. Once this id is spent it never arms again,
+          # so a second probe needs a fresh grant.
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-03-GEMINI-SEMANTICS-1"
           GEMINI_CANARY_AUTH_EXPIRES: "2026-10-03T23:00:00Z"
         run: |
           set -o pipefail
@@ -1077,13 +1090,18 @@ jobs:
           test -n "${{ github.event.inputs.semantics_symbol }}" \
             || { echo "::error::semantics_symbol is required"; exit 1; }
           test -n "${{ github.event.inputs.semantics_limit_price }}" \
-            || { echo "::error::a PREDECLARED limit price is required"; exit 1; }
+            || { echo "::error::an approved limit price is required"; exit 1; }
+          test -n "${{ github.event.inputs.semantics_approved_ask }}" \
+            || { echo "::error::case A requires semantics_approved_ask -- the
+                 ask recorded at preflight. Without it the limit is
+                 untethered."; exit 1; }
           mkdir -p analysis/gemini/info_edge
           python -m src.gemini_execution.semantics_probe \
-            --symbol      "${{ github.event.inputs.semantics_symbol }}" \
-            --favored     "${{ github.event.inputs.semantics_favored }}" \
-            --limit-price "${{ github.event.inputs.semantics_limit_price }}" \
-            --quantity    "${{ github.event.inputs.semantics_quantity }}" \
-            --auth-id     "${GEMINI_CANARY_AUTH}" \
+            --symbol       "${{ github.event.inputs.semantics_symbol }}" \
+            --favored      "${{ github.event.inputs.semantics_favored }}" \
+            --limit-price  "${{ github.event.inputs.semantics_limit_price }}" \
+            --approved-ask "${{ github.event.inputs.semantics_approved_ask }}" \
+            --quantity     "${{ github.event.inputs.semantics_quantity }}" \
+            --auth-id      "${GEMINI_CANARY_AUTH}" \
             --out analysis/gemini/info_edge/semantics_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
             2>&1 | tee /tmp/semantics.txt

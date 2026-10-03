@@ -220,21 +220,33 @@ def test_no_extend_average_chase_flip_or_complement_exists():
 
 
 def test_a_moved_book_stops_rather_than_chasing(monkeypatch):
-    """Case A with a predeclared limit now BELOW the ask: refuse, never
-    reprice upward."""
+    """Case A with an approved limit now BELOW the ask: refuse, never reprice
+    upward. Since the limit must also be tied to the approved ask, a book that
+    has moved trips that gate first -- either way nothing is sent and no price
+    is adjusted."""
     rec = _run_probe(monkeypatch, favored="yes", ask="0.80", bid="0.40",
                      limit="0.50", qty="0.01", armed=True)
-    assert rec["stop"].startswith("PRICE_NO_LONGER_FITS_CASE")
-    assert "chasing" in rec["intended_action"]["price_fits_case"]["why"]
+    assert rec["stop"].startswith("LIMIT_NOT_TIED_TO_APPROVED_ASK")
     assert rec["orders_submitted"] == 0
+
+    # and with the limit correctly tied at approval, a LATER move up is caught
+    # by the pre-submission re-read rather than chased.
+    rec2 = _run_probe(monkeypatch, favored="yes", ask="0.50", bid="0.40",
+                      limit="0.50", qty="1", armed=True, approved_ask="0.50",
+                      submission_ask="0.80")
+    assert rec2["stop"].startswith("APPROVED_LIQUIDITY_GONE")
+    assert rec2["orders_submitted"] == 0
 
 
 def test_case_b_price_must_rest_not_cross(monkeypatch):
-    """Case B with a limit at or above the bid could cross: refuse."""
-    rec = _run_probe(monkeypatch, favored="yes", ask=None, bid="0.40",
-                     limit="0.45", qty="0.01", armed=True)
-    assert rec["classification"]["case"] == "B"
-    assert rec["stop"].startswith("PRICE_NO_LONGER_FITS_CASE")
+    """Case B's price rule, checked directly. Case B is NOT authorized for
+    live submission (see test_case_b_market_stops_rather_than_becoming_a_fallback),
+    so the rule is exercised as a function rather than through a run."""
+    cls = sp.classify({"readable": True, "yes": {"ask": None, "bid": "0.40"},
+                       "no": {"ask": None, "bid": None}}, "yes")
+    assert cls["case"] == "B"
+    assert not sp.price_does_what_the_case_needs("B", "0.45", cls)["ok"]
+    assert sp.price_does_what_the_case_needs("B", "0.39", cls)["ok"]
 
 
 # --------------------------------------------------------------------------
@@ -414,12 +426,184 @@ def test_classify_calls_a_genuinely_absent_ask_case_b():
 
 
 # --------------------------------------------------------------------------
+# 11. CASE A: the limit must be TIED to the approved ask (no universal 0.99)
+# --------------------------------------------------------------------------
+
+def test_limit_must_equal_the_approved_ask_or_one_tick_above():
+    f = sp.limit_is_tied_to_the_approved_ask
+    assert f("0.50", "0.50", "0.01")["ok"]          # the ask itself
+    assert f("0.51", "0.50", "0.01")["ok"]          # one tick above
+    assert not f("0.52", "0.50", "0.01")["ok"]      # two ticks: refused
+    assert not f("0.99", "0.50", "0.01")["ok"]      # the old universal price
+    assert not f("0.49", "0.50", "0.01")["ok"]      # below: would not cross
+
+
+def test_a_universal_crossing_price_is_now_refused(monkeypatch):
+    """The specific change asked for: 0.99 against a 0.50 ask must STOP."""
+    rec = _run_probe(monkeypatch, favored="yes", ask="0.50", bid="0.49",
+                     limit="0.99", qty="1", armed=True, approved_ask="0.50")
+    assert rec["stop"].startswith("LIMIT_NOT_TIED_TO_APPROVED_ASK")
+    assert rec["orders_submitted"] == 0
+
+
+def test_case_a_requires_an_approved_ask(monkeypatch):
+    rec = _run_probe(monkeypatch, favored="yes", ask="0.50", bid="0.49",
+                     limit="0.50", qty="1", armed=True, approved_ask=None)
+    assert rec["stop"].startswith("NO_APPROVED_ASK")
+    assert rec["orders_submitted"] == 0
+
+
+def test_no_tick_in_terms_means_one_tick_above_is_undefined():
+    r = sp.limit_is_tied_to_the_approved_ask("0.50", "0.50", None)
+    assert not r["ok"] and "undefined" in r["why"]
+
+
+# --------------------------------------------------------------------------
+# 12. the pre-submission re-read
+# --------------------------------------------------------------------------
+
+def _book(ask, bid="0.49", favored="yes"):
+    return {"readable": True, "crossed": False,
+            favored: {"ask": ask, "bid": bid},
+            "no": {"ask": None, "bid": None}}
+
+
+def _depth(levels):
+    return {"asks": {"levels": levels}}
+
+
+def test_still_executable_accepts_unchanged_liquidity():
+    r = sp.still_executable_at_the_frozen_limit(
+        _book("0.50"), _depth([{"price": "0.50", "qty": "750"}]),
+        "yes", "0.50", "1")
+    assert r["ok"] and r["displayed_size_at_or_below_limit"] == "750"
+
+
+def test_still_executable_stops_when_the_ask_moved_up():
+    r = sp.still_executable_at_the_frozen_limit(
+        _book("0.52"), _depth([{"price": "0.52", "qty": "750"}]),
+        "yes", "0.51", "1")
+    assert not r["ok"] and "MOVED UP" in r["why"]
+
+
+def test_still_executable_stops_when_the_offer_disappeared():
+    r = sp.still_executable_at_the_frozen_limit(
+        _book(None), _depth([]), "yes", "0.50", "1")
+    assert not r["ok"] and "DISAPPEARED" in r["why"]
+
+
+def test_still_executable_stops_on_insufficient_displayed_size():
+    r = sp.still_executable_at_the_frozen_limit(
+        _book("0.50"), _depth([{"price": "0.50", "qty": "0.4"}]),
+        "yes", "0.50", "1")
+    assert not r["ok"] and "insufficient displayed size" in r["why"]
+
+
+def test_size_above_the_limit_does_not_count():
+    """Depth sitting ABOVE the frozen limit is not takeable at that limit."""
+    r = sp.still_executable_at_the_frozen_limit(
+        _book("0.50"), _depth([{"price": "0.50", "qty": "0.5"},
+                               {"price": "0.80", "qty": "900"}]),
+        "yes", "0.50", "1")
+    assert not r["ok"]
+
+
+def test_a_vanished_offer_stops_the_run_and_sends_nothing(monkeypatch):
+    rec = _run_probe(monkeypatch, favored="yes", ask="0.50", bid="0.49",
+                     limit="0.50", qty="1", armed=True, approved_ask="0.50",
+                     submission_ask=None)
+    assert rec["stop"].startswith("APPROVED_LIQUIDITY_GONE")
+    assert rec["orders_submitted"] == 0
+    assert "SPENT" in rec["authorization_note"]
+
+
+# --------------------------------------------------------------------------
+# 13. live terms are a hard pre-submit requirement
+# --------------------------------------------------------------------------
+
+GOOD_TERMS = {"readable": True, "missing_fields": [],
+              "quantityMinimum": "0.01", "quantityIncrement": "0.01",
+              "priceMinimum": "0.01", "priceIncrement": "0.01",
+              "contract_status": "active", "market_state": "open"}
+
+
+def test_live_terms_accepted_when_complete():
+    r = sp.terms_are_live(GOOD_TERMS)
+    assert r["ok"] and r["tick"] == "0.01"
+
+
+@pytest.mark.parametrize("mutate", [
+    {"readable": False},
+    {"missing_fields": ["priceIncrement"]},
+    {"priceIncrement": None},
+    {"quantityMinimum": ""},
+    {"contract_status": "halted"},
+    {"market_state": "closed"},
+])
+def test_live_terms_refused_on_any_defect(mutate):
+    t = dict(GOOD_TERMS); t.update(mutate)
+    assert not sp.terms_are_live(t)["ok"]
+
+
+def test_null_terms_are_a_hard_pre_submit_failure(monkeypatch):
+    rec = _run_probe(monkeypatch, favored="yes", ask="0.50", bid="0.49",
+                     limit="0.50", qty="1", armed=True, approved_ask="0.50",
+                     terms={"readable": True, "missing_fields": [],
+                            "quantityMinimum": None, "quantityIncrement": None,
+                            "priceMinimum": None, "priceIncrement": None,
+                            "contract_status": None, "market_state": None})
+    assert rec["stop"].startswith("TERMS_READ_FAILED")
+    assert rec["orders_submitted"] == 0
+
+
+# --------------------------------------------------------------------------
+# 14. case B is NOT authorized, and is not a fallback
+# --------------------------------------------------------------------------
+
+def test_case_b_market_stops_rather_than_becoming_a_fallback(monkeypatch):
+    rec = _run_probe(monkeypatch, favored="yes", ask=None, bid="0.49",
+                     limit="0.01", qty="1", armed=True)
+    assert rec["stop"].startswith("CASE_B_NOT_AUTHORIZED")
+    assert "Not selecting another market" in rec["stop"]
+    assert rec["orders_submitted"] == 0
+
+
+# --------------------------------------------------------------------------
+# 15. a fill above the approved limit is a contradiction, not a cost
+# --------------------------------------------------------------------------
+
+def test_fill_above_the_limit_is_an_anomaly():
+    rec = {"submitted_body": {"side": "buy", "outcome": "yes",
+                              "price": "0.50", "quantity": "1"},
+           "observations": [{"t_s": 2.0, "order": {"order": {
+               "avgExecutionPrice": "0.62"}}}],
+           "classification": {"favored_ask": "0.50"}}
+    r = sp._reconcile(rec, "A", "yes", "0.50", "1", D("1"))
+    assert r["anomaly"] and r["kind"] == "FILL_ABOVE_LIMIT"
+
+
+def test_fill_at_or_below_the_limit_is_not_an_anomaly():
+    for px in ("0.50", "0.48"):
+        rec = {"submitted_body": {"side": "buy", "outcome": "yes",
+                                  "price": "0.50", "quantity": "1"},
+               "observations": [{"t_s": 2.0, "order": {"order": {
+                   "avgExecutionPrice": px}}}],
+               "classification": {"favored_ask": "0.50"}}
+        r = sp._reconcile(rec, "A", "yes", "0.50", "1", D("1"))
+        assert not r["anomaly"], px
+
+
+# --------------------------------------------------------------------------
 # harness
 # --------------------------------------------------------------------------
 
+_SENTINEL = object()
+
+
 def _run_probe(monkeypatch, *, favored, ask, bid, limit, qty,
                active=None, armed=False, state_dir=None, trace=None,
-               halt_file=None):
+               halt_file=None, approved_ask=_SENTINEL, terms=None,
+               submission_ask=_SENTINEL, depth_qty="750"):
     """Drive sp.run with every venue read stubbed. No network, no credentials."""
     import tempfile
     from src.gemini_execution import latch, metadata
@@ -436,9 +620,28 @@ def _run_probe(monkeypatch, *, favored, ask, bid, limit, qty,
             favored: {"ask": ask, "bid": bid},
             other: {"ask": None, "bid": None},
             "identity_consistent": True}
-    monkeypatch.setattr(metadata, "terms_for", lambda s: {"tick_size": "0.01"})
-    monkeypatch.setattr(metadata, "outcome_book", lambda s: book)
-    monkeypatch.setattr(metadata, "contract_depth", lambda s, **k: {})
+    # the book as it reads at SUBMISSION time; defaults to unchanged
+    sub_ask = ask if submission_ask is _SENTINEL else submission_ask
+    books = iter([book])
+
+    def _book_read(s):
+        try:
+            return next(books)
+        except StopIteration:
+            return {"readable": True, "crossed": False,
+                    favored: {"ask": sub_ask, "bid": bid},
+                    other: {"ask": None, "bid": None},
+                    "identity_consistent": True}
+
+    monkeypatch.setattr(metadata, "terms_for",
+                        lambda s: terms if terms is not None else dict(
+                            GOOD_TERMS))
+    monkeypatch.setattr(metadata, "outcome_book", _book_read)
+    monkeypatch.setattr(
+        metadata, "contract_depth",
+        lambda s, **k: {"asks": {"levels": (
+            [] if sub_ask is None
+            else [{"price": sub_ask, "qty": depth_qty}])}})
     monkeypatch.setattr(metadata, "resolution_for", lambda s, **k: {})
     monkeypatch.setattr(metadata, "smallest_valid_quantity", lambda t: qty)
     monkeypatch.setattr(metadata, "price_is_valid",
@@ -502,7 +705,10 @@ def _run_probe(monkeypatch, *, favored, ask, bid, limit, qty,
     else:
         monkeypatch.delenv(arming.LIVE_ENV, raising=False)
 
+    # default: the approved ask IS the observed ask, which is the normal case.
+    aa = ask if approved_ask is _SENTINEL else approved_ask
     return asyncio.run(sp.run(symbol="GEMI-BTC05M2610030225-UP",
                               favored=favored, auth_id=PROBE_ID,
-                              limit_price=limit,
+                              limit_price=limit, quantity=qty,
+                              approved_ask=aa,
                               state_dir=state_dir or tempfile.mkdtemp()))
