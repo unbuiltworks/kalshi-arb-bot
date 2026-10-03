@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from src.gemini_execution import (arming, ci15m_budget as BUD, cohort,
                                   payload, position_ledger, spec, transport)
 from src.gemini_execution.ci15m_policy import POLICY, QUANTITY, fingerprint
+from src.gemini_execution import ci15m_adapters as AD
 from src.gemini_execution import ci15m_treatments as TREAT
 from src.gemini_execution.continuous_probe import (COMPLETE, EXTEND, HOLD,
                                                    OPEN)
@@ -330,25 +331,14 @@ def intent_of(ticker: str, inv: Any, dec: Mapping[str, Any],
 
 
 async def one_outstanding_order(symbol: str) -> Dict[str, Any]:
-    """B -- THE HARD INVARIANT. No submission while ANY previous order has
-    an unresolved status.
+    """B -- THE HARD INVARIANT, now decided by one normalised type.
 
-    THE DEFECT THIS REPLACES, exactly. The previous version caught
-    exceptions and then called `transport._orders_of(res)` without ever
-    checking `res["ok"]`. `_orders_of` returns `[]` for any body shape it
-    does not recognise -- an error body included -- so a FAILED or
-    UNRECOGNISED active-orders read was read as "zero outstanding orders"
-    and the probe submitted anyway. Its docstring claimed "Unreadable
-    refuses"; the code did the opposite. CI15M-1 left FOUR orders resting
-    simultaneously (slots 2,3,4,5 at 0.70/0.71/0.73/0.72, all status
-    `open`) through that hole.
-
-    THREE THINGS MUST NOW HOLD, and each is checked positively:
-      1. the read SUCCEEDED (`res["ok"]`);
-      2. the response SHAPE was recognised, so an empty list means "the
-         venue said none" and not "we could not find the list";
-      3. the recognised list is empty.
-    Anything else refuses. An unreadable order state fails closed.
+    `AD.ActiveOrders` requires the read to have SUCCEEDED and its shape to
+    have been RECOGNISED before it will report a count, so neither a failed
+    read nor an unrecognised body can present as "zero outstanding orders".
+    That was the hole four CI15M-1 orders rested through simultaneously.
+    An order in a non-terminal state also blocks, not merely a non-empty
+    list.
     """
     try:
         res = await transport.active_orders(symbol)
@@ -357,34 +347,19 @@ async def one_outstanding_order(symbol: str) -> Dict[str, Any]:
                 "why": "active orders could not be read (%s); an account "
                        "whose orders cannot be read is not an account with "
                        "none" % exc}
+    ao = AD.ActiveOrders.of(res)
     read = {k: res.get(k) for k in ("ok", "status", "classification",
-                                    "request_shape")}
-    if not res.get("ok"):
-        return {"ok": False, "readable": False, "read": read,
-                "why": "the active-orders read did not succeed (%s); an "
-                       "unreadable order book is never an empty one" % read}
-    body = res.get("body")
-    recognised = isinstance(body, list) or (
-        isinstance(body, dict)
-        and any(isinstance(body.get(k), list)
-                for k in ("orders", "results", "data")))
-    if not recognised:
-        return {"ok": False, "readable": False, "read": read,
-                "why": "the active-orders response shape was not recognised "
-                       "(body type %s, keys %s); an empty list we could not "
-                       "find is not an empty order book"
-                       % (type(body).__name__,
-                          sorted(body)[:8] if isinstance(body, dict)
-                          else None)}
-    orders = transport._orders_of(res)
-    if orders:
-        return {"ok": False, "readable": True, "open": len(orders),
-                "read": read,
-                "order_ids": [str(o.get(payload.spec.ORDER_ID_FIELD)
-                                  or o.get("orderId")) for o in orders][:10],
+                                    "request_shape")} \
+        if isinstance(res, Mapping) else None
+    if not ao.readable:
+        return {"ok": False, "readable": False, "read": read, "why": ao.why}
+    if ao.count:
+        return {"ok": False, "readable": True, "open": ao.count, "read": read,
+                "order_ids": [o.order_id for o in ao.orders][:10],
+                "unresolved": ao.any_unresolved,
                 "why": "%d order(s) already outstanding on %s; the probe "
                        "allows exactly one, and an unresolved order blocks "
-                       "the next decision" % (len(orders), symbol)}
+                       "the next decision" % (ao.count, symbol)}
     return {"ok": True, "readable": True, "open": 0, "read": read,
             "why": None}
 
@@ -420,30 +395,12 @@ def classify_ack(body: Mapping[str, Any]) -> Dict[str, Any]:
     open, and it must be polled to a terminal state before anything else
     happens.
     """
-    st = str(body.get("status") or "").strip().lower()
-    try:
-        filled = D(str(body.get("filledQuantity")
-                       if body.get("filledQuantity") is not None
-                       else body.get("executedQuantity") or "0"))
-    except Exception:                                          # noqa: BLE001
-        return {"state": ACK_UNRESOLVED, "status": st, "filled": None,
-                "terminal": False,
-                "why": "the ack carried an unreadable filled quantity"}
-    if st == "filled" or (st in TERMINAL_STATUSES and filled > 0):
-        return {"state": ACK_FILLED, "status": st, "filled": filled,
-                "terminal": True, "why": None}
-    if st in ("cancelled", "canceled", "expired", "rejected") and filled <= 0:
-        return {"state": ACK_CANCELLED, "status": st, "filled": filled,
-                "terminal": True, "why": None}
-    if st in ("open", "accepted", "pending"):
-        return {"state": ACK_RESTING, "status": st, "filled": filled,
-                "terminal": False,
-                "why": ("the order is RESTING. `open` is not NOT_FILLED -- "
-                        "CI15M-1's four fills all began in this state. Its "
-                        "terminal state must be polled.")}
-    return {"state": ACK_UNRESOLVED, "status": st or "(absent)",
-            "filled": filled, "terminal": False,
-            "why": "unrecognised or absent order status -- fail closed"}
+    o = AD.OrderState.of(body)
+    state = {AD.FILLED: ACK_FILLED, AD.CANCELLED: ACK_CANCELLED,
+             AD.RESTING: ACK_RESTING,
+             AD.UNRESOLVED: ACK_UNRESOLVED}[o.state]
+    return {"state": state, "status": o.status, "filled": o.filled,
+            "terminal": o.terminal, "why": o.why, "order": o}
 
 
 async def poll_terminal(cohort_id: str, symbol: str, order_id: Any, *,
@@ -468,26 +425,24 @@ async def poll_terminal(cohort_id: str, symbol: str, order_id: Any, *,
             last = {"error": str(exc)}
             await sleep(pause)
             continue
-        if hist.get("readable") is False:
-            last = {"unreadable": hist.get("why")}
+        h = AD.OrderHistory.of(hist)
+        if not h.readable:
+            last = {"unreadable": h.why}
             await sleep(pause)
             continue
-        for grp in (hist.get("per_status") or []):
-            for o in (grp.get("orders") or []):
-                if str(o.get("orderId")) != str(order_id):
-                    continue
-                st = str(o.get("status") or "").strip().lower()
-                if st in TERMINAL_STATUSES:
-                    try:
-                        f = D(str(o.get("filledQuantity") or "0"))
-                    except Exception:                          # noqa: BLE001
-                        break
-                    return {"resolved": True,
-                            "state": (TERMINAL_FILLED if f > 0
-                                      else TERMINAL_CANCELLED),
-                            "status": st, "filled": f, "row": o,
-                            "attempts": i + 1}
-                last = {"status": st, "row": o}
+        found = h.find(order_id)
+        if found is not None:
+            if found.terminal:
+                return {"resolved": True,
+                        "state": (TERMINAL_FILLED if found.state == AD.FILLED
+                                  else TERMINAL_CANCELLED),
+                        "status": found.status, "filled": found.filled,
+                        "row": {"price": (None if found.price is None
+                                          else str(found.price)),
+                                "outcome": found.outcome,
+                                "orderId": found.order_id},
+                        "attempts": i + 1}
+            last = {"status": found.status, "why": found.why}
         await sleep(pause)
     BUD.halt(cohort_id, "SEMANTIC_CONTRADICTION",
              "order %s never reached a terminal state after %d polls: %r"
@@ -500,6 +455,13 @@ async def poll_terminal(cohort_id: str, symbol: str, order_id: Any, *,
 
 
 def _position_rows(got: Any) -> Optional[List[Mapping[str, Any]]]:
+    """Kept as a thin shim over `AD.PositionRead` so the normalisation lives
+    in ONE place at the boundary. See ci15m_adapters for the contract and
+    for why "empty" and "unknown" must never be the same value."""
+    return AD.PositionRead.of(got).rows
+
+
+def _position_rows_legacy(got: Any) -> Optional[List[Mapping[str, Any]]]:
     """The rows out of `metadata.positions()`, READ FROM ITS OWN CONTRACT.
 
     THE DEFECT THIS REPLACES, AND IT IS THE THIRD OF ITS KIND. The previous
@@ -859,22 +821,11 @@ def book_from_venue(symbol: str) -> Dict[str, Any]:
     Nothing about the policy changes. This is the market-state INPUT.
     """
     from src.gemini_execution import metadata
-    dep = metadata.contract_depth(symbol)
-    if not dep.get("readable"):
-        return {"readable": False, "why": dep.get("why"), "stage": "ladder"}
-    bids, asks = dep.get("bids") or {}, dep.get("asks") or {}
-    best_bid, best_ask = bids.get("best"), asks.get("best")
-    if best_bid is None or best_ask is None:
-        return {"readable": False, "stage": "ladder",
-                "why": ("the executable ladder is one-sided (bid %r, ask "
-                        "%r); nothing is derived in its place"
-                        % (best_bid, best_ask))}
-    bid, ask = D(str(best_bid)), D(str(best_ask))
-    if not (bid < ask):
-        return {"readable": False, "stage": "ladder",
-                "semantic_contradiction": True,
-                "why": "the executable ladder is crossed or locked: bid %s "
-                       ">= ask %s" % (bid, ask)}
+    lad = AD.ExecutableBook.of(metadata.contract_depth(symbol))
+    if not lad.readable:
+        return {"readable": False, "why": lad.why, "stage": "ladder",
+                "semantic_contradiction": bool(lad.crossed)}
+    bid, ask = lad.bid, lad.ask
 
     # ---- TELEMETRY ONLY. Never used to price an order.
     tel: Dict[str, Any] = {"read": False}
@@ -903,14 +854,13 @@ def book_from_venue(symbol: str) -> Dict[str, Any]:
         "readable": True,
         "source": "contract_depth /v1/book -- the EXECUTABLE ladder",
         "bid": bid, "ask": ask,
-        "bid_size": bids.get("best_qty"),
-        "ask_size": asks.get("best_qty"),
+        "bid_size": lad.bid_size,
+        "ask_size": lad.ask_size,
         "up_acquisition": str(ask),
         "down_acquisition": str(D("1") - bid),
-        "snapshot_age_s": dep.get("snapshot_age_s"),
-        "venue_ts": dep.get("venue_ts"),
+        "snapshot_age_s": lad.snapshot_age_s,
         "contract_price_telemetry": tel,
-        "levels": {"bids": bids.get("levels"), "asks": asks.get("levels")},
+        "ladder": lad,
     }
 
 
