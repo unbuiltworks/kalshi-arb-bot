@@ -142,7 +142,28 @@ jobs:
             > ~/.ssh/l5_volume_export.pub
           chmod 644 ~/.ssh/l5_volume_export.pub
 
+      - name: Reuse frames already retrieved, when a run is named
+        if: ${{ needs.plan.outputs.harvest_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: oos-calibration-*
+          path: reuse
+          run-id: ${{ needs.plan.outputs.harvest_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Adopt the reused frames
+        if: ${{ needs.plan.outputs.harvest_run_id != '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p cal
+          # The frames are the recorder's own bytes and the parts are immutable,
+          # so reusing them is the same read, not a different one -- and it
+          # spares the recorder's volume a repeat transfer.
+          cp "$(ls reuse/*/ws.jsonl | head -1)" cal/ws.jsonl
+          wc -l cal/ws.jsonl
+
       - name: Read the overlap parts and show the REAL frame shape
+        if: ${{ needs.plan.outputs.harvest_run_id == '' }}
         run: |
           set -euo pipefail
           mkdir -p cal

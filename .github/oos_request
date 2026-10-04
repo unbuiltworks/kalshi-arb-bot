@@ -15,9 +15,9 @@ them anchored at both ends so this prose cannot be mistaken for one.
     requested exactly once.
 
 STAGE=calibrate
-HARVEST_RUN_ID=37225234232
+HARVEST_RUN_ID=37230639101
 
 Cutoff: cpc-btc-updown-15m-2026-10-02-2045z. Development ends at the cutoff;
 only windows starting strictly after it are OOS.
 
-REQUEST=4
+REQUEST=5
