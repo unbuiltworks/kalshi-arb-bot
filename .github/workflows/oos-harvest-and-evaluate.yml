@@ -63,9 +63,9 @@ jobs:
           # Anchored and fully constrained on BOTH ends: the request file also
           # explains itself in prose, and a loose '^STAGE=' once matched a
           # sentence instead of the directive.
-          stage="$(sed -n -E 's/^STAGE=(harvest|evaluate)[[:space:]]*$/\\1/p' \
+          stage="$(sed -n -E 's/^STAGE=(harvest|evaluate)[[:space:]]*$/\1/p' \
                    "$f" | tail -1)"
-          rid="$(sed -n -E 's/^HARVEST_RUN_ID=([0-9]*)[[:space:]]*$/\\1/p' \
+          rid="$(sed -n -E 's/^HARVEST_RUN_ID=([0-9]*)[[:space:]]*$/\1/p' \
                  "$f" | tail -1)"
           case "$stage" in
             harvest|evaluate) ;;
