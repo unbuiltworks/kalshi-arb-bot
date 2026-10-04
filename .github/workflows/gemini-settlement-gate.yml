@@ -349,14 +349,40 @@ jobs:
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
         run: |
           set -o pipefail
-          OUT="ci15m_shadow_persist_$(date -u +%Y%m%dT%H%M%SZ).json"
+          TS=$(date -u +%Y%m%dT%H%M%SZ)
+          # THE CAPACITY TAPE RUNS ALONGSIDE, in the same container, for the
+          # same reason the shadow does: a local background process on the
+          # agent host is reaped between turns -- both of mine died at
+          # 00:49 with no exit record -- while a job step owns its process
+          # for its whole duration. Read-only public reads; no credential.
+          python -m scripts.gemini_capacity_collect \
+            --seconds 4300 --interval 5 \
+            > /tmp/captape.log 2>&1 &
+          COLLECTOR=$!
+          echo "capacity collector pid $COLLECTOR"
+          OUT="ci15m_shadow_persist_$TS.json"
           python -m scripts.ci15m_shadow_persistent \
-            --cohort "SHADOW-PERSIST4-$(date -u +%Y%m%dT%H%M%SZ)" \
+            --cohort "SHADOW-PERSIST4-$TS" \
             --windows "${{ github.event.inputs.soak_windows || '4' }}" \
-            --runtime-s 4500 \
+            --runtime-s 4200 \
             --out "$OUT" 2>&1 | tee /tmp/ci15m_shadow.txt
+          SHADOW_RC=${PIPESTATUS[0]}
+          kill "$COLLECTOR" 2>/dev/null || true
+          sleep 2
+          tail -5 /tmp/captape.log || true
           mkdir -p "$GITHUB_WORKSPACE/analysis/gemini"
           cp "$OUT" "$GITHUB_WORKSPACE/analysis/gemini/$OUT"
+          # THE SHADOW COHORT'S DURABLE RECORD and the TAPES are the
+          # evidence; a reclaimed runner must not carry the only copy.
+          # Tapes are gzipped because an hour of 5 s ticks is ~18 MB raw.
+          for f in analysis/gemini/info_edge/*/capacity_tape_*.jsonl; do
+            [ -e "$f" ] || continue
+            gzip -9 -c "$f" > "$GITHUB_WORKSPACE/${f}.gz"
+          done
+          mkdir -p "$GITHUB_WORKSPACE/analysis/gemini/shadow_cohorts"
+          cp -r analysis/gemini/shadow_cohorts/. \
+            "$GITHUB_WORKSPACE/analysis/gemini/shadow_cohorts/" || true
+          exit $SHADOW_RC
 
       # P1. READ-ONLY. Submits nothing, cancels nothing, mutates no cohort.
       # It deliberately does NOT call ci15m_probe.authenticated_fills, which
@@ -1242,6 +1268,9 @@ jobs:
                    analysis/gemini/cohort_live_status.json.jsonl \
                    analysis/gemini/ci15m4_fill_read_*.json \
                    analysis/gemini/ci15m_shadow_persist_*.json \
+                   analysis/gemini/info_edge/*/capacity_tape_*.jsonl.gz \
+                   analysis/gemini/shadow_cohorts/*/*.json \
+                   analysis/gemini/shadow_cohorts/*/*.jsonl \
                    analysis/gemini/canary_latch/*.json; do
             if [ -e "$f" ]; then git add -- "$f"; fi
           done
@@ -1282,7 +1311,7 @@ jobs:
           # only one that survives a runner killed between windows -- which
           # is precisely the case where the per-window report never gets
           # written at all.
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|maker_fee_cash_[0-9TZ]+\.json|ci15m4_fill_read_[0-9TZ]+\.json|ci15m_shadow_persist_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_([A-Za-z0-9]+_)?[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|maker_fee_cash_[0-9TZ]+\.json|ci15m4_fill_read_[0-9TZ]+\.json|ci15m_shadow_persist_[0-9TZ]+\.json|info_edge/btc(15m|5m)/capacity_tape_[0-9TZ]+\.jsonl\.gz|shadow_cohorts/[A-Za-z0-9_-]+/(cohort\.json|cohort_state\.json|ledger\.jsonl|windows\.jsonl|telemetry\.jsonl|exits\.jsonl)|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_([A-Za-z0-9]+_)?[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
             # An evidence job must not lose its evidence to a race. Any other
