@@ -437,6 +437,11 @@ def replay(slug: str, w, outcome: str, variant: str,
         "opposite_fills": len(fills_opp),
         "touch_depth_consumed_max": (str(round(max(port.depth_frac), 4))
                                      if port.depth_frac else None),
+        "touch_depth_consumed_mean": (
+            str(round(sum(port.depth_frac) / len(port.depth_frac), 4))
+            if port.depth_frac else None),
+        "touch_depth_frac_sum": (str(round(sum(port.depth_frac), 4))
+                                 if port.depth_frac else "0"),
         "touch_depth_consumed_over_10pct": sum(
             1 for x in port.depth_frac if x > 0.10),
         "taker_orders": len(port.depth_frac),
@@ -781,6 +786,11 @@ def replay_c(slug: str, w, outcome: str,
         "profitable_exits": sum(1 for e in exits if e["profitable_exit"]),
         "touch_depth_consumed_max": (str(round(max(port.depth_frac), 4))
                                      if port.depth_frac else None),
+        "touch_depth_consumed_mean": (
+            str(round(sum(port.depth_frac) / len(port.depth_frac), 4))
+            if port.depth_frac else None),
+        "touch_depth_frac_sum": (str(round(sum(port.depth_frac), 4))
+                                 if port.depth_frac else "0"),
         "touch_depth_consumed_over_10pct": sum(
             1 for x in port.depth_frac if x > 0.10),
         "taker_orders": len(port.depth_frac),

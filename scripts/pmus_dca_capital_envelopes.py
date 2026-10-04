@@ -33,15 +33,20 @@ _s = importlib.util.spec_from_file_location(
 DCA = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(DCA)
 
-ENVELOPES = [D(25), D(50), D(100), D(200), D(500)]
+ENVELOPES = [D(25), D(50), D(75), D(100), D(150), D(200)]
 TARGET = D(5)
+
+
+VARIANT_KW = {"C": {}, "D0": {"seed": False},
+              "D1": {"seed": False, "opposite_rest": True}}
 
 
 def run(elig, variant: str, alloc: D):
     out = []
     for slug in sorted(elig):
         w, oc, _ = elig[slug]
-        r = (DCA.replay_c(slug, w, oc, alloc) if variant == "C"
+        r = (DCA.replay_c(slug, w, oc, alloc, name=variant,
+                          **VARIANT_KW[variant]) if variant in VARIANT_KW
              else DCA.replay(slug, w, oc, variant, alloc))
         r.pop("trajectory", None)
         out.append(r)
@@ -66,6 +71,8 @@ def summarize(rows, alloc: D, envelope=None):
                           or r["acquisition_cost"]) / pk)
     dfr = [r["touch_depth_consumed_max"] for r in rows
            if r["touch_depth_consumed_max"]]
+    nets = sorted(float(r["net_settlement_pnl"]) for r in rows)
+    orders = sum(r["taker_orders"] for r in rows)
     return {
         "envelope": (str(envelope) if envelope else "baseline"),
         "alloc_usd": str(round(alloc, 4)),
@@ -89,6 +96,28 @@ def summarize(rows, alloc: D, envelope=None):
             abs(D(r["residual_terminal"])) for r in rows), 1)),
         "settlement_contingent_exposure_worst_window_usd": str(round(
             max(D(r["max_residual"]) for r in rows), 1)),
+        # the tests the \$5 objective now requires explicitly
+        "p_net_ge_5": str(round(D(sum(1 for x in nets if x >= 5)) / n, 4)),
+        "p_net_lt_0": str(round(D(sum(1 for x in nets if x < 0)) / n, 4)),
+        "pct_windows_5plus": str(round(
+            D(100 * sum(1 for x in nets if x >= 5)) / n, 1)),
+        "pct_windows_positive": str(round(
+            D(100 * sum(1 for x in nets if x > 0)) / n, 1)),
+        "worst_window": str(round(D(nets[0]), 3)),
+        "leave_best_1_net_per_window": str(round(
+            (D(sum(nets)) - D(nets[-1])) / (n - 1), 4)),
+        "leave_best_3_net_per_window": str(round(
+            (D(sum(nets)) - D(sum(nets[-3:]))) / (n - 3), 4)),
+        # liquidity participation: the share of the DISPLAYED touch a
+        # typical order consumed, averaged over every taker order in the
+        # sample. The tape has nothing below the touch, so this is the only
+        # honest participation measure available.
+        "liquidity_participation_mean_frac_of_touch": (str(round(
+            sum(D(r["touch_depth_frac_sum"]) for r in rows) / orders, 4))
+            if orders else None),
+        "orders_over_10pct_of_touch_pct": str(round(
+            D(100 * sum(r["touch_depth_consumed_over_10pct"] for r in rows))
+            / orders, 1)) if orders else None,
         "net_per_peak_capital": (str(round(net / n / peak_cap, 4))
                                  if peak_cap > 0 else None),
         "touch_depth_consumed_max": (max(dfr) if dfr else None),
@@ -107,7 +136,7 @@ def main() -> int:
             elig[slug] = (w, oc, why)
     res = {"windows": len(elig), "target_net_per_window": str(TARGET),
            "variants": {}}
-    for variant in ("A", "Am", "B", "C"):
+    for variant in ("A", "Am", "B", "C", "D0", "D1"):
         base = run(elig, variant, D(1))
         b = summarize(base, D(1))
         peak1 = D(b["peak_capital_worst_window"])
