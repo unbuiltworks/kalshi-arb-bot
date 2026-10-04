@@ -80,9 +80,16 @@ MECHANICS = "MECHANICS"
 MECHANICS2 = "MECHANICS2"
 FULL = "FULL"
 
+#: PERSIST4 is the PERSISTENT-ROLLOVER envelope: four consecutive windows,
+#: two submissions each, eight in total. It is TIGHTER per window than any
+#: earlier profile (2, not 3 or 6) because the question it answers is
+#: whether the executor survives four rollovers, not how much it can trade.
+PERSIST4 = "PERSIST4"
+
 PROFILES = {
     MECHANICS: {"windows": 1, "orders_total": 3, "orders_per_window": 3},
     MECHANICS2: {"windows": 2, "orders_total": 6, "orders_per_window": 3},
+    PERSIST4: {"windows": 4, "orders_total": 8, "orders_per_window": 2},
     FULL: {"windows": 3, "orders_total": 12, "orders_per_window": 6},
 }
 
