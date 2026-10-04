@@ -66,8 +66,13 @@ FEE_PER_DOLLAR_SENSITIVITY = 0.02
 TRAIN_FRAC = 0.6
 
 
-def load(path: str, coin: str = "btc") -> Dict[str, Dict[str, Any]]:
-    """Both outcomes' FULL bid and ask ladders, second by second."""
+def load(path: str, coin: Optional[str] = "btc"
+         ) -> Dict[str, Dict[str, Any]]:
+    """Both outcomes' FULL bid and ask ladders, second by second.
+
+    `coin=None` loads EVERY coin in the file. The default stays "btc" so the
+    original 33-window run reproduces byte-for-byte.
+    """
     import pyarrow.parquet as pq
     t = pq.read_table(path, columns=[
         "market_slug", "coin", "token_id", "outcome", "is_winning_outcome",
@@ -76,7 +81,7 @@ def load(path: str, coin: str = "btc") -> Dict[str, Dict[str, Any]]:
     d = t.to_pydict()
     wins: Dict[str, Dict[str, Any]] = {}
     for i in range(len(d["market_slug"])):
-        if d["coin"][i] != coin:
+        if coin is not None and d["coin"][i] != coin:
             continue
         slug = d["market_slug"][i]
         w = wins.setdefault(slug, {"slug": slug, "winning_outcome": None,
@@ -169,6 +174,16 @@ def run_window(w: Dict[str, Any], *, cadence: float, base_dollars: float,
     peak_capital = 0.0
     peak_dir_exposure = 0.0
     unsold_at_exit = 0.0
+    # ---- INSTRUMENTATION ONLY. None of these feed a decision; they are
+    # added so slippage and bid depth are MEASURED rather than asserted.
+    entry_slippage = 0.0       # paid above the displayed ask touch
+    exit_slippage = 0.0        # received below the displayed bid touch
+    exit_touch_proceeds = 0.0  # what touch-equals-fill would have claimed
+    exit_bid_depth_shares: List[float] = []
+    exit_bid_depth_dollars: List[float] = []
+    exit_bid_levels: List[float] = []
+    n_exits_partial = 0
+    n_exits_nothing = 0
     events: List[Dict[str, Any]] = []
 
     # ---- BASE: the first instant both sides are buyable
@@ -228,8 +243,25 @@ def run_window(w: Dict[str, Any], *, cadence: float, base_dollars: float,
             if not (retreated or lost_lead):
                 continue
             got = sell_shares(s, ext_q[side_name])
+            bsz = [float(x) for x in (s.get("bid_sizes") or [])
+                   if x is not None]
+            bpx = [float(x) for x in (s.get("bid_prices") or [])
+                   if x is not None]
+            exit_bid_depth_shares.append(sum(bsz))
+            exit_bid_depth_dollars.append(sum(
+                px_ * sz_ for px_, sz_ in zip(bpx, bsz)))
+            exit_bid_levels.append(float(len(bsz)))
             if got["sold"] <= 0:
+                # THE VENUE'S OWN NO-LIQUIDITY STATE, in the historical
+                # tape: we wanted out and the bid side could not take any
+                # of it. Counted, never silently skipped.
+                n_exits_nothing += 1
                 continue
+            if got["unsold"] > 1e-9:
+                n_exits_partial += 1
+            if bid is not None:
+                exit_touch_proceeds += got["sold"] * bid
+                exit_slippage += got["sold"] * bid - got["proceeds"]
             basis = (ext_c[side_name] / ext_q[side_name]) * got["sold"]
             ext_realized += got["proceeds"] - basis
             ext_c[side_name] -= basis
@@ -266,6 +298,9 @@ def run_window(w: Dict[str, Any], *, cadence: float, base_dollars: float,
             if strengthening:
                 got = buy_dollars(s, ext_dollars)
                 if got["shares"] > 0:
+                    ask = s.get("best_ask")
+                    if ask is not None:
+                        entry_slippage += got["spent"] - got["shares"] * ask
                     ext_q[fav] += got["shares"]
                     ext_c[fav] += got["spent"]
                     gross_bought += got["spent"]
@@ -310,6 +345,21 @@ def run_window(w: Dict[str, Any], *, cadence: float, base_dollars: float,
         "peak_capital": round(peak_capital, 4),
         "peak_directional_exposure": round(peak_dir_exposure, 4),
         "unsold_shares_at_exit": round(unsold_at_exit, 4),
+        "no_trade_window": (n_ext == 0),
+        "entry_slippage_dollars": round(entry_slippage, 4),
+        "exit_slippage_dollars": round(exit_slippage, 4),
+        "exit_touch_only_proceeds": round(exit_touch_proceeds, 4),
+        "exit_bid_depth_shares_mean": (
+            None if not exit_bid_depth_shares
+            else round(statistics.fmean(exit_bid_depth_shares), 2)),
+        "exit_bid_depth_dollars_mean": (
+            None if not exit_bid_depth_dollars
+            else round(statistics.fmean(exit_bid_depth_dollars), 2)),
+        "exit_bid_levels_mean": (
+            None if not exit_bid_levels
+            else round(statistics.fmean(exit_bid_levels), 2)),
+        "n_exits_partial": n_exits_partial,
+        "n_exits_nothing_sellable": n_exits_nothing,
         "total_net_zero_fees": round(total_net, 4),
         "fee_sensitivity": round(gross_bought
                                  * FEE_PER_DOLLAR_SENSITIVITY, 4),
@@ -381,6 +431,24 @@ def summarise(rows: List[Dict[str, Any]], arm: str) -> Dict[str, Any]:
         "unsold_shares_at_exit": _st([r["unsold_shares_at_exit"]
                                       for r in rows]),
         "lead_flips": _st([float(r["lead_flips"]) for r in rows]),
+        "no_trade_windows": sum(1 for r in rows if r.get("no_trade_window")),
+        "entry_slippage_dollars": _st([r["entry_slippage_dollars"]
+                                       for r in rows]),
+        "exit_slippage_dollars": _st([r["exit_slippage_dollars"]
+                                      for r in rows]),
+        "exit_slippage_pct_of_touch": (
+            None if not sum(r["exit_touch_only_proceeds"] for r in rows)
+            else round(100.0 * sum(r["exit_slippage_dollars"] for r in rows)
+                       / sum(r["exit_touch_only_proceeds"] for r in rows), 3)),
+        "exit_bid_depth_shares_mean": _st([r["exit_bid_depth_shares_mean"]
+                                           for r in rows]),
+        "exit_bid_depth_dollars_mean": _st([r["exit_bid_depth_dollars_mean"]
+                                            for r in rows]),
+        "exit_bid_levels_mean": _st([r["exit_bid_levels_mean"]
+                                     for r in rows]),
+        "exits_partial": sum(r["n_exits_partial"] for r in rows),
+        "exits_nothing_sellable": sum(r["n_exits_nothing_sellable"]
+                                      for r in rows),
         "fees": {"base_case": 0.0,
                  "why_zero": ("no authenticated Polymarket fee measurement "
                               "exists in this repository"),

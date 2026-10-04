@@ -1,3 +1,11 @@
+> **SUPERSEDED 2026-10-04 — CANDIDATE REJECTED.** Expanded to 805 windows
+> (8 coins x 3 durations) with the strategy unchanged: all three
+> preregistered candidates are negative at every size $2-$25 on every slice
+> except the original 33 BTC 15m windows, and the capacity curve has no
+> interior optimum. The positive result below was a single-coin,
+> single-duration artifact carried by settlement, not by the exit. See
+> `analysis/gemini/momentum/EXPANDED_OOS_FINDINGS.md`.
+
 # TWO-SIDED BASE + FAVORITE MOMENTUM + PULLBACK EXIT
 
 **This is not the strategy that was rejected.** The hold-to-settlement
