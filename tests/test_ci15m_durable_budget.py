@@ -260,3 +260,40 @@ def test_persist4_is_the_authorized_persistent_envelope():
     p = BUD.PROFILES[BUD.PERSIST4]
     assert (p["windows"], p["orders_total"], p["orders_per_window"]) == (
         4, 8, 2)
+
+
+def test_a_persist4_cohort_may_complete_four_windows(tmp_path, monkeypatch):
+    """THE DEFECT THAT MADE THE FOUR-WINDOW PROOF UNREACHABLE.
+
+    `expired()` checked the profile's window count and THEN re-checked the
+    module constant WINDOW_BUDGET (3), so a PERSIST4 cohort authorized for
+    4 windows stopped at 3 with "WINDOW_BUDGET_EXHAUSTED: 3 of 3". It
+    bound TIGHTER than authorized, which is why it stayed invisible until
+    a cohort asked for more than the old default.
+    """
+    root = str(tmp_path / "cohorts")
+    monkeypatch.setattr(BUD, "latch_slots",
+                        lambda c, **k: {"readable": True, "slots": [],
+                                        "count": 0, "why": None})
+    cid = "P4-WINDOWS"
+    BUD.create(cid, root=root, profile=BUD.PERSIST4)
+    assert BUD.profile_of(cid, root=root)["windows"] == 4
+    for n in range(1, 4):
+        BUD.open_window(cid, "BTC15M261004%04d" % n, root=root)
+        BUD.close_window(cid, "BTC15M261004%04d" % n, "RESIDUAL", root=root)
+        assert BUD.completed_windows(cid, root=root) == n
+        assert BUD.expired(cid, root=root, remote=None) is None, (
+            "a PERSIST4 cohort must not expire at %d of 4 windows" % n)
+    BUD.open_window(cid, "BTC15M2610040004", root=root)
+    BUD.close_window(cid, "BTC15M2610040004", "RESIDUAL", root=root)
+    why = BUD.expired(cid, root=root, remote=None)
+    assert why is not None and "4 of 4" in why, why
+
+
+def test_the_window_ceiling_has_a_single_source(tmp_path, monkeypatch):
+    import inspect
+    src = inspect.getsource(BUD.expired)
+    code = "\n".join(l.split("#", 1)[0] for l in src.splitlines())
+    assert 'prof["windows"]' in code
+    assert "done >= WINDOW_BUDGET" not in code, (
+        "the module constant must not be a second window gate")

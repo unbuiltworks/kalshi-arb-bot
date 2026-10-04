@@ -262,6 +262,11 @@ def main(argv: Any = None) -> int:
                                 max_windows=a.windows,
                                 runtime_s=a.runtime_s, root=a.root))
     finally:
+        # CAPTURED BEFORE THE SINKS ARE CLEARED. Reading write_mode() in
+        # the report after this block restored LIVE made the artifact say
+        # "write_mode_at_exit": "LIVE" on a run where nothing was sent --
+        # a false alarm in the one field a reader would check first.
+        mode_at_exit = P.write_mode()
         P.set_write_sink(None)
         P.set_cancel_sink(None)
 
@@ -281,7 +286,7 @@ def main(argv: Any = None) -> int:
         "halted": st["halted"],
         "telemetry_rows": len(BUD.telemetry(a.cohort, root=a.root) or []),
         "policy_fingerprint": P.fingerprint(),
-        "write_mode_at_exit": P.write_mode(),
+        "write_mode_at_exit": mode_at_exit,
     }
     # ACCEPTANCE, evaluated here rather than left to a reader.
     report["acceptance"] = _acceptance(report, a.windows)

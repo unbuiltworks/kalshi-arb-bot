@@ -521,9 +521,24 @@ def expired(cohort_id: str, *, root: str = cohort.COHORT_ROOT,
         return ("WINDOW_BUDGET_EXHAUSTED: %d of %d live windows completed "
                 "(profile %s). There is no replenishment."
                 % (done, prof["windows"], prof["name"]))
-    if done >= WINDOW_BUDGET:
-        return ("WINDOW_BUDGET_EXHAUSTED: %d of %d live windows completed. "
-                "There is no replenishment." % (done, WINDOW_BUDGET))
+    # THE SECOND CHECK IS GONE, AND IT IS WHY THE FOUR-WINDOW PROOF COULD
+    # NEVER PASS. It re-tested the MODULE CONSTANT `WINDOW_BUDGET` (3)
+    # after the profile check above had already allowed PERSIST4's 4, so a
+    # correctly configured 4-window cohort stopped at 3 with
+    # "WINDOW_BUDGET_EXHAUSTED: 3 of 3 live windows completed" -- measured
+    # in run 37169250593, whose only failing acceptance check was
+    # `stayed_alive_across_windows` (3 seen, 4 required). Every other
+    # check passed.
+    #
+    # This is the same failure as `profile_of`: a bound read from a module
+    # constant instead of from the cohort's own profile. It bound TIGHTER
+    # than authorized (3 < 4) so nothing unsafe happened, and that is
+    # exactly why it was invisible until a cohort asked for more than the
+    # old default.
+    #
+    # `prof["windows"]` is now the SINGLE source for the window ceiling.
+    # WINDOW_BUDGET remains the FULL profile's value and the basis of the
+    # legacy derived constants below; it is no longer a second gate.
     loss = realized_principal_loss(cohort_id, root=root)
     if loss >= REALIZED_LOSS_STOP:
         return ("REALIZED_LOSS_STOP: confirmed realized principal loss $%s "
