@@ -63,13 +63,14 @@ jobs:
           # Anchored and fully constrained on BOTH ends: the request file also
           # explains itself in prose, and a loose '^STAGE=' once matched a
           # sentence instead of the directive.
-          stage="$(sed -n -E 's/^STAGE=(harvest|evaluate)[[:space:]]*$/\1/p' \
+          stage="$(sed -n -E 's/^STAGE=(calibrate|harvest|evaluate)[[:space:]]*$/\1/p' \
                    "$f" | tail -1)"
           rid="$(sed -n -E 's/^HARVEST_RUN_ID=([0-9]*)[[:space:]]*$/\1/p' \
                  "$f" | tail -1)"
           case "$stage" in
-            harvest|evaluate) ;;
-            *) echo "::error::STAGE must be harvest or evaluate, got '$stage'"
+            calibrate|harvest|evaluate) ;;
+            *) echo "::error::STAGE must be calibrate, harvest or evaluate," \
+                    "got '$stage'"
                exit 1 ;;
           esac
           if [ "$stage" = evaluate ] && [ -z "$rid" ]; then
@@ -78,6 +79,115 @@ jobs:
           echo "stage=$stage" >> "$GITHUB_OUTPUT"
           echo "harvest_run_id=$rid" >> "$GITHUB_OUTPUT"
           echo "stage=$stage harvest_run_id=$rid"
+
+  calibrate:
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'calibrate' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SSH_PRIVATE_KEY_B64: ${{ secrets.RAILWAY_SSH_PRIVATE_KEY_B64 }}
+      PROJECT_ID: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
+      ENVIRONMENT_ID: f3642d27-26dc-4e21-9170-bc76290c076f
+      SERVICE_ID: 71b6ea99-ea6a-4b20-9602-fa873721ed35
+      REMOTE_DIR: /state/pmus-ws/raw
+      RAILWAY_CLI_VERSION: 5.63.1
+      # 2026-09-30 12:00-13:59Z covers development windows 1215z..1345z, which
+      # the committed development tape also covers. That overlap is the only
+      # ground truth available for the derivation.
+      CAL_FILES: 'pmus_ws_20260930_12.jsonl,pmus_ws_20260930_13.jsonl'
+    steps:
+      - name: Fail closed if required CI secrets are absent
+        run: |
+          set -euo pipefail
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_TOKEN secret is not set."; exit 1
+          fi
+          if [ -z "${RAILWAY_SSH_PRIVATE_KEY_B64:-}" ]; then
+            echo "::error::RAILWAY_SSH_PRIVATE_KEY_B64 secret is not set."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the PINNED Railway CLI and assert the version
+        run: |
+          set -euo pipefail
+          npm install -g "@railway/cli@$RAILWAY_CLI_VERSION"
+          got="$(railway --version | tr -d '\r')"
+          echo "installed: $got"
+          case "$got" in
+            *"$RAILWAY_CLI_VERSION"*) ;;
+            *) echo "::error::CLI version mismatch"; exit 1 ;;
+          esac
+
+      - name: Prepare dedicated Railway SSH identity
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s' "$RAILWAY_SSH_PRIVATE_KEY_B64" \
+            | base64 --decode > ~/.ssh/l5_volume_export
+          chmod 600 ~/.ssh/l5_volume_export
+          ssh-keygen -y -f ~/.ssh/l5_volume_export \
+            > ~/.ssh/l5_volume_export.pub
+          chmod 644 ~/.ssh/l5_volume_export.pub
+
+      - name: Read the overlap parts and show the REAL frame shape
+        run: |
+          set -euo pipefail
+          mkdir -p cal
+          IFS=',' read -ra NAMES <<< "$CAL_FILES"
+          for raw in "${NAMES[@]}"; do
+            name="$(echo "$raw" | xargs)"
+            [ -n "$name" ] || continue
+            ok=0
+            for attempt in 1 2 3 4; do
+              if railway service files \
+                   --service "$SERVICE_ID" \
+                   --environment "$ENVIRONMENT_ID" \
+                   --project "$PROJECT_ID" \
+                   download "$REMOTE_DIR/$name" part.jsonl < /dev/null; then
+                ok=1; break
+              fi
+              echo "read attempt $attempt failed; retrying"
+              rm -f part.jsonl; sleep $((attempt * 20))
+            done
+            [ "$ok" -eq 1 ] || { echo "::error::could not read $name"; exit 1; }
+            echo "$name bytes=$(stat -c%s part.jsonl) lines=$(wc -l < part.jsonl)"
+            echo "::group::real raw frame shape ($name)"
+            # The documented claim was that these are book/trade rows. Print
+            # what they actually are, so the record shows it rather than
+            # asserting it.
+            python3 scripts/pmus_oos_frame_shape.py part.jsonl 2
+            echo "::endgroup::"
+            python3 scripts/pmus_oos_reduce_part.py part.jsonl rows.jsonl
+            cat rows.jsonl >> cal/ws.jsonl
+            rm -f part.jsonl rows.jsonl
+          done
+          wc -l cal/ws.jsonl
+
+      - name: Derive rows and CALIBRATE against the development tape
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_oos_derive_rows.py cal/ws.jsonl \
+            cal/derived.jsonl | tee cal/DERIVE.json
+          python3 scripts/pmus_oos_calibrate_derivation.py cal/derived.jsonl \
+            | tee cal/CALIBRATION.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oos-calibration-${{ github.run_id }}
+          path: cal/
+          retention-days: 14
+          if-no-files-found: error
 
   harvest:
     needs: plan
@@ -242,7 +352,10 @@ jobs:
       - name: Merge the slices; a SHORT harvest fails rather than scoring
         run: |
           set -euo pipefail
-          mkdir -p data/pmus_ws_tape_oos
+          # `pmus_oos_extract_and_inventory` globs every *.jsonl in
+          # data/pmus_ws_tape_oos, so that directory must hold ONLY the derived
+          # tape. Raw frames and the post-cutoff restriction live in work/.
+          mkdir -p data/pmus_ws_tape_oos work
           cat slices/*/MANIFEST.tsv | sort -u > HARVEST_MANIFEST.tsv
           cat HARVEST_MANIFEST.tsv
           n="$(wc -l < HARVEST_MANIFEST.tsv)"
@@ -252,8 +365,14 @@ jobs:
                  "refusing to score a partial tape"
             exit 1
           fi
-          zcat slices/*/rows.jsonl.gz > data/pmus_ws_tape_oos/oos_tape.jsonl
-          wc -l data/pmus_ws_tape_oos/oos_tape.jsonl
+          zcat slices/*/rows.jsonl.gz > work/oos_ws.jsonl
+          wc -l work/oos_ws.jsonl
+
+      - name: Derive book/trade rows from the raw frames
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_oos_derive_rows.py work/oos_ws.jsonl \
+            data/pmus_ws_tape_oos/oos_tape.jsonl | tee OOS_DERIVE.json
 
       - name: Inventory and completeness, under the established gate
         run: |
@@ -266,13 +385,13 @@ jobs:
           set -euo pipefail
           python3 scripts/pmus_oos_strict_tape.py \
             data/pmus_ws_tape_oos/oos_tape.jsonl \
-            data/pmus_ws_tape_oos/oos_strict.jsonl | tee OOS_SPLIT.json
+            work/oos_strict.jsonl | tee OOS_SPLIT.json
 
       - name: Build the OOS state table
         run: |
           set -euo pipefail
           python3 scripts/pmus_state_table.py \
-            --tape data/pmus_ws_tape_oos/oos_strict.jsonl --label OOS \
+            --tape work/oos_strict.jsonl --label OOS \
             | tee state_table_oos.log
           wc -l analysis/l5/state_conditional/state_table_oos.jsonl
 
@@ -289,7 +408,7 @@ jobs:
           set -euo pipefail
           mkdir -p out
           for f in HARVEST_MANIFEST.tsv OOS_INVENTORY_SUMMARY.txt \
-                   OOS_SPLIT.json state_table_oos.log OOS_EVALUATION.log \
+                   OOS_SPLIT.json OOS_DERIVE.json state_table_oos.log OOS_EVALUATION.log \
                    analysis/l5/oos/OOS_INVENTORY.json \
                    analysis/l5/state_conditional/market_terms_oos.json \
                    analysis/l5/state_conditional/state_conditional_v1_oos.json \
