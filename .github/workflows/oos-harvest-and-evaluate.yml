@@ -60,9 +60,13 @@ jobs:
         run: |
           set -euo pipefail
           f=.github/oos_request
-          stage="$(grep -E '^STAGE=' "$f" | head -1 | cut -d= -f2- | xargs)"
-          rid="$(grep -E '^HARVEST_RUN_ID=' "$f" | head -1 | cut -d= -f2- \
-                 | xargs || true)"
+          # Anchored and fully constrained on BOTH ends: the request file also
+          # explains itself in prose, and a loose '^STAGE=' once matched a
+          # sentence instead of the directive.
+          stage="$(sed -n -E 's/^STAGE=(harvest|evaluate)[[:space:]]*$/\\1/p' \
+                   "$f" | tail -1)"
+          rid="$(sed -n -E 's/^HARVEST_RUN_ID=([0-9]*)[[:space:]]*$/\\1/p' \
+                 "$f" | tail -1)"
           case "$stage" in
             harvest|evaluate) ;;
             *) echo "::error::STAGE must be harvest or evaluate, got '$stage'"

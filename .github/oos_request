@@ -1,18 +1,21 @@
 « OOS harvest / evaluation request »
 
-Touching this file is what starts .github/workflows/oos-harvest-and-evaluate.yml.
+Touching this file starts .github/workflows/oos-harvest-and-evaluate.yml.
 The workflow lives only on this research branch, and GitHub offers
 workflow_dispatch only for workflows on the default branch, so a gated push
 trigger is how a branch-local workflow gets started without touching main.
 
-STAGE=harvest reads all 46 post-cutoff hourly parts off the recorder's volume
-(read-only) and reduces each one to BTC 15m rows.
+The two directives below are the only lines the workflow reads, and it matches
+them anchored at both ends so this prose cannot be mistaken for one.
 
-STAGE=evaluate merges one named harvest, checks completeness, builds the OOS
-state table and runs the FROZEN 2939ee67 / c31a5e32 evaluation. It is requested
-exactly once.
+  - stage "harvest" reads all 46 post-cutoff hourly parts off the recorder's
+    volume (read-only) and reduces each one to BTC 15m rows;
+  - stage "evaluate" merges one named harvest, checks completeness, builds the
+    OOS state table and runs the FROZEN 2939ee67 / c31a5e32 evaluation. It is
+    requested exactly once.
 
 STAGE=harvest
 HARVEST_RUN_ID=
-CUTOFF_SLUG=cpc-btc-updown-15m-2026-10-02-2045z
-NOTE=development ends at the cutoff; only windows strictly after it are OOS
+
+Cutoff: cpc-btc-updown-15m-2026-10-02-2045z. Development ends at the cutoff;
+only windows starting strictly after it are OOS.
