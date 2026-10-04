@@ -96,6 +96,8 @@ class Port:
         self.max_residual = ZERO
         self.cash_in = ZERO                     # exit proceeds, net of fee
         self.depth_frac = []                    # per order, consumed/displayed
+        self.realized_gross = ZERO              # exit proceeds BEFORE fee
+        self.realized_basis = ZERO              # cost basis of exited shares
         self.max_net_capital = ZERO             # deployed - cash_in, peak
 
     # --- aggregates the preregistration requires after every purchase
@@ -148,6 +150,8 @@ class Port:
             self.dn_cash -= sh * avg
         self.fees += fee
         self.cash_in += sh * px - fee
+        self.realized_gross += sh * px
+        self.realized_basis += sh * avg
         self.max_residual = max(self.max_residual, abs(self.residual))
 
     # --- valuation
@@ -473,7 +477,8 @@ def replay(slug: str, w, outcome: str, variant: str,
 
 
 def replay_c(slug: str, w, outcome: str,
-             alloc: D = ALLOC_USD) -> dict:
+             alloc: D = ALLOC_USD, *, seed: bool = True,
+             opposite_rest: bool = False, name: str = "C") -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
 
     Seed $1 on BOTH sides once, extend the favored side $1 per 60 s only
@@ -485,6 +490,8 @@ def replay_c(slug: str, w, outcome: str,
     books, trades = w["book"], w["trade"]
     start = window_start(slug)
     port = Port()
+    rest = Resting()
+    opp_fills = []
     bt = [b["t"] for b in books]
     marks = [start + k * CADENCE_S for k in range(1, 15)]
     fav = None
@@ -606,7 +613,7 @@ def replay_c(slug: str, w, outcome: str,
             mid = (bid + ask) / 2
             new_fav = ("UP" if mid > D("0.50")
                        else ("DOWN" if mid < D("0.50") else None))
-            if mi == 0:
+            if mi == 0 and seed:
                 # the seed: bounded inventory on BOTH sides, once
                 taker_buy("UP", bid, ask, bq, aq, b["t"], "seed")
                 taker_buy("DOWN", bid, ask, bq, aq, b["t"], "seed")
@@ -623,7 +630,7 @@ def replay_c(slug: str, w, outcome: str,
                 fm = fav_mid(fav, bid, ask)
                 strengthening = (prev_fav_mid is not None
                                  and fm > prev_fav_mid)
-                if mi == 0:
+                if mi == 0 and seed:
                     episode_open = True            # the seed opens an episode
                     peak, spread_at_peak = fm, (ask - bid)
                 elif strengthening and episode_open:
@@ -637,14 +644,55 @@ def replay_c(slug: str, w, outcome: str,
                     peak, spread_at_peak = fm, (ask - bid)
                     taker_buy(fav, bid, ask, bq, aq, b["t"], "extend")
                 prev_fav_mid = fm
+                if opposite_rest:
+                    # Variant B's frozen reservation rule, carried over
+                    # unmodified: pay at most what leaves the matched pair
+                    # non-negative after the fees already paid.
+                    opp = "DOWN" if fav == "UP" else "UP"
+                    res = reservation(port, fav)
+                    opp_ask = (ONE - bid) if opp == "DOWN" else ask
+                    q = min(res, opp_ask - TICK)
+                    if q >= D("0.01") and res > 0:
+                        rest.quote(opp, q.quantize(TICK), alloc / q.quantize(TICK),
+                                   b["t"])
+                    else:
+                        rest.cancel()
 
-        # between marks: the reversal is a risk control, so it is evaluated
-        # on EVERY book update
+        # between marks: books and trades are walked in TRUE TIME ORDER, so a
+        # passive fill and a reversal in the same interval resolve in the
+        # order the tape puts them, not in the order the code is written.
         nxt = mark + CADENCE_S
-        for j in range(len(books)):
-            bb = books[j]
-            if not (mark <= bb["t"] < nxt):
+        events = [(bb["t"], 0, bb) for bb in books if mark <= bb["t"] < nxt]
+        if opposite_rest:
+            events += [(tr["t"], 1, tr) for tr in trades
+                       if mark <= tr["t"] < nxt]
+        events.sort(key=lambda e: (e[0], e[1]))
+        for _t, kind, ev in events:
+            if kind == 1:
+                if rest.side is None:
+                    continue
+                j0 = bisect.bisect_left(bt, ev["t"]) - 1
+                if j0 >= 0:
+                    b0 = books[j0]
+                    rest.on_book(D(b0["bid"]), D(b0["ask"]),
+                                 D(b0["bid_qty"]), D(b0["ask_qty"]))
+                got = rest.on_trade(D(ev["px"]), D(ev["qty"]), ev.get("dir"))
+                if got > 0:
+                    side0, fpx = rest.side, rest.px
+                    port.add(side0, got, fpx, ZERO,
+                             rebate=FEES.maker_rebate(fpx, got))
+                    opp_fills.append({
+                        "t": ev["t"], "side": side0, "px": str(fpx),
+                        "sh": str(round(got, 4)),
+                        "rebate_modelled": str(FEES.maker_rebate(fpx, got)),
+                        "queue_at_arm": str(rest.queue_at_arm),
+                        "matched": str(round(port.matched, 4)),
+                        "residual": str(round(port.residual, 4)),
+                        "deployed": str(round(port.deployed, 4))})
+                    if rest.sh <= 0:
+                        rest.cancel()
                 continue
+            bb = ev
             bid2, ask2 = D(bb["bid"]), D(bb["ask"])
             if fav is not None and episode_open:
                 fm2 = fav_mid(fav, bid2, ask2)
@@ -677,15 +725,22 @@ def replay_c(slug: str, w, outcome: str,
     bidL, askL = D(last["bid"]), D(last["ask"])
     settle = port.settlement_value(outcome)
     net = port.cash_in + settle - port.deployed
-    # matched economics on average costs; directional is the remainder, so
-    # the three lines tie to the cash identity exactly.
+    # The preregistered identity, with every term defined from tracked
+    # quantities rather than one of them left as a plug:
+    #   directional + matched + settlement_residual + compensation - fees = net
     m = port.matched
     cu = port.up_cash / port.up_sh if port.up_sh > 0 else ZERO
     cd = port.dn_cash / port.dn_sh if port.dn_sh > 0 else ZERO
     matched_econ = m * (ONE - (cu + cd)) if m > 0 else ZERO
-    directional = net - matched_econ
+    r = port.residual
+    res_basis = (abs(r) * (cu if r > 0 else cd)) if r != 0 else ZERO
+    res_settle = (abs(r) if ((r > 0 and outcome == "UP")
+                             or (r < 0 and outcome == "DOWN")) else ZERO)
+    settle_resid = res_settle - res_basis
+    directional = port.realized_gross - port.realized_basis
+    identity = (directional + matched_econ + settle_resid - port.fees) - net
     return {
-        "slug": slug, "variant": "C", "settlement_outcome": outcome,
+        "slug": slug, "variant": name, "settlement_outcome": outcome,
         "allocations": len(allocs),
         "seed_legs": sum(1 for a in allocs if a["kind"] == "seed"),
         "extends": sum(1 for a in allocs if a["kind"] == "extend"),
@@ -708,9 +763,10 @@ def replay_c(slug: str, w, outcome: str,
         "exit_proceeds": str(round(port.cash_in, 4)),
         "settlement_value": str(round(settle, 4)),
         "matched_pair_economics": str(round(matched_econ, 4)),
-        "directional_trading_pnl": str(round(directional, 4)),
-        "reconciliation_matched_plus_directional_minus_net": str(
-            round(matched_econ + directional - net, 6)),
+        "directional_realized_pnl": str(round(directional, 4)),
+        "settlement_residual_pnl": str(round(settle_resid, 4)),
+        "verified_compensation": "0.0000",
+        "decomposition_identity_residual": str(round(identity, 6)),
         "gross_settlement_pnl": str(round(port.cash_in + settle
                                           - port.acq_cost, 4)),
         "net_settlement_pnl": str(round(net, 4)),
@@ -720,7 +776,8 @@ def replay_c(slug: str, w, outcome: str,
             port.mark(bidL, askL) - (port.deployed - port.cash_in), 4)),
         "min_executable_pnl": str(round(trough, 4)),
         "max_drawdown_from_peak": str(round(max_dd, 4)),
-        "opposite_fills": 0,
+        "opposite_fills": len(opp_fills),
+        "opposite_fill_log_n": len(opp_fills),
         "profitable_exits": sum(1 for e in exits if e["profitable_exit"]),
         "touch_depth_consumed_max": (str(round(max(port.depth_frac), 4))
                                      if port.depth_frac else None),
@@ -730,10 +787,11 @@ def replay_c(slug: str, w, outcome: str,
         "capital_turnover": str(round(
             port.deployed / port.max_net_capital, 3)
             if port.max_net_capital > 0 else 0),
-        "maker_rebate_modelled_UNVERIFIED": "0.0000",
+        "maker_rebate_modelled_UNVERIFIED": str(round(port.rebate_modelled,
+                                                      4)),
         "maker_rebate_verified": "0.0000",
         "trajectory": traj, "allocation_log": allocs, "exit_log": exits,
-        "opposite_fill_log": [],
+        "opposite_fill_log": opp_fills,
     }
 
 
@@ -757,6 +815,10 @@ def main() -> int:
         res["windows"][slug] = {v: replay(slug, w, oc, v, al)
                                 for v in ("A", "B", "Am")}
         res["windows"][slug]["C"] = replay_c(slug, w, oc, al)
+        res["windows"][slug]["D0"] = replay_c(slug, w, oc, al, seed=False,
+                                              name="D0")
+        res["windows"][slug]["D1"] = replay_c(slug, w, oc, al, seed=False,
+                                              opposite_rest=True, name="D1")
     os.makedirs(a.out, exist_ok=True)
     # the trajectories are ~99MB as one JSON document, so they go out as a
     # gzipped row stream and the summary keeps everything else. The split is
