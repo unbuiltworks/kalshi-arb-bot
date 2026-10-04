@@ -101,6 +101,8 @@ class Port:
         self.max_residual = ZERO
         self.cash_in = ZERO                     # exit proceeds, net of fee
         self.depth_frac = []                    # per order, consumed/displayed
+        self.impact_shares = ZERO               # filled beyond the touch
+        self.impact_cost = ZERO                 # charged for those shares
         self.realized_gross = ZERO              # exit proceeds BEFORE fee
         self.realized_basis = ZERO              # cost basis of exited shares
         self.max_net_capital = ZERO             # deployed - cash_in, peak
@@ -494,6 +496,7 @@ def replay_c(slug: str, w, outcome: str,
              exits_enabled: bool = True,
              seed_multiple: D = D(1),
              toggle_ts=None, match_cap: bool = False,
+             impact: D = D(0),
              only_exits=None,
              only_periods=None) -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
@@ -548,9 +551,17 @@ def replay_c(slug: str, w, outcome: str,
         depth = aq if side == "UP" else bq
         sh = (alloc * mult) / px
         if depth > 0:
-            port.depth_frac.append(float(min(sh, depth) / depth))
+            port.depth_frac.append(float(sh / depth))
+        over = ZERO
         if depth < sh:
-            sh = depth
+            if impact > 0:
+                # fill the touch, then pay `impact` for the remainder. The
+                # tape shows no level below the touch, so this is a CHARGE
+                # derived from observed 1s impact, never a quoted price.
+                over = sh - depth
+                sh = depth
+            else:
+                sh = depth
         if sh <= 0 or not (D("0.01") <= px <= D("0.99")):
             return False
         fee = FEES.taker_fee(px, sh)
@@ -909,6 +920,17 @@ def replay_c(slug: str, w, outcome: str,
             px = bid if side == "UP" else ONE - ask
             depth = bq if side == "UP" else aq
             take = min(need, depth)
+            if take > 0 and impact > 0 and need > depth:
+                extra = min(need - depth, depth)   # one impact level only
+                px2 = max(px - impact, D("0.01"))
+                port.sell(side, extra, px2, FEES.taker_fee(px2, extra))
+                port.impact_shares += extra
+                port.impact_cost += extra * impact
+                need -= extra
+                legs.append({"t": bb["t"], "px": str(px2),
+                             "sh": str(round(extra, 4)),
+                             "fee": str(FEES.taker_fee(px2, extra)),
+                             "beyond_touch": True})
             if take > 0 and D("0.01") <= px <= D("0.99"):
                 fee = FEES.taker_fee(px, take)
                 port.sell(side, take, px, fee)
@@ -1290,6 +1312,8 @@ def replay_c(slug: str, w, outcome: str,
         "touch_depth_consumed_over_10pct": sum(
             1 for x in port.depth_frac if x > 0.10),
         "taker_orders": len(port.depth_frac),
+        "impact_shares": str(round(port.impact_shares, 2)),
+        "impact_cost": str(round(port.impact_cost, 4)),
         "capital_turnover": str(round(
             port.deployed / port.max_net_capital, 3)
             if port.max_net_capital > 0 else 0),
