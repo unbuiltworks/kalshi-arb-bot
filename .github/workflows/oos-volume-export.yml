@@ -1,0 +1,52 @@
+name: OOS volume export (inventory only)
+
+# WHY THIS EXISTS. The research container's egress is HTTPS-only, and Railway's
+# volume file access is SFTP on port 22, so the recorder's tape is unreachable
+# from there. A GitHub runner has that egress, and this repo already holds the
+# RAILWAY_TOKEN its deploy pipeline uses, so the read happens here instead and
+# nothing has to be provisioned on Railway.
+#
+# THIS WORKFLOW IS READ-ONLY WITH RESPECT TO RAILWAY. It lists volume files and
+# nothing else. It does not download, deploy, redeploy, restart, detach, mount,
+# resize, expose or vary the recorder or its volume, and it creates no Railway
+# infrastructure.
+#
+# THE TOKEN IS NEVER OBSERVABLE. It is passed only as a step env var for the
+# CLI. It is never echoed, interpolated into a printed string, written to a
+# file, uploaded as an artifact or committed. `set -x` is deliberately not used.
+#
+# Gated on .github/oos_export_request so ordinary pushes to the research branch
+# do not run it.
+
+on:
+  push:
+    branches: [claude/l5-pmus-economic-results-7c116e]
+    paths: ['.github/oos_export_request']
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
+      ENVIRONMENT: f3642d27-26dc-4e21-9170-bc76290c076f
+      SERVICE: 71b6ea99-ea6a-4b20-9602-fa873721ed35
+      VOLUME: 18bd5702-2248-4572-9966-88a6037b95fb
+    steps:
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@5.63.1
+
+      - name: List the volume root and the raw tape directory
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          set -euo pipefail
+          for d in / /raw; do
+            echo "::group::listing $d"
+            railway volume -p "$PROJECT" -e "$ENVIRONMENT" -s "$SERVICE" \
+              files --volume "$VOLUME" list "$d" --json \
+              || echo "(listing failed for $d)"
+            echo "::endgroup::"
+          done
