@@ -1,0 +1,771 @@
+{
+ "sample": "DEVELOPMENT",
+ "calibration": {
+  "base_rate_rows": 0.4945,
+  "base_rate_windows": 0.5,
+  "LOWO": {
+   "n": 24508,
+   "brier": 0.174742,
+   "logloss": 0.513754,
+   "brier_vs_baserate": 0.249969,
+   "reliability": [
+    {
+     "bin": "0.0-0.1",
+     "n": 2910,
+     "mean_pred": 0.0244,
+     "observed": 0.012
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 1944,
+     "mean_pred": 0.152,
+     "observed": 0.2716
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 2212,
+     "mean_pred": 0.2519,
+     "observed": 0.274
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 2466,
+     "mean_pred": 0.3514,
+     "observed": 0.2972
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 3408,
+     "mean_pred": 0.4524,
+     "observed": 0.5123
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 2732,
+     "mean_pred": 0.5483,
+     "observed": 0.5549
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 2286,
+     "mean_pred": 0.6436,
+     "observed": 0.601
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 1657,
+     "mean_pred": 0.7491,
+     "observed": 0.7526
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 1538,
+     "mean_pred": 0.8479,
+     "observed": 0.8427
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 3355,
+     "mean_pred": 0.9737,
+     "observed": 0.9052
+    }
+   ]
+  },
+  "CHRONOLOGICAL_fit0930_test1002": {
+   "n_train": 5038,
+   "n_test": 19470,
+   "brier": 0.201354,
+   "logloss": 0.684937,
+   "brier_vs_baserate": 0.247934,
+   "reliability": [
+    {
+     "bin": "0.0-0.1",
+     "n": 1590,
+     "mean_pred": 0.0242,
+     "observed": 0.0
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 667,
+     "mean_pred": 0.1503,
+     "observed": 0.0
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 1005,
+     "mean_pred": 0.2538,
+     "observed": 0.1274
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 1210,
+     "mean_pred": 0.3472,
+     "observed": 0.1769
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 1358,
+     "mean_pred": 0.4563,
+     "observed": 0.232
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 1928,
+     "mean_pred": 0.5513,
+     "observed": 0.2599
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 2999,
+     "mean_pred": 0.6529,
+     "observed": 0.5045
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 2873,
+     "mean_pred": 0.7508,
+     "observed": 0.5593
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 2245,
+     "mean_pred": 0.8466,
+     "observed": 0.7416
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 3595,
+     "mean_pred": 0.9716,
+     "observed": 0.8086
+    }
+   ]
+  },
+  "frozen_full_sample_coefficients": {
+   "intercept": 1.057243,
+   "z": 108.293112,
+   "locked_frac": 0.241926,
+   "mom_60s": 0.078187,
+   "standardization_mu": [
+    1.083422,
+    0.033703,
+    0.098486
+   ],
+   "standardization_sd": [
+    84.648565,
+    0.145419,
+    8.580793
+   ]
+  },
+  "LOWO_coefficient_stability": {
+   "intercept": [
+    0.1638,
+    1.9424
+   ],
+   "z": [
+    97.4998,
+    129.6922
+   ],
+   "locked_frac": [
+    -0.094,
+    0.3502
+   ],
+   "mom_60s": [
+    0.0188,
+    0.0962
+   ]
+  }
+ },
+ "decomposition": {
+  "1_first_leg_standalone": {
+   "n": 28,
+   "mean_predicted_EV_per_share": "0.060777",
+   "total_predicted_EV": "1.7018",
+   "total_realized_pnl": "-0.5800",
+   "win_rate": 0.5,
+   "mean_q": 0.4185,
+   "mean_seconds_remaining_at_entry": 875.3
+  },
+  "2_first_leg_calibration_by_edge_bucket": [
+   {
+    "edge": "[0.01,0.02)",
+    "n": 1,
+    "mean_predicted_EV": "0.01399",
+    "mean_realized_pnl": "0.44000",
+    "mean_q": 0.426,
+    "win_rate": 1.0
+   },
+   {
+    "edge": "[0.02,0.05)",
+    "n": 9,
+    "mean_predicted_EV": "0.03330",
+    "mean_realized_pnl": "0.14222",
+    "mean_q": 0.4423,
+    "win_rate": 0.6667
+   },
+   {
+    "edge": "[0.05,1.00)",
+    "n": 18,
+    "mean_predicted_EV": "0.07711",
+    "mean_realized_pnl": "-0.12778",
+    "mean_q": 0.4062,
+    "win_rate": 0.3889
+   }
+  ],
+  "3_complement_completion_rate": 1.0,
+  "3_complement_counts": {
+   "completed": 28,
+   "never": 0,
+   "first_legs": 28
+  },
+  "4_time_to_complement_s": {
+   "n": 28,
+   "median": 469.0,
+   "min": 57,
+   "max": 861
+  },
+  "5_allin_matched_pair_cost": {
+   "n": 28,
+   "mean": "1.1357",
+   "min": "0.6700",
+   "under_1_00": 11
+  },
+  "6_locked_pair_gain": "-3.8000",
+  "7_first_legs_never_complemented": {
+   "n": 0,
+   "share": 0.0
+  },
+  "8_unpaired_leg_pnl": "0.0000",
+  "9_extend_purchases": {
+   "n": 464,
+   "cash": "214.7660",
+   "fees": "4.8200",
+   "mean_predicted_EV": "0.055841"
+  },
+  "10_residual_directional_pnl": "5.2771",
+  "11_fees": {
+   "venue_cent": "5.6500",
+   "modeled_4dp": "5.3234"
+  },
+  "12_total_portfolio_cashflow": {
+   "purchase_cash": "245.7360",
+   "settlement_cash": "251.0600",
+   "gross_before_fees": "5.3240",
+   "net_venue_cent": "-0.3260",
+   "net_modeled_4dp": "0.0006"
+  },
+  "10b_matched_book_economics_average_cost": "0.0469",
+  "10c_reconciliation": {
+   "matched_book_plus_residual_pnl": "5.3240",
+   "gross_before_fees": "5.3240",
+   "residual_abs": "0.000000"
+  }
+ },
+ "economics_unit_size": {
+  "eligible_windows": 28,
+  "traded_windows": 28,
+  "purchases_total": 520,
+  "purchases_per_traded_window": 18.57,
+  "net_per_traded_window_venue_cent": -0.0116,
+  "median_net": -0.06,
+  "positive_pct": 50.0,
+  "worst_window": [
+   -9.68,
+   "cpc-btc-updown-15m-2026-10-02-1915z"
+  ],
+  "peak_shares_any_side": "16"
+ },
+ "sub_dollar_pair_state": {
+  "rows_evaluated": 24508,
+  "rows_with_allin_pair_under_1": 3,
+  "pct_of_all_rows": 0.0122,
+  "rows_after_a_qualifying_first_leg": 24480,
+  "of_those_under_1": 3,
+  "pct_after_first_leg": 0.0123,
+  "min_side_size_median": 512.99,
+  "min_side_size_p10": 512.99,
+  "min_side_size_p90": 512.99,
+  "allin_pair_cost_min": 0.99,
+  "allin_pair_cost_median": 0.99,
+  "persistence_runs": 1,
+  "persistence_seconds_median": 3.0,
+  "persistence_seconds_max": 3
+ },
+ "per_window": [
+  {
+   "slug": "cpc-btc-updown-15m-2026-09-30-1215z",
+   "outcome_up": "1",
+   "up_sh": "2",
+   "dn_sh": "10",
+   "up_cash": "1.9800",
+   "dn_cash": "4.1500",
+   "matched": "2",
+   "residual": "-8",
+   "cash_out": "6.1300",
+   "settlement": "2",
+   "fees_cent": "0.12",
+   "fees_4dp": "0.1219",
+   "net_cent": "-4.2500",
+   "net_4dp": "-4.2519",
+   "gross": "-4.1300"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-09-30-1230z",
+   "outcome_up": "1",
+   "up_sh": "6",
+   "dn_sh": "11",
+   "up_cash": "5.9400",
+   "dn_cash": "0.9700",
+   "matched": "6",
+   "residual": "-5",
+   "cash_out": "6.9100",
+   "settlement": "6",
+   "fees_cent": "0.03",
+   "fees_4dp": "0.0558",
+   "net_cent": "-0.9400",
+   "net_4dp": "-0.9658",
+   "gross": "-0.9100"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-09-30-1245z",
+   "outcome_up": "1",
+   "up_sh": "6",
+   "dn_sh": "13",
+   "up_cash": "5.3600",
+   "dn_cash": "2.7700",
+   "matched": "6",
+   "residual": "-7",
+   "cash_out": "8.1300",
+   "settlement": "6",
+   "fees_cent": "0.13",
+   "fees_4dp": "0.1273",
+   "net_cent": "-2.2600",
+   "net_4dp": "-2.2573",
+   "gross": "-2.1300"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-09-30-1300z",
+   "outcome_up": "1",
+   "up_sh": "3",
+   "dn_sh": "15",
+   "up_cash": "2.4200",
+   "dn_cash": "5.8800",
+   "matched": "3",
+   "residual": "-12",
+   "cash_out": "8.3000",
+   "settlement": "3",
+   "fees_cent": "0.22",
+   "fees_4dp": "0.1947",
+   "net_cent": "-5.5200",
+   "net_4dp": "-5.4947",
+   "gross": "-5.3000"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-09-30-1315z",
+   "outcome_up": "0",
+   "up_sh": "6",
+   "dn_sh": "16",
+   "up_cash": "1.4100",
+   "dn_cash": "10.6800",
+   "matched": "6",
+   "residual": "-10",
+   "cash_out": "12.0900",
+   "settlement": "16",
+   "fees_cent": "0.29",
+   "fees_4dp": "0.2797",
+   "net_cent": "3.6200",
+   "net_4dp": "3.6303",
+   "gross": "3.9100"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-09-30-1330z",
+   "outcome_up": "0",
+   "up_sh": "6",
+   "dn_sh": "13",
+   "up_cash": "1.0000",
+   "dn_cash": "8.5700",
+   "matched": "6",
+   "residual": "-7",
+   "cash_out": "9.5700",
+   "settlement": "13",
+   "fees_cent": "0.11",
+   "fees_4dp": "0.1270",
+   "net_cent": "3.3200",
+   "net_4dp": "3.3030",
+   "gross": "3.4300"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1100z",
+   "outcome_up": "1",
+   "up_sh": "5",
+   "dn_sh": "12",
+   "up_cash": "4.9500",
+   "dn_cash": "2.9100",
+   "matched": "5",
+   "residual": "-7",
+   "cash_out": "7.8600",
+   "settlement": "5",
+   "fees_cent": "0.14",
+   "fees_4dp": "0.1322",
+   "net_cent": "-3.0000",
+   "net_4dp": "-2.9922",
+   "gross": "-2.8600"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1115z",
+   "outcome_up": "0",
+   "up_sh": "4",
+   "dn_sh": "16",
+   "up_cash": "1.2200",
+   "dn_cash": "7.6900",
+   "matched": "4",
+   "residual": "-12",
+   "cash_out": "8.9100",
+   "settlement": "16",
+   "fees_cent": "0.31",
+   "fees_4dp": "0.2864",
+   "net_cent": "6.7800",
+   "net_4dp": "6.8036",
+   "gross": "7.0900"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1130z",
+   "outcome_up": "1",
+   "up_sh": "2",
+   "dn_sh": "15",
+   "up_cash": "1.9100",
+   "dn_cash": "3.0700",
+   "matched": "2",
+   "residual": "-13",
+   "cash_out": "4.9800",
+   "settlement": "2",
+   "fees_cent": "0.17",
+   "fees_4dp": "0.1540",
+   "net_cent": "-3.1500",
+   "net_4dp": "-3.1340",
+   "gross": "-2.9800"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1145z",
+   "outcome_up": "0",
+   "up_sh": "4",
+   "dn_sh": "16",
+   "up_cash": "0.9000",
+   "dn_cash": "6.5100",
+   "matched": "4",
+   "residual": "-12",
+   "cash_out": "7.4100",
+   "settlement": "16",
+   "fees_cent": "0.28",
+   "fees_4dp": "0.2523",
+   "net_cent": "8.3100",
+   "net_4dp": "8.3377",
+   "gross": "8.5900"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1200z",
+   "outcome_up": "0",
+   "up_sh": "7",
+   "dn_sh": "16",
+   "up_cash": "2.3200",
+   "dn_cash": "10.1800",
+   "matched": "7",
+   "residual": "-9",
+   "cash_out": "12.5000",
+   "settlement": "16",
+   "fees_cent": "0.32",
+   "fees_4dp": "0.3201",
+   "net_cent": "3.1800",
+   "net_4dp": "3.1799",
+   "gross": "3.5000"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1300z",
+   "outcome_up": "0",
+   "up_sh": "4",
+   "dn_sh": "16",
+   "up_cash": "0.5700",
+   "dn_cash": "10.3400",
+   "matched": "4",
+   "residual": "-12",
+   "cash_out": "10.9100",
+   "settlement": "16",
+   "fees_cent": "0.24",
+   "fees_4dp": "0.2268",
+   "net_cent": "4.8500",
+   "net_4dp": "4.8632",
+   "gross": "5.0900"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1315z",
+   "outcome_up": "0",
+   "up_sh": "3",
+   "dn_sh": "16",
+   "up_cash": "0.3300",
+   "dn_cash": "9.9600",
+   "matched": "3",
+   "residual": "-13",
+   "cash_out": "10.2900",
+   "settlement": "16",
+   "fees_cent": "0.29",
+   "fees_4dp": "0.2509",
+   "net_cent": "5.4200",
+   "net_4dp": "5.4591",
+   "gross": "5.7100"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1430z",
+   "outcome_up": "0",
+   "up_sh": "11",
+   "dn_sh": "7",
+   "up_cash": "1.0800",
+   "dn_cash": "4.9200",
+   "matched": "7",
+   "residual": "4",
+   "cash_out": "6.0000",
+   "settlement": "7",
+   "fees_cent": "0.18",
+   "fees_4dp": "0.1499",
+   "net_cent": "0.8200",
+   "net_4dp": "0.8501",
+   "gross": "1.0000"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1730z",
+   "outcome_up": "0",
+   "up_sh": "6",
+   "dn_sh": "16",
+   "up_cash": "1.3500",
+   "dn_cash": "9.3400",
+   "matched": "6",
+   "residual": "-10",
+   "cash_out": "10.6900",
+   "settlement": "16",
+   "fees_cent": "0.31",
+   "fees_4dp": "0.2795",
+   "net_cent": "5.0000",
+   "net_4dp": "5.0305",
+   "gross": "5.3100"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1745z",
+   "outcome_up": "1",
+   "up_sh": "6",
+   "dn_sh": "14",
+   "up_cash": "5.0200",
+   "dn_cash": "3.9000",
+   "matched": "6",
+   "residual": "-8",
+   "cash_out": "8.9200",
+   "settlement": "6",
+   "fees_cent": "0.22",
+   "fees_4dp": "0.2063",
+   "net_cent": "-3.1400",
+   "net_4dp": "-3.1263",
+   "gross": "-2.9200"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1800z",
+   "outcome_up": "1",
+   "up_sh": "3",
+   "dn_sh": "15",
+   "up_cash": "2.5400",
+   "dn_cash": "5.4100",
+   "matched": "3",
+   "residual": "-12",
+   "cash_out": "7.9500",
+   "settlement": "3",
+   "fees_cent": "0.29",
+   "fees_4dp": "0.2458",
+   "net_cent": "-5.2400",
+   "net_4dp": "-5.1958",
+   "gross": "-4.9500"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1815z",
+   "outcome_up": "0",
+   "up_sh": "4",
+   "dn_sh": "15",
+   "up_cash": "0.5900",
+   "dn_cash": "13.0100",
+   "matched": "4",
+   "residual": "-11",
+   "cash_out": "13.6000",
+   "settlement": "15",
+   "fees_cent": "0.11",
+   "fees_4dp": "0.1264",
+   "net_cent": "1.2900",
+   "net_4dp": "1.2736",
+   "gross": "1.4000"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1830z",
+   "outcome_up": "0",
+   "up_sh": "9",
+   "dn_sh": "11",
+   "up_cash": "0.5100",
+   "dn_cash": "8.7600",
+   "matched": "9",
+   "residual": "-2",
+   "cash_out": "9.2700",
+   "settlement": "11",
+   "fees_cent": "0.13",
+   "fees_4dp": "0.1273",
+   "net_cent": "1.6000",
+   "net_4dp": "1.6027",
+   "gross": "1.7300"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1845z",
+   "outcome_up": "1",
+   "up_sh": "4",
+   "dn_sh": "13",
+   "up_cash": "3.9600",
+   "dn_cash": "3.6100",
+   "matched": "4",
+   "residual": "-9",
+   "cash_out": "7.5700",
+   "settlement": "4",
+   "fees_cent": "0.16",
+   "fees_4dp": "0.1503",
+   "net_cent": "-3.7300",
+   "net_4dp": "-3.7203",
+   "gross": "-3.5700"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1900z",
+   "outcome_up": "0",
+   "up_sh": "7",
+   "dn_sh": "11",
+   "up_cash": "0.6000",
+   "dn_cash": "7.2200",
+   "matched": "7",
+   "residual": "-4",
+   "cash_out": "7.8200",
+   "settlement": "11",
+   "fees_cent": "0.20",
+   "fees_4dp": "0.1749",
+   "net_cent": "2.9800",
+   "net_4dp": "3.0051",
+   "gross": "3.1800"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1915z",
+   "outcome_up": "1",
+   "up_sh": "1",
+   "dn_sh": "16",
+   "up_cash": "0.7800",
+   "dn_cash": "9.6600",
+   "matched": "1",
+   "residual": "-15",
+   "cash_out": "10.4400",
+   "settlement": "1",
+   "fees_cent": "0.24",
+   "fees_4dp": "0.2258",
+   "net_cent": "-9.6800",
+   "net_4dp": "-9.6658",
+   "gross": "-9.4400"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1930z",
+   "outcome_up": "1",
+   "up_sh": "2",
+   "dn_sh": "16",
+   "up_cash": "1.9400",
+   "dn_cash": "5.0000",
+   "matched": "2",
+   "residual": "-14",
+   "cash_out": "6.9400",
+   "settlement": "2",
+   "fees_cent": "0.21",
+   "fees_4dp": "0.1954",
+   "net_cent": "-5.1500",
+   "net_4dp": "-5.1354",
+   "gross": "-4.9400"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-1945z",
+   "outcome_up": "1",
+   "up_sh": "3",
+   "dn_sh": "14",
+   "up_cash": "2.9700",
+   "dn_cash": "4.6700",
+   "matched": "3",
+   "residual": "-11",
+   "cash_out": "7.6400",
+   "settlement": "3",
+   "fees_cent": "0.23",
+   "fees_4dp": "0.2024",
+   "net_cent": "-4.8700",
+   "net_4dp": "-4.8424",
+   "gross": "-4.6400"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-2000z",
+   "outcome_up": "1",
+   "up_sh": "2",
+   "dn_sh": "15",
+   "up_cash": "1.9800",
+   "dn_cash": "2.8900",
+   "matched": "2",
+   "residual": "-13",
+   "cash_out": "4.8700",
+   "settlement": "2",
+   "fees_cent": "0.16",
+   "fees_4dp": "0.1469",
+   "net_cent": "-3.0300",
+   "net_4dp": "-3.0169",
+   "gross": "-2.8700"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-2015z",
+   "outcome_up": "0",
+   "up_sh": "4",
+   "dn_sh": "15.0600",
+   "up_cash": "1.7000",
+   "dn_cash": "6.37600000",
+   "matched": "4",
+   "residual": "-11.0600",
+   "cash_out": "8.07600000",
+   "settlement": "15.0600",
+   "fees_cent": "0.23",
+   "fees_4dp": "0.2250",
+   "net_cent": "6.75400000",
+   "net_4dp": "6.75900000",
+   "gross": "6.98400000"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-2030z",
+   "outcome_up": "0",
+   "up_sh": "6",
+   "dn_sh": "13",
+   "up_cash": "4.1600",
+   "dn_cash": "6.8200",
+   "matched": "6",
+   "residual": "-7",
+   "cash_out": "10.9800",
+   "settlement": "13",
+   "fees_cent": "0.20",
+   "fees_4dp": "0.2019",
+   "net_cent": "1.8200",
+   "net_4dp": "1.8181",
+   "gross": "2.0200"
+  },
+  {
+   "slug": "cpc-btc-updown-15m-2026-10-02-2045z",
+   "outcome_up": "1",
+   "up_sh": "9",
+   "dn_sh": "8",
+   "up_cash": "8.5500",
+   "dn_cash": "2.4300",
+   "matched": "8",
+   "residual": "1",
+   "cash_out": "10.9800",
+   "settlement": "9",
+   "fees_cent": "0.13",
+   "fees_4dp": "0.1365",
+   "net_cent": "-2.1100",
+   "net_4dp": "-2.1165",
+   "gross": "-1.9800"
+  }
+ ]
+}
