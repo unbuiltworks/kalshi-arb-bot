@@ -693,7 +693,8 @@ def replay_c(slug: str, w, outcome: str,
                 _ep_close(t, None, "side_switch_without_exit")
             cur_ep = {"side": side, "t_entry": t, "entry_px": str(px),
                       "shares": ZERO, "cost": ZERO, "entry_fees": ZERO,
-                      "additions": 0, "mfe_px": None, "mae_px": None,
+                      "additions": 0, "add_ts": [], "add_px": [],
+                      "add_sh": [], "add_fee": [], "mfe_px": None, "mae_px": None,
                       "flip_during": False,
                       "tte_s_at_entry": round(
                           (window_start(slug) + 900) - t, 1)}
@@ -701,6 +702,10 @@ def replay_c(slug: str, w, outcome: str,
         cur_ep["cost"] += sh * px
         cur_ep["entry_fees"] += fee
         cur_ep["additions"] += 1
+        cur_ep["add_ts"].append(t)
+        cur_ep["add_px"].append(str(px))
+        cur_ep["add_sh"].append(str(sh))
+        cur_ep["add_fee"].append(str(fee))
 
     def _ep_mark(bid, ask):
         if cur_ep is None:
@@ -738,6 +743,8 @@ def replay_c(slug: str, w, outcome: str,
             "shares": str(round(sh, 4)),
             "notional": str(round(e["cost"], 6)),
             "additions": e["additions"],
+            "add_ts": e["add_ts"], "add_px": e["add_px"],
+            "add_sh": e["add_sh"], "add_fee": e["add_fee"],
             "peak_px_while_held": e["mfe_px"],
             "trough_px_while_held": e["mae_px"],
             "mfe_per_share": (None if e["mfe_px"] is None
