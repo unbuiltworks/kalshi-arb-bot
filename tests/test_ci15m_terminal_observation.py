@@ -480,3 +480,61 @@ def test_the_frozen_policy_fingerprint_is_untouched_by_this_repair():
     from src.gemini_execution.ci15m_policy import fingerprint
     assert fingerprint() == (
         "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329")
+
+
+# ---------------------------------------------------------------------------
+# THE POST-FILL AUTHORITY. Found by the four-window shadow proof, and it
+# would have stopped the first persistent live cohort on its FIRST FILL.
+#
+# `reconcile_after_fill` was the last call site still gating on
+# `positions()`. That surface has NEVER carried a BTC intraday contract --
+# established read-only on the CI15M-3 fill -- so it returns a SUCCESSFUL
+# EMPTY read, and comparing that against a correct ledger of 1 produced
+# INVENTORY_DISAGREEMENT every time: venue_representation FLAT_NO_ROWS,
+# venue_signed 0, our_signed 1, halt.
+#
+# The authority is the AUTHENTICATED FILL RECORD. positions() stays read
+# and reported, as telemetry.
+# ---------------------------------------------------------------------------
+def test_an_empty_positions_read_does_not_halt_a_reconciled_fill(env,
+                                                                 monkeypatch):
+    root = env
+    _durable_open(root)
+    _tape(monkeypatch, [CI15M4_FILLED], active=0)
+    inv = P.new_inventory()
+    inv.add(POLICY["make_fill"](0.0, "UP", "taker", D("0.68"), D("1"),
+                                "live OPEN"))
+    inv.assert_identities()
+    rec = asyncio.run(P.reconcile_after_fill(CID, SYMBOL, inv, root=root))
+    assert rec["halted"] is False, rec
+    assert rec["verdict"] == "RECONCILED"
+    assert rec["signed"] == D("1")
+    assert "authenticated fill record" in rec["authority"]
+    # positions WAS read, and is reported as telemetry rather than as a gate
+    assert rec["positions_telemetry"]["read"] is True
+    assert rec["positions_telemetry"]["n_rows"] == 0
+    assert "TELEMETRY ONLY" in rec["positions_telemetry"]["labels"]
+    assert BUD.halted(CID, root=root) is None
+
+
+def test_the_post_fill_gate_no_longer_consults_the_position_surface():
+    import inspect
+    src = inspect.getsource(P.reconcile_after_fill)
+    assert "reconciled_inventory" in src
+    assert "reconcile_or_halt" not in src, (
+        "the position-gated path must not decide the post-fill outcome")
+
+
+def test_an_unreadable_fill_record_still_halts_after_a_fill(env,
+                                                            monkeypatch):
+    """The authority moved; fail-closed did not."""
+    root = env
+    _durable_open(root)
+    dead = _hist([_bucket("filled", [], unreadable=True, http=503)])
+    _tape(monkeypatch, [dead], active=0)
+    inv = P.new_inventory()
+    inv.add(POLICY["make_fill"](0.0, "UP", "taker", D("0.68"), D("1"),
+                                "live OPEN"))
+    rec = asyncio.run(P.reconcile_after_fill(CID, SYMBOL, inv, root=root))
+    assert rec["halted"] is True
+    assert BUD.halted(CID, root=root) is not None

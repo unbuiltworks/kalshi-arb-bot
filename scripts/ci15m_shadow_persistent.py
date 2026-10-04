@@ -27,12 +27,14 @@ import asyncio
 import json
 import os
 import time
-from typing import Any, Dict
+from decimal import Decimal as D
+from typing import Any, Dict, List, Optional
 
 from src.gemini_execution import ci15m_budget as BUD
 from src.gemini_execution import ci15m_probe as P
 from src.gemini_execution import ci15m_runner as R
 from src.gemini_execution import cohort, transport
+from src.gemini_execution import metadata as MD
 
 SHADOW_ROOT = os.path.join("analysis", "gemini", "shadow_cohorts")
 
@@ -42,6 +44,111 @@ def _book(symbol: str) -> Dict[str, Any]:
     the same book the policy priced from."""
     bk = P.book_from_venue(symbol) or {}
     return {k: bk.get(k) for k in ("bid", "ask", "bid_size", "ask_size")}
+
+
+class ShadowVenue:
+    """A venue that is INTERNALLY CONSISTENT with its own simulated fills.
+
+    WHY THIS IS NECESSARY, and the first shadow run proved it in 2.4
+    seconds. The write sink simulated a fill, so our ledger held UP q1 --
+    and then `reconciled_inventory` read the REAL venue, which had no such
+    fill, reported signed 0, and the cohort HALTed INVENTORY_DISAGREEMENT.
+    That halt was CORRECT: simulated writes combined with authenticated
+    reads of the real account can never agree, and the engine is right to
+    refuse to decide on a contradiction.
+
+    So a shadow venue must answer for its OWN fills. This records every
+    simulated fill and serves it back on the two surfaces the
+    authenticated path reads -- the order-history rows and the mytrades
+    rows -- which keeps the PROVEN join
+    (`fill_reconciliation.authoritative_fills`) inside the tested path
+    rather than stubbing it out.
+
+    WHAT THIS DOES AND DOES NOT PROVE. It proves the LIFECYCLE: discovery,
+    the frozen decision, payload construction, one-outstanding-order,
+    durable slot accounting, terminal-state observation, the authenticated
+    join, inventory reconstruction, carry-over, the deadman, and rollover
+    across windows. It does NOT prove reconciliation against REAL venue
+    data -- nothing that simulates its own fills can. That was established
+    separately: by the CI15M-4 forensics on a real fill, the 17
+    terminal-observation regressions built from that real tape, and the
+    crash-boundary tests.
+
+    IT IS CONFINED TO THIS DRIVER. No production module learns that a
+    shadow exists; the substitution happens at this process's boundary.
+    """
+
+    def __init__(self) -> None:
+        self.orders: Dict[str, Dict[str, Any]] = {}
+        self.trades: List[Dict[str, Any]] = []
+        self.n = 0
+
+    def record(self, body: Dict[str, Any], sim: Dict[str, Any]) -> None:
+        oid = str(body.get("orderId"))
+        self.orders[oid] = dict(body)
+        got = D(str(body.get("filledQuantity") or "0"))
+        if got > 0:
+            self.n += 1
+            # fee_amount 0: the ONE authenticated CI15M-4 fill came back
+            # aggressor false, fee_amount "0" -- a maker fill at a
+            # marketable limit. Modelling a taker fee here would make
+            # shadow economics look worse than the only real measurement
+            # we have, so the measured value is used and labelled.
+            self.trades.append({
+                "tid": 9_900_000 + self.n,
+                "order_id": oid,
+                "symbol": body.get("symbol"),
+                "price": str(body.get("avgExecutionPrice")
+                             or body.get("price")),
+                "amount": str(got),
+                "fee_amount": "0",
+                "fee_currency": "USD",
+                "aggressor": False,
+                "timestampms": int(time.time() * 1000),
+                "shadow": True,
+            })
+
+    def rows_for(self, symbol: Optional[str], statuses: Any) -> List[Dict]:
+        want = tuple(str(x).lower() for x in (statuses or ()))
+        out = []
+        for o in self.orders.values():
+            if symbol and o.get("symbol") != symbol:
+                continue
+            if want and str(o.get("status", "")).lower() not in want:
+                continue
+            out.append(o)
+        return out
+
+    def order_history(self, **kw) -> Dict[str, Any]:
+        statuses = kw.get("statuses") or ("filled", "cancelled")
+        symbol = kw.get("symbol")
+        per = []
+        total = 0
+        for st in statuses:
+            rows = self.rows_for(symbol, (st,))
+            total += len(rows)
+            per.append({"status_filter": st, "http": 200,
+                        "rows": len(rows), "orders": rows})
+        return {"readable": True,
+                "verdict": "ORDERS_FOUND" if total else "NO_ORDERS_ON_RECORD",
+                "total_rows": total, "unreadable_statuses": [],
+                "per_status": per, "shadow": True}
+
+    def active_orders(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """ITS OWN resting orders. Reading the REAL account here would gate
+        shadow submissions on live orders the shadow did not place -- and
+        locally it answered AMBIGUOUS, which correctly refused every
+        submission. A shadow venue must own every surface it is asked
+        about."""
+        rows = [o for o in self.orders.values()
+                if (not symbol or o.get("symbol") == symbol)
+                and str(o.get("status", "")).lower() == "open"]
+        return {"ok": True, "status": 200, "classification": "ACCEPTED",
+                "shadow": True, "body": {"orders": rows}}
+
+    def mytrades(self, symbol: str) -> Dict[str, Any]:
+        return {"rows": [t for t in self.trades if t["symbol"] == symbol],
+                "status": 200, "shadow": True}
 
 
 async def _no_venue_write(**kw):
@@ -105,8 +212,37 @@ def main(argv: Any = None) -> int:
     transport.cancel = _no_venue_cancel               # type: ignore[assignment]
     transport.cancel_and_confirm = _no_venue_cancel   # type: ignore[assignment]
 
-    P.set_write_sink(P.shadow_sink(_book))
+    venue = ShadowVenue()
+    base_sink = P.shadow_sink(_book)
+
+    async def recording_sink(**kw):
+        res = await base_sink(**kw)
+        venue.record(res.get("body") or {}, res.get("simulated") or {})
+        return res
+
+    async def shadow_history(**kw):
+        return venue.order_history(**kw)
+
+    async def shadow_mytrades(symbol):
+        return venue.mytrades(symbol)
+
+    async def shadow_positions():
+        # The position surface has NEVER carried a BTC intraday contract
+        # (established read-only on the CI15M-3 fill), so an empty read is
+        # the faithful answer and the authenticated FILL record is the
+        # authority. Reporting it as readable-and-empty is what the real
+        # account does.
+        return {"ok": True, "rows": [], "status": 200, "total": 0}
+
+    async def shadow_active(symbol=None):
+        return venue.active_orders(symbol)
+
+    transport.active_orders = shadow_active   # type: ignore[assignment]
+    P.set_write_sink(recording_sink)
     P.set_cancel_sink(P.shadow_cancel_sink())
+    MD.order_history = shadow_history          # type: ignore[assignment]
+    P._mytrades = shadow_mytrades              # type: ignore[assignment]
+    MD.positions = shadow_positions            # type: ignore[assignment]
     print(json.dumps({"label": "CI15M_PERSISTENT_SHADOW_V1",
                       "write_mode": P.write_mode(),
                       "cohort": a.cohort, "root": a.root,

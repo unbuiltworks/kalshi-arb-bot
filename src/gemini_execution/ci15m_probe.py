@@ -1355,16 +1355,56 @@ def book_from_venue(symbol: str) -> Dict[str, Any]:
 async def reconcile_after_fill(cohort_id: str, symbol: str, inv: Any, *,
                                root: str = cohort.COHORT_ROOT
                                ) -> Dict[str, Any]:
-    """AUTHORITATIVE reconciliation against the account, after every fill."""
+    """AUTHORITATIVE reconciliation against the account, after every fill.
+
+    THE AUTHORITY IS THE AUTHENTICATED FILL RECORD, NOT `positions()`.
+    This call site was the last place still gating on the position
+    surface, and it would have stopped the first persistent live cohort on
+    its first fill. `positions()` has NEVER carried a BTC intraday
+    contract -- established read-only on the CI15M-3 fill, where NFL rows
+    persisted for two hours while the BTC contract was absent both before
+    and after settlement. So it returns a SUCCESSFUL EMPTY read, and
+    comparing that empty read against a correct ledger of 1 produced
+    INVENTORY_DISAGREEMENT every time.
+
+    The shadow proof found it: `venue_representation FLAT_NO_ROWS`,
+    `venue_signed 0`, `our_signed 1`, halt. The fix is the correction that
+    was already approved and already implemented in
+    `reconciled_inventory` -- the authenticated order-history-to-mytrades
+    join -- which this now delegates to. The position surface is still
+    READ and still REPORTED, as TELEMETRY, so the disagreement keeps being
+    measured and nothing is hidden.
+
+    FAIL-CLOSED IS UNCHANGED: an UNREADABLE fill record still HALTs, and a
+    reconstruction that disagrees with our own durable ledger still HALTs.
+    Only the authority moved.
+    """
     from src.gemini_execution import metadata
+    rec = await reconciled_inventory(cohort_id, symbol, root=root, ours=inv)
+    telemetry: Dict[str, Any] = {"read": False}
     try:
         got = await metadata.positions()
+        rows = _position_rows(got)
+        telemetry = {
+            "read": True,
+            "readable": rows is not None,
+            "n_rows": (None if rows is None else len(rows)),
+            "labels": ("TELEMETRY ONLY. The position surface has never "
+                       "carried a BTC intraday contract, so an empty read "
+                       "here may not contradict a reconstructed fill "
+                       "ledger. It is recorded so the representation keeps "
+                       "being measured."),
+        }
     except Exception as exc:                                   # noqa: BLE001
-        BUD.halt(cohort_id, "UNKNOWN_POSITION",
-                 "positions read failed: %s" % exc, root=root)
-        return {"halted": True, "verdict": "UNREADABLE", "why": str(exc)}
-    rows = _position_rows(got)
-    return reconcile_or_halt(cohort_id, symbol, inv, rows, root=root)
+        telemetry = {"read": False, "why": "positions read failed: %s" % exc}
+    return {"halted": not rec["ok"],
+            "verdict": ("RECONCILED" if rec["ok"] else "HALTED"),
+            "why": rec.get("why"),
+            "signed": rec.get("signed"),
+            "reconstruction": rec.get("reconstruction"),
+            "authority": "authenticated fill record (order history ⋈ "
+                         "mytrades on order_id)",
+            "positions_telemetry": telemetry}
 
 
 def decision_telemetry(ticker: str, inv: Any, bk: Mapping[str, Any],
