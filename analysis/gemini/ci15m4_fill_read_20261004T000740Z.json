@@ -1,0 +1,186 @@
+{
+  "accounting": {
+    "CASH_CONFIRMED": false,
+    "FILLED": true,
+    "REALIZED": false,
+    "SETTLED": true,
+    "first_break": "CASH_CONFIRMED",
+    "labels": "FILLED and SETTLED are authenticated. CASH_CONFIRMED is absent, so NOTHING here is realized P&L."
+  },
+  "authoritative_fills": {
+    "n": 1,
+    "orders_joined": 1,
+    "readable": true,
+    "rows": [
+      {
+        "aggressor": false,
+        "client_order_id": "a78717c1-8d1b-4325-9566-6b2d9d1b46c7",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "leg": "yes",
+        "leg_resolved": true,
+        "maker": "maker",
+        "order_id": "145828836725658335",
+        "price": "0.68",
+        "qty": "1",
+        "tid": 1893456012178953,
+        "time_in_force": "good-til-cancel",
+        "timestampms": 1791063282776
+      }
+    ],
+    "source": "after.orders_seen (venue filled-order rows) joined to after.trades (venue trade record) on order_id",
+    "tids": [
+      1893456012178953
+    ]
+  },
+  "cash_anchor": {
+    "labels": "A CASH ANCHOR, not a cashflow. A level read today cannot attribute a settlement that happened yesterday; it is recorded so a later reading can difference it, never as CASH_CONFIRMED.",
+    "readable": true,
+    "usd_rows": [
+      {
+        "amount": "13.0277",
+        "available": "113.0277",
+        "currency": "USD"
+      }
+    ]
+  },
+  "cashflow_attribution": {
+    "attributable": false,
+    "why": "no surface read here ties a cash movement to this order. A balance is a level, not a cashflow, and no per-settlement credit record was located on this account."
+  },
+  "fee": {
+    "authoritative_for_every_fill": true,
+    "fee_amounts": [
+      "0"
+    ],
+    "labels": "an absent fee_amount is UNKNOWN, never zero, and the fee model is NEVER substituted when authenticated data exists",
+    "n_fills": 1,
+    "source": "/v1/mytrades fee_amount",
+    "total_usd": "0"
+  },
+  "fills_for_this_order": [
+    {
+      "aggressor": false,
+      "client_order_id": "a78717c1-8d1b-4325-9566-6b2d9d1b46c7",
+      "fee_amount": "0",
+      "fee_currency": "USD",
+      "leg": "yes",
+      "leg_resolved": true,
+      "maker": "maker",
+      "order_id": "145828836725658335",
+      "price": "0.68",
+      "qty": "1",
+      "tid": 1893456012178953,
+      "time_in_force": "good-til-cancel",
+      "timestampms": 1791063282776
+    }
+  ],
+  "label": "CI15M4_AUTHENTICATED_FILL_READ_V1",
+  "mytrades": {
+    "detail": null,
+    "http": 200,
+    "n_rows": 1,
+    "raw_rows": [
+      {
+        "aggressor": false,
+        "amount": "1",
+        "client_order_id": "a78717c1-8d1b-4325-9566-6b2d9d1b46c7",
+        "exchange": "gemini",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "is_auction_fill": false,
+        "is_clearing_fill": false,
+        "order_id": "145828836725658335",
+        "price": "0.68",
+        "symbol": "GEMI-BTC15M2610032145-UP",
+        "tid": 1893456012178953,
+        "timestamp": 1791063282,
+        "timestampms": 1791063282776,
+        "type": "Buy"
+      }
+    ],
+    "readable": true,
+    "why": null
+  },
+  "order_history": {
+    "raw_rows": [
+      {
+        "avgExecutionPrice": "0.68",
+        "clientOrderId": "a78717c1-8d1b-4325-9566-6b2d9d1b46c7",
+        "contractMetadata": {
+          "category": "Bitcoin",
+          "color": "#4CAF50",
+          "contractId": "742307",
+          "contractName": "Up",
+          "contractStatus": "Settled",
+          "contractTicker": "UP",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 3, 2026 at 5:45pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "eventName": "BTC price today at 5:45pm EDT",
+          "eventTicker": "BTC15M2610032145",
+          "eventType": "binary",
+          "expiryDate": "2026-10-03T21:45:00.000Z",
+          "instrumentSymbol": "GEMI-BTC15M2610032145-UP",
+          "parentCategory": "Crypto",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-10-03T21:45:05.750Z",
+          "settlementValue": "84689.7985",
+          "sortOrder": 0,
+          "startTime": "2026-10-03T21:30:00.000Z",
+          "strike": {
+            "availableAt": "2026-10-03T21:30:00.000Z",
+            "type": "reference",
+            "value": "84695.55"
+          },
+          "template": "crypto-up-down"
+        },
+        "createdAt": "2026-10-03T21:34:17.262Z",
+        "filledQuantity": "1",
+        "globalOrderId": "145828836725658335",
+        "hashOrderId": "Klj272AexooO",
+        "orderId": 145828836725658335,
+        "orderType": "limit",
+        "outcome": "yes",
+        "price": "0.68",
+        "quantity": "1",
+        "remainingQuantity": "0",
+        "side": "buy",
+        "status": "filled",
+        "symbol": "GEMI-BTC15M2610032145-UP",
+        "timeInForce": "good-til-cancel",
+        "updatedAt": "2026-10-03T21:34:42.776Z"
+      }
+    ],
+    "readable": true,
+    "rows_for_this_order": 1,
+    "verdict": "ORDERS_FOUND"
+  },
+  "order_id": "145828836725658335",
+  "payout_reconstruction": {
+    "avg_price": "0.68",
+    "filled_qty": "1",
+    "gross_before_fee_usd": "-0.68",
+    "held_outcome": "yes",
+    "labels": "ARITHMETIC on authenticated fills and the venue's own resolution. NOT realized P&L: REALIZED requires attributable cash movement, which a reconstruction cannot supply.",
+    "net_after_authenticated_fee_usd": "-0.68",
+    "payout_usd": "0",
+    "principal_usd": "0.68",
+    "resolution_side": "no",
+    "won": false
+  },
+  "positions_now": {
+    "labels": "the CURRENT representation, never evidence about a historical moment that has since settled",
+    "n_rows": 0,
+    "ok": true
+  },
+  "settlement": {
+    "contract_status": "Settled",
+    "delta_settlement_minus_strike": "-5.7515",
+    "expiry": "2026-10-03T21:45:00.000Z",
+    "resolution_side": "no",
+    "resolved_at": "2026-10-03T21:45:05.750Z",
+    "settlement_value": "84689.7985",
+    "strike": "84695.55"
+  },
+  "symbol": "GEMI-BTC15M2610032145-UP"
+}
