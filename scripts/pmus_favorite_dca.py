@@ -515,6 +515,7 @@ def replay_c(slug: str, w, outcome: str,
     # never silently crossed.
     intents, captures, missed, fallbacks = [], [], [], []
     pending = None
+    last_strengthening = None          # D0's gate value at the live signal
     bt = [b["t"] for b in books]
     marks = [start + k * CADENCE_S for k in range(1, 15)]
     fav = None
@@ -550,6 +551,7 @@ def replay_c(slug: str, w, outcome: str,
         fee = FEES.taker_fee(px, sh)
         port.add(side, sh, px, fee)
         allocs.append({"t": t, "kind": tag, "side": side, "px": str(px),
+                       "strengthening_at_signal": last_strengthening,
                        "sh": str(round(sh, 4)), "fee": str(fee),
                        "up_sh": str(round(port.up_sh, 4)),
                        "dn_sh": str(round(port.dn_sh, 4)),
@@ -907,12 +909,19 @@ def replay_c(slug: str, w, outcome: str,
                 fm = fav_mid(fav, bid, ask)
                 strengthening = (prev_fav_mid is not None
                                  and fm > prev_fav_mid)
+                last_strengthening = bool(strengthening)
                 if mi == 0 and seed:
                     episode_open = True            # the seed opens an episode
                     peak, spread_at_peak = fm, (ask - bid)
                 elif not require_strengthening:
                     # V1: one purchase of the current favorite every period,
-                    # unconditionally.
+                    # unconditionally. The episode is opened by the purchase
+                    # itself so that D0's frozen trail has a peak to measure
+                    # from; without it no reversal could ever fire and cell C
+                    # would silently collapse into cell A.
+                    if not episode_open:
+                        episode_open = True
+                        peak, spread_at_peak = fm, (ask - bid)
                     act(mi, fav, bid, ask, bq, aq, b["t"])
                 elif strengthening and episode_open:
                     act(mi, fav, bid, ask, bq, aq, b["t"])
@@ -1162,6 +1171,12 @@ def main() -> int:
         res["windows"][slug]["D3"] = replay_c(
             slug, w, oc, al, seed=False, name="D3",
             entry_mode="maker_then_taker")
+        res["windows"][slug]["CELL_B_strengthening_only"] = replay_c(
+            slug, w, oc, al, seed=False, name="CELL_B_strengthening_only",
+            require_strengthening=True, exits_enabled=False)
+        res["windows"][slug]["CELL_C_reversal_only"] = replay_c(
+            slug, w, oc, al, seed=False, name="CELL_C_reversal_only",
+            require_strengthening=False, exits_enabled=True)
         res["windows"][slug]["V1"] = replay_c(
             slug, w, oc, al, seed=True, name="V1",
             require_strengthening=False, exits_enabled=False,
