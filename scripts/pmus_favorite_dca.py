@@ -493,6 +493,7 @@ def replay_c(slug: str, w, outcome: str,
              require_strengthening: bool = True,
              exits_enabled: bool = True,
              seed_multiple: D = D(1),
+             toggle_ts=None,
              only_exits=None,
              only_periods=None) -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
@@ -517,6 +518,7 @@ def replay_c(slug: str, w, outcome: str,
     pending = None
     last_strengthening = None          # D0's gate value at the live signal
     episodes = []                      # INSTRUMENTATION ONLY -- see below
+    ext_side = [None, 0]               # CF_MATCH: [current side, toggles used]
     cur_ep = None
     bt = [b["t"] for b in books]
     marks = [start + k * CADENCE_S for k in range(1, 15)]
@@ -1008,6 +1010,20 @@ def replay_c(slug: str, w, outcome: str,
                 if mi == 0 and seed:
                     episode_open = True            # the seed opens an episode
                     peak, spread_at_peak = fm, (ask - bid)
+                elif toggle_ts is not None:
+                    # CF_MATCH: the side we EXTEND toggles at each frozen
+                    # Cell C reversal. No sell happens; the opposite outcome
+                    # is bought instead, which matches residual rather than
+                    # closing it. The displayed favourite only seeds the
+                    # state at the first mark.
+                    if ext_side[0] is None:
+                        ext_side[0] = fav
+                    while (ext_side[1] < len(toggle_ts)
+                           and toggle_ts[ext_side[1]] <= b["t"]):
+                        ext_side[0] = ("DOWN" if ext_side[0] == "UP"
+                                       else "UP")
+                        ext_side[1] += 1
+                    act(mi, ext_side[0], bid, ask, bq, aq, b["t"])
                 elif not require_strengthening:
                     # V1: one purchase of the current favorite every period,
                     # unconditionally. The episode is opened by the purchase
@@ -1269,6 +1285,17 @@ def main() -> int:
         res["windows"][slug]["D3"] = replay_c(
             slug, w, oc, al, seed=False, name="D3",
             entry_mode="maker_then_taker")
+        _c = replay_c(slug, w, oc, al, seed=False, name="_c_for_toggles",
+                      require_strengthening=False, exits_enabled=True)
+        _tog = sorted(e["t"] for e in _c["exit_log"])
+        res["windows"][slug]["CF_MATCH"] = replay_c(
+            slug, w, oc, al, seed=False, name="CF_MATCH",
+            require_strengthening=False, exits_enabled=False,
+            toggle_ts=_tog)
+        res["windows"][slug]["CF_MATCH_SEED"] = replay_c(
+            slug, w, oc, al, seed=True, name="CF_MATCH_SEED",
+            require_strengthening=False, exits_enabled=False,
+            seed_multiple=D(5), toggle_ts=_tog)
         res["windows"][slug]["CELL_B_strengthening_only"] = replay_c(
             slug, w, oc, al, seed=False, name="CELL_B_strengthening_only",
             require_strengthening=True, exits_enabled=False)
