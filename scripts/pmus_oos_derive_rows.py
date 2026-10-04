@@ -37,7 +37,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.pmus_ws_evidence_recorder import apply_events, book_status  # noqa
+from src.pmus_ws_evidence_recorder import (                          # noqa
+    apply_events, book_status, _walk_market_events)
 
 
 def _epoch(v):
@@ -51,12 +52,60 @@ def _epoch(v):
 
 
 def derive(src: str, dst: str) -> dict:
-    """Replay `src` (raw ws frames) and write dev-schema book/trade rows."""
+    """Replay `src` (raw ws frames) and write dev-schema book/trade rows.
+
+    ONLY the markets a frame actually touches are drained, and only the TAIL of
+    their histories is examined. The first version rescanned every market's full
+    2000-entry history on every frame against a growing `seen` set, which is
+    fine for the 9 markets of a calibration slice and quadratic for the ~200 of
+    a full harvest. `apply_events` appends in timestamp order and trims only
+    from the front, so walking back from the end while the timestamp exceeds the
+    last one emitted finds exactly the new entries, in O(new rows) per frame.
+    """
     state: dict = {}
-    seen_book: dict = {}
-    seen_trade: dict = {}
+    last_book: dict = {}
+    last_trade: dict = {}
     frames = books = trades = skipped = 0
     out = open(dst, "w")
+
+    def drain(slug, s, key, lastmap, emit):
+        seq = s.get(key) or []
+        prev = lastmap.get(slug)
+        fresh = []
+        for i in range(len(seq) - 1, -1, -1):
+            t = seq[i].get("t")
+            if prev is not None and t is not None and t <= prev:
+                break
+            fresh.append(seq[i])
+        n = 0
+        for x in reversed(fresh):
+            emit(slug, x)
+            n += 1
+        if fresh:
+            newest = fresh[0].get("t")
+            if newest is not None:
+                lastmap[slug] = newest
+        return n
+
+    def emit_book(slug, h):
+        out.write(json.dumps({
+            "t": h.get("t"), "bid": h.get("bid"), "ask": h.get("ask"),
+            "bid_qty": h.get("bid_qty"), "ask_qty": h.get("ask_qty"),
+            "ask_book_missing": h.get("ask_book_missing"),
+            "status": book_status(
+                {"bid": h.get("bid"), "ask": h.get("ask"), "t": h.get("t")},
+                h.get("t"), True),
+            "slug": slug, "kind": "book"}, default=str) + "\n")
+
+    def emit_trade(slug, x):
+        out.write(json.dumps({
+            "t": x.get("t"), "px": x.get("px"), "qty": x.get("qty"),
+            "trade_time": x.get("trade_time"),
+            "bid_at_trade": x.get("bid_at_trade"),
+            "ask_at_trade": x.get("ask_at_trade"),
+            "dir": x.get("dir"),
+            "slug": slug, "kind": "trade"}, default=str) + "\n")
+
     with open(src) as f:
         for line in f:
             try:
@@ -70,41 +119,22 @@ def derive(src: str, dst: str) -> dict:
                 skipped += 1
                 continue
             frames += 1
-            # the recorder's own fold, unchanged
-            apply_events(state, r.get("msg"), now)
-            for slug, s in state.items():
-                sb = seen_book.setdefault(slug, set())
-                for h in s.get("bbo_history") or []:
-                    k = repr(h.get("t"))
-                    if k in sb:
-                        continue
-                    sb.add(k)
-                    out.write(json.dumps({
-                        "t": h.get("t"),
-                        "bid": h.get("bid"), "ask": h.get("ask"),
-                        "bid_qty": h.get("bid_qty"),
-                        "ask_qty": h.get("ask_qty"),
-                        "ask_book_missing": h.get("ask_book_missing"),
-                        "status": book_status(
-                            {"bid": h.get("bid"), "ask": h.get("ask"),
-                             "t": h.get("t")}, now, True),
-                        "slug": slug, "kind": "book"}, default=str) + "\n")
-                    books += 1
-                st = seen_trade.setdefault(slug, set())
-                for x in s.get("trades") or []:
-                    k = (repr(x.get("t")), str(x.get("px")), str(x.get("qty")))
-                    if k in st:
-                        continue
-                    st.add(k)
-                    out.write(json.dumps({
-                        "t": x.get("t"), "px": x.get("px"),
-                        "qty": x.get("qty"),
-                        "trade_time": x.get("trade_time"),
-                        "bid_at_trade": x.get("bid_at_trade"),
-                        "ask_at_trade": x.get("ask_at_trade"),
-                        "dir": x.get("dir"),
-                        "slug": slug, "kind": "trade"}, default=str) + "\n")
-                    trades += 1
+            msg = r.get("msg")
+            # which markets this frame concerns, read structurally by the
+            # recorder's own walker rather than guessed
+            touched = []
+            evs: list = []
+            _walk_market_events(msg, evs)
+            for ev in evs:
+                if ev.get("slug") and ev["slug"] not in touched:
+                    touched.append(ev["slug"])
+            apply_events(state, msg, now)
+            for slug in touched:
+                s = state.get(slug)
+                if not s:
+                    continue
+                books += drain(slug, s, "bbo_history", last_book, emit_book)
+                trades += drain(slug, s, "trades", last_trade, emit_trade)
     out.close()
     return {"ws_frames": frames, "book_rows": books, "trade_rows": trades,
             "frames_without_timestamp": skipped, "slugs": len(state)}
