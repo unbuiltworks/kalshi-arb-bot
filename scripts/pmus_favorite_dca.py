@@ -496,6 +496,7 @@ def replay_c(slug: str, w, outcome: str,
              exits_enabled: bool = True,
              seed_multiple: D = D(1),
              toggle_ts=None, match_cap: bool = False,
+             match_only: bool = False,
              impact: D = D(0),
              only_exits=None,
              only_periods=None) -> dict:
@@ -1033,6 +1034,40 @@ def replay_c(slug: str, w, outcome: str,
                 if mi == 0 and seed:
                     episode_open = True            # the seed opens an episode
                     peak, spread_at_peak = fm, (ask - bid)
+                elif match_only:
+                    # P2: SEED BOTH ONCE -> only ever buy the UNDER-HELD
+                    # side, capped so it cannot flip the residual -> WAIT
+                    # whenever the book is flat. No leadership input at all.
+                    resid = port.residual
+                    if resid != 0:
+                        o = "DOWN" if resid > 0 else "UP"
+                        px_o = ask if o == "UP" else ONE - bid
+                        dep = aq if o == "UP" else bq
+                        qty = min(alloc / px_o if px_o > 0 else ZERO,
+                                  abs(resid), dep)
+                        if qty > 0 and D("0.01") <= px_o <= D("0.99"):
+                            fee = FEES.taker_fee(px_o, qty)
+                            port.add(o, qty, px_o, fee)
+                            port.depth_frac.append(float(qty / dep)
+                                                   if dep > 0 else 0.0)
+                            _ep_add(o, px_o, qty, fee, b["t"])
+                            allocs.append({
+                                "t": b["t"], "kind": "match_only",
+                                "side": o, "px": str(px_o),
+                                "sh": str(round(qty, 6)), "fee": str(fee),
+                                "strengthening_at_signal": last_strengthening,
+                                "up_sh": str(round(port.up_sh, 4)),
+                                "dn_sh": str(round(port.dn_sh, 4)),
+                                "matched": str(round(port.matched, 4)),
+                                "residual": str(round(port.residual, 4)),
+                                "deployed": str(round(port.deployed, 4)),
+                                "net_capital": str(round(
+                                    port.deployed - port.cash_in, 4))})
+                            ext_counts[1] += 1
+                            if abs(port.residual) <= D("0.000001"):
+                                ext_counts[2] += 1
+                    else:
+                        withheld += 1          # WAIT, and it costs nothing
                 elif toggle_ts is not None:
                     # CF_MATCH: the side we EXTEND toggles at each frozen
                     # Cell C reversal. No sell happens; the opposite outcome
@@ -1370,6 +1405,10 @@ def main() -> int:
             slug, w, oc, al, seed=True, name="CF_MATCH_SEED",
             require_strengthening=False, exits_enabled=False,
             seed_multiple=D(5), toggle_ts=_tog)
+        res["windows"][slug]["P2_MATCH_ONLY_SEED"] = replay_c(
+            slug, w, oc, al, seed=True, name="P2_MATCH_ONLY_SEED",
+            require_strengthening=False, exits_enabled=False,
+            seed_multiple=D(5), match_only=True)
         res["windows"][slug]["PORTFOLIO_MATCH_V1"] = replay_c(
             slug, w, oc, al, seed=False, name="PORTFOLIO_MATCH_V1",
             require_strengthening=False, exits_enabled=False,
