@@ -483,7 +483,9 @@ def replay(slug: str, w, outcome: str, variant: str,
 
 def replay_c(slug: str, w, outcome: str,
              alloc: D = ALLOC_USD, *, seed: bool = True,
-             opposite_rest: bool = False, name: str = "C") -> dict:
+             opposite_rest: bool = False, name: str = "C",
+             entry_mode: str = "taker",
+             only_periods=None) -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
 
     Seed $1 on BOTH sides once, extend the favored side $1 per 60 s only
@@ -497,6 +499,13 @@ def replay_c(slug: str, w, outcome: str,
     port = Port()
     rest = Resting()
     opp_fills = []
+    # D2: the SAME decisions, executed passively. An intended action becomes
+    # a resting bid at the favored side's own best bid -- the Am rule, reused
+    # verbatim so no offset is chosen here -- which lives until the next
+    # evaluation and is then cancelled. An unfilled action is a MISSED action,
+    # never silently crossed.
+    intents, captures, missed = [], [], []
+    pending = None
     bt = [b["t"] for b in books]
     marks = [start + k * CADENCE_S for k in range(1, 15)]
     fav = None
@@ -541,6 +550,36 @@ def replay_c(slug: str, w, outcome: str,
                        "net_capital": str(round(port.deployed - port.cash_in,
                                                 4))})
         return True
+
+    def act(mi, side, bid, ask, bq, aq, t):
+        """One intended D0 action, executed under `entry_mode`.
+
+        The DECISION is identical in every mode -- this function is only
+        reached when D0's own logic says to extend. `only_periods`, when
+        given, restricts execution to a named set of periods so that a
+        matched counterfactual can be run on exactly the actions another
+        mode captured.
+        """
+        nonlocal pending
+        taker_px = ask if side == "UP" else ONE - bid
+        intents.append({"period": mi, "t": t, "side": side,
+                        "taker_px": str(taker_px),
+                        "maker_px": str(bid if side == "UP" else ONE - ask)})
+        if only_periods is not None and mi not in only_periods:
+            return
+        if entry_mode == "taker":
+            if taker_buy(side, bid, ask, bq, aq, t, "extend"):
+                captures.append(mi)
+            return
+        # maker-first: rest at our own side's best bid; no touch = fill
+        mpx = bid if side == "UP" else ONE - ask
+        if not (D("0.01") <= mpx <= D("0.99")):
+            missed.append({"period": mi, "why": "price_out_of_range"})
+            return
+        rest.quote(side, mpx, alloc / mpx, t)
+        pending = {"period": mi, "side": side, "px": mpx, "t": t,
+                   "taker_px": taker_px,
+                   "sh_wanted": alloc / mpx, "filled": ZERO}
 
     def flatten(t, reason):
         """Reduce the residual to zero at executable prices, across as many
@@ -606,6 +645,15 @@ def replay_c(slug: str, w, outcome: str,
             "residual_after": str(round(port.residual, 4))})
 
     for mi, mark in enumerate(marks):
+        if entry_mode == "maker" and pending is not None:
+            if pending["filled"] <= 0:
+                missed.append({"period": pending["period"],
+                               "side": pending["side"],
+                               "maker_px": str(pending["px"]),
+                               "taker_px": str(pending["taker_px"]),
+                               "why": "no_defensible_fill_within_period"})
+            rest.cancel()
+            pending = None
         i = bisect.bisect_left(bt, mark)
         cand = [j for j in (i - 1, i) if 0 <= j < len(books)]
         best = min(cand, key=lambda j: abs(books[j]["t"] - mark), default=None)
@@ -639,7 +687,7 @@ def replay_c(slug: str, w, outcome: str,
                     episode_open = True            # the seed opens an episode
                     peak, spread_at_peak = fm, (ask - bid)
                 elif strengthening and episode_open:
-                    taker_buy(fav, bid, ask, bq, aq, b["t"], "extend")
+                    act(mi, fav, bid, ask, bq, aq, b["t"])
                 elif episode_open:
                     withheld += 1
                 elif strengthening:
@@ -647,7 +695,7 @@ def replay_c(slug: str, w, outcome: str,
                     # after a flip or an exit
                     episode_open = True
                     peak, spread_at_peak = fm, (ask - bid)
-                    taker_buy(fav, bid, ask, bq, aq, b["t"], "extend")
+                    act(mi, fav, bid, ask, bq, aq, b["t"])
                 prev_fav_mid = fm
                 if opposite_rest:
                     # Variant B's frozen reservation rule, carried over
@@ -668,7 +716,7 @@ def replay_c(slug: str, w, outcome: str,
         # order the tape puts them, not in the order the code is written.
         nxt = mark + CADENCE_S
         events = [(bb["t"], 0, bb) for bb in books if mark <= bb["t"] < nxt]
-        if opposite_rest:
+        if opposite_rest or entry_mode == "maker":
             events += [(tr["t"], 1, tr) for tr in trades
                        if mark <= tr["t"] < nxt]
         events.sort(key=lambda e: (e[0], e[1]))
@@ -686,6 +734,29 @@ def replay_c(slug: str, w, outcome: str,
                     side0, fpx = rest.side, rest.px
                     port.add(side0, got, fpx, ZERO,
                              rebate=FEES.maker_rebate(fpx, got))
+                    if pending is not None and entry_mode == "maker":
+                        pending["filled"] += got
+                        allocs.append({
+                            "t": ev["t"], "kind": "extend_maker",
+                            "side": side0, "px": str(fpx),
+                            "sh": str(round(got, 4)), "fee": "0.0000",
+                            "rebate_modelled": str(FEES.maker_rebate(fpx,
+                                                                     got)),
+                            "taker_px_counterfactual": str(
+                                pending["taker_px"]),
+                            "up_sh": str(round(port.up_sh, 4)),
+                            "dn_sh": str(round(port.dn_sh, 4)),
+                            "matched": str(round(port.matched, 4)),
+                            "residual": str(round(port.residual, 4)),
+                            "deployed": str(round(port.deployed, 4)),
+                            "net_capital": str(round(port.deployed
+                                                     - port.cash_in, 4))})
+                        if pending["period"] not in captures:
+                            captures.append(pending["period"])
+                        if rest.sh <= 0:
+                            rest.cancel()
+                            pending = None
+                        continue
                     opp_fills.append({
                         "t": ev["t"], "side": side0, "px": str(fpx),
                         "sh": str(round(got, 4)),
@@ -726,6 +797,11 @@ def replay_c(slug: str, w, outcome: str,
             if peak_pnl["pnl"] is not None:
                 max_dd = max(max_dd, D(peak_pnl["pnl"]) - pnl)
 
+    if entry_mode == "maker" and pending is not None and pending["filled"] <= 0:
+        missed.append({"period": pending["period"], "side": pending["side"],
+                       "maker_px": str(pending["px"]),
+                       "taker_px": str(pending["taker_px"]),
+                       "why": "no_defensible_fill_within_period"})
     last = books[-1]
     bidL, askL = D(last["bid"]), D(last["ask"])
     settle = port.settlement_value(outcome)
@@ -750,6 +826,15 @@ def replay_c(slug: str, w, outcome: str,
         "seed_legs": sum(1 for a in allocs if a["kind"] == "seed"),
         "extends": sum(1 for a in allocs if a["kind"] == "extend"),
         "extensions_withheld_not_strengthening": withheld,
+        "entry_mode": entry_mode,
+        "intended_actions": len(intents),
+        "captured_actions": len(captures),
+        "missed_actions": len(missed),
+        "maker_capture_rate": (str(round(D(len(captures))
+                                         / len(intents), 4))
+                               if intents else None),
+        "captured_periods": sorted(captures),
+        "intent_log": intents, "missed_log": missed,
         "skipped_periods": skips, "leadership_flips": flips,
         "exits": len(exits),
         "cleanup_shares_unexitable": str(round(cleanup_shares, 4)),
@@ -829,6 +914,15 @@ def main() -> int:
                                               name="D0")
         res["windows"][slug]["D1"] = replay_c(slug, w, oc, al, seed=False,
                                               opposite_rest=True, name="D1")
+        d2 = replay_c(slug, w, oc, al, seed=False, name="D2",
+                      entry_mode="maker")
+        res["windows"][slug]["D2"] = d2
+        # the matched counterfactual: D0's TAKER execution on exactly the
+        # actions D2 captured, so cheaper execution is separated from the
+        # selection effect of which actions a passive order wins.
+        res["windows"][slug]["D0_on_D2_captured"] = replay_c(
+            slug, w, oc, al, seed=False, name="D0_on_D2_captured",
+            only_periods=set(d2["captured_periods"]))
     os.makedirs(a.out, exist_ok=True)
     # the trajectories are ~99MB as one JSON document, so they go out as a
     # gzipped row stream and the summary keeps everything else. The split is
