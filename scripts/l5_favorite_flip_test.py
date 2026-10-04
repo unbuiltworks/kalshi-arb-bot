@@ -395,6 +395,24 @@ def q6_sequential(train, test):
     return out
 
 
+ERA_CUT = 1780000000          # Mar-Apr ramp vs the August regime
+
+
+def era(r):
+    return "spring" if int(r["slug"].rsplit("-", 1)[1]) < ERA_CUT else "august"
+
+
+def by_era(rows, fn):
+    """Same question inside each era. Prior art already showed a fitted side
+    model transferring 4 points WORSE than persistence across this boundary,
+    so a pooled number here would hide the thing most likely to matter."""
+    out = {}
+    for e in ("spring", "august"):
+        g = [r for r in rows if era(r) == e]
+        out[e] = {"n": len(g)} if len(g) < 200 else fn(g)
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--state", default=STATE)
@@ -415,6 +433,16 @@ def main() -> int:
                                     / len(rows), 4) for h in (1, 5, 15, 30)},
            "q1_favorite_preference": q1_favorite_preference(rows),
            "q2_flip_response": q2_flip_response(rows),
+           "q1_by_era": by_era(rows, q1_favorite_preference),
+           "q2_by_era": by_era(rows, q2_flip_response),
+           "persistence_accuracy_by_era": {
+               e: {"n": len(g),
+                   "p_next_same_side": round(ACC(g, m_persistence), 4),
+                   "p_next_is_favorite": round(ACC(g, m_favorite), 4)}
+               for e, g in (("spring", [r for r in rows
+                                        if era(r) == "spring"]),
+                            ("august", [r for r in rows
+                                        if era(r) == "august"]))},
            "q3_momentum_extension": q3_momentum_extension(rows),
            "q4_inventory_interaction": q4_inventory_interaction(rows, train,
                                                                 test),
