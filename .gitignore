@@ -120,3 +120,9 @@ data/gemini_shadow/merged/
 # pmus-ws-evidence-recorder Railway logs and is regenerable; the .gz is tracked.
 data/pmus_ws_tape/*.jsonl
 data/btc_ref/*.jsonl
+
+# L5 FAVORITE/FLIP: the market-wide print tape is ~65MB across 527 per-window
+# files and is exactly reproducible from the window list by
+# scripts/l5_market_tape_fetch.py (resumable, one atomic file per window).
+# The derived pre-action state table is tracked instead.
+data/l5/market_tape/

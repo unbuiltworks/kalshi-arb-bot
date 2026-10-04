@@ -20,7 +20,8 @@ derived from prints is a last-traded favorite, and that limit is carried into
 the output rather than papered over.
 """
 from __future__ import annotations
-import argparse, gzip, json, os, sys, time
+import argparse, gzip, json, os, sys, threading, time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.request, urllib.error
 
 API = "https://data-api.polymarket.com/trades"
@@ -78,19 +79,26 @@ def main() -> int:
     ap.add_argument("--windows", required=True)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--out", default=OUT)
+    ap.add_argument("--workers", type=int, default=6)
     a = ap.parse_args()
     ws = json.load(open(a.windows))
     if a.limit:
         ws = ws[:a.limit]
     os.makedirs(a.out, exist_ok=True)
-    done = n_new = 0
-    for w in ws:
+    todo = [w for w in ws
+            if not os.path.exists(os.path.join(a.out,
+                                               "%s.jsonl.gz" % w["slug"]))]
+    done = len(ws) - len(todo)
+    lock = threading.Lock()
+    counter = [0]
+
+    def one(w):
         p = os.path.join(a.out, "%s.jsonl.gz" % w["slug"])
-        if os.path.exists(p):
-            done += 1
-            continue
         rows = fetch_window(w["window_id"])
-        tmp = p + ".part"
+        # the temp name carries the thread id, so two workers can never share
+        # a partial file; the rename is atomic, so an interrupted run leaves
+        # only whole windows behind and resume stays sound.
+        tmp = "%s.%d.part" % (p, threading.get_ident())
         with gzip.open(tmp, "wt") as f:
             f.write(json.dumps({"kind": "provenance", "source": API,
                                 "window_id": w["window_id"],
@@ -100,9 +108,14 @@ def main() -> int:
             for r in rows:
                 f.write(json.dumps({k: r.get(k) for k in KEEP}) + "\n")
         os.replace(tmp, p)
-        n_new += 1
-        print("%s %d rows" % (w["slug"], len(rows)), flush=True)
-    print("already_present=%d fetched=%d" % (done, n_new))
+        with lock:
+            counter[0] += 1
+            if counter[0] % 20 == 0:
+                print("%d/%d windows" % (counter[0], len(todo)), flush=True)
+
+    with ThreadPoolExecutor(max_workers=a.workers) as ex:
+        list(ex.map(one, todo))
+    print("already_present=%d fetched=%d" % (done, counter[0]))
     return 0
 
 
