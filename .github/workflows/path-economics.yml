@@ -36,10 +36,15 @@ jobs:
           set -euo pipefail
           f=.github/path_economics_request
           rid="$(sed -n -E 's/^EVAL_RUN_ID=([0-9]+)[[:space:]]*$/\1/p' "$f" | tail -1)"
+          hv="$(sed -n -E 's/^HARVEST_RUN_ID=([0-9]+)[[:space:]]*$/\1/p' "$f" | tail -1)"
           if [ -z "$rid" ]; then
             echo "::error::EVAL_RUN_ID missing"; exit 1
           fi
+          if [ -z "$hv" ]; then
+            echo "::error::HARVEST_RUN_ID missing"; exit 1
+          fi
           echo "rid=$rid" >> "$GITHUB_OUTPUT"
+          echo "harvest=$hv" >> "$GITHUB_OUTPUT"
           echo "eval run: $rid"
 
       - name: Fetch the reconstructed OOS state table
@@ -61,12 +66,62 @@ jobs:
           wc -l work/state_table_oos.jsonl
           python3 -c "import json;r=json.loads(open('work/state_table_oos.jsonl').readline());print('columns:', sorted(r))"
 
+      - name: Fetch the harvested raw frames (for sub-second studies)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: oos-slice-*
+          path: slices
+          run-id: ${{ steps.p.outputs.harvest }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive sub-second book and trade rows
+        run: |
+          set -euo pipefail
+          n="$(ls slices/*/rows.jsonl.gz | wc -l)"
+          echo "slices: $n"
+          if [ "$n" -ne 16 ]; then
+            echo "::error::expected 16 slices, got $n"; exit 1
+          fi
+          zcat slices/*/rows.jsonl.gz > work/oos_ws.jsonl
+          wc -l work/oos_ws.jsonl
+          # the SAME derivation that was calibrated against the development
+          # tape at recall 1.000; not a second implementation
+          python3 scripts/pmus_oos_derive_rows.py work/oos_ws.jsonl \
+            work/oos_rows.jsonl | tee DERIVE.json
+          wc -l work/oos_rows.jsonl
+
       - name: Run the study
         run: |
           set -euo pipefail
           python3 scripts/pmus_path_economics.py \
             --table work/state_table_oos.jsonl --label OOS \
             | tee PATH_ECONOMICS.log
+
+      - name: BRTI -> PMUS response lag
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_brti_lag.py \
+            --books work/oos_rows.jsonl \
+            --state work/state_table_oos.jsonl --label OOS \
+            > BRTI_LAG.log 2>&1 || { tail -40 BRTI_LAG.log; exit 1; }
+          tail -5 BRTI_LAG.log
+
+      - name: Capture mechanics (taker / maker / hybrid)
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_capture_mechanics.py \
+            --books work/oos_rows.jsonl \
+            --state work/state_table_oos.jsonl --label OOS \
+            > CAPTURE.log 2>&1 || { tail -40 CAPTURE.log; exit 1; }
+          tail -5 CAPTURE.log
+
+      - name: Addendum headline numbers
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_addendum_summary.py \
+            analysis/l5/path_economics/brti_lag_oos.json \
+            analysis/l5/path_economics/capture_mechanics_oos.json \
+            | tee ADDENDUM_SUMMARY.txt
 
       - name: Headline numbers
         if: always()
@@ -82,6 +137,9 @@ jobs:
           set -euo pipefail
           mkdir -p out
           for f in PATH_ECONOMICS.log PATH_ECONOMICS_SUMMARY.txt \
+                   ADDENDUM_SUMMARY.txt DERIVE.json \
+                   analysis/l5/path_economics/brti_lag_oos.json \
+                   analysis/l5/path_economics/capture_mechanics_oos.json \
                    analysis/l5/path_economics/path_economics_oos.json; do
             if [ -f "$f" ]; then cp -f "$f" out/; fi
           done
