@@ -365,8 +365,16 @@ jobs:
             --cohort "SHADOW-PERSIST4-$TS" \
             --windows "${{ github.event.inputs.soak_windows || '4' }}" \
             --runtime-s 4200 \
-            --out "$OUT" 2>&1 | tee /tmp/ci15m_shadow.txt
+            --out "$OUT" 2>&1 | tee /tmp/ci15m_shadow.txt || true
           SHADOW_RC=${PIPESTATUS[0]}
+          # `|| true` IS LOAD-BEARING. The shell is `bash -e`, so a failing
+          # pipeline aborts the step THERE -- and the driver exits 1
+          # whenever acceptance fails, which is by design. Without it every
+          # line below was dead code on exactly the runs whose evidence
+          # matters most: run 37169250593 failed acceptance after 24
+          # minutes and copied back NOTHING, so the report, the cohort
+          # record and the tapes were all reclaimed with the runner. The
+          # real exit code is carried in SHADOW_RC and applied at the end.
           kill "$COLLECTOR" 2>/dev/null || true
           sleep 2
           tail -5 /tmp/captape.log || true
