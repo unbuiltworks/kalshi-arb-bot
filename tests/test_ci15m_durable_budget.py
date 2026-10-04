@@ -205,3 +205,58 @@ def test_the_full_profile_is_unchanged(tmp_path):
     BUD.create("CI15M-1-LIKE", root=root, profile=BUD.FULL)
     prof = BUD.profile_of("CI15M-1-LIKE", root=root)
     assert prof["windows"] == 3 and prof["orders_total"] == 12
+
+
+# ---------------------------------------------------------------------------
+# EVERY PROFILE MUST ROUND-TRIP. `profile_of` once iterated a HARDCODED
+# (MECHANICS2, MECHANICS) list, so PERSIST4 -- present in PROFILES and
+# written into the manifest by `create` -- resolved to FULL, the WIDEST
+# profile. The four-window shadow spent 3 submissions in its first window
+# against a 2-per-window envelope. Live that is 6/window and 12 total
+# instead of 2 and 8: a risk breach from a reader blind to a recorded bound.
+# ---------------------------------------------------------------------------
+def test_every_profile_round_trips_through_create_and_profile_of(tmp_path):
+    root = str(tmp_path / "cohorts")
+    for name, want in BUD.PROFILES.items():
+        cid = "RT-%s" % name
+        BUD.create(cid, root=root, profile=name)
+        got = BUD.profile_of(cid, root=root)
+        assert got["name"] == name, (
+            "%s was written to the manifest and read back as %s"
+            % (name, got["name"]))
+        assert got["windows"] == want["windows"]
+        assert got["orders_per_window"] == want["orders_per_window"]
+
+
+def test_profile_of_reads_no_hardcoded_profile_list():
+    import inspect
+    # CODE ONLY: the docstring and comments legitimately quote the old
+    # hardcoded list in order to explain what went wrong.
+    code = "\n".join(
+        l.split("#", 1)[0] for l in inspect.getsource(BUD.profile_of)
+        .splitlines())
+    code = code.replace(inspect.getdoc(BUD.profile_of) or "", "")
+    assert "sorted(PROFILES" in code, (
+        "the candidate list must be DERIVED from PROFILES, so adding a "
+        "profile cannot again be invisible to the reader")
+    assert "(MECHANICS2, MECHANICS)" not in code
+
+
+def test_an_unknown_profile_refuses_rather_than_widening(tmp_path,
+                                                         monkeypatch):
+    root = str(tmp_path / "cohorts")
+    BUD.create("UNK-1", root=root, profile=BUD.MECHANICS)
+    # simulate a manifest written by a build that knew a profile this one
+    # does not: the reader must REFUSE, not fall back to FULL.
+    monkeypatch.setattr(BUD.cohort, "load",
+                        lambda c, **k: type("M", (), {
+                            "note": " profile=SOMETHING_ELSE"})())
+    with pytest.raises(BUD.BudgetRefused) as e:
+        BUD.profile_of("UNK-1", root=root)
+    assert "wider envelope" in str(e.value)
+
+
+def test_persist4_is_the_authorized_persistent_envelope():
+    p = BUD.PROFILES[BUD.PERSIST4]
+    assert (p["windows"], p["orders_total"], p["orders_per_window"]) == (
+        4, 8, 2)

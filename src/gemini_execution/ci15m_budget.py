@@ -288,11 +288,34 @@ def profile_of(cohort_id: str, *,
         note = str(cohort.load(cohort_id, root=root).note or "")
     except Exception:                                          # noqa: BLE001
         note = ""
-    name = FULL
-    for cand in (MECHANICS2, MECHANICS):      # longest first: MECHANICS is
-        if ("profile=" + cand) in note:       # a prefix of MECHANICS2
+    # DERIVED FROM `PROFILES`, NEVER HARDCODED, and longest-first because
+    # one profile name can be a prefix of another (MECHANICS / MECHANICS2).
+    #
+    # THE DEFECT THIS REPLACES was a hardcoded (MECHANICS2, MECHANICS)
+    # list. PERSIST4 was added to PROFILES and not to that list, so a
+    # cohort whose manifest plainly said `profile=PERSIST4` resolved to
+    # FULL -- THE WIDEST PROFILE -- and the four-window shadow run spent 3
+    # submissions in its first window against a 2-per-window envelope.
+    # Live, that would have been 6 per window and 12 total instead of the
+    # authorized 2 and 8: a risk-envelope breach produced by a reader that
+    # could not see a bound the writer had recorded.
+    #
+    # An UNRECOGNISED explicit profile now REFUSES rather than widening. A
+    # cohort with no tag at all is a pre-existing one -- `create` has
+    # always appended the tag -- and keeps the historical FULL reading so
+    # closed cohorts still read as they did.
+    name = None
+    for cand in sorted(PROFILES, key=len, reverse=True):
+        if ("profile=" + cand) in note:
             name = cand
             break
+    if name is None:
+        if "profile=" in note:
+            raise BudgetRefused(
+                "cohort %r names a profile this build does not know (%r). "
+                "Refusing rather than falling back to a wider envelope."
+                % (cohort_id, note.strip()))
+        name = FULL
     out = dict(PROFILES[name])
     out["name"] = name
     # the pre-existing envelope still binds, and is never raised
