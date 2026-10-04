@@ -68,12 +68,20 @@ jobs:
             --table work/state_table_oos.jsonl --label OOS \
             | tee PATH_ECONOMICS.log
 
+      - name: Headline numbers
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_path_economics_summary.py \
+            analysis/l5/path_economics/path_economics_oos.json \
+            | tee PATH_ECONOMICS_SUMMARY.txt
+
       - name: Package
         if: always()
         run: |
           set -euo pipefail
           mkdir -p out
-          for f in PATH_ECONOMICS.log \
+          for f in PATH_ECONOMICS.log PATH_ECONOMICS_SUMMARY.txt \
                    analysis/l5/path_economics/path_economics_oos.json; do
             if [ -f "$f" ]; then cp -f "$f" out/; fi
           done
