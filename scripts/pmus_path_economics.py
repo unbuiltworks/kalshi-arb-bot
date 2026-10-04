@@ -500,6 +500,14 @@ def phase2(by, first_side):
             resid_qty += lot["qty"]
         per_window.append({
             "slug": slug, "outcome_up": outcome_up,
+            # ADDITIVE reporting only: the mechanics above are untouched. The
+            # settlement-lock diagnostic needs to know WHICH lots were left
+            # unmatched and at what basis, not merely their total.
+            "residual_lots": [
+                {"side": lot["side"], "qty": str(lot["qty"]),
+                 "cost": str(lot["cost"]),
+                 "unit_cost": str(lot["cost"] / lot["qty"]),
+                 "t": lot["t"]} for lot in open_lots],
             "matched_qty": str(matched_qty),
             "n_tranches": len(tranches),
             "locked_net": str(locked),

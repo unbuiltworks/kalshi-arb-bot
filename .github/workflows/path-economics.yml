@@ -115,6 +115,16 @@ jobs:
             > CAPTURE.log 2>&1 || { tail -40 CAPTURE.log; exit 1; }
           tail -5 CAPTURE.log
 
+      - name: Settlement-lock diagnostic (state table only)
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_settlement_lock.py \
+            --state work/state_table_oos.jsonl --label OOS \
+            > SETTLEMENT_LOCK.log 2>&1 || { tail -40 SETTLEMENT_LOCK.log; exit 1; }
+          python3 scripts/pmus_settlement_lock_summary.py \
+            analysis/l5/path_economics/settlement_lock_oos.json \
+            | tee SETTLEMENT_LOCK_SUMMARY.txt
+
       - name: Addendum headline numbers
         run: |
           set -euo pipefail
@@ -138,6 +148,8 @@ jobs:
           mkdir -p out
           for f in PATH_ECONOMICS.log PATH_ECONOMICS_SUMMARY.txt \
                    ADDENDUM_SUMMARY.txt DERIVE.json \
+                   SETTLEMENT_LOCK_SUMMARY.txt \
+                   analysis/l5/path_economics/settlement_lock_oos.json \
                    analysis/l5/path_economics/brti_lag_oos.json \
                    analysis/l5/path_economics/capture_mechanics_oos.json \
                    analysis/l5/path_economics/path_economics_oos.json; do
