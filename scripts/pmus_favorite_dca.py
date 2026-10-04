@@ -493,7 +493,7 @@ def replay_c(slug: str, w, outcome: str,
              require_strengthening: bool = True,
              exits_enabled: bool = True,
              seed_multiple: D = D(1),
-             toggle_ts=None,
+             toggle_ts=None, match_cap: bool = False,
              only_exits=None,
              only_periods=None) -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
@@ -519,6 +519,7 @@ def replay_c(slug: str, w, outcome: str,
     last_strengthening = None          # D0's gate value at the live signal
     episodes = []                      # INSTRUMENTATION ONLY -- see below
     ext_side = [None, 0]               # CF_MATCH: [current side, toggles used]
+    ext_counts = [0, 0, 0]             # [EXTENDs, MATCHes, MATCHes to flat]
     cur_ep = None
     bt = [b["t"] for b in books]
     marks = [start + k * CADENCE_S for k in range(1, 15)]
@@ -1023,7 +1024,53 @@ def replay_c(slug: str, w, outcome: str,
                         ext_side[0] = ("DOWN" if ext_side[0] == "UP"
                                        else "UP")
                         ext_side[1] += 1
-                    act(mi, ext_side[0], bid, ask, bq, aq, b["t"])
+                    if not match_cap:
+                        act(mi, ext_side[0], bid, ask, bq, aq, b["t"])
+                    else:
+                        # PORTFOLIO_MATCH_V1. The frozen state machine names
+                        # the outcome; the CONTROLLER decides the size.
+                        o = ext_side[0]
+                        resid = port.residual
+                        rside = ("UP" if resid > 0
+                                 else ("DOWN" if resid < 0 else None))
+                        if rside is None or rside == o:
+                            # EXTEND -- frozen sizing, unchanged
+                            act(mi, o, bid, ask, bq, aq, b["t"])
+                            ext_counts[0] += 1
+                        else:
+                            # MATCH -- share-sized, capped at the residual so
+                            # it can reach flat but never flips the residual
+                            # to the other side.
+                            px_o = ask if o == "UP" else ONE - bid
+                            dep = aq if o == "UP" else bq
+                            want = alloc / px_o if px_o > 0 else ZERO
+                            qty = min(want, abs(resid), dep)
+                            if qty > 0 and D("0.01") <= px_o <= D("0.99"):
+                                fee = FEES.taker_fee(px_o, qty)
+                                port.add(o, qty, px_o, fee)
+                                port.depth_frac.append(float(qty / dep)
+                                                       if dep > 0 else 0.0)
+                                _ep_add(o, px_o, qty, fee, b["t"])
+                                allocs.append({
+                                    "t": b["t"], "kind": "match", "side": o,
+                                    "px": str(px_o),
+                                    "sh": str(round(qty, 6)),
+                                    "fee": str(fee),
+                                    "strengthening_at_signal":
+                                        last_strengthening,
+                                    "capped": bool(want > abs(resid)),
+                                    "reached_flat": bool(
+                                        abs(port.residual) <= D("0.000001")),
+                                    "up_sh": str(round(port.up_sh, 4)),
+                                    "dn_sh": str(round(port.dn_sh, 4)),
+                                    "matched": str(round(port.matched, 4)),
+                                    "residual": str(round(port.residual, 4)),
+                                    "deployed": str(round(port.deployed, 4)),
+                                    "net_capital": str(round(
+                                        port.deployed - port.cash_in, 4))})
+                                ext_counts[1] += 1
+                                if abs(port.residual) <= D("0.000001"):
+                                    ext_counts[2] += 1
                 elif not require_strengthening:
                     # V1: one purchase of the current favorite every period,
                     # unconditionally. The episode is opened by the purchase
@@ -1179,6 +1226,9 @@ def replay_c(slug: str, w, outcome: str,
         "extends": sum(1 for a in allocs if a["kind"] == "extend"),
         "extensions_withheld_not_strengthening": withheld,
         "entry_mode": entry_mode,
+        "extend_actions": ext_counts[0],
+        "match_actions": ext_counts[1],
+        "match_reached_flat": ext_counts[2],
         "intended_actions": len(intents),
         "captured_actions": len(captures),
         "missed_actions": len(missed),
@@ -1296,6 +1346,14 @@ def main() -> int:
             slug, w, oc, al, seed=True, name="CF_MATCH_SEED",
             require_strengthening=False, exits_enabled=False,
             seed_multiple=D(5), toggle_ts=_tog)
+        res["windows"][slug]["PORTFOLIO_MATCH_V1"] = replay_c(
+            slug, w, oc, al, seed=False, name="PORTFOLIO_MATCH_V1",
+            require_strengthening=False, exits_enabled=False,
+            toggle_ts=_tog, match_cap=True)
+        res["windows"][slug]["PORTFOLIO_MATCH_V1_SEED"] = replay_c(
+            slug, w, oc, al, seed=True, name="PORTFOLIO_MATCH_V1_SEED",
+            require_strengthening=False, exits_enabled=False,
+            seed_multiple=D(5), toggle_ts=_tog, match_cap=True)
         res["windows"][slug]["CELL_B_strengthening_only"] = replay_c(
             slug, w, oc, al, seed=False, name="CELL_B_strengthening_only",
             require_strengthening=True, exits_enabled=False)
