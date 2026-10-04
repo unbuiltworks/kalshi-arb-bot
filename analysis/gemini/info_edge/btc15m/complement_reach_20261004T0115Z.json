@@ -1,0 +1,489 @@
+{
+  "accounting_label": "historical replay",
+  "duration": "BTC15M",
+  "effective_open_band": {
+    "band": [
+      120.0,
+      840.0
+    ],
+    "basis": "AS_FROZEN",
+    "clipped_by_contract_start": false,
+    "comparability": "UNCLIPPED. The frozen band sits inside this window.",
+    "empty": false,
+    "fraction_of_window": 0.8,
+    "frozen_band": [
+      120.0,
+      840.0
+    ],
+    "name": "BTC15M",
+    "seconds_eligible": 720.0,
+    "window_s": 900.0
+  },
+  "frozen_max_extends": "2",
+  "frozen_pair_ceiling": "0.96",
+  "label": "GEMINI_COMPLEMENT_REACHABILITY_V1",
+  "labels": "The ceiling sensitivity is ANALYSIS ONLY and is NOT a proposal to move .96, which remains frozen and is flagged in every sweep row. The 2-EXTEND column describes the STRATEGY: the current PERSIST4 envelope caps submissions at 2 per window, so a second EXTEND could not actually be sent today.",
+  "n_windows": 7,
+  "per_size": {
+    "1": {
+      "ceiling_sensitivity": {
+        "0.90": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.92": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.94": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.96": {
+          "is_frozen_ceiling": true,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.98": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "1.00": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        }
+      },
+      "effective_pair_cost_when_reachable": {
+        "best": "0.89",
+        "n": 2,
+        "worst": "0.95"
+      },
+      "min_complement_gap": {
+        "best": "-0.09",
+        "labels": "gap = executable DOWN VWAP minus the price the frozen .96 ceiling requires. <= 0 is REACHABLE.",
+        "median": "-0.03",
+        "n": 3,
+        "worst": "0.14"
+      },
+      "n_after_1_extend": 3,
+      "n_after_2_extends": 3,
+      "n_open_states": 3,
+      "pct_ever_reaching_frozen_ceiling": 66.7,
+      "pct_reachable_after_1_extend": 0.0,
+      "pct_reachable_after_2_extends": 0.0,
+      "qty_executable_when_reachable": [
+        "100"
+      ],
+      "residual_when_never_reachable": {
+        "n_windows": 1,
+        "principal_total": "1.7500",
+        "qty_total": "3"
+      },
+      "ticks_outside_open_band": 583,
+      "time_open_to_first_reachable_s": {
+        "max": 191.4,
+        "median": 191.4,
+        "min": 106.1,
+        "n": 2
+      },
+      "windows": 7,
+      "windows_with_open": 3
+    },
+    "10": {
+      "ceiling_sensitivity": {
+        "0.90": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.92": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.94": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.96": {
+          "is_frozen_ceiling": true,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.98": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "1.00": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        }
+      },
+      "effective_pair_cost_when_reachable": {
+        "best": "0.89",
+        "n": 2,
+        "worst": "0.95"
+      },
+      "min_complement_gap": {
+        "best": "-0.09",
+        "labels": "gap = executable DOWN VWAP minus the price the frozen .96 ceiling requires. <= 0 is REACHABLE.",
+        "median": "-0.03",
+        "n": 3,
+        "worst": "0.14"
+      },
+      "n_after_1_extend": 0,
+      "n_after_2_extends": 0,
+      "n_open_states": 3,
+      "pct_ever_reaching_frozen_ceiling": 66.7,
+      "pct_reachable_after_1_extend": null,
+      "pct_reachable_after_2_extends": null,
+      "qty_executable_when_reachable": [
+        "100"
+      ],
+      "residual_when_never_reachable": {
+        "n_windows": 1,
+        "principal_total": "6.40",
+        "qty_total": "10"
+      },
+      "ticks_outside_open_band": 583,
+      "time_open_to_first_reachable_s": {
+        "max": 191.4,
+        "median": 191.4,
+        "min": 106.1,
+        "n": 2
+      },
+      "windows": 7,
+      "windows_with_open": 3
+    },
+    "100": {
+      "ceiling_sensitivity": {
+        "0.90": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.92": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.94": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.96": {
+          "is_frozen_ceiling": true,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.98": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "1.00": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        }
+      },
+      "effective_pair_cost_when_reachable": {
+        "best": "0.89",
+        "n": 2,
+        "worst": "0.95"
+      },
+      "min_complement_gap": {
+        "best": "-0.09",
+        "labels": "gap = executable DOWN VWAP minus the price the frozen .96 ceiling requires. <= 0 is REACHABLE.",
+        "median": "-0.03",
+        "n": 3,
+        "worst": "0.14"
+      },
+      "n_after_1_extend": 0,
+      "n_after_2_extends": 0,
+      "n_open_states": 3,
+      "pct_ever_reaching_frozen_ceiling": 66.7,
+      "pct_reachable_after_1_extend": null,
+      "pct_reachable_after_2_extends": null,
+      "qty_executable_when_reachable": [
+        "100"
+      ],
+      "residual_when_never_reachable": {
+        "n_windows": 1,
+        "principal_total": "64.00",
+        "qty_total": "100"
+      },
+      "ticks_outside_open_band": 577,
+      "time_open_to_first_reachable_s": {
+        "max": 191.4,
+        "median": 191.4,
+        "min": 106.1,
+        "n": 2
+      },
+      "windows": 7,
+      "windows_with_open": 3
+    },
+    "25": {
+      "ceiling_sensitivity": {
+        "0.90": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.92": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.94": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.96": {
+          "is_frozen_ceiling": true,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.98": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "1.00": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        }
+      },
+      "effective_pair_cost_when_reachable": {
+        "best": "0.89",
+        "n": 2,
+        "worst": "0.95"
+      },
+      "min_complement_gap": {
+        "best": "-0.09",
+        "labels": "gap = executable DOWN VWAP minus the price the frozen .96 ceiling requires. <= 0 is REACHABLE.",
+        "median": "-0.03",
+        "n": 3,
+        "worst": "0.14"
+      },
+      "n_after_1_extend": 0,
+      "n_after_2_extends": 0,
+      "n_open_states": 3,
+      "pct_ever_reaching_frozen_ceiling": 66.7,
+      "pct_reachable_after_1_extend": null,
+      "pct_reachable_after_2_extends": null,
+      "qty_executable_when_reachable": [
+        "100"
+      ],
+      "residual_when_never_reachable": {
+        "n_windows": 1,
+        "principal_total": "16.00",
+        "qty_total": "25"
+      },
+      "ticks_outside_open_band": 583,
+      "time_open_to_first_reachable_s": {
+        "max": 191.4,
+        "median": 191.4,
+        "min": 106.1,
+        "n": 2
+      },
+      "windows": 7,
+      "windows_with_open": 3
+    },
+    "5": {
+      "ceiling_sensitivity": {
+        "0.90": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.92": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.94": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.96": {
+          "is_frozen_ceiling": true,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.98": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "1.00": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        }
+      },
+      "effective_pair_cost_when_reachable": {
+        "best": "0.89",
+        "n": 2,
+        "worst": "0.95"
+      },
+      "min_complement_gap": {
+        "best": "-0.09",
+        "labels": "gap = executable DOWN VWAP minus the price the frozen .96 ceiling requires. <= 0 is REACHABLE.",
+        "median": "-0.03",
+        "n": 3,
+        "worst": "0.14"
+      },
+      "n_after_1_extend": 0,
+      "n_after_2_extends": 0,
+      "n_open_states": 3,
+      "pct_ever_reaching_frozen_ceiling": 66.7,
+      "pct_reachable_after_1_extend": null,
+      "pct_reachable_after_2_extends": null,
+      "qty_executable_when_reachable": [
+        "100"
+      ],
+      "residual_when_never_reachable": {
+        "n_windows": 1,
+        "principal_total": "3.20",
+        "qty_total": "5"
+      },
+      "ticks_outside_open_band": 583,
+      "time_open_to_first_reachable_s": {
+        "max": 191.4,
+        "median": 191.4,
+        "min": 106.1,
+        "n": 2
+      },
+      "windows": 7,
+      "windows_with_open": 3
+    },
+    "50": {
+      "ceiling_sensitivity": {
+        "0.90": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.92": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 1,
+          "pct_open_states_ever_reachable": 33.3
+        },
+        "0.94": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.96": {
+          "is_frozen_ceiling": true,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "0.98": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        },
+        "1.00": {
+          "is_frozen_ceiling": false,
+          "n_open_states": 3,
+          "n_reachable": 2,
+          "pct_open_states_ever_reachable": 66.7
+        }
+      },
+      "effective_pair_cost_when_reachable": {
+        "best": "0.89",
+        "n": 2,
+        "worst": "0.95"
+      },
+      "min_complement_gap": {
+        "best": "-0.09",
+        "labels": "gap = executable DOWN VWAP minus the price the frozen .96 ceiling requires. <= 0 is REACHABLE.",
+        "median": "-0.03",
+        "n": 3,
+        "worst": "0.14"
+      },
+      "n_after_1_extend": 0,
+      "n_after_2_extends": 0,
+      "n_open_states": 3,
+      "pct_ever_reaching_frozen_ceiling": 66.7,
+      "pct_reachable_after_1_extend": null,
+      "pct_reachable_after_2_extends": null,
+      "qty_executable_when_reachable": [
+        "100"
+      ],
+      "residual_when_never_reachable": {
+        "n_windows": 1,
+        "principal_total": "32.00",
+        "qty_total": "50"
+      },
+      "ticks_outside_open_band": 583,
+      "time_open_to_first_reachable_s": {
+        "max": 191.4,
+        "median": 191.4,
+        "min": 106.1,
+        "n": 2
+      },
+      "windows": 7,
+      "windows_with_open": 3
+    }
+  },
+  "tape": "analysis/gemini/info_edge/btc15m/capacity_tape_20261004T002406Z.jsonl",
+  "windows": [
+    "BTC15M2610040030",
+    "BTC15M2610040045",
+    "BTC15M2610040100",
+    "BTC15M2610040115",
+    "BTC15M2610040130",
+    "BTC15M2610040145",
+    "BTC15M2610040200"
+  ]
+}
