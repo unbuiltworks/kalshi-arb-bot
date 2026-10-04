@@ -2,62 +2,82 @@
 #
 # WHY THIS EXISTS. Two hosts this work needs are unreachable from the research
 # container: Railway's volume transport is SFTP on port 22, and the venue
-# gateway (gateway.polymarket.us), which publishes the BRTI 1-second index the
-# state table is built from, is denied by that container's network policy. A
-# GitHub runner reaches both, so retrieval and replay happen here and only
-# small derived files travel back.
+# gateway (gateway.polymarket.us), which publishes the BRTI 1-second index
+# every state-table row is built from, is denied by that container's network
+# policy. A GitHub runner reaches both, so retrieval and replay happen here and
+# only small derived files travel back.
+#
+# WHY IT IS PUSH-TRIGGERED. This workflow lives only on a research branch, and
+# GitHub offers workflow_dispatch only for workflows present on the default
+# branch. Gating a push trigger on .github/oos_request keeps the whole thing on
+# the branch without touching main, and ordinary pushes to the branch do not
+# start it.
 #
 # READ-ONLY WITH RESPECT TO RAILWAY. The only Railway operations anywhere in
 # this file are `files list` and `files download`. There is no deploy,
-# redeploy, restart, variable change, domain change, volume mount/detach/resize
-# or Railway agent call, so the healthy pmus-ws-evidence-recorder cannot be
-# disturbed by running it. The recorder keeps collecting throughout, and no
-# second service mounts its volume.
+# redeploy, restart, variable change, domain change, volume
+# mount/detach/resize or Railway agent call, so the healthy
+# pmus-ws-evidence-recorder cannot be disturbed by running it. The recorder
+# keeps collecting throughout and no second service mounts its volume.
 #
 # NOTHING IS FITTED. `harvest` retrieves and filters. `evaluate` replays, then
 # reads the FROZEN coefficients out of the committed development artifact
 # (2939ee67) and runs the staged evaluator (c31a5e32) unchanged. No threshold,
-# sizing, window-selection or controller parameter is an input to this
-# workflow -- there is deliberately nowhere to put one.
+# sizing, window-selection or controller parameter is an input anywhere --
+# there is deliberately nowhere to put one.
 #
 # WINDOW SELECTION IS MECHANICAL. Every hourly part after the frozen
 # development cutoff is harvested, all 46 of them, and the
-# OOS/DEVELOPMENT split is read from DEV_CUTOFF_SLUG in
+# OOS/DEVELOPMENT split is READ from DEV_CUTOFF_SLUG in
 # scripts/pmus_oos_extract_and_inventory.py. No window is chosen, dropped or
 # reordered by hand, and a short harvest FAILS rather than scoring part of the
 # tape.
 #
-# THE EVALUATION RUNS ONCE. The two stages are separate dispatches on purpose:
-# the tape is harvested and inventoried first, and `evaluate` is dispatched a
-# single time against one named harvest run.
+# THE EVALUATION RUNS ONCE. The stages are separate requests on purpose: the
+# tape is harvested and its completeness checked first, and STAGE=evaluate is
+# requested a single time against one named harvest run.
 name: oos-harvest-and-evaluate
 
 on:
-  workflow_dispatch:
-    inputs:
-      stage:
-        description: harvest (retrieve+filter) or evaluate (replay+score once)
-        required: true
-        default: harvest
-        type: choice
-        options: [harvest, evaluate]
-      harvest_run_id:
-        description: >-
-          evaluate stage only: run id of the harvest whose slices to score
-        required: false
-        default: ''
-      railway_cli_version:
-        description: Pinned @railway/cli version (asserted after install)
-        required: true
-        default: 5.63.1
+  push:
+    branches: ['claude/l5-pmus-economic-results-7c116e']
+    paths: ['.github/oos_request']
 
 permissions:
   contents: read
   actions: read
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.p.outputs.stage }}
+      harvest_run_id: ${{ steps.p.outputs.harvest_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the request
+        id: p
+        run: |
+          set -euo pipefail
+          f=.github/oos_request
+          stage="$(grep -E '^STAGE=' "$f" | head -1 | cut -d= -f2- | xargs)"
+          rid="$(grep -E '^HARVEST_RUN_ID=' "$f" | head -1 | cut -d= -f2- \
+                 | xargs || true)"
+          case "$stage" in
+            harvest|evaluate) ;;
+            *) echo "::error::STAGE must be harvest or evaluate, got '$stage'"
+               exit 1 ;;
+          esac
+          if [ "$stage" = evaluate ] && [ -z "$rid" ]; then
+            echo "::error::STAGE=evaluate needs HARVEST_RUN_ID"; exit 1
+          fi
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
+          echo "harvest_run_id=$rid" >> "$GITHUB_OUTPUT"
+          echo "stage=$stage harvest_run_id=$rid"
+
   harvest:
-    if: ${{ inputs.stage == 'harvest' }}
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'harvest' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -89,6 +109,7 @@ jobs:
       # pmus-ws-evidence-recorder. READ ONLY; never redeployed here.
       SERVICE_ID: 71b6ea99-ea6a-4b20-9602-fa873721ed35
       REMOTE_DIR: /state/pmus-ws/raw
+      RAILWAY_CLI_VERSION: 5.63.1
       CHUNK_FILES: ${{ matrix.chunk.files }}
     steps:
       - name: Fail closed if required CI secrets are absent
@@ -113,13 +134,13 @@ jobs:
       - name: Install the PINNED Railway CLI and assert the version
         run: |
           set -euo pipefail
-          npm install -g "@railway/cli@${{ inputs.railway_cli_version }}"
+          npm install -g "@railway/cli@$RAILWAY_CLI_VERSION"
           got="$(railway --version | tr -d '\r')"
           echo "installed: $got"
           case "$got" in
-            *"${{ inputs.railway_cli_version }}"*) ;;
+            *"$RAILWAY_CLI_VERSION"*) ;;
             *) echo "::error::CLI version mismatch: wanted" \
-                    "${{ inputs.railway_cli_version }}, got '$got'"; exit 1 ;;
+                    "$RAILWAY_CLI_VERSION, got '$got'"; exit 1 ;;
           esac
 
       - name: Prepare dedicated Railway SSH identity
@@ -196,7 +217,8 @@ jobs:
           if-no-files-found: error
 
   evaluate:
-    if: ${{ inputs.stage == 'evaluate' }}
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'evaluate' }}
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
@@ -210,7 +232,7 @@ jobs:
         with:
           pattern: oos-slice-*
           path: slices
-          run-id: ${{ inputs.harvest_run_id }}
+          run-id: ${{ needs.plan.outputs.harvest_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Merge the slices; a SHORT harvest fails rather than scoring
@@ -268,7 +290,7 @@ jobs:
                    analysis/l5/state_conditional/market_terms_oos.json \
                    analysis/l5/state_conditional/state_conditional_v1_oos.json \
                    analysis/l5/state_conditional/state_table_oos.jsonl; do
-            [ -f "$f" ] && cp -f "$f" out/ || true
+            if [ -f "$f" ]; then cp -f "$f" out/; fi
           done
           gzip -9 out/state_table_oos.jsonl || true
           ls -l out/
