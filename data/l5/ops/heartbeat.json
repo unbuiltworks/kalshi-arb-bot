@@ -1,8 +1,8 @@
 {
- "utc": "2026-10-04T14:15:28Z",
+ "utc": "2026-10-04T18:11:59Z",
  "status": "ok",
  "read_only": true,
  "stage": "shadow",
- "fills_processed": 1991,
- "windows": 111
+ "fills_processed": 1548,
+ "windows": 75
 }
