@@ -14,10 +14,10 @@ them anchored at both ends so this prose cannot be mistaken for one.
     OOS state table and runs the FROZEN 2939ee67 / c31a5e32 evaluation. It is
     requested exactly once.
 
-STAGE=harvest
-HARVEST_RUN_ID=
+STAGE=evaluate
+HARVEST_RUN_ID=37225234232
 
 Cutoff: cpc-btc-updown-15m-2026-10-02-2045z. Development ends at the cutoff;
 only windows starting strictly after it are OOS.
 
-REQUEST=1
+REQUEST=2
