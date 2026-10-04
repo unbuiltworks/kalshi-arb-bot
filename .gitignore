@@ -112,3 +112,13 @@ analysis/gemini/info_edge/btc15m_shadow_result.json
 # .jsonl.gz, which compresses ~10x on this highly repetitive JSON) together
 # with its derived summary. The .gz form is deliberately NOT ignored.
 analysis/gemini/info_edge/*/capacity_tape_*.jsonl
+
+# THE SHADOW COHORT'S RUNTIME DIRECTORY, IN FLIGHT. The running proof
+# appends telemetry every few seconds, so a tracked copy makes the tree
+# dirty continuously for the hour the run lasts. Same treatment as the raw
+# tapes, and the same reason: the FINAL state is committed when the run
+# completes (it is the rollover evidence -- windows seen, slots consumed,
+# the open-state lifecycle). Losing an in-flight shadow costs one re-run
+# and nothing irreversible, which is exactly why a LIVE cohort's record is
+# pushed to a durable latch ref DURING the run and this is not.
+analysis/gemini/shadow_cohorts/
