@@ -20,4 +20,4 @@ HARVEST_RUN_ID=37225234232
 Cutoff: cpc-btc-updown-15m-2026-10-02-2045z. Development ends at the cutoff;
 only windows starting strictly after it are OOS.
 
-REQUEST=3
+REQUEST=4

@@ -93,10 +93,13 @@ jobs:
       SERVICE_ID: 71b6ea99-ea6a-4b20-9602-fa873721ed35
       REMOTE_DIR: /state/pmus-ws/raw
       RAILWAY_CLI_VERSION: 5.63.1
-      # 2026-09-30 12:00-13:59Z covers development windows 1215z..1345z, which
-      # the committed development tape also covers. That overlap is the only
-      # ground truth available for the derivation.
-      CAL_FILES: 'pmus_ws_20260930_12.jsonl,pmus_ws_20260930_13.jsonl'
+      # The volume's 12 GiB retention has already swept every 2026-09-30
+      # part -- the oldest surviving part is pmus_ws_20261001_14 -- so the
+      # development tape's seven 09-30 windows cannot be re-derived at all.
+      # Its eighth window, 2026-10-02-0400z, is the ONLY overlap that still
+      # exists. The 03 part comes along because the features need 300s of
+      # trailing history before the window opens.
+      CAL_FILES: 'pmus_ws_20261002_03.jsonl,pmus_ws_20261002_04.jsonl'
     steps:
       - name: Fail closed if required CI secrets are absent
         run: |
