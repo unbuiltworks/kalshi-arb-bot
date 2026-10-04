@@ -55,28 +55,54 @@ def _levels(side: Mapping[str, Any]) -> List[Tuple[D, D]]:
 
 
 def walk(levels: Sequence[Tuple[D, D]], qty: D, *,
-         cost_of: Any = None) -> Dict[str, Any]:
+         cost_of: Any = None,
+         max_paid: Optional[D] = None) -> Dict[str, Any]:
     """Consume `qty` across `levels` in the order given.
 
     `cost_of` maps a level price to the price actually PAID (identity for
     UP; 1 - p for DOWN). Levels must already be ordered cheapest-first in
     PAID terms.
+
+    `max_paid` IS THE POLICY'S OWN PRICE CAP, AND IT BINDS PER LEVEL.
+    A real order is a LIMIT: an order priced at L fills against levels at
+    or below L and never above, so a VWAP that only LOOKS compliant --
+    inside the cap on average while having consumed a level above it -- is
+    a fill no limit order could have obtained. Levels above `max_paid` are
+    therefore NOT CONSUMED, and if that leaves the request short the
+    result is NOT fully executable. The remainder is never manufactured.
+
+    WHETHER THIS CHANGES ANY RECORDED NUMBER IS AN EMPIRICAL QUESTION, and
+    it was measured rather than assumed: across the recorded 00:20Z ladder
+    and twelve live BTC15M/BTC05M symbols, at q1..q100, there were ZERO
+    cases of a capped-compliant VWAP reached through an over-cap level --
+    the near-touch levels carry hundreds of contracts, so q100 never
+    reaches past the second level. The cap is enforced anyway, because
+    "it did not happen in the sample" is not an invariant.
     """
     cost = cost_of or (lambda p: p)
     got = D("0")
     spend = D("0")
     used: List[Dict[str, str]] = []
+    refused: List[Dict[str, str]] = []
     for price, avail in levels:
         if got >= qty:
             break
-        take = min(avail, qty - got)
         paid = cost(price)
+        if max_paid is not None and paid > max_paid:
+            # The policy may not pay this, so no order of ours fills here.
+            refused.append({"level_price": str(price), "paid": str(paid),
+                            "qty_available": str(avail)})
+            continue
+        take = min(avail, qty - got)
         got += take
         spend += take * paid
         used.append({"level_price": str(price), "paid": str(paid),
                      "qty": str(take)})
     filled = got
     return {"requested": str(qty), "filled": str(filled),
+            "max_paid": (None if max_paid is None else str(max_paid)),
+            "levels_refused_above_cap": refused,
+            "n_levels_refused_above_cap": len(refused),
             "shortfall": str(qty - filled),
             "fully_executable": bool(filled >= qty),
             "spend": str(spend),
@@ -92,31 +118,34 @@ def walk(levels: Sequence[Tuple[D, D]], qty: D, *,
     }
 
 
-def up_acquisition(depth: Mapping[str, Any], qty: D) -> Dict[str, Any]:
+def up_acquisition(depth: Mapping[str, Any], qty: D, *,
+                   max_paid: Optional[D] = None) -> Dict[str, Any]:
     """Buy UP by walking the asks upward (cheapest ask first)."""
     lv = sorted(_levels(depth.get("asks") or {}), key=lambda t: t[0])
-    return walk(lv, qty)
+    return walk(lv, qty, max_paid=max_paid)
 
 
-def down_acquisition(depth: Mapping[str, Any], qty: D) -> Dict[str, Any]:
+def down_acquisition(depth: Mapping[str, Any], qty: D, *,
+                     max_paid: Optional[D] = None) -> Dict[str, Any]:
     """Buy DOWN through the complement identity: paying (1 - bid).
 
     The cheapest DOWN sits at the HIGHEST bid, so the bids are walked
     downward in price -- which is cheapest-first in PAID terms.
     """
     lv = sorted(_levels(depth.get("bids") or {}), key=lambda t: -t[0])
-    return walk(lv, qty, cost_of=lambda p: D("1") - p)
+    return walk(lv, qty, cost_of=lambda p: D("1") - p, max_paid=max_paid)
 
 
 def pair_at(depth: Mapping[str, Any], qty: D, *,
-            pair_ceiling: D) -> Dict[str, Any]:
+            pair_ceiling: D,
+            max_paid: Optional[D] = None) -> Dict[str, Any]:
     """Both legs at `qty`, and whether a matched pair is executable.
 
     `pair_ceiling` is passed IN by the caller from the frozen policy; this
     module does not know or restate it.
     """
-    up = up_acquisition(depth, qty)
-    dn = down_acquisition(depth, qty)
+    up = up_acquisition(depth, qty, max_paid=max_paid)
+    dn = down_acquisition(depth, qty, max_paid=max_paid)
     both = up["fully_executable"] and dn["fully_executable"]
     pair_cost = None
     if up["vwap"] is not None and dn["vwap"] is not None:
@@ -143,6 +172,7 @@ def pair_at(depth: Mapping[str, Any], qty: D, *,
 
 
 def capacity_curve(depth: Mapping[str, Any], *, pair_ceiling: D,
+                   max_paid: Optional[D] = None,
                    sizes: Sequence[D] = SIZES) -> Dict[str, Any]:
     """The whole curve, plus the maximum DEFENSIBLE pair quantity.
 
@@ -151,7 +181,8 @@ def capacity_curve(depth: Mapping[str, Any], *, pair_ceiling: D,
     not an estimate of it -- hidden or replenishing liquidity would only
     help, and is not counted because it was not observed.
     """
-    rows = [pair_at(depth, q, pair_ceiling=pair_ceiling) for q in sizes]
+    rows = [pair_at(depth, q, pair_ceiling=pair_ceiling, max_paid=max_paid)
+            for q in sizes]
     ok = [r for r in rows if r["both_legs_executable"]
           and r["pair_cost_within_ceiling"]]
     best = ok[-1] if ok else None

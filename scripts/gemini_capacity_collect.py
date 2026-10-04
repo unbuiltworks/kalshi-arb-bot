@@ -95,8 +95,16 @@ def sample(duration: str, now: float, *,
                          "readable": False,
                          "why": depth.get("why") or "depth unreadable"})
             continue
+        # THE POLICY'S PRICE CAP BINDS PER LEVEL. A real order is a LIMIT,
+        # so it cannot fill against a level above its price; a VWAP that is
+        # inside the cap only because it averaged in an over-cap level is a
+        # fill no order of ours could obtain. Measured example on a thin
+        # book: asks 0.80x5 then 0.95x5000 gives an UNCAPPED q10 VWAP of
+        # 0.875 -- compliant-looking -- while 5 of those 10 came from 0.95.
+        # Capped, that request fills 5 and is NOT fully executable.
         cur = CAP.capacity_curve(depth,
-                                 pair_ceiling=POLICY["MAX_PAIR_COST"])
+                                 pair_ceiling=POLICY["MAX_PAIR_COST"],
+                                 max_paid=POLICY["HARD_MAX_PRICE"])
         in_band = (lo is not None and lo <= m["tte"] <= hi)
         rows.append({
             "utc": _utc(), "duration": duration, "ticker": m["ticker"],
@@ -105,6 +113,18 @@ def sample(duration: str, now: float, *,
             "frozen_open_band": [lo, hi],
             "band_basis": band["basis"],
             "ladder": cur["depth_shown"],
+            # THE RAW LEVELS, so any later question can be re-derived from
+            # the tape instead of needing a fresh collection. Their absence
+            # is why the first tape could not be re-walked under the price
+            # cap after the fact.
+            "levels": {
+                "asks": [{"price": l.get("price"), "qty": l.get("qty")}
+                         for l in (depth.get("asks") or {}).get("levels")
+                         or []],
+                "bids": [{"price": l.get("price"), "qty": l.get("qty")}
+                         for l in (depth.get("bids") or {}).get("levels")
+                         or []]},
+            "price_cap_applied": str(POLICY["HARD_MAX_PRICE"]),
             "snapshot_age_s": depth.get("snapshot_age_s"),
             "sizes": [{
                 "qty": r["qty"],
@@ -113,6 +133,10 @@ def sample(duration: str, now: float, *,
                 "up_fully_executable": r["up"]["fully_executable"],
                 "up_slippage_vs_touch": r["up"]["slippage_vs_touch"],
                 "up_levels": r["up"]["n_levels_consumed"],
+                "up_levels_refused_above_cap":
+                    r["up"]["n_levels_refused_above_cap"],
+                "down_levels_refused_above_cap":
+                    r["down"]["n_levels_refused_above_cap"],
                 "down_vwap": r["down"]["vwap"],
                 "down_filled": r["down"]["filled"],
                 "down_fully_executable": r["down"]["fully_executable"],

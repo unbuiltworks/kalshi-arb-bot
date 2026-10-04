@@ -458,3 +458,74 @@ def test_the_duration_registry_carries_no_decision_rule():
         assert banned not in src, (
             "the duration registry must not name a strategy parameter: %s"
             % banned)
+
+
+# =====================================================================
+# THE PRICE CAP BINDS PER LEVEL, NOT ON AVERAGE
+# =====================================================================
+def test_a_vwap_inside_the_cap_may_not_be_reached_through_an_over_cap_level():
+    """THE INVARIANT. A real order is a LIMIT: priced at L it fills at or
+    below L and never above. So a VWAP that is inside the policy's cap
+    ONLY because it averaged in an over-cap level is a fill no order of
+    ours could have obtained, and the quantity is NOT executable.
+
+    Measured case: asks 0.80 x5 then 0.95 x5000. Uncapped, q10 walks to a
+    VWAP of 0.875 -- which passes a 0.90 check -- while HALF the fill came
+    from 0.95.
+    """
+    from src.gemini_execution import capacity_ladder as CAP
+    from src.gemini_execution.ci15m_policy import POLICY
+    cap = POLICY["HARD_MAX_PRICE"]
+    depth = {"asks": {"levels": [{"price": "0.80", "qty": "5"},
+                                 {"price": "0.95", "qty": "5000"}]}}
+
+    uncapped = CAP.up_acquisition(depth, D("10"))
+    assert uncapped["vwap"] == "0.875"
+    assert D(uncapped["vwap"]) <= cap, "this is what makes it dangerous"
+    assert uncapped["fully_executable"] is True
+
+    capped = CAP.up_acquisition(depth, D("10"), max_paid=cap)
+    assert capped["filled"] == "5"
+    assert capped["fully_executable"] is False, (
+        "the remainder must NOT be manufactured")
+    assert capped["shortfall"] == "5"
+    assert capped["n_levels_refused_above_cap"] == 1
+    assert all(D(x["paid"]) <= cap for x in capped["levels_consumed"])
+
+
+def test_the_cap_does_not_change_an_all_compliant_ladder():
+    """Enforcement must not quietly move numbers where it should not."""
+    from src.gemini_execution import capacity_ladder as CAP
+    from src.gemini_execution.ci15m_policy import POLICY
+    depth = {"asks": {"levels": [{"price": "0.82", "qty": "5"},
+                                 {"price": "0.84", "qty": "350"}]}}
+    for q in (D("1"), D("10"), D("100")):
+        a = CAP.up_acquisition(depth, q)
+        b = CAP.up_acquisition(depth, q, max_paid=POLICY["HARD_MAX_PRICE"])
+        assert a["vwap"] == b["vwap"] and a["filled"] == b["filled"]
+        assert b["n_levels_refused_above_cap"] == 0
+
+
+def test_the_down_leg_is_capped_too():
+    """DOWN pays 1 - bid, so a low bid is an expensive DOWN."""
+    from src.gemini_execution import capacity_ladder as CAP
+    from src.gemini_execution.ci15m_policy import POLICY
+    # bid 0.20 -> DOWN costs 0.80 (ok); bid 0.05 -> DOWN costs 0.95 (over)
+    depth = {"bids": {"levels": [{"price": "0.20", "qty": "4"},
+                                 {"price": "0.05", "qty": "5000"}]}}
+    c = CAP.up_acquisition  # sanity: wrong side has no bids
+    assert c(depth, D("1"))["vwap"] is None
+    d = CAP.down_acquisition(depth, D("10"),
+                             max_paid=POLICY["HARD_MAX_PRICE"])
+    assert d["filled"] == "4" and d["fully_executable"] is False
+    assert d["n_levels_refused_above_cap"] == 1
+
+
+def test_the_collector_applies_the_policy_cap_and_records_levels():
+    import inspect
+    import scripts.gemini_capacity_collect as C
+    src = inspect.getsource(C.sample)
+    assert 'max_paid=POLICY["HARD_MAX_PRICE"]' in src
+    assert '"levels"' in src, (
+        "the raw levels must be recorded so the tape can be re-walked "
+        "later without a fresh collection")
