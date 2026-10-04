@@ -104,3 +104,11 @@ data/gemini_15m_shadow/
 # execution code, and it must not keep landing on the authorized lineage.
 # The frozen one-off snapshot (btc15m_shadow_frozen_n4.json) stays tracked.
 analysis/gemini/info_edge/btc15m_shadow_result.json
+
+# RAW CAPACITY TAPES, IN FLIGHT. ~18 MB per 90-minute collection and
+# appended every 5 s, so keeping them tracked while they are being written
+# churns a large binary-ish blob on every commit. They are EVIDENCE and are
+# NOT discarded: each completed tape is committed GZIPPED (capacity_tape_*
+# .jsonl.gz, which compresses ~10x on this highly repetitive JSON) together
+# with its derived summary. The .gz form is deliberately NOT ignored.
+analysis/gemini/info_edge/*/capacity_tape_*.jsonl

@@ -1,0 +1,13 @@
+{
+  "label": "GEMINI_MUTATION_COHORT_V1",
+  "cohort_id": "SHADOW-PERSIST4-RUN1",
+  "created_utc": "2026-10-04T00:34:10.886043+00:00",
+  "budget": 8,
+  "ledger_path": "analysis/gemini/shadow_cohorts/SHADOW-PERSIST4-RUN1/ledger.jsonl",
+  "predecessor_ledger": "analysis/gemini/continuous_ledger.jsonl",
+  "predecessor_sha256": "89cf9de6d949cf8838afe1aca18ff7c6d1cacf3472e4562c25439c2064ea40a7",
+  "predecessor_consumed": 12,
+  "envelope_max_actions": 12,
+  "note": " profile=PERSIST4",
+  "labels": "NO ROLLOVER: this budget is fixed and unused slots never carry. NO REWRITE: the predecessor ledger is hashed, never modified. NO AUTOMATIC CREATION: nothing in the package calls create()."
+}
