@@ -87,6 +87,8 @@ class Port:
         self.deployed = ZERO                    # cash + fees, cumulative
         self.max_deployed = ZERO
         self.max_residual = ZERO
+        self.cash_in = ZERO                     # exit proceeds, net of fee
+        self.max_net_capital = ZERO             # deployed - cash_in, peak
 
     # --- aggregates the preregistration requires after every purchase
     @property
@@ -120,6 +122,24 @@ class Port:
         self.rebate_modelled += rebate
         self.deployed += cost + fee
         self.max_deployed = max(self.max_deployed, self.deployed)
+        self.max_residual = max(self.max_residual, abs(self.residual))
+        self.max_net_capital = max(self.max_net_capital,
+                                   self.deployed - self.cash_in)
+
+    def sell(self, side: str, sh: D, px: D, fee: D):
+        """Reduce one side at an executable price. The cost basis leaves at
+        that side's AVERAGE cost, so the matched/directional split below is
+        computed on the same basis throughout and cannot drift with order."""
+        if side == "UP":
+            avg = self.up_cash / self.up_sh if self.up_sh > 0 else ZERO
+            self.up_sh -= sh
+            self.up_cash -= sh * avg
+        else:
+            avg = self.dn_cash / self.dn_sh if self.dn_sh > 0 else ZERO
+            self.dn_sh -= sh
+            self.dn_cash -= sh * avg
+        self.fees += fee
+        self.cash_in += sh * px - fee
         self.max_residual = max(self.max_residual, abs(self.residual))
 
     # --- valuation
@@ -436,6 +456,248 @@ def replay(slug: str, w, outcome: str, variant: str) -> dict:
     }
 
 
+def replay_c(slug: str, w, outcome: str) -> dict:
+    """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
+
+    Seed $1 on BOTH sides once, extend the favored side $1 per 60 s only
+    while it is strengthening, and on one derived reversal condition flatten
+    the directional residual at executable prices while never unwinding
+    matched inventory.
+    """
+    import bisect
+    books, trades = w["book"], w["trade"]
+    start = window_start(slug)
+    port = Port()
+    bt = [b["t"] for b in books]
+    marks = [start + k * CADENCE_S for k in range(1, 15)]
+    fav = None
+    prev_fav_mid = None
+    peak = None                  # running max of the favored mid, this episode
+    spread_at_peak = None
+    episode_open = False
+    flips = skips = withheld = 0
+    allocs, exits, traj = [], [], []
+    cleanup_shares = ZERO
+    peak_pnl = {"pnl": None, "t": None}
+    trough = ZERO
+    max_dd = ZERO
+
+    def book_at(t):
+        j = bisect.bisect_left(bt, t) - 1
+        return books[j] if j >= 0 else None
+
+    def fav_mid(side, bid, ask):
+        m = (bid + ask) / 2
+        return m if side == "UP" else ONE - m
+
+    def taker_buy(side, bid, ask, bq, aq, t, tag):
+        px = ask if side == "UP" else ONE - bid
+        depth = aq if side == "UP" else bq
+        sh = ALLOC_USD / px
+        if depth < sh:
+            sh = depth
+        if sh <= 0 or not (D("0.01") <= px <= D("0.99")):
+            return False
+        fee = FEES.taker_fee(px, sh)
+        port.add(side, sh, px, fee)
+        allocs.append({"t": t, "kind": tag, "side": side, "px": str(px),
+                       "sh": str(round(sh, 4)), "fee": str(fee),
+                       "up_sh": str(round(port.up_sh, 4)),
+                       "dn_sh": str(round(port.dn_sh, 4)),
+                       "matched": str(round(port.matched, 4)),
+                       "residual": str(round(port.residual, 4)),
+                       "deployed": str(round(port.deployed, 4)),
+                       "net_capital": str(round(port.deployed - port.cash_in,
+                                                4))})
+        return True
+
+    def flatten(t, reason):
+        """Reduce the residual to zero at executable prices, across as many
+        books as depth requires. Matched inventory is untouched."""
+        nonlocal cleanup_shares
+        b = book_at(t)
+        if b is None:
+            return
+        before = port.mark(D(b["bid"]), D(b["ask"])) - (port.deployed
+                                                        - port.cash_in)
+        want = port.residual
+        if want == 0:
+            return
+        side = "UP" if want > 0 else "DOWN"
+        need = abs(want)
+        legs = []
+        j = bisect.bisect_left(bt, t)
+        j = max(0, j - 1)
+        while need > 0 and j < len(books):
+            bb = books[j]
+            bid, ask = D(bb["bid"]), D(bb["ask"])
+            bq, aq = D(bb["bid_qty"]), D(bb["ask_qty"])
+            # selling UP hits the UP bid; exiting DOWN sells at the DOWN bid,
+            # 1 - ask, which consumes the UP ask side's depth
+            px = bid if side == "UP" else ONE - ask
+            depth = bq if side == "UP" else aq
+            take = min(need, depth)
+            if take > 0 and D("0.01") <= px <= D("0.99"):
+                fee = FEES.taker_fee(px, take)
+                port.sell(side, take, px, fee)
+                need -= take
+                legs.append({"t": bb["t"], "px": str(px),
+                             "sh": str(round(take, 4)), "fee": str(fee)})
+            j += 1
+            if len(legs) > 200:
+                break
+        if need > 0:
+            cleanup_shares += need
+        bb = book_at(legs[-1]["t"]) if legs else b
+        after = (port.mark(D(bb["bid"]), D(bb["ask"]))
+                 - (port.deployed - port.cash_in))
+        exits.append({
+            "t": t, "reason": reason, "side_exited": side,
+            "shares_wanted": str(round(abs(want), 4)),
+            "shares_exited": str(round(abs(want) - need, 4)),
+            "unfilled_cleanup": str(round(need, 4)),
+            "legs": legs,
+            "executable_pnl_before": str(round(before, 4)),
+            "executable_pnl_after": str(round(after, 4)),
+            "delta": str(round(after - before, 4)),
+            "matched_after": str(round(port.matched, 4)),
+            "residual_after": str(round(port.residual, 4))})
+
+    for mi, mark in enumerate(marks):
+        i = bisect.bisect_left(bt, mark)
+        cand = [j for j in (i - 1, i) if 0 <= j < len(books)]
+        best = min(cand, key=lambda j: abs(books[j]["t"] - mark), default=None)
+        if best is None or abs(books[best]["t"] - mark) > MARK_TOL_S:
+            skips += 1
+        else:
+            b = books[best]
+            bid, ask = D(b["bid"]), D(b["ask"])
+            bq, aq = D(b["bid_qty"]), D(b["ask_qty"])
+            mid = (bid + ask) / 2
+            new_fav = ("UP" if mid > D("0.50")
+                       else ("DOWN" if mid < D("0.50") else None))
+            if mi == 0:
+                # the seed: bounded inventory on BOTH sides, once
+                taker_buy("UP", bid, ask, bq, aq, b["t"], "seed")
+                taker_buy("DOWN", bid, ask, bq, aq, b["t"], "seed")
+            if new_fav is None:
+                skips += 1
+            else:
+                if fav is not None and new_fav != fav:
+                    flips += 1
+                    peak = None
+                    spread_at_peak = None
+                    episode_open = False
+                    prev_fav_mid = None
+                fav = new_fav
+                fm = fav_mid(fav, bid, ask)
+                strengthening = (prev_fav_mid is not None
+                                 and fm > prev_fav_mid)
+                if mi == 0:
+                    episode_open = True            # the seed opens an episode
+                    peak, spread_at_peak = fm, (ask - bid)
+                elif strengthening and episode_open:
+                    taker_buy(fav, bid, ask, bq, aq, b["t"], "extend")
+                elif episode_open:
+                    withheld += 1
+                elif strengthening:
+                    # a new episode begins on the first strengthening read
+                    # after a flip or an exit
+                    episode_open = True
+                    peak, spread_at_peak = fm, (ask - bid)
+                    taker_buy(fav, bid, ask, bq, aq, b["t"], "extend")
+                prev_fav_mid = fm
+
+        # between marks: the reversal is a risk control, so it is evaluated
+        # on EVERY book update
+        nxt = mark + CADENCE_S
+        for j in range(len(books)):
+            bb = books[j]
+            if not (mark <= bb["t"] < nxt):
+                continue
+            bid2, ask2 = D(bb["bid"]), D(bb["ask"])
+            if fav is not None and episode_open:
+                fm2 = fav_mid(fav, bid2, ask2)
+                if peak is None or fm2 > peak:
+                    peak, spread_at_peak = fm2, (ask2 - bid2)
+                else:
+                    trail = (spread_at_peak
+                             + FEES.taker_fee(peak, D(1)) * 2)
+                    if fm2 < peak - trail and port.residual != 0:
+                        flatten(bb["t"], "trail_%s" % str(round(trail, 4)))
+                        episode_open = False
+                        peak = spread_at_peak = None
+            mk = port.mark(bid2, ask2)
+            net_cap = port.deployed - port.cash_in
+            pnl = mk - net_cap
+            traj.append({"t": bb["t"], "bid": bb["bid"], "ask": bb["ask"],
+                         "mark": str(round(mk, 4)),
+                         "pnl": str(round(pnl, 4)),
+                         "matched": str(round(port.matched, 4)),
+                         "residual": str(round(port.residual, 4)),
+                         "net_capital": str(round(net_cap, 4))})
+            if peak_pnl["pnl"] is None or pnl > D(peak_pnl["pnl"]):
+                peak_pnl = {"pnl": str(round(pnl, 4)), "t": bb["t"],
+                            "s_into_window": round(bb["t"] - start, 1)}
+            trough = min(trough, pnl)
+            if peak_pnl["pnl"] is not None:
+                max_dd = max(max_dd, D(peak_pnl["pnl"]) - pnl)
+
+    last = books[-1]
+    bidL, askL = D(last["bid"]), D(last["ask"])
+    settle = port.settlement_value(outcome)
+    net = port.cash_in + settle - port.deployed
+    # matched economics on average costs; directional is the remainder, so
+    # the three lines tie to the cash identity exactly.
+    m = port.matched
+    cu = port.up_cash / port.up_sh if port.up_sh > 0 else ZERO
+    cd = port.dn_cash / port.dn_sh if port.dn_sh > 0 else ZERO
+    matched_econ = m * (ONE - (cu + cd)) if m > 0 else ZERO
+    directional = net - matched_econ
+    return {
+        "slug": slug, "variant": "C", "settlement_outcome": outcome,
+        "allocations": len(allocs),
+        "seed_legs": sum(1 for a in allocs if a["kind"] == "seed"),
+        "extends": sum(1 for a in allocs if a["kind"] == "extend"),
+        "extensions_withheld_not_strengthening": withheld,
+        "skipped_periods": skips, "leadership_flips": flips,
+        "exits": len(exits),
+        "cleanup_shares_unexitable": str(round(cleanup_shares, 4)),
+        "up_shares": str(round(port.up_sh, 4)),
+        "dn_shares": str(round(port.dn_sh, 4)),
+        "up_cash": str(round(port.up_cash, 4)),
+        "dn_cash": str(round(port.dn_cash, 4)),
+        "matched_shares": str(round(m, 4)),
+        "residual_terminal": str(round(port.residual, 4)),
+        "max_residual": str(round(port.max_residual, 4)),
+        "acquisition_cost": str(round(port.acq_cost, 4)),
+        "fees": str(round(port.fees, 4)),
+        "maker_compensation": "0.0000",
+        "max_capital": str(round(port.max_net_capital, 4)),
+        "gross_cash_out": str(round(port.deployed, 4)),
+        "exit_proceeds": str(round(port.cash_in, 4)),
+        "settlement_value": str(round(settle, 4)),
+        "matched_pair_economics": str(round(matched_econ, 4)),
+        "directional_trading_pnl": str(round(directional, 4)),
+        "reconciliation_matched_plus_directional_minus_net": str(
+            round(matched_econ + directional - net, 6)),
+        "gross_settlement_pnl": str(round(port.cash_in + settle
+                                          - port.acq_cost, 4)),
+        "net_settlement_pnl": str(round(net, 4)),
+        "peak_executable_pnl": peak_pnl["pnl"],
+        "peak_t_s_into_window": peak_pnl.get("s_into_window"),
+        "terminal_executable_pnl": str(round(
+            port.mark(bidL, askL) - (port.deployed - port.cash_in), 4)),
+        "min_executable_pnl": str(round(trough, 4)),
+        "max_drawdown_from_peak": str(round(max_dd, 4)),
+        "opposite_fills": 0,
+        "maker_rebate_modelled_UNVERIFIED": "0.0000",
+        "maker_rebate_verified": "0.0000",
+        "trajectory": traj, "allocation_log": allocs, "exit_log": exits,
+        "opposite_fill_log": [],
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tape", default=TAPE)
@@ -452,6 +714,7 @@ def main() -> int:
         w, oc, _ = elig[slug]
         res["windows"][slug] = {v: replay(slug, w, oc, v)
                                 for v in ("A", "B", "Am")}
+        res["windows"][slug]["C"] = replay_c(slug, w, oc)
     os.makedirs(a.out, exist_ok=True)
     # the trajectories are ~99MB as one JSON document, so they go out as a
     # gzipped row stream and the summary keeps everything else. The split is
