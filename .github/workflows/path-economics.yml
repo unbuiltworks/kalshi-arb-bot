@@ -1,0 +1,89 @@
+# Run the sequential path-economics study on the reconstructed OOS state table.
+#
+# WHY A RUNNER. The reconstructed post-cutoff tape lives in the CI artifact
+# produced by the calibrated evaluation run; the research container cannot reach
+# Railway's SFTP transport or the venue gateway, so the table is here, not there.
+# This job touches NO external service at all: it downloads one artifact this
+# repository already produced and runs a pure, deterministic script over it.
+#
+# NOTHING IS LIVE AND NOTHING IS FITTED. No Railway operation, no order, no
+# deploy, no credential. The study has no tunable threshold and never computes
+# the rejected q - executable price - fee signal.
+name: path-economics
+
+on:
+  push:
+    branches: ['claude/l5-pmus-economic-results-7c116e']
+    paths: ['.github/path_economics_request']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Read the request
+        id: p
+        run: |
+          set -euo pipefail
+          f=.github/path_economics_request
+          rid="$(sed -n -E 's/^EVAL_RUN_ID=([0-9]+)[[:space:]]*$/\1/p' "$f" | tail -1)"
+          if [ -z "$rid" ]; then
+            echo "::error::EVAL_RUN_ID missing"; exit 1
+          fi
+          echo "rid=$rid" >> "$GITHUB_OUTPUT"
+          echo "eval run: $rid"
+
+      - name: Fetch the reconstructed OOS state table
+        uses: actions/download-artifact@v4
+        with:
+          pattern: oos-evaluation-*
+          path: ev
+          run-id: ${{ steps.p.outputs.rid }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Unpack and record provenance
+        run: |
+          set -euo pipefail
+          gz="$(ls ev/*/state_table_oos.jsonl.gz | head -1)"
+          echo "source: $gz"
+          sha256sum "$gz"
+          mkdir -p work
+          zcat "$gz" > work/state_table_oos.jsonl
+          wc -l work/state_table_oos.jsonl
+          python3 -c "import json;r=json.loads(open('work/state_table_oos.jsonl').readline());print('columns:', sorted(r))"
+
+      - name: Run the study
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_path_economics.py \
+            --table work/state_table_oos.jsonl --label OOS \
+            | tee PATH_ECONOMICS.log
+
+      - name: Package
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          for f in PATH_ECONOMICS.log \
+                   analysis/l5/path_economics/path_economics_oos.json; do
+            if [ -f "$f" ]; then cp -f "$f" out/; fi
+          done
+          gzip -9 -f out/path_economics_oos.json || true
+          ls -l out/
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: path-economics-${{ github.run_id }}
+          path: out/
+          retention-days: 30
+          if-no-files-found: error

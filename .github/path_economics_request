@@ -1,0 +1,15 @@
+« sequential path-economics study request »
+
+Touching this file starts .github/workflows/path-economics.yml. The workflow is
+branch-local, and GitHub offers workflow_dispatch only for workflows on the
+default branch, so a gated push trigger is how it gets started without putting
+research plumbing on main.
+
+The only directive the workflow reads is EVAL_RUN_ID, matched anchored at both
+ends so this prose cannot be mistaken for it. It names the run whose artifact
+holds the reconstructed post-cutoff state table -- the one whose derivation was
+calibrated against the development tape at recall 1.000.
+
+EVAL_RUN_ID=37239734134
+
+REQUEST=1
