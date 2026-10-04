@@ -490,6 +490,9 @@ def replay_c(slug: str, w, outcome: str,
              alloc: D = ALLOC_USD, *, seed: bool = True,
              opposite_rest: bool = False, name: str = "C",
              entry_mode: str = "taker", exit_mode: str = "taker",
+             require_strengthening: bool = True,
+             exits_enabled: bool = True,
+             seed_multiple: D = D(1),
              only_exits=None,
              only_periods=None) -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
@@ -534,10 +537,10 @@ def replay_c(slug: str, w, outcome: str,
         m = (bid + ask) / 2
         return m if side == "UP" else ONE - m
 
-    def taker_buy(side, bid, ask, bq, aq, t, tag):
+    def taker_buy(side, bid, ask, bq, aq, t, tag, mult: D = D(1)):
         px = ask if side == "UP" else ONE - bid
         depth = aq if side == "UP" else bq
-        sh = alloc / px
+        sh = (alloc * mult) / px
         if depth > 0:
             port.depth_frac.append(float(min(sh, depth) / depth))
         if depth < sh:
@@ -885,9 +888,12 @@ def replay_c(slug: str, w, outcome: str,
             new_fav = ("UP" if mid > D("0.50")
                        else ("DOWN" if mid < D("0.50") else None))
             if mi == 0 and seed:
-                # the seed: bounded inventory on BOTH sides, once
-                taker_buy("UP", bid, ask, bq, aq, b["t"], "seed")
-                taker_buy("DOWN", bid, ask, bq, aq, b["t"], "seed")
+                # the seed: bounded inventory on BOTH sides, once. V1 sizes
+                # it by the manual experiment's own 5:1 ratio.
+                taker_buy("UP", bid, ask, bq, aq, b["t"], "seed",
+                          mult=seed_multiple)
+                taker_buy("DOWN", bid, ask, bq, aq, b["t"], "seed",
+                          mult=seed_multiple)
             if new_fav is None:
                 skips += 1
             else:
@@ -904,6 +910,10 @@ def replay_c(slug: str, w, outcome: str,
                 if mi == 0 and seed:
                     episode_open = True            # the seed opens an episode
                     peak, spread_at_peak = fm, (ask - bid)
+                elif not require_strengthening:
+                    # V1: one purchase of the current favorite every period,
+                    # unconditionally.
+                    act(mi, fav, bid, ask, bq, aq, b["t"])
                 elif strengthening and episode_open:
                     act(mi, fav, bid, ask, bq, aq, b["t"])
                 elif episode_open:
@@ -995,7 +1005,8 @@ def replay_c(slug: str, w, outcome: str,
                 else:
                     trail = (spread_at_peak
                              + FEES.taker_fee(peak, D(1)) * 2)
-                    if fm2 < peak - trail and port.residual != 0:
+                    if (exits_enabled and fm2 < peak - trail
+                            and port.residual != 0):
                         flatten(bb["t"], "trail_%s" % str(round(trail, 4)),
                                 trail=trail, fm_trigger=fm2)
                         episode_open = False
@@ -1151,6 +1162,13 @@ def main() -> int:
         res["windows"][slug]["D3"] = replay_c(
             slug, w, oc, al, seed=False, name="D3",
             entry_mode="maker_then_taker")
+        res["windows"][slug]["V1"] = replay_c(
+            slug, w, oc, al, seed=True, name="V1",
+            require_strengthening=False, exits_enabled=False,
+            seed_multiple=D(5))
+        res["windows"][slug]["V1_no_seed"] = replay_c(
+            slug, w, oc, al, seed=False, name="V1_no_seed",
+            require_strengthening=False, exits_enabled=False)
         d4 = replay_c(slug, w, oc, al, seed=False, name="D4",
                       exit_mode="maker")
         res["windows"][slug]["D4"] = d4
