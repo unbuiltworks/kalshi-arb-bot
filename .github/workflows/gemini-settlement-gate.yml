@@ -337,7 +337,7 @@ jobs:
         if: ${{ github.event.inputs.continuous_shadow_soak == 'true' }}
         uses: actions/checkout@v4
         with:
-          ref: a905d33b010fdbfdd2fed93d868e67706933e461
+          ref: a7a55bd264a6e8cad99c040cb7ae1f34dcef1865
           path: shadowtree
 
       - name: CI15M four-window PERSISTENT shadow proof (sends nothing)
