@@ -372,11 +372,47 @@ def authoritative_fill(order: Mapping[str, Any]) -> Optional[dict]:
                "parseable average execution price")
 
 
-def fresh_bbo(t: Transport, slug: str, sleep=time.sleep) -> dict:
+def _gateway_bbo(t: Transport, slug: str, sleep=time.sleep) -> dict:
+    """The KEYLESS PUBLIC gateway quote. Diagnostics only once a WS feed is
+    attached, and unreachable from an armed run -- see `fresh_bbo`."""
     md = _get_with_retry(t, f"/v1/markets/{slug}/bbo", base=GATEWAY,
                          sleep=sleep).get("marketData") or {}
     return {"bid": (md.get("bestBid") or {}).get("value"),
-            "ask": (md.get("bestAsk") or {}).get("value")}
+            "ask": (md.get("bestAsk") or {}).get("value"),
+            "source": "public_gateway"}
+
+
+#: the authenticated feed, attached by the runner. None means "not
+#: configured"; it is never created implicitly.
+WS_FEED = None
+
+
+def attach_ws_feed(feed) -> None:
+    """Install the authenticated WS pricing source. The ONLY market-state
+    input boundary change in this executor."""
+    global WS_FEED
+    WS_FEED = feed
+
+
+def fresh_bbo(t: Transport, slug: str, sleep=time.sleep) -> dict:
+    """The executor's single market-state input.
+
+    With an authenticated WS feed attached, the quote comes from it and
+    nothing else: a missing, one-sided or stale book raises and the caller
+    places no order. With no feed attached, an ARMED run refuses outright
+    rather than silently pricing from the public gateway; only an unarmed
+    (diagnostic) run may read the gateway.
+    """
+    if WS_FEED is not None:
+        try:
+            return WS_FEED.bbo(slug)
+        except Exception as e:                                # noqa: BLE001
+            raise Halt("WS_BBO_UNAVAILABLE: %s" % (e,)) from None
+    if armed():
+        raise Halt("WS_PRICING_REQUIRED: armed run with no authenticated "
+                   "WS feed attached; the public gateway is not an "
+                   "acceptable pricing source for a money-moving run")
+    return _gateway_bbo(t, slug, sleep=sleep)
 
 
 def would_cross(outcome_side: str, price: D, bbo: Mapping[str, Any]) -> bool:
