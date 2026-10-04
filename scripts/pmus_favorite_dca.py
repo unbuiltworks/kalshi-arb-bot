@@ -28,6 +28,11 @@ ZERO, ONE, TICK = D(0), D(1), D("0.01")
 CADENCE_S = 60
 ALLOC_USD = D(1)        # the frozen default; only the ENVELOPE study varies it
 MIN_SPAN_S = 600
+#: D3's single derived wait: measured cancel RTT p90 (0.612s, 4,567 in-repo
+#: samples) + one median book inter-arrival (0.101s, n=178,135). It is the
+#: earliest achievable fallback, not a tuned value -- see
+#: analysis/l5/favorite_dca/PREREGISTRATION_D3.md.
+D3_WAIT_S = 0.713
 END_TOL_S = 30
 MARK_TOL_S = 5
 TERMINAL = {(D("0.9900"), D("0.9900")): "UP", (D("0.0100"), D("0.0100")): "DOWN"}
@@ -504,7 +509,7 @@ def replay_c(slug: str, w, outcome: str,
     # verbatim so no offset is chosen here -- which lives until the next
     # evaluation and is then cancelled. An unfilled action is a MISSED action,
     # never silently crossed.
-    intents, captures, missed = [], [], []
+    intents, captures, missed, fallbacks = [], [], [], []
     pending = None
     bt = [b["t"] for b in books]
     marks = [start + k * CADENCE_S for k in range(1, 15)]
@@ -571,6 +576,9 @@ def replay_c(slug: str, w, outcome: str,
             if taker_buy(side, bid, ask, bq, aq, t, "extend"):
                 captures.append(mi)
             return
+        if entry_mode == "maker_then_taker":
+            d3_attempt(mi, side, t, bid, ask)
+            return
         # maker-first: rest at our own side's best bid; no touch = fill
         mpx = bid if side == "UP" else ONE - ask
         if not (D("0.01") <= mpx <= D("0.99")):
@@ -580,6 +588,89 @@ def replay_c(slug: str, w, outcome: str,
         pending = {"period": mi, "side": side, "px": mpx, "t": t,
                    "taker_px": taker_px,
                    "sh_wanted": alloc / mpx, "filled": ZERO}
+
+    def d3_attempt(mi, side, t, bid, ask):
+        """rest -> cancel -> confirmed -> re-read -> conditional cross.
+
+        The passive order lives for exactly D3_WAIT_S, which is the time the
+        venue needs to confirm a cancel and serve one fresh state. If it
+        fills, that fill stands. If it does not, the fallback is priced at
+        the book in force at t + D3_WAIT_S -- never at the price D0 saw at t
+        -- so momentum moving away during the attempt is charged to D3.
+        """
+        mpx = bid if side == "UP" else ONE - ask
+        r = Resting()
+        if D("0.01") <= mpx <= D("0.99"):
+            r.quote(side, mpx, alloc / mpx, t)
+            got = ZERO
+            for tr in trades:
+                if tr["t"] < t:
+                    continue
+                if tr["t"] > t + D3_WAIT_S:
+                    break
+                j0 = bisect.bisect_left(bt, tr["t"]) - 1
+                if j0 >= 0:
+                    b0 = books[j0]
+                    r.on_book(D(b0["bid"]), D(b0["ask"]),
+                              D(b0["bid_qty"]), D(b0["ask_qty"]))
+                g = r.on_trade(D(tr["px"]), D(tr["qty"]), tr.get("dir"))
+                if g > 0:
+                    got += g
+                    if r.sh <= 0:
+                        break
+            if got > 0:
+                reb = FEES.maker_rebate(mpx, got)
+                port.add(side, got, mpx, ZERO, rebate=reb)
+                taker_px = ask if side == "UP" else ONE - bid
+                allocs.append({
+                    "t": t, "kind": "extend_maker", "side": side,
+                    "px": str(mpx), "sh": str(round(got, 4)),
+                    "fee": "0.0000", "rebate_modelled": str(reb),
+                    "taker_px_counterfactual": str(taker_px),
+                    "up_sh": str(round(port.up_sh, 4)),
+                    "dn_sh": str(round(port.dn_sh, 4)),
+                    "matched": str(round(port.matched, 4)),
+                    "residual": str(round(port.residual, 4)),
+                    "deployed": str(round(port.deployed, 4)),
+                    "net_capital": str(round(port.deployed - port.cash_in,
+                                             4))})
+                captures.append(mi)
+                return
+        # cancelled unfilled; re-read the state the venue would now serve
+        j = bisect.bisect_left(bt, t + D3_WAIT_S) - 1
+        if j < 0:
+            missed.append({"period": mi, "why": "no_state_after_wait"})
+            return
+        b2 = books[j]
+        bid2, ask2 = D(b2["bid"]), D(b2["ask"])
+        mid2 = (bid2 + ask2) / 2
+        fav2 = ("UP" if mid2 > D("0.50")
+                else ("DOWN" if mid2 < D("0.50") else None))
+        fm2 = fav_mid(side, bid2, ask2)
+        # D0's OWN predicate, re-applied at the new state: same favoured
+        # side, and still strictly above the previous evaluation's mid.
+        still_valid = (fav2 == side and episode_open
+                       and prev_fav_mid is not None and fm2 > prev_fav_mid)
+        taker_px_then = ask if side == "UP" else ONE - bid
+        taker_px_now = ask2 if side == "UP" else ONE - bid2
+        if not still_valid:
+            missed.append({"period": mi, "side": side,
+                           "why": "signal_invalidated_during_wait",
+                           "maker_px": str(mpx),
+                           "taker_px_at_signal": str(taker_px_then),
+                           "taker_px_after_wait": str(taker_px_now)})
+            return
+        fallbacks.append({"period": mi, "side": side,
+                          "taker_px_at_signal": str(taker_px_then),
+                          "taker_px_after_wait": str(taker_px_now),
+                          "price_moved": str(taker_px_now - taker_px_then),
+                          "t_signal": t, "t_fallback": b2["t"]})
+        if taker_buy(side, bid2, ask2, D(b2["bid_qty"]), D(b2["ask_qty"]),
+                     b2["t"], "extend_taker_fallback"):
+            captures.append(mi)
+            fallbacks[-1]["filled"] = True
+        else:
+            fallbacks[-1]["filled"] = False
 
     def flatten(t, reason):
         """Reduce the residual to zero at executable prices, across as many
@@ -834,6 +925,15 @@ def replay_c(slug: str, w, outcome: str,
                                          / len(intents), 4))
                                if intents else None),
         "captured_periods": sorted(captures),
+        "taker_fallbacks_attempted": len(fallbacks),
+        "taker_fallbacks_filled": sum(1 for f in fallbacks
+                                      if f.get("filled")),
+        "signals_invalidated_during_wait": sum(
+            1 for m in missed
+            if m.get("why") == "signal_invalidated_during_wait"),
+        "maker_fills": sum(1 for a in allocs
+                           if a["kind"] == "extend_maker"),
+        "fallback_log": fallbacks,
         "intent_log": intents, "missed_log": missed,
         "skipped_periods": skips, "leadership_flips": flips,
         "exits": len(exits),
@@ -920,6 +1020,9 @@ def main() -> int:
         # the matched counterfactual: D0's TAKER execution on exactly the
         # actions D2 captured, so cheaper execution is separated from the
         # selection effect of which actions a passive order wins.
+        res["windows"][slug]["D3"] = replay_c(
+            slug, w, oc, al, seed=False, name="D3",
+            entry_mode="maker_then_taker")
         res["windows"][slug]["D0_on_D2_captured"] = replay_c(
             slug, w, oc, al, seed=False, name="D0_on_D2_captured",
             only_periods=set(d2["captured_periods"]))
