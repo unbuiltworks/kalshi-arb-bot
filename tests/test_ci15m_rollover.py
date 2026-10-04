@@ -392,24 +392,58 @@ def test_both_durations_are_the_same_engine_with_separate_datasets():
     assert not DUR.matches(DUR.BTC15M, "BTC5M2610032145")
 
 
-def test_the_15m_band_is_authorized_and_fits_its_window():
+def test_the_15m_frozen_band_is_unclipped_by_its_window():
     from src.gemini_execution import gemini_durations as DUR
-    got = DUR.ready_for_live(DUR.BTC15M)
-    assert got["ok"] is True
-    assert got["open_band"] == (120.0, 840.0)
-    assert got["open_band"][1] < got["window_s"] == 900.0
+    eff = DUR.effective_open_band(DUR.BTC15M)
+    assert eff["band"] == (120.0, 840.0)
+    assert eff["clipped_by_contract_start"] is False
+    assert eff["seconds_eligible"] == 720.0
+    assert DUR.ready_for_live(DUR.BTC15M)["ok"] is True
 
 
-def test_btc5m_is_refused_until_a_band_is_authorized():
-    """THE THRESHOLD IS NOT INHERITED. 840s > a 300s window, so reusing the
-    15m band would be a different policy wearing validated numbers."""
+def test_btc5m_on_the_frozen_policy_is_120_to_300_effective():
+    """THE CORRECTION. 840 > 300 does NOT make the rule impossible:
+    intersecting [120,840] with a 300s contract leaves [120,300] -- the
+    first three minutes of the window. BTC5m is runnable on the frozen
+    policy exactly as it stands."""
     from src.gemini_execution import gemini_durations as DUR
-    got = DUR.ready_for_live(DUR.BTC5M)
-    assert got["ok"] is False
-    assert "not authorized" in got["why"]
-    assert "exceeds" in got["why"]
-    assert DUR.DURATIONS[DUR.BTC5M]["open_band"] is None, (
-        "no number may be invented for 5m")
+    eff = DUR.effective_open_band(DUR.BTC5M)
+    assert eff["empty"] is False
+    assert eff["band"] == (120.0, 300.0)
+    assert eff["seconds_eligible"] == 180.0
+    assert eff["clipped_by_contract_start"] is True
+    assert DUR.ready_for_live(DUR.BTC5M)["runnable_on_frozen_policy"] is True
+
+
+def test_btc5m_is_runnable_but_live_money_is_a_separate_decision():
+    from src.gemini_execution import gemini_durations as DUR
+    r = DUR.ready_for_live(DUR.BTC5M)
+    assert r["runnable_on_frozen_policy"] is True
+    assert r["live_authorized"] is False
+    assert r["ok"] is False, "replay/shadow yes; live money needs an owner"
+    assert "not a property of the rule" in r["why"]
+
+
+def test_the_clipped_regime_is_labelled_as_not_comparable():
+    """Runnable is not the same as comparable, and the difference is
+    stated rather than left for a reader to notice."""
+    from src.gemini_execution import gemini_durations as DUR
+    assert "CLIPPED" in DUR.effective_open_band(DUR.BTC5M)["comparability"]
+    assert "NOT an apples-to-apples" in DUR.effective_open_band(
+        DUR.BTC5M)["comparability"]
+    assert "UNCLIPPED" in DUR.effective_open_band(DUR.BTC15M)["comparability"]
+
+
+def test_the_normalized_band_is_a_labelled_hypothesis_not_the_policy():
+    from src.gemini_execution import gemini_durations as DUR
+    h = DUR.normalized_hypothesis(DUR.BTC5M)
+    assert h["basis"] == DUR.HYPOTHESIS_NORMALIZED
+    assert h["is_frozen_policy"] is False
+    assert h["band"] == (40.0, 280.0)        # 120/840 scaled by 300/900
+    assert h["band"] != DUR.effective_open_band(DUR.BTC5M)["band"]
+    # and it can never be used to move the 15m policy
+    assert DUR.normalized_hypothesis(DUR.BTC15M)["warning"] is not None
+    assert DUR.normalized_hypothesis(DUR.BTC15M)["band"] == (120.0, 840.0)
 
 
 def test_the_duration_registry_carries_no_decision_rule():

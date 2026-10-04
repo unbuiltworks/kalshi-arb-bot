@@ -886,6 +886,158 @@ def shadow_sink(book_fn: Any) -> Any:
     return sink
 
 
+# ---------------------------------------------------------------------
+# CANCELLATION / DEADMAN. The SECOND venue mutation, and the last one.
+# ---------------------------------------------------------------------
+CANCEL_REQUESTED = "CANCEL_REQUESTED"
+CANCEL_CONFIRMED = "CANCEL_CONFIRMED"
+CANCEL_UNKNOWN = "CANCEL_UNKNOWN"
+CANCEL_RACED_FILL = "CANCEL_RACED_FILL"
+_CANCEL_SINK: Optional[Any] = None
+
+
+def set_cancel_sink(sink: Optional[Any]) -> None:
+    """Install (or clear) the cancel sink. Shadow must not cancel for real."""
+    global _CANCEL_SINK
+    _CANCEL_SINK = sink
+
+
+async def _cancel(order_id: Any, symbol: str) -> Dict[str, Any]:
+    if _CANCEL_SINK is not None:
+        return await _CANCEL_SINK(order_id=order_id, symbol=symbol)
+    return await transport.cancel_and_confirm(order_id, symbol)
+
+
+def shadow_cancel_sink(outcome: str = CANCEL_CONFIRMED) -> Any:
+    """A cancel sink that SENDS NOTHING."""
+    async def sink(*, order_id: Any, symbol: str) -> Dict[str, Any]:
+        return {"state": ("CANCEL_CONFIRMED"
+                          if outcome == CANCEL_CONFIRMED else "OUTSTANDING"),
+                "shadow": True, "order_id": order_id,
+                "labels": "SHADOW. No cancel was sent to the venue."}
+    return sink
+
+
+async def cancel_and_reconcile(cohort_id: str, symbol: str, ticker: str,
+                               order_id: Any, *,
+                               reason: str = "deadman",
+                               root: str = cohort.COHORT_ROOT,
+                               ours: Any = None) -> Dict[str, Any]:
+    """Cancel ONE resting order and establish what we actually hold.
+
+    THE LIFECYCLE, and the middle step is the one that is easy to skip:
+
+        SUBMITTED -> RESTING -> cancellation requested
+                  -> CANCEL_CONFIRMED
+                  -> AUTHORITATIVE FILL RECONCILIATION
+                  -> terminal
+
+    CANCELLATION IS NOT PROOF OF ZERO FILL. `transport.cancel_and_confirm`
+    reports CANCEL_CONFIRMED when the order is GONE FROM THE ACTIVE BOOK --
+    and an order can leave that book by filling. Treating "gone" as "never
+    filled" is the same disappearance fallacy that cost CI15M-4 its fill,
+    one surface along. So the authoritative terminal row is read AFTER the
+    cancel ack, and a fill found there is recovered as inventory:
+
+      * filled in full before the cancel landed -> CANCEL_RACED_FILL, and
+        the inventory is the fill. The cancel simply lost.
+      * PARTIALLY filled before cancelling     -> the partial is carried.
+        `AD.OrderState` reports a dead order with filledQuantity > 0 as
+        FILLED with that quantity, so the partial cannot round to zero.
+      * genuinely cancelled with nothing done  -> flat, and only then.
+
+    AN UNKNOWN CANCEL OUTCOME HALTS. It never reports flat.
+
+    THERE IS NO REPRICE AND NO CHASE HERE. This function cancels and
+    accounts. It never submits anything, and nothing in it consults a
+    price.
+    """
+    ev: Dict[str, Any] = {"ticker": ticker, "order_id": str(order_id),
+                          "reason": reason, "state": CANCEL_REQUESTED}
+    BUD.record_status(cohort_id, ticker, slot=0, status="SUBMITTED",
+                      detail={"cancel_requested": True, "reason": reason,
+                              "order_id": str(order_id)}, root=root)
+    try:
+        got = await _cancel(order_id, symbol)
+    except Exception as exc:                                   # noqa: BLE001
+        BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                 "cancel raised %s for order %s; the order's fate is "
+                 "UNKNOWN" % (exc, order_id), root=root)
+        ev.update(state=CANCEL_UNKNOWN, ok=False, why="cancel raised %s" % exc)
+        return ev
+    ev["cancel"] = got
+    state = str((got or {}).get("state") or "")
+    if state != "CANCEL_CONFIRMED":
+        # OUTSTANDING or unreadable. Either way we do not know, so we do
+        # not proceed and we do not claim flat.
+        BUD.halt(cohort_id, "UNKNOWN_POSITION",
+                 "cancel for order %s did not confirm (state %r): %s"
+                 % (order_id, state, (got or {}).get("why")), root=root)
+        ev.update(state=CANCEL_UNKNOWN, ok=False,
+                  why=((got or {}).get("why")
+                       or "the cancel did not confirm"))
+        return ev
+
+    # CONFIRMED GONE FROM THE ACTIVE BOOK. That is NOT yet "did not fill".
+    term = await poll_terminal(cohort_id, symbol, order_id, attempts=3,
+                               pause=1.0, root=root)
+    ev["terminal"] = {k: str(term.get(k)) for k in
+                      ("resolved", "state", "filled", "status")}
+    if not term.get("resolved"):
+        ev.update(state=CANCEL_UNKNOWN, ok=False,
+                  why=("the cancel was confirmed but the order's terminal "
+                       "state could not be read, so whether it filled "
+                       "first is UNKNOWN"))
+        return ev
+
+    filled = term.get("filled") or D("0")
+    if term["state"] == TERMINAL_FILLED or filled > 0:
+        # The cancel lost a race, wholly or partly. The fill is OURS.
+        rec = await reconciled_inventory(cohort_id, symbol, root=root,
+                                         ours=ours)
+        ev["reconciled"] = {"ok": rec["ok"], "signed": str(rec.get("signed")),
+                            "why": rec.get("why")}
+        if not rec["ok"]:
+            ev.update(state=CANCEL_UNKNOWN, ok=False, why=rec.get("why"))
+            return ev
+        BUD.record_status(cohort_id, ticker, slot=0, status="FILLED",
+                          detail={"recovered_from": "cancel race",
+                                  "authoritative_filled": str(filled),
+                                  "partial": bool(
+                                      term.get("partial")
+                                      or term["state"] != TERMINAL_FILLED),
+                                  "reason": reason}, root=root)
+        ev.update(state=CANCEL_RACED_FILL, ok=True,
+                  filled=str(filled),
+                  labels=("the cancel did not prevent the fill. Inventory "
+                          "is what the authenticated record says, not what "
+                          "the cancel implied."))
+        return ev
+
+    # RECORDED IN THE SHAPE `open_state` READS, which is the venue row.
+    # Writing it in some other shape left the window OPEN_SUBMITTED
+    # forever, so the carry-over guard kept re-flagging an order that was
+    # already dead and the executor would have looped cancelling it. A
+    # terminal cancellation must actually CLOSE the lifecycle.
+    BUD.record_status(cohort_id, ticker, slot=0, status="SUBMITTED",
+                      detail={"terminal": "CANCELLED",
+                              "authoritative_filled": "0",
+                              "reason": reason,
+                              "venue": {"body": {
+                                  "orderId": str(order_id),
+                                  "status": "cancelled",
+                                  "filledQuantity": "0",
+                                  "cancelledAt": BUD._now()}},
+                              "labels": "flat on the VENUE'S filled "
+                                        "quantity, not on the cancel ack"},
+                      root=root)
+    ev.update(state=CANCEL_CONFIRMED, ok=True, filled="0",
+              labels=("cancelled with nothing done -- and that is asserted "
+                      "from the authoritative terminal row, not inferred "
+                      "from the order's absence"))
+    return ev
+
+
 async def submit(cohort_id: str, symbol: str, ticker: str,
                  intent: Dict[str, Any], *,
                  root: str = cohort.COHORT_ROOT,

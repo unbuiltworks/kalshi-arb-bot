@@ -6,22 +6,29 @@ the ticker pattern, the window length, where that duration's datasets and
 cohorts live -- so one executor can run either. It carries NO decision
 rule. The frozen policy still decides every side, price, size and moment.
 
-THE 5m OPEN BAND IS NOT SET HERE, AND THAT IS THE POINT.
-The frozen policy's band is
+THE FROZEN POLICY DOES APPLY TO BTC5m, AND IT IS NOT A DEAD END.
+An earlier note here claimed the 5m lane was unusable because the frozen
+upper bound 840s "exceeds the whole contract". That was too strong, and it
+was wrong. Intersecting the frozen band with a 300-second contract leaves a
+real eligible interval:
 
-    OPEN_TTE_LO, OPEN_TTE_HI = 120.0, 840.0
+    frozen [120, 840] INTERSECT window [0, 300]  ->  EFFECTIVE [120, 300]
 
-which was fitted to a 900-second window. A BTC5m window is 300 seconds
-TOTAL, so 840 exceeds the entire contract: reusing the 15m band on 5m would
-mean "openable from the first second to the 180th", a materially different
-policy wearing the same numbers. Choosing 5m bounds is a THRESHOLD
-DECISION, and thresholds are explicitly not being optimized yet.
+i.e. openable from 120s to 300s of time-to-expiry, which is roughly the
+first three minutes of a five-minute window. So BTC5m CAN be run on the
+frozen policy exactly as it stands, and `effective_open_band()` reports
+that interval rather than refusing.
 
-So BTC5m is plumbed and REFUSED AT THE GATE until an owner authorizes a
-band for it. `ready_for_live()` returns False with that reason, and nothing
-in this module invents a number. Failing closed is the whole habit of this
-codebase: a silent reuse of 15m thresholds on 5m would be a new strategy
-pretending to be a validated one.
+WHAT WOULD ACTUALLY BE WRONG is pretending that is an apples-to-apples
+comparison with BTC15m, or quietly editing the threshold. On 15m the band
+covers 720 of 900 seconds and sits clear of both ends; on 5m it covers 180
+of 300 seconds and is CLIPPED by the contract's own start. Those are
+different operating regimes wearing one pair of numbers, so:
+
+  * `AS_FROZEN` is the comparability baseline: the frozen rule, unmodified,
+    with its effective interval stated.
+  * a duration-normalized band is a SEPARATE, LABELLED HYPOTHESIS. It is
+    not inherited, not applied by default, and it never touches BTC15m.
 
 DATASETS STAY SEPARATE. Each duration gets its own cohort root and its own
 dataset directory, so 5m and 15m evidence can never be pooled by accident.
@@ -97,34 +104,94 @@ def roots_are_separate() -> bool:
     return len(set(flat)) == len(flat)
 
 
-def ready_for_live(name: str) -> Dict[str, Any]:
-    """May this duration be run for real yet?
+BASELINE_AS_FROZEN = "AS_FROZEN"
+HYPOTHESIS_NORMALIZED = "DURATION_NORMALIZED_HYPOTHESIS"
 
-    A duration whose OPEN band is not authorized is REFUSED here rather
-    than run on borrowed numbers.
+
+def effective_open_band(name: str) -> Dict[str, Any]:
+    """The frozen band INTERSECTED with this duration's window.
+
+    This is the comparability baseline: the frozen rule unmodified, with
+    the interval it actually produces on this contract length stated
+    rather than assumed.
     """
     d = of(name)
-    band = d["open_band"]
-    if not d["band_authorized"] or band is None:
-        return {"ok": False, "duration": d["name"],
-                "why": ("the OPEN band for %s is not authorized. The frozen "
-                        "band is %.0f..%.0fs, fitted to a 900s window, and "
-                        "this duration's window is %.0fs -- so the upper "
-                        "bound %s the whole contract. Choosing bounds for "
-                        "%s is a threshold decision and needs an explicit "
-                        "authorization; it is not inherited."
-                        % (d["name"], FROZEN_OPEN_TTE_LO,
-                           FROZEN_OPEN_TTE_HI, d["window_s"],
-                           ("exceeds" if FROZEN_OPEN_TTE_HI > d["window_s"]
-                            else "fits inside"), d["name"]))}
-    lo, hi = band
-    if hi > d["window_s"]:
-        return {"ok": False, "duration": d["name"],
-                "why": ("the authorized band's upper bound %.0fs exceeds "
-                        "the %.0fs window" % (hi, d["window_s"]))}
-    return {"ok": True, "duration": d["name"], "open_band": band,
-            "window_s": d["window_s"], "cohort_root": d["cohort_root"],
-            "dataset_root": d["dataset_root"]}
+    lo = max(FROZEN_OPEN_TTE_LO, 0.0)
+    hi = min(FROZEN_OPEN_TTE_HI, d["window_s"])
+    if lo >= hi:
+        return {"name": d["name"], "basis": BASELINE_AS_FROZEN,
+                "empty": True, "band": None,
+                "why": ("the frozen band and a %.0fs window do not overlap"
+                        % d["window_s"])}
+    clipped = FROZEN_OPEN_TTE_HI > d["window_s"]
+    return {"name": d["name"], "basis": BASELINE_AS_FROZEN, "empty": False,
+            "band": (lo, hi), "window_s": d["window_s"],
+            "seconds_eligible": hi - lo,
+            "fraction_of_window": (hi - lo) / d["window_s"],
+            "clipped_by_contract_start": clipped,
+            "frozen_band": (FROZEN_OPEN_TTE_LO, FROZEN_OPEN_TTE_HI),
+            "comparability": (
+                "CLIPPED. The frozen upper bound %.0fs exceeds this %.0fs "
+                "window, so the effective interval is bounded by the "
+                "contract itself. The rule is unmodified and runnable; it "
+                "is NOT an apples-to-apples regime against BTC15m, where "
+                "the band sits clear of both ends."
+                % (FROZEN_OPEN_TTE_HI, d["window_s"]) if clipped else
+                "UNCLIPPED. The frozen band sits inside this window.")}
+
+
+def ready_for_live(name: str) -> Dict[str, Any]:
+    """May this duration be run for real?
+
+    A duration is runnable on the frozen policy whenever the effective
+    band is non-empty. `band_authorized` records whether an owner has
+    authorized LIVE money on it -- which is a separate question from
+    whether the rule is well defined, and is what gates execution.
+    """
+    d = of(name)
+    eff = effective_open_band(name)
+    if eff["empty"]:
+        return {"ok": False, "duration": d["name"], "effective_band": eff,
+                "why": eff["why"]}
+    return {"ok": bool(d["band_authorized"]), "duration": d["name"],
+            "effective_band": eff["band"],
+            "runnable_on_frozen_policy": True,
+            "live_authorized": bool(d["band_authorized"]),
+            "window_s": d["window_s"],
+            "cohort_root": d["cohort_root"],
+            "dataset_root": d["dataset_root"],
+            "why": (None if d["band_authorized"] else
+                    ("the frozen rule is well defined here (effective "
+                     "%.0f..%.0fs) and may be replayed and shadowed. LIVE "
+                     "money on %s is not authorized yet, which is an "
+                     "owner's decision and not a property of the rule."
+                     % (eff["band"][0], eff["band"][1], d["name"]))),
+            "comparability": eff["comparability"]}
+
+
+def normalized_hypothesis(name: str) -> Dict[str, Any]:
+    """A duration-normalized OPEN band, AS A LABELLED HYPOTHESIS.
+
+    It scales the frozen 15m band by the ratio of window lengths, which is
+    one defensible normalization among several. IT IS NOT THE FROZEN RULE,
+    it is never applied by default, and it never touches BTC15m: the 15m
+    policy is frozen and this function returns its own band unchanged for
+    that duration precisely so a caller cannot use it to move it.
+    """
+    d = of(name)
+    ratio = d["window_s"] / DURATIONS[BTC15M]["window_s"]
+    band = (FROZEN_OPEN_TTE_LO * ratio, FROZEN_OPEN_TTE_HI * ratio)
+    return {"name": d["name"], "basis": HYPOTHESIS_NORMALIZED,
+            "band": band, "window_s": d["window_s"], "ratio": ratio,
+            "frozen_band": (FROZEN_OPEN_TTE_LO, FROZEN_OPEN_TTE_HI),
+            "is_frozen_policy": False,
+            "labels": ("A HYPOTHESIS, not the frozen policy. It must be "
+                       "tested against the AS_FROZEN baseline on the SAME "
+                       "data before it earns any capital, and its results "
+                       "are never pooled with BTC15m's."),
+            "warning": ("applying this to BTC15m would CHANGE THE FROZEN "
+                        "POLICY and is not permitted"
+                        if d["name"] == BTC15M else None)}
 
 
 def summary() -> Dict[str, Any]:

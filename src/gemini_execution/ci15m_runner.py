@@ -281,7 +281,8 @@ def preflight(cohort_id: str, *, probe_seconds: float) -> Dict[str, Any]:
                               % BUD.TOTAL_ORDER_BUDGET)}
 
 
-async def resolve_carry_over(cohort_id: str, ticker: str,
+async def resolve_carry_over(cohort_id: str, ticker: str, *,
+                             deadman: bool = False,
                              **rk) -> Dict[str, Any]:
     """Resolve ONE carried-over window through the authoritative surfaces.
 
@@ -315,6 +316,26 @@ async def resolve_carry_over(cohort_id: str, ticker: str,
                         "terminal state cannot be looked up. UNKNOWN.")}
     term = await P.poll_terminal(cohort_id, symbol, oid, attempts=3,
                                  pause=1.0, **rk)
+    if not term.get("resolved") and deadman:
+        # THE DEADMAN. An unattended executor cannot stop forever because
+        # an old GTC order is still resting, and it equally cannot abandon
+        # it and roll on. So it CANCELS that order and then establishes
+        # what it actually holds -- cancellation is requested here, and
+        # `cancel_and_reconcile` is what refuses to call it flat without
+        # the authoritative fill record.
+        #
+        # It is NOT a reprice and NOT a chase: nothing is resubmitted and
+        # no price is consulted. The slot stays spent.
+        can = await P.cancel_and_reconcile(cohort_id, symbol, ticker, oid,
+                                           reason="deadman: window N order "
+                                                  "outstanding as N+1 "
+                                                  "arrives", **rk)
+        out = {"ticker": ticker, "order_id": str(oid),
+               "resolved": bool(can.get("ok")), "cancel": can,
+               "state": can.get("state")}
+        if can.get("state") == P.CANCEL_RACED_FILL:
+            out["carried_inventory"] = can.get("reconciled")
+        return out
     if not term.get("resolved"):
         return {"ticker": ticker, "order_id": str(oid), "resolved": False,
                 "state": term.get("state"), "why": term.get("why"),
@@ -383,6 +404,7 @@ async def run(cohort_id: str, *, live: bool, durable_branch: Optional[str],
               sleeper: Optional[Any] = None,
               mode: str = MODE_PROBE,
               shadow: bool = False,
+              deadman: bool = False,
               root: Optional[str] = None) -> Dict[str, Any]:
     """Stay alive until an eligible window runs, or the deadline passes.
 
@@ -425,7 +447,8 @@ async def run(cohort_id: str, *, live: bool, durable_branch: Optional[str],
         if stuck:
             resolved = []
             for w in stuck:
-                got = await resolve_carry_over(cohort_id, w["ticker"], **rk)
+                got = await resolve_carry_over(cohort_id, w["ticker"],
+                                               deadman=deadman, **rk)
                 resolved.append(got)
                 print("CARRY-OVER %s: %s" % (w["ticker"],
                                              json.dumps(got, default=str)))
