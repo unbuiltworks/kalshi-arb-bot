@@ -330,6 +330,19 @@ jobs:
       # HALTs a cohort on an unreadable surface -- correct for a live
       # executor, wrong for a read of a historical order in a cohort that is
       # already halted and must stay exactly as it is.
+      # IT NEEDS ITS OWN TREE. The job's ROOT checkout is the
+      # economic-viability branch by design, and this script lives on the
+      # information-edge branch -- so the first attempt died in 29ms with
+      # "No module named scripts.ci15m4_authenticated_fill_read". The
+      # script was never in the tree the step ran from. Full 40-char SHA,
+      # because actions/checkout resolves anything shorter as a branch.
+      - name: Check out the fill-read tree
+        if: ${{ github.event.inputs.fill_forensics == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: 6ba52d5bc0c7ac306eb3e7e4351f53c2a860a54e
+          path: fillread
+
       - name: CI15M-4 authenticated-fill read (read-only; order 145828836725658335)
         # RIDES THE EXISTING read-only forensics switch. workflow_dispatch
         # admits at most 25 inputs and the file is AT that ceiling, so a
@@ -342,12 +355,18 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        working-directory: fillread
         run: |
           set -o pipefail
-          mkdir -p analysis/gemini
+          OUT="ci15m4_fill_read_$(date -u +%Y%m%dT%H%M%SZ).json"
           python -m scripts.ci15m4_authenticated_fill_read \
-            --out analysis/gemini/ci15m4_fill_read_$(date -u +%Y%m%dT%H%M%SZ).json \
-            2>&1 | tee /tmp/ci15m4_fill_read.txt
+            --order-id 145828836725658335 \
+            --symbol GEMI-BTC15M2610032145-UP \
+            --out "$OUT" 2>&1 | tee /tmp/ci15m4_fill_read.txt
+          # the evidence committer works from the ROOT checkout, so the
+          # artifact is handed back to it rather than stranded in this tree.
+          mkdir -p "$GITHUB_WORKSPACE/analysis/gemini"
+          cp "$OUT" "$GITHUB_WORKSPACE/analysis/gemini/$OUT"
 
       - name: Check out the reviewed probe/runner tree at its pinned SHA
         if: ${{ github.event.inputs.r2_runner == 'true' }}
