@@ -489,7 +489,8 @@ def replay(slug: str, w, outcome: str, variant: str,
 def replay_c(slug: str, w, outcome: str,
              alloc: D = ALLOC_USD, *, seed: bool = True,
              opposite_rest: bool = False, name: str = "C",
-             entry_mode: str = "taker",
+             entry_mode: str = "taker", exit_mode: str = "taker",
+             only_exits=None,
              only_periods=None) -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
 
@@ -672,7 +673,85 @@ def replay_c(slug: str, w, outcome: str,
         else:
             fallbacks[-1]["filled"] = False
 
-    def flatten(t, reason):
+    def passive_exit(t, side, need, trail, fm_trigger, deadline):
+        """D4: rest at the economically correct OWN-SIDE touch and sell.
+
+        Selling a long UP residual rests an OFFER at the UP ask, lifted by a
+        `dir: buy`; selling a long DOWN residual rests the DOWN offer, which
+        in this single long-side book is a BID at the UP bid, hit by a
+        `dir: sell`. No touch = fill: the queue ahead is taken from the depth
+        displayed when our level becomes the touch, only trades consuming our
+        side deplete it, and a print through our price clears it.
+
+        Returns (legs, filled, t_end, abort_reason).
+        """
+        b0 = book_at(t)
+        if b0 is None or need <= 0:
+            return [], ZERO, t, "no_book"
+        is_offer = (side == "UP")
+        up_px = D(b0["ask"]) if is_offer else D(b0["bid"])
+        if not (D("0.01") <= up_px <= D("0.99")):
+            return [], ZERO, t, "price_out_of_range"
+        our_px = up_px if is_offer else ONE - up_px   # in the side's terms
+        queue = None
+        filled = ZERO
+        legs = []
+        abort = "deadline"
+        t_end = deadline
+        for tr in trades:
+            if tr["t"] <= t:
+                continue
+            if tr["t"] > deadline:
+                break
+            bb = book_at(tr["t"])
+            if bb is not None:
+                # risk abort: one further trail-width against us from the
+                # level that triggered the exit (bound 2, frozen)
+                fm_now = fav_mid(side, D(bb["bid"]), D(bb["ask"]))
+                if fm_now < fm_trigger - trail:
+                    abort = "risk_abort_one_more_trail_width"
+                    t_end = tr["t"]
+                    break
+                if queue is None:
+                    if is_offer and D(bb["ask"]) == up_px:
+                        queue = D(bb["ask_qty"])
+                    elif (not is_offer) and D(bb["bid"]) == up_px:
+                        queue = D(bb["bid_qty"])
+            if queue is None:
+                continue
+            aggressor = "buy" if is_offer else "sell"
+            if tr.get("dir") != aggressor:
+                continue
+            px, qty = D(tr["px"]), D(tr["qty"])
+            through = (px > up_px) if is_offer else (px < up_px)
+            if through:
+                queue = ZERO
+                continue
+            if px != up_px:
+                continue
+            if queue > 0:
+                eaten = min(queue, qty)
+                queue -= eaten
+                qty -= eaten
+            if qty <= 0:
+                continue
+            take = min(need - filled, qty)
+            if take <= 0:
+                continue
+            reb = FEES.maker_rebate(our_px, take)
+            port.sell(side, take, our_px, ZERO)
+            port.rebate_modelled += reb
+            filled += take
+            legs.append({"t": tr["t"], "px": str(our_px),
+                         "sh": str(round(take, 4)), "fee": "0.0000",
+                         "maker": True, "rebate_modelled": str(reb)})
+            if filled >= need:
+                abort = "filled"
+                t_end = tr["t"]
+                break
+        return legs, filled, t_end, abort
+
+    def flatten(t, reason, trail=None, fm_trigger=None):
         """Reduce the residual to zero at executable prices, across as many
         books as depth requires. Matched inventory is untouched."""
         nonlocal cleanup_shares
@@ -690,7 +769,40 @@ def replay_c(slug: str, w, outcome: str,
                      and port.up_sh > 0 else
                      ((port.dn_cash / port.dn_sh) if port.dn_sh > 0 else ZERO))
         legs = []
-        j = bisect.bisect_left(bt, t)
+        t_exec = t
+        maker_filled = ZERO
+        maker_outcome = None
+        fallback_px = adverse = None
+        need_before_fallback = need
+        px_at_trigger = (D(b["bid"]) if side == "UP"
+                         else ONE - D(b["ask"]))
+        do_maker = (exit_mode == "maker"
+                    and trail is not None and fm_trigger is not None)
+        if do_maker:
+            # bound 1: flat before the controller decides again, keeping back
+            # D3's measured lifecycle reserve for the aggressive fallback
+            nxt_mark = start + CADENCE_S * (int((t - start) // CADENCE_S) + 1)
+            deadline = max(t, nxt_mark - D3_WAIT_S)
+            mlegs, maker_filled, t_end, maker_outcome = passive_exit(
+                t, side, need, trail, fm_trigger, deadline)
+            legs.extend(mlegs)
+            need -= maker_filled
+            # confirmed cancellation + one state refresh before crossing
+            t_exec = (t_end if maker_outcome == "filled"
+                      else t_end + D3_WAIT_S)
+        # the fallback's price and the movement suffered while waiting must
+        # be read HERE, before the taker sweep drives `need` to zero --
+        # reading them afterwards reported None for almost every exit.
+        need_before_fallback = need
+        if need_before_fallback > 0:
+            jj = max(0, bisect.bisect_left(bt, t_exec) - 1)
+            bf = books[jj]
+            fallback_px = (D(bf["bid"]) if side == "UP"
+                           else ONE - D(bf["ask"]))
+            adverse = px_at_trigger - fallback_px
+        else:
+            fallback_px = adverse = None
+        j = bisect.bisect_left(bt, t_exec)
         j = max(0, j - 1)
         while need > 0 and j < len(books):
             bb = books[j]
@@ -729,6 +841,21 @@ def replay_c(slug: str, w, outcome: str,
             "profitable_exit": bool(
                 sum(D(l["px"]) * D(l["sh"]) - D(l["fee"]) for l in legs)
                 > basis_per * (abs(want) - need)),
+            "maker_shares_filled": str(round(maker_filled, 4)),
+            "taker_counterfactual_on_captured": (None if maker_filled <= 0
+                else str(round(
+                    maker_filled * px_at_trigger
+                    - FEES.taker_fee(px_at_trigger, maker_filled), 6))),
+            "maker_proceeds_on_captured": (None if maker_filled <= 0
+                else str(round(sum(D(l["px"]) * D(l["sh"])
+                                   for l in legs if l.get("maker")), 6))),
+            "maker_outcome": maker_outcome,
+            "exit_px_at_trigger": str(px_at_trigger),
+            "fallback_shares": str(round(need_before_fallback, 4)),
+            "fallback_px": (None if fallback_px is None
+                            else str(fallback_px)),
+            "adverse_movement_while_waiting": (None if adverse is None
+                                               else str(adverse)),
             "executable_pnl_before": str(round(before, 4)),
             "executable_pnl_after": str(round(after, 4)),
             "delta": str(round(after - before, 4)),
@@ -869,7 +996,8 @@ def replay_c(slug: str, w, outcome: str,
                     trail = (spread_at_peak
                              + FEES.taker_fee(peak, D(1)) * 2)
                     if fm2 < peak - trail and port.residual != 0:
-                        flatten(bb["t"], "trail_%s" % str(round(trail, 4)))
+                        flatten(bb["t"], "trail_%s" % str(round(trail, 4)),
+                                trail=trail, fm_trigger=fm2)
                         episode_open = False
                         peak = spread_at_peak = None
             mk = port.mark(bid2, ask2)
@@ -1023,6 +1151,9 @@ def main() -> int:
         res["windows"][slug]["D3"] = replay_c(
             slug, w, oc, al, seed=False, name="D3",
             entry_mode="maker_then_taker")
+        d4 = replay_c(slug, w, oc, al, seed=False, name="D4",
+                      exit_mode="maker")
+        res["windows"][slug]["D4"] = d4
         res["windows"][slug]["D0_on_D2_captured"] = replay_c(
             slug, w, oc, al, seed=False, name="D0_on_D2_captured",
             only_periods=set(d2["captured_periods"]))
