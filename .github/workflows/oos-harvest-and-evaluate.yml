@@ -220,7 +220,11 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 16
+      # 16 concurrent reads timed out 6 of 16 chunks on "Failed to initialize
+      # SFTP session: Timeout". The volume serves one SSH endpoint, so the
+      # concurrency is the cause; 6 at a time still finishes well inside the
+      # job timeout and does not lean on the retry loop to succeed.
+      max-parallel: 6
       matrix:
         chunk:
           - {id: '00', files: 'pmus_ws_20261002_21.jsonl,pmus_ws_20261002_22.jsonl,pmus_ws_20261002_23.jsonl'}
