@@ -26,7 +26,7 @@ getcontext().prec = 28
 TAPE = "data/pmus_ws_tape/pmus_btc15m_auth_tape.jsonl"
 ZERO, ONE, TICK = D(0), D(1), D("0.01")
 CADENCE_S = 60
-ALLOC_USD = D(1)
+ALLOC_USD = D(1)        # the frozen default; only the ENVELOPE study varies it
 MIN_SPAN_S = 600
 END_TOL_S = 30
 MARK_TOL_S = 5
@@ -79,6 +79,13 @@ def eligible(slug: str, w) -> tuple:
 class Port:
     """Aggregate UP/DOWN inventory. Never a list of independent pairs."""
 
+    #: the tape shows TOP OF BOOK only, so "defensible liquidity" is the
+    #: displayed touch depth and nothing deeper. The fraction of it a single
+    #: order consumes is tracked, because a size that routinely eats most of
+    #: the touch is no longer a price-taker at the displayed price and the
+    #: replay would be flattering itself.
+    
+
     def __init__(self):
         self.up_sh = self.dn_sh = ZERO
         self.up_cash = self.dn_cash = ZERO      # price paid, fees excluded
@@ -88,6 +95,7 @@ class Port:
         self.max_deployed = ZERO
         self.max_residual = ZERO
         self.cash_in = ZERO                     # exit proceeds, net of fee
+        self.depth_frac = []                    # per order, consumed/displayed
         self.max_net_capital = ZERO             # deployed - cash_in, peak
 
     # --- aggregates the preregistration requires after every purchase
@@ -258,7 +266,8 @@ def reservation(p: Port, fav: str) -> D:
     return ONE - (cash / sh) - fee_per
 
 
-def replay(slug: str, w, outcome: str, variant: str) -> dict:
+def replay(slug: str, w, outcome: str, variant: str,
+           alloc: D = ALLOC_USD) -> dict:
     """variant: "A" taker control, "B" taker + opposite resting,
     "Am" the maker variant of A -- the SAME $1 favored allocation, rested at
     the favored outcome's own best bid instead of taken, replaced each period,
@@ -304,14 +313,16 @@ def replay(slug: str, w, outcome: str, variant: str) -> dict:
                 # `bid`, or a resting DOWN bid at `1 - ask` (the DOWN bid).
                 mpx = bid if fav == "UP" else ONE - ask
                 if D("0.01") <= mpx <= D("0.99"):
-                    rest.quote(fav, mpx, ALLOC_USD / mpx, b["t"])
+                    rest.quote(fav, mpx, alloc / mpx, b["t"])
                 else:
                     rest.cancel()
                 px = None
             else:
                 px = ask if fav == "UP" else ONE - bid
                 depth = aq if fav == "UP" else bq
-                sh = (ALLOC_USD / px)
+                sh = (alloc / px)
+            if px is not None and depth > 0:
+                port.depth_frac.append(float(min(sh, depth) / depth))
             if px is not None and depth < sh:
                 sh = depth                      # executable depth is the cap
             if px is not None and sh > 0 and D("0.01") <= px <= D("0.99"):
@@ -339,7 +350,7 @@ def replay(slug: str, w, outcome: str, variant: str) -> dict:
             q = min(res, cap)
             if q >= D("0.01") and res > 0:
                 q = q.quantize(TICK)
-                rest.quote(opp, q, ALLOC_USD / q, b["t"])
+                rest.quote(opp, q, alloc / q, b["t"])
             else:
                 rest.cancel()
 
@@ -420,6 +431,11 @@ def replay(slug: str, w, outcome: str, variant: str) -> dict:
         "allocations": len(allocs), "skipped_periods": skips,
         "leadership_flips": flips,
         "opposite_fills": len(fills_opp),
+        "touch_depth_consumed_max": (str(round(max(port.depth_frac), 4))
+                                     if port.depth_frac else None),
+        "touch_depth_consumed_over_10pct": sum(
+            1 for x in port.depth_frac if x > 0.10),
+        "taker_orders": len(port.depth_frac),
         "opposite_replacements": rest.replacements,
         "up_shares": str(round(port.up_sh, 4)),
         "dn_shares": str(round(port.dn_sh, 4)),
@@ -456,7 +472,8 @@ def replay(slug: str, w, outcome: str, variant: str) -> dict:
     }
 
 
-def replay_c(slug: str, w, outcome: str) -> dict:
+def replay_c(slug: str, w, outcome: str,
+             alloc: D = ALLOC_USD) -> dict:
     """TWO_SIDED_FAVORITE_TRAIL, frozen by PREREGISTRATION_C.md.
 
     Seed $1 on BOTH sides once, extend the favored side $1 per 60 s only
@@ -493,7 +510,9 @@ def replay_c(slug: str, w, outcome: str) -> dict:
     def taker_buy(side, bid, ask, bq, aq, t, tag):
         px = ask if side == "UP" else ONE - bid
         depth = aq if side == "UP" else bq
-        sh = ALLOC_USD / px
+        sh = alloc / px
+        if depth > 0:
+            port.depth_frac.append(float(min(sh, depth) / depth))
         if depth < sh:
             sh = depth
         if sh <= 0 or not (D("0.01") <= px <= D("0.99")):
@@ -525,6 +544,9 @@ def replay_c(slug: str, w, outcome: str) -> dict:
             return
         side = "UP" if want > 0 else "DOWN"
         need = abs(want)
+        basis_per = ((port.up_cash / port.up_sh) if side == "UP"
+                     and port.up_sh > 0 else
+                     ((port.dn_cash / port.dn_sh) if port.dn_sh > 0 else ZERO))
         legs = []
         j = bisect.bisect_left(bt, t)
         j = max(0, j - 1)
@@ -557,6 +579,14 @@ def replay_c(slug: str, w, outcome: str) -> dict:
             "shares_exited": str(round(abs(want) - need, 4)),
             "unfilled_cleanup": str(round(need, 4)),
             "legs": legs,
+            "cost_basis_per_share": str(round(basis_per, 6)),
+            "proceeds_net_of_fee": str(round(
+                sum(D(l["px"]) * D(l["sh"]) - D(l["fee"]) for l in legs), 4)),
+            "basis_of_exited_shares": str(round(
+                basis_per * (abs(want) - need), 4)),
+            "profitable_exit": bool(
+                sum(D(l["px"]) * D(l["sh"]) - D(l["fee"]) for l in legs)
+                > basis_per * (abs(want) - need)),
             "executable_pnl_before": str(round(before, 4)),
             "executable_pnl_after": str(round(after, 4)),
             "delta": str(round(after - before, 4)),
@@ -691,6 +721,15 @@ def replay_c(slug: str, w, outcome: str) -> dict:
         "min_executable_pnl": str(round(trough, 4)),
         "max_drawdown_from_peak": str(round(max_dd, 4)),
         "opposite_fills": 0,
+        "profitable_exits": sum(1 for e in exits if e["profitable_exit"]),
+        "touch_depth_consumed_max": (str(round(max(port.depth_frac), 4))
+                                     if port.depth_frac else None),
+        "touch_depth_consumed_over_10pct": sum(
+            1 for x in port.depth_frac if x > 0.10),
+        "taker_orders": len(port.depth_frac),
+        "capital_turnover": str(round(
+            port.deployed / port.max_net_capital, 3)
+            if port.max_net_capital > 0 else 0),
         "maker_rebate_modelled_UNVERIFIED": "0.0000",
         "maker_rebate_verified": "0.0000",
         "trajectory": traj, "allocation_log": allocs, "exit_log": exits,
@@ -702,19 +741,22 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tape", default=TAPE)
     ap.add_argument("--out", default="analysis/l5/favorite_dca")
+    ap.add_argument("--alloc", default="1")
     a = ap.parse_args()
     by = load(a.tape)
     elig, rejected = {}, {}
     for slug, w in by.items():
         ok, oc, why = eligible(slug, w)
         (elig if ok else rejected)[slug] = (w, oc, why)
-    res = {"eligible_windows": len(elig), "rejected_windows":
+    res = {"alloc_usd": a.alloc,
+           "eligible_windows": len(elig), "rejected_windows":
            {s: v[2] for s, v in rejected.items()}, "windows": {}}
     for slug in sorted(elig):
         w, oc, _ = elig[slug]
-        res["windows"][slug] = {v: replay(slug, w, oc, v)
+        al = D(a.alloc)
+        res["windows"][slug] = {v: replay(slug, w, oc, v, al)
                                 for v in ("A", "B", "Am")}
-        res["windows"][slug]["C"] = replay_c(slug, w, oc)
+        res["windows"][slug]["C"] = replay_c(slug, w, oc, al)
     os.makedirs(a.out, exist_ok=True)
     # the trajectories are ~99MB as one JSON document, so they go out as a
     # gzipped row stream and the summary keeps everything else. The split is
