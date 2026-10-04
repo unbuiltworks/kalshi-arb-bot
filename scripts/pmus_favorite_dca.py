@@ -516,6 +516,8 @@ def replay_c(slug: str, w, outcome: str,
     intents, captures, missed, fallbacks = [], [], [], []
     pending = None
     last_strengthening = None          # D0's gate value at the live signal
+    episodes = []                      # INSTRUMENTATION ONLY -- see below
+    cur_ep = None
     bt = [b["t"] for b in books]
     marks = [start + k * CADENCE_S for k in range(1, 15)]
     fav = None
@@ -550,6 +552,7 @@ def replay_c(slug: str, w, outcome: str,
             return False
         fee = FEES.taker_fee(px, sh)
         port.add(side, sh, px, fee)
+        _ep_add(side, px, sh, fee, t)
         allocs.append({"t": t, "kind": tag, "side": side, "px": str(px),
                        "strengthening_at_signal": last_strengthening,
                        "sh": str(round(sh, 4)), "fee": str(fee),
@@ -677,6 +680,84 @@ def replay_c(slug: str, w, outcome: str,
             fallbacks[-1]["filled"] = True
         else:
             fallbacks[-1]["filled"] = False
+
+    def _ep_px(side, bid, ask):
+        """The price at which this side could be EXITED right now."""
+        return bid if side == "UP" else ONE - ask
+
+    def _ep_add(side, px, sh, fee, t):
+        """Open or extend the current episode. Instrumentation only."""
+        nonlocal cur_ep
+        if cur_ep is None or cur_ep["side"] != side:
+            if cur_ep is not None:
+                _ep_close(t, None, "side_switch_without_exit")
+            cur_ep = {"side": side, "t_entry": t, "entry_px": str(px),
+                      "shares": ZERO, "cost": ZERO, "entry_fees": ZERO,
+                      "additions": 0, "mfe_px": None, "mae_px": None,
+                      "flip_during": False,
+                      "tte_s_at_entry": round(
+                          (window_start(slug) + 900) - t, 1)}
+        cur_ep["shares"] += sh
+        cur_ep["cost"] += sh * px
+        cur_ep["entry_fees"] += fee
+        cur_ep["additions"] += 1
+
+    def _ep_mark(bid, ask):
+        if cur_ep is None:
+            return
+        p = _ep_px(cur_ep["side"], bid, ask)
+        if cur_ep["mfe_px"] is None or p > D(cur_ep["mfe_px"]):
+            cur_ep["mfe_px"] = str(p)
+        if cur_ep["mae_px"] is None or p < D(cur_ep["mae_px"]):
+            cur_ep["mae_px"] = str(p)
+
+    def _ep_close(t_trigger, exit_info, reason):
+        """Close the episode. `exit_info` is (t_exec, proceeds, fee, shares)
+        for a reversal exit, or None when the episode runs to settlement."""
+        nonlocal cur_ep
+        if cur_ep is None:
+            return
+        e = cur_ep
+        cur_ep = None
+        sh = e["shares"]
+        if exit_info is not None:
+            t_exec, proceeds, xfee, xsh = exit_info
+        else:
+            won = (e["side"] == outcome)
+            t_exec = window_start(slug) + 900
+            proceeds = sh if won else ZERO
+            xfee = ZERO
+            xsh = sh
+        avg = (e["cost"] / sh) if sh > 0 else ZERO
+        gross = proceeds - e["cost"]
+        fees = e["entry_fees"] + xfee
+        episodes.append({
+            "side": e["side"], "t_entry": e["t_entry"],
+            "entry_px_first": e["entry_px"],
+            "avg_entry_px": str(round(avg, 6)),
+            "shares": str(round(sh, 4)),
+            "notional": str(round(e["cost"], 6)),
+            "additions": e["additions"],
+            "peak_px_while_held": e["mfe_px"],
+            "trough_px_while_held": e["mae_px"],
+            "mfe_per_share": (None if e["mfe_px"] is None
+                              else str(round(D(e["mfe_px"]) - avg, 6))),
+            "mae_per_share": (None if e["mae_px"] is None
+                              else str(round(D(e["mae_px"]) - avg, 6))),
+            "t_exit_trigger": t_trigger, "t_exit_exec": t_exec,
+            "exit_shares": str(round(xsh, 4)),
+            "exit_proceeds_gross": str(round(proceeds, 6)),
+            "holding_s": round(t_exec - e["t_entry"], 2),
+            "tte_s_at_entry": e["tte_s_at_entry"],
+            "flip_during_episode": e["flip_during"],
+            "gross_pnl": str(round(gross, 6)),
+            "entry_fee": str(round(e["entry_fees"], 6)),
+            "exit_fee": str(round(xfee, 6)),
+            "total_fees": str(round(fees, 6)),
+            "net_pnl": str(round(gross - fees, 6)),
+            "gross_over_fees": (None if fees <= 0
+                                else str(round(gross / fees, 4))),
+            "reason": reason})
 
     def passive_exit(t, side, need, trail, fm_trigger, deadline):
         """D4: rest at the economically correct OWN-SIDE touch and sell.
@@ -829,6 +910,11 @@ def replay_c(slug: str, w, outcome: str,
                 break
         if need > 0:
             cleanup_shares += need
+        _ep_close(t, (legs[-1]["t"] if legs else t,
+                      sum(D(l["px"]) * D(l["sh"]) for l in legs),
+                      sum(D(l["fee"]) for l in legs),
+                      sum(D(l["sh"]) for l in legs)) if legs else None,
+                  reason)
         bb = book_at(legs[-1]["t"]) if legs else b
         after = (port.mark(D(bb["bid"]), D(bb["ask"]))
                  - (port.deployed - port.cash_in))
@@ -901,6 +987,8 @@ def replay_c(slug: str, w, outcome: str,
             else:
                 if fav is not None and new_fav != fav:
                     flips += 1
+                    if cur_ep is not None:
+                        cur_ep["flip_during"] = True
                     peak = None
                     spread_at_peak = None
                     episode_open = False
@@ -1007,6 +1095,7 @@ def replay_c(slug: str, w, outcome: str,
                 continue
             bb = ev
             bid2, ask2 = D(bb["bid"]), D(bb["ask"])
+            _ep_mark(bid2, ask2)
             if fav is not None and episode_open:
                 fm2 = fav_mid(fav, bid2, ask2)
                 if peak is None or fm2 > peak:
@@ -1041,6 +1130,7 @@ def replay_c(slug: str, w, outcome: str,
                        "maker_px": str(pending["px"]),
                        "taker_px": str(pending["taker_px"]),
                        "why": "no_defensible_fill_within_period"})
+    _ep_close(window_start(slug) + 900, None, "held_to_settlement")
     last = books[-1]
     bidL, askL = D(last["bid"]), D(last["ask"])
     settle = port.settlement_value(outcome)
@@ -1133,6 +1223,7 @@ def replay_c(slug: str, w, outcome: str,
         "maker_rebate_modelled_UNVERIFIED": str(round(port.rebate_modelled,
                                                       4)),
         "maker_rebate_verified": "0.0000",
+        "episodes": episodes,
         "trajectory": traj, "allocation_log": allocs, "exit_log": exits,
         "opposite_fill_log": opp_fills,
     }
