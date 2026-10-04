@@ -798,6 +798,94 @@ def assert_payload_is_q1(symbol: str, intent: Mapping[str, Any]
     return body
 
 
+# ======================================================================
+# THE WRITE BOUNDARY, AND IT IS EXACTLY ONE FUNCTION.
+#
+# `transport.place` is the only call in this module that mutates anything
+# at the venue. SHADOW MODE REPLACES THAT ONE CALL AND NOTHING ELSE, so a
+# shadow run executes the IDENTICAL path -- same discovery, same frozen
+# policy, same payload validation, same one-outstanding-order invariant,
+# same durable slot accounting, same terminal-state observation, same
+# authenticated reconciliation -- with writes disabled. That is the point:
+# a second strategy implementation would prove nothing about this one.
+#
+# The shadow sink answers from `ci15m_sim`, the venue-faithful simulator
+# already written and tested, so shadow fills obey the same crossing and
+# post-only rules the venue demonstrated.
+# ======================================================================
+WRITE_LIVE = "LIVE"
+WRITE_SHADOW = "SHADOW"
+_WRITE_SINK: Optional[Any] = None
+_WRITE_MODE = WRITE_LIVE
+
+
+def write_mode() -> str:
+    return _WRITE_MODE
+
+
+def set_write_sink(sink: Optional[Any], *, mode: str = WRITE_SHADOW) -> None:
+    """Install (or clear) the write sink. `None` restores the LIVE path."""
+    global _WRITE_SINK, _WRITE_MODE
+    if sink is None:
+        _WRITE_SINK, _WRITE_MODE = None, WRITE_LIVE
+        return
+    if mode == WRITE_LIVE:
+        raise ProbeRefused("a sink may not claim to be the LIVE venue path")
+    _WRITE_SINK, _WRITE_MODE = sink, mode
+
+
+async def _write(**kw) -> Dict[str, Any]:
+    """The ONE write. Live goes to the venue; shadow goes to the simulator
+    and the venue is never contacted."""
+    if _WRITE_SINK is not None:
+        return await _WRITE_SINK(**kw)
+    return await transport.place(**kw)
+
+
+def shadow_sink(book_fn: Any) -> Any:
+    """A write sink that SENDS NOTHING and answers like the venue would.
+
+    `book_fn(symbol)` supplies the executable ladder at send time, so the
+    simulated fill is decided against the same book the policy priced from.
+    It returns the transport envelope shape its consumers already parse, so
+    classify_ack / poll_terminal see nothing unusual.
+    """
+    from src.gemini_execution import ci15m_sim as SIM
+    state = {"n": 0}
+
+    async def sink(*, symbol: str, side: str, outcome: str, price: str,
+                   quantity: str, client_order_id: Any = None,
+                   now: Any = None, allow_taker: bool = False
+                   ) -> Dict[str, Any]:
+        state["n"] += 1
+        bk = book_fn(symbol) or {}
+        leg = "UP" if str(outcome).lower() == "yes" else "DOWN"
+        sim = SIM.simulate(side=leg, price=D(str(price)), qty=D(str(quantity)),
+                           maker_or_cancel=False,
+                           bid=bk.get("bid"), ask=bk.get("ask"),
+                           bid_size=bk.get("bid_size"),
+                           ask_size=bk.get("ask_size"))
+        got = D(str(sim.get("filled_qty") or 0))
+        oid = 9_000_000_000_000 + state["n"]
+        status = "filled" if got >= D(str(quantity)) else (
+            "open" if got == 0 and sim.get("outcome") != "CANCELLED"
+            else ("cancelled" if got == 0 else "open"))
+        return {"ok": True, "status": 201, "classification": "ACCEPTED",
+                "shadow": True, "simulated": sim,
+                "body": {"orderId": oid, "symbol": symbol, "side": side,
+                         "outcome": outcome, "orderType": "limit",
+                         "timeInForce": "good-til-cancel",
+                         "price": str(price), "quantity": str(quantity),
+                         "filledQuantity": str(got),
+                         "remainingQuantity": str(D(str(quantity)) - got),
+                         "avgExecutionPrice": (None if got == 0
+                                               else str(sim.get("fill_price")
+                                                        or price)),
+                         "status": status},
+                "labels": "SHADOW. Nothing was sent to the venue."}
+    return sink
+
+
 async def submit(cohort_id: str, symbol: str, ticker: str,
                  intent: Dict[str, Any], *,
                  root: str = cohort.COHORT_ROOT,
@@ -841,11 +929,11 @@ async def submit(cohort_id: str, symbol: str, ticker: str,
                     "why": "the durability hook did not confirm; the slot is "
                            "SPENT and is never retried"}
     try:
-        res = await transport.place(symbol=symbol, side=payload.spec.SIDE_BUY,
-                                    outcome=intent["outcome"],
-                                    price=str(intent["price"]),
-                                    quantity=str(intent["quantity"]),
-                                    allow_taker=True)
+        res = await _write(symbol=symbol, side=payload.spec.SIDE_BUY,
+                           outcome=intent["outcome"],
+                           price=str(intent["price"]),
+                           quantity=str(intent["quantity"]),
+                           allow_taker=True)
     except Exception as exc:                                   # noqa: BLE001
         BUD.record_status(cohort_id, ticker, slot=row["slot"],
                           status="SUBMITTED",

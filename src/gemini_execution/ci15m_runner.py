@@ -281,10 +281,108 @@ def preflight(cohort_id: str, *, probe_seconds: float) -> Dict[str, Any]:
                               % BUD.TOTAL_ORDER_BUDGET)}
 
 
+async def resolve_carry_over(cohort_id: str, ticker: str,
+                             **rk) -> Dict[str, Any]:
+    """Resolve ONE carried-over window through the authoritative surfaces.
+
+    It reads; it never sends and never cancels. The order id comes from the
+    durable ledger's own SUBMITTED record, so this works after a restart
+    with nothing in memory.
+
+    An order that is STILL RESTING is reported unresolved, which stops the
+    loop. That is deliberate: rolling into the next window while an order
+    is live at the venue is exactly the state a persistent executor must
+    never reach, and the right answer is to stop rather than to cancel
+    something the owner has not authorized cancelling.
+    """
+    rows = BUD._rows(BUD._paths(cohort_id, rk.get("root",
+                                                  cohort.COHORT_ROOT))
+                     ["ledger"])
+    oid = symbol = None
+    for r in rows:
+        if r.get("ticker") != ticker:
+            continue
+        if r.get("kind") == "STATUS" and r.get("status") == "SUBMITTED":
+            b = ((r.get("detail") or {}).get("venue") or {}).get("body") or {}
+            oid = oid or b.get("orderId") or b.get("id")
+            symbol = symbol or b.get("symbol")
+    if symbol is None:
+        symbol = "GEMI-%s-UP" % ticker
+    if oid is None:
+        return {"ticker": ticker, "resolved": False,
+                "why": ("the durable ledger records a submission for this "
+                        "window but carries no venue order id, so its "
+                        "terminal state cannot be looked up. UNKNOWN.")}
+    term = await P.poll_terminal(cohort_id, symbol, oid, attempts=3,
+                                 pause=1.0, **rk)
+    if not term.get("resolved"):
+        return {"ticker": ticker, "order_id": str(oid), "resolved": False,
+                "state": term.get("state"), "why": term.get("why"),
+                "halt": term.get("halt")}
+    out = {"ticker": ticker, "order_id": str(oid), "resolved": True,
+           "state": term["state"], "filled": str(term.get("filled"))}
+    if term["state"] == P.TERMINAL_FILLED:
+        # The authenticated record rebuilds what we hold, through the same
+        # proven primitive the live path uses.
+        rec = await P.reconciled_inventory(cohort_id, symbol, **rk)
+        out["reconciled"] = {"ok": rec["ok"], "signed": str(rec.get("signed")),
+                             "why": rec.get("why")}
+        if rec["ok"]:
+            BUD.record_status(cohort_id, ticker, slot=0, status="FILLED",
+                              detail={"recovered_from": "carry-over resolve",
+                                      "order_id": str(oid),
+                                      "filled": str(term.get("filled"))},
+                              **rk)
+        else:
+            out["resolved"] = False
+    else:
+        BUD.record_status(cohort_id, ticker, slot=0, status="SUBMITTED",
+                          detail={"terminal": term["state"],
+                                  "authoritative_filled":
+                                      str(term.get("filled")),
+                                  "resolved_by": "carry-over resolve"}, **rk)
+    return out
+
+
+MODE_PROBE = "PROBE"
+MODE_PERSISTENT = "PERSISTENT"
+MODES = (MODE_PROBE, MODE_PERSISTENT)
+
+
+def unresolved_windows(cohort_id: str, **rk) -> List[Dict[str, Any]]:
+    """Every window that SUBMITTED an OPEN and has no terminal outcome yet.
+
+    THIS IS THE CARRY-OVER GUARD, and CI15M-4 is why it exists. Order
+    145828836725658335 was left RESTING when its window ended: the engine
+    halted without resolving it, and the order was GTC. A persistent
+    executor that rolls into window N+1 while window N's order is still
+    live would be running two positions while believing it had none -- and
+    the inventory it priced from would be a fiction.
+
+    `open_state` is derived from the DURABLE ledger, so this survives a
+    restart: a fresh process sees the submitted-but-unresolved OPEN before
+    it can discover anything new.
+    """
+    out = []
+    for ticker, outcome in (BUD.windows(cohort_id, **rk) or {}).items():
+        st = BUD.open_state(cohort_id, ticker, **rk)
+        if st == BUD.OPEN_SUBMITTED:
+            out.append({"ticker": ticker, "open_state": st,
+                        "window_outcome": outcome,
+                        "why": ("an OPEN was submitted into this window and "
+                                "has no terminal outcome on the durable "
+                                "ledger. It may still be resting at the "
+                                "venue; it may have filled. Either way it "
+                                "is not forgettable.")})
+    return out
+
+
 async def run(cohort_id: str, *, live: bool, durable_branch: Optional[str],
               max_windows: int, runtime_s: float,
               now_fn: Optional[Any] = None,
               sleeper: Optional[Any] = None,
+              mode: str = MODE_PROBE,
+              shadow: bool = False,
               root: Optional[str] = None) -> Dict[str, Any]:
     """Stay alive until an eligible window runs, or the deadline passes.
 
@@ -318,6 +416,28 @@ async def run(cohort_id: str, *, live: bool, durable_branch: Optional[str],
                            "windows": BUD.windows(cohort_id, **rk)}
             print("WINDOW BUDGET reached: %d" % max_windows)
             break
+        # THE CARRY-OVER GUARD, before discovery and before anything new.
+        # A resting or unresolved order from window N must be resolved
+        # before window N+1 can be entered. This runs on EVERY pass, so a
+        # fresh process after a restart hits it before it can discover a
+        # market.
+        stuck = unresolved_windows(cohort_id, **rk)
+        if stuck:
+            resolved = []
+            for w in stuck:
+                got = await resolve_carry_over(cohort_id, w["ticker"], **rk)
+                resolved.append(got)
+                print("CARRY-OVER %s: %s" % (w["ticker"],
+                                             json.dumps(got, default=str)))
+            if any(not g["resolved"] for g in resolved):
+                exit_reason = "CARRY_OVER_UNRESOLVED"
+                exit_detail = {"windows": stuck, "attempts": resolved,
+                               "why": ("an earlier window's order could not "
+                                       "be resolved. Entering another "
+                                       "window while it is outstanding "
+                                       "would price from a fiction.")}
+                print("STOP: %s" % exit_detail["why"])
+                break
         now = clock()
         sel = P.select_market(discover(now), now)
         if not sel["selected"]:
@@ -338,7 +458,7 @@ async def run(cohort_id: str, *, live: bool, durable_branch: Optional[str],
                               s["ticker"], seen[s["ticker"]]))
             await sleep(POLL_S * 4)
             continue
-        if not live:
+        if not live and not shadow:
             exit_reason, exit_detail = "NOT_LIVE", {"would_open": s["ticker"]}
             print("WOULD OPEN %s (tte %.0fs) -- not live, nothing sent"
                   % (s["ticker"], s["tte"]))
@@ -370,11 +490,22 @@ async def run(cohort_id: str, *, live: bool, durable_branch: Optional[str],
             print("HALTED: %s" % rep["halted"])
             break
         if BUD.submissions_in_window(cohort_id, s["ticker"], **rk) > 0:
-            exit_reason = "SUBMITTED"
-            exit_detail = {"ticker": s["ticker"],
-                           "submissions": BUD.submissions_in_window(
-                               cohort_id, s["ticker"])}
-            break
+            if mode == MODE_PROBE:
+                # A BOUNDED PROBE STOPS AFTER ITS SUBMISSION. Unchanged:
+                # every CI15M-1..4 guarantee rests on this.
+                exit_reason = "SUBMITTED"
+                exit_detail = {"ticker": s["ticker"],
+                               "submissions": BUD.submissions_in_window(
+                                   cohort_id, s["ticker"])}
+                break
+            # PERSISTENT: a traded window is not a reason to exit. The
+            # window is dispositioned, so discovery will skip it and the
+            # loop rolls into N+1. A window that qualified for nothing is
+            # an equally valid NO_TRADE window -- the loop never forces an
+            # OPEN to justify staying alive.
+            print("WINDOW %s dispositioned (%d submission(s)); rolling on"
+                  % (s["ticker"],
+                     BUD.submissions_in_window(cohort_id, s["ticker"], **rk)))
         # nothing was sent and we are not halted: keep looking
         await sleep(POLL_S)
 
@@ -407,6 +538,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--durable-branch", default=None)
     ap.add_argument("--max-windows", type=int, default=1)
     ap.add_argument("--runtime-s", type=float, default=3000.0)
+    ap.add_argument("--mode", default=MODE_PROBE, choices=sorted(MODES),
+                    help="PROBE exits after one submission -- every "
+                         "CI15M-1..4 guarantee rests on that. PERSISTENT "
+                         "rolls into the next window instead of exiting.")
+    ap.add_argument("--shadow", action="store_true",
+                    help="run the EXACT live path with the venue write "
+                         "disabled at its single chokepoint. Sends nothing.")
     a = ap.parse_args(argv)
 
     # A -- THE DURABLE BUDGET IS RECONSTRUCTED BEFORE A COHORT IS CREATED
@@ -445,6 +583,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(json.dumps(pf, indent=2, default=str))
     if a.preflight_only:
         return 0 if pf["ok"] else 1
+    if a.shadow:
+        # THE EXACT LIVE PATH, WRITES DISABLED. One chokepoint is replaced
+        # (`ci15m_probe._write`); discovery, the frozen policy, payload
+        # validation, the one-outstanding-order invariant, durable slot
+        # accounting, terminal-state observation and authenticated
+        # reconciliation are all the live code. Nothing is sent.
+        if a.live:
+            print("--shadow and --live are mutually exclusive")
+            return 2
+        P.set_write_sink(P.shadow_sink(
+            lambda sym: {k: (P.book_from_venue(sym) or {}).get(k)
+                         for k in ("bid", "ask", "bid_size", "ask_size")}))
+        print("SHADOW: write mode %s -- the venue is never contacted"
+              % P.write_mode())
+        try:
+            out = asyncio.run(run(a.cohort, live=False, shadow=True,
+                                  durable_branch=None, mode=a.mode,
+                                  max_windows=a.max_windows,
+                                  runtime_s=a.runtime_s))
+        finally:
+            P.set_write_sink(None)
+        print(json.dumps(out["budget"], indent=2, default=str))
+        return 0
     if not a.live:
         print("not --live: nothing can be submitted.")
         return 0
@@ -457,6 +618,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     out = asyncio.run(run(a.cohort, live=True,
                           durable_branch=a.durable_branch,
+                          mode=a.mode,
                           max_windows=a.max_windows,
                           runtime_s=a.runtime_s))
     print(json.dumps(out["budget"], indent=2, default=str))
