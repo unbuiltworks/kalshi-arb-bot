@@ -1,4 +1,29 @@
-# OOS retrieval — safest supported path chosen, blocked on one token
+# OOS retrieval — COMPLETE. See OOS_ECONOMIC_RESULT.md for the answer.
+
+> **SUPERSEDED, AND TWO CLAIMS BELOW WERE WRONG.** Retrieval finished on
+> 2026-10-04 and the frozen evaluation has run once. The economic answer is in
+> `OOS_ECONOMIC_RESULT.md`. This file is kept for the record of what was tried,
+> with its two errors marked, because both cost real time.
+>
+> **Error 1 — the blocker was not the token.** `railway volume files` needs an
+> SSH identity as well; the inventory-only run failed with `No SSH keys found`
+> even with a valid `RAILWAY_TOKEN`. The working path already existed on `main`
+> as `l5-volume-export`, which pairs the project token with a registered SSH
+> key, and it listed the volume on the first attempt.
+>
+> **Error 2 — the volume does NOT hold `book`/`trade` rows.** The claim below
+> that it carries "the same `kind: book` / `kind: trade` rows the development
+> tape is made of, so the existing replay and gate code reads them unchanged" is
+> false, and it was load-bearing. `pmus_ws_evidence_recorder.append` persists
+> `{"kind": "ws", "t", "msg"}` raw frames; the `book`/`trade` rows are derived
+> in-process by `apply_events`, and the development tape was built from the
+> recorder's PRINTED log lines by `pmus_railway_log_to_tape.py`. A harvest
+> written against this claim read all 46 parts and kept zero rows.
+>
+> One further fact this file could not have known: the 12 GiB retention has since
+> swept every 2026-09-30 part, so seven of the development tape's eight windows
+> can no longer be re-derived from the volume at all.
+
 
 Recorder untouched: not modified, not redeployed, not exposed, collection
 behaviour unchanged. No second service mounts its volume. The WS pricing
