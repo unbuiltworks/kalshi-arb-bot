@@ -387,9 +387,12 @@ def test_both_durations_are_the_same_engine_with_separate_datasets():
     assert DUR.cohort_root(DUR.BTC15M) != DUR.cohort_root(DUR.BTC5M)
     assert DUR.dataset_root(DUR.BTC15M) != DUR.dataset_root(DUR.BTC5M)
     assert DUR.matches(DUR.BTC15M, "BTC15M2610032145")
-    assert DUR.matches(DUR.BTC5M, "BTC5M2610032145")
+    # THE VENUE'S OWN SPELLING, zero-padded, measured from the live
+    # events list. `BTC5M` matches nothing and silently collects no data.
+    assert DUR.matches(DUR.BTC5M, "BTC05M2610040025")
+    assert not DUR.matches(DUR.BTC5M, "BTC5M2610040025")
     assert not DUR.matches(DUR.BTC5M, "BTC15M2610032145")
-    assert not DUR.matches(DUR.BTC15M, "BTC5M2610032145")
+    assert not DUR.matches(DUR.BTC15M, "BTC05M2610040025")
 
 
 def test_the_15m_frozen_band_is_unclipped_by_its_window():

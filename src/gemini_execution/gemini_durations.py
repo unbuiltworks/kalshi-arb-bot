@@ -63,7 +63,12 @@ DURATIONS: Dict[str, Dict[str, Any]] = {
     },
     BTC5M: {
         "name": BTC5M,
-        "pattern": re.compile(r"^BTC5M\d{10}$"),
+        # THE VENUE SPELLS IT BTC05M, ZERO-PADDED -- measured from the
+        # live events list on 2026-10-04: BTC05M2610040025 alongside
+        # BTC15M2610040030. An earlier `^BTC5M\d{10}$` here matched
+        # NOTHING and the 5m collector silently recorded zero rows, which
+        # reads exactly like "no 5m opportunity" and is not.
+        "pattern": re.compile(r"^BTC05M\d{10}$"),
         "window_s": 300.0,
         # NOT SET. See the module docstring: 840 > 300, so the 15m band
         # cannot be carried over without changing the policy's meaning.
