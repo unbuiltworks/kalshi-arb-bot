@@ -14,9 +14,30 @@ Resolution order (first hit wins, recorded in ``FEE_SOURCE``):
    implementation when it is available on the PYTHONPATH.
 2. ``polymarket_us`` package, if it exposes ``fees.taker_fee_cents`` /
    ``fees.maker_fee_cents``.
-3. The FROZEN FALLBACK SCHEDULE below.
+3. The CANONICAL SCHEDULE (bound 2026-10-05)
+-------------------------------------
+``src/pmus_fees.py`` is the programme's canonical, effective-dated PMUS fee
+schedule and is now the default source. It publishes
 
-FROZEN FALLBACK SCHEDULE
+    fee = theta * C * p * (1 - p),  banker's rounding to the cent
+
+with theta_taker = 0.0695 from 2026-09-17 04:00Z (0.06 before) and
+theta_maker_rebate = 0.0125, verified against all 99 rows of the venue's
+published price table.
+
+This CORRECTS the freeze-time fallback, which assumed a zero rate because no
+PMUS fee module was importable in this repository at the time. The correction
+is a fee-source binding, not a tuning: it was required by the freeze document
+before any result could be trusted, and it was made before any outcome was
+read. It raises every break-even and shrinks every net, and the freeze's
+`fee_schedule_fingerprint` changes accordingly -- which is exactly what the
+fingerprint is for.
+
+Note the rounding rule is the venue's published banker's rounding, not the
+conservative ceil the fallback used. The canonical module is authoritative.
+
+FROZEN FALLBACK SCHEDULE (now only a last resort)
+-------------------------------------------------SCHEDULE
 ------------------------
 As of the freeze date (2026-10-05) no PMUS fee module is importable in this
 repository (``main`` carries only the Kalshi schedule in ``src/fee_calc.py``,
@@ -90,17 +111,27 @@ def _resolve() -> tuple[Callable[..., int], str]:
         return func, f"env:{spec}"
 
     try:
-        pm_fees = importlib.import_module("polymarket_us.fees")
+        canon = importlib.import_module("src.pmus_fees")
     except ModuleNotFoundError:
-        pm_fees = None
-    if pm_fees is not None:
-        taker = getattr(pm_fees, "taker_fee_cents", None)
-        maker = getattr(pm_fees, "maker_fee_cents", None)
-        if callable(taker) and callable(maker):
-            def _canonical(count: int, price_cents: int, side: str, liquidity: str) -> int:
-                fn = taker if liquidity == "taker" else maker
-                return int(fn(count, price_cents))
-            return _canonical, "polymarket_us.fees"
+        canon = None
+    if canon is not None and hasattr(canon, "taker_fee"):
+        from decimal import Decimal as _D
+
+        def _canonical(count: int, price_cents: int, side: str, liquidity: str) -> int:
+            """Canonical schedule, in integer cents.
+
+            ``taker_fee``/``maker_rebate`` take a DOLLAR price and return
+            dollars already rounded to the cent, so x100 is exact. The maker
+            figure is a REBATE (a credit), never a negative fee, so it is not
+            used as a cost here: a maker leg's fee cost is zero and the credit
+            is accounted separately by whoever earns it.
+            """
+            if liquidity != "taker":
+                return 0
+            d = canon.taker_fee(_D(price_cents) / _D(100), _D(count), cents=True)
+            return int((d * 100).to_integral_value())
+
+        return _canonical, "src.pmus_fees(taker_theta=%s)" % canon.taker_theta()
 
     return _fallback_fee_cents, (
         f"frozen-fallback(taker={PMUS_TAKER_RATE!r},maker={PMUS_MAKER_RATE!r})"

@@ -31,31 +31,36 @@ Every economic figure in this framework comes from **one** fee entry point:
 2. `polymarket_us.fees.{taker,maker}_fee_cents`, if present;
 3. an explicit **frozen fallback schedule**.
 
-At freeze time **no PMUS fee module is importable in this repository.** `main`
-carries only `src/fee_calc.py`, which is the *Kalshi* schedule and is
-deliberately **not** used as a silent stand-in. The frozen fallback is
-therefore the convex form `ceil(rate · C · P · (1−P))` with
-`PMUS_TAKER_RATE` / `PMUS_MAKER_RATE` defaulting to **0.0**, matching
-Polymarket US's published zero-trading-fee posture at freeze time.
+**Freeze-time state, and the correction made the same day.** When this was
+first written, no PMUS fee module was importable in this checkout, so the
+fallback was used at a zero rate and the published break-evens equalled the
+ask. That was wrong in magnitude. The programme's canonical, effective-dated
+schedule `src/pmus_fees.py` was then located on the archive branch and **bound
+as the default source**, and every table regenerated:
 
-Consequences, stated plainly:
+    fee = theta · C · p · (1 − p),  banker's rounding to the cent
+    theta_taker = 0.0695 from 2026-09-17 04:00Z (0.06 before it)
+    theta_maker_rebate = 0.0125, a CREDIT, never netted into a cost here
 
-- With a zero rate the fee-inclusive break-even win probability equals the
-  executable ask in probability terms (e.g. 23c → 0.2300). Published tables
-  below show exactly that, which is the correct degenerate case, not an error.
-- Binding a non-zero rate, or binding the canonical implementation, changes
-  only a **constant** — never the shape of any table, rule, or threshold here.
-  Every table is regenerated from the same code, so re-binding is a one-command
-  refresh.
-- Every generated artifact stamps `fee_source` and a
-  `fee_schedule_fingerprint`. **A table whose fingerprint does not match the
-  fingerprint printed in the artifact is not the frozen table.** Before the
-  holdout evaluation, the fee source MUST be confirmed (and re-stamped) against
-  the canonical PMUS implementation.
+verified by that module against all 99 rows of the venue's published price
+table. The rounding is the venue's banker's rounding, not the conservative
+ceil the fallback assumed.
 
-**Open item, owned and visible:** bind the canonical PMUS fee implementation
-via `PMUS_FEE_IMPL` and regenerate `PMUS_BTC15M_ECONOMICS.md` before any
-candidate is evaluated on holdout.
+This is a **fee-source binding, not a tuning**. It was required by this
+document before any result could be trusted, and it was made **before any
+outcome was read**. It raises every break-even and shrinks every net:
+
+| | fallback (wrong) | canonical |
+|---|---|---|
+| fee source | `frozen-fallback(0.0)` | `src.pmus_fees(taker_theta=0.0695)` |
+| fingerprint | `9276398def68203c` | `7df8b095d5ce142b` |
+| 20c entry | 7 @ $1.40, BE 0.2000 | 7 @ $1.48, BE 0.2114 |
+| 49c entry | 10 @ $4.90, BE 0.4900 | 11 @ $5.58, BE 0.5073 |
+
+The fingerprint changing is the mechanism working, not failing. **The frozen
+fingerprint is now `7df8b095d5ce142b`; a table carrying any other fingerprint
+is not the frozen table.**
+
 
 ---
 

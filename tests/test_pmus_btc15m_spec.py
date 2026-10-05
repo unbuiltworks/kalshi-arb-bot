@@ -55,7 +55,8 @@ def test_row_internal_accounting_and_breakeven(ask):
     assert row.net_profit_win_cents == row.contracts * 100 - row.spend_cents
     assert row.loss_if_loser_cents == row.spend_cents  # a loss is total
     expected_be = row.spend_cents / (row.spend_cents + row.net_profit_win_cents)
-    assert row.breakeven_win_prob == pytest.approx(expected_be, abs=1e-9)
+    # stored to 6dp, so compare at that resolution rather than to the bit
+    assert row.breakeven_win_prob == pytest.approx(expected_be, abs=1e-6)
     # fees can only push break-even up, never below the raw ask probability
     assert row.breakeven_win_prob >= ask / 100 - 1e-9
     assert row.required_touch_depth >= row.contracts
@@ -63,7 +64,11 @@ def test_row_internal_accounting_and_breakeven(ask):
 
 def test_expectancy_is_zero_at_breakeven_and_monotone_in_win_prob():
     row = spec.size_for_entry(23)
-    assert spec.expected_pnl_cents(row, row.breakeven_win_prob) == pytest.approx(0.0, abs=1e-6)
+    # the stored break-even is rounded to 6dp, so expectancy at it is within
+    # 1e-6 of the payout span rather than exactly zero
+    span = row.net_profit_win_cents + row.loss_if_loser_cents
+    assert spec.expected_pnl_cents(row, row.breakeven_win_prob) == pytest.approx(
+        0.0, abs=1e-6 * span)
     vals = [spec.expected_pnl_cents(row, p) for p in spec.WIN_PROB_GRID]
     assert all(b > a for a, b in zip(vals, vals[1:]))
 
