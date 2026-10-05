@@ -1,0 +1,730 @@
+{
+  "accounting": "FILLED -> SETTLED -> CASH_CONFIRMED -> REALIZED. SETTLED and CASH_CONFIRMED are kept separate and a settled outcome is never reported as realized.",
+  "cash_leg_readable": false,
+  "cash_leg_reads": [
+    {
+      "params": {
+        "limit": 100,
+        "withCashOuts": true
+      },
+      "why": "raised TypeError"
+    },
+    {
+      "params": {
+        "limit": 100,
+        "withCashOuts": "true"
+      },
+      "why": "raised TypeError"
+    }
+  ],
+  "cohort_state": {
+    "attempts_consumed": 5,
+    "attempts_remaining": 0,
+    "committed_headroom_usd": "1.0855",
+    "committed_usd": "3.4460",
+    "halted": null,
+    "windows_touched": [
+      "GEMI-BTC05M2610051550-UP",
+      "GEMI-BTC05M2610051555-UP",
+      "GEMI-BTC05M2610051600-UP",
+      "GEMI-BTC05M2610051605-UP",
+      "GEMI-BTC05M2610051610-UP"
+    ]
+  },
+  "excluded_from_strategy": [
+    "GEMI-BTC05M2610051550-UP",
+    "GEMI-BTC05M2610051555-UP",
+    "GEMI-BTC05M2610051600-UP",
+    "GEMI-BTC05M2610051605-UP",
+    "GEMI-BTC05M2610051610-UP"
+  ],
+  "label": "GEMINI_BTC5M_COHORT1_AUDIT_V1",
+  "read_only": "this audit imports no order path; it reads the contract object, positions/settled and our own durable ledger",
+  "rows": [
+    {
+      "ACK": {
+        "client_order_id": "c4ac0348-e139-4125-9bc0-f0fe6a367806",
+        "created_at": "2026-10-05T15:45:16.085Z",
+        "latency_ms": 493.77,
+        "order_id": "145828836798388805",
+        "venue_status": "open"
+      },
+      "CASH_CONFIRMED": {
+        "confirmed": false,
+        "realized_net_usd": null,
+        "rows": [],
+        "why": "no cashOuts/settled row for this symbol; realized net P&L is NOT computed from an outcome"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.5",
+        "elapsed_since_open_s": 15.396137714385986,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.4,
+        "up_ask": "0.72",
+        "up_ask_size": "25.0",
+        "up_bid": "0.5",
+        "up_bid_size": "234.0",
+        "utc": "2026-10-05T15:45:15.513283+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "no authoritative strike.value",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": null,
+        "down_price_contemporaneous": "0.5",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 5703.513,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 5703.513,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5718.513,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5733.513,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5763.513,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5793.513,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5823.513,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5883.513,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5943.513,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5988.513,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": null
+        },
+        "settlement_side": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "up_entry_price": "0.72",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.72",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.72",
+        "quantity": "1",
+        "role": "maker",
+        "venue_fee_usd": "0"
+      },
+      "SETTLED": {
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "payout_usd": null,
+        "readable": true,
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "status": null,
+        "strike_consistency": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.7341",
+        "requested_price": "0.72",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T15:45:16.131550+00:00"
+      },
+      "market": "GEMI-BTC05M2610051550-UP",
+      "slot": 1
+    },
+    {
+      "ACK": {
+        "client_order_id": "ceded863-4fbf-4e26-a05f-13f7414d6c87",
+        "created_at": "2026-10-05T15:50:16.850Z",
+        "latency_ms": 183.139,
+        "order_id": "145828836798486502",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "confirmed": false,
+        "realized_net_usd": null,
+        "rows": [],
+        "why": "no cashOuts/settled row for this symbol; realized net P&L is NOT computed from an outcome"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.63",
+        "elapsed_since_open_s": 15.341307401657104,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": -0.659,
+        "up_ask": "0.67",
+        "up_ask_size": "25.0",
+        "up_bid": "0.37",
+        "up_bid_size": "405.0",
+        "utc": "2026-10-05T15:50:16.580080+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "no authoritative strike.value",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": null,
+        "down_price_contemporaneous": "0.63",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6004.58,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6004.58,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6019.58,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6034.58,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6064.58,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6094.58,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6124.58,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6184.58,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6244.58,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6289.58,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": null
+        },
+        "settlement_side": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "up_entry_price": "0.67",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.67",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.67",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "payout_usd": null,
+        "readable": true,
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "status": null,
+        "strike_consistency": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.6855",
+        "requested_price": "0.67",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T15:50:16.857098+00:00"
+      },
+      "market": "GEMI-BTC05M2610051555-UP",
+      "slot": 2
+    },
+    {
+      "ACK": {
+        "client_order_id": "1c2eb398-04d7-4670-9c0d-30035acdef18",
+        "created_at": "2026-10-05T15:55:16.019Z",
+        "latency_ms": 123.781,
+        "order_id": "145828836798601425",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "confirmed": false,
+        "realized_net_usd": null,
+        "rows": [],
+        "why": "no cashOuts/settled row for this symbol; realized net P&L is NOT computed from an outcome"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.68",
+        "elapsed_since_open_s": 15.614298343658447,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.614,
+        "up_ask": "0.6",
+        "up_ask_size": "400.0",
+        "up_bid": "0.32",
+        "up_bid_size": "25.0",
+        "utc": "2026-10-05T15:55:15.803119+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "no authoritative strike.value",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": null,
+        "down_price_contemporaneous": "0.68",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6303.803,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6303.803,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6318.803,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6333.803,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6363.803,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6393.803,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6423.803,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6483.803,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6543.803,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6588.803,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": null
+        },
+        "settlement_side": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "up_entry_price": "0.6",
+        "up_was_at_entry": "DOWN"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.6",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.6",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "payout_usd": null,
+        "readable": true,
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "status": null,
+        "strike_consistency": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.6168",
+        "requested_price": "0.6",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T15:55:16.024729+00:00"
+      },
+      "market": "GEMI-BTC05M2610051600-UP",
+      "slot": 3
+    },
+    {
+      "ACK": {
+        "client_order_id": "b7ca1493-8858-4c5e-8d88-98788b31e924",
+        "created_at": "2026-10-05T16:00:16.029Z",
+        "latency_ms": 148.879,
+        "order_id": "145828836798659256",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "confirmed": false,
+        "realized_net_usd": null,
+        "rows": [],
+        "why": "no cashOuts/settled row for this symbol; realized net P&L is NOT computed from an outcome"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.63",
+        "elapsed_since_open_s": 15.53202486038208,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.532,
+        "up_ask": "0.64",
+        "up_ask_size": "416.0",
+        "up_bid": "0.37",
+        "up_bid_size": "405.0",
+        "utc": "2026-10-05T16:00:15.823868+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "no authoritative strike.value",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": null,
+        "down_price_contemporaneous": "0.63",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6603.824,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6603.824,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6618.824,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6633.824,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6663.824,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6693.824,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6723.824,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6783.824,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6843.824,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6888.824,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": null
+        },
+        "settlement_side": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "up_entry_price": "0.64",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.64",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.64",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "payout_usd": null,
+        "readable": true,
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "status": null,
+        "strike_consistency": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.6561",
+        "requested_price": "0.64",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T16:00:16.048735+00:00"
+      },
+      "market": "GEMI-BTC05M2610051605-UP",
+      "slot": 4
+    },
+    {
+      "ACK": {
+        "client_order_id": "bfcf3c1d-6a3e-4992-933a-9f64dff05715",
+        "created_at": "2026-10-05T16:05:16.143Z",
+        "latency_ms": 152.304,
+        "order_id": "145828836798737214",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "confirmed": false,
+        "realized_net_usd": null,
+        "rows": [],
+        "why": "no cashOuts/settled row for this symbol; realized net P&L is NOT computed from an outcome"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.55",
+        "elapsed_since_open_s": 15.604108095169067,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.604,
+        "up_ask": "0.74",
+        "up_ask_size": "25.0",
+        "up_bid": "0.45",
+        "up_bid_size": "181.75",
+        "utc": "2026-10-05T16:05:15.912119+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "no authoritative strike.value",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": null,
+        "down_price_contemporaneous": "0.55",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6903.912,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6903.912,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6918.912,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6933.912,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6963.912,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6993.912,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7023.912,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7083.912,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7143.912,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7188.912,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": null
+        },
+        "settlement_side": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "up_entry_price": "0.74",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.74",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.74",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "payout_usd": null,
+        "readable": true,
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "status": null,
+        "strike_consistency": null,
+        "strike_source": "ABSENT",
+        "strike_value": null,
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.7535",
+        "requested_price": "0.74",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T16:05:16.152692+00:00"
+      },
+      "market": "GEMI-BTC05M2610051610-UP",
+      "slot": 5
+    }
+  ]
+}
