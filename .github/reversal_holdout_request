@@ -12,7 +12,7 @@ evaluate stage.
 
   STAGE must be the word harvest or the word evaluate.
 
-STAGE=harvest
-HARVEST_RUN_ID=
+STAGE=evaluate
+HARVEST_RUN_ID=37250074970
 
-REQUEST=1
+REQUEST=2
