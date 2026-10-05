@@ -1,0 +1,471 @@
+{
+  "accounting_label": "historical replay on Gemini's own recorded books and settlements; no order was sent",
+  "book_state_census": {
+    "10s": {
+      "EMPTY": 57,
+      "ONE_SIDED": 75,
+      "TWO_SIDED": 1,
+      "ask_only": 30,
+      "bid_only": 45,
+      "observations": 133
+    },
+    "120s": {
+      "EMPTY": 1,
+      "ONE_SIDED": 76,
+      "TWO_SIDED": 56,
+      "ask_only": 29,
+      "bid_only": 47,
+      "observations": 133
+    },
+    "15s": {
+      "EMPTY": 55,
+      "ONE_SIDED": 76,
+      "TWO_SIDED": 2,
+      "ask_only": 31,
+      "bid_only": 45,
+      "observations": 133
+    },
+    "1s": {
+      "EMPTY": 73,
+      "ONE_SIDED": 60,
+      "ask_only": 23,
+      "bid_only": 37,
+      "observations": 133
+    },
+    "20s": {
+      "EMPTY": 53,
+      "ONE_SIDED": 80,
+      "ask_only": 35,
+      "bid_only": 45,
+      "observations": 133
+    },
+    "2s": {
+      "EMPTY": 63,
+      "ONE_SIDED": 70,
+      "ask_only": 26,
+      "bid_only": 44,
+      "observations": 133
+    },
+    "30s": {
+      "EMPTY": 30,
+      "ONE_SIDED": 101,
+      "TWO_SIDED": 2,
+      "ask_only": 43,
+      "bid_only": 58,
+      "observations": 133
+    },
+    "45s": {
+      "EMPTY": 7,
+      "ONE_SIDED": 112,
+      "TWO_SIDED": 14,
+      "ask_only": 49,
+      "bid_only": 63,
+      "observations": 133
+    },
+    "5s": {
+      "EMPTY": 58,
+      "ONE_SIDED": 75,
+      "ask_only": 30,
+      "bid_only": 45,
+      "observations": 133
+    },
+    "60s": {
+      "EMPTY": 9,
+      "ONE_SIDED": 111,
+      "TWO_SIDED": 13,
+      "ask_only": 49,
+      "bid_only": 62,
+      "observations": 133
+    },
+    "90s": {
+      "EMPTY": 4,
+      "ONE_SIDED": 99,
+      "TWO_SIDED": 30,
+      "ask_only": 39,
+      "bid_only": 60,
+      "observations": 133
+    }
+  },
+  "by_checkpoint": {
+    "10s": {
+      "favorite_correct_pct": 7.14,
+      "leader_correct_pct_ALL": 69.74,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 17.86,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.4029,
+        "leader_correct_pct": 70.67,
+        "leader_has_no_ask_pct": 68.0,
+        "observations": 75,
+        "only_executable_side_is_the_loser_pct": 97.33
+      },
+      "two_sided": {
+        "leader_correct_pct": 0.0,
+        "median_abs_proxy_distance_LOSERS": 9.01,
+        "median_abs_proxy_distance_WINNERS": null,
+        "median_spread": 0.29,
+        "observations": 1
+      }
+    },
+    "120s": {
+      "favorite_correct_pct": 70.69,
+      "leader_correct_pct_ALL": 83.33,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 70.69,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.2211,
+        "leader_correct_pct": 93.42,
+        "leader_has_no_ask_pct": 97.37,
+        "observations": 76,
+        "only_executable_side_is_the_loser_pct": 90.79
+      },
+      "two_sided": {
+        "leader_correct_pct": 69.64,
+        "median_abs_proxy_distance_LOSERS": 7.92,
+        "median_abs_proxy_distance_WINNERS": 9.15,
+        "median_spread": 0.33,
+        "observations": 56
+      }
+    },
+    "15s": {
+      "favorite_correct_pct": 6.9,
+      "leader_correct_pct_ALL": 69.23,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 17.24,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.4024,
+        "leader_correct_pct": 69.74,
+        "leader_has_no_ask_pct": 68.42,
+        "observations": 76,
+        "only_executable_side_is_the_loser_pct": 98.68
+      },
+      "two_sided": {
+        "leader_correct_pct": 50.0,
+        "median_abs_proxy_distance_LOSERS": 12.79,
+        "median_abs_proxy_distance_WINNERS": 12.94,
+        "median_spread": 0.19,
+        "observations": 2
+      }
+    },
+    "1s": {
+      "favorite_correct_pct": 8.33,
+      "leader_correct_pct_ALL": 70.0,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 25.0,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.4372,
+        "leader_correct_pct": 70.0,
+        "leader_has_no_ask_pct": 66.67,
+        "observations": 60,
+        "only_executable_side_is_the_loser_pct": 96.67
+      },
+      "two_sided": {
+        "leader_correct_pct": null,
+        "median_abs_proxy_distance_LOSERS": null,
+        "median_abs_proxy_distance_WINNERS": null,
+        "median_spread": null,
+        "observations": 0
+      }
+    },
+    "20s": {
+      "favorite_correct_pct": 9.38,
+      "leader_correct_pct_ALL": 67.5,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 18.75,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.4287,
+        "leader_correct_pct": 67.5,
+        "leader_has_no_ask_pct": 63.75,
+        "observations": 80,
+        "only_executable_side_is_the_loser_pct": 96.25
+      },
+      "two_sided": {
+        "leader_correct_pct": null,
+        "median_abs_proxy_distance_LOSERS": null,
+        "median_abs_proxy_distance_WINNERS": null,
+        "median_spread": null,
+        "observations": 0
+      }
+    },
+    "2s": {
+      "favorite_correct_pct": 7.41,
+      "leader_correct_pct_ALL": 71.43,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 25.93,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.4166,
+        "leader_correct_pct": 71.43,
+        "leader_has_no_ask_pct": 68.57,
+        "observations": 70,
+        "only_executable_side_is_the_loser_pct": 97.14
+      },
+      "two_sided": {
+        "leader_correct_pct": null,
+        "median_abs_proxy_distance_LOSERS": null,
+        "median_abs_proxy_distance_WINNERS": null,
+        "median_spread": null,
+        "observations": 0
+      }
+    },
+    "30s": {
+      "favorite_correct_pct": 8.33,
+      "leader_correct_pct_ALL": 78.64,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 20.83,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.3196,
+        "leader_correct_pct": 79.21,
+        "leader_has_no_ask_pct": 81.19,
+        "observations": 101,
+        "only_executable_side_is_the_loser_pct": 96.04
+      },
+      "two_sided": {
+        "leader_correct_pct": 50.0,
+        "median_abs_proxy_distance_LOSERS": 1.96,
+        "median_abs_proxy_distance_WINNERS": 11.32,
+        "median_spread": 0.575,
+        "observations": 2
+      }
+    },
+    "45s": {
+      "favorite_correct_pct": 50.0,
+      "leader_correct_pct_ALL": 90.48,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 50.0,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.1788,
+        "leader_correct_pct": 94.64,
+        "leader_has_no_ask_pct": 98.21,
+        "observations": 112,
+        "only_executable_side_is_the_loser_pct": 96.43
+      },
+      "two_sided": {
+        "leader_correct_pct": 57.14,
+        "median_abs_proxy_distance_LOSERS": 2.185,
+        "median_abs_proxy_distance_WINNERS": 3.235,
+        "median_spread": 0.335,
+        "observations": 14
+      }
+    },
+    "5s": {
+      "favorite_correct_pct": 11.11,
+      "leader_correct_pct_ALL": 73.33,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 25.93,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.4079,
+        "leader_correct_pct": 73.33,
+        "leader_has_no_ask_pct": 69.33,
+        "observations": 75,
+        "only_executable_side_is_the_loser_pct": 96.0
+      },
+      "two_sided": {
+        "leader_correct_pct": null,
+        "median_abs_proxy_distance_LOSERS": null,
+        "median_abs_proxy_distance_WINNERS": null,
+        "median_spread": null,
+        "observations": 0
+      }
+    },
+    "60s": {
+      "favorite_correct_pct": 61.54,
+      "leader_correct_pct_ALL": 91.13,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 61.54,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.1864,
+        "leader_correct_pct": 94.59,
+        "leader_has_no_ask_pct": 100.0,
+        "observations": 111,
+        "only_executable_side_is_the_loser_pct": 94.59
+      },
+      "two_sided": {
+        "leader_correct_pct": 61.54,
+        "median_abs_proxy_distance_LOSERS": 1.58,
+        "median_abs_proxy_distance_WINNERS": 7.59,
+        "median_spread": 0.36,
+        "observations": 13
+      }
+    },
+    "90s": {
+      "favorite_correct_pct": 63.89,
+      "leader_correct_pct_ALL": 86.82,
+      "leader_correct_pct_WHERE_EXEC_FAVORITE_EXISTS": 63.89,
+      "observations": 133,
+      "one_sided": {
+        "its_avg_price": 0.2398,
+        "leader_correct_pct": 91.92,
+        "leader_has_no_ask_pct": 93.94,
+        "observations": 99,
+        "only_executable_side_is_the_loser_pct": 93.94
+      },
+      "two_sided": {
+        "leader_correct_pct": 70.0,
+        "median_abs_proxy_distance_LOSERS": 4.59,
+        "median_abs_proxy_distance_WINNERS": 7.07,
+        "median_spread": 0.325,
+        "observations": 30
+      }
+    }
+  },
+  "diagnostic_only": "no threshold search, no strategy derived, the rejected price-only study untouched",
+  "duration": "BTC5M",
+  "label": "GEMINI_SELECTION_GAP_V1",
+  "observations": 1463,
+  "observations_sample": [
+    {
+      "book_state": "ONE_SIDED",
+      "cheapest_executable_price": 0.08,
+      "cheapest_executable_side": "DOWN",
+      "checkpoint_s": 120.0,
+      "depth_contracts": 5.0,
+      "executable_favorite_price": null,
+      "executable_favorite_side": null,
+      "executable_sides": [
+        "DOWN"
+      ],
+      "favorite_correct": null,
+      "leader": "UP",
+      "leader_basis": "BID_ONLY",
+      "leader_correct": true,
+      "leader_has_an_ask": false,
+      "leader_tenure_s": null,
+      "leader_tenure_status": "NOT_RESOLVABLE_ON_AN_11_POINT_GRID",
+      "only_executable_side_is_the_loser": true,
+      "prior_flip_checkpoints": [],
+      "prior_flips": 0,
+      "proxy_distance_from_strike": 115.68,
+      "proxy_move_30s": null,
+      "proxy_move_60s": null,
+      "proxy_reference": 84455.93,
+      "quote_age_s": null,
+      "quote_age_status": "NOT_RECORDED_BY_THIS_TAPE",
+      "reference_feed_caveat": "proxy is Coinbase spot; Gemini's settlement index is LS-LRRR-XBTUSD and Z is NOT IDENTIFIED",
+      "spread": null,
+      "window": "BTC05M2610022055",
+      "winner": "UP"
+    },
+    {
+      "book_state": "ONE_SIDED",
+      "cheapest_executable_price": 0.08,
+      "cheapest_executable_side": "DOWN",
+      "checkpoint_s": 90.0,
+      "depth_contracts": 5.0,
+      "executable_favorite_price": null,
+      "executable_favorite_side": null,
+      "executable_sides": [
+        "DOWN"
+      ],
+      "favorite_correct": null,
+      "leader": "UP",
+      "leader_basis": "BID_ONLY",
+      "leader_correct": true,
+      "leader_has_an_ask": false,
+      "leader_tenure_s": null,
+      "leader_tenure_status": "NOT_RESOLVABLE_ON_AN_11_POINT_GRID",
+      "only_executable_side_is_the_loser": true,
+      "prior_flip_checkpoints": [],
+      "prior_flips": 0,
+      "proxy_distance_from_strike": 91.48,
+      "proxy_move_30s": -24.2,
+      "proxy_move_60s": null,
+      "proxy_reference": 84431.73,
+      "quote_age_s": null,
+      "quote_age_status": "NOT_RECORDED_BY_THIS_TAPE",
+      "reference_feed_caveat": "proxy is Coinbase spot; Gemini's settlement index is LS-LRRR-XBTUSD and Z is NOT IDENTIFIED",
+      "spread": null,
+      "window": "BTC05M2610022055",
+      "winner": "UP"
+    },
+    {
+      "book_state": "ONE_SIDED",
+      "cheapest_executable_price": 0.16,
+      "cheapest_executable_side": "DOWN",
+      "checkpoint_s": 60.0,
+      "depth_contracts": 178.0,
+      "executable_favorite_price": null,
+      "executable_favorite_side": null,
+      "executable_sides": [
+        "DOWN"
+      ],
+      "favorite_correct": null,
+      "leader": "UP",
+      "leader_basis": "BID_ONLY",
+      "leader_correct": true,
+      "leader_has_an_ask": false,
+      "leader_tenure_s": null,
+      "leader_tenure_status": "NOT_RESOLVABLE_ON_AN_11_POINT_GRID",
+      "only_executable_side_is_the_loser": true,
+      "prior_flip_checkpoints": [],
+      "prior_flips": 0,
+      "proxy_distance_from_strike": 94.08,
+      "proxy_move_30s": 2.6,
+      "proxy_move_60s": -21.6,
+      "proxy_reference": 84434.33,
+      "quote_age_s": null,
+      "quote_age_status": "NOT_RECORDED_BY_THIS_TAPE",
+      "reference_feed_caveat": "proxy is Coinbase spot; Gemini's settlement index is LS-LRRR-XBTUSD and Z is NOT IDENTIFIED",
+      "spread": null,
+      "window": "BTC05M2610022055",
+      "winner": "UP"
+    }
+  ],
+  "recorded_checkpoints": [
+    120.0,
+    90.0,
+    60.0,
+    45.0,
+    30.0,
+    20.0,
+    15.0,
+    10.0,
+    5.0,
+    2.0,
+    1.0
+  ],
+  "requested_not_collected": [
+    180
+  ],
+  "the_selection_gap": {
+    "at_60s": {
+      "EMPTY": {
+        "leader_correct_pct": 0.0,
+        "median_abs_proxy_distance_losers": null,
+        "median_abs_proxy_distance_winners": null,
+        "median_abs_proxy_move_60s_losers": null,
+        "median_abs_proxy_move_60s_winners": null,
+        "median_depth": null,
+        "median_prior_flips": 0.0,
+        "observations": 9
+      },
+      "ONE_SIDED": {
+        "leader_correct_pct": 94.59,
+        "median_abs_proxy_distance_losers": 9.98,
+        "median_abs_proxy_distance_winners": 22.95,
+        "median_abs_proxy_move_60s_losers": 14.83,
+        "median_abs_proxy_move_60s_winners": 7.01,
+        "median_depth": 178.0,
+        "median_prior_flips": 0.0,
+        "observations": 111
+      },
+      "TWO_SIDED": {
+        "leader_correct_pct": 61.54,
+        "median_abs_proxy_distance_losers": 1.58,
+        "median_abs_proxy_distance_winners": 7.59,
+        "median_abs_proxy_move_60s_losers": 8.44,
+        "median_abs_proxy_move_60s_winners": 10.97,
+        "median_depth": 1250.0,
+        "median_prior_flips": 0.0,
+        "observations": 13
+      }
+    },
+    "explanation": "the 91.1% figure is carried almost entirely by ONE_SIDED observations, where the leader is right ~94.6% of the time and has NO ASK in 100% of cases -- so the accurate leader cannot be bought at any price, and the single executable side is the loser in 94.6% of them at an average 0.186. The executable-favorite subset is the TWO_SIDED minority, where both outcomes are buyable across a ~0.35 spread and the leader is close to a coin flip. The book goes two-sided precisely when the outcome is undecided: within TWO_SIDED, winners sit a median $7.59 from the strike on the proxy and losers $1.58.",
+    "not_a_strategy": "the tradeable expressions of 'the one-sided leader is right' are both already measured dead ends: resting a bid on the leader is a maker fill at 0.6-1.6% per cycle with +0.12 adverse selection, and selling the executable loser would be a naked short whose venue semantics are undetermined and which sell_path refuses."
+  },
+  "unmeasurable_here": {
+    "leader_tenure_s": "grid spacing is 30-60s in this range; every cell returns the full span",
+    "quote_age_s": "no venue event time or snapshot age in this tape",
+    "settlement_state_Z": "NOT IDENTIFIED (LS-LRRR-XBTUSD unknown)"
+  },
+  "windows": 133
+}
