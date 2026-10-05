@@ -1,0 +1,1170 @@
+{
+  "study": "L5 edge decomposition Q3 (does EXTEND create value) and Q4 (what predicts the next action)",
+  "status": "RESEARCH ONLY - another trader's public activity; nothing here is realized profit for our account",
+  "corpus": {
+    "provenance": {
+      "envelopes_admitted": 1569,
+      "records_seen": 784500,
+      "records_name_matches": 78000,
+      "records_unique": 776749,
+      "nontrade_dropped": 15932,
+      "envelope_no_list_payload": 1,
+      "dupes_dropped": 7751,
+      "records_nameless": 706500,
+      "trade_fills": 760817,
+      "sell_fills": 2
+    },
+    "identity_rule": "envelope params.user == L5 address; a record is rejected only on a CONTRADICTING name. The 706,500 nameless gap records are ADMITTED.",
+    "dedupe_key": "(transactionHash, conditionId, outcomeIndex, timestamp, str(price), str(size), type)",
+    "trade_fills_post_dedupe": 760817,
+    "event_slugs_all": 17046,
+    "sell_fills": 2,
+    "preincentive_cutoff": "2026-08-01T00:00:00Z (epoch 1785542400)",
+    "preincentive_conditions": 6252,
+    "preincentive_events": 6252,
+    "preincentive_fills": 336342,
+    "resolved_conditions_available": 3527,
+    "tte_verification": {
+      "slug_open_plus_duration_matches_endDate": 3528,
+      "mismatches": 0,
+      "examples": [
+        {
+          "event": "btc-updown-5m-1773914700",
+          "open_epoch": 1773914700,
+          "duration_s": 300,
+          "endDate": "2026-03-19T10:10:00Z"
+        },
+        {
+          "event": "btc-updown-5m-1773915600",
+          "open_epoch": 1773915600,
+          "duration_s": 300,
+          "endDate": "2026-03-19T10:25:00Z"
+        },
+        {
+          "event": "btc-updown-15m-1773917100",
+          "open_epoch": 1773917100,
+          "duration_s": 900,
+          "endDate": "2026-03-19T11:00:00Z"
+        }
+      ]
+    },
+    "maker_share": "UNAVAILABLE - /activity carries no maker/taker liquidity flag; never estimated"
+  },
+  "caveats": [
+    "Nothing in this document is realized profit for our account. This is another trader's public activity on Polymarket.",
+    "MAKER SHARE IS UNAVAILABLE. /activity carries no maker/taker liquidity flag, so the maker/taker split of L5's fills cannot be determined and is never estimated here. Because the venue fee schedule is takerOnly, the charged wedge is a LOWER BOUND indicator of taker activity, not a measurement of maker share.",
+    "Fills sharing a timestamp are not time-ordered in the corpus. They are collapsed into size-weighted LEGS, and legs that share a timestamp with the other outcome are marked AMBIGUOUS and excluded from sequential classification (count reported).",
+    "'Pair cost' here is a charged-cash average cost of held inventory, not a mark-to-market or a modelled fill.",
+    "SETTLEMENT P&L IS EFFECTIVELY UNAVAILABLE for the worked corpus. Only 591 of 6,252 pre-incentive events have a resolved condition in markets.jsonl, and that subset has median 2 legs vs 32 and mean matched fraction 0.26 vs 0.69 - it is the barely-worked tail, not a random sample. The P&L columns are retained as descriptive of that tail and are NOT evidence about EXTEND.",
+    "The deployed clone's 5c EXTEND improvement gate is NOT applied anywhere in this study, and no threshold here is optimized.",
+    "Resolution-dependent P&L is a SETTLEMENT outcome and is reported only as a descriptive consequence; Q4's target is deliberately the next ACTION, never the settlement."
+  ],
+  "settlement_pnl_representativeness": {
+    "verdict": "NOT REPRESENTATIVE - settlement P&L is effectively UNAVAILABLE for the worked pre-incentive corpus",
+    "detail": "Only 591 of 6252 pre-incentive events have a resolved condition in markets.jsonl, and that subset is dominated by the barely-worked events (see the shape comparison). Every charged-cash P&L number in this document is computed on that subset only and must NOT be read as the P&L of the behaviour being studied, nor as a treatment effect.",
+    "shape_comparison": {
+      "resolved": {
+        "n_events": 591,
+        "mean_final_matched_frac": 0.2621,
+        "median_spend_usd": 38.04,
+        "median_legs": 2
+      },
+      "unresolved": {
+        "n_events": 5661,
+        "mean_final_matched_frac": 0.6937,
+        "median_spend_usd": 381.26,
+        "median_legs": 32
+      }
+    }
+  },
+  "charged_costs": {
+    "rule": "cost per fill = max(0, usdcSize - price*size); usdcSize is the DEBITED amount",
+    "preincentive_fills": 336342,
+    "fee_bearing_fills": 109336,
+    "fee_bearing_pct": 32.5,
+    "total_charged_usd": 29135.82,
+    "note": "venue schedule is takerOnly, which is why most fills carry no charged wedge. We use the charged wedge."
+  },
+  "q3a_forward_outcomes_by_class": {
+    "EXTEND_LOWER": {
+      "legs": 55767,
+      "independent_events": 4626,
+      "reached_matched_after": {
+        "n_events": 4626,
+        "point": 0.9394725464764375,
+        "ci": [
+          0.9325551232166018,
+          0.9466061392131431
+        ]
+      },
+      "median_s_to_next_complete": {
+        "n_events": 4127,
+        "point": 25.474194330021806,
+        "ci": [
+          24.6364187060819,
+          26.383935061788225
+        ]
+      },
+      "final_pair_cost_of_event": {
+        "n_events": 4346,
+        "point": 0.979677339199488,
+        "ci": [
+          0.9766184264714566,
+          0.9826875031600132
+        ]
+      },
+      "final_matched_frac_of_event": {
+        "n_events": 4626,
+        "point": 0.7792389674950796,
+        "ci": [
+          0.7717815389964672,
+          0.7873316783319028
+        ]
+      },
+      "event_charged_cash_pnl_usd": {
+        "n_events": 321,
+        "point": -26.063543859813084,
+        "ci": [
+          -32.20031086292835,
+          -19.83843471339564
+        ]
+      }
+    },
+    "EXTEND_HIGHER": {
+      "legs": 44644,
+      "independent_events": 4878,
+      "reached_matched_after": {
+        "n_events": 4878,
+        "point": 0.9163591635916359,
+        "ci": [
+          0.9083640836408364,
+          0.923739237392374
+        ]
+      },
+      "median_s_to_next_complete": {
+        "n_events": 4266,
+        "point": 28.3511486169714,
+        "ci": [
+          27.328762306610408,
+          29.370135958743553
+        ]
+      },
+      "final_pair_cost_of_event": {
+        "n_events": 4470,
+        "point": 0.9827213782413121,
+        "ci": [
+          0.9796722671596962,
+          0.9860525665581048
+        ]
+      },
+      "final_matched_frac_of_event": {
+        "n_events": 4878,
+        "point": 0.7550102263994964,
+        "ci": [
+          0.7466312315770606,
+          0.7634076118724108
+        ]
+      },
+      "event_charged_cash_pnl_usd": {
+        "n_events": 251,
+        "point": -18.98615633067729,
+        "ci": [
+          -25.69293864940239,
+          -12.340660888446214
+        ]
+      }
+    },
+    "EXTEND_SAME": {
+      "legs": 22784,
+      "independent_events": 4207,
+      "reached_matched_after": {
+        "n_events": 4207,
+        "point": 0.9467554076539102,
+        "ci": [
+          0.940099833610649,
+          0.9534109816971714
+        ]
+      },
+      "median_s_to_next_complete": {
+        "n_events": 3801,
+        "point": 28.357669034464614,
+        "ci": [
+          27.253091291765326,
+          29.516969218626677
+        ]
+      },
+      "final_pair_cost_of_event": {
+        "n_events": 3983,
+        "point": 0.9797799165684954,
+        "ci": [
+          0.97679090770685,
+          0.9829317220463808
+        ]
+      },
+      "final_matched_frac_of_event": {
+        "n_events": 4207,
+        "point": 0.7985084601003206,
+        "ci": [
+          0.7910588394126051,
+          0.8061230428635127
+        ]
+      },
+      "event_charged_cash_pnl_usd": {
+        "n_events": 171,
+        "point": -21.99587942105263,
+        "ci": [
+          -31.101543309941516,
+          -14.18297404093567
+        ]
+      }
+    },
+    "SWITCH": {
+      "legs": 75336,
+      "independent_events": 5089,
+      "reached_matched_after": {
+        "n_events": 5089,
+        "point": 1.0,
+        "ci": [
+          1.0,
+          1.0
+        ]
+      },
+      "median_s_to_next_complete": {
+        "n_events": 4430,
+        "point": 22.23002257336343,
+        "ci": [
+          21.418510158013543,
+          23.098194130925506
+        ]
+      },
+      "final_pair_cost_of_event": {
+        "n_events": 5089,
+        "point": 0.9831934793298189,
+        "ci": [
+          0.9799326226439766,
+          0.9867534045650809
+        ]
+      },
+      "final_matched_frac_of_event": {
+        "n_events": 5089,
+        "point": 0.8010463316588322,
+        "ci": [
+          0.7953223534117242,
+          0.8065832340648061
+        ]
+      },
+      "event_charged_cash_pnl_usd": {
+        "n_events": 194,
+        "point": 1.8734833298969087,
+        "ci": [
+          -1.0365489278350495,
+          5.034657051546391
+        ]
+      }
+    },
+    "AMBIGUOUS": {
+      "legs": 23286,
+      "independent_events": 2468,
+      "reached_matched_after": {
+        "n_events": 2468,
+        "point": 1.0,
+        "ci": [
+          1.0,
+          1.0
+        ]
+      },
+      "median_s_to_next_complete": {
+        "n_events": 2425,
+        "point": 11.158144329896908,
+        "ci": [
+          10.430721649484536,
+          11.965360824742268
+        ]
+      },
+      "final_pair_cost_of_event": {
+        "n_events": 2468,
+        "point": 0.9764047578593761,
+        "ci": [
+          0.9739244594889988,
+          0.9787695272048997
+        ]
+      },
+      "final_matched_frac_of_event": {
+        "n_events": 2468,
+        "point": 0.8983291265835677,
+        "ci": [
+          0.8946496243459005,
+          0.9022453673667935
+        ]
+      },
+      "event_charged_cash_pnl_usd": {
+        "n_events": 17,
+        "point": 5.741630352941202,
+        "ci": [
+          -4.538019823529419,
+          16.50702358823533
+        ]
+      }
+    }
+  },
+  "q3a_note": "The 5c EXTEND gate in src/gemini_execution/arming.py is NOT imposed anywhere in this study. Per the corpus, same-side re-buys are a coin flip on direction, so a 5c improvement requirement describes a small minority of L5's own extends.",
+  "q3b_does_extend_higher_enable_compression": {
+    "design": "events with >=1 EXTEND_HIGHER vs events with >=1 classified action but NO EXTEND_HIGHER. Both arms have >=2 legs. One value per event; bootstrap over events.",
+    "n_events_with_extend_higher": 4878,
+    "n_events_without": 847,
+    "final_matched_frac": {
+      "with_extend_higher": {
+        "n_events": 4878,
+        "point": 0.7550102263994964,
+        "ci": [
+          0.746827321668663,
+          0.7627644524736085
+        ]
+      },
+      "without": {
+        "n_events": 847,
+        "point": 0.4681183596845736,
+        "ci": [
+          0.4448742429915181,
+          0.4909187858778857
+        ]
+      },
+      "difference": {
+        "diff": 0.2868918667149232,
+        "ci": [
+          0.26244363719948016,
+          0.31101445466610433
+        ],
+        "n_a_events": 4878,
+        "n_b_events": 847
+      }
+    },
+    "final_pair_cost": {
+      "with_extend_higher": {
+        "n_events": 4470,
+        "point": 0.9827213782413121,
+        "ci": [
+          0.9797503957791988,
+          0.9859233108598491
+        ]
+      },
+      "without": {
+        "n_events": 624,
+        "point": 0.9869808107685482,
+        "ci": [
+          0.9711790132759884,
+          1.003573868885624
+        ]
+      },
+      "difference": {
+        "diff": -0.0042594325272333755,
+        "ci": [
+          -0.02115958279804775,
+          0.012264868707818177
+        ],
+        "n_a_events": 4470,
+        "n_b_events": 624
+      }
+    },
+    "event_charged_cash_pnl_usd": {
+      "with_extend_higher": {
+        "n_events": 251,
+        "point": -18.98615633067729,
+        "ci": [
+          -25.907920896414346,
+          -12.967417254980075
+        ]
+      },
+      "without": {
+        "n_events": 134,
+        "point": -39.825628462686566,
+        "ci": [
+          -48.17029503731343,
+          -32.12387893283582
+        ]
+      },
+      "difference": {
+        "diff": 20.8394721320093,
+        "ci": [
+          10.27370766180054,
+          31.219869675982657
+        ],
+        "n_a_events": 251,
+        "n_b_events": 134
+      }
+    },
+    "pnl_per_dollar_spent": {
+      "with_extend_higher": {
+        "n_events": 249,
+        "point": -0.2460431541653529,
+        "ci": [
+          -0.30834788808266056,
+          -0.1853031449004394
+        ]
+      },
+      "without": {
+        "n_events": 134,
+        "point": -0.9121186814804165,
+        "ci": [
+          -0.9565295148091351,
+          -0.8613660333933796
+        ]
+      },
+      "difference": {
+        "diff": 0.6660755273150636,
+        "ci": [
+          0.5852933485193967,
+          0.7410516139892596
+        ],
+        "n_a_events": 249,
+        "n_b_events": 134
+      }
+    },
+    "causal_precedence": {
+      "design": "For each EXTEND_HIGHER leg i in an event: is the event's FIRST matched inventory reached at a leg > i (i.e. does the higher-price extend come BEFORE the pair is completable)? And what is the change in the event's running pair cost from the state right after leg i to the final state? Aggregated to one value per event.",
+      "frac_extend_higher_legs_before_first_matched_inventory": {
+        "n_events": 4470,
+        "point": 0.1684156022430678,
+        "ci": [
+          0.1601339578978942,
+          0.17677084280070862
+        ]
+      },
+      "pair_cost_right_after_the_higher_extend": {
+        "n_events": 4128,
+        "point": 1.0137091263898221,
+        "ci": [
+          1.0106550132831846,
+          1.0169361117707374
+        ]
+      },
+      "pair_cost_at_event_end": {
+        "n_events": 4128,
+        "point": 0.9857510185571996,
+        "ci": [
+          0.9826897544251222,
+          0.9887674129195482
+        ]
+      },
+      "pair_cost_change_after_the_higher_extend": {
+        "n_events": 4128,
+        "point": -0.027958107832622557,
+        "ci": [
+          -0.030071687211750735,
+          -0.025897554175793782
+        ]
+      },
+      "interpretation_rule": "A negative pair_cost_change means the pair cost COMPRESSED after the higher-price extend, i.e. the apparently-bad fill preceded the compression that pays. Positive means it did not."
+    },
+    "control_pair_cost_change_after_EXTEND_LOWER": {
+      "n_events": 4083,
+      "point": -0.005907238418502415,
+      "ci": [
+        -0.0076866060272096914,
+        -0.004033995781239376
+      ]
+    }
+  },
+  "q4_next_action": {
+    "design": "Target is L5's NEXT ACTION, not the settlement outcome. State uses only information available at the leg. Legs that share a timestamp with the other outcome are excluded because their order is not recoverable.",
+    "decision_points": 204599,
+    "independent_events": 6252,
+    "unconditional": {
+      "p_EXTEND_pct": 60.2,
+      "p_SWITCH_pct": 36.8,
+      "p_STOP_pct": 3.0
+    },
+    "tables": {
+      "inventory_imbalance": {
+        "description": "Imbalance = (qty on the outcome just bought - qty on the other) / total qty, measured AFTER this leg. 100% means no inventory at all on the other outcome.",
+        "cells": [
+          {
+            "cell": "balanced(<=0)",
+            "legs": 88207,
+            "independent_events": 4878,
+            "p_EXTEND_pct": 62.8,
+            "p_SWITCH_pct": 34.9,
+            "p_STOP_pct": 2.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              34.5,
+              35.2
+            ]
+          },
+          {
+            "cell": "mild(0-33%)",
+            "legs": 81673,
+            "independent_events": 4142,
+            "p_EXTEND_pct": 57.9,
+            "p_SWITCH_pct": 39.4,
+            "p_STOP_pct": 2.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              39.0,
+              39.8
+            ]
+          },
+          {
+            "cell": "moderate(33-67%)",
+            "legs": 15405,
+            "independent_events": 3595,
+            "p_EXTEND_pct": 56.9,
+            "p_SWITCH_pct": 39.7,
+            "p_STOP_pct": 3.4,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              38.8,
+              40.7
+            ]
+          },
+          {
+            "cell": "heavy(67-100%)",
+            "legs": 3464,
+            "independent_events": 1341,
+            "p_EXTEND_pct": 55.2,
+            "p_SWITCH_pct": 40.0,
+            "p_STOP_pct": 4.8,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              38.2,
+              41.8
+            ]
+          },
+          {
+            "cell": "one_sided(100%)",
+            "legs": 15850,
+            "independent_events": 6137,
+            "p_EXTEND_pct": 61.9,
+            "p_SWITCH_pct": 30.8,
+            "p_STOP_pct": 7.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              30.2,
+              31.5
+            ]
+          }
+        ]
+      },
+      "has_matched_inventory": {
+        "description": "Whether any matched pair is already held at this state.",
+        "cells": [
+          {
+            "cell": "unmatched_only",
+            "legs": 15848,
+            "independent_events": 6137,
+            "p_EXTEND_pct": 61.9,
+            "p_SWITCH_pct": 30.8,
+            "p_STOP_pct": 7.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              30.1,
+              31.5
+            ]
+          },
+          {
+            "cell": "matched_held",
+            "legs": 188751,
+            "independent_events": 5097,
+            "p_EXTEND_pct": 60.1,
+            "p_SWITCH_pct": 37.3,
+            "p_STOP_pct": 2.6,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              37.0,
+              37.6
+            ]
+          }
+        ]
+      },
+      "price_of_the_leg_just_bought": {
+        "description": "Price paid on this leg.",
+        "cells": [
+          {
+            "cell": "<20c",
+            "legs": 50254,
+            "independent_events": 4583,
+            "p_EXTEND_pct": 63.4,
+            "p_SWITCH_pct": 31.6,
+            "p_STOP_pct": 5.1,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              31.1,
+              32.0
+            ]
+          },
+          {
+            "cell": "20-40c",
+            "legs": 36436,
+            "independent_events": 4172,
+            "p_EXTEND_pct": 62.0,
+            "p_SWITCH_pct": 36.9,
+            "p_STOP_pct": 1.1,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              36.3,
+              37.5
+            ]
+          },
+          {
+            "cell": "40-60c",
+            "legs": 42366,
+            "independent_events": 4411,
+            "p_EXTEND_pct": 60.2,
+            "p_SWITCH_pct": 38.8,
+            "p_STOP_pct": 0.9,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              38.2,
+              39.3
+            ]
+          },
+          {
+            "cell": "60-80c",
+            "legs": 38220,
+            "independent_events": 4762,
+            "p_EXTEND_pct": 60.6,
+            "p_SWITCH_pct": 38.2,
+            "p_STOP_pct": 1.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              37.6,
+              38.7
+            ]
+          },
+          {
+            "cell": ">=80c",
+            "legs": 37323,
+            "independent_events": 4802,
+            "p_EXTEND_pct": 53.8,
+            "p_SWITCH_pct": 40.2,
+            "p_STOP_pct": 6.0,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              39.6,
+              40.7
+            ]
+          }
+        ]
+      },
+      "effective_pair_cost_if_completed_now": {
+        "description": "Sum of the weighted-average charged cost of each leg held. Defined only once both outcomes are held, so this table conditions on already having a pair.",
+        "cells": [
+          {
+            "cell": "<0.90",
+            "legs": 15232,
+            "independent_events": 2089,
+            "p_EXTEND_pct": 61.5,
+            "p_SWITCH_pct": 33.2,
+            "p_STOP_pct": 5.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              32.2,
+              34.1
+            ]
+          },
+          {
+            "cell": "0.90-0.96",
+            "legs": 43520,
+            "independent_events": 3132,
+            "p_EXTEND_pct": 61.4,
+            "p_SWITCH_pct": 36.0,
+            "p_STOP_pct": 2.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              35.4,
+              36.6
+            ]
+          },
+          {
+            "cell": "0.96-1.00",
+            "legs": 51120,
+            "independent_events": 3391,
+            "p_EXTEND_pct": 59.7,
+            "p_SWITCH_pct": 38.0,
+            "p_STOP_pct": 2.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              37.5,
+              38.5
+            ]
+          },
+          {
+            "cell": "1.00-1.05",
+            "legs": 46780,
+            "independent_events": 3195,
+            "p_EXTEND_pct": 58.9,
+            "p_SWITCH_pct": 39.2,
+            "p_STOP_pct": 1.9,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              38.7,
+              39.8
+            ]
+          },
+          {
+            "cell": ">=1.05",
+            "legs": 32099,
+            "independent_events": 2698,
+            "p_EXTEND_pct": 60.0,
+            "p_SWITCH_pct": 37.3,
+            "p_STOP_pct": 2.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              36.7,
+              37.9
+            ]
+          }
+        ]
+      },
+      "consecutive_same_side_buys": {
+        "description": "Length of the current same-outcome run ending at this leg.",
+        "cells": [
+          {
+            "cell": "1",
+            "legs": 85181,
+            "independent_events": 6252,
+            "p_EXTEND_pct": 57.6,
+            "p_SWITCH_pct": 39.0,
+            "p_STOP_pct": 3.4,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              38.6,
+              39.3
+            ]
+          },
+          {
+            "cell": "2",
+            "legs": 47404,
+            "independent_events": 5494,
+            "p_EXTEND_pct": 60.2,
+            "p_SWITCH_pct": 36.7,
+            "p_STOP_pct": 3.1,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              36.2,
+              37.2
+            ]
+          },
+          {
+            "cell": "3",
+            "legs": 27694,
+            "independent_events": 4654,
+            "p_EXTEND_pct": 61.6,
+            "p_SWITCH_pct": 35.8,
+            "p_STOP_pct": 2.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              35.1,
+              36.4
+            ]
+          },
+          {
+            "cell": "4",
+            "legs": 16525,
+            "independent_events": 3958,
+            "p_EXTEND_pct": 62.9,
+            "p_SWITCH_pct": 34.8,
+            "p_STOP_pct": 2.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              34.0,
+              35.6
+            ]
+          },
+          {
+            "cell": "5",
+            "legs": 10110,
+            "independent_events": 3450,
+            "p_EXTEND_pct": 64.5,
+            "p_SWITCH_pct": 33.7,
+            "p_STOP_pct": 1.8,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              32.7,
+              34.6
+            ]
+          },
+          {
+            "cell": "6+",
+            "legs": 17685,
+            "independent_events": 2919,
+            "p_EXTEND_pct": 65.6,
+            "p_SWITCH_pct": 32.3,
+            "p_STOP_pct": 2.1,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              31.4,
+              33.2
+            ]
+          }
+        ]
+      },
+      "previous_action": {
+        "description": "The class of THIS leg, i.e. the action immediately preceding the target.",
+        "cells": [
+          {
+            "cell": "OPEN",
+            "legs": 6137,
+            "independent_events": 6137,
+            "p_EXTEND_pct": 61.1,
+            "p_SWITCH_pct": 30.5,
+            "p_STOP_pct": 8.5,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              29.3,
+              31.6
+            ]
+          },
+          {
+            "cell": "EXTEND_LOWER",
+            "legs": 53899,
+            "independent_events": 4616,
+            "p_EXTEND_pct": 66.0,
+            "p_SWITCH_pct": 31.5,
+            "p_STOP_pct": 2.5,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              31.0,
+              32.0
+            ]
+          },
+          {
+            "cell": "EXTEND_SAME",
+            "legs": 22135,
+            "independent_events": 4200,
+            "p_EXTEND_pct": 59.1,
+            "p_SWITCH_pct": 37.3,
+            "p_STOP_pct": 3.6,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              36.7,
+              38.0
+            ]
+          },
+          {
+            "cell": "EXTEND_HIGHER",
+            "legs": 43384,
+            "independent_events": 4872,
+            "p_EXTEND_pct": 58.6,
+            "p_SWITCH_pct": 38.9,
+            "p_STOP_pct": 2.4,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              38.4,
+              39.5
+            ]
+          },
+          {
+            "cell": "SWITCH",
+            "legs": 72634,
+            "independent_events": 5087,
+            "p_EXTEND_pct": 57.4,
+            "p_SWITCH_pct": 39.6,
+            "p_STOP_pct": 3.0,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              39.2,
+              39.9
+            ]
+          }
+        ]
+      },
+      "time_to_expiry": {
+        "description": "TTE = slug_open_epoch + duration_seconds - t. The trailing slug integer is the window OPEN, verified against markets.jsonl endDate.",
+        "cells": [
+          {
+            "cell": "expired(<0)",
+            "legs": 130,
+            "independent_events": 81,
+            "p_EXTEND_pct": 28.5,
+            "p_SWITCH_pct": 12.3,
+            "p_STOP_pct": 59.2,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              7.7,
+              17.3
+            ]
+          },
+          {
+            "cell": "0-30s",
+            "legs": 5499,
+            "independent_events": 2074,
+            "p_EXTEND_pct": 41.3,
+            "p_SWITCH_pct": 23.3,
+            "p_STOP_pct": 35.4,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              22.1,
+              24.5
+            ]
+          },
+          {
+            "cell": "30-60s",
+            "legs": 9445,
+            "independent_events": 2844,
+            "p_EXTEND_pct": 52.9,
+            "p_SWITCH_pct": 35.0,
+            "p_STOP_pct": 12.1,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              33.9,
+              35.9
+            ]
+          },
+          {
+            "cell": "60-120s",
+            "legs": 18375,
+            "independent_events": 3712,
+            "p_EXTEND_pct": 57.2,
+            "p_SWITCH_pct": 36.5,
+            "p_STOP_pct": 6.2,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              35.8,
+              37.3
+            ]
+          },
+          {
+            "cell": "120-300s",
+            "legs": 52254,
+            "independent_events": 5102,
+            "p_EXTEND_pct": 59.8,
+            "p_SWITCH_pct": 37.5,
+            "p_STOP_pct": 2.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              37.0,
+              37.9
+            ]
+          },
+          {
+            "cell": ">=300s",
+            "legs": 118896,
+            "independent_events": 3335,
+            "p_EXTEND_pct": 62.3,
+            "p_SWITCH_pct": 37.4,
+            "p_STOP_pct": 0.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              37.0,
+              37.7
+            ]
+          }
+        ]
+      },
+      "recent_price_movement_same_outcome": {
+        "description": "This leg's vwap minus the vwap of the previous leg on the SAME outcome. Only defined from the second leg on that outcome.",
+        "cells": [
+          {
+            "cell": "down>2c",
+            "legs": 51351,
+            "independent_events": 4760,
+            "p_EXTEND_pct": 65.1,
+            "p_SWITCH_pct": 32.4,
+            "p_STOP_pct": 2.4,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              32.0,
+              33.0
+            ]
+          },
+          {
+            "cell": "down0-2c",
+            "legs": 32177,
+            "independent_events": 3795,
+            "p_EXTEND_pct": 62.7,
+            "p_SWITCH_pct": 34.3,
+            "p_STOP_pct": 3.0,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              33.6,
+              34.9
+            ]
+          },
+          {
+            "cell": "flat",
+            "legs": 36095,
+            "independent_events": 4330,
+            "p_EXTEND_pct": 60.8,
+            "p_SWITCH_pct": 36.4,
+            "p_STOP_pct": 2.8,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              35.8,
+              37.0
+            ]
+          },
+          {
+            "cell": "up0-2c",
+            "legs": 23983,
+            "independent_events": 3838,
+            "p_EXTEND_pct": 56.5,
+            "p_SWITCH_pct": 40.9,
+            "p_STOP_pct": 2.6,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              40.2,
+              41.6
+            ]
+          },
+          {
+            "cell": "up>2c",
+            "legs": 50055,
+            "independent_events": 4948,
+            "p_EXTEND_pct": 55.3,
+            "p_SWITCH_pct": 42.0,
+            "p_STOP_pct": 2.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              41.5,
+              42.6
+            ]
+          }
+        ]
+      },
+      "imbalance_x_tte": {
+        "description": "Imbalance crossed with TTE: the two states that actually move P(SWITCH).",
+        "cells": [
+          {
+            "cell": "balanced | 60-180s",
+            "legs": 15736,
+            "independent_events": 3278,
+            "p_EXTEND_pct": 60.3,
+            "p_SWITCH_pct": 36.1,
+            "p_STOP_pct": 3.5,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              35.4,
+              36.9
+            ]
+          },
+          {
+            "cell": "balanced | <60s",
+            "legs": 6281,
+            "independent_events": 2190,
+            "p_EXTEND_pct": 50.6,
+            "p_SWITCH_pct": 31.5,
+            "p_STOP_pct": 17.9,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              30.4,
+              32.7
+            ]
+          },
+          {
+            "cell": "balanced | >=180s",
+            "legs": 66139,
+            "independent_events": 3702,
+            "p_EXTEND_pct": 64.6,
+            "p_SWITCH_pct": 34.9,
+            "p_STOP_pct": 0.5,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              34.5,
+              35.3
+            ]
+          },
+          {
+            "cell": "balanced | expired",
+            "legs": 51,
+            "independent_events": 41,
+            "p_EXTEND_pct": 21.6,
+            "p_SWITCH_pct": 17.6,
+            "p_STOP_pct": 60.8,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              7.3,
+              29.3
+            ]
+          },
+          {
+            "cell": "heavy | 60-180s",
+            "legs": 425,
+            "independent_events": 206,
+            "p_EXTEND_pct": 57.6,
+            "p_SWITCH_pct": 33.6,
+            "p_STOP_pct": 8.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              29.2,
+              39.1
+            ]
+          },
+          {
+            "cell": "heavy | <60s",
+            "legs": 298,
+            "independent_events": 191,
+            "p_EXTEND_pct": 32.9,
+            "p_SWITCH_pct": 27.5,
+            "p_STOP_pct": 39.6,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              22.5,
+              33.3
+            ]
+          },
+          {
+            "cell": "heavy | >=180s",
+            "legs": 2741,
+            "independent_events": 1026,
+            "p_EXTEND_pct": 57.2,
+            "p_SWITCH_pct": 42.3,
+            "p_STOP_pct": 0.4,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              40.1,
+              44.3
+            ]
+          },
+          {
+            "cell": "mild-mod | 60-180s",
+            "legs": 17241,
+            "independent_events": 3169,
+            "p_EXTEND_pct": 56.4,
+            "p_SWITCH_pct": 39.2,
+            "p_STOP_pct": 4.4,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              38.3,
+              40.0
+            ]
+          },
+          {
+            "cell": "mild-mod | <60s",
+            "legs": 7403,
+            "independent_events": 2233,
+            "p_EXTEND_pct": 49.4,
+            "p_SWITCH_pct": 31.3,
+            "p_STOP_pct": 19.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              30.2,
+              32.5
+            ]
+          },
+          {
+            "cell": "mild-mod | >=180s",
+            "legs": 72356,
+            "independent_events": 3570,
+            "p_EXTEND_pct": 59.0,
+            "p_SWITCH_pct": 40.4,
+            "p_STOP_pct": 0.6,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              40.0,
+              40.8
+            ]
+          },
+          {
+            "cell": "mild-mod | expired",
+            "legs": 78,
+            "independent_events": 56,
+            "p_EXTEND_pct": 33.3,
+            "p_SWITCH_pct": 9.0,
+            "p_STOP_pct": 57.7,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              3.6,
+              15.8
+            ]
+          },
+          {
+            "cell": "one_sided | 60-180s",
+            "legs": 2419,
+            "independent_events": 1437,
+            "p_EXTEND_pct": 51.1,
+            "p_SWITCH_pct": 29.6,
+            "p_STOP_pct": 19.3,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              27.8,
+              31.4
+            ]
+          },
+          {
+            "cell": "one_sided | <60s",
+            "legs": 962,
+            "independent_events": 628,
+            "p_EXTEND_pct": 34.8,
+            "p_SWITCH_pct": 21.4,
+            "p_STOP_pct": 43.8,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              18.8,
+              24.1
+            ]
+          },
+          {
+            "cell": "one_sided | >=180s",
+            "legs": 12468,
+            "independent_events": 4864,
+            "p_EXTEND_pct": 66.1,
+            "p_SWITCH_pct": 31.8,
+            "p_STOP_pct": 2.1,
+            "p_SWITCH_event_bootstrap_ci_pct": [
+              31.0,
+              32.5
+            ]
+          },
+          {
+            "cell": "one_sided | expired",
+            "legs": 1,
+            "independent_events": 1,
+            "p_EXTEND_pct": 0.0,
+            "p_SWITCH_pct": 0.0,
+            "p_STOP_pct": 100.0,
+            "p_SWITCH_event_bootstrap_ci_pct": null
+          }
+        ]
+      }
+    }
+  }
+}
