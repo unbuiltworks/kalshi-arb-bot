@@ -1,0 +1,10 @@
+{
+ "windows_D": 190,
+ "rows_D": 168150,
+ "windows_C": 99,
+ "rows_C": 87615,
+ "first_D": "cpc-btc-updown-15m-2026-10-02-0000z",
+ "last_D": "cpc-btc-updown-15m-2026-10-03-2345z",
+ "first_C": "cpc-btc-updown-15m-2026-10-04-0015z",
+ "last_C": "cpc-btc-updown-15m-2026-10-05-0145z"
+}
