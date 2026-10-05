@@ -1,0 +1,72 @@
+# PMUS public BTC15m SETTLEMENT-HISTORY harvest and streak study.
+#
+# WHY A RUNNER. gateway.polymarket.us is denied by the research container's
+# network policy; a GitHub runner reaches it. Nothing else about this needs a
+# runner, and nothing here touches Railway, the recorder, or an account.
+#
+# UNAUTHENTICATED AND GET-ONLY. Every request is a plain public GET with no
+# credential of any kind. This workflow declares NO secret, so there is
+# nothing here that could reach an account or place an order.
+#
+# THIS IS SETTLEMENT HISTORY ONLY. Outcomes are sufficient for base-rate and
+# streak statistics and are NOT sufficient for executable-price P&L. The three
+# datasets stay separate and are never pooled:
+#   1. this settlement-history series   -- streaks and transitions only;
+#   2. the 178-window generating sample -- existing executable economics;
+#   3. the 43-window independent holdout -- frozen-rule validation.
+# The lost per-second 2026-10-01 executable tape is NOT recovered by this and
+# this does not claim to replace it.
+name: settlement-history
+
+on:
+  push:
+    branches: ['claude/l5-pmus-economic-results-7c116e']
+    paths: ['.github/settlement_history_request']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.p.outputs.stage }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the request
+        id: p
+        run: |
+          set -euo pipefail
+          f=.github/settlement_history_request
+          stage="$(sed -n -E 's/^STAGE=(probe|harvest)[[:space:]]*$/\1/p' "$f" | tail -1)"
+          case "$stage" in
+            probe|harvest) ;;
+            *) echo "::error::STAGE must be probe or harvest, got '$stage'"; exit 1 ;;
+          esac
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
+          echo "stage=$stage"
+
+  probe:
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'probe' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Probe the public historical routes
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_history_probe.py | tee PROBE.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: history-probe-${{ github.run_id }}
+          path: |
+            PROBE.log
+            history_probe.json
+          retention-days: 30
+          if-no-files-found: error

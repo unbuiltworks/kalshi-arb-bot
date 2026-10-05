@@ -1,0 +1,12 @@
+« PMUS settlement-history request »
+
+Touching this file starts .github/workflows/settlement-history.yml. The workflow
+is branch-local and GitHub offers workflow_dispatch only for workflows on the
+default branch, so a gated push trigger is how it gets started.
+
+One directive is read, anchored at both ends so this prose cannot be mistaken
+for it. The stage word is the word probe or the word harvest, on its own line.
+
+STAGE=probe
+
+REQUEST=1
