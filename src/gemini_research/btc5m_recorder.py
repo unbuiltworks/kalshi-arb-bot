@@ -121,6 +121,54 @@ def ssl_ctx() -> ssl.SSLContext:
     return ctx
 
 
+#: MEASURED 2026-10-05 on live BTC5m contracts: the venue leaves
+#: sourceDetails NULL and populates only the DEPRECATED flat `source`
+#: ("LS-LRRR-XBTUSD"). Requirement 1 silently produced zero rows because the
+#: subscription needed an agency the venue never sent. So the agency is
+#: resolved from the index prefix when sourceDetails is absent, and EVERY
+#: candidate form is tried with its ack recorded, so the venue itself tells us
+#: which spelling it accepts rather than us guessing once and failing quietly.
+AGENCY_BY_INDEX_PREFIX = (
+    ("LS-LRRR", "lukka"),      # Lukka Real-time Reference Rate
+    ("LS-", "lukka"),
+    ("GRR-KAIKO", "kaiko"),
+    ("GRR-", "kaiko"),
+)
+
+
+def agency_for(index: Optional[str],
+               declared: Optional[str] = None) -> Optional[str]:
+    """The agency token for an index, declared if the venue sent one."""
+    if declared:
+        return declared
+    if not index:
+        return None
+    up = str(index).upper()
+    for pref, ag in AGENCY_BY_INDEX_PREFIX:
+        if up.startswith(pref):
+            return ag
+    return None
+
+
+def index_stream_candidates(index: Optional[str],
+                            agency: Optional[str]) -> List[str]:
+    """Every subscription spelling worth trying, most specific first.
+
+    The documented form is {agency}:{index}@indexPrice. A bare {index} form is
+    tried too, because an ack or an error on it is evidence either way and
+    costs one frame.
+    """
+    if not index:
+        return []
+    out = []
+    if agency:
+        out.append("%s:%s@indexPrice" % (agency, index))
+        out.append("%s:%s@indexPrice" % (agency.upper(), index))
+    out.append("%s@indexPrice" % index)
+    seen = set()
+    return [x for x in out if not (x in seen or seen.add(x))]
+
+
 def parse_ts(s: Any) -> Optional[float]:
     if not s:
         return None
@@ -255,6 +303,16 @@ async def meta_task(sink: Sink, stop: asyncio.Event,
                         "source_agency": sd.get("agency"),
                         "source_index": sd.get("index"),
                         "source_flat_deprecated": c.get("source"),
+                        # what we will actually subscribe, and where it came
+                        # from -- the venue sends sourceDetails null in
+                        # practice, so this is usually the flat string
+                        "resolved_index": (sd.get("index") or c.get("source")),
+                        "resolved_agency": agency_for(
+                            sd.get("index") or c.get("source"),
+                            sd.get("agency")),
+                        "resolved_agency_basis": (
+                            "sourceDetails.agency" if sd.get("agency")
+                            else "inferred from the index prefix"),
                         "expiry": c.get("expiryDate"),
                         "effective": c.get("effectiveDate"),
                         "start": ev.get("startTime"),
@@ -284,16 +342,19 @@ async def meta_task(sink: Sink, stop: asyncio.Event,
                                     exp - DEFAULT_LIFE_S.get(dur, 300.0)),
                                 "t0_source": ("availableAt" if av
                                               else "expiry_minus_life"),
-                                "agency": sd.get("agency"),
-                                "index": sd.get("index"),
+                                "agency": agency_for(
+                                    sd.get("index") or c.get("source"),
+                                    sd.get("agency")),
+                                "index": (sd.get("index") or c.get("source")),
                                 "fired": set(),
                             }
                         sink.write(row)
                     else:
+                        idx = sd.get("index") or c.get("source")
                         known[sym].update(
                             {k: v for k, v in
-                             (("agency", sd.get("agency")),
-                              ("index", sd.get("index")),
+                             (("agency", agency_for(idx, sd.get("agency"))),
+                              ("index", idx),
                               ("availableAt", strike.get("availableAt")))
                              if v})
                         # availableAt arrives LATER than the listing, so T is
@@ -368,18 +429,24 @@ async def index_task(sink: Sink, stop: asyncio.Event,
                 sink.write({"t_ns": now_ns(), "kind": "index_open"})
                 backoff = 1.0
                 while not stop.is_set() and time.monotonic() < deadline:
-                    want = {"%s:%s" % (m["agency"], m["index"])
-                            for m in known.values()
-                            if m.get("agency") and m.get("index")}
+                    want: Set[str] = set()
+                    for m in known.values():
+                        for cand in index_stream_candidates(m.get("index"),
+                                                            m.get("agency")):
+                            want.add(cand)
                     add = sorted(want - subscribed)
                     if add:
-                        params = ["%s@indexPrice" % k for k in add]
                         await ws.send(json.dumps({"id": "idx",
                                                   "method": "SUBSCRIBE",
-                                                  "params": params}))
+                                                  "params": add}))
                         subscribed.update(add)
-                        sink.write({"t_ns": now_ns(), "kind": "index_subscribe",
-                                    "params": params})
+                        sink.write({"t_ns": now_ns(),
+                                    "kind": "index_subscribe",
+                                    "params": add,
+                                    "note": ("every candidate spelling is "
+                                             "sent; the venue's ack or error "
+                                             "is the evidence of which one "
+                                             "it accepts")})
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     except asyncio.TimeoutError:

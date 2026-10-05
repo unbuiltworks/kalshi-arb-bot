@@ -172,3 +172,26 @@ def test_validator_fails_when_early_ladder_has_no_sizes(tmp_path):
     v = R.validate(p)
     assert v["pass"] is False
     assert "early_ladder_has_sizes" in v["missing"]
+
+
+def test_agency_is_resolved_from_the_flat_source_when_sourceDetails_is_null():
+    """MEASURED: the venue sends sourceDetails null and only the flat string.
+
+    Requirement 1 produced zero rows on the first live tape because the
+    subscription needed an agency the venue never sent.
+    """
+    assert R.agency_for("LS-LRRR-XBTUSD") == "lukka"
+    assert R.agency_for("GRR-KAIKO_RFR_BTCUSD_60S") == "kaiko"
+    assert R.agency_for(None) is None
+    # a declared agency always wins over the inference
+    assert R.agency_for("LS-LRRR-XBTUSD", "Lukka") == "Lukka"
+
+
+def test_every_subscription_spelling_is_tried_most_specific_first():
+    c = R.index_stream_candidates("LS-LRRR-XBTUSD", "lukka")
+    assert c[0] == "lukka:LS-LRRR-XBTUSD@indexPrice"
+    assert "LS-LRRR-XBTUSD@indexPrice" in c
+    assert len(c) == len(set(c))
+    assert R.index_stream_candidates(None, "lukka") == []
+    # no agency at all still tries the bare form
+    assert R.index_stream_candidates("X-IDX", None) == ["X-IDX@indexPrice"]
