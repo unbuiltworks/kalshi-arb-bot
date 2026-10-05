@@ -1,0 +1,2628 @@
+{
+  "base_rate_warning": "a settlement-direction base rate over few windows can imitate skill, so each bin also reports the UP=yes share of its fill windows",
+  "candidate_grid": "1 Hz p_snapshot books, minimum 1.0s apart -- deliberately far denser than the frozen study's eight EARLY_FROM_T0 checkpoints, so that fill scarcity is measured at its most generous",
+  "census": {
+    "markets_excluded_probe_contaminated": 10,
+    "markets_excluded_sealed_oos": 6,
+    "markets_no_meta": 0,
+    "markets_seen": 80,
+    "markets_unsettled_excluded": 2,
+    "markets_used": 62,
+    "placements_placed": 25464,
+    "states_considered": 23951,
+    "states_quotable": 8494
+  },
+  "exclusions": {
+    "probe_contaminated": [
+      "BTC05M2610051550",
+      "BTC05M2610051555",
+      "BTC05M2610051600",
+      "BTC05M2610051605",
+      "BTC05M2610051610",
+      "BTC05M2610051730",
+      "BTC05M2610051755",
+      "BTC05M2610051800",
+      "BTC05M2610051805",
+      "BTC05M2610051810"
+    ],
+    "sealed_oos_never_read": [
+      "BTC05M2610051845",
+      "BTC05M2610051850",
+      "BTC05M2610051855",
+      "BTC05M2610051900",
+      "BTC05M2610051905",
+      "BTC05M2610051910"
+    ]
+  },
+  "external_btc_feed": "NOT AVAILABLE and therefore OMITTED. The lead/lag feed probe rejected all four candidate venues, so no external spot or futures series exists for this tape. The only reference used is the venue's own authoritative index_price (raw.I == LRRR_XBT).",
+  "fingerprint_sha256": "a0eba3fc0fdbb5b2e0bfb51b784a063ddb52c88eff9c85e7677b14e6f1d416d1",
+  "independence_note": "overlapping states within one five-minute window are NOT independent trials; every interval is a window-level bootstrap (windows resampled whole) and every cell reports its distinct window count",
+  "index_price_points": 32058,
+  "label": "GEMINI_MAKER_TOXICITY_SEPARABILITY_LANE3_V1",
+  "not_a_cancellation_sweep": "no cancellation threshold is proposed, swept or tuned anywhere in this file; the deliverable is a separability verdict",
+  "resting_horizon": "a hypothetical quote is left resting from its state until the window's expiry and is never cancelled or repriced. This is the MOST GENEROUS fill assumption available and is why the fill count far exceeds the frozen study's 0-for-7: that study quoted only at eight EARLY_FROM_T0 checkpoints, whereas this grid is 1 Hz. The evidence standard itself is unchanged. Note also that an inside-spread placement has little or no displayed size ahead of it, so the conservative queue is usually just our own contract -- the fills are cheap to earn and still lose money.",
+  "result": {
+    "any_non_toxic_bin": [],
+    "best_bin_anywhere": {
+      "adverse_selection_usd": -0.10965,
+      "bin": "LOW",
+      "ci95": [
+        -0.16047,
+        -0.0852
+      ],
+      "distinct_windows_with_a_fill": 28,
+      "feature": "touch_depth",
+      "fills": 1611,
+      "range": "< 50",
+      "settlement_up_yes_share_of_fill_windows": 0.1006
+    },
+    "distinct_windows_placed": 62,
+    "distinct_windows_with_any_fill": 46,
+    "features_tested": 20,
+    "features_that_separate": [
+      "lrrr_delta_30s",
+      "spread",
+      "touch_depth",
+      "tte_since_available_s",
+      "tte_to_expiry_s"
+    ],
+    "fills_by_placement": {
+      "p25": 3468,
+      "p50": 3579,
+      "p75": 3651
+    },
+    "fills_by_side": {
+      "DOWN": 3986,
+      "UP": 6712
+    },
+    "hypothetical_maker_fills": 10698,
+    "median_time_to_fill_s": 86.69,
+    "overall_fill_rate_pct": 42.0123,
+    "per_feature": {
+      "aggr_imbalance_30s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.32924,
+                -0.13333
+              ],
+              "mean": -0.25489,
+              "n_obs": 773,
+              "n_windows": 15
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 29,
+            "distinct_windows_with_a_fill": 15,
+            "fill_rate_pct": 38.747,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.23362,
+                0.53512
+              ],
+              "mean": 0.38747,
+              "n_obs": 1995,
+              "n_windows": 29
+            },
+            "fills": 773,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.32526,
+                -0.03079
+              ],
+              "mean": -0.10491,
+              "n_obs": 171,
+              "n_windows": 4
+            },
+            "median_time_to_fill_s": 100.67,
+            "placed_states": 1995,
+            "range": ">= 1e-12",
+            "settlement_up_yes_share_of_fill_windows": 0.5304
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.3235,
+                -0.13536
+              ],
+              "mean": -0.24339,
+              "n_obs": 1249,
+              "n_windows": 22
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 36,
+            "distinct_windows_with_a_fill": 22,
+            "fill_rate_pct": 42.483,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.28185,
+                0.57226
+              ],
+              "mean": 0.42483,
+              "n_obs": 2940,
+              "n_windows": 36
+            },
+            "fills": 1249,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.26499,
+                -0.18302
+              ],
+              "mean": -0.22485,
+              "n_obs": 472,
+              "n_windows": 14
+            },
+            "median_time_to_fill_s": 82.42,
+            "placed_states": 2940,
+            "range": "< 0",
+            "settlement_up_yes_share_of_fill_windows": 0.5677
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28431,
+                -0.18825
+              ],
+              "mean": -0.23577,
+              "n_obs": 8676,
+              "n_windows": 46
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 62,
+            "distinct_windows_with_a_fill": 46,
+            "fill_rate_pct": 42.262,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31863,
+                0.53248
+              ],
+              "mean": 0.42262,
+              "n_obs": 20529,
+              "n_windows": 62
+            },
+            "fills": 8676,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.226,
+                -0.12399
+              ],
+              "mean": -0.17554,
+              "n_obs": 2130,
+              "n_windows": 29
+            },
+            "median_time_to_fill_s": 86.39,
+            "placed_states": 20529,
+            "range": "[0, 1e-12)",
+            "settlement_up_yes_share_of_fill_windows": 0.3706
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "MID",
+          "point_separation_usd": 0.01912,
+          "window_bootstrap": {
+            "ci95": [
+              -0.10327,
+              0.11009
+            ],
+            "excludes_zero": false,
+            "separation": 0.01912
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          0.0,
+          1e-12
+        ],
+        "usable": true
+      },
+      "aggr_imbalance_60s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.30987,
+                -0.16908
+              ],
+              "mean": -0.25008,
+              "n_obs": 1257,
+              "n_windows": 17
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 30,
+            "distinct_windows_with_a_fill": 17,
+            "fill_rate_pct": 37.578,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.22792,
+                0.52874
+              ],
+              "mean": 0.37578,
+              "n_obs": 3345,
+              "n_windows": 30
+            },
+            "fills": 1257,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.27187,
+                -0.03922
+              ],
+              "mean": -0.11019,
+              "n_obs": 214,
+              "n_windows": 5
+            },
+            "median_time_to_fill_s": 137.61,
+            "placed_states": 3345,
+            "range": ">= 1e-12",
+            "settlement_up_yes_share_of_fill_windows": 0.4582
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31359,
+                -0.16402
+              ],
+              "mean": -0.24903,
+              "n_obs": 2035,
+              "n_windows": 23
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 36,
+            "distinct_windows_with_a_fill": 23,
+            "fill_rate_pct": 42.08,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.28164,
+                0.56683
+              ],
+              "mean": 0.4208,
+              "n_obs": 4836,
+              "n_windows": 36
+            },
+            "fills": 2035,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.2477,
+                -0.17536
+              ],
+              "mean": -0.21488,
+              "n_obs": 697,
+              "n_windows": 14
+            },
+            "median_time_to_fill_s": 73.03,
+            "placed_states": 4836,
+            "range": "< 0",
+            "settlement_up_yes_share_of_fill_windows": 0.5214
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28757,
+                -0.17807
+              ],
+              "mean": -0.23298,
+              "n_obs": 7406,
+              "n_windows": 46
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 62,
+            "distinct_windows_with_a_fill": 46,
+            "fill_rate_pct": 42.851,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31361,
+                0.54558
+              ],
+              "mean": 0.42851,
+              "n_obs": 17283,
+              "n_windows": 62
+            },
+            "fills": 7406,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.22952,
+                -0.11916
+              ],
+              "mean": -0.17434,
+              "n_obs": 1862,
+              "n_windows": 27
+            },
+            "median_time_to_fill_s": 85.37,
+            "placed_states": 17283,
+            "range": "[0, 1e-12)",
+            "settlement_up_yes_share_of_fill_windows": 0.3642
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "MID",
+          "point_separation_usd": 0.0171,
+          "window_bootstrap": {
+            "ci95": [
+              -0.07791,
+              0.10232
+            ],
+            "excludes_zero": false,
+            "separation": 0.0171
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          0.0,
+          1e-12
+        ],
+        "usable": true
+      },
+      "aggr_imbalance_signed_frac_30s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.32838,
+                -0.13863
+              ],
+              "mean": -0.25489,
+              "n_obs": 773,
+              "n_windows": 15
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 29,
+            "distinct_windows_with_a_fill": 15,
+            "fill_rate_pct": 38.747,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.23833,
+                0.5448
+              ],
+              "mean": 0.38747,
+              "n_obs": 1995,
+              "n_windows": 29
+            },
+            "fills": 773,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.32526,
+                -0.03079
+              ],
+              "mean": -0.10491,
+              "n_obs": 171,
+              "n_windows": 4
+            },
+            "median_time_to_fill_s": 100.67,
+            "placed_states": 1995,
+            "range": ">= 1e-12",
+            "settlement_up_yes_share_of_fill_windows": 0.5304
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.32414,
+                -0.1308
+              ],
+              "mean": -0.24339,
+              "n_obs": 1249,
+              "n_windows": 22
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 36,
+            "distinct_windows_with_a_fill": 22,
+            "fill_rate_pct": 42.483,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.28632,
+                0.57103
+              ],
+              "mean": 0.42483,
+              "n_obs": 2940,
+              "n_windows": 36
+            },
+            "fills": 1249,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.26271,
+                -0.18201
+              ],
+              "mean": -0.22485,
+              "n_obs": 472,
+              "n_windows": 14
+            },
+            "median_time_to_fill_s": 82.42,
+            "placed_states": 2940,
+            "range": "< 0",
+            "settlement_up_yes_share_of_fill_windows": 0.5677
+          },
+          "MID": {
+            "adverse_selection_given_fill": null,
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 0,
+            "distinct_windows_with_a_fill": 0,
+            "fill_rate_pct": null,
+            "fill_rate_window_bootstrap": null,
+            "fills": 0,
+            "mark_move_30s_given_fill": null,
+            "median_time_to_fill_s": null,
+            "placed_states": 0,
+            "range": "[0, 1e-12)",
+            "settlement_up_yes_share_of_fill_windows": null
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.0115,
+          "window_bootstrap": {
+            "ci95": [
+              -0.12972,
+              0.1462
+            ],
+            "excludes_zero": false,
+            "separation": 0.0115
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          0.0,
+          1e-12
+        ],
+        "usable": true
+      },
+      "aggr_imbalance_signed_frac_60s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31044,
+                -0.16638
+              ],
+              "mean": -0.25008,
+              "n_obs": 1257,
+              "n_windows": 17
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 30,
+            "distinct_windows_with_a_fill": 17,
+            "fill_rate_pct": 37.578,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.22578,
+                0.52373
+              ],
+              "mean": 0.37578,
+              "n_obs": 3345,
+              "n_windows": 30
+            },
+            "fills": 1257,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.27187,
+                -0.03985
+              ],
+              "mean": -0.11019,
+              "n_obs": 214,
+              "n_windows": 5
+            },
+            "median_time_to_fill_s": 137.61,
+            "placed_states": 3345,
+            "range": ">= 1e-12",
+            "settlement_up_yes_share_of_fill_windows": 0.4582
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31355,
+                -0.16667
+              ],
+              "mean": -0.24903,
+              "n_obs": 2035,
+              "n_windows": 23
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 36,
+            "distinct_windows_with_a_fill": 23,
+            "fill_rate_pct": 42.08,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.27618,
+                0.56272
+              ],
+              "mean": 0.4208,
+              "n_obs": 4836,
+              "n_windows": 36
+            },
+            "fills": 2035,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24852,
+                -0.17517
+              ],
+              "mean": -0.21488,
+              "n_obs": 697,
+              "n_windows": 14
+            },
+            "median_time_to_fill_s": 73.03,
+            "placed_states": 4836,
+            "range": "< 0",
+            "settlement_up_yes_share_of_fill_windows": 0.5214
+          },
+          "MID": {
+            "adverse_selection_given_fill": null,
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 0,
+            "distinct_windows_with_a_fill": 0,
+            "fill_rate_pct": null,
+            "fill_rate_window_bootstrap": null,
+            "fills": 0,
+            "mark_move_30s_given_fill": null,
+            "median_time_to_fill_s": null,
+            "placed_states": 0,
+            "range": "[0, 1e-12)",
+            "settlement_up_yes_share_of_fill_windows": null
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.00105,
+          "window_bootstrap": {
+            "ci95": [
+              -0.10412,
+              0.10065
+            ],
+            "excludes_zero": false,
+            "separation": 0.00105
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          0.0,
+          1e-12
+        ],
+        "usable": true
+      },
+      "aggr_volume_30s": {
+        "usable": false,
+        "why": "degenerate or too-sparse feature; no distinct tercile edges exist"
+      },
+      "aggr_volume_60s": {
+        "usable": false,
+        "why": "degenerate or too-sparse feature; no distinct tercile edges exist"
+      },
+      "lrrr_abs_delta_15s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.25602,
+                -0.16461
+              ],
+              "mean": -0.21087,
+              "n_obs": 3841,
+              "n_windows": 38
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 55,
+            "distinct_windows_with_a_fill": 38,
+            "fill_rate_pct": 45.289,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.33798,
+                0.57836
+              ],
+              "mean": 0.45289,
+              "n_obs": 8481,
+              "n_windows": 55
+            },
+            "fills": 3841,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.26038,
+                -0.14381
+              ],
+              "mean": -0.2033,
+              "n_obs": 1297,
+              "n_windows": 18
+            },
+            "median_time_to_fill_s": 65.48,
+            "placed_states": 8481,
+            "range": ">= 6.7163",
+            "settlement_up_yes_share_of_fill_windows": 0.3936
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31815,
+                -0.18659
+              ],
+              "mean": -0.25431,
+              "n_obs": 3398,
+              "n_windows": 39
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 58,
+            "distinct_windows_with_a_fill": 39,
+            "fill_rate_pct": 40.08,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.27891,
+                0.53488
+              ],
+              "mean": 0.4008,
+              "n_obs": 8478,
+              "n_windows": 58
+            },
+            "fills": 3398,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23421,
+                -0.09178
+              ],
+              "mean": -0.16422,
+              "n_obs": 626,
+              "n_windows": 23
+            },
+            "median_time_to_fill_s": 98.21,
+            "placed_states": 8478,
+            "range": "< 2.6827",
+            "settlement_up_yes_share_of_fill_windows": 0.4023
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.30227,
+                -0.19238
+              ],
+              "mean": -0.25147,
+              "n_obs": 3447,
+              "n_windows": 44
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 60,
+            "distinct_windows_with_a_fill": 44,
+            "fill_rate_pct": 40.658,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.29763,
+                0.5188
+              ],
+              "mean": 0.40658,
+              "n_obs": 8478,
+              "n_windows": 60
+            },
+            "fills": 3447,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.19426,
+                -0.1215
+              ],
+              "mean": -0.15471,
+              "n_obs": 850,
+              "n_windows": 24
+            },
+            "median_time_to_fill_s": 106.61,
+            "placed_states": 8478,
+            "range": "[2.6827, 6.7163)",
+            "settlement_up_yes_share_of_fill_windows": 0.4221
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "HIGH",
+          "point_separation_usd": 0.04344,
+          "window_bootstrap": {
+            "ci95": [
+              -0.04142,
+              0.11962
+            ],
+            "excludes_zero": false,
+            "separation": 0.04344
+          },
+          "worst_bin": "LOW"
+        },
+        "tercile_edges": [
+          2.6827,
+          6.7163
+        ],
+        "usable": true
+      },
+      "lrrr_delta_15s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31625,
+                -0.21254
+              ],
+              "mean": -0.26952,
+              "n_obs": 3402,
+              "n_windows": 40
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 59,
+            "distinct_windows_with_a_fill": 40,
+            "fill_rate_pct": 40.113,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.2913,
+                0.51339
+              ],
+              "mean": 0.40113,
+              "n_obs": 8481,
+              "n_windows": 59
+            },
+            "fills": 3402,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23891,
+                -0.10316
+              ],
+              "mean": -0.16872,
+              "n_obs": 665,
+              "n_windows": 18
+            },
+            "median_time_to_fill_s": 95.42,
+            "placed_states": 8481,
+            "range": ">= 1.5642",
+            "settlement_up_yes_share_of_fill_windows": 0.7466
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.25178,
+                -0.15102
+              ],
+              "mean": -0.20291,
+              "n_obs": 3853,
+              "n_windows": 33
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 55,
+            "distinct_windows_with_a_fill": 33,
+            "fill_rate_pct": 45.447,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31659,
+                0.58613
+              ],
+              "mean": 0.45447,
+              "n_obs": 8478,
+              "n_windows": 55
+            },
+            "fills": 3853,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24813,
+                -0.14874
+              ],
+              "mean": -0.19662,
+              "n_obs": 1435,
+              "n_windows": 20
+            },
+            "median_time_to_fill_s": 69.56,
+            "placed_states": 8478,
+            "range": "< -3.6993",
+            "settlement_up_yes_share_of_fill_windows": 0.143
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31077,
+                -0.16989
+              ],
+              "mean": -0.24546,
+              "n_obs": 3431,
+              "n_windows": 38
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 58,
+            "distinct_windows_with_a_fill": 38,
+            "fill_rate_pct": 40.469,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.2801,
+                0.53798
+              ],
+              "mean": 0.40469,
+              "n_obs": 8478,
+              "n_windows": 58
+            },
+            "fills": 3431,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.22288,
+                -0.08254
+              ],
+              "mean": -0.15398,
+              "n_obs": 673,
+              "n_windows": 20
+            },
+            "median_time_to_fill_s": 101.25,
+            "placed_states": 8478,
+            "range": "[-3.6993, 1.5642)",
+            "settlement_up_yes_share_of_fill_windows": 0.3623
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.06661,
+          "window_bootstrap": {
+            "ci95": [
+              -0.00738,
+              0.13407
+            ],
+            "excludes_zero": false,
+            "separation": 0.06661
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          -3.6993,
+          1.5642
+        ],
+        "usable": true
+      },
+      "lrrr_delta_30s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31249,
+                -0.21709
+              ],
+              "mean": -0.27042,
+              "n_obs": 3252,
+              "n_windows": 39
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 58,
+            "distinct_windows_with_a_fill": 39,
+            "fill_rate_pct": 38.399,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.27919,
+                0.49916
+              ],
+              "mean": 0.38399,
+              "n_obs": 8469,
+              "n_windows": 58
+            },
+            "fills": 3252,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.22686,
+                -0.09105
+              ],
+              "mean": -0.16117,
+              "n_obs": 667,
+              "n_windows": 19
+            },
+            "median_time_to_fill_s": 92.15,
+            "placed_states": 8469,
+            "range": ">= 2.754",
+            "settlement_up_yes_share_of_fill_windows": 0.7657
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.23883,
+                -0.12944
+              ],
+              "mean": -0.18822,
+              "n_obs": 3825,
+              "n_windows": 29
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 53,
+            "distinct_windows_with_a_fill": 29,
+            "fill_rate_pct": 45.181,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31501,
+                0.58883
+              ],
+              "mean": 0.45181,
+              "n_obs": 8466,
+              "n_windows": 53
+            },
+            "fills": 3825,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.25211,
+                -0.14989
+              ],
+              "mean": -0.19938,
+              "n_obs": 1404,
+              "n_windows": 16
+            },
+            "median_time_to_fill_s": 70.25,
+            "placed_states": 8466,
+            "range": "< -7.3155",
+            "settlement_up_yes_share_of_fill_windows": 0.1294
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.32359,
+                -0.18447
+              ],
+              "mean": -0.26089,
+              "n_obs": 3609,
+              "n_windows": 39
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 58,
+            "distinct_windows_with_a_fill": 39,
+            "fill_rate_pct": 42.614,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.30332,
+                0.55844
+              ],
+              "mean": 0.42614,
+              "n_obs": 8469,
+              "n_windows": 58
+            },
+            "fills": 3609,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.22654,
+                -0.08562
+              ],
+              "mean": -0.15748,
+              "n_obs": 702,
+              "n_windows": 22
+            },
+            "median_time_to_fill_s": 105.67,
+            "placed_states": 8469,
+            "range": "[-7.3155, 2.754)",
+            "settlement_up_yes_share_of_fill_windows": 0.3738
+          }
+        },
+        "separates": true,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.0822,
+          "window_bootstrap": {
+            "ci95": [
+              0.00882,
+              0.15508
+            ],
+            "excludes_zero": true,
+            "separation": 0.0822
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          -7.3155,
+          2.754
+        ],
+        "usable": true
+      },
+      "lrrr_delta_5s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.30974,
+                -0.2176
+              ],
+              "mean": -0.26859,
+              "n_obs": 3582,
+              "n_windows": 41
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 59,
+            "distinct_windows_with_a_fill": 41,
+            "fill_rate_pct": 42.206,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.30997,
+                0.53185
+              ],
+              "mean": 0.42206,
+              "n_obs": 8487,
+              "n_windows": 59
+            },
+            "fills": 3582,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24695,
+                -0.10795
+              ],
+              "mean": -0.17154,
+              "n_obs": 651,
+              "n_windows": 19
+            },
+            "median_time_to_fill_s": 99.43,
+            "placed_states": 8487,
+            "range": ">= 0.5712",
+            "settlement_up_yes_share_of_fill_windows": 0.7225
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.25429,
+                -0.1512
+              ],
+              "mean": -0.20565,
+              "n_obs": 3846,
+              "n_windows": 33
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 57,
+            "distinct_windows_with_a_fill": 33,
+            "fill_rate_pct": 45.364,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31628,
+                0.58959
+              ],
+              "mean": 0.45364,
+              "n_obs": 8478,
+              "n_windows": 57
+            },
+            "fills": 3846,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.25388,
+                -0.15221
+              ],
+              "mean": -0.20141,
+              "n_obs": 1430,
+              "n_windows": 19
+            },
+            "median_time_to_fill_s": 69.59,
+            "placed_states": 8478,
+            "range": "< -1.2333",
+            "settlement_up_yes_share_of_fill_windows": 0.1422
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.30981,
+                -0.16143
+              ],
+              "mean": -0.24204,
+              "n_obs": 3261,
+              "n_windows": 40
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 58,
+            "distinct_windows_with_a_fill": 40,
+            "fill_rate_pct": 38.41,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.26726,
+                0.52206
+              ],
+              "mean": 0.3841,
+              "n_obs": 8490,
+              "n_windows": 58
+            },
+            "fills": 3261,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.20859,
+                -0.07081
+              ],
+              "mean": -0.14204,
+              "n_obs": 692,
+              "n_windows": 23
+            },
+            "median_time_to_fill_s": 97.63,
+            "placed_states": 8490,
+            "range": "[-1.2333, 0.5712)",
+            "settlement_up_yes_share_of_fill_windows": 0.3677
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.06294,
+          "window_bootstrap": {
+            "ci95": [
+              -0.0098,
+              0.12891
+            ],
+            "excludes_zero": false,
+            "separation": 0.06294
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          -1.2333,
+          0.5712
+        ],
+        "usable": true
+      },
+      "mid_accel_15s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.29669,
+                -0.20172
+              ],
+              "mean": -0.25096,
+              "n_obs": 3670,
+              "n_windows": 43
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 43,
+            "fill_rate_pct": 42.834,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.32685,
+                0.53331
+              ],
+              "mean": 0.42834,
+              "n_obs": 8568,
+              "n_windows": 61
+            },
+            "fills": 3670,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.21394,
+                -0.12483
+              ],
+              "mean": -0.16781,
+              "n_obs": 985,
+              "n_windows": 26
+            },
+            "median_time_to_fill_s": 84.91,
+            "placed_states": 8568,
+            "range": ">= 0.035",
+            "settlement_up_yes_share_of_fill_windows": 0.4417
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.3057,
+                -0.21435
+              ],
+              "mean": -0.2637,
+              "n_obs": 3320,
+              "n_windows": 44
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 44,
+            "fill_rate_pct": 42.352,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.32677,
+                0.52996
+              ],
+              "mean": 0.42352,
+              "n_obs": 7839,
+              "n_windows": 61
+            },
+            "fills": 3320,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.25852,
+                -0.16228
+              ],
+              "mean": -0.21047,
+              "n_obs": 952,
+              "n_windows": 23
+            },
+            "median_time_to_fill_s": 90.2,
+            "placed_states": 7839,
+            "range": "< -0.025",
+            "settlement_up_yes_share_of_fill_windows": 0.4292
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.27463,
+                -0.13644
+              ],
+              "mean": -0.2031,
+              "n_obs": 3421,
+              "n_windows": 43
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 60,
+            "distinct_windows_with_a_fill": 43,
+            "fill_rate_pct": 43.624,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31166,
+                0.5633
+              ],
+              "mean": 0.43624,
+              "n_obs": 7842,
+              "n_windows": 60
+            },
+            "fills": 3421,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.21876,
+                -0.11529
+              ],
+              "mean": -0.16222,
+              "n_obs": 743,
+              "n_windows": 23
+            },
+            "median_time_to_fill_s": 85.39,
+            "placed_states": 7842,
+            "range": "[-0.025, 0.035)",
+            "settlement_up_yes_share_of_fill_windows": 0.3347
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "MID",
+          "point_separation_usd": 0.0606,
+          "window_bootstrap": {
+            "ci95": [
+              -0.02182,
+              0.141
+            ],
+            "excludes_zero": false,
+            "separation": 0.0606
+          },
+          "worst_bin": "LOW"
+        },
+        "tercile_edges": [
+          -0.025,
+          0.035
+        ],
+        "usable": true
+      },
+      "mid_accel_5s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28715,
+                -0.19661
+              ],
+              "mean": -0.24382,
+              "n_obs": 3654,
+              "n_windows": 46
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 46,
+            "fill_rate_pct": 42.365,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.32604,
+                0.52368
+              ],
+              "mean": 0.42365,
+              "n_obs": 8625,
+              "n_windows": 61
+            },
+            "fills": 3654,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23114,
+                -0.14598
+              ],
+              "mean": -0.18807,
+              "n_obs": 992,
+              "n_windows": 29
+            },
+            "median_time_to_fill_s": 92.36,
+            "placed_states": 8625,
+            "range": ">= 0.01",
+            "settlement_up_yes_share_of_fill_windows": 0.4488
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28981,
+                -0.20537
+              ],
+              "mean": -0.24825,
+              "n_obs": 3315,
+              "n_windows": 46
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 46,
+            "fill_rate_pct": 41.017,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31443,
+                0.50825
+              ],
+              "mean": 0.41017,
+              "n_obs": 8082,
+              "n_windows": 61
+            },
+            "fills": 3315,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24012,
+                -0.15186
+              ],
+              "mean": -0.19715,
+              "n_obs": 930,
+              "n_windows": 26
+            },
+            "median_time_to_fill_s": 92.72,
+            "placed_states": 8082,
+            "range": "< -0.005",
+            "settlement_up_yes_share_of_fill_windows": 0.4377
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28849,
+                -0.15606
+              ],
+              "mean": -0.22148,
+              "n_obs": 3490,
+              "n_windows": 42
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 42,
+            "fill_rate_pct": 43.883,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31499,
+                0.56242
+              ],
+              "mean": 0.43883,
+              "n_obs": 7953,
+              "n_windows": 61
+            },
+            "fills": 3490,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.21517,
+                -0.08855
+              ],
+              "mean": -0.14767,
+              "n_obs": 801,
+              "n_windows": 23
+            },
+            "median_time_to_fill_s": 74.39,
+            "placed_states": 7953,
+            "range": "[-0.005, 0.01)",
+            "settlement_up_yes_share_of_fill_windows": 0.3143
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "MID",
+          "point_separation_usd": 0.02677,
+          "window_bootstrap": {
+            "ci95": [
+              -0.05133,
+              0.10151
+            ],
+            "excludes_zero": false,
+            "separation": 0.02676
+          },
+          "worst_bin": "LOW"
+        },
+        "tercile_edges": [
+          -0.005,
+          0.01
+        ],
+        "usable": true
+      },
+      "mid_delta_30s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.32869,
+                -0.22791
+              ],
+              "mean": -0.28531,
+              "n_obs": 3707,
+              "n_windows": 35
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 60,
+            "distinct_windows_with_a_fill": 35,
+            "fill_rate_pct": 44.917,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.33022,
+                0.56903
+              ],
+              "mean": 0.44917,
+              "n_obs": 8253,
+              "n_windows": 60
+            },
+            "fills": 3707,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24933,
+                -0.13138
+              ],
+              "mean": -0.18573,
+              "n_obs": 776,
+              "n_windows": 18
+            },
+            "median_time_to_fill_s": 104.38,
+            "placed_states": 8253,
+            "range": ">= 0.025",
+            "settlement_up_yes_share_of_fill_windows": 0.7758
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.27853,
+                -0.1496
+              ],
+              "mean": -0.22322,
+              "n_obs": 3486,
+              "n_windows": 34
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 56,
+            "distinct_windows_with_a_fill": 34,
+            "fill_rate_pct": 43.261,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31507,
+                0.55581
+              ],
+              "mean": 0.43261,
+              "n_obs": 8058,
+              "n_windows": 56
+            },
+            "fills": 3486,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23558,
+                -0.14652
+              ],
+              "mean": -0.19379,
+              "n_obs": 1241,
+              "n_windows": 19
+            },
+            "median_time_to_fill_s": 78.91,
+            "placed_states": 8058,
+            "range": "< -0.055",
+            "settlement_up_yes_share_of_fill_windows": 0.1902
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28075,
+                -0.1331
+              ],
+              "mean": -0.2053,
+              "n_obs": 3382,
+              "n_windows": 39
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 57,
+            "distinct_windows_with_a_fill": 39,
+            "fill_rate_pct": 40.162,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.27421,
+                0.52809
+              ],
+              "mean": 0.40162,
+              "n_obs": 8421,
+              "n_windows": 57
+            },
+            "fills": 3382,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.2376,
+                -0.09054
+              ],
+              "mean": -0.1549,
+              "n_obs": 702,
+              "n_windows": 21
+            },
+            "median_time_to_fill_s": 73.62,
+            "placed_states": 8421,
+            "range": "[-0.055, 0.025)",
+            "settlement_up_yes_share_of_fill_windows": 0.2182
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "MID",
+          "point_separation_usd": 0.08001,
+          "window_bootstrap": {
+            "ci95": [
+              -0.01207,
+              0.16775
+            ],
+            "excludes_zero": false,
+            "separation": 0.08001
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          -0.055,
+          0.025
+        ],
+        "usable": true
+      },
+      "mid_delta_5s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.29581,
+                -0.19608
+              ],
+              "mean": -0.24696,
+              "n_obs": 6690,
+              "n_windows": 46
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 62,
+            "distinct_windows_with_a_fill": 46,
+            "fill_rate_pct": 42.737,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.33165,
+                0.52791
+              ],
+              "mean": 0.42737,
+              "n_obs": 15654,
+              "n_windows": 62
+            },
+            "fills": 6690,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.2105,
+                -0.12111
+              ],
+              "mean": -0.16441,
+              "n_obs": 1619,
+              "n_windows": 28
+            },
+            "median_time_to_fill_s": 90.21,
+            "placed_states": 15654,
+            "range": ">= 0",
+            "settlement_up_yes_share_of_fill_windows": 0.5081
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.25966,
+                -0.17267
+              ],
+              "mean": -0.22293,
+              "n_obs": 2948,
+              "n_windows": 45
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 59,
+            "distinct_windows_with_a_fill": 45,
+            "fill_rate_pct": 41.958,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.30109,
+                0.53573
+              ],
+              "mean": 0.41958,
+              "n_obs": 7026,
+              "n_windows": 59
+            },
+            "fills": 2948,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24246,
+                -0.15266
+              ],
+              "mean": -0.20176,
+              "n_obs": 921,
+              "n_windows": 26
+            },
+            "median_time_to_fill_s": 79.33,
+            "placed_states": 7026,
+            "range": "< -0.005",
+            "settlement_up_yes_share_of_fill_windows": 0.213
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28383,
+                -0.17475
+              ],
+              "mean": -0.2235,
+              "n_obs": 899,
+              "n_windows": 39
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 59,
+            "distinct_windows_with_a_fill": 39,
+            "fill_rate_pct": 39.223,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.26741,
+                0.51909
+              ],
+              "mean": 0.39223,
+              "n_obs": 2292,
+              "n_windows": 59
+            },
+            "fills": 899,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.27599,
+                -0.14414
+              ],
+              "mean": -0.20113,
+              "n_obs": 204,
+              "n_windows": 17
+            },
+            "median_time_to_fill_s": 86.95,
+            "placed_states": 2292,
+            "range": "[-0.005, 0)",
+            "settlement_up_yes_share_of_fill_windows": 0.2191
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.02403,
+          "window_bootstrap": {
+            "ci95": [
+              -0.04261,
+              0.09369
+            ],
+            "excludes_zero": false,
+            "separation": 0.02403
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          -0.005,
+          0.0
+        ],
+        "usable": true
+      },
+      "spread": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.34501,
+                -0.26538
+              ],
+              "mean": -0.3112,
+              "n_obs": 4509,
+              "n_windows": 46
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 46,
+            "fill_rate_pct": 44.745,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.33955,
+                0.55575
+              ],
+              "mean": 0.44745,
+              "n_obs": 10077,
+              "n_windows": 61
+            },
+            "fills": 4509,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23303,
+                -0.12915
+              ],
+              "mean": -0.18295,
+              "n_obs": 967,
+              "n_windows": 29
+            },
+            "median_time_to_fill_s": 103.75,
+            "placed_states": 10077,
+            "range": ">= 0.3",
+            "settlement_up_yes_share_of_fill_windows": 0.5245
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.20866,
+                -0.12656
+              ],
+              "mean": -0.15813,
+              "n_obs": 3148,
+              "n_windows": 33
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 55,
+            "distinct_windows_with_a_fill": 33,
+            "fill_rate_pct": 40.251,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.24812,
+                0.56087
+              ],
+              "mean": 0.40251,
+              "n_obs": 7821,
+              "n_windows": 55
+            },
+            "fills": 3148,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.25199,
+                -0.09648
+              ],
+              "mean": -0.16174,
+              "n_obs": 570,
+              "n_windows": 14
+            },
+            "median_time_to_fill_s": 56.28,
+            "placed_states": 7821,
+            "range": "< 0.25",
+            "settlement_up_yes_share_of_fill_windows": 0.1849
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28527,
+                -0.12046
+              ],
+              "mean": -0.2123,
+              "n_obs": 3041,
+              "n_windows": 42
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 60,
+            "distinct_windows_with_a_fill": 42,
+            "fill_rate_pct": 40.193,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.29768,
+                0.51079
+              ],
+              "mean": 0.40193,
+              "n_obs": 7566,
+              "n_windows": 60
+            },
+            "fills": 3041,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23403,
+                -0.14118
+              ],
+              "mean": -0.18518,
+              "n_obs": 1236,
+              "n_windows": 25
+            },
+            "median_time_to_fill_s": 92.95,
+            "placed_states": 7566,
+            "range": "[0.25, 0.3)",
+            "settlement_up_yes_share_of_fill_windows": 0.4561
+          }
+        },
+        "separates": true,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.15307,
+          "window_bootstrap": {
+            "ci95": [
+              0.08628,
+              0.20141
+            ],
+            "excludes_zero": true,
+            "separation": 0.15308
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          0.25,
+          0.3
+        ],
+        "usable": true
+      },
+      "spread_delta_10s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.29881,
+                -0.19758
+              ],
+              "mean": -0.25004,
+              "n_obs": 5257,
+              "n_windows": 44
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 44,
+            "fill_rate_pct": 41.574,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31561,
+                0.51843
+              ],
+              "mean": 0.41574,
+              "n_obs": 12645,
+              "n_windows": 61
+            },
+            "fills": 5257,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.20611,
+                -0.12135
+              ],
+              "mean": -0.16187,
+              "n_obs": 1318,
+              "n_windows": 27
+            },
+            "median_time_to_fill_s": 87.21,
+            "placed_states": 12645,
+            "range": ">= 0",
+            "settlement_up_yes_share_of_fill_windows": 0.424
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.26978,
+                -0.16951
+              ],
+              "mean": -0.22205,
+              "n_obs": 2962,
+              "n_windows": 44
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 44,
+            "fill_rate_pct": 44.235,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.34374,
+                0.54012
+              ],
+              "mean": 0.44235,
+              "n_obs": 6696,
+              "n_windows": 61
+            },
+            "fills": 2962,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23583,
+                -0.1496
+              ],
+              "mean": -0.19432,
+              "n_obs": 919,
+              "n_windows": 25
+            },
+            "median_time_to_fill_s": 76.36,
+            "placed_states": 6696,
+            "range": "< -0.02",
+            "settlement_up_yes_share_of_fill_windows": 0.4099
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.27672,
+                -0.18934
+              ],
+              "mean": -0.23104,
+              "n_obs": 2291,
+              "n_windows": 41
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 60,
+            "distinct_windows_with_a_fill": 41,
+            "fill_rate_pct": 41.891,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.30801,
+                0.53367
+              ],
+              "mean": 0.41891,
+              "n_obs": 5469,
+              "n_windows": 60
+            },
+            "fills": 2291,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24842,
+                -0.15285
+              ],
+              "mean": -0.19767,
+              "n_obs": 498,
+              "n_windows": 23
+            },
+            "median_time_to_fill_s": 99.67,
+            "placed_states": 5469,
+            "range": "[-0.02, 0)",
+            "settlement_up_yes_share_of_fill_windows": 0.3422
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.02799,
+          "window_bootstrap": {
+            "ci95": [
+              -0.0422,
+              0.09827
+            ],
+            "excludes_zero": false,
+            "separation": 0.02799
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          -0.02,
+          0.0
+        ],
+        "usable": true
+      },
+      "touch_depth": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31687,
+                -0.2076
+              ],
+              "mean": -0.26844,
+              "n_obs": 3533,
+              "n_windows": 46
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 46,
+            "fill_rate_pct": 41.614,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31803,
+                0.51561
+              ],
+              "mean": 0.41614,
+              "n_obs": 8490,
+              "n_windows": 61
+            },
+            "fills": 3533,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.24527,
+                -0.14341
+              ],
+              "mean": -0.19621,
+              "n_obs": 1035,
+              "n_windows": 28
+            },
+            "median_time_to_fill_s": 99.34,
+            "placed_states": 8490,
+            "range": ">= 293.62",
+            "settlement_up_yes_share_of_fill_windows": 0.5627
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.16047,
+                -0.0852
+              ],
+              "mean": -0.10965,
+              "n_obs": 1611,
+              "n_windows": 28
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 52,
+            "distinct_windows_with_a_fill": 28,
+            "fill_rate_pct": 38.058,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.19329,
+                0.57374
+              ],
+              "mean": 0.38058,
+              "n_obs": 4233,
+              "n_windows": 52
+            },
+            "fills": 1611,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.21971,
+                -0.01844
+              ],
+              "mean": -0.08459,
+              "n_obs": 283,
+              "n_windows": 11
+            },
+            "median_time_to_fill_s": 58.36,
+            "placed_states": 4233,
+            "range": "< 50",
+            "settlement_up_yes_share_of_fill_windows": 0.1006
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.306,
+                -0.20025
+              ],
+              "mean": -0.25595,
+              "n_obs": 5554,
+              "n_windows": 45
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 45,
+            "fill_rate_pct": 43.592,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.33378,
+                0.53882
+              ],
+              "mean": 0.43592,
+              "n_obs": 12741,
+              "n_windows": 61
+            },
+            "fills": 5554,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.22964,
+                -0.14124
+              ],
+              "mean": -0.18623,
+              "n_obs": 1455,
+              "n_windows": 26
+            },
+            "median_time_to_fill_s": 92.93,
+            "placed_states": 12741,
+            "range": "[50, 293.62)",
+            "settlement_up_yes_share_of_fill_windows": 0.3932
+          }
+        },
+        "separates": true,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.15879,
+          "window_bootstrap": {
+            "ci95": [
+              0.08231,
+              0.21289
+            ],
+            "excludes_zero": true,
+            "separation": 0.15879
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          50.0,
+          293.62
+        ],
+        "usable": true
+      },
+      "touch_depth_delta_10s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.28642,
+                -0.19489
+              ],
+              "mean": -0.24097,
+              "n_obs": 6297,
+              "n_windows": 44
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 44,
+            "fill_rate_pct": 42.951,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.32618,
+                0.53455
+              ],
+              "mean": 0.42951,
+              "n_obs": 14661,
+              "n_windows": 61
+            },
+            "fills": 6297,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.2148,
+                -0.13113
+              ],
+              "mean": -0.17089,
+              "n_obs": 1535,
+              "n_windows": 27
+            },
+            "median_time_to_fill_s": 90.63,
+            "placed_states": 14661,
+            "range": ">= 0",
+            "settlement_up_yes_share_of_fill_windows": 0.4056
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.29208,
+                -0.18498
+              ],
+              "mean": -0.24073,
+              "n_obs": 3439,
+              "n_windows": 45
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 61,
+            "distinct_windows_with_a_fill": 45,
+            "fill_rate_pct": 42.036,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.33071,
+                0.51518
+              ],
+              "mean": 0.42036,
+              "n_obs": 8181,
+              "n_windows": 61
+            },
+            "fills": 3439,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.23909,
+                -0.14939
+              ],
+              "mean": -0.19587,
+              "n_obs": 1061,
+              "n_windows": 27
+            },
+            "median_time_to_fill_s": 85.36,
+            "placed_states": 8181,
+            "range": "< -24",
+            "settlement_up_yes_share_of_fill_windows": 0.4292
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.25671,
+                -0.16153
+              ],
+              "mean": -0.20187,
+              "n_obs": 774,
+              "n_windows": 33
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 56,
+            "distinct_windows_with_a_fill": 33,
+            "fill_rate_pct": 39.329,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.25641,
+                0.54384
+              ],
+              "mean": 0.39329,
+              "n_obs": 1968,
+              "n_windows": 56
+            },
+            "fills": 774,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.22791,
+                -0.09379
+              ],
+              "mean": -0.14554,
+              "n_obs": 139,
+              "n_windows": 12
+            },
+            "median_time_to_fill_s": 62.08,
+            "placed_states": 1968,
+            "range": "[-24, 0)",
+            "settlement_up_yes_share_of_fill_windows": 0.2545
+          }
+        },
+        "separates": false,
+        "separation_best_minus_worst": {
+          "best_bin": "MID",
+          "point_separation_usd": 0.0391,
+          "window_bootstrap": {
+            "ci95": [
+              -0.03254,
+              0.09922
+            ],
+            "excludes_zero": false,
+            "separation": 0.0391
+          },
+          "worst_bin": "HIGH"
+        },
+        "tercile_edges": [
+          -24.0,
+          0.0
+        ],
+        "usable": true
+      },
+      "tte_since_available_s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.23722,
+                -0.14373
+              ],
+              "mean": -0.18607,
+              "n_obs": 2943,
+              "n_windows": 27
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 51,
+            "distinct_windows_with_a_fill": 27,
+            "fill_rate_pct": 34.664,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.21415,
+                0.48419
+              ],
+              "mean": 0.34664,
+              "n_obs": 8490,
+              "n_windows": 51
+            },
+            "fills": 2943,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.2737,
+                -0.05438
+              ],
+              "mean": -0.06982,
+              "n_obs": 171,
+              "n_windows": 5
+            },
+            "median_time_to_fill_s": 56.91,
+            "placed_states": 8490,
+            "range": ">= 159.59",
+            "settlement_up_yes_share_of_fill_windows": 0.1723
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31495,
+                -0.1368
+              ],
+              "mean": -0.23448,
+              "n_obs": 4099,
+              "n_windows": 41
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 60,
+            "distinct_windows_with_a_fill": 41,
+            "fill_rate_pct": 48.297,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.37018,
+                0.58634
+              ],
+              "mean": 0.48297,
+              "n_obs": 8487,
+              "n_windows": 60
+            },
+            "fills": 4099,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.22182,
+                -0.12276
+              ],
+              "mean": -0.17535,
+              "n_obs": 1758,
+              "n_windows": 26
+            },
+            "median_time_to_fill_s": 112.58,
+            "placed_states": 8487,
+            "range": "< 75.74",
+            "settlement_up_yes_share_of_fill_windows": 0.5414
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.32741,
+                -0.23795
+              ],
+              "mean": -0.28388,
+              "n_obs": 3656,
+              "n_windows": 32
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 56,
+            "distinct_windows_with_a_fill": 32,
+            "fill_rate_pct": 43.078,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31644,
+                0.54992
+              ],
+              "mean": 0.43078,
+              "n_obs": 8487,
+              "n_windows": 56
+            },
+            "fills": 3656,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.28866,
+                -0.12861
+              ],
+              "mean": -0.21063,
+              "n_obs": 844,
+              "n_windows": 13
+            },
+            "median_time_to_fill_s": 136.29,
+            "placed_states": 8487,
+            "range": "[75.74, 159.59)",
+            "settlement_up_yes_share_of_fill_windows": 0.4398
+          }
+        },
+        "separates": true,
+        "separation_best_minus_worst": {
+          "best_bin": "HIGH",
+          "point_separation_usd": 0.09781,
+          "window_bootstrap": {
+            "ci95": [
+              0.02982,
+              0.15681
+            ],
+            "excludes_zero": true,
+            "separation": 0.09782
+          },
+          "worst_bin": "MID"
+        },
+        "tercile_edges": [
+          75.74,
+          159.59
+        ],
+        "usable": true
+      },
+      "tte_to_expiry_s": {
+        "bins": {
+          "HIGH": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.31162,
+                -0.13522
+              ],
+              "mean": -0.23455,
+              "n_obs": 4102,
+              "n_windows": 41
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 60,
+            "distinct_windows_with_a_fill": 41,
+            "fill_rate_pct": 48.299,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.37416,
+                0.59476
+              ],
+              "mean": 0.48299,
+              "n_obs": 8493,
+              "n_windows": 60
+            },
+            "fills": 4102,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.2203,
+                -0.12634
+              ],
+              "mean": -0.17535,
+              "n_obs": 1758,
+              "n_windows": 26
+            },
+            "median_time_to_fill_s": 113.88,
+            "placed_states": 8493,
+            "range": ">= 224.26",
+            "settlement_up_yes_share_of_fill_windows": 0.541
+          },
+          "LOW": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.23537,
+                -0.14348
+              ],
+              "mean": -0.18607,
+              "n_obs": 2943,
+              "n_windows": 27
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 51,
+            "distinct_windows_with_a_fill": 27,
+            "fill_rate_pct": 34.677,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.21493,
+                0.48436
+              ],
+              "mean": 0.34677,
+              "n_obs": 8487,
+              "n_windows": 51
+            },
+            "fills": 2943,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.27542,
+                -0.05438
+              ],
+              "mean": -0.06982,
+              "n_obs": 171,
+              "n_windows": 5
+            },
+            "median_time_to_fill_s": 56.91,
+            "placed_states": 8487,
+            "range": "< 140.41",
+            "settlement_up_yes_share_of_fill_windows": 0.1723
+          },
+          "MID": {
+            "adverse_selection_given_fill": {
+              "ci95": [
+                -0.32647,
+                -0.23638
+              ],
+              "mean": -0.28385,
+              "n_obs": 3653,
+              "n_windows": 32
+            },
+            "base_rate_caveat": "this share is the CONFOUND to watch: a bin whose fills sit in windows that settled one way can look skilful when it is only reading the settlement direction",
+            "bin_is_non_toxic": false,
+            "distinct_windows_placed": 56,
+            "distinct_windows_with_a_fill": 32,
+            "fill_rate_pct": 43.058,
+            "fill_rate_window_bootstrap": {
+              "ci95": [
+                0.31625,
+                0.54843
+              ],
+              "mean": 0.43058,
+              "n_obs": 8484,
+              "n_windows": 56
+            },
+            "fills": 3653,
+            "mark_move_30s_given_fill": {
+              "ci95": [
+                -0.28706,
+                -0.12938
+              ],
+              "mean": -0.21063,
+              "n_obs": 844,
+              "n_windows": 13
+            },
+            "median_time_to_fill_s": 136.22,
+            "placed_states": 8484,
+            "range": "[140.41, 224.26)",
+            "settlement_up_yes_share_of_fill_windows": 0.4402
+          }
+        },
+        "separates": true,
+        "separation_best_minus_worst": {
+          "best_bin": "LOW",
+          "point_separation_usd": 0.09778,
+          "window_bootstrap": {
+            "ci95": [
+              0.02886,
+              0.1575
+            ],
+            "excludes_zero": true,
+            "separation": 0.09778
+          },
+          "worst_bin": "MID"
+        },
+        "tercile_edges": [
+          140.41,
+          224.26
+        ],
+        "usable": true
+      }
+    },
+    "placed_hypothetical_quotes": 25464,
+    "toxic_fill_share": 0.9374,
+    "unconditional_adverse_selection_given_fill": {
+      "ci95": [
+        -0.28091,
+        -0.1925
+      ],
+      "mean": -0.23804,
+      "n_obs": 10698,
+      "n_windows": 46
+    }
+  },
+  "reuses_frozen": {
+    "copied": [
+      "fill-evidence standard (TRADE_THROUGH only, aggressor side from buyer_is_maker, cumulative size must clear the queue ahead; NO touch=fill)",
+      "placements 25/50/75% through the spread, snapped away from aggression",
+      "conservative queue (behind all better-or-equal displayed size, plus our own)",
+      "fee model, with NO rebate assumed or credited",
+      "unsettled windows excluded from the denominator"
+    ],
+    "maker_study_sha256": "267ef1d15944feb49c5e25c897e61064e446f9d5a5e4ce7d7a33ac965f763a63",
+    "neither_modified": true,
+    "state_aware_sha256_prefix": "513eff6e"
+  },
+  "status": "RESEARCH ONLY. No live orders, no venue writes, no credentials. Authorizes nothing and opens no venue surface.",
+  "tape_rows": 200382,
+  "tapes": [
+    "analysis/gemini/btc5m_rec/btc5m_rec_20261005T140214Z.jsonl.gz",
+    "analysis/gemini/btc5m_rec/btc5m_rec_20261005T143422Z.jsonl.gz",
+    "analysis/gemini/btc5m_rec/btc5m_rec_20261005T144223Z.jsonl.gz",
+    "analysis/gemini/btc5m_snap/btc5m_rec_20261005T192626Z.jsonl.gz",
+    "analysis/gemini/btc5m_snap/btc5m_rec_20261005T193426Z.jsonl.gz",
+    "analysis/gemini/btc5m_snap/btc5m_rec_20261005T174931Z.jsonl.gz",
+    "analysis/gemini/btc5m_snap/btc5m_rec_20261005T175732Z.jsonl.gz"
+  ],
+  "trade_prints_btc05m": 374,
+  "verdict": {
+    "best_bin_anywhere": {
+      "adverse_selection_usd": -0.10965,
+      "bin": "LOW",
+      "ci95": [
+        -0.16047,
+        -0.0852
+      ],
+      "distinct_windows_with_a_fill": 28,
+      "feature": "touch_depth",
+      "fills": 1611,
+      "range": "< 50",
+      "settlement_up_yes_share_of_fill_windows": 0.1006
+    },
+    "distinct_windows_with_a_fill": 46,
+    "features_ordering_the_degree_of_loss": [
+      "lrrr_delta_30s",
+      "spread",
+      "touch_depth",
+      "tte_since_available_s",
+      "tte_to_expiry_s"
+    ],
+    "hypothetical_fills": 10698,
+    "maker_hypothesis": "KILLED",
+    "non_toxic_bins_found": 0,
+    "recommended_action": "KILL the BTC5m maker hypothesis. No surviving variant is proposed and no cancellation threshold is swept: a cancel rule cannot help, because there is no non-toxic state for it to stay resting in.",
+    "statement": "10698 evidenced hypothetical fills across 46 distinct windows. 93.7% of fills are toxic. Some pre-fill features DO order states by how badly the fill turns out -- but EVERY bin of EVERY feature has an adverse-selection interval entirely BELOW zero. The least-toxic bin found anywhere is touch_depth=LOW at -0.10965 USD per contract (CI [-0.16047, -0.0852]), still strictly negative. Pre-fill information here ranks states from bad to worse and never identifies one worth supplying liquidity into, so toxic-versus-non-toxic is not a separation that exists to be made. The features that order the loss are additionally confounded with the settlement direction of the few windows behind each bin (each bin's UP=yes share is reported), which is exactly the base-rate trap, so even the ordering is weaker than it looks.",
+    "verdict": "SEPARATION_OF_DEGREE_ONLY__NO_NON_TOXIC_STATE"
+  }
+}
