@@ -51,7 +51,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install the two client libraries the recorder needs
-        run: python -m pip install --quiet httpx websockets
+        run: python -m pip install --quiet httpx websockets pytest
 
       # ---- structural guard: prove read-only over the AST, before anything
       - name: Prove the recorder has no order path
