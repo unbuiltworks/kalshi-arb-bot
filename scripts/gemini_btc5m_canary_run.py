@@ -72,6 +72,17 @@ def _ts(s: Any) -> Optional[float]:
         return None
 
 
+def _auth_path_imports() -> tuple:
+    """Can the authenticated read/submit chain even be imported? No secret."""
+    try:
+        import importlib
+        importlib.import_module("src.gemini_prediction_auth")
+        importlib.import_module("src.gemini_execution.transport")
+        return True, None
+    except Exception as exc:                                   # noqa: BLE001
+        return False, "%s: %s" % (type(exc).__name__, exc)
+
+
 def preflight() -> Dict[str, Any]:
     """Everything provable with no credential in scope."""
     env = C.envelope_match()
@@ -96,9 +107,17 @@ def preflight() -> Dict[str, Any]:
         "attempts_remaining": st["attempts_remaining"] > 0,
         "q1_at_or_above_venue_minimum": (
             D(C.AUTHORIZED_ENVELOPE["quantity"]) >= C.VENUE_QUANTITY_MINIMUM),
+        # THE SUBMISSION PATH MUST BE IMPORTABLE. Cohort run 1 reached a
+        # qualifying book at T+15 on 12 of 13 windows and refused every one of
+        # them because src.gemini_prediction_auth imports python-dotenv at
+        # module scope and the dependency was not installed. The executor was
+        # right to fail closed; the preflight was wrong to pass. Importing the
+        # chain needs no credential -- it only proves the modules resolve.
+        "authenticated_read_path_imports": _auth_path_imports()[0],
     }
     failed = [k for k, v in checks.items() if not v]
     return {"label": LABEL, "utc": _utc(), "checks": checks,
+            "authenticated_read_path_why": _auth_path_imports()[1],
             "failed": failed, "ok": not failed,
             "envelope": env, "auth_gate": gate, "cohort": st,
             "arming_state": arming.state(),

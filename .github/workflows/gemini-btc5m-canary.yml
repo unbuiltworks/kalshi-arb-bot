@@ -62,8 +62,15 @@ jobs:
         with:
           python-version: '3.11'
 
+      # python-dotenv IS REQUIRED. src/gemini_prediction_auth imports it at
+      # module scope, so without it EVERY authenticated read raises
+      # ImportError -- and the executor, correctly failing closed, refused all
+      # 12 qualifying windows of cohort run 1 with "active orders could not be
+      # read". A missing dependency cost a whole live cohort. The preflight now
+      # imports the authenticated read chain so it can never happen silently.
       - name: Install deps
-        run: python -m pip install --quiet httpx websockets pytest
+        run: |
+          python -m pip install --quiet httpx websockets pytest python-dotenv
 
       # ---- every gate, proved with NO credential in scope
       - name: Gate -- envelope, both authorization constants, arithmetic

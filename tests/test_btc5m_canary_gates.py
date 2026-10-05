@@ -334,3 +334,45 @@ def test_the_runner_traces_every_decision(capsys):
     assert rec["kind"] == "DECISION"
     assert rec["failed_checks"] == ["ladder_readable"]
     assert rec["utc"]
+
+
+def test_the_preflight_fails_closed_when_the_submit_path_cannot_import():
+    """Cohort run 1's whole lesson, as a test.
+
+    12 of 13 windows reached a qualifying book at T+15 and every one was
+    refused with "active orders could not be read (No module named
+    'dotenv')": src.gemini_prediction_auth imports python-dotenv at module
+    scope and the workflow did not install it. The executor failed closed
+    correctly. The preflight passed, and should not have.
+    """
+    import builtins
+    import sys
+
+    real = builtins.__import__
+
+    def blocked(name, *a, **k):
+        if name == "dotenv" or name.startswith("dotenv."):
+            raise ModuleNotFoundError("No module named 'dotenv'")
+        return real(name, *a, **k)
+
+    saved = {m: sys.modules[m] for m in list(sys.modules)
+             if "gemini_prediction_auth" in m or m == "dotenv"}
+    try:
+        for m in saved:
+            del sys.modules[m]
+        builtins.__import__ = blocked
+        from scripts.gemini_btc5m_canary_run import _auth_path_imports
+        ok, why = _auth_path_imports()
+        assert ok is False
+        assert "dotenv" in why
+    finally:
+        builtins.__import__ = real
+        sys.modules.update(saved)
+
+
+def test_the_canary_workflow_installs_the_auth_dependency():
+    wf = open(".github/workflows/gemini-btc5m-canary.yml",
+              encoding="utf-8").read()
+    install = [ln for ln in wf.splitlines() if "pip install" in ln]
+    assert install, "the workflow no longer installs anything"
+    assert any("python-dotenv" in ln for ln in install), install
