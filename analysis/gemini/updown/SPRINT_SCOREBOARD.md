@@ -98,3 +98,38 @@ Nothing in this sprint created a D V3, another fixed underdog/favorite
 rule, a martingale, simultaneous two-sided taker buying, or another
 threshold sweep of the failed maker policy. Increasing size, frequency or
 concurrency on any arm above would multiply a loss whose CI excludes zero.
+
+---
+
+## CORRECTION — the Gemini spread, measured three ways
+
+I reported "median spread $0.24" and separately called the pair proxy
+"algebraically the true UP bid-ask". The algebra is right (synthesized
+DOWN ask = 1 − UP bid, so pair − 1 = UP ask − UP bid) but the **population
+was not stated**, and that matters:
+
+| measurement | population | n | median | mean |
+|---|---|---|---|---|
+| q1 pair cost − 1 | 61 **complete** windows (strike + settlement) | 24,520 | **0.24** | 0.275 |
+| top-of-book UP ask − bid | **all** non-excluded windows with a book | 47,922 | **0.14** | 0.228 |
+| single-leg quoted spread | **Gemini BTC15M, Aug 2026 historical** | 23,318 | 0.02 | 0.036 |
+
+All three are correct on their own population; none is "the" Gemini
+spread. **The "extraordinary ~29¢ spread" framing was overstated**: on
+direct top-of-book measurement the median is **$0.14**, and **18.2% of
+observations sit at a 1–2¢ spread** while 41.4% are at or above 20¢. The
+book is bimodal, not uniformly wide. Top-of-book size is median 25 on
+both sides.
+
+This does **not** change Lane 3's verdict, which measured adverse
+selection directly on 10,698 evidenced fills rather than inferring it from
+spread width. It does mean the maker opportunity was never as large as the
+headline implied.
+
+A second correction, applied to `VENUE_SCORECARD.md`: it claimed in one
+place that `policy_d_port_ext` independently reproduces Gemini's
+pair-cost floor and in another that it cannot. The latter is right — that
+corpus carries the **UP leg only, zero DOWN-leg rows** — so the claim of
+independent reproduction is removed. **Gemini's pair-cost floor rests on a
+single census and is not independently confirmed.** That is a caveat
+against the Gemini conclusion, not for it.
