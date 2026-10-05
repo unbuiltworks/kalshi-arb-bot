@@ -214,7 +214,7 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: MOVING THIS CLOSES THE BTC15m PATH, which is the point: ci15m_probe.submit()
 #: refuses when its own PROBE_AUTH_ID is not the live authorization, so the
 #: separate PERSIST4 cohort cannot be spent on this grant.
-EXPECTED_AUTH_ID: Final = "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1"
+EXPECTED_AUTH_ID = "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1"
 
 
 class NotArmed(Exception):

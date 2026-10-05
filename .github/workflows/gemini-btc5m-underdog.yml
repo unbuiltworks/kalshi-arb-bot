@@ -127,8 +127,12 @@ jobs:
           GEMINI_CANARY_AUTH_EXPIRES: "2026-10-06T00:00:00Z"
           GEMINI_CANARY_STATE_DIR: "analysis/gemini/underdog_latch"
         run: |
-          python -m scripts.gemini_btc5m_underdog_run --runtime-s 3600 \
-            || echo "underdog run exited non-zero; evidence is preserved below"
+          # NO `|| echo`. Run 1 died of KeyError on its first window and the
+          # swallowed exit code made the step report SUCCESS -- a crashed
+          # money-moving cohort that looked like a completed one. The evidence
+          # steps below are `if: always()`, so a hard failure here still
+          # preserves and commits everything; what it no longer does is lie.
+          python -m scripts.gemini_btc5m_underdog_run --runtime-s 3600
 
       - name: Preserve the evidence
         if: always()

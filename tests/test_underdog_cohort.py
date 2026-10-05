@@ -339,3 +339,78 @@ def test_a_stranger_fill_halts(tmp_path, monkeypatch):
                                    "price": "0.20", "qty": "1", "tid": 1}])
     assert got["ok"] is False
     assert U.halted() is not None
+
+
+# --------------------------------------------------------------------------
+# RUN 1's CRASH, as a test. The runner copied `dec["book"]`, a key the canary
+# decision carries and this one does not, so the cohort died of KeyError on
+# its FIRST window -- before any order, but also before any evidence.
+def test_every_decision_key_the_runner_copies_really_exists(monkeypatch):
+    import ast
+    import inspect
+    from scripts import gemini_btc5m_underdog_run as R
+
+    class Lad:
+        crossed = False
+
+    monkeypatch.setattr(U.P, "book_from_venue", lambda s: {
+        "readable": True, "bid": D("0.30"), "ask": D("0.40"),
+        "bid_size": D("25"), "ask_size": D("25"),
+        "snapshot_age_s": 0.4, "ladder": Lad()})
+    from src.gemini_execution import metadata
+    monkeypatch.setattr(metadata, "contract_depth", lambda s, **k: {
+        "readable": True, "venue_ts": "1791216316",
+        "asks": {"levels": [{"price": "0.40", "qty": "25"}]},
+        "bids": {"levels": [{"price": "0.30", "qty": "25"}]}})
+    dec = U.evaluate("GEMI-X-UP", elapsed_since_open_s=16.0)
+
+    tree = ast.parse(inspect.getsource(R.work_window))
+    wanted = set()
+    for node in ast.walk(tree):
+        # dec.get("k") / dec["k"] inside the evidence comprehension
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "get"
+                and getattr(node.func.value, "id", None) == "dec"):
+            for a in node.args:
+                if isinstance(a, ast.Constant) and isinstance(a.value, str):
+                    wanted.add(a.value)
+        if (isinstance(node, ast.Subscript)
+                and getattr(node.value, "id", None) == "dec"
+                and isinstance(node.slice, ast.Constant)
+                and isinstance(node.slice.value, str)):
+            wanted.add(node.slice.value)
+        # the tuple of names in the dict comprehension
+        if isinstance(node, ast.Tuple):
+            for e in node.elts:
+                if isinstance(e, ast.Constant) and isinstance(e.value, str):
+                    wanted.add(e.value)
+    missing = sorted(k for k in wanted
+                     if k not in dec and k in _DECISION_SHAPED)
+    assert not missing, ("the runner reads decision keys that do not "
+                        "exist: %r" % missing)
+
+
+#: the key names that are unambiguously decision fields, so the AST sweep
+#: above does not flag unrelated string tuples elsewhere in the function.
+_DECISION_SHAPED = frozenset({
+    "utc", "qualifies", "failed_checks", "side", "underdog", "leader",
+    "requested_price", "requested_quantity", "up_q1_vwap", "down_q1_vwap",
+    "combined_q1_cost", "spread_touch", "depth", "elapsed_since_open_s",
+    "quote_age_s", "above_ceiling_no_trade", "projected_fee_usd",
+    "projected_outlay_usd", "book_integrity_detail", "book", "checks",
+    "outcome", "ladder_snapshot_age_s",
+})
+
+
+def test_the_workflow_does_not_swallow_a_crash():
+    """A money-moving step that reports success after dying is worse than a
+    failing one."""
+    wf = open(".github/workflows/gemini-btc5m-underdog.yml",
+              encoding="utf-8").read()
+    live = wf.split("BTC5m underdog -- live bounded cohort")[1]
+    live = live.split("- name: Preserve the evidence")[0]
+    code = "\n".join(ln for ln in live.splitlines()
+                     if not ln.strip().startswith("#"))
+    assert "|| echo" not in code and "|| true" not in code, code
+    assert "if: always()" in wf

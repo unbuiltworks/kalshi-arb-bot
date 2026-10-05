@@ -235,11 +235,22 @@ async def work_window(w: Dict[str, Any], *, deadline: float,
                   underdog=dec["underdog"],
                   price=dec["requested_price"],
                   ceiling=C.AUTHORIZED_ENVELOPE["max_acquisition_price"])
+        # EVERY KEY HERE IS ONE THE UNDERDOG DECISION ACTUALLY RETURNS.
+        # The canary's decision carried a `book` key and this one does not --
+        # it carries up_q1_vwap/down_q1_vwap/underdog/leader instead -- so
+        # copying the canary's key list raised KeyError: 'book' on the FIRST
+        # window of run 1 and killed the cohort before any order. The list is
+        # now `.get()`-based so a future field rename degrades the evidence
+        # rather than the run.
         evidence.append({"kind": "DECISION", "window": sym, **{
-            k: dec[k] for k in ("utc", "qualifies", "failed_checks",
-                                "requested_price", "requested_quantity",
-                                "elapsed_since_open_s", "quote_age_s",
-                                "book")}})
+            k: dec.get(k) for k in (
+                "utc", "qualifies", "failed_checks", "side", "underdog",
+                "leader", "requested_price", "requested_quantity",
+                "up_q1_vwap", "down_q1_vwap", "combined_q1_cost",
+                "spread_touch", "depth", "elapsed_since_open_s",
+                "quote_age_s", "above_ceiling_no_trade",
+                "projected_fee_usd", "projected_outlay_usd",
+                "book_integrity_detail")}})
         if dec["qualifies"]:
             try:
                 taken = await C.attempt(sym, dec)
