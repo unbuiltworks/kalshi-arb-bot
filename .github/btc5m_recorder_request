@@ -1,5 +1,5 @@
 BTC5m research recorder request
-requested: 2026-10-05T13:31:19Z
-retry: 1 (the first run died on a missing pytest in the runner image; the read-only AST guard PASSED)
-stage1: 480s validation
+requested: 2026-10-05T13:37:01Z
+retry: 2 -- EARLY checkpoint family added (T+5/15/30/45/60/90/120/150/180 anchored to availableAt)
+validation: now WINDOW-AWARE -- the first completed BTC5m window must contain an EARLY TWO_SIDED book with sizes on both sides, a populated index reference at a checkpoint, and a T derived from the published availableAt
 stage2: 32400s continuous collection

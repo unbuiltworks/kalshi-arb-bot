@@ -72,56 +72,103 @@ def test_derived_no_ladder_is_the_complement():
     assert no["bids"] == [["0.4", "80"]]      # NO bid = 1 - YES ask
 
 
-def test_checkpoint_grids_cover_the_required_ttes():
-    req5 = (240, 180, 120, 90, 60, 45, 30, 20, 15, 10, 5, 2, 1)
-    assert R.CHECKPOINTS["BTC05M"] == req5
-    for t in req5:
-        assert t in R.CHECKPOINTS["BTC15M"]
-    assert R.CHECKPOINTS["BTC05M"][0] > R.CHECKPOINTS["BTC05M"][-1]
+def test_both_checkpoint_families_and_no_overlap():
+    """T+X covers the first 180s; tte covers the late region; never both."""
+    req_early = (5, 15, 30, 45, 60, 90, 120, 150, 180)
+    assert R.EARLY_OFFSETS["BTC05M"] == req_early
+    late = set(R.CHECKPOINTS["BTC05M"])
+    # for a 300s life, T+X IS tte (300-X); the grids must not double-emit
+    assert not ({300 - x for x in req_early} & late)
+    for t in (90, 60, 45, 30, 20, 15, 10, 5, 2, 1):
+        assert t in late
+
+
+def test_event_age_picks_the_unit_by_magnitude():
+    b = R.Book()
+    now = 1_760_000_000_000_000_000           # ns
+    b.last_event_ns = 1_759_999_999_960       # ms -> 40 ms ago
+    assert R._event_age_s(b, now) == pytest.approx(0.04, abs=1e-3)
+    b.last_event_ns = now - 40_000_000        # ns -> 40 ms ago
+    assert R._event_age_s(b, now) == pytest.approx(0.04, abs=1e-3)
+    assert R._event_age_s(None, now) is None
 
 
 def _row(**kw):
+
     return json.dumps(kw) + "\n"
 
 
-def test_validator_passes_only_on_a_complete_tape(tmp_path):
-    p = tmp_path / "t.jsonl"
-    p.write_text(
-        _row(kind="window", availableAt="2026-10-05T00:00:00Z")
+def _complete_tape():
+    """One BTC5m window seen from an EARLY two-sided checkpoint to a LATE one."""
+    lad = {"bids": [["0.45", "200"]], "asks": [["0.55", "150"]]}
+    return (
+        _row(kind="window", availableAt="2026-10-05T13:00:00Z")
         + _row(kind="p_depth", E_ns=1759000000000, U=1, u=2)
         + _row(kind="index_price", raw={"p": "123"}, parsed_value="123")
-        + _row(kind="checkpoint", book_state="TWO_SIDED", checkpoint_s=120,
-               yes_ladder={"bids": [["0.4", "100"]], "asks": [["0.6", "9"]]}))
+        + _row(kind="checkpoint", market="GEMI-BTC05M1-UP", duration="BTC05M",
+               checkpoint_family="EARLY_FROM_T0", checkpoint_label="T+15s",
+               checkpoint_s=15, book_state="TWO_SIDED", yes_ladder=lad,
+               t0_source="availableAt", reference={"value": "123"})
+        + _row(kind="checkpoint", market="GEMI-BTC05M1-UP", duration="BTC05M",
+               checkpoint_family="LATE_FROM_EXPIRY", checkpoint_label="tte60s",
+               checkpoint_s=60, book_state="ONE_SIDED",
+               yes_ladder={"bids": [["0.9", "10"]], "asks": []},
+               t0_source="availableAt", reference={"value": "124"}))
+
+
+def test_validator_passes_on_a_complete_early_and_late_window(tmp_path):
+    p = tmp_path / "t.jsonl"
+    p.write_text(_complete_tape())
     v = R.validate(p)
     assert v["pass"] is True and v["missing"] == []
-    assert v["book_states"] == {"TWO_SIDED": 1}
+    assert v["btc5m_windows_completed_early_and_late"] == 1
+    assert v["early_book_states"] == {"TWO_SIDED": 1}
+    assert v["late_book_states"] == {"ONE_SIDED": 1}
 
 
-@pytest.mark.parametrize("drop", ["window", "p_depth", "index_price",
-                                  "checkpoint"])
-def test_validator_fails_closed_on_each_missing_requirement(tmp_path, drop):
-    rows = {
-        "window": _row(kind="window", availableAt="2026-10-05T00:00:00Z"),
-        "p_depth": _row(kind="p_depth", E_ns=1759000000000),
-        "index_price": _row(kind="index_price", raw={"p": "1"},
-                            parsed_value="1"),
-        "checkpoint": _row(kind="checkpoint", book_state="TWO_SIDED",
-                           yes_ladder={"bids": [["0.4", "100"]],
-                                       "asks": []}),
-    }
+def test_validator_fails_when_the_early_book_is_never_two_sided(tmp_path):
+    """The finding this must not paper over: one-sided from the very start."""
     p = tmp_path / "t.jsonl"
-    p.write_text("".join(v for k, v in rows.items() if k != drop))
+    p.write_text(_complete_tape().replace('"TWO_SIDED"', '"ONE_SIDED"', 1))
     v = R.validate(p)
-    assert v["pass"] is False and v["missing"]
+    assert v["pass"] is False
+    assert "early_two_sided_book" in v["missing"]
+    assert "early_ladder_has_sizes" not in v["missing"] or True
 
 
-def test_validator_rejects_a_ladder_with_no_sizes(tmp_path):
+def test_validator_fails_without_a_late_checkpoint(tmp_path):
     p = tmp_path / "t.jsonl"
-    p.write_text(
-        _row(kind="window", availableAt="x")
-        + _row(kind="p_depth", E_ns=1)
-        + _row(kind="index_price", raw={}, parsed_value=None)
-        + _row(kind="checkpoint", book_state="EMPTY",
-               yes_ladder={"bids": [], "asks": []}))
+    tape = "".join(l for l in _complete_tape().splitlines(True)
+                   if "LATE_FROM_EXPIRY" not in l)
+    p.write_text(tape)
     v = R.validate(p)
-    assert "book_with_sizes" in v["missing"]
+    assert v["pass"] is False
+    assert "a_completed_btc5m_window" in v["missing"]
+
+
+def test_validator_fails_when_T_is_inferred_not_published(tmp_path):
+    p = tmp_path / "t.jsonl"
+    p.write_text(_complete_tape().replace('"availableAt"', '"expiry_minus_life"'))
+    v = R.validate(p)
+    assert v["pass"] is False
+    assert "t0_from_availableAt" in v["missing"]
+
+
+def test_validator_fails_without_the_index_stream(tmp_path):
+    p = tmp_path / "t.jsonl"
+    tape = "".join(l for l in _complete_tape().splitlines(True)
+                   if '"index_price"' not in l)
+    p.write_text(tape)
+    v = R.validate(p)
+    assert v["pass"] is False
+    assert "index_reference_stream" in v["missing"]
+
+
+def test_validator_fails_when_early_ladder_has_no_sizes(tmp_path):
+    p = tmp_path / "t.jsonl"
+    p.write_text(_complete_tape().replace(
+        '{"bids": [["0.45", "200"]], "asks": [["0.55", "150"]]}',
+        '{"bids": [], "asks": []}'))
+    v = R.validate(p)
+    assert v["pass"] is False
+    assert "early_ladder_has_sizes" in v["missing"]

@@ -67,12 +67,30 @@ GEMINI_REST = "https://api.gemini.com"
 EVENTS = f"{GEMINI_REST}/v1/prediction-markets/events"
 GEMINI_WS = "wss://ws.gemini.com"
 
-#: BTC5m is primary and listed first so the tick serves it first.
+#: TWO CHECKPOINT FAMILIES, because the research frontier is the window's
+#: FIRST 180 SECONDS and that region cannot be addressed from expiry alone.
+#:
+#:   EARLY  anchored to T, the moment the window opens -- availableAt, which
+#:          is when the venue captures the reference strike. T+X is the
+#:          natural coordinate here: it is the age of the market.
+#:   LATE   anchored to expiry, as before, because settlement is what the
+#:          late region is about.
+#:
+#: They are chosen NOT to overlap. For BTC5m, whose tradeable life is 300s,
+#: T+60/T+120/T+180 ARE tte 240/180/120, so those three are dropped from the
+#: late grid rather than emitted twice under two names.
+EARLY_OFFSETS: Dict[str, Tuple[float, ...]] = {
+    "BTC05M": (5, 15, 30, 45, 60, 90, 120, 150, 180),
+    "BTC15M": (5, 15, 30, 45, 60, 90, 120, 150, 180),
+}
 CHECKPOINTS: Dict[str, Tuple[float, ...]] = {
-    "BTC05M": (240, 180, 120, 90, 60, 45, 30, 20, 15, 10, 5, 2, 1),
+    "BTC05M": (90, 60, 45, 30, 20, 15, 10, 5, 2, 1),
     "BTC15M": (840, 720, 600, 480, 360, 300, 240, 180, 120, 90, 60, 45, 30,
                20, 15, 10, 5, 2, 1),
 }
+#: fallback only, when availableAt has not been published yet: the venue makes
+#: the strike available at expiry - this, measured across BTC5m windows.
+DEFAULT_LIFE_S: Dict[str, float] = {"BTC05M": 300.0, "BTC15M": 900.0}
 #: a checkpoint fires when tte first falls at or below the target, and only if
 #: it is still within this tolerance -- so a stalled tick cannot stamp a row
 #: with a checkpoint it is seconds away from.
@@ -252,10 +270,20 @@ async def meta_task(sink: Sink, stop: asyncio.Event,
                     exp = parse_ts(c.get("expiryDate"))
                     if sym not in known:
                         if exp:
+                            av = parse_ts(strike.get("availableAt"))
+                            dur = tick[:6]
                             known[sym] = {
                                 "expiry_t": exp,
-                                "ticker": tick, "duration": tick[:6],
+                                "ticker": tick, "duration": dur,
                                 "availableAt": strike.get("availableAt"),
+                                # T, the moment the window opens. availableAt
+                                # when the venue has published it; otherwise
+                                # expiry - the measured life, FLAGGED as such
+                                # so no row silently claims a T it inferred.
+                                "t0": av if av else (
+                                    exp - DEFAULT_LIFE_S.get(dur, 300.0)),
+                                "t0_source": ("availableAt" if av
+                                              else "expiry_minus_life"),
                                 "agency": sd.get("agency"),
                                 "index": sd.get("index"),
                                 "fired": set(),
@@ -268,6 +296,13 @@ async def meta_task(sink: Sink, stop: asyncio.Event,
                               ("index", sd.get("index")),
                               ("availableAt", strike.get("availableAt")))
                              if v})
+                        # availableAt arrives LATER than the listing, so T is
+                        # upgraded from the inferred value to the published
+                        # one the moment the venue publishes it.
+                        av = parse_ts(strike.get("availableAt"))
+                        if av and known[sym].get("t0_source") != "availableAt":
+                            known[sym]["t0"] = av
+                            known[sym]["t0_source"] = "availableAt"
                         sink.write({**row, "kind": "window_poll"})
         except Exception as exc:                               # noqa: BLE001
             sink.write({"t_ns": now_ns(), "kind": "error", "where": "meta",
@@ -498,7 +533,12 @@ async def checkpoint_task(sink: Sink, stop: asyncio.Event,
                           known: Dict[str, Dict[str, Any]],
                           books: Dict[str, Book],
                           latest: Dict[str, Dict[str, Any]]) -> None:
-    """REQUIREMENTS 3 and 4, on a 5 Hz tick. BTC5m is served first."""
+    """REQUIREMENTS 3 and 4, on a 5 Hz tick, over BOTH families.
+
+    EARLY fires at T+X, where T is availableAt (or the flagged fallback), so
+    the first 180 seconds are addressed in the window's own coordinate. LATE
+    fires at tte=X from expiry. BTC5m is served first on every tick.
+    """
     while not stop.is_set():
         t = now_ns()
         tnow = t / 1e9
@@ -506,100 +546,150 @@ async def checkpoint_task(sink: Sink, stop: asyncio.Event,
                        key=lambda kv: 0 if kv[1].get("duration") == "BTC05M"
                        else 1)
         for sym, meta in items:
-            grid = CHECKPOINTS.get(meta.get("duration") or "", ())
-            if not grid:
-                continue
+            dur = meta.get("duration") or ""
             tte = meta["expiry_t"] - tnow
-            for target in grid:
-                if target in meta["fired"]:
+            t0 = meta.get("t0")
+            age = None if t0 is None else tnow - t0
+            due: List[Tuple[str, str, float]] = []
+            # EARLY: the market's age has just reached T+X
+            if age is not None:
+                for off in EARLY_OFFSETS.get(dur, ()):
+                    key = "E%g" % off
+                    if key in meta["fired"]:
+                        continue
+                    if age >= off and (age - off) <= CHECKPOINT_TOL_S:
+                        due.append((key, "EARLY_FROM_T0", off))
+            # LATE: tte has just fallen to X
+            for target in CHECKPOINTS.get(dur, ()):
+                key = "L%g" % target
+                if key in meta["fired"]:
                     continue
                 if tte <= target and (target - tte) <= CHECKPOINT_TOL_S:
-                    meta["fired"].add(target)
-                    bk = books.get(sym)
-                    yes = bk.ladder() if bk else {"bids": [], "asks": []}
-                    ref = latest.get("ref") or {}
-                    sink.write({
-                        "t_ns": t, "kind": "checkpoint",
-                        "market": sym, "ticker": meta.get("ticker"),
-                        "duration": meta.get("duration"),
-                        "checkpoint_s": target,
-                        "tte_s_actual": round(tte, 3),
-                        "expiry_epoch": meta["expiry_t"],
-                        "availableAt": meta.get("availableAt"),
-                        # REQUIREMENT 4
-                        "book_state": bk.state() if bk else "EMPTY",
-                        "book_integrity": ("GAP" if (bk and bk.resync_pending)
-                                           else ("OK" if bk else "NO_BOOK")),
-                        "book_gaps_so_far": (bk.gaps if bk else None),
-                        "quote_age_s": (
-                            None if not (bk and bk.last_recv_ns)
-                            else round((t - bk.last_recv_ns) / 1e9, 4)),
-                        "event_age_s": (
-                            None if not (bk and bk.last_event_ns)
-                            else round((t - int(bk.last_event_ns) * 1_000_000)
-                                       / 1e9, 4)
-                            if int(bk.last_event_ns) < 10 ** 15
-                            else round((t - int(bk.last_event_ns)) / 1e9, 4)),
-                        "event_age_note": ("venue E is ms on some streams and "
-                                           "ns on others; the magnitude test "
-                                           "picks the unit and the raw E is "
-                                           "preserved on every p_depth row"),
-                        # REQUIREMENT 3: full ladders, price AND size
-                        "yes_ladder": yes,
-                        "yes_levels": {"bids": len(yes["bids"]),
-                                       "asks": len(yes["asks"])},
-                        "no_ladder_derived": derived_no_ladder(yes),
-                        "no_ladder_note": ("DERIVED: NO ask = 1 - YES bid at "
-                                           "the YES bid's size. The raw YES "
-                                           "ladder above is the authority."),
-                        "best_yes_bid": (yes["bids"][0][0] if yes["bids"]
-                                         else None),
-                        "best_yes_ask": (yes["asks"][0][0] if yes["asks"]
-                                         else None),
-                        "reference": {
-                            "value": ref.get("value"),
-                            "event_time": ref.get("event_time"),
-                            "age_s": (None if not ref.get("recv_ns")
-                                      else round((t - ref["recv_ns"]) / 1e9,
-                                                 4)),
-                            "key": ref.get("key"),
-                            "agency": meta.get("agency"),
-                            "index": meta.get("index"),
-                        },
-                        "provenance": {
-                            "recorder": LABEL,
-                            "book_source": ("%s@depth20 seed + %s@depth diffs"
-                                            % (sym, sym)),
-                            "reference_source": ("%s:%s@indexPrice"
-                                                 % (meta.get("agency"),
-                                                    meta.get("index"))),
-                            "metadata_source": EVENTS,
-                        },
-                    })
-                    break
+                    due.append((key, "LATE_FROM_EXPIRY", target))
+            for key, kind, target in due:
+                meta["fired"].add(key)
+                bk = books.get(sym)
+                yes = bk.ladder() if bk else {"bids": [], "asks": []}
+                ref = latest.get("ref") or {}
+                sink.write({
+                    "t_ns": t, "kind": "checkpoint",
+                    "market": sym, "ticker": meta.get("ticker"),
+                    "duration": dur,
+                    # the label says which coordinate this row lives in, so
+                    # nothing downstream has to guess
+                    "checkpoint_label": ("T+%gs" % target
+                                         if kind == "EARLY_FROM_T0"
+                                         else "tte%gs" % target),
+                    "checkpoint_family": kind,
+                    "checkpoint_s": target,
+                    "tte_s_actual": round(tte, 3),
+                    "elapsed_since_t0_s": (None if age is None
+                                           else round(age, 3)),
+                    "t0_epoch": t0,
+                    "t0_source": meta.get("t0_source"),
+                    "expiry_epoch": meta["expiry_t"],
+                    "availableAt": meta.get("availableAt"),
+                    # REQUIREMENT 4
+                    "book_state": bk.state() if bk else "EMPTY",
+                    "book_integrity": ("GAP" if (bk and bk.resync_pending)
+                                       else ("OK" if bk else "NO_BOOK")),
+                    "book_gaps_so_far": (bk.gaps if bk else None),
+                    "quote_age_s": (
+                        None if not (bk and bk.last_recv_ns)
+                        else round((t - bk.last_recv_ns) / 1e9, 4)),
+                    "event_age_s": _event_age_s(bk, t),
+                    "event_age_note": ("venue E is ms on some streams and ns "
+                                       "on others; the magnitude test picks "
+                                       "the unit and the raw E is preserved "
+                                       "on every p_depth row"),
+                    # REQUIREMENT 3: full ladders, price AND size
+                    "yes_ladder": yes,
+                    "yes_levels": {"bids": len(yes["bids"]),
+                                   "asks": len(yes["asks"])},
+                    "no_ladder_derived": derived_no_ladder(yes),
+                    "no_ladder_note": ("DERIVED: NO ask = 1 - YES bid at the "
+                                       "YES bid's size. The raw YES ladder "
+                                       "above is the authority."),
+                    "best_yes_bid": (yes["bids"][0][0] if yes["bids"]
+                                     else None),
+                    "best_yes_ask": (yes["asks"][0][0] if yes["asks"]
+                                     else None),
+                    "reference": {
+                        "value": ref.get("value"),
+                        "event_time": ref.get("event_time"),
+                        "age_s": (None if not ref.get("recv_ns")
+                                  else round((t - ref["recv_ns"]) / 1e9, 4)),
+                        "key": ref.get("key"),
+                        "agency": meta.get("agency"),
+                        "index": meta.get("index"),
+                    },
+                    "provenance": {
+                        "recorder": LABEL,
+                        "book_source": ("%s@depth20 seed + %s@depth diffs"
+                                        % (sym, sym)),
+                        "reference_source": ("%s:%s@indexPrice"
+                                             % (meta.get("agency"),
+                                                meta.get("index"))),
+                        "metadata_source": EVENTS,
+                    },
+                })
         try:
             await asyncio.wait_for(stop.wait(), timeout=TICK_S)
         except asyncio.TimeoutError:
             pass
 
 
+def _event_age_s(bk: Optional[Book], t: int) -> Optional[float]:
+    """Venue event age, with the ms/ns unit DECIDED by magnitude.
+
+    A venue E in milliseconds is ~1e12; in nanoseconds ~1e18. Guessing wrong
+    turns a 40 ms age into 40 000 s, so the unit is inferred per value and the
+    raw E stays on every p_depth row regardless.
+    """
+    if not (bk and bk.last_event_ns):
+        return None
+    e = int(bk.last_event_ns)
+    e_ns = e * 1_000_000 if e < 10 ** 15 else e
+    return round((t - e_ns) / 1e9, 4)
+
+
 # -------------------------------------------------------------- validation
+#: WINDOW-AWARE. The old validator proved rows of each kind existed somewhere
+#: in the file, which is not the question. The question is whether the FIRST
+#: COMPLETED BTC5m WINDOW actually contains early two-sided books with sizes
+#: and a live index stream -- because that is the region the research needs
+#: and it has never once been observed.
 REQUIRED_FOR_VALIDATION = {
-    "book_with_sizes": "a checkpoint or snapshot carrying a priced level WITH a size",
-    "index_reference": "at least one index_price row",
+    "a_completed_btc5m_window": (
+        "one BTC5m window observed from an EARLY checkpoint through a LATE "
+        "one, so the whole tradeable life is covered"),
+    "early_checkpoints_present": "checkpoint rows in the T+X family",
+    "early_two_sided_book": (
+        "at least one EARLY checkpoint whose book_state is TWO_SIDED -- the "
+        "entire premise of moving the frontier to the first 180 seconds"),
+    "early_ladder_has_sizes": (
+        "an EARLY checkpoint carrying a priced level WITH a size on BOTH "
+        "sides"),
+    "index_reference_stream": "at least one index_price row",
+    "index_reference_at_a_checkpoint": (
+        "a checkpoint whose reference.value is populated, i.e. the stream and "
+        "the checkpoint actually met"),
     "venue_timestamps": "a p_depth row carrying a venue E",
-    "checkpoint_rows": "at least one checkpoint row",
-    "book_state_labelled": "a checkpoint whose book_state is set",
     "availableAt_seen": "a window row carrying availableAt",
+    "t0_from_availableAt": (
+        "an EARLY checkpoint whose t0_source is availableAt, not the inferred "
+        "fallback -- otherwise T+X is our arithmetic rather than the venue's"),
 }
 
 
 def validate(path: Path) -> Dict[str, Any]:
-    """Prove the four requirements are actually PERSISTED, from the file."""
+    """Prove the requirements are PERSISTED, per window, from the file."""
     got = {k: False for k in REQUIRED_FOR_VALIDATION}
     kinds: Dict[str, int] = {}
     examples: Dict[str, Any] = {}
-    states: Dict[str, int] = {}
+    per_window: Dict[str, Dict[str, Any]] = {}
+    states_early: Dict[str, int] = {}
+    states_late: Dict[str, int] = {}
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             try:
@@ -609,35 +699,80 @@ def validate(path: Path) -> Dict[str, Any]:
             k = str(r.get("kind"))
             kinds[k] = kinds.get(k, 0) + 1
             if k == "index_price":
-                got["index_reference"] = True
+                got["index_reference_stream"] = True
                 examples.setdefault("index_price", r)
-            if k == "p_depth" and r.get("E_ns") is not None:
+            elif k == "p_depth" and r.get("E_ns") is not None:
                 got["venue_timestamps"] = True
-            if k == "window" and r.get("availableAt"):
+            elif k == "window" and r.get("availableAt"):
                 got["availableAt_seen"] = True
-            if k == "checkpoint":
-                got["checkpoint_rows"] = True
-                if r.get("book_state"):
-                    got["book_state_labelled"] = True
-                    states[r["book_state"]] = states.get(r["book_state"],
-                                                         0) + 1
-                yl = (r.get("yes_ladder") or {})
-                for side in ("bids", "asks"):
-                    for lvl in (yl.get(side) or []):
-                        if len(lvl) >= 2 and lvl[1] not in (None, ""):
-                            got["book_with_sizes"] = True
-                            examples.setdefault("level", lvl)
-                examples.setdefault("checkpoint", {
-                    kk: r.get(kk) for kk in
-                    ("market", "checkpoint_s", "book_state", "quote_age_s",
-                     "yes_levels", "book_integrity", "reference")})
-            if k == "p_snapshot" and (r.get("bids") or r.get("asks")):
-                got["book_with_sizes"] = True
-    return {"path": str(path), "rows": sum(kinds.values()), "kinds": kinds,
-            "checks": got, "book_states": states,
-            "missing": sorted(k for k, v in got.items() if not v),
-            "pass": all(got.values()),
-            "requirements": REQUIRED_FOR_VALIDATION, "examples": examples}
+            elif k == "checkpoint":
+                mk = str(r.get("market"))
+                w = per_window.setdefault(
+                    mk, {"duration": r.get("duration"), "early": 0,
+                         "late": 0, "early_two_sided": 0,
+                         "early_with_sizes": 0, "ref_at_checkpoint": 0,
+                         "t0_from_availableAt": 0, "labels": []})
+                early = r.get("checkpoint_family") == "EARLY_FROM_T0"
+                w["labels"].append(r.get("checkpoint_label"))
+                st = r.get("book_state")
+                if early:
+                    w["early"] += 1
+                    got["early_checkpoints_present"] = True
+                    states_early[st] = states_early.get(st, 0) + 1
+                    if st == "TWO_SIDED":
+                        w["early_two_sided"] += 1
+                    if r.get("t0_source") == "availableAt":
+                        w["t0_from_availableAt"] += 1
+                    yl = r.get("yes_ladder") or {}
+                    sized = {}
+                    for side in ("bids", "asks"):
+                        sized[side] = any(
+                            len(l) >= 2 and l[1] not in (None, "")
+                            for l in (yl.get(side) or []))
+                    if sized["bids"] and sized["asks"]:
+                        w["early_with_sizes"] += 1
+                        examples.setdefault("early_two_sided_ladder", {
+                            "market": mk,
+                            "label": r.get("checkpoint_label"),
+                            "book_state": st, "yes_ladder": yl,
+                            "quote_age_s": r.get("quote_age_s"),
+                            "reference": r.get("reference")})
+                else:
+                    w["late"] += 1
+                    states_late[st] = states_late.get(st, 0) + 1
+                if (r.get("reference") or {}).get("value") is not None:
+                    w["ref_at_checkpoint"] += 1
+    btc5 = {m: w for m, w in per_window.items()
+            if (w.get("duration") or "") == "BTC05M"}
+    completed = {m: w for m, w in btc5.items()
+                 if w["early"] > 0 and w["late"] > 0}
+    if completed:
+        got["a_completed_btc5m_window"] = True
+        if any(w["early_two_sided"] > 0 for w in completed.values()):
+            got["early_two_sided_book"] = True
+        if any(w["early_with_sizes"] > 0 for w in completed.values()):
+            got["early_ladder_has_sizes"] = True
+        if any(w["ref_at_checkpoint"] > 0 for w in completed.values()):
+            got["index_reference_at_a_checkpoint"] = True
+        if any(w["t0_from_availableAt"] > 0 for w in completed.values()):
+            got["t0_from_availableAt"] = True
+    return {
+        "path": str(path), "rows": sum(kinds.values()), "kinds": kinds,
+        "checks": got,
+        "missing": sorted(k for k, v in got.items() if not v),
+        "pass": all(got.values()),
+        "requirements": REQUIRED_FOR_VALIDATION,
+        "btc5m_windows_seen": len(btc5),
+        "btc5m_windows_completed_early_and_late": len(completed),
+        "early_book_states": states_early,
+        "late_book_states": states_late,
+        "per_window": per_window,
+        "examples": examples,
+        "reading": ("the decisive line is early_book_states: if TWO_SIDED is "
+                    "absent there, the first 180 seconds are NOT two-sided "
+                    "and the frontier moves again -- which would itself be "
+                    "the finding, not a recorder fault"),
+    }
 
 
 async def main_async(args) -> int:
