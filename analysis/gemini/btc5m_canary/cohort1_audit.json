@@ -54,8 +54,12 @@
         "venue_status": "open"
       },
       "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
         "confirmed": true,
-        "realized_net_usd": null,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.72",
         "rows": [
           {
             "_key": "positions",
@@ -142,7 +146,12 @@
             "settledAt": "2026-10-05T15:50:05.499Z"
           }
         ],
-        "why": null
+        "settled_at": "2026-10-05T15:50:05.499Z",
+        "venue_cost_basis_usd": "0.72",
+        "venue_fee_usd": "0",
+        "venue_net_profit_usd": "-0.72",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
       },
       "DECISION": {
         "down_acquisition_contemporaneous": "0.5",
@@ -298,8 +307,12 @@
         "venue_status": "filled"
       },
       "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
         "confirmed": true,
-        "realized_net_usd": null,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.69",
         "rows": [
           {
             "_key": "positions",
@@ -386,7 +399,12 @@
             "settledAt": "2026-10-05T15:55:05.525Z"
           }
         ],
-        "why": null
+        "settled_at": "2026-10-05T15:55:05.525Z",
+        "venue_cost_basis_usd": "0.67",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "-0.67",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
       },
       "DECISION": {
         "down_acquisition_contemporaneous": "0.63",
@@ -542,8 +560,12 @@
         "venue_status": "filled"
       },
       "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
         "confirmed": true,
-        "realized_net_usd": null,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.62",
         "rows": [
           {
             "_key": "positions",
@@ -630,7 +652,12 @@
             "settledAt": "2026-10-05T16:00:06.490Z"
           }
         ],
-        "why": null
+        "settled_at": "2026-10-05T16:00:06.490Z",
+        "venue_cost_basis_usd": "0.6",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "-0.6",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
       },
       "DECISION": {
         "down_acquisition_contemporaneous": "0.68",
@@ -786,8 +813,12 @@
         "venue_status": "filled"
       },
       "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
         "confirmed": true,
-        "realized_net_usd": null,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.66",
         "rows": [
           {
             "_key": "positions",
@@ -874,7 +905,12 @@
             "settledAt": "2026-10-05T16:05:05.570Z"
           }
         ],
-        "why": null
+        "settled_at": "2026-10-05T16:05:05.570Z",
+        "venue_cost_basis_usd": "0.64",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "-0.64",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
       },
       "DECISION": {
         "down_acquisition_contemporaneous": "0.63",
@@ -1030,8 +1066,12 @@
         "venue_status": "filled"
       },
       "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
         "confirmed": true,
-        "realized_net_usd": null,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "0.24",
         "rows": [
           {
             "_key": "positions",
@@ -1118,7 +1158,12 @@
             "settledAt": "2026-10-05T16:10:05.498Z"
           }
         ],
-        "why": null
+        "settled_at": "2026-10-05T16:10:05.498Z",
+        "venue_cost_basis_usd": "0.74",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "0.26",
+        "venue_payout_usd": "1",
+        "venue_realized_pnl_usd": "0"
       },
       "DECISION": {
         "down_acquisition_contemporaneous": "0.55",
