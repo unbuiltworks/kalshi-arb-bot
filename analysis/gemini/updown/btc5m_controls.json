@@ -1,0 +1,966 @@
+{
+  "accounting_label": "historical replay on Gemini's own recorded books and settlements; no order was sent",
+  "by_checkpoint": {
+    "120s": {
+      "CONTROL_A": {
+        "A1_buy_UP_always": {
+          "arm": "A1 buy UP once, hold",
+          "avg_executable_ask": 0.5031,
+          "breakeven_pct_taker_fees": 52.06,
+          "breakeven_pct_zero_fees": 50.31,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9907,
+            "median": 0.4673
+          },
+          "ci_low_minus_breakeven_pp": -25.0,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 96.59,
+            "max": 14999.0,
+            "median": 192.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01207,
+          "fees_usd_total": 1.0259,
+          "longest_loss_streak": 11,
+          "max_drawdown_usd": -13.8522,
+          "net_pnl_per_day_usd": -27.69,
+          "net_pnl_per_trade_usd": -0.1504,
+          "net_pnl_per_window_attempted_usd": -0.0961,
+          "net_pnl_usd_total": -12.7859,
+          "settlement_win_pct": 36.47,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 63.9,
+          "trades": 85,
+          "win_minus_breakeven_pp": -15.59,
+          "win_pct_ci95_window_bootstrap": [
+            27.06,
+            47.06
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 48
+        },
+        "A2_buy_DOWN_always": {
+          "arm": "A2 buy DOWN once, hold",
+          "avg_executable_ask": 0.4806,
+          "breakeven_pct_taker_fees": 49.81,
+          "breakeven_pct_zero_fees": 48.06,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9907,
+            "median": 0.3659
+          },
+          "ci_low_minus_breakeven_pp": -27.48,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 92.27,
+            "max": 7500.0,
+            "median": 192.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01124,
+          "fees_usd_total": 1.1575,
+          "longest_loss_streak": 13,
+          "max_drawdown_usd": -18.8057,
+          "net_pnl_per_day_usd": -40.4,
+          "net_pnl_per_trade_usd": -0.1811,
+          "net_pnl_per_window_attempted_usd": -0.1403,
+          "net_pnl_usd_total": -18.6575,
+          "settlement_win_pct": 31.07,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 77.4,
+          "trades": 103,
+          "win_minus_breakeven_pp": -18.74,
+          "win_pct_ci95_window_bootstrap": [
+            22.33,
+            39.81
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 30
+        },
+        "unconditional_UP_settlement_rate_pct": 55.64
+      },
+      "CONTROL_B": {
+        "B1_buy_initial_UNDERDOG": {
+          "arm": "B1 buy cheaper executable outcome once, hold",
+          "avg_executable_ask": 0.4771,
+          "breakeven_pct_taker_fees": 49.46,
+          "breakeven_pct_zero_fees": 47.71,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9346,
+            "median": 0.4724
+          },
+          "ci_low_minus_breakeven_pp": -31.6,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 114.28,
+            "max": 428.0,
+            "median": 239.5,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01608,
+          "fees_usd_total": 0.9004,
+          "longest_loss_streak": 12,
+          "max_drawdown_usd": -12.3207,
+          "net_pnl_per_day_usd": -54.62,
+          "net_pnl_per_trade_usd": -0.1896,
+          "net_pnl_per_window_attempted_usd": -0.1896,
+          "net_pnl_usd_total": -10.6204,
+          "settlement_win_pct": 30.36,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 56,
+          "win_minus_breakeven_pp": -19.1,
+          "win_pct_ci95_window_bootstrap": [
+            17.86,
+            42.86
+          ],
+          "windows_attempted": 56,
+          "windows_with_no_executable_ask": 0
+        },
+        "B1_by_price_bucket": {
+          "10-20c": {
+            "trades": 0
+          },
+          "20-30c": {
+            "avg_executable_ask": 0.245,
+            "breakeven_pct_taker_fees": 25.79,
+            "breakeven_pct_zero_fees": 24.5,
+            "ci_low_minus_breakeven_pp": -25.79,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": 0.2421,
+            "settlement_win_pct": 50.0,
+            "side_mix": {
+              "DOWN": 1,
+              "UP": 1
+            },
+            "trades": 2,
+            "win_minus_breakeven_pp": 24.21,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "30-40c": {
+            "avg_executable_ask": 0.3475,
+            "breakeven_pct_taker_fees": 36.34,
+            "breakeven_pct_zero_fees": 34.75,
+            "ci_low_minus_breakeven_pp": -36.34,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": -0.1758,
+            "settlement_win_pct": 18.75,
+            "side_mix": {
+              "DOWN": 9,
+              "UP": 7
+            },
+            "trades": 16,
+            "win_minus_breakeven_pp": -17.59,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              37.5
+            ]
+          },
+          "40-50c": {
+            "avg_executable_ask": 0.4524,
+            "breakeven_pct_taker_fees": 46.97,
+            "breakeven_pct_zero_fees": 45.24,
+            "ci_low_minus_breakeven_pp": -46.97,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": -0.352,
+            "settlement_win_pct": 11.76,
+            "side_mix": {
+              "DOWN": 5,
+              "UP": 12
+            },
+            "trades": 17,
+            "win_minus_breakeven_pp": -35.2,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              29.41
+            ]
+          },
+          "<10c": {
+            "trades": 0
+          }
+        },
+        "B1_side_mix": {
+          "DOWN": 20,
+          "UP": 36
+        },
+        "B2_buy_initial_FAVORITE": {
+          "arm": "B2 buy dearer executable outcome once, hold",
+          "avg_executable_ask": 0.8704,
+          "breakeven_pct_taker_fees": 87.83,
+          "breakeven_pct_zero_fees": 87.04,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9907,
+            "median": 0.8969
+          },
+          "ci_low_minus_breakeven_pp": -30.69,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 130.55,
+            "max": 14999.0,
+            "median": 150.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.00723,
+          "fees_usd_total": 0.4047,
+          "longest_loss_streak": 3,
+          "max_drawdown_usd": -10.504,
+          "net_pnl_per_day_usd": -52.17,
+          "net_pnl_per_trade_usd": -0.1812,
+          "net_pnl_per_window_attempted_usd": -0.1812,
+          "net_pnl_usd_total": -10.1447,
+          "settlement_win_pct": 69.64,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 56,
+          "win_minus_breakeven_pp": -18.18,
+          "win_pct_ci95_window_bootstrap": [
+            57.14,
+            82.14
+          ],
+          "windows_attempted": 56,
+          "windows_with_no_executable_ask": 0
+        },
+        "B2_side_mix": {
+          "DOWN": 36,
+          "UP": 20
+        },
+        "two_sided_only": true
+      },
+      "checkpoint_tte_s": 120.0,
+      "equivalent_time_since_open_s": 180.0,
+      "two_sided_windows": 56,
+      "windows_settled": 133
+    },
+    "45s": {
+      "CONTROL_A": {
+        "A1_buy_UP_always": {
+          "arm": "A1 buy UP once, hold",
+          "avg_executable_ask": 0.2725,
+          "breakeven_pct_taker_fees": 28.64,
+          "breakeven_pct_zero_fees": 27.25,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9814,
+            "median": 0.1694
+          },
+          "ci_low_minus_breakeven_pp": -22.29,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 48.51,
+            "max": 1500.0,
+            "median": 178.0,
+            "p10": 5.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01041,
+          "fees_usd_total": 0.656,
+          "longest_loss_streak": 16,
+          "max_drawdown_usd": -9.2686,
+          "net_pnl_per_day_usd": -19.11,
+          "net_pnl_per_trade_usd": -0.1401,
+          "net_pnl_per_window_attempted_usd": -0.0664,
+          "net_pnl_usd_total": -8.826,
+          "settlement_win_pct": 14.29,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 47.4,
+          "trades": 63,
+          "win_minus_breakeven_pp": -14.36,
+          "win_pct_ci95_window_bootstrap": [
+            6.35,
+            23.81
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 70
+        },
+        "A2_buy_DOWN_always": {
+          "arm": "A2 buy DOWN once, hold",
+          "avg_executable_ask": 0.2801,
+          "breakeven_pct_taker_fees": 29.42,
+          "breakeven_pct_zero_fees": 28.01,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9907,
+            "median": 0.1694
+          },
+          "ci_low_minus_breakeven_pp": -24.23,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 49.86,
+            "max": 15000.0,
+            "median": 178.0,
+            "p10": 5.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.00921,
+          "fees_usd_total": 0.7095,
+          "longest_loss_streak": 23,
+          "max_drawdown_usd": -13.2795,
+          "net_pnl_per_day_usd": -28.76,
+          "net_pnl_per_trade_usd": -0.1725,
+          "net_pnl_per_window_attempted_usd": -0.0998,
+          "net_pnl_usd_total": -13.2795,
+          "settlement_win_pct": 11.69,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 57.9,
+          "trades": 77,
+          "win_minus_breakeven_pp": -17.74,
+          "win_pct_ci95_window_bootstrap": [
+            5.19,
+            19.48
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 56
+        },
+        "unconditional_UP_settlement_rate_pct": 55.64
+      },
+      "CONTROL_B": {
+        "B1_buy_initial_UNDERDOG": {
+          "arm": "B1 buy cheaper executable outcome once, hold",
+          "avg_executable_ask": 0.4279,
+          "breakeven_pct_taker_fees": 44.5,
+          "breakeven_pct_zero_fees": 42.79,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.6463,
+            "median": 0.4319
+          },
+          "ci_low_minus_breakeven_pp": -23.07,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 109.75,
+            "max": 405.0,
+            "median": 256.5,
+            "p10": 200.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.0161,
+          "fees_usd_total": 0.2254,
+          "longest_loss_streak": 3,
+          "max_drawdown_usd": -2.2732,
+          "net_pnl_per_day_usd": -4.43,
+          "net_pnl_per_trade_usd": -0.0154,
+          "net_pnl_per_window_attempted_usd": -0.0154,
+          "net_pnl_usd_total": -0.2154,
+          "settlement_win_pct": 42.86,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 14,
+          "win_minus_breakeven_pp": -1.64,
+          "win_pct_ci95_window_bootstrap": [
+            21.43,
+            71.43
+          ],
+          "windows_attempted": 14,
+          "windows_with_no_executable_ask": 0
+        },
+        "B1_by_price_bucket": {
+          "10-20c": {
+            "trades": 0
+          },
+          "20-30c": {
+            "avg_executable_ask": 0.2567,
+            "breakeven_pct_taker_fees": 27.0,
+            "breakeven_pct_zero_fees": 25.67,
+            "ci_low_minus_breakeven_pp": -27.0,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": 0.3967,
+            "settlement_win_pct": 66.67,
+            "side_mix": {
+              "DOWN": 2,
+              "UP": 1
+            },
+            "trades": 3,
+            "win_minus_breakeven_pp": 39.66,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "30-40c": {
+            "avg_executable_ask": 0.37,
+            "breakeven_pct_taker_fees": 38.63,
+            "breakeven_pct_zero_fees": 37.0,
+            "ci_low_minus_breakeven_pp": -38.63,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": -0.3863,
+            "settlement_win_pct": 0.0,
+            "side_mix": {
+              "DOWN": 1,
+              "UP": 3
+            },
+            "trades": 4,
+            "win_minus_breakeven_pp": -38.63,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "40-50c": {
+            "avg_executable_ask": 0.46,
+            "breakeven_pct_taker_fees": 47.74,
+            "breakeven_pct_zero_fees": 46.0,
+            "ci_low_minus_breakeven_pp": 52.26,
+            "established_positive": true,
+            "net_pnl_per_trade_usd": 0.5226,
+            "settlement_win_pct": 100.0,
+            "side_mix": {
+              "DOWN": 1,
+              "UP": 1
+            },
+            "trades": 2,
+            "win_minus_breakeven_pp": 52.26,
+            "win_pct_ci95_window_bootstrap": [
+              100.0,
+              100.0
+            ]
+          },
+          "<10c": {
+            "trades": 0
+          }
+        },
+        "B1_side_mix": {
+          "DOWN": 5,
+          "UP": 9
+        },
+        "B2_buy_initial_FAVORITE": {
+          "arm": "B2 buy dearer executable outcome once, hold",
+          "avg_executable_ask": 0.9086,
+          "breakeven_pct_taker_fees": 91.44,
+          "breakeven_pct_zero_fees": 90.86,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9907,
+            "median": 0.9486
+          },
+          "ci_low_minus_breakeven_pp": -62.87,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 1073.02,
+            "max": 15000.0,
+            "median": 1181.0,
+            "p10": 124.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.0053,
+          "fees_usd_total": 0.0742,
+          "longest_loss_streak": 2,
+          "max_drawdown_usd": -4.7942,
+          "net_pnl_per_day_usd": -98.62,
+          "net_pnl_per_trade_usd": -0.3424,
+          "net_pnl_per_window_attempted_usd": -0.3424,
+          "net_pnl_usd_total": -4.7942,
+          "settlement_win_pct": 57.14,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 14,
+          "win_minus_breakeven_pp": -34.3,
+          "win_pct_ci95_window_bootstrap": [
+            28.57,
+            85.71
+          ],
+          "windows_attempted": 14,
+          "windows_with_no_executable_ask": 0
+        },
+        "B2_side_mix": {
+          "DOWN": 9,
+          "UP": 5
+        },
+        "two_sided_only": true
+      },
+      "checkpoint_tte_s": 45.0,
+      "equivalent_time_since_open_s": 255.0,
+      "two_sided_windows": 14,
+      "windows_settled": 133
+    },
+    "60s": {
+      "CONTROL_A": {
+        "A1_buy_UP_always": {
+          "arm": "A1 buy UP once, hold",
+          "avg_executable_ask": 0.2753,
+          "breakeven_pct_taker_fees": 28.93,
+          "breakeven_pct_zero_fees": 27.53,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.8969,
+            "median": 0.1799
+          },
+          "ci_low_minus_breakeven_pp": -24.09,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 49.56,
+            "max": 1363.0,
+            "median": 180.0,
+            "p10": 178.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01157,
+          "fees_usd_total": 0.7171,
+          "longest_loss_streak": 14,
+          "max_drawdown_usd": -10.2197,
+          "net_pnl_per_day_usd": -21.19,
+          "net_pnl_per_trade_usd": -0.1579,
+          "net_pnl_per_window_attempted_usd": -0.0736,
+          "net_pnl_usd_total": -9.7871,
+          "settlement_win_pct": 12.9,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 46.6,
+          "trades": 62,
+          "win_minus_breakeven_pp": -16.03,
+          "win_pct_ci95_window_bootstrap": [
+            4.84,
+            20.97
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 71
+        },
+        "A2_buy_DOWN_always": {
+          "arm": "A2 buy DOWN once, hold",
+          "avg_executable_ask": 0.2813,
+          "breakeven_pct_taker_fees": 29.55,
+          "breakeven_pct_zero_fees": 28.13,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.972,
+            "median": 0.1694
+          },
+          "ci_low_minus_breakeven_pp": -22.88,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 50.08,
+            "max": 5000.0,
+            "median": 178.0,
+            "p10": 178.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01033,
+          "fees_usd_total": 0.7749,
+          "longest_loss_streak": 22,
+          "max_drawdown_usd": -11.168,
+          "net_pnl_per_day_usd": -23.55,
+          "net_pnl_per_trade_usd": -0.145,
+          "net_pnl_per_window_attempted_usd": -0.0818,
+          "net_pnl_usd_total": -10.8749,
+          "settlement_win_pct": 14.67,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 56.4,
+          "trades": 75,
+          "win_minus_breakeven_pp": -14.88,
+          "win_pct_ci95_window_bootstrap": [
+            6.67,
+            22.67
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 58
+        },
+        "unconditional_UP_settlement_rate_pct": 55.64
+      },
+      "CONTROL_B": {
+        "B1_buy_initial_UNDERDOG": {
+          "arm": "B1 buy cheaper executable outcome once, hold",
+          "avg_executable_ask": 0.5,
+          "breakeven_pct_taker_fees": 51.75,
+          "breakeven_pct_zero_fees": 50.0,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.6365,
+            "median": 0.5175
+          },
+          "ci_low_minus_breakeven_pp": -36.37,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 141.5,
+            "max": 394.0,
+            "median": 283.0,
+            "p10": 267.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.0173,
+          "fees_usd_total": 0.2249,
+          "longest_loss_streak": 7,
+          "max_drawdown_usd": -3.6353,
+          "net_pnl_per_day_usd": -38.21,
+          "net_pnl_per_trade_usd": -0.1327,
+          "net_pnl_per_window_attempted_usd": -0.1327,
+          "net_pnl_usd_total": -1.7249,
+          "settlement_win_pct": 38.46,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 13,
+          "win_minus_breakeven_pp": -13.29,
+          "win_pct_ci95_window_bootstrap": [
+            15.38,
+            61.54
+          ],
+          "windows_attempted": 13,
+          "windows_with_no_executable_ask": 0
+        },
+        "B1_by_price_bucket": {
+          "10-20c": {
+            "trades": 0
+          },
+          "20-30c": {
+            "trades": 0
+          },
+          "30-40c": {
+            "trades": 0
+          },
+          "40-50c": {
+            "avg_executable_ask": 0.4533,
+            "breakeven_pct_taker_fees": 47.07,
+            "breakeven_pct_zero_fees": 45.33,
+            "ci_low_minus_breakeven_pp": -47.07,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": -0.304,
+            "settlement_win_pct": 16.67,
+            "side_mix": {
+              "DOWN": 1,
+              "UP": 5
+            },
+            "trades": 6,
+            "win_minus_breakeven_pp": -30.4,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              50.0
+            ]
+          },
+          "<10c": {
+            "trades": 0
+          }
+        },
+        "B1_side_mix": {
+          "DOWN": 4,
+          "UP": 9
+        },
+        "B2_buy_initial_FAVORITE": {
+          "arm": "B2 buy dearer executable outcome once, hold",
+          "avg_executable_ask": 0.8446,
+          "breakeven_pct_taker_fees": 85.38,
+          "breakeven_pct_zero_fees": 84.46,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.972,
+            "median": 0.8874
+          },
+          "ci_low_minus_breakeven_pp": -46.92,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 1055.77,
+            "max": 5000.0,
+            "median": 1250.0,
+            "p10": 258.1,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.0085,
+          "fees_usd_total": 0.1105,
+          "longest_loss_streak": 3,
+          "max_drawdown_usd": -3.2917,
+          "net_pnl_per_day_usd": -68.47,
+          "net_pnl_per_trade_usd": -0.2377,
+          "net_pnl_per_window_attempted_usd": -0.2377,
+          "net_pnl_usd_total": -3.0905,
+          "settlement_win_pct": 61.54,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 13,
+          "win_minus_breakeven_pp": -23.84,
+          "win_pct_ci95_window_bootstrap": [
+            38.46,
+            84.62
+          ],
+          "windows_attempted": 13,
+          "windows_with_no_executable_ask": 0
+        },
+        "B2_side_mix": {
+          "DOWN": 9,
+          "UP": 4
+        },
+        "two_sided_only": true
+      },
+      "checkpoint_tte_s": 60.0,
+      "equivalent_time_since_open_s": 240.0,
+      "two_sided_windows": 13,
+      "windows_settled": 133
+    },
+    "90s": {
+      "CONTROL_A": {
+        "A1_buy_UP_always": {
+          "arm": "A1 buy UP once, hold",
+          "avg_executable_ask": 0.4142,
+          "breakeven_pct_taker_fees": 43.12,
+          "breakeven_pct_zero_fees": 41.42,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9907,
+            "median": 0.3455
+          },
+          "ci_low_minus_breakeven_pp": -30.08,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 75.38,
+            "max": 7499.0,
+            "median": 182.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01123,
+          "fees_usd_total": 0.7749,
+          "longest_loss_streak": 13,
+          "max_drawdown_usd": -14.8374,
+          "net_pnl_per_day_usd": -31.08,
+          "net_pnl_per_trade_usd": -0.208,
+          "net_pnl_per_window_attempted_usd": -0.1079,
+          "net_pnl_usd_total": -14.3549,
+          "settlement_win_pct": 21.74,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 51.9,
+          "trades": 69,
+          "win_minus_breakeven_pp": -21.38,
+          "win_pct_ci95_window_bootstrap": [
+            13.04,
+            31.88
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 64
+        },
+        "A2_buy_DOWN_always": {
+          "arm": "A2 buy DOWN once, hold",
+          "avg_executable_ask": 0.3883,
+          "breakeven_pct_taker_fees": 40.5,
+          "breakeven_pct_zero_fees": 38.83,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9814,
+            "median": 0.232
+          },
+          "ci_low_minus_breakeven_pp": -26.06,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 69.9,
+            "max": 7500.0,
+            "median": 180.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01057,
+          "fees_usd_total": 0.9512,
+          "longest_loss_streak": 27,
+          "max_drawdown_usd": -15.1336,
+          "net_pnl_per_day_usd": -32.27,
+          "net_pnl_per_trade_usd": -0.1656,
+          "net_pnl_per_window_attempted_usd": -0.112,
+          "net_pnl_usd_total": -14.9012,
+          "settlement_win_pct": 23.33,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 67.7,
+          "trades": 90,
+          "win_minus_breakeven_pp": -17.16,
+          "win_pct_ci95_window_bootstrap": [
+            14.44,
+            32.22
+          ],
+          "windows_attempted": 133,
+          "windows_with_no_executable_ask": 43
+        },
+        "unconditional_UP_settlement_rate_pct": 55.64
+      },
+      "CONTROL_B": {
+        "B1_buy_initial_UNDERDOG": {
+          "arm": "B1 buy cheaper executable outcome once, hold",
+          "avg_executable_ask": 0.4373,
+          "breakeven_pct_taker_fees": 45.46,
+          "breakeven_pct_zero_fees": 43.73,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.7631,
+            "median": 0.4219
+          },
+          "ci_low_minus_breakeven_pp": -32.13,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 100.81,
+            "max": 357.0,
+            "median": 230.5,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.01633,
+          "fees_usd_total": 0.4899,
+          "longest_loss_streak": 12,
+          "max_drawdown_usd": -6.546,
+          "net_pnl_per_day_usd": -44.25,
+          "net_pnl_per_trade_usd": -0.1537,
+          "net_pnl_per_window_attempted_usd": -0.1537,
+          "net_pnl_usd_total": -4.6099,
+          "settlement_win_pct": 30.0,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 30,
+          "win_minus_breakeven_pp": -15.46,
+          "win_pct_ci95_window_bootstrap": [
+            13.33,
+            46.67
+          ],
+          "windows_attempted": 30,
+          "windows_with_no_executable_ask": 0
+        },
+        "B1_by_price_bucket": {
+          "10-20c": {
+            "trades": 0
+          },
+          "20-30c": {
+            "avg_executable_ask": 0.245,
+            "breakeven_pct_taker_fees": 25.79,
+            "breakeven_pct_zero_fees": 24.5,
+            "ci_low_minus_breakeven_pp": -25.79,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": 0.2421,
+            "settlement_win_pct": 50.0,
+            "side_mix": {
+              "DOWN": 2
+            },
+            "trades": 2,
+            "win_minus_breakeven_pp": 24.21,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "30-40c": {
+            "avg_executable_ask": 0.3664,
+            "breakeven_pct_taker_fees": 38.26,
+            "breakeven_pct_zero_fees": 36.64,
+            "ci_low_minus_breakeven_pp": -38.26,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": -0.1098,
+            "settlement_win_pct": 27.27,
+            "side_mix": {
+              "DOWN": 5,
+              "UP": 6
+            },
+            "trades": 11,
+            "win_minus_breakeven_pp": -10.99,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              54.55
+            ]
+          },
+          "40-50c": {
+            "avg_executable_ask": 0.4325,
+            "breakeven_pct_taker_fees": 44.97,
+            "breakeven_pct_zero_fees": 43.25,
+            "ci_low_minus_breakeven_pp": -44.97,
+            "established_positive": false,
+            "net_pnl_per_trade_usd": -0.1996,
+            "settlement_win_pct": 25.0,
+            "side_mix": {
+              "DOWN": 2,
+              "UP": 6
+            },
+            "trades": 8,
+            "win_minus_breakeven_pp": -19.97,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              62.5
+            ]
+          },
+          "<10c": {
+            "trades": 0
+          }
+        },
+        "B1_side_mix": {
+          "DOWN": 12,
+          "UP": 18
+        },
+        "B2_buy_initial_FAVORITE": {
+          "arm": "B2 buy dearer executable outcome once, hold",
+          "avg_executable_ask": 0.889,
+          "breakeven_pct_taker_fees": 89.59,
+          "breakeven_pct_zero_fees": 88.9,
+          "capital_at_risk_per_trade_usd": {
+            "max": 0.9814,
+            "median": 0.911
+          },
+          "ci_low_minus_breakeven_pp": -36.26,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 22.23,
+            "max": 7500.0,
+            "median": 25.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "established_positive": false,
+          "fees_usd_per_trade": 0.0065,
+          "fees_usd_total": 0.1949,
+          "longest_loss_streak": 3,
+          "max_drawdown_usd": -5.8649,
+          "net_pnl_per_day_usd": -56.3,
+          "net_pnl_per_trade_usd": -0.1955,
+          "net_pnl_per_window_attempted_usd": -0.1955,
+          "net_pnl_usd_total": -5.8649,
+          "settlement_win_pct": 70.0,
+          "sizing": "q = 1 contract, once per window. No scaling, no Martingale.",
+          "tradeable_share_pct": 100.0,
+          "trades": 30,
+          "win_minus_breakeven_pp": -19.59,
+          "win_pct_ci95_window_bootstrap": [
+            53.33,
+            86.67
+          ],
+          "windows_attempted": 30,
+          "windows_with_no_executable_ask": 0
+        },
+        "B2_side_mix": {
+          "DOWN": 18,
+          "UP": 12
+        },
+        "two_sided_only": true
+      },
+      "checkpoint_tte_s": 90.0,
+      "equivalent_time_since_open_s": 210.0,
+      "two_sided_windows": 30,
+      "windows_settled": 133
+    }
+  },
+  "checkpoint_choice": {
+    "earliest_consistently_available_tte_s": 120.0,
+    "equivalent_time_since_open_s": 180.0,
+    "primary": 120.0,
+    "recorded_grid_tte_s": [
+      120.0,
+      90.0,
+      60.0,
+      45.0,
+      30.0,
+      20.0,
+      15.0,
+      10.0,
+      5.0,
+      2.0,
+      1.0
+    ],
+    "requested_opening_ladder_status": "ENTIRELY ABSENT from this corpus. NOT substituted with a later observation; it needs the P2 recorder.",
+    "requested_opening_ladder_tte_s": [
+      295.0,
+      285.0,
+      270.0,
+      240.0
+    ],
+    "secondary": [
+      90.0,
+      60.0,
+      45.0
+    ],
+    "secondary_caveat": "two-sided coverage collapses below 90s (56 -> 30 -> 13 -> 14 windows), so Control B is only meaningfully testable at 120s and 90s",
+    "tradeable_life_s": 300.0
+  },
+  "discipline": "one trade per window, q=1 contract, held to settlement. No exits, scaling, Martingale, flips, filters, Z or state conditioning. Executable asks only; no recorded ask means no trade.",
+  "duration": "BTC5M",
+  "fee_model": {
+    "breakeven": "p + 0.07*p*(1-p)",
+    "formula": "rate * q * p * (1 - p)",
+    "note": "published schedule, not reconciled against our own fills; zero-fee breakeven reported beside it",
+    "taker_rate": 0.07
+  },
+  "label": "GEMINI_BTC5M_CONTROLS_V1",
+  "new_or_previously_run": {
+    "CONTROL_A": "NEW. No prior study bought UP or DOWN unconditionally; every earlier arm selected a side by price (cheaper/dearer) or by a state proxy.",
+    "CONTROL_B1_underdog_two_sided_only": "NEW. The earlier underdog matrix pooled ONE-SIDED books, where the 'cheaper executable side' is whichever side happens to still be quoted. Restricting to two-sided books is a different population and was never measured.",
+    "CONTROL_B2_favorite_two_sided_only": "OVERLAPS an earlier measurement: the favorite test already required both sides executable, so its 120s row is the same population. It is re-reported here for symmetry and the numbers should agree."
+  }
+}
