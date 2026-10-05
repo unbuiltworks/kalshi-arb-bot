@@ -1,0 +1,162 @@
+name: pmus-brti-conditioned-study
+
+# A SEPARATE study. It does not read, modify or re-tune the frozen underdog
+# matrix or its workflow; it adds a BRTI-conditioned descriptive layer.
+#
+# Runs in Actions for two reasons: the archived raw pmus_ws parts are workflow
+# artifacts whose bytes come from Azure blob storage (denied by this
+# programme's session egress), and the BRTI index history comes from
+# gateway.polymarket.us. Both are reachable here.
+#
+# OCT 1 IS SEALED TWICE OVER. Parts dated before 2026-10-02 are deleted before
+# any analysis step runs, and the study itself refuses a window whose index
+# fetch span [T-960, T+5] would reach a pre-Oct-2 second, so no such second is
+# ever requested.
+#
+# Started by touching .github/brti_study_request.
+on:
+  push:
+    branches: ['claude/pmus-btc15m-preregister-44yivc']
+    paths: ['.github/brti_study_request']
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  SRC_REF: ae80e9d59450bd13f8cd01f8460dea91033bd66b
+  EARLIEST_ELIGIBLE: '20261002'
+  ARCHIVE_RUN_ID: '37253257157'
+
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Borrow the canonical tape code (read only, pinned)
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin claude/l5-pmus-economic-results-7c116e
+          git checkout "$SRC_REF" -- \
+            src/pmus_ws_evidence_recorder.py \
+            scripts/pmus_oos_derive_rows.py \
+            data/pmus_settlement_history/settlements.jsonl.gz
+          git reset -q
+          git log -1 --format='borrowed from %H %ci %s' "$SRC_REF"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -q httpx python-dotenv websockets cryptography pytest
+
+      - name: Unit-test the settlement-state arithmetic first
+        run: python -m pytest tests/test_brti_state.py -q
+
+      - name: Download the COMPLETED archive chunk artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: raw-tape-archive-*
+          path: arc
+          run-id: ${{ env.ARCHIVE_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Quarantine everything before Oct. 2, then inventory what is left
+        run: |
+          set -euo pipefail
+          mkdir -p parts
+          find arc -name 'pmus_ws_*.jsonl.gz' -print0 | while IFS= read -r -d '' f; do
+            b=$(basename "$f"); d=$(echo "$b" | sed -E 's/^pmus_ws_([0-9]{8})_.*/\1/')
+            if [ "$d" -ge "$EARLIEST_ELIGIBLE" ]; then mv "$f" "parts/$b";
+            else echo "QUARANTINED (pre-Oct-2): $b"; rm -f "$f"; fi
+          done
+          rm -rf arc
+          ls parts | sort > PARTS_USED.txt
+          echo "eligible parts: $(wc -l < PARTS_USED.txt)"
+          test -s PARTS_USED.txt || { echo "::error::no eligible Oct 2+ parts"; exit 1; }
+
+      - name: Concatenate eligible parts in chronological order
+        run: |
+          set -euo pipefail
+          : > raw_oct2plus.jsonl
+          while read -r p; do gunzip -c "parts/$p" >> raw_oct2plus.jsonl; done < PARTS_USED.txt
+          wc -l raw_oct2plus.jsonl
+          rm -rf parts
+
+      - name: Derive book rows with the recorder's own fold
+        run: python scripts/pmus_oos_derive_rows.py raw_oct2plus.jsonl rows_oct2plus.jsonl
+
+      - name: BRTI-conditioned descriptive study
+        run: |
+          set -euo pipefail
+          python scripts/pmus_brti_conditioned_study.py \
+            --books rows_oct2plus.jsonl \
+            --settlements data/pmus_settlement_history/settlements.jsonl.gz \
+            --brti-cache data/brti_1s_oct2plus \
+            --out analysis/pmus/brti_conditioned \
+            --dump analysis/pmus/brti_conditioned/dumps
+
+      - name: Gate -- prove no quarantined second reached any table
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import gzip, json, sys, datetime as dt
+          cut = dt.datetime(2026,10,2,tzinfo=dt.timezone.utc).timestamp()
+          bad = total = 0
+          for name in ("checkpoint_states","final_60s_states","lag_events"):
+              p = "analysis/pmus/brti_conditioned/dumps/%s.jsonl.gz" % name
+              with gzip.open(p,"rt") as f:
+                  for line in f:
+                      r = json.loads(line); total += 1
+                      # every row is stamped inside its own window; the earliest
+                      # second any row can touch is T-960 (the open statistic)
+                      end = r.get("window_end_unix")
+                      if end is None:
+                          end = float(r["checkpoint_epoch"]) + r["checkpoint_min_remaining"]*60
+                      if float(end) - 960 < cut:
+                          bad += 1; print("LEAK:", r.get("slug"), end)
+          print("rows=%d pre_oct2=%d" % (total, bad))
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Record provenance
+        run: |
+          set -euo pipefail
+          { echo "archive_run_id: $ARCHIVE_RUN_ID";
+            echo "analysis_code_ref: $SRC_REF";
+            echo "earliest_eligible_part_date: $EARLIEST_ELIGIBLE";
+            echo "ran_at: $(date -u +%FT%TZ)";
+            echo; echo "parts used:"; cat PARTS_USED.txt; } \
+            > analysis/pmus/brti_conditioned/PROVENANCE.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brti-conditioned-oct2plus
+          path: analysis/pmus/brti_conditioned/
+
+      - name: Commit the descriptive tables to this branch
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          for f in src/pmus_ws_evidence_recorder.py \
+                   scripts/pmus_oos_derive_rows.py \
+                   data/pmus_settlement_history/settlements.jsonl.gz; do
+            git ls-files --error-unmatch "$f" >/dev/null 2>&1 || rm -f "$f"
+          done
+          # the harvested index cache is evidence that cannot be re-fetched if
+          # the venue ever stops serving it, so it is committed too
+          git add -f analysis/pmus/brti_conditioned/ data/brti_1s_oct2plus/
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit \
+            -m "BRTI-conditioned descriptive state tables on Oct 2+ tape" \
+            -m "Descriptive only: distributions and calibration, no strategy selected and no threshold searched." \
+            -m "Oct 1 sealed: pre-Oct-2 parts deleted before analysis, and no window whose index span reaches a pre-Oct-2 second is eligible." \
+            -m "Both published statistics re-derived from the index and checked exactly per window."
+          for i in 1 2 3 4; do git pull --rebase -q origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0; sleep $((2**i)); done
+          echo "::error::could not push the study"; exit 1
