@@ -764,6 +764,16 @@ feed does not send.
 Corpus with provenance identity: 312 events / 9,901 fills →
 **17,855 events / 754,234 fills, 2026-03-19 → 2026-09-25**.
 
+**PRECISION, corrected after I first wrote this addendum:** the filter is
+NOT broken everywhere. On `data/l5/raw/trades.jsonl` all 10,500 payload
+records match the `name` filter (100.0%) — the `/trades` feed does send the
+profile block. The defect bites only on the `/activity` pages. The real
+limitation of the 312-event / 9,901-fill baseline is therefore its SPAN:
+`trades.jsonl` covers **2026-08-30 07:49 → 20:52 UTC, 13.1 hours of a
+single day**. Every L5 constant derived from it describes one session, and
+the remedy is to re-derive against the 754,234-fill provenance-identified
+corpus rather than to change a filter.
+
 **Therefore: the constants "first acquisition median 0.588, 69.4%
 favored, T+44s, 71.5% complement, 52s to first matched increase, median 1
 EXTEND, median 6 fills/event" describe the JUL–AUG 2026 REGIME, not L5's

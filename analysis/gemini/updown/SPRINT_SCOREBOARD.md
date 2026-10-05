@@ -280,3 +280,38 @@ Kalshi's honest blocker: **prints are anonymous**, so per-actor
 OPEN/EXTEND/COMPLETE sequences and complement lag are UNAVAILABLE, and its
 leg tape is **83 minutes**. It is demonstrated *structurally permissive*,
 not *behaviourally L5-like*.
+
+---
+
+## CORRECTION — I misdiagnosed the remedy for Lanes 2 and 4
+
+I wrote that Lane 2 "derived its action-family triggers from the L5 corpus
+**using the defective `name` filter**". **That is wrong.** Verified:
+
+* `data/l5/raw/trades.jsonl` — 10,500 payload records, **10,500 match
+  `name == 'l5Zn1bWoM8eTsK'` (100.0%)**. The `/trades` feed *does* send the
+  profile block, so the filter works perfectly there.
+* The defect bites **only** on `data/l5/raw/activity_gap.jsonl.gz` (the
+  `/activity` feed, 706,500 records, zero with a `name`), and **neither
+  Lane 2 nor Lane 4 reads that file.**
+
+So the diagnosis changes, and the real finding is sharper and worse:
+
+> **`trades.jsonl` spans 2026-08-30 07:49 → 20:52 UTC — 13.1 hours of a
+> single day.**
+
+Lane 2's band `[0.20, 0.82]`, its compress trigger `0.991`, and Lane 4's
+entire L5 reference row (the 100.0-similarity anchor the whole venue
+ranking is scaled against) are derived from **one 13-hour session**, not
+from the "Jul–Aug regime" and not from 754,234 fills.
+
+**The remedy is therefore not "fix the filter" — it is "point the
+derivation at the 754,234-fill provenance-identified corpus."** Lane 5's
+own audit is the only analysis in this sprint built on that corpus.
+
+This strengthens rather than weakens the sprint's conclusions, because the
+L5 *reference* was the optimistic side of every comparison: Lane 4 ranked
+Gemini 28.4 against an L5 anchor measured on a single good day. It also
+means **no L5-derived parameter in this repository should be quoted until
+re-derived**, and that the one-day provenance must be stated wherever the
+312-event / 9,901-fill figures appear.
