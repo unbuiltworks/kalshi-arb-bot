@@ -1,0 +1,12 @@
+« raw tape archive request »
+
+Touching this file starts .github/workflows/raw-tape-archive.yml, which copies
+every surviving raw pmus_ws_* part out of the recorder volume's rolling 12 GiB
+retention, verifies each archived copy byte-for-byte against the sha256 of the
+uncompressed original, and fails if any listed part is missing.
+
+The workflow reads no directive from this file -- the part list is built from a
+listing taken inside the run, because retention moves while we work. Only the
+counter below changes, to start a run.
+
+REQUEST=1

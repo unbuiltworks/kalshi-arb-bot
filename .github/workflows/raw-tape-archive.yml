@@ -1,0 +1,321 @@
+# ARCHIVE every surviving raw pmus_ws_* part OUT of the rolling 12 GiB retention.
+#
+# WHY, URGENTLY. The recorder's volume keeps about 12 GiB and sweeps the oldest
+# parts to stay under it. It has already destroyed 2026-10-01 00:00-06:00
+# permanently, and it destroys roughly a day of executable evidence per day. The
+# venue serves NO historical book or BBO for a settled market -- /book and /bbo
+# answer 200 with empty ladders and every other price-history route 404s -- so
+# this tape is the ONLY source of causal executable quotes that will ever exist
+# for these windows. Once a part is swept it cannot be reconstructed from
+# anything.
+#
+# READ-ONLY WITH RESPECT TO THE RECORDER. The only Railway operations here are
+# `files list` and `files download`. No deploy, redeploy, restart, variable,
+# domain, volume mount/detach/resize or Railway agent call, and nothing writes to
+# or deletes from the volume. The recorder keeps collecting throughout and no
+# second service mounts its volume.
+#
+# RAW BYTES, NOT A DERIVATION. Each part is archived as the recorder's own bytes,
+# compressed losslessly with gzip and nothing else. No filtering, no reduction to
+# BTC15m, no row derivation -- those are analysis steps and they belong
+# downstream, where they can be redone. The sha256 recorded is of the
+# UNCOMPRESSED original, so the archive can be proven byte-identical to what the
+# volume held.
+#
+# THE PLAN IS CONTEMPORANEOUS. The directory is listed inside this run and the
+# matrix is built from that listing, because a hardcoded list would both ask for
+# parts retention has since eaten and miss parts written since.
+#
+# VERIFIED, NOT ASSUMED. A separate job downloads every archive artifact back,
+# decompresses it, recomputes the sha256 of the raw bytes and compares it to the
+# manifest; then a gate proves every listed part is present. A mismatch or a gap
+# FAILS the run.
+name: raw-tape-archive
+
+on:
+  push:
+    branches: ['claude/l5-pmus-economic-results-7c116e']
+    paths: ['.github/raw_tape_archive_request']
+
+permissions:
+  # the manifest (small, text) is committed so provenance outlives the artifacts
+  contents: write
+  actions: read
+
+env:
+  PROJECT_ID: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
+  ENVIRONMENT_ID: f3642d27-26dc-4e21-9170-bc76290c076f
+  # pmus-ws-evidence-recorder. READ ONLY; never redeployed, never written to.
+  SERVICE_ID: 71b6ea99-ea6a-4b20-9602-fa873721ed35
+  REMOTE_DIR: /state/pmus-ws/raw
+  RAILWAY_CLI_VERSION: 5.63.1
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.p.outputs.matrix }}
+      parts: ${{ steps.p.outputs.parts }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SSH_PRIVATE_KEY_B64: ${{ secrets.RAILWAY_SSH_PRIVATE_KEY_B64 }}
+    steps:
+      - name: Fail closed if required CI secrets are absent
+        run: |
+          set -euo pipefail
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_TOKEN secret is not set."; exit 1
+          fi
+          if [ -z "${RAILWAY_SSH_PRIVATE_KEY_B64:-}" ]; then
+            echo "::error::RAILWAY_SSH_PRIVATE_KEY_B64 secret is not set."; exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install the PINNED Railway CLI and assert the version
+        run: |
+          set -euo pipefail
+          npm install -g "@railway/cli@$RAILWAY_CLI_VERSION"
+          got="$(railway --version | tr -d '\r')"
+          case "$got" in
+            *"$RAILWAY_CLI_VERSION"*) echo "installed: $got" ;;
+            *) echo "::error::CLI version mismatch: got '$got'"; exit 1 ;;
+          esac
+      - name: Prepare dedicated Railway SSH identity
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s' "$RAILWAY_SSH_PRIVATE_KEY_B64" \
+            | base64 --decode > ~/.ssh/l5_volume_export
+          chmod 600 ~/.ssh/l5_volume_export
+          ssh-keygen -y -f ~/.ssh/l5_volume_export > ~/.ssh/l5_volume_export.pub
+          chmod 644 ~/.ssh/l5_volume_export.pub
+      - name: List the volume NOW and build the plan from that listing
+        id: p
+        run: |
+          set -euo pipefail
+          railway service files \
+            --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" \
+            --project "$PROJECT_ID" list "$REMOTE_DIR" < /dev/null \
+            > LISTING.txt
+          echo "::group::raw listing"
+          cat LISTING.txt
+          echo "::endgroup::"
+          m="$(PER_CHUNK=8 python3 scripts/pmus_archive_plan.py < LISTING.txt)"
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          echo "parts=$(wc -l < ARCHIVE_EXPECTED.txt)" >> "$GITHUB_OUTPUT"
+          cat ARCHIVE_EXPECTED.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-plan
+          path: |
+            LISTING.txt
+            ARCHIVE_EXPECTED.txt
+          retention-days: 90
+          if-no-files-found: error
+
+  archive:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      # The volume serves ONE SSH endpoint. 16 concurrent reads timed out 6 of
+      # 16 chunks on "Failed to initialize SFTP session"; 4 does not.
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SSH_PRIVATE_KEY_B64: ${{ secrets.RAILWAY_SSH_PRIVATE_KEY_B64 }}
+      CHUNK_FILES: ${{ matrix.files }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install the PINNED Railway CLI and assert the version
+        run: |
+          set -euo pipefail
+          npm install -g "@railway/cli@$RAILWAY_CLI_VERSION"
+          got="$(railway --version | tr -d '\r')"
+          case "$got" in
+            *"$RAILWAY_CLI_VERSION"*) echo "installed: $got" ;;
+            *) echo "::error::CLI version mismatch: got '$got'"; exit 1 ;;
+          esac
+      - name: Prepare dedicated Railway SSH identity
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s' "$RAILWAY_SSH_PRIVATE_KEY_B64" \
+            | base64 --decode > ~/.ssh/l5_volume_export
+          chmod 600 ~/.ssh/l5_volume_export
+          ssh-keygen -y -f ~/.ssh/l5_volume_export > ~/.ssh/l5_volume_export.pub
+          chmod 644 ~/.ssh/l5_volume_export.pub
+
+      - name: Copy each raw part out, verbatim, and record its provenance
+        run: |
+          set -euo pipefail
+          mkdir -p arc
+          : > arc/MANIFEST.tsv
+          IFS=',' read -ra NAMES <<< "$CHUNK_FILES"
+          for raw in "${NAMES[@]}"; do
+            name="$(echo "$raw" | xargs)"
+            [ -n "$name" ] || continue
+            case "$name" in
+              */*|..*) echo "::error::refusing suspicious name"; exit 1 ;;
+            esac
+            echo "::group::$name"
+            # The ONLY Railway operation: a read. Retried for transport flakes;
+            # a retry re-reads the same immutable part, so it cannot vary data.
+            ok=0
+            for attempt in 1 2 3 4 5; do
+              if railway service files \
+                   --service "$SERVICE_ID" \
+                   --environment "$ENVIRONMENT_ID" \
+                   --project "$PROJECT_ID" \
+                   download "$REMOTE_DIR/$name" part.jsonl < /dev/null; then
+                ok=1; break
+              fi
+              echo "read attempt $attempt failed; retrying"
+              rm -f part.jsonl; sleep $((attempt * 20))
+            done
+            if [ "$ok" -ne 1 ]; then
+              # Recorded, not swallowed: the gate job fails the run on any gap.
+              printf '%s\tUNREADABLE\t0\t0\t-\t-\n' "$name" >> arc/MANIFEST.tsv
+              echo "::warning::could not read $name after 5 attempts"
+              echo "::endgroup::"; continue
+            fi
+            bytes="$(stat -c%s part.jsonl)"
+            if [ "$bytes" -le 0 ]; then
+              echo "::error::read 0 bytes for $name"; exit 1
+            fi
+            # sha256 of the UNCOMPRESSED original: this is what proves the
+            # archive is byte-identical to what the volume held.
+            raw_sha="$(sha256sum part.jsonl | awk '{print $1}')"
+            lines="$(wc -l < part.jsonl)"
+            gzip -9 -c part.jsonl > "arc/$name.gz"
+            gz_sha="$(sha256sum "arc/$name.gz" | awk '{print $1}')"
+            printf '%s\tOK\t%s\t%s\t%s\t%s\n' \
+              "$name" "$bytes" "$lines" "$raw_sha" "$gz_sha" >> arc/MANIFEST.tsv
+            echo "$name raw_bytes=$bytes lines=$lines gz=$(stat -c%s "arc/$name.gz")"
+            rm -f part.jsonl
+            echo "::endgroup::"
+          done
+          cat arc/MANIFEST.tsv
+          du -sh arc/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raw-tape-archive-${{ matrix.id }}
+          path: arc/
+          # the longest retention GitHub Actions allows
+          retention-days: 90
+          if-no-files-found: error
+
+  verify:
+    needs: [plan, archive]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: archive-plan
+          path: plan
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: raw-tape-archive-*
+          path: arc
+
+      - name: Re-read every archived part and PROVE the bytes match
+        run: |
+          set -euo pipefail
+          cat arc/*/MANIFEST.tsv | sort -u > MANIFEST.tsv
+          echo "manifest rows: $(wc -l < MANIFEST.tsv)"
+          fail=0
+          verified=0
+          while IFS=$'\t' read -r name status bytes lines raw_sha gz_sha; do
+            if [ "$status" != OK ]; then
+              echo "::error::$name recorded as $status"; fail=1; continue
+            fi
+            f="$(find arc -name "$name.gz" -print -quit)"
+            if [ -z "$f" ]; then
+              echo "::error::$name.gz missing from the artifacts"; fail=1; continue
+            fi
+            # Decompress and recompute: the real test, not a size comparison.
+            got_sha="$(gzip -dc "$f" | sha256sum | awk '{print $1}')"
+            got_bytes="$(gzip -dc "$f" | wc -c)"
+            got_lines="$(gzip -dc "$f" | wc -l)"
+            if [ "$got_sha" != "$raw_sha" ]; then
+              echo "::error::$name sha256 MISMATCH: archived $got_sha != recorded $raw_sha"
+              fail=1; continue
+            fi
+            if [ "$got_bytes" != "$bytes" ] || [ "$got_lines" != "$lines" ]; then
+              echo "::error::$name size/line mismatch: $got_bytes/$got_lines vs $bytes/$lines"
+              fail=1; continue
+            fi
+            verified=$((verified + 1))
+          done < MANIFEST.tsv
+          echo "verified byte-identical: $verified"
+          [ "$fail" -eq 0 ] || { echo "::error::verification failed"; exit 1; }
+
+      - name: Gate -- every part the volume listed must be in the archive
+        run: |
+          set -euo pipefail
+          awk -F'\t' '$2=="OK"{print $1}' MANIFEST.tsv | sort -u > ARCHIVED.txt
+          sort -u plan/ARCHIVE_EXPECTED.txt > EXPECTED.txt
+          echo "expected $(wc -l < EXPECTED.txt), archived $(wc -l < ARCHIVED.txt)"
+          if ! diff -u EXPECTED.txt ARCHIVED.txt > GAPS.diff; then
+            echo "::error::the archive does not cover every listed part"
+            cat GAPS.diff
+            exit 1
+          fi
+          echo "complete: every listed part is archived and byte-verified"
+
+      - name: Commit the manifest so provenance outlives the artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p data/pmus_ws_raw_archive
+          { echo "# raw pmus_ws part archive manifest"
+            echo "# run: ${{ github.run_id }}"
+            echo "# archived_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "# source: /state/pmus-ws/raw on pmus-ws-evidence-recorder"
+            echo "# artifacts: raw-tape-archive-* on run ${{ github.run_id }} (90-day retention)"
+            echo "# sha256 is of the UNCOMPRESSED original bytes"
+            printf '# name\tstatus\traw_bytes\tlines\traw_sha256\tgz_sha256\n'
+            cat MANIFEST.tsv
+          } > data/pmus_ws_raw_archive/MANIFEST.tsv
+          cp -f plan/LISTING.txt data/pmus_ws_raw_archive/VOLUME_LISTING.txt
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/pmus_ws_raw_archive/
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit \
+            -m "Raw pmus_ws tape archive manifest (run ${{ github.run_id }})" \
+            -m "Every surviving raw part copied out of the rolling 12 GiB retention, byte-verified by sha256 of the uncompressed original. Read-only with respect to the recorder volume."
+          for i in 1 2 3 4; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
+            git pull --rebase origin "${GITHUB_REF_NAME}"; sleep $((i * 4))
+          done
+          echo "::error::could not push the manifest"; exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-tape-archive-verification-${{ github.run_id }}
+          path: |
+            MANIFEST.tsv
+            EXPECTED.txt
+            ARCHIVED.txt
+          retention-days: 90
+          if-no-files-found: error
