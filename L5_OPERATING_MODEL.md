@@ -742,3 +742,85 @@ Before adding a new strategy, venue behavior, or risk increase, answer:
 If the answer is unclear, it is probably not the priority.
 
 The target remains **real, executable, settled, source-accounted profit**. The historical $480/day objective is a target to measure against, never an assumption.
+
+---
+
+## ADDENDUM 2026-10-05 — the behavioral baseline was computed on ~2% of the corpus
+
+Source: `analysis/l5/LANE5_NEWEST_ACTIVITY_AUDIT.md`,
+`analysis/gemini/updown/SPRINT_SCOREBOARD.md`. Independently verified
+before adoption.
+
+**A filter defect, not data absence.** `data/l5/raw/activity_gap.jsonl.gz`
+holds **706,500 payload records of which ZERO carry a `name` field**
+(verified: the `/activity` pages carry conditionId / eventSlug / outcome /
+price / side / size / timestamp / transactionHash / type / usdcSize and no
+profile block), all fetched with `params.user` = L5's address. Any filter
+of the form `x['name'] == 'l5Zn1bWoM8eTsK'` discards all of them. Identity
+must come from **provenance** (fetched with L5's address as `params.user`,
+disqualified only by a *contradicting* name), not from a name field the
+feed does not send.
+
+Corpus with provenance identity: 312 events / 9,901 fills →
+**17,855 events / 754,234 fills, 2026-03-19 → 2026-09-25**.
+
+**Therefore: the constants "first acquisition median 0.588, 69.4%
+favored, T+44s, 71.5% complement, 52s to first matched increase, median 1
+EXTEND, median 6 fills/event" describe the JUL–AUG 2026 REGIME, not L5's
+policy.** Anywhere they appear as L5's policy they are mislabelled.
+
+What holds across every period: incremental same-side accumulation
+(EXTEND first-class, 46.9–64.8% of events carry ≥1), patient
+complementing (median 29–75s), favored-side bias at first acquisition
+(strengthening monotonically 42% → 66.9%), and **frequency-before-size** —
+events/month 88 → 10,794 with median size flat in a 10–20 band and
+**concurrency capped at ≤4 throughout**. That is direct external support
+for `PATIENCE → FREQUENCY → SIZE → CONCURRENCY` and for one-market-at-a-time.
+
+What changed: completion collapsed 99% → 73% → **43.5%** (Sep); median
+EXTENDs → 0 (bimodal, not shifted); entry later. **L5's median completed
+pair cost is 0.97–1.00 with p90 1.27–1.31, materially above the spring's
+`<= 0.96` target, so that target stays LOCKED.**
+
+**The incentive finding, which governs how much of this is clonable.**
+L5's maker-rebate cashflows rose ~12× in August (median `usdcSize` per
+rebate record 98 → 1,161) and `REWARD` records appear for the first time.
+The behavioral regime change coincides exactly with that arrival. L5 is
+paid to rest liquidity, so an uncompleted resting fill is not a loss to
+it; **we have no sourced equivalent.** Against this, our own measurement
+of unrebated maker supply is **−$0.2380/contract (CI [−0.2831, −0.1935]),
+with zero non-toxic states across every pre-fill feature bin** — so a
+rebate must exceed **$0.238/contract** merely to break even. This is the
+concrete form of the existing rule *"Do not unlock mature incentive-era
+behavior merely because L5 used it later"*, and it is now quantified.
+
+**L5 is buy-only: 2 SELL fills in 754,234, both in March, none since.**
+Inventory is never unwound by selling — only complemented or redeemed.
+PRECISION NOTE: this does **not** contradict the documented "side switch"
+mechanic in `L5_STATUS.md` (median 9s between switches). That mechanic is
+L5 alternating **which outcome it BUYS**, which is what COMPLETE is, and
+it remains well-supported. The buy-only finding constrains something
+different and narrower: there is no evidence L5 ever exits by selling.
+
+**Category scope, recorded without licensing a narrowing.** Across 17,855
+events the corpus is crypto up/down only — BTC from March, ETH added in
+August, 5m overtaking 15m in July — with **not one** sports, esports,
+politics, economics or weather market. The market-agnostic engine
+requirement in `CLAUDE.md` **stands unchanged**; what this says is only
+that the behavioural evidence base is crypto-up/down, so transfer to any
+other category is extrapolation and must be labelled as such.
+
+**September is a signal to re-pull, not a settled finding.** It is 2.6
+days, not from the canonical collector, with verified holes (09-24 hours
+02–06 empty; 09-25 stops 16:02). The drop reproduces standalone on
+**09-23, which is complete**. A fresh pull was attempted today and FAILED:
+the egress proxy returned `403 Forbidden` to `CONNECT` for
+`data-api`, `gamma-api` and `clob.polymarket.com`; the failure is
+preserved in canonical envelope form at `data/l5/raw_2026_10_05_attempt/`.
+Mar–Aug conclusions are therefore **unchanged for lack of new data**;
+May/Jun/Jul conclusions are **genuinely new**, recovered from the filter
+defect.
+
+No number here is realized, filled, submitted or settled profit for our
+account. L5's `REDEEM`/`REWARD`/rebate figures are its own cashflows and
+are not evidence that equivalent incentives accrue to us.

@@ -133,3 +133,150 @@ corpus carries the **UP leg only, zero DOWN-leg rows** — so the claim of
 independent reproduction is removed. **Gemini's pair-cost floor rests on a
 single census and is not independently confirmed.** That is a caveat
 against the Gemini conclusion, not for it.
+
+---
+
+# SPRINT SYNTHESIS — all six lanes in
+
+## The keystone: our behavioral baseline was built on 2% of the data, and L5's recent edge looks like a rebate
+
+Lane 5 found a defect in the baseline itself, which I verified
+independently: `data/l5/raw/activity_gap.jsonl.gz` holds **706,500
+payload records, of which ZERO carry a `name` field** (verified: record
+keys are conditionId/eventSlug/outcome/price/side/size/timestamp/
+transactionHash/type/usdcSize — no `name`, no `proxyWallet`), all fetched
+with `params.user` = L5's address. The prescribed filter
+`x['name']=='l5Zn1bWoM8eTsK'` discards all of them.
+
+Corpus after switching identity from name to **provenance**: 312 events /
+9,901 fills → **17,855 events / 754,234 fills, 2026-03-19 → 2026-09-25**.
+
+**Every L5 constant I have reported this session is a Jul–Aug 2026
+snapshot, not L5's policy.** The mechanics hold in kind; the parameters
+move a lot:
+
+| period | events | 1st-acq med | % favored | % complemented | EXTENDs med | fills/event |
+|---|---|---|---|---|---|---|
+| 2026-03 | 88 | 0.495 | 45.5% | 83.0% | 1 | 21 |
+| 2026-05 | 877 | 0.50 | 44.9% | **99.2%** | 2 | — |
+| 2026-07 | 3,666 | 0.54 | 61.3% | 70.3% | 1 | — |
+| 2026-08 | 10,794 | 0.55 | 62.6% | 73.0% | 1 | 6 |
+| **2026-09** | 851 | **0.59** | **66.9%** | **43.5%** | **0** | **2** |
+
+HOLDS: incremental same-side accumulation (EXTEND first-class in every
+period), patient complementing, favored-side bias (strengthening
+monotonically 42% → 66.9%), and **frequency-before-size** — events/month
+rose 88 → 10,794 while median size stayed in a 10–20 band, with
+**concurrency capped at ≤4 throughout**. That is direct external support
+for `PATIENCE → FREQUENCY → SIZE → CONCURRENCY`.
+
+CHANGED: completion collapsed 99% → 73% → **43.5%**; median EXTENDs → 0
+(bimodal, not shifted); entry later (T+104s).
+
+**AND THE LIKELY CAUSE: L5's maker rebates jumped ~12× in August**
+(median `usdcSize` per rebate record 98 → 1,161) with `REWARD` records
+appearing for the first time. The behavioral regime change coincides
+exactly with the arrival of large incentive cashflows. **L5 is paid to
+rest liquidity, so an uncompleted resting fill is not a loss to it. We are
+not paid that.** This is the single strongest reason the recent L5
+behaviour must not be cloned — and it is exactly what `CLAUDE.md` already
+anticipated: *"Do not unlock mature incentive-era behavior merely because
+L5 used it later."*
+
+## Where Lane 3 and Lane 5 meet — the decisive number
+
+Lane 3 measured **unrebated** maker liquidity supply on Gemini BTC5m at
+**−$0.2380/contract, CI [−$0.2831, −$0.1935]**, with **zero non-toxic
+states** out of every bin of every pre-fill feature.
+
+So a maker rebate must exceed **$0.238/contract** merely to break even,
+and **$0.283** to clear the pessimistic bound. For the $480/day target:
+
+| size | net needed | implied rebate needed |
+|---|---|---|
+| q25 | +$0.0667 | **≥ $0.3047** |
+| q50 | +$0.0333 | ≥ $0.2713 |
+| q100 | +$0.0167 | ≥ $0.2547 |
+
+**That is the whole program in one line: the L5 strategy in its profitable
+regime appears to be a rebate-harvesting strategy, and the rebate is the
+component we have never sourced for our own account.**
+
+## Other newly discovered L5 mechanics
+
+1. **L5 is buy-only** — 2 SELL fills in 754,234, both in March, none since.
+   Inventory is never unwound by selling, only complemented or redeemed.
+   The "side-switch" framing in our model has **no support in the tape**.
+   This independently vindicates Lane 2 modelling zero SELLs, and it
+   sharpens the blocking limitation: the obvious fix for our residual loss
+   is an action L5 itself never takes, because it is paid to wait instead.
+2. A hard **06:00–19:00 UTC session in Apr–Jun dissolving into flat 24h
+   operation by August** — human supervision becoming automated.
+3. **Descending size ladder within each event** (Sep medians by ordinal
+   37.0 → 28.2 → 28.2 → 20.0 → 19.5 → 13.3). A single per-fill size number
+   hides this.
+4. Round-lot quantization plus ~10,691 Aug fills at size <0.05 — dust
+   partials consistent with resting maker orders being nibbled.
+5. **Category scope: crypto up/down only.** BTC from March, ETH added in
+   August, 5m overtook 15m in July. Across 17,855 events there is **not
+   one** sports, esports, politics, economics or weather market. This does
+   not license narrowing our engine — the market-agnostic requirement
+   stands — but the behavioural evidence base is crypto-up/down only, so
+   transfer to any other category is extrapolation.
+6. Maker/taker is **not resolvable** from this corpus; a cross-reference
+   gives a **16.9% taker-share lower bound only**, reported as a floor.
+
+## Consequence for Lane 2 that must be recorded
+
+Lane 2 derived its action-family triggers from the L5 corpus **using the
+defective `name` filter**, so its band `[0.20, 0.82]` and compress trigger
+`0.991` describe the **Jul–Aug regime**, not L5's policy. Its structural
+conclusion — matched book ≈ zero, entire loss is unhedged directional
+residual, loss linear in unhedged favored shares — does not depend on
+those constants and stands. **Its parameters need re-deriving on the
+754,234-fill corpus before any replay number from it is quoted again.**
+
+## Final scoreboard
+
+| hypothesis | evidence | ind. windows | causal? | executable? | net EV | capacity | $/day | status | next gate |
+|---|---|---|---|---|---|---|---|---|---|
+| Gemini underdog + complement | measured | 61 | yes | yes | −$0.0285/win | q1=q25 reach | −$8.21 | **KILLED** | — |
+| Gemini favored first leg | measured | 61 | yes | yes | −$0.3108/win | q1–q25 | −$89.51 | **KILLED** | — |
+| Gemini first-leg state selection | measured | 10 disc | yes | yes | negative everywhere | — | — | **KILLED** | — |
+| Gemini L5 inventory replay | measured | 62 | yes | modelled | −$0.437/win CI excl. 0 | — | −$125.86 | **KILLED** | params need re-derivation |
+| └ matched book alone | measured | 62 | yes | modelled | +$0.006/win CI spans 0 | q25 61.7% | $43 @q25 | **ceiling ≈ zero** | 11.1× short |
+| Gemini maker supply (unrebated) | measured | 46 | yes | 42% fill | −$0.2380/fill | 10,698 fills | negative | **KILLED** | zero non-toxic states |
+| **Kalshi 15M structural fit** | measured | 72 tickers | — | 91.9% @q5 | UNMEASURED | pair 1.02 | UNMEASURED | **best candidate** | **adverse selection; rebate ≥$0.238?** |
+| Polymarket sports | measured | 71 events | — | — | UNMEASURED | pair 1.01 | UNMEASURED | gated | confirm 1000bps fee is/isn't effective |
+| PMUS sports | **artifact** | 2 markets/12min | — | ask_qty null 232/232 | — | — | — | **gated out** | needs a real census |
+| External→book lead (Phase A) | collecting | 0 | — | — | UNMEASURED | — | — | **dispatched** | ≥2 admissible venues |
+| L5 rebate-harvesting hypothesis | **new** | 17,855 events | plausible | — | UNMEASURED | — | — | **highest value** | source our own rebate terms |
+
+## Recommendation
+
+**Gemini BTC5m is finished as a deployment candidate.** It failed on four
+independent mechanisms — prediction, inventory management, liquidity
+supply, and capacity arithmetic — and the capacity ceiling alone (11.1×
+short under a *perfect* hedge) is independent of prediction quality.
+
+**The fastest defensible route is now Kalshi 15-minute series**, for one
+reason that is not about Kalshi's spread: it is the **only** environment
+where **maker-reward program terms are actually sourced** (183,329
+programs scanned; 83.1% of leg-tape rows under an active program), and the
+rebate is the component Lane 5 identifies as the likely source of L5's
+profitable-regime economics. Kalshi also matches L5's 900s window exactly
+and prices pairs 22¢ tighter than Gemini.
+
+Two things must be measured before any of that is trusted, and neither is
+a strategy experiment:
+1. **Our own rebate terms** — does any available program credit
+   ≥$0.238/contract? Sourced and credited, never assumed. This single
+   number decides whether the maker lane is dead or the main event.
+2. **Adverse selection, which is UNAVAILABLE for every environment** — no
+   corpus aligns own fills with book state and subsequent mark. It is the
+   dimension most likely to reverse Kalshi's apparent edge.
+
+Kalshi's honest blocker: **prints are anonymous**, so per-actor
+OPEN/EXTEND/COMPLETE sequences and complement lag are UNAVAILABLE, and its
+leg tape is **83 minutes**. It is demonstrated *structurally permissive*,
+not *behaviourally L5-like*.
