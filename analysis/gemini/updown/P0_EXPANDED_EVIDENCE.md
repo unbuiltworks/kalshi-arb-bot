@@ -135,3 +135,38 @@ tick floor rather than a measured distribution; and Gemini BTC15M's 2¢
 spread is **historical** (Aug 2026), not current. Both need their own
 census before anything is built on them. I am naming the structurally
 closest candidate as asked, not proposing a strategy for it.
+
+---
+
+## ADDENDUM — Phase A lead/lag: the probe ran, and REJECTED all four feeds
+
+The re-dispatched job (`868caa11`, probe at 21:41:31Z) completed its
+admissibility stage and committed a verdict. **0 of 4 venues admissible**,
+so the preregistered gate stopped the run before collection — fewer than
+two admissible venues is not a consensus. This is the design working, not
+a crash.
+
+| Venue | Reachable | Failed requirement | Detail |
+|---|---|---|---|
+| coinbase | yes | **4_book_with_sizes** | bid 85896.13 / ask 85896.14, ISO8601 ts identified, clock offset **1.033 s**, RTT 0.114 s, sequence id 1102756342 published — but **no sizes** |
+| kraken | yes | **2 + 3_source_timestamp** | bid/ask **with** sizes (1.000 each), RTT 0.110 s — but **no source timestamp field at all** |
+| binance | **no** | **1_reachable** | **HTTP 451** (unavailable for legal reasons) |
+| gemini_spot | yes | **3 + 4** | non-numeric timestamp, no sizes |
+
+**The cause is endpoint choice, and it is systematic.** All four URLs are
+*ticker* endpoints, which by construction publish either a sized book or a
+source timestamp but not both: coinbase and gemini_spot give a timestamp
+without sizes, kraken gives sizes without a timestamp. The admissibility
+rule is correct and should not be weakened — an unsized touch genuinely is
+not an executable book, and a feed whose clock semantics cannot be
+established genuinely cannot support a sub-second lead/lag claim.
+
+**What would fix it is a change of endpoint, not of rule** — order-book
+endpoints (coinbase `/products/BTC-USD/book?level=1`, kraken
+`/0/public/Depth`) publish both, and binance's 451 needs a different host
+or to be dropped with its USDT basis caveat. **That is a redesign of the
+collector's source list, so I have not done it.** It is the one open
+decision blocking Phase A, and limb 1 of the decision gate stays
+unresolved until it is made.
+
+Phase B remains unrun and unpreregistered, as before.
