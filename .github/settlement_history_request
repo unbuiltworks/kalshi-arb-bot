@@ -7,6 +7,6 @@ default branch, so a gated push trigger is how it gets started.
 One directive is read, anchored at both ends so this prose cannot be mistaken
 for it. The stage word is the word probe or the word harvest, on its own line.
 
-STAGE=probe
+STAGE=harvest
 
-REQUEST=1
+REQUEST=2

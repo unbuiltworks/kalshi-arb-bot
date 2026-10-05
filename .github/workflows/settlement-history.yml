@@ -24,7 +24,12 @@ on:
     paths: ['.github/settlement_history_request']
 
 permissions:
-  contents: read
+  # The harvest job COMMITS the dataset back to this research branch. That is
+  # not a convenience: artifact blob storage is unreachable from the research
+  # container, so committing is how the harvested series becomes available at
+  # all -- and the instruction is to preserve it so it never has to be
+  # rediscovered. Only data/pmus_settlement_history/ is ever staged.
+  contents: write
   actions: read
 
 jobs:
@@ -69,4 +74,78 @@ jobs:
             PROBE.log
             history_probe.json
           retention-days: 30
+          if-no-files-found: error
+
+  harvest:
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'harvest' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Walk backward in exact 15-minute steps
+        run: |
+          set -euo pipefail
+          mkdir -p data/pmus_settlement_history
+          python3 scripts/pmus_settlement_history_harvest.py \
+            --out data/pmus_settlement_history/settlements.jsonl \
+            --raw-out data/pmus_settlement_history/raw_responses.jsonl \
+            | tee HARVEST.log
+          wc -l data/pmus_settlement_history/settlements.jsonl \
+                data/pmus_settlement_history/raw_responses.jsonl
+
+      - name: Streaks, base rates and transitions
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_settlement_streaks.py \
+            --settlements data/pmus_settlement_history/settlements.jsonl \
+            --out analysis/l5/settlement_history/settlement_streaks.json \
+            | tee STREAKS.log
+
+      - name: Compress and commit the dataset to the research branch
+        run: |
+          set -euo pipefail
+          cd data/pmus_settlement_history
+          gzip -9 -f settlements.jsonl raw_responses.jsonl
+          ls -l
+          cd "$GITHUB_WORKSPACE"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # ONLY the dataset and its analysis. Nothing else is staged, so this
+          # cannot pick up an incidental working-tree change.
+          git add data/pmus_settlement_history/settlements.jsonl.gz \
+                  data/pmus_settlement_history/raw_responses.jsonl.gz \
+                  data/pmus_settlement_history/settlements.jsonl.summary.json \
+                  analysis/l5/settlement_history/settlement_streaks.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit"; exit 0
+          fi
+          git commit \
+            -m "PMUS BTC15m settlement-history dataset and streak statistics" \
+            -m "Harvested by .github/workflows/settlement-history.yml. Settlement outcomes with full raw provenance; no book and no executable price, so this cannot be used for P&L." \
+            -m "Separate from the 178-window generating sample and the 43-window executable holdout. Neither is altered by this and the swept per-second 2026-10-01 tape is not recovered by it."
+          for i in 1 2 3 4; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
+            echo "push $i failed; rebasing on the branch and retrying"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            sleep $((i * 4))
+          done
+          echo "::error::could not push the dataset"; exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: settlement-history-${{ github.run_id }}
+          path: |
+            HARVEST.log
+            STREAKS.log
+            data/pmus_settlement_history/
+            analysis/l5/settlement_history/
+          retention-days: 90
           if-no-files-found: error
