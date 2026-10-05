@@ -117,7 +117,9 @@ jobs:
                       # second any row can touch is T-960 (the open statistic)
                       end = r.get("window_end_unix")
                       if end is None:
-                          end = float(r["checkpoint_epoch"]) + r["checkpoint_min_remaining"]*60
+                          # a row that cannot state its own window cannot be
+                          # cleared; fail rather than wave it through
+                          bad += 1; print("UNDATED:", name, r.get("slug")); continue
                       if float(end) - 960 < cut:
                           bad += 1; print("LEAK:", r.get("slug"), end)
           print("rows=%d pre_oct2=%d" % (total, bad))

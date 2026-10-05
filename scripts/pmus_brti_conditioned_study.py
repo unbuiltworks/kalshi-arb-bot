@@ -253,7 +253,9 @@ def checkpoint_states(slug, T, s, candles, times, rows):
         b = BS.book_at(times, rows, at)
         exe = BS.executable_from_book(b) if b is not None else None
         if exe is None:
-            out.append({"slug": slug, "checkpoint_min_remaining": m,
+            out.append({"slug": slug, "window_end_unix": T,
+                        "checkpoint_min_remaining": m,
+                        "checkpoint_epoch": at,
                         "excluded": "no_causal_two_sided_book"})
             continue
         if exe["up_ask"] <= exe["down_ask"]:
@@ -267,7 +269,8 @@ def checkpoint_states(slug, T, s, candles, times, rows):
         d60 = BS.brti_change(candles, at, 60)
         dist_d = None if (brti is None or strike is None) else brti - strike
         out.append({
-            "slug": slug, "checkpoint_min_remaining": m,
+            "slug": slug, "window_end_unix": T,
+            "checkpoint_min_remaining": m,
             "checkpoint_epoch": at,
             "cheaper_outcome": cheap,
             "cheaper_executable_ask": str(cheap_px),
@@ -365,7 +368,8 @@ def lag_events(slug, T, s, candles, times, rows):
                         break
                     i += 1
                 ev.append({
-                    "slug": slug, "t": t, "seconds_remaining": T - t,
+                    "slug": slug, "window_end_unix": T,
+                    "t": t, "seconds_remaining": T - t,
                     "n_known": n_known, "n_remaining": BS.STAT_N - n_known,
                     "d_dollars": str(d), "delta_d_dollars": str(dd),
                     "magnitude_sigmas": None if mag is None else round(mag, 4),
