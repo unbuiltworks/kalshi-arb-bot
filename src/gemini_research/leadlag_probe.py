@@ -34,29 +34,57 @@ TIMEOUT = 15.0
 #: the collector prefers websockets where a venue offers them, and re-probes
 #: the same requirements there.
 CANDIDATES: Tuple[Dict[str, Any], ...] = (
-    {"venue": "coinbase", "instrument": "BTC-USD", "kind": "spot",
-     "url": "https://api.exchange.coinbase.com/products/BTC-USD/ticker",
-     "ts_fields": ("time",), "bid": ("bid",), "ask": ("ask",),
-     "bid_size": ("bid_size",), "ask_size": ("ask_size",),
-     "seq": ("trade_id",)},
-    {"venue": "kraken", "instrument": "XBT/USD", "kind": "spot",
-     "url": "https://api.kraken.com/0/public/Ticker?pair=XBTUSD",
-     "ts_fields": (), "bid": ("result", "XXBTZUSD", "b", 0),
-     "ask": ("result", "XXBTZUSD", "a", 0),
-     "bid_size": ("result", "XXBTZUSD", "b", 2),
-     "ask_size": ("result", "XXBTZUSD", "a", 2), "seq": ()},
-    {"venue": "binance", "instrument": "BTCUSDT", "kind": "spot",
+    # ORDER-BOOK endpoints, not ticker endpoints. The V1 probe asked four
+    # TICKER urls and all four were rejected: a ticker publishes either a
+    # sized book or a source timestamp, never both (coinbase and
+    # gemini_spot gave `time` with no sizes; kraken gave sizes with no
+    # timestamp field at all). The admissibility RULE is unchanged and is
+    # correct -- an unsized touch is not an executable book -- so the fix
+    # is the source, which is what these urls change.
+    {"venue": "coinbase", "instrument": "BTC-USD", "kind": "spot_book",
+     "url": ("https://api.exchange.coinbase.com/products/BTC-USD/book"
+             "?level=2"),
+     "ts_fields": ("time",),
+     "bid": ("bids", 0, 0), "ask": ("asks", 0, 0),
+     "bid_size": ("bids", 0, 1), "ask_size": ("asks", 0, 1),
+     "seq": ("sequence",)},
+    {"venue": "kraken", "instrument": "XBT/USD", "kind": "spot_book",
+     "url": "https://api.kraken.com/0/public/Depth?pair=XBTUSD&count=1",
+     # each level carries its OWN unix timestamp, which is the source
+     # timestamp the ticker endpoint lacked
+     "ts_fields": (("result", "XXBTZUSD", "bids", 0, 2),),
+     "bid": ("result", "XXBTZUSD", "bids", 0, 0),
+     "ask": ("result", "XXBTZUSD", "asks", 0, 0),
+     "bid_size": ("result", "XXBTZUSD", "bids", 0, 1),
+     "ask_size": ("result", "XXBTZUSD", "asks", 0, 1),
+     "seq": ()},
+    {"venue": "gemini_spot", "instrument": "btcusd", "kind": "spot_book",
+     "url": ("https://api.gemini.com/v1/book/btcusd"
+             "?limit_bids=1&limit_asks=1"),
+     "ts_fields": (("bids", 0, "timestamp"),),
+     "bid": ("bids", 0, "price"), "ask": ("asks", 0, "price"),
+     "bid_size": ("bids", 0, "amount"), "ask_size": ("asks", 0, "amount"),
+     "seq": ()},
+    {"venue": "bitstamp", "instrument": "btcusd", "kind": "spot_book",
+     # USD-quoted, so it carries NO basis caveat, and it publishes both a
+     # microsecond timestamp and sized levels
+     "url": "https://www.bitstamp.net/api/v2/order_book/btcusd/",
+     "ts_fields": ("microtimestamp", "timestamp"),
+     "bid": ("bids", 0, 0), "ask": ("asks", 0, 0),
+     "bid_size": ("bids", 0, 1), "ask_size": ("asks", 0, 1),
+     "seq": ()},
+    # RETAINED so the record shows it was not silently dropped: binance
+    # answered HTTP 451 (unavailable for legal reasons) from the CI egress.
+    # Its USDT quote also means it could never join a USD consensus
+    # without an explicit basis layer.
+    {"venue": "binance", "instrument": "BTCUSDT", "kind": "spot_book",
      "basis": ("USDT-quoted, NOT USD. Any comparison to a USD reference "
                "carries USDT/USD basis and is reported as a separate layer, "
                "never folded into a USD consensus without it."),
-     "url": "https://api.binance.com/api/v3/ticker/bookTicker?symbol=BTCUSDT",
-     "ts_fields": (), "bid": ("bidPrice",), "ask": ("askPrice",),
-     "bid_size": ("bidQty",), "ask_size": ("askQty",),
+     "url": "https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=5",
+     "ts_fields": (), "bid": ("bids", 0, 0), "ask": ("asks", 0, 0),
+     "bid_size": ("bids", 0, 1), "ask_size": ("asks", 0, 1),
      "seq": ("lastUpdateId",)},
-    {"venue": "gemini_spot", "instrument": "btcusd", "kind": "spot",
-     "url": "https://api.gemini.com/v1/pubticker/btcusd",
-     "ts_fields": ("volume", "timestamp"), "bid": ("bid",), "ask": ("ask",),
-     "bid_size": (), "ask_size": (), "seq": ()},
 )
 
 
@@ -81,14 +109,24 @@ def classify_unit(raw: Any, now_s: float) -> Dict[str, Any]:
     if raw is None:
         return {"identified": False, "why": "no source timestamp field"}
     if isinstance(raw, str):
+        # A NUMERIC STRING is an epoch, not an ISO date. Several venues
+        # publish "1791236835" or a microsecond string; the earlier version
+        # tried ISO first and REJECTED those outright as unparseable, which
+        # is a false rejection of a perfectly good timestamp. Try the
+        # numeric reading first and fall through to the magnitude test
+        # below, which is what actually identifies the unit.
         try:
-            from datetime import datetime
-            t = datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
-            return {"identified": True, "unit": "iso8601",
-                    "epoch_s": t, "offset_s": round(now_s - t, 4)}
-        except Exception:                                      # noqa: BLE001
-            return {"identified": False, "why": "unparseable string: %r"
-                    % raw[:40]}
+            float(raw)
+        except ValueError:
+            try:
+                from datetime import datetime
+                t = datetime.fromisoformat(
+                    raw.replace("Z", "+00:00")).timestamp()
+                return {"identified": True, "unit": "iso8601",
+                        "epoch_s": t, "offset_s": round(now_s - t, 4)}
+            except Exception:                                  # noqa: BLE001
+                return {"identified": False, "why": "unparseable string: %r"
+                        % raw[:40]}
     try:
         v = float(raw)
     except Exception:                                          # noqa: BLE001
