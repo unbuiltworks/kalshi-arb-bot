@@ -1,0 +1,459 @@
+{
+ "LABEL": "PMUS_BTC15M_SETTLEMENT_STREAKS",
+ "block_sizes_top10": [
+  568,
+  340,
+  171,
+  88
+ ],
+ "continuous_blocks": 4,
+ "dataset": "settlement-history (dataset 1 of 3; NOT the 178-window generating sample, NOT the 43-window executable holdout)",
+ "gaps": [
+  {
+   "after_window_start": "2026-09-24T09:45:00+00:00",
+   "before_window_start": "2026-09-24T12:00:00+00:00",
+   "missing_windows": 8
+  },
+  {
+   "after_window_start": "2026-09-25T09:45:00+00:00",
+   "before_window_start": "2026-09-25T12:00:00+00:00",
+   "missing_windows": 8
+  },
+  {
+   "after_window_start": "2026-10-01T09:45:00+00:00",
+   "before_window_start": "2026-10-01T12:00:00+00:00",
+   "missing_windows": 8
+  }
+ ],
+ "labels": "Statistics are computed over the largest CONTINUOUS run of consecutive 15-minute windows. The whole-series figures break every streak at every gap rather than counting across a hole. Settlement outcomes cannot establish profitability of any strategy.",
+ "largest_continuous_block": {
+  "conditional_continuation": {
+   "DOWN": {
+    "1": {
+     "continued": 74,
+     "frequency": 0.5,
+     "opportunities": 148
+    },
+    "2": {
+     "continued": 30,
+     "frequency": 0.4054,
+     "opportunities": 74
+    },
+    "3": {
+     "continued": 14,
+     "frequency": 0.4667,
+     "opportunities": 30
+    },
+    "4": {
+     "continued": 4,
+     "frequency": 0.2857,
+     "opportunities": 14
+    },
+    "5": {
+     "continued": 1,
+     "frequency": 0.25,
+     "opportunities": 4
+    },
+    "6": {
+     "continued": 0,
+     "frequency": 0.0,
+     "opportunities": 1
+    },
+    "7": {
+     "continued": 0,
+     "frequency": null,
+     "opportunities": 0
+    },
+    "8": {
+     "continued": 0,
+     "frequency": null,
+     "opportunities": 0
+    },
+    "9": {
+     "continued": 0,
+     "frequency": null,
+     "opportunities": 0
+    }
+   },
+   "UP": {
+    "1": {
+     "continued": 65,
+     "frequency": 0.4392,
+     "opportunities": 148
+    },
+    "2": {
+     "continued": 33,
+     "frequency": 0.5077,
+     "opportunities": 65
+    },
+    "3": {
+     "continued": 18,
+     "frequency": 0.5455,
+     "opportunities": 33
+    },
+    "4": {
+     "continued": 10,
+     "frequency": 0.5556,
+     "opportunities": 18
+    },
+    "5": {
+     "continued": 7,
+     "frequency": 0.7,
+     "opportunities": 10
+    },
+    "6": {
+     "continued": 6,
+     "frequency": 0.8571,
+     "opportunities": 7
+    },
+    "7": {
+     "continued": 3,
+     "frequency": 0.5,
+     "opportunities": 6
+    },
+    "8": {
+     "continued": 3,
+     "frequency": 1.0,
+     "opportunities": 3
+    },
+    "9": {
+     "continued": 2,
+     "frequency": 0.6667,
+     "opportunities": 3
+    }
+   }
+  },
+  "down_10_plus_occurrences": 0,
+  "down_count": 272,
+  "down_pct": 47.887,
+  "first_window_start": "2026-09-25T12:00:00+00:00",
+  "label": "largest_continuous_block",
+  "labels": "settlement outcomes only; no book, no executable price, no fee, no P&L. A frequency is not an edge and not a profitable strategy.",
+  "last_window_start": "2026-10-01T09:45:00+00:00",
+  "longest_down_streak": 6,
+  "longest_up_streak": 11,
+  "streaks_of_6_or_more": [
+   {
+    "first_window_start": "2026-09-26T13:30:00+00:00",
+    "last_window_start": "2026-09-26T15:45:00+00:00",
+    "length": 10,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-27T06:45:00+00:00",
+    "last_window_start": "2026-09-27T08:15:00+00:00",
+    "length": 7,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-27T17:15:00+00:00",
+    "last_window_start": "2026-09-27T18:45:00+00:00",
+    "length": 7,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-28T09:45:00+00:00",
+    "last_window_start": "2026-09-28T12:15:00+00:00",
+    "length": 11,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-28T14:45:00+00:00",
+    "last_window_start": "2026-09-28T16:15:00+00:00",
+    "length": 7,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-30T05:45:00+00:00",
+    "last_window_start": "2026-09-30T07:00:00+00:00",
+    "length": 6,
+    "outcome": "DOWN"
+   },
+   {
+    "first_window_start": "2026-09-30T08:45:00+00:00",
+    "last_window_start": "2026-09-30T10:45:00+00:00",
+    "length": 9,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-10-01T08:15:00+00:00",
+    "last_window_start": "2026-10-01T09:30:00+00:00",
+    "length": 6,
+    "outcome": "UP"
+   }
+  ],
+  "streaks_reaching_at_least": {
+   "DOWN": {
+    "2": 74,
+    "3": 30,
+    "4": 14,
+    "5": 4,
+    "6": 1,
+    "7": 0,
+    "8": 0,
+    "9": 0,
+    "10": 0
+   },
+   "UP": {
+    "2": 65,
+    "3": 33,
+    "4": 18,
+    "5": 10,
+    "6": 7,
+    "7": 6,
+    "8": 3,
+    "9": 3,
+    "10": 2
+   }
+  },
+  "streaks_total": 297,
+  "transitions": {
+   "DOWN->DOWN": 123,
+   "DOWN->UP": 148,
+   "UP->DOWN": 148,
+   "UP->UP": 148
+  },
+  "up_10_plus_occurrences": 2,
+  "up_count": 296,
+  "up_pct": 52.113,
+  "windows": 568
+ },
+ "resolved_windows": 1167,
+ "source": "data/pmus_settlement_history/settlements.jsonl",
+ "whole_resolved_series_streaks_broken_at_gaps": {
+  "conditional_continuation": {
+   "DOWN": {
+    "1": {
+     "continued": 150,
+     "frequency": 0.5,
+     "opportunities": 300
+    },
+    "2": {
+     "continued": 65,
+     "frequency": 0.4362,
+     "opportunities": 149
+    },
+    "3": {
+     "continued": 30,
+     "frequency": 0.4615,
+     "opportunities": 65
+    },
+    "4": {
+     "continued": 13,
+     "frequency": 0.4333,
+     "opportunities": 30
+    },
+    "5": {
+     "continued": 6,
+     "frequency": 0.4615,
+     "opportunities": 13
+    },
+    "6": {
+     "continued": 2,
+     "frequency": 0.3333,
+     "opportunities": 6
+    },
+    "7": {
+     "continued": 1,
+     "frequency": 0.5,
+     "opportunities": 2
+    },
+    "8": {
+     "continued": 1,
+     "frequency": 1.0,
+     "opportunities": 1
+    },
+    "9": {
+     "continued": 1,
+     "frequency": 1.0,
+     "opportunities": 1
+    }
+   },
+   "UP": {
+    "1": {
+     "continued": 147,
+     "frequency": 0.49,
+     "opportunities": 300
+    },
+    "2": {
+     "continued": 70,
+     "frequency": 0.4795,
+     "opportunities": 146
+    },
+    "3": {
+     "continued": 32,
+     "frequency": 0.4571,
+     "opportunities": 70
+    },
+    "4": {
+     "continued": 15,
+     "frequency": 0.4688,
+     "opportunities": 32
+    },
+    "5": {
+     "continued": 10,
+     "frequency": 0.6667,
+     "opportunities": 15
+    },
+    "6": {
+     "continued": 7,
+     "frequency": 0.7,
+     "opportunities": 10
+    },
+    "7": {
+     "continued": 3,
+     "frequency": 0.4286,
+     "opportunities": 7
+    },
+    "8": {
+     "continued": 3,
+     "frequency": 1.0,
+     "opportunities": 3
+    },
+    "9": {
+     "continued": 2,
+     "frequency": 0.6667,
+     "opportunities": 3
+    }
+   }
+  },
+  "down_10_plus_occurrences": 1,
+  "down_count": 576,
+  "down_pct": 49.357,
+  "label": "whole_resolved_series_streaks_broken_at_gaps",
+  "longest_down_streak": 16,
+  "longest_up_streak": 11,
+  "streaks_of_6_or_more": [
+   {
+    "first_window_start": "2026-09-23T18:30:00+00:00",
+    "last_window_start": "2026-09-23T19:45:00+00:00",
+    "length": 6,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-23T23:00:00+00:00",
+    "last_window_start": "2026-09-24T00:15:00+00:00",
+    "length": 6,
+    "outcome": "DOWN"
+   },
+   {
+    "first_window_start": "2026-09-24T00:45:00+00:00",
+    "last_window_start": "2026-09-24T02:00:00+00:00",
+    "length": 6,
+    "outcome": "DOWN"
+   },
+   {
+    "first_window_start": "2026-09-24T08:00:00+00:00",
+    "last_window_start": "2026-09-24T09:30:00+00:00",
+    "length": 7,
+    "outcome": "DOWN"
+   },
+   {
+    "first_window_start": "2026-09-24T12:45:00+00:00",
+    "last_window_start": "2026-09-24T14:15:00+00:00",
+    "length": 7,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-24T16:30:00+00:00",
+    "last_window_start": "2026-09-24T17:45:00+00:00",
+    "length": 6,
+    "outcome": "DOWN"
+   },
+   {
+    "first_window_start": "2026-09-26T13:30:00+00:00",
+    "last_window_start": "2026-09-26T15:45:00+00:00",
+    "length": 10,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-27T06:45:00+00:00",
+    "last_window_start": "2026-09-27T08:15:00+00:00",
+    "length": 7,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-27T17:15:00+00:00",
+    "last_window_start": "2026-09-27T18:45:00+00:00",
+    "length": 7,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-28T09:45:00+00:00",
+    "last_window_start": "2026-09-28T12:15:00+00:00",
+    "length": 11,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-28T14:45:00+00:00",
+    "last_window_start": "2026-09-28T16:15:00+00:00",
+    "length": 7,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-09-30T05:45:00+00:00",
+    "last_window_start": "2026-09-30T07:00:00+00:00",
+    "length": 6,
+    "outcome": "DOWN"
+   },
+   {
+    "first_window_start": "2026-09-30T08:45:00+00:00",
+    "last_window_start": "2026-09-30T10:45:00+00:00",
+    "length": 9,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-10-01T08:15:00+00:00",
+    "last_window_start": "2026-10-01T09:30:00+00:00",
+    "length": 6,
+    "outcome": "UP"
+   },
+   {
+    "first_window_start": "2026-10-02T13:45:00+00:00",
+    "last_window_start": "2026-10-02T17:30:00+00:00",
+    "length": 16,
+    "outcome": "DOWN"
+   },
+   {
+    "first_window_start": "2026-10-03T16:30:00+00:00",
+    "last_window_start": "2026-10-03T17:45:00+00:00",
+    "length": 6,
+    "outcome": "UP"
+   }
+  ],
+  "streaks_reaching_at_least": {
+   "DOWN": {
+    "2": 150,
+    "3": 65,
+    "4": 30,
+    "5": 13,
+    "6": 6,
+    "7": 2,
+    "8": 1,
+    "9": 1,
+    "10": 1
+   },
+   "UP": {
+    "2": 147,
+    "3": 70,
+    "4": 32,
+    "5": 15,
+    "6": 10,
+    "7": 7,
+    "8": 3,
+    "9": 3,
+    "10": 2
+   }
+  },
+  "transitions": {
+   "DOWN->DOWN": 275,
+   "DOWN->UP": 299,
+   "UP->DOWN": 299,
+   "UP->UP": 290
+  },
+  "up_10_plus_occurrences": 2,
+  "up_count": 591,
+  "up_pct": 50.643,
+  "windows": 1167
+ }
+}

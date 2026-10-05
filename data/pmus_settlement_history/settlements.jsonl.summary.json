@@ -1,0 +1,30 @@
+{
+ "LABEL": "PMUS_BTC15M_SETTLEMENT_HISTORY_HARVEST",
+ "authenticated": false,
+ "books_collected": false,
+ "boundary_confirmation_existing_beyond_walk": [],
+ "boundary_confirmation_probes": 120,
+ "boundary_confirmed": true,
+ "cross_check_disagreements": [],
+ "cross_check_tally": {
+  "agree": 1163,
+  "disagree": 0,
+  "incomplete": 5
+ },
+ "elapsed_s": 386,
+ "existence_tally": {
+  "ABSENT": 312,
+  "ERROR": 0,
+  "EXISTS": 1168
+ },
+ "labels": "ABSENT means the venue answered 404. ERROR means we failed to ask and is NEVER counted as absence. An outcome is UP only at settlementPx 1 and DOWN only at 0; anything else is left unresolved and never inferred -- the independent priceToBeat/settlementPrice arithmetic is a CROSS-CHECK and never fills in an outcome the venue did not state. boundary_confirmation probes test whether anything exists further back than the walk reached; they are not part of the series. Settlement outcomes cannot establish the profitability of any strategy.",
+ "method": "GET",
+ "newest_requested_window": "2026-10-05T01:00:00+00:00",
+ "oldest_existing_window": "2026-09-22T15:15:00+00:00",
+ "raw": "data/pmus_settlement_history/raw_responses.jsonl",
+ "resolved_outcomes": 1167,
+ "settlements": "data/pmus_settlement_history/settlements.jsonl",
+ "stop_after_absent": 288,
+ "stop_reason": "288 consecutive ABSENT windows back to 2026-09-19T15:15:00+00:00",
+ "walked_windows": 1480
+}
