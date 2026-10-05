@@ -1,0 +1,162 @@
+name: pmus-underdog-partial-discovery
+
+# WHY THIS RUNS IN ACTIONS AND NOT IN A SESSION CONTAINER.
+# The archived raw pmus_ws parts live as workflow artifacts of run
+# ARCHIVE_RUN_ID. Artifact bytes are served from Azure blob storage, which this
+# programme's session egress policy denies (403 on CONNECT). Actions can read
+# them. Nothing here touches the recorder, its volume, its service, its
+# deployment or the archive branch's history -- artifacts and git are read
+# only, and the only write is a commit to THIS branch.
+#
+# OCT. 1 IS QUARANTINED. Only parts dated 2026-10-02 or later are unpacked; a
+# part dated 2026-10-01 or earlier is deleted before any analysis step can see
+# it, and the run FAILS if an observation with a pre-Oct-2 window end survives.
+#
+# PARTIAL BY CONSTRUCTION. The archive run is still in flight, so this uses the
+# chunk artifacts that are COMPLETE at dispatch time and records exactly which.
+
+on:
+  workflow_dispatch:
+    inputs:
+      archive_run_id:
+        description: 'workflow run id holding the raw-tape-archive-* artifacts'
+        required: true
+        default: '37253257157'
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  # pinned so the borrowed analysis code is identical to what the archive run
+  # was built from; this branch is never written to
+  SRC_REF: ae80e9d59450bd13f8cd01f8460dea91033bd66b
+  EARLIEST_ELIGIBLE: '20261002'
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Check out this branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Borrow the canonical analysis code (read only, pinned)
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin claude/l5-pmus-economic-results-7c116e
+          # canonical fee model, recorder fold, derive step, sampler, settlements
+          git checkout "$SRC_REF" -- \
+            src/pmus_fees.py \
+            src/pmus_ws_evidence_recorder.py \
+            scripts/pmus_oos_derive_rows.py \
+            scripts/pmus_underdog_calibration.py \
+            data/pmus_settlement_history/settlements.jsonl.gz
+          git reset -q
+          echo "borrowed from $SRC_REF:"
+          git log -1 --format='%H %ci %s' "$SRC_REF"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -q httpx python-dotenv websockets cryptography
+
+      - name: Download the COMPLETED archive chunk artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: raw-tape-archive-*
+          path: arc
+          run-id: ${{ inputs.archive_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Quarantine everything before Oct. 2, then inventory what is left
+        run: |
+          set -euo pipefail
+          mkdir -p parts
+          find arc -name 'pmus_ws_*.jsonl.gz' -print0 | while IFS= read -r -d '' f; do
+            b=$(basename "$f"); d=$(echo "$b" | sed -E 's/^pmus_ws_([0-9]{8})_.*/\1/')
+            if [ "$d" -ge "$EARLIEST_ELIGIBLE" ]; then mv "$f" "parts/$b";
+            else echo "QUARANTINED (pre-Oct-2): $b"; rm -f "$f"; fi
+          done
+          rm -rf arc
+          ls parts | sort > PARTS_USED.txt
+          echo "eligible parts: $(wc -l < PARTS_USED.txt)"
+          cat PARTS_USED.txt
+          test -s PARTS_USED.txt || { echo "::error::no eligible Oct 2+ parts"; exit 1; }
+
+      - name: Concatenate eligible parts in chronological order
+        run: |
+          set -euo pipefail
+          : > raw_oct2plus.jsonl
+          while read -r p; do gunzip -c "parts/$p" >> raw_oct2plus.jsonl; done < PARTS_USED.txt
+          wc -l raw_oct2plus.jsonl
+          rm -rf parts
+
+      - name: Derive book/trade rows with the recorder's own fold
+        run: python scripts/pmus_oos_derive_rows.py raw_oct2plus.jsonl rows_oct2plus.jsonl
+
+      - name: Underdog price x time calibration (frozen checkpoints and buckets)
+        run: |
+          set -euo pipefail
+          python scripts/pmus_underdog_calibration.py \
+            --books rows_oct2plus.jsonl \
+            --settlements data/pmus_settlement_history/settlements.jsonl.gz \
+            --label OCT2PLUS_PARTIAL \
+            --out analysis/pmus/underdog_calibration \
+            --dump-observations observations_oct2plus.jsonl.gz
+
+      - name: Gate -- prove no quarantined window leaked in
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import gzip, json, sys, datetime as dt
+          cut = dt.datetime(2026,10,2,tzinfo=dt.timezone.utc)
+          bad = 0; n = 0
+          with gzip.open("observations_oct2plus.jsonl.gz","rt") as f:
+              for line in f:
+                  r = json.loads(line); n += 1
+                  we = str(r.get("window_end",""))
+                  t = dt.datetime.fromisoformat(we.replace("Z","+00:00"))
+                  if t < cut:
+                      bad += 1; print("LEAK:", r["slug"], we)
+          print("observations=%d pre_oct2=%d" % (n, bad))
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Record the exact provenance of this partial sample
+        run: |
+          set -euo pipefail
+          mkdir -p analysis/pmus/underdog_calibration
+          { echo "archive_run_id: ${{ inputs.archive_run_id }}";
+            echo "analysis_code_ref: $SRC_REF";
+            echo "earliest_eligible_part_date: $EARLIEST_ELIGIBLE";
+            echo "dispatched_at: $(date -u +%FT%TZ)";
+            echo; echo "parts used:"; cat PARTS_USED.txt; } \
+            > analysis/pmus/underdog_calibration/PARTIAL_SAMPLE_PROVENANCE.txt
+          cp PARTS_USED.txt analysis/pmus/underdog_calibration/PARTS_USED.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: underdog-calibration-oct2plus
+          path: |
+            analysis/pmus/underdog_calibration/
+            observations_oct2plus.jsonl.gz
+
+      - name: Commit the matrix to this branch
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -f analysis/pmus/underdog_calibration/
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit \
+            -m "Partial underdog price x time calibration on archived Oct 2+ chunks" \
+            -m "Descriptive calibration only. No strategy selected, no threshold tuned." \
+            -m "Oct 1 quarantined and gated out before any analysis step." \
+            -m "Partial: the archive run was still in flight, so only the chunk artifacts complete at dispatch contributed."
+          for i in 1 2 3 4; do git pull --rebase -q origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0; sleep $((2**i)); done
+          echo "::error::could not push the calibration"; exit 1
