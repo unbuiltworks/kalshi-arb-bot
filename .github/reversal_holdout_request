@@ -1,0 +1,18 @@
+« independent historical reversal-holdout request »
+
+Touching this file starts .github/workflows/reversal-holdout.yml. The workflow is
+branch-local, and GitHub offers workflow_dispatch only for workflows on the
+default branch, so a gated push trigger is how it gets started without putting
+research plumbing on main.
+
+Two directives are read, both anchored at both ends so this prose cannot be
+mistaken for one. The stage word is on its own line below. HARVEST_RUN_ID names
+the run whose artifacts hold the harvested parts, and is required only for the
+evaluate stage.
+
+  STAGE must be the word harvest or the word evaluate.
+
+STAGE=harvest
+HARVEST_RUN_ID=
+
+REQUEST=1
