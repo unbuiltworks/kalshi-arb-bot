@@ -315,3 +315,88 @@ Gemini 28.4 against an L5 anchor measured on a single good day. It also
 means **no L5-derived parameter in this repository should be quoted until
 re-derived**, and that the one-day provenance must be stated wherever the
 312-event / 9,901-fill figures appear.
+
+---
+
+## RETRACTION — my Kalshi recommendation rested on an artifact
+
+Two turns ago I recommended Kalshi 15-minute series as "the fastest
+defensible route", and gave as the central justification that it is "the
+**only** environment where maker-reward program terms are actually
+sourced (183,329 programs scanned; **83.1%** of leg-tape rows under an
+active program)".
+
+**The 83.1% is arithmetically correct and substantively misleading, and I
+verified the decomposition myself:**
+
+| series | leg-tape rows | under a reward program |
+|---|---|---|
+| KXCRYPTOLEAD15M | 935 | 935 |
+| KXSILVER15M | 197 | 197 |
+| KXWTI15M | 196 | 196 |
+| KXGOLD15M | 195 | 195 |
+| KXCOPPER15M | 185 | 185 |
+| KXNATGAS15M | 178 | 178 |
+| **KXBTC15M** | **191** | **0** |
+| **KXETH15M** | **192** | **0** |
+
+**Every one of the 1,886 program rows is in a series with no fill
+evidence, and 0 of the 383 BTC/ETH rows — the only series where flow is
+measurable — is under any program.** The reward programs exist precisely
+where there is no flow and are absent precisely where flow exists. The
+83.1% was an artifact of which tickers the collector happened to poll.
+
+### The gate verdict, split
+
+**Class A — liquid (BTC/ETH/SOL/XRP/DOGE 15M; 40,791 deduped prints, 51
+windows, ~6.9h): expected compensation $0.0000, maximum $0.0000,
+confirmed credited $0.00.** Against the $0.2380 break-even that is a
+deficit of **≥$0.2380/contract**, and it is robust to every unsourced
+parameter, because zero compensation minus a non-negative fee is at most
+zero. **Incentive-replication is KILLED at Kalshi wherever fills are
+measurable.**
+
+**Class B — subsidised (CRYPTOLEAD + commodity 15Ms; fill evidence NONE):**
+sourced pool **$20.00 per 15-minute period** = $1,920/day/market, which is
+*not* below the target, so **not killed on arithmetic**. But eligibility
+mechanics and the pool-scoring rule are **UNSOURCED** — and unknowable
+from this container. **$1,920/day of advertised pool in a market with
+$177/window of flow is a term, not a business.**
+
+**`CONFIRMED_CREDITED` is $0.00 for every Kalshi program. No credit has
+ever been observed.**
+
+### Fees are not the constraint
+
+Source-confirmed shape `quadratic`, multiplier 1, `tapered_deci_cent`;
+coefficient UNSOURCED. Sensitivity at c = 0.035/0.07/0.10 gives
+$0.0088/$0.0175/$0.0250 per contract at P=0.50 — **0–10.5% of the
+hurdle**. The missing coefficient cannot flip the verdict either way.
+
+### And Kalshi has the same pair-cost floor as Gemini
+
+Verified independently: **`pair_cost < 1.00` in 0 of 2,269 snapshots**
+(min 1.0010, median 1.0200), and **zero sub-$1 snapshots in every one of
+the eight series**. So the `≤0.96` spring target is never satisfiable on
+this sample either. Kalshi is tighter than Gemini (median 1.02 vs 1.24)
+but **not qualitatively different** — the simultaneous pair never pays.
+
+### Two caveats that cut against my earlier framing
+
+1. **The −$0.2380 hurdle is a GEMINI BTC5m measurement, not a Kalshi
+   one.** Transferring it assumes comparable maker toxicity, which is
+   **unmeasured** on Kalshi. A Kalshi-native adverse-selection
+   measurement is therefore blocking, not optional.
+2. The leg tape is **2,269 snapshots over 83.3 minutes of one day**, with
+   **no fills, no maker P&L and no credited rewards**. Program presence on
+   one 83-minute slice is also not evidence of persistence.
+
+### Corrected status
+
+**Kalshi is NOT the demonstrated best candidate.** It is an environment
+whose liquid markets carry **no** incentive and whose incentivised markets
+carry **no flow**, on sourced-but-stale terms, with its maker toxicity
+unmeasured. The single observation that would reopen it is **whether a
+liquidity program ever appears over a liquid series** — and the existing
+collector already logs `KALSHI_INCENTIVE_STATE`, so that needs no new
+code.
