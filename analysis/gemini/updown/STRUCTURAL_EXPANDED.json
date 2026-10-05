@@ -1,0 +1,502 @@
+{
+  "label": "GEMINI_BTC5M_STRUCTURAL_EXPANDED_V1",
+  "independent_windows": 61,
+  "observations": 24520,
+  "excluded_by_name": [
+    "BTC05M2610051550",
+    "BTC05M2610051555",
+    "BTC05M2610051600",
+    "BTC05M2610051605",
+    "BTC05M2610051610",
+    "BTC05M2610051730",
+    "BTC05M2610051755",
+    "BTC05M2610051800",
+    "BTC05M2610051805",
+    "BTC05M2610051810",
+    "BTC05M2610051845",
+    "BTC05M2610051850",
+    "BTC05M2610051855",
+    "BTC05M2610051900",
+    "BTC05M2610051905",
+    "BTC05M2610051910"
+  ],
+  "exclusion_reason": "6 sealed OOS windows from the first-leg study plus live-probe-contaminated windows",
+  "pair_cost_q1": {
+    "n": 24520,
+    "unit": "$ UP+DOWN",
+    "min": 1.01,
+    "p10": 1.01,
+    "median": 1.24,
+    "p90": 1.96,
+    "max": 1.97,
+    "mean": 1.2748
+  },
+  "spread_proxy_q1": {
+    "n": 24520,
+    "unit": "$ over 1.00",
+    "min": 0.01,
+    "p10": 0.01,
+    "median": 0.24,
+    "p90": 0.96,
+    "max": 0.97,
+    "mean": 0.2748
+  },
+  "both_sides_executable_pct": {
+    "q1": 100.0,
+    "q5": 68.16,
+    "q10": 68.04,
+    "q25": 61.7
+  },
+  "pair_cost_at_depth": {
+    "q1": {
+      "n": 24520,
+      "unit": "$",
+      "min": 1.01,
+      "p10": 1.01,
+      "median": 1.24,
+      "p90": 1.96,
+      "max": 1.97,
+      "mean": 1.2748
+    },
+    "q5": {
+      "n": 16714,
+      "unit": "$",
+      "min": 1.01,
+      "p10": 1.01,
+      "median": 1.27,
+      "p90": 1.67,
+      "max": 1.96,
+      "mean": 1.2681
+    },
+    "q10": {
+      "n": 16683,
+      "unit": "$",
+      "min": 1.01,
+      "p10": 1.01,
+      "median": 1.27,
+      "p90": 1.672,
+      "max": 1.96,
+      "mean": 1.2691
+    },
+    "q25": {
+      "n": 15129,
+      "unit": "$",
+      "min": 1.012,
+      "p10": 1.012,
+      "median": 1.28,
+      "p90": 1.96,
+      "max": 1.96,
+      "mean": 1.2999
+    }
+  },
+  "UNDERDOG": {
+    "windows_with_a_first_leg": 61,
+    "first_leg_price": {
+      "n": 61,
+      "unit": "$",
+      "min": 0.08,
+      "p10": 0.41,
+      "median": 0.55,
+      "p90": 0.63,
+      "max": 0.67,
+      "mean": 0.5354
+    },
+    "first_leg_t_plus": {
+      "n": 61,
+      "unit": "s",
+      "min": 15.02,
+      "p10": 15.09,
+      "median": 15.46,
+      "p90": 15.96,
+      "max": 265.46,
+      "mean": 21.7284
+    },
+    "complement": {
+      "q1": {
+        "windows_reached": 28,
+        "of_windows": 61,
+        "reach_pct": 45.9,
+        "seconds_to_first": {
+          "n": 28,
+          "unit": "s",
+          "min": 33.0,
+          "p10": 75.0,
+          "median": 117.02,
+          "p90": 216.01,
+          "max": 248.07,
+          "mean": 135.59
+        },
+        "open_seconds_per_window": {
+          "n": 28,
+          "unit": "s",
+          "min": 4.0,
+          "p10": 12.0,
+          "median": 100.0,
+          "p90": 196.0,
+          "max": 221.6,
+          "mean": 98.7893
+        },
+        "episodes_per_window": {
+          "n": 28,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 1.0,
+          "p90": 3.0,
+          "max": 5.0,
+          "mean": 1.6786
+        },
+        "best_lock": {
+          "n": 28,
+          "unit": "$",
+          "min": 0.49,
+          "p10": 0.58,
+          "median": 0.74,
+          "p90": 0.92,
+          "max": 0.99,
+          "mean": 0.7439
+        }
+      },
+      "q5": {
+        "windows_reached": 28,
+        "of_windows": 61,
+        "reach_pct": 45.9,
+        "seconds_to_first": {
+          "n": 28,
+          "unit": "s",
+          "min": 33.0,
+          "p10": 75.0,
+          "median": 117.02,
+          "p90": 216.01,
+          "max": 248.07,
+          "mean": 135.59
+        },
+        "open_seconds_per_window": {
+          "n": 28,
+          "unit": "s",
+          "min": 4.0,
+          "p10": 12.0,
+          "median": 100.0,
+          "p90": 196.0,
+          "max": 221.6,
+          "mean": 98.7893
+        },
+        "episodes_per_window": {
+          "n": 28,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 1.0,
+          "p90": 3.0,
+          "max": 5.0,
+          "mean": 1.6786
+        },
+        "best_lock": {
+          "n": 28,
+          "unit": "$",
+          "min": 0.49,
+          "p10": 0.58,
+          "median": 0.74,
+          "p90": 0.92,
+          "max": 0.99,
+          "mean": 0.7439
+        }
+      },
+      "q10": {
+        "windows_reached": 28,
+        "of_windows": 61,
+        "reach_pct": 45.9,
+        "seconds_to_first": {
+          "n": 28,
+          "unit": "s",
+          "min": 33.0,
+          "p10": 75.0,
+          "median": 117.02,
+          "p90": 216.01,
+          "max": 248.07,
+          "mean": 135.59
+        },
+        "open_seconds_per_window": {
+          "n": 28,
+          "unit": "s",
+          "min": 4.0,
+          "p10": 12.0,
+          "median": 100.0,
+          "p90": 196.0,
+          "max": 221.6,
+          "mean": 98.7893
+        },
+        "episodes_per_window": {
+          "n": 28,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 1.0,
+          "p90": 3.0,
+          "max": 5.0,
+          "mean": 1.6786
+        },
+        "best_lock": {
+          "n": 28,
+          "unit": "$",
+          "min": 0.49,
+          "p10": 0.6,
+          "median": 0.74,
+          "p90": 0.92,
+          "max": 0.99,
+          "mean": 0.7489
+        }
+      },
+      "q25": {
+        "windows_reached": 28,
+        "of_windows": 61,
+        "reach_pct": 45.9,
+        "seconds_to_first": {
+          "n": 28,
+          "unit": "s",
+          "min": 33.0,
+          "p10": 75.0,
+          "median": 117.02,
+          "p90": 216.01,
+          "max": 248.07,
+          "mean": 135.59
+        },
+        "open_seconds_per_window": {
+          "n": 28,
+          "unit": "s",
+          "min": 4.0,
+          "p10": 12.0,
+          "median": 100.0,
+          "p90": 188.0,
+          "max": 221.6,
+          "mean": 97.6464
+        },
+        "episodes_per_window": {
+          "n": 28,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 1.0,
+          "p90": 3.0,
+          "max": 5.0,
+          "mean": 1.6786
+        },
+        "best_lock": {
+          "n": 28,
+          "unit": "$",
+          "min": 0.49,
+          "p10": 0.61,
+          "median": 0.74,
+          "p90": 0.92,
+          "max": 0.99,
+          "mean": 0.7504
+        }
+      }
+    }
+  },
+  "FAVORED": {
+    "windows_with_a_first_leg": 61,
+    "first_leg_price": {
+      "n": 61,
+      "unit": "$",
+      "min": 0.64,
+      "p10": 0.67,
+      "median": 0.75,
+      "p90": 0.87,
+      "max": 0.98,
+      "mean": 0.7552
+    },
+    "first_leg_t_plus": {
+      "n": 61,
+      "unit": "s",
+      "min": 15.02,
+      "p10": 15.09,
+      "median": 15.46,
+      "p90": 15.96,
+      "max": 265.46,
+      "mean": 21.7284
+    },
+    "complement": {
+      "q1": {
+        "windows_reached": 31,
+        "of_windows": 61,
+        "reach_pct": 50.82,
+        "seconds_to_first": {
+          "n": 31,
+          "unit": "s",
+          "min": 24.0,
+          "p10": 40.0,
+          "median": 113.01,
+          "p90": 221.09,
+          "max": 252.04,
+          "mean": 124.1652
+        },
+        "open_seconds_per_window": {
+          "n": 31,
+          "unit": "s",
+          "min": 0.0,
+          "p10": 5.0,
+          "median": 90.0,
+          "p90": 181.0,
+          "max": 228.1,
+          "mean": 95.0161
+        },
+        "episodes_per_window": {
+          "n": 31,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 2.0,
+          "p90": 6.0,
+          "max": 11.0,
+          "mean": 2.8387
+        },
+        "best_lock": {
+          "n": 31,
+          "unit": "$",
+          "min": 0.72,
+          "p10": 0.78,
+          "median": 0.91,
+          "p90": 0.96,
+          "max": 0.98,
+          "mean": 0.8848
+        }
+      },
+      "q5": {
+        "windows_reached": 31,
+        "of_windows": 61,
+        "reach_pct": 50.82,
+        "seconds_to_first": {
+          "n": 31,
+          "unit": "s",
+          "min": 24.0,
+          "p10": 40.0,
+          "median": 113.01,
+          "p90": 221.09,
+          "max": 252.04,
+          "mean": 124.1652
+        },
+        "open_seconds_per_window": {
+          "n": 31,
+          "unit": "s",
+          "min": 0.0,
+          "p10": 5.0,
+          "median": 90.0,
+          "p90": 181.0,
+          "max": 228.1,
+          "mean": 95.0161
+        },
+        "episodes_per_window": {
+          "n": 31,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 2.0,
+          "p90": 6.0,
+          "max": 11.0,
+          "mean": 2.8387
+        },
+        "best_lock": {
+          "n": 31,
+          "unit": "$",
+          "min": 0.72,
+          "p10": 0.78,
+          "median": 0.91,
+          "p90": 0.96,
+          "max": 0.98,
+          "mean": 0.8848
+        }
+      },
+      "q10": {
+        "windows_reached": 31,
+        "of_windows": 61,
+        "reach_pct": 50.82,
+        "seconds_to_first": {
+          "n": 31,
+          "unit": "s",
+          "min": 24.0,
+          "p10": 40.0,
+          "median": 113.01,
+          "p90": 221.09,
+          "max": 252.04,
+          "mean": 124.7781
+        },
+        "open_seconds_per_window": {
+          "n": 31,
+          "unit": "s",
+          "min": 0.0,
+          "p10": 5.0,
+          "median": 82.0,
+          "p90": 178.0,
+          "max": 228.1,
+          "mean": 91.5645
+        },
+        "episodes_per_window": {
+          "n": 31,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 2.0,
+          "p90": 6.0,
+          "max": 10.0,
+          "mean": 2.7419
+        },
+        "best_lock": {
+          "n": 31,
+          "unit": "$",
+          "min": 0.72,
+          "p10": 0.78,
+          "median": 0.91,
+          "p90": 0.96,
+          "max": 0.98,
+          "mean": 0.8871
+        }
+      },
+      "q25": {
+        "windows_reached": 31,
+        "of_windows": 61,
+        "reach_pct": 50.82,
+        "seconds_to_first": {
+          "n": 31,
+          "unit": "s",
+          "min": 24.0,
+          "p10": 40.0,
+          "median": 113.01,
+          "p90": 221.09,
+          "max": 252.04,
+          "mean": 124.7781
+        },
+        "open_seconds_per_window": {
+          "n": 31,
+          "unit": "s",
+          "min": 0.0,
+          "p10": 5.0,
+          "median": 78.0,
+          "p90": 178.0,
+          "max": 228.1,
+          "mean": 89.5323
+        },
+        "episodes_per_window": {
+          "n": 31,
+          "unit": "count",
+          "min": 1.0,
+          "p10": 1.0,
+          "median": 2.0,
+          "p90": 7.0,
+          "max": 13.0,
+          "mean": 2.9355
+        },
+        "best_lock": {
+          "n": 31,
+          "unit": "$",
+          "min": 0.7265,
+          "p10": 0.78,
+          "median": 0.91,
+          "p90": 0.968,
+          "max": 0.98,
+          "mean": 0.8882
+        }
+      }
+    }
+  }
+}
