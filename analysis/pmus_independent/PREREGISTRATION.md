@@ -114,3 +114,21 @@ positives. Therefore:
 
 Passing 1–3 makes a rule a **candidate for fresh-tape validation**, not a
 strategy. Anything failing is recorded as rejected with its numbers.
+
+---
+
+## Addendum A — written after D was read, BEFORE C was opened (2026-10-05 ~04:50Z)
+
+D result: only **H1-600** met criterion 1 (n=38, +0.1766/trade, t=3.01). Every
+fixed-horizon (+30/+60 s) taker rule was significantly negative. D diagnostics
+(not selection): the H1 gap rule is positive at every checkpoint 840→360 s and
+negative ≤300 s; threshold-free β of (outcome−mid) on (Φ−mid) is ≈+1 only at
+660–480 s; positive on both D days; gross convergence after entry is +1.3c/30s,
++2.0c/120s, +5.7c/240s.
+
+**Primary confirmatory test on C: `H1-600` (settle), unchanged.** Criterion 2
+applies to it alone. Added, D-derived and therefore labelled `POST-D` with no
+promotion standing of their own: `H1-660`, `H1-540`, `H1-480` (neighbour
+stability), `H1-600+120s`, `H1-600+240s` (convergence mechanism), and the β table
+by checkpoint. Expected C power is low: ~20 H1-600 trades, se ≈ 0.09/trade, so C
+can refute a large effect but cannot confirm a small one.

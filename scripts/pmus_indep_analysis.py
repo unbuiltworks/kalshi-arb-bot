@@ -159,6 +159,49 @@ def r_h1(T):
     return f
 
 
+def r_h1x(T, h):
+    """POST-D addendum: H1 with a fixed-time complement exit (mechanism check)."""
+    def f(w):
+        for r in w.rows:
+            if r["sr"] <= T and fresh(r):
+                best = None
+                for s in ("UP", "DOWN"):
+                    px, _ = side_px(r, s)
+                    gap = side_phi(r, s) - px - fee(px)
+                    if gap >= 0.05 and (best is None or gap > best[1]):
+                        best = (s, gap)
+                if best:
+                    return trade(w, r, best[0], h), 1
+                return None, 0
+        return None, 0
+    return f
+
+
+def beta_table(wins):
+    """POST-D addendum: OLS of (outcome - mid) on (Phi - mid), one obs per
+    window per checkpoint, HC0 robust se. Threshold-free."""
+    out = {}
+    for T in (840, 780, 720, 660, 600, 540, 480, 420, 360, 300, 240, 180, 120, 90, 60):
+        xs, ys = [], []
+        for w in wins:
+            r = next((x for x in w.rows if x["sr"] <= T and fresh(x)), None)
+            if r is None or r["sr"] < T - 15:
+                continue
+            xs.append(r["pu"] - r["mid"])
+            ys.append(w.out - r["mid"])
+        if len(xs) < 10:
+            continue
+        mx, my = st.mean(xs), st.mean(ys)
+        sxx = sum((x - mx) ** 2 for x in xs)
+        b = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
+        a = my - b * mx
+        se = math.sqrt(sum(((x - mx) ** 2) * (y - a - b * x) ** 2
+                           for x, y in zip(xs, ys))) / sxx
+        out[str(T)] = {"n": len(xs), "beta": round(b, 3), "se": round(se, 3),
+                       "t": round(b / se, 2)}
+    return out
+
+
 def _disp(w, cond, pick, exit_h):
     first, n = None, 0
     for r in w.rows:
@@ -266,6 +309,9 @@ RULES = [
     ("H7-120", r_h7(120, 0.70, 0.95, "fav")),
     ("H7U-300", r_h7(300, 0.05, 0.30, "dog")),
     ("H7U-120", r_h7(120, 0.05, 0.30, "dog")),
+    # ---- POST-D addendum, frozen before C was opened (see PREREGISTRATION.md)
+    ("H1-660", r_h1(660)), ("H1-540", r_h1(540)), ("H1-480", r_h1(480)),
+    ("H1-600+120s", r_h1x(600, 120)), ("H1-600+240s", r_h1x(600, 240)),
 ]
 
 
@@ -448,6 +494,7 @@ def main() -> int:
     res["H1_calibration"] = calibration(wins)
     res["H1_phi_calibration"] = phi_calibration(wins)
     res["H6_wide_spread"] = wide_spread(wins)
+    res["H1_beta_postD"] = beta_table(wins)
     with open(a.out, "w") as fh:
         json.dump(res, fh, indent=1)
     print("%s windows=%d %s..%s up_rate=%.3f" % (a.label, len(wins), res["first"],
