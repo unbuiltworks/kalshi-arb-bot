@@ -55,9 +55,14 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     rs = rows(a.tapes)
 
-    ref = sorted((float(r["parsed_event_time"]), r)
-                 for r in rs if r.get("kind") == "index_price"
-                 and r.get("parsed_event_time") is not None)
+    # SORT ON THE TIMESTAMP ONLY. Sorting (float, dict) tuples compares the
+    # dicts whenever two reference rows share a timestamp, which raises
+    # TypeError -- it only ever worked because the small validation tapes had
+    # no such tie. The larger snapshot tape does.
+    ref = sorted(((float(r["parsed_event_time"]), r)
+                  for r in rs if r.get("kind") == "index_price"
+                  and r.get("parsed_event_time") is not None),
+                 key=lambda x: x[0])
     ref_t = [t for t, _ in ref]
 
     strikes: Dict[str, Any] = {}

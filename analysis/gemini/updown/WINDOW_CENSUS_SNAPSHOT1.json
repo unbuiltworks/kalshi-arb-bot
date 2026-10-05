@@ -1,0 +1,30 @@
+{
+  "GENUINELY_COMPLETE_WINDOWS": 1,
+  "btc5m_tickers_seen": 53,
+  "complete": [
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85359.29",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051800",
+      "up_resolution_side": "yes"
+    }
+  ],
+  "incomplete_by_missing_requirement": {
+    "fewer_than_6_early_checkpoints": 36,
+    "fewer_than_6_executable_books": 36,
+    "fewer_than_6_fresh_reference_observations": 36,
+    "no_authoritative_strike": 51,
+    "no_settlement": 1
+  },
+  "label": "GEMINI_BTC5M_WINDOW_CENSUS",
+  "max_reference_age_s": 10.0,
+  "min_early_checkpoints_required": 6,
+  "read_only": "opens no venue surface and changes nothing",
+  "reference_observations": 4983,
+  "requirements": "early checkpoints, authoritative strike, contemporaneous fresh reference, settlement, executable books -- all five, per window",
+  "tape_rows": 31570,
+  "tapes_glob": "analysis/gemini/btc5m_snap/btc5m_rec_*.jsonl.gz"
+}
