@@ -1,0 +1,157 @@
+# Independent mechanistic-hypothesis lane for PMUS BTC15m.
+# Preregistration: analysis/pmus_independent/PREREGISTRATION.md
+#
+# NO RAILWAY OPERATION. NO SECRET BEYOND GITHUB_TOKEN. The only inputs are the
+# raw parts ALREADY archived by run 37253257157 (raw-tape-archive-*) and the
+# public venue gateway (BRTI 1s + market terms) that pmus_state_table.py reads.
+# The recorder, its volume, the archive job and every live service are untouched.
+#
+# 2026-10-01 IS NEVER OPENED. Parts named pmus_ws_20261001_* are skipped by
+# name before decompression, and pmus_indep_split.py hard-fails if any window
+# starting before 2026-10-02 00:00Z reaches it.
+#
+# STAGE=build    -> D committed to the branch; C uploaded as an artifact only.
+# STAGE=confirm  -> the analysis script AS COMMITTED runs once on C.
+name: pmus-indep-hypotheses
+
+on:
+  push:
+    branches: ['claude/pmus-btc15m-independent-hypotheses']
+    paths: ['.github/pmus_indep_request']
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: pmus-indep
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.p.outputs.stage }}
+      build_run_id: ${{ steps.p.outputs.build_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: |
+          set -euo pipefail
+          f=.github/pmus_indep_request
+          stage="$(sed -n -E 's/^STAGE=(build|confirm)[[:space:]]*$/\1/p' "$f" | tail -1)"
+          rid="$(sed -n -E 's/^BUILD_RUN_ID=([0-9]*)[[:space:]]*$/\1/p' "$f" | tail -1)"
+          case "$stage" in build|confirm) ;; *) echo "::error::bad STAGE"; exit 1;; esac
+          if [ "$stage" = confirm ] && [ -z "$rid" ]; then echo "::error::need BUILD_RUN_ID"; exit 1; fi
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
+          echo "build_run_id=$rid" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'build' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch the archived raw parts (read-only copy, run 37253257157)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: raw-tape-archive-*
+          path: arcs
+          run-id: 37253257157
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Reduce Oct-02+ parts only; Oct-01 skipped by name, never opened
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          : > work/ws.jsonl
+          : > work/PARTS_USED.tsv
+          : > work/PARTS_SKIPPED_RESERVED.txt
+          for gz in $(find arcs -name 'pmus_ws_*.jsonl.gz' | sort); do
+            name="$(basename "$gz" .gz)"
+            case "$name" in
+              pmus_ws_20261001_*) echo "$name" >> work/PARTS_SKIPPED_RESERVED.txt; continue ;;
+              pmus_ws_202610[0-3][0-9]_*) ;;
+              *) echo "::error::unexpected part name $name"; exit 1 ;;
+            esac
+            zcat "$gz" > part.jsonl
+            python3 scripts/pmus_oos_reduce_part.py part.jsonl rows.jsonl > reduce.json
+            printf '%s\t%s\t%s\n' "$name" "$(wc -l < part.jsonl)" "$(wc -l < rows.jsonl)" >> work/PARTS_USED.tsv
+            cat rows.jsonl >> work/ws.jsonl
+            rm -f part.jsonl rows.jsonl reduce.json
+          done
+          echo "skipped (reserved, never opened): $(wc -l < work/PARTS_SKIPPED_RESERVED.txt)"
+          cat work/PARTS_USED.tsv
+      - name: Derive book/trade rows (calibrated recorder fold, unchanged)
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_oos_derive_rows.py work/ws.jsonl work/tape.jsonl | tee work/DERIVE.json
+          rm -f work/ws.jsonl
+      - name: Build the causal per-second state table (unchanged builder)
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_state_table.py --tape work/tape.jsonl \
+            --label INDEP --out work/st --cache work/brti | tee work/STATE_TABLE.log
+      - name: Split into preregistered D / C
+        run: |
+          set -euo pipefail
+          mkdir -p analysis/pmus_independent/data
+          python3 scripts/pmus_indep_split.py work/st/state_table_indep.jsonl \
+            analysis/pmus_independent/data/state_D.csv.gz work/state_C.csv.gz \
+            | tee analysis/pmus_independent/data/SPLIT.json
+          cp work/PARTS_USED.tsv work/PARTS_SKIPPED_RESERVED.txt work/DERIVE.json \
+             work/STATE_TABLE.log work/st/market_terms_indep.json analysis/pmus_independent/data/
+          cp work/state_C.csv.gz .
+      - name: C stays sealed as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: indep-state-C
+          path: state_C.csv.gz
+          retention-days: 60
+          if-no-files-found: error
+      - name: Commit D and provenance
+        run: |
+          set -euo pipefail
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add analysis/pmus_independent/data
+          git commit -m "Discovery set D: causal per-second state, Oct-02/03 windows (run ${GITHUB_RUN_ID})" \
+            -m "Oct-01 parts skipped by name and never opened. C sealed as artifact indep-state-C."
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+  confirm:
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'confirm' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: indep-state-C
+          path: sealed
+          run-id: ${{ needs.plan.outputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run the frozen analysis on C, once
+        run: |
+          set -euo pipefail
+          git log -1 --format='analysis frozen at %H' -- scripts/pmus_indep_analysis.py | tee analysis/pmus_independent/C_PROVENANCE.txt
+          python3 scripts/pmus_indep_analysis.py --state sealed/state_C.csv.gz \
+            --label C --sigma-median-from analysis/pmus_independent/results_D.json \
+            --out analysis/pmus_independent/results_C.json | tee analysis/pmus_independent/results_C.txt
+      - name: Commit C results
+        run: |
+          set -euo pipefail
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add analysis/pmus_independent/results_C.json analysis/pmus_independent/results_C.txt analysis/pmus_independent/C_PROVENANCE.txt
+          git commit -m "Confirmation set C: frozen analysis, evaluated once (run ${GITHUB_RUN_ID})"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
