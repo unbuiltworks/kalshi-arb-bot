@@ -1,0 +1,168 @@
+# BTC5m RESEARCH RECORDER -- read-only, unauthenticated, CI-hosted long run.
+#
+# WHY A SEPARATE FILE RATHER THAN A NEW INPUT ON gemini-settlement-gate.yml:
+# that workflow is AT the 25-input workflow_dispatch ceiling, and a 26th input
+# makes the whole file unparseable ("you may only define up to 25 inputs") --
+# which already cost this programme one run. So this follows the same PATTERN
+# (pinned tree, long timeout, no-cancel concurrency, evidence commit under an
+# allowlist) in a file of its own, and adds no infrastructure beyond it.
+#
+# STARTED BY A REQUEST FILE, not workflow_dispatch. The API refuses to
+# dispatch a workflow that does not exist on the DEFAULT branch, and this
+# research does not belong on main. Touching .github/btc5m_recorder_request
+# starts it on this branch instead -- the same mechanism the pmus research
+# workflows use.
+#
+# NO CREDENTIAL IS IN SCOPE. The recorder reads public market data only: it
+# has no signer, no authenticated path and no mutation endpoint. A structural
+# guard proves that over the AST before the long run starts, so "read-only" is
+# a checked property rather than a claim.
+#
+# TWO STAGES, AND THE SECOND ONLY RUNS IF THE FIRST PASSES. Stage 1 records a
+# short window and then PROVES from the file on disk that books with sizes,
+# the index reference, venue timestamps, checkpoint rows, book-state labels
+# and availableAt were all actually persisted. Stage 2 is the long run.
+name: gemini-btc5m-recorder
+
+on:
+  push:
+    paths:
+      - '.github/btc5m_recorder_request'
+      - '.github/workflows/gemini-btc5m-recorder.yml'
+
+concurrency:
+  group: gemini-btc5m-recorder
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 630
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the two client libraries the recorder needs
+        run: python -m pip install --quiet httpx websockets
+
+      # ---- structural guard: prove read-only over the AST, before anything
+      - name: Prove the recorder has no order path
+        run: |
+          python - <<'PY'
+          import ast, sys
+          src = open("src/gemini_research/btc5m_recorder.py").read()
+          tree = ast.parse(src)
+          banned_imports = ("gemini_execution", "arming", "transport",
+                            "payload", "sell_path")
+          for n in ast.walk(tree):
+              if isinstance(n, (ast.Import, ast.ImportFrom)):
+                  names = [getattr(n, "module", None) or ""] + [
+                      a.name for a in n.names]
+                  for nm in names:
+                      for b in banned_imports:
+                          assert b not in (nm or ""), \
+                              "recorder imports %s" % nm
+          # STRINGS, not the import graph: the docstring legitimately names
+          # the execution package to say it is NOT imported, so the import
+          # assertion above is the one that covers that.
+          for needle in ("/order", "X-GEMINI-APIKEY", "hmac", "GEMINI_API",
+                         "signature", "nonce"):
+              assert needle not in src, "recorder mentions %r" % needle
+          assert "prediction-markets/events" in src
+          print("READ-ONLY GUARD PASSED: no order path, no credential, "
+                "no execution import")
+          PY
+
+      - name: Unit-check the book, the derived NO ladder and the validator
+        run: python -m pytest tests/test_gemini_btc5m_recorder.py -q
+
+      # ---- STAGE 1: short validation run. Must pass or the job stops.
+      - name: Stage 1 -- validation run (8 minutes, >= one BTC5m window)
+        id: validate
+        timeout-minutes: 15
+        run: |
+          mkdir -p data/gemini_btc5m_research analysis/gemini/btc5m_rec
+          python -m src.gemini_research.btc5m_recorder \
+            --outdir data/gemini_btc5m_research \
+            --duration-s 480 \
+            --validate-out analysis/gemini/btc5m_rec/validation.json
+          echo "---- validation ----"
+          python - <<'PY'
+          import json
+          v = json.load(open("analysis/gemini/btc5m_rec/validation.json"))
+          print(json.dumps({"pass": v["pass"], "missing": v["missing"],
+                            "rows": v["rows"], "kinds": v["kinds"],
+                            "book_states": v["book_states"]},
+                           indent=2, sort_keys=True))
+          PY
+
+      - name: Stage 1 -- publish the validation verdict as the gate
+        run: |
+          python - <<'PY'
+          import json, sys
+          v = json.load(open("analysis/gemini/btc5m_rec/validation.json"))
+          if not v["pass"]:
+              print("::error::validation FAILED; missing %s" % v["missing"])
+              sys.exit(1)
+          print("validation PASSED: %d rows, states %s"
+                % (v["rows"], v["book_states"]))
+          PY
+
+      # ---- STAGE 2: the long run. Only reached on a passing validation.
+      - name: Stage 2 -- continuous collection
+        timeout-minutes: 560
+        run: |
+          python -m src.gemini_research.btc5m_recorder \
+            --outdir data/gemini_btc5m_research \
+            --duration-s ${{ env.RUN_SECONDS }} \
+            --validate-out analysis/gemini/btc5m_rec/validation_long.json \
+            || echo "long run ended with a non-zero status; evidence is kept"
+        env:
+          RUN_SECONDS: 32400
+
+      # ---- evidence. gz the tapes, commit under analysis/gemini/ only.
+      - name: Preserve the tapes
+        if: always()
+        run: |
+          mkdir -p analysis/gemini/btc5m_rec
+          for f in data/gemini_btc5m_research/*.jsonl; do
+            [ -e "$f" ] || continue
+            gzip -9 -c "$f" > "analysis/gemini/btc5m_rec/$(basename "$f").gz"
+          done
+          ls -la analysis/gemini/btc5m_rec/ || true
+
+      - name: Commit the evidence
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in analysis/gemini/btc5m_rec/*.jsonl.gz \
+                   analysis/gemini/btc5m_rec/validation*.json; do
+            if [ -e "$f" ]; then git add -- "$f"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "no new evidence artifact"; exit 0
+          fi
+          # ALLOW-LIST: this job may only ever commit its own two shapes.
+          if git diff --cached --name-only \
+               | grep -qvE '^analysis/gemini/btc5m_rec/(btc5m_rec_[0-9TZ]+\.jsonl\.gz|validation(_long)?\.json)$'; then
+            echo "::error::refusing to commit files outside the recorder's own evidence"
+            git diff --cached --name-only; exit 1
+          fi
+          git commit -m "evidence(gemini): btc5m research recorder tape [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then exit 0; fi
+            echo "push rejected (attempt $attempt); rebasing onto remote"
+            git fetch origin ${{ github.ref_name }}
+            git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
+            sleep $((attempt * 3))
+          done
+          echo "::error::could not push evidence after 3 attempts"; exit 1

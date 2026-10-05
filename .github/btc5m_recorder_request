@@ -1,0 +1,5 @@
+BTC5m research recorder request
+requested: 2026-10-05T13:29:07Z
+stage1: 480s validation (books+sizes, index reference, venue timestamps, checkpoints, book state, availableAt)
+stage2: 32400s continuous collection
+primary: BTC05M  secondary: BTC15M on the same connection
