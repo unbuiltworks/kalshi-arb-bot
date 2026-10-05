@@ -1,0 +1,240 @@
+{
+  "label": "L5_EDGE_DECOMPOSITION_V1",
+  "scope": {
+    "pre_incentive_events": 6252,
+    "fills": 336342,
+    "total_cash": 19596.32,
+    "days": 100,
+    "per_day": 195.96
+  },
+  "Q2_attribution": {
+    "matched_pair_part": 80652.14,
+    "residual_settlement_part": -30654.03,
+    "charged_transaction_costs": -29135.82,
+    "sum_of_parts": 20862.28,
+    "measured_cash": 19596.32,
+    "UNRECONCILED_RESIDUAL": -1265.97,
+    "note": "the parts are a SPLIT of measured cash derived from terminal inventory, never a model added alongside redemption, so no value is double-counted. The unreconciled residual is reported, not hidden."
+  },
+  "Q1_matched_vs_residual": {
+    "events_with_matched_inventory": 5100,
+    "matched_cash_part_total": 80652.14,
+    "residual_cash_part_total": -30654.03,
+    "pair_cost": {
+      "n": 5100,
+      "min": 0.2485,
+      "p10": 0.8492,
+      "p25": 0.9195,
+      "median": 0.9679,
+      "p75": 1.0136,
+      "p90": 1.0933,
+      "max": 1.775,
+      "mean": 0.9711,
+      "sum": 4952.45
+    },
+    "matched_pct": {
+      "n": 6252,
+      "min": 0.0,
+      "p10": 0.0,
+      "p25": 0.271,
+      "median": 0.7034,
+      "p75": 0.8797,
+      "p90": 0.954,
+      "max": 1.0,
+      "mean": 0.5778,
+      "sum": 3612.46
+    },
+    "residual_pct": {
+      "n": 6252,
+      "min": 0.0,
+      "p10": 0.046,
+      "p25": 0.1203,
+      "median": 0.2967,
+      "p75": 0.729,
+      "p90": 1.0,
+      "max": 1.0,
+      "mean": 0.4222,
+      "sum": 2639.54
+    },
+    "residual_won_events": 3179
+  },
+  "Q5_concentration": {
+    "event_cash": {
+      "n": 6252,
+      "min": -528.7658,
+      "p10": -74.8422,
+      "p25": -23.1243,
+      "median": 5.1882,
+      "p75": 32.3396,
+      "p90": 69.4487,
+      "max": 791.8706,
+      "mean": 3.1344,
+      "sum": 19596.32
+    },
+    "win_rate_pct": 57.37,
+    "concentration": {
+      "top_1%": {
+        "events": 63,
+        "cash": 18756.42,
+        "share_of_total_pct": 95.71
+      },
+      "top_5%": {
+        "events": 313,
+        "cash": 52821.66,
+        "share_of_total_pct": 269.55
+      },
+      "top_10%": {
+        "events": 625,
+        "cash": 78822.85,
+        "share_of_total_pct": 402.23
+      },
+      "top_25%": {
+        "events": 1563,
+        "cash": 123709.39,
+        "share_of_total_pct": 631.29
+      }
+    },
+    "max_drawdown": -3446.07,
+    "longest_losing_streak_events": 11
+  },
+  "Q6_time_stability": {
+    "by_regime": {
+      "R1": {
+        "events": 386,
+        "days": 21,
+        "cash": 885.63,
+        "per_day": 42.17,
+        "per_event": 2.2944,
+        "win_rate_pct": 51.04,
+        "median_event_cash": 0.098
+      },
+      "R2": {
+        "events": 1684,
+        "days": 49,
+        "cash": 9031.59,
+        "per_day": 184.32,
+        "per_event": 5.3632,
+        "win_rate_pct": 52.43,
+        "median_event_cash": 2.0416
+      },
+      "R3_pre_incentive_part": {
+        "events": 4182,
+        "days": 30,
+        "cash": 9679.1,
+        "per_day": 322.64,
+        "per_event": 2.3145,
+        "win_rate_pct": 59.95,
+        "median_event_cash": 6.6073
+      }
+    },
+    "by_week": {
+      "2026-W12": {
+        "cash": 0.13,
+        "events": 3
+      },
+      "2026-W13": {
+        "cash": -17.31,
+        "events": 55
+      },
+      "2026-W14": {
+        "cash": -140.62,
+        "events": 43
+      },
+      "2026-W15": {
+        "cash": 75.58,
+        "events": 30
+      },
+      "2026-W16": {
+        "cash": -169.79,
+        "events": 55
+      },
+      "2026-W17": {
+        "cash": 1735.13,
+        "events": 246
+      },
+      "2026-W18": {
+        "cash": 1963.39,
+        "events": 313
+      },
+      "2026-W19": {
+        "cash": -2415.6,
+        "events": 231
+      },
+      "2026-W20": {
+        "cash": 1096.13,
+        "events": 185
+      },
+      "2026-W21": {
+        "cash": 1229.16,
+        "events": 212
+      },
+      "2026-W22": {
+        "cash": 1484.07,
+        "events": 182
+      },
+      "2026-W23": {
+        "cash": 2053.86,
+        "events": 201
+      },
+      "2026-W24": {
+        "cash": 1137.83,
+        "events": 140
+      },
+      "2026-W25": {
+        "cash": 1726.5,
+        "events": 150
+      },
+      "2026-W26": {
+        "cash": 1876.93,
+        "events": 405
+      },
+      "2026-W27": {
+        "cash": 2718.95,
+        "events": 566
+      },
+      "2026-W28": {
+        "cash": 502.38,
+        "events": 750
+      },
+      "2026-W29": {
+        "cash": 2368.35,
+        "events": 838
+      },
+      "2026-W30": {
+        "cash": 1877.62,
+        "events": 877
+      },
+      "2026-W31": {
+        "cash": 493.64,
+        "events": 770
+      }
+    }
+  },
+  "Q7_capacity_inputs": {
+    "peak_outlay_per_event": {
+      "n": 6252,
+      "min": 0.05,
+      "p10": 36.3705,
+      "p25": 96.2688,
+      "median": 316.0516,
+      "p75": 750.6239,
+      "p90": 1131.3021,
+      "max": 3050.0559,
+      "mean": 478.4382,
+      "sum": 2991195.59
+    },
+    "cash_per_deployed_dollar": {
+      "n": 6252,
+      "min": -1.0,
+      "p10": -0.3994,
+      "p25": -0.077,
+      "median": 0.0222,
+      "p75": 0.1202,
+      "p90": 0.3057,
+      "max": 17.7529,
+      "mean": 0.0061,
+      "sum": 38.44
+    }
+  },
+  "profit_attribution": "NONE for our account; historical reconstruction of public activity."
+}
