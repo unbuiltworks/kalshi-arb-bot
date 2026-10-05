@@ -150,25 +150,33 @@ def reference_at(ser: List[tuple], t: float,
 # --------------------------------------------------------- the venue legs
 async def settled_outcome(symbol: str) -> Dict[str, Any]:
     from src.gemini_execution import metadata
+    # RESOLUTION_FOR ALREADY FLATTENS THIS. The first draft of this function
+    # went looking for r["contract"] and for observations[*]["_contract"] --
+    # neither survives the call: `_contract` is POPPED off every observation
+    # and the fields are published at the top level, with the strike carried
+    # in `strike_check`. So the audit printed verdict SETTLED beside a null
+    # status, side and settlementValue, which is the unreadable-versus-empty
+    # mistake in a new place. Read what the producer actually returns.
     r = metadata.resolution_for(symbol)
-    c = (r.get("contract") or {}) if isinstance(r, dict) else {}
-    if not c:
-        for o in (r.get("observations") or []):
-            if o.get("readable") and o.get("_contract"):
-                c = o["_contract"]
-                break
-    strike = c.get("strike") if isinstance(c.get("strike"), dict) else {}
+    chk = r.get("strike_check") or {}
+    k = chk.get("strike") if chk.get("available") else None
     return {
         "verdict": r.get("verdict"),
         "readable": r.get("readable"),
-        "status": c.get("status"),
-        "resolutionSide": c.get("resolutionSide"),
-        "resolvedAt": c.get("resolvedAt"),
-        "settlementValue": c.get("settlementValue"),
-        "strike_value": strike.get("value"),
-        "strike_source": ("contract.strike.value" if strike.get("value")
-                          not in (None, "") else "ABSENT"),
-        "strike_consistency": metadata._strike_check(c) if c else None,
+        "status": r.get("status"),
+        "resolutionSide": r.get("resolutionSide"),
+        "resolvedAt": r.get("resolvedAt"),
+        "settlementValue": r.get("settlementValue"),
+        "expiryDate": r.get("expiryDate"),
+        "reads": r.get("reads"),
+        "reads_settled": r.get("reads_settled"),
+        "flapped": r.get("flapped"),
+        "distinct_readings": r.get("distinct_readings"),
+        "missing_fields": r.get("missing_fields"),
+        "strike_value": k,
+        "strike_source": ("contract.strike.value via strike_check"
+                          if k not in (None, "") else "ABSENT"),
+        "strike_consistency": chk,
         "label": ("SETTLED is the OUTCOME leg only. It is not cash and not "
                   "realized."),
     }
@@ -183,8 +191,12 @@ async def cash_leg(symbols: List[str]) -> Dict[str, Any]:
     for params in ({"withCashOuts": True, "limit": 100},
                    {"withCashOuts": "true", "limit": 100}):
         try:
+            # params is KEYWORD-ONLY and goes into the SIGNED payload;
+            # passing it positionally raised TypeError and the first audit
+            # recorded the cash leg as unreadable for a reason that had
+            # nothing to do with the venue.
             r = await private_rest_request("POST", SETTLED_PATH,
-                                           params, timeout=25.0)
+                                           params=params, timeout=25.0)
         except Exception as exc:                               # noqa: BLE001
             out["reads"].append({"params": params,
                                  "why": "raised %s" % type(exc).__name__})
