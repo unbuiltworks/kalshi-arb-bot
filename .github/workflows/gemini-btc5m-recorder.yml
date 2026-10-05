@@ -95,13 +95,20 @@ jobs:
             --duration-s 480 \
             --validate-out analysis/gemini/btc5m_rec/validation.json
           echo "---- validation ----"
-          python - <<'PY'
+          # INFORMATIONAL ONLY, and it must never be able to fail a PASSING
+          # gate. It did once: this block still named v["book_states"], a key
+          # the validator rewrite had renamed to early_/late_book_states, so a
+          # 9-of-9 PASS was reported as a step failure by its own echo. Every
+          # lookup is now .get() and the block cannot raise.
+          python - <<'PY' || true
           import json
           v = json.load(open("analysis/gemini/btc5m_rec/validation.json"))
-          print(json.dumps({"pass": v["pass"], "missing": v["missing"],
-                            "rows": v["rows"], "kinds": v["kinds"],
-                            "book_states": v["book_states"]},
-                           indent=2, sort_keys=True))
+          print(json.dumps({k: v.get(k) for k in
+                            ("pass", "missing", "rows", "kinds",
+                             "btc5m_windows_seen",
+                             "btc5m_windows_completed_early_and_late",
+                             "early_book_states", "late_book_states")},
+                           indent=2, sort_keys=True, default=str))
           PY
 
       - name: Stage 1 -- publish the validation verdict as the gate

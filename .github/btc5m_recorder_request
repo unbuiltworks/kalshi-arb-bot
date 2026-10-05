@@ -1,3 +1,5 @@
 BTC5m research recorder request
-requested: 2026-10-05T13:50:22Z
-retry: 4 -- one SUBSCRIBE frame per index-stream candidate (a batched frame is rejected whole on its first bad name; venue answered 400/-1013 naming only the bare form)
+requested: 2026-10-05T14:01:21Z
+verdict: VALIDATION PASSED 9/9 on run 5 -- both prefixed Lukka index streams accepted (status 200); the bare form is invalid (-1013)
+fix: the informational echo in stage 1 referenced a renamed validator key and failed a PASSING gate; it is now .get()-based and cannot raise
+action: proceed into validated long BTC5m collection (stage 2, 32400s)
