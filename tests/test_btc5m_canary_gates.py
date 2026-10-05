@@ -41,15 +41,32 @@ def test_q1_is_permitted_and_is_100x_the_venue_minimum():
 
 
 # ---- both authorization constants, and the separation they enforce
-def test_both_constants_name_this_grant():
-    assert arming.EXPECTED_AUTH_ID == C.CANARY_AUTH_ID
-    assert payload.SEMANTICS_PROBE_AUTH_ID == C.CANARY_AUTH_ID
+def test_both_constants_name_this_grant(monkeypatch):
+    """The GATE's logic, decoupled from which grant currently holds the key.
+
+    CANARY-1 is spent (5/5) and the UNDERDOG-1 grant now holds both
+    constants, so asserting the globals still name the canary would be
+    asserting today's arming state rather than the gate's logic.
+    """
+    monkeypatch.setattr(arming, "EXPECTED_AUTH_ID", C.CANARY_AUTH_ID)
+    monkeypatch.setattr(payload, "SEMANTICS_PROBE_AUTH_ID",
+                        C.CANARY_AUTH_ID)
     g = C.auth_gate()
     assert g["arming_matches"] and g["taker_key_matches"]
 
 
+def test_the_spent_canary_is_now_refused_because_another_grant_holds_the_key():
+    """Exactly one authorization holds the taker key, and it is not this
+    one any more. The spent cohort must therefore be unable to send."""
+    assert arming.EXPECTED_AUTH_ID != C.CANARY_AUTH_ID
+    assert payload.SEMANTICS_PROBE_AUTH_ID != C.CANARY_AUTH_ID
+    g = C.auth_gate()
+    assert g["arming_matches"] is False
+    assert g["taker_key_matches"] is False
+
+
 def test_this_grant_closes_the_btc15m_persist4_path():
-    """Authorizing the canary must NOT authorize the PERSIST4 cohort."""
+    """Whichever grant holds the key, it must NOT be PERSIST4's."""
     assert P.PROBE_AUTH_ID != arming.EXPECTED_AUTH_ID
     assert C.auth_gate()["ci15m_submit_is_now_refused"] is True
 
@@ -298,6 +315,9 @@ def test_runner_preflight_is_credential_free_and_passes(tmp_path,
     monkeypatch.setattr(B, "LEDGER_DIR", str(d))
     monkeypatch.setattr(B, "LEDGER", str(d / "cohort.jsonl"))
     monkeypatch.setattr(B, "HALT", str(d / "HALT.json"))
+    monkeypatch.setattr(arming, "EXPECTED_AUTH_ID", B.CANARY_AUTH_ID)
+    monkeypatch.setattr(payload, "SEMANTICS_PROBE_AUTH_ID",
+                        B.CANARY_AUTH_ID)
     pf = R.preflight()
     assert pf["ok"] is True, pf["failed"]
     assert pf["checks"]["btc15m_persist4_path_is_closed"] is True

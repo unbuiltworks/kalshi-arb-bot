@@ -1,0 +1,177 @@
+# BTC5m EXECUTION CANARY -- LIVE, MONEY-MOVING, BOUNDED.
+#
+# AUTHORIZATION: OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1, granted explicitly by
+# the owner as a live money-moving authorization for the probe frozen in
+# analysis/gemini/updown/BTC5M_PROBE_SPEC.md. It is NOT a strategy
+# authorization: there is no proven BTC5m directional rule, and this cohort's
+# P&L is execution evidence only.
+#
+# ENVELOPE, enforced in code and re-proved here before any secret is in scope:
+# q=1 fixed, acquisition cap 0.90, 5 entry attempts, one per window, one
+# outstanding order, hold to settlement, no SELL, no averaging down, no size
+# change, cohort outlay cap $4.5315, deadman on.
+#
+# IT CANNOT CANCEL THE RECORDER. Its own concurrency group is separate from
+# gemini-btc5m-recorder's, so the 9-hour collection runs on untouched.
+#
+# A SEPARATE FILE, because gemini-settlement-gate.yml is AT the 25-input
+# workflow_dispatch ceiling and a 26th makes the whole file unparseable.
+# Started by a request file for the same reason the recorder is: the API will
+# not dispatch a workflow absent from the default branch.
+name: gemini-btc5m-underdog
+
+on:
+  push:
+    paths:
+      - '.github/btc5m_underdog_request'
+
+concurrency:
+  group: gemini-btc5m-underdog
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  underdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      # THE EXECUTION SHA IS github.sha, which for a push IS the commit being
+      # run -- so the pin is exact and needs no placeholder. Pinning a literal
+      # here is a regress: writing the SHA into the file changes the SHA.
+      # A short ref is resolved by actions/checkout as a BRANCH and the step
+      # then skips silently, which has already cost this programme a run, so
+      # the length is asserted below rather than assumed.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Record and assert the execution SHA
+        run: |
+          echo "EXECUTION SHA: ${{ github.sha }}"
+          python - <<'PY'
+          sha = "${{ github.sha }}"
+          assert len(sha) == 40 and all(
+              c in "0123456789abcdef" for c in sha), sha
+          print("execution SHA is a full 40-character hex SHA: %s" % sha)
+          PY
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # python-dotenv IS REQUIRED. src/gemini_prediction_auth imports it at
+      # module scope, so without it EVERY authenticated read raises
+      # ImportError -- and the executor, correctly failing closed, refused all
+      # 12 qualifying windows of cohort run 1 with "active orders could not be
+      # read". A missing dependency cost a whole live cohort. The preflight now
+      # imports the authenticated read chain so it can never happen silently.
+      - name: Install deps
+        run: |
+          python -m pip install --quiet httpx websockets pytest python-dotenv
+
+      # ---- every gate, proved with NO credential in scope
+      - name: Gate -- envelope, both authorization constants, exposure
+        run: |
+          python - <<'PY'
+          from decimal import Decimal as D
+          from src.gemini_execution import arming, payload
+          from src.gemini_execution import underdog_cohort as U
+          e = U.AUTHORIZED_ENVELOPE
+          assert e["quantity"] == "1", e
+          assert e["max_acquisition_price"] == "0.60", e
+          assert e["max_entry_attempts"] == 5, e
+          assert e["max_attempts_per_window"] == 1, e
+          assert e["max_outstanding_orders"] == 1, e
+          assert e["side_rule"] == "UNDERDOG_LOWER_EXECUTABLE_Q1_VWAP", e
+          assert e["depth_variant"] == "CUMULATIVE", e
+          assert e["sell_permitted"] is False, e
+          assert e["averaging_down_permitted"] is False, e
+          assert e["size_changes_permitted"] is False, e
+          assert e["price_chasing_permitted"] is False, e
+          assert e["hold_to_settlement"] is True, e
+          assert arming.EXPECTED_AUTH_ID == U.UNDERDOG_AUTH_ID
+          assert payload.SEMANTICS_PROBE_AUTH_ID == U.UNDERDOG_AUTH_ID
+          # exactly one grant holds the taker key
+          from src.gemini_execution import btc5m_canary as C
+          from src.gemini_execution import ci15m_probe as P
+          assert P.PROBE_AUTH_ID != arming.EXPECTED_AUTH_ID
+          assert C.CANARY_AUTH_ID != arming.EXPECTED_AUTH_ID
+          # the exposure is derived and exact
+          assert U.max_principal() == D("3.0000"), U.max_principal()
+          assert U.max_fees() == D("0.1000"), U.max_fees()
+          assert U.cohort_cap() == D("3.1000"), U.cohort_cap()
+          assert U.cohort_cap() == U.max_principal() + U.max_fees()
+          print("ENVELOPE OK. ceiling $0.60/share, q=1, 5 attempts max")
+          print("MAX PRINCIPAL $%s  MAX FEES $%s  COHORT CAP $%s"
+                % (U.max_principal(), U.max_fees(), U.cohort_cap()))
+          print("worst fee detail: %s" % U.worst_case_fee())
+          PY
+
+      - name: Gate -- the underdog safety suite
+        run: python -m pytest tests/test_underdog_cohort.py tests/test_ci15m_probe.py -q
+
+      - name: Preflight (credential-free)
+        run: python -m scripts.gemini_btc5m_underdog_run --preflight-only
+
+      # ---- THE LIVE RUN. Credentials enter scope only here.
+      - name: BTC5m underdog -- live bounded cohort
+        timeout-minutes: 70
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          GEMINI_CANARY_AUTH: "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1"
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-10-06T00:00:00Z"
+          GEMINI_CANARY_STATE_DIR: "analysis/gemini/underdog_latch"
+        run: |
+          python -m scripts.gemini_btc5m_underdog_run --runtime-s 3600 \
+            || echo "underdog run exited non-zero; evidence is preserved below"
+
+      - name: Preserve the evidence
+        if: always()
+        run: |
+          ls -la analysis/gemini/btc5m_underdog/ || true
+          python - <<'PY' || true
+          import glob, json
+          for f in sorted(glob.glob(
+                  "analysis/gemini/btc5m_underdog/underdog_run_*.json")):
+              d = json.load(open(f))
+              print(json.dumps({
+                  "file": f,
+                  "stop_reason": d.get("stop_reason"),
+                  "windows": len(d.get("windows") or []),
+                  "cohort_final": d.get("cohort_final"),
+                  "outcomes": [w.get("outcome") for w in
+                               (d.get("windows") or [])],
+              }, indent=2, sort_keys=True, default=str))
+          PY
+
+      - name: Commit the evidence
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in analysis/gemini/btc5m_underdog/underdog_run_*.json \
+                   analysis/gemini/btc5m_underdog/cohort.jsonl \
+                   analysis/gemini/btc5m_underdog/HALT.json; do
+            if [ -e "$f" ]; then git add -- "$f"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "no new evidence artifact"; exit 0
+          fi
+          if git diff --cached --name-only \
+               | grep -qvE '^analysis/gemini/btc5m_underdog/(underdog_run_[0-9TZ]+\.json|cohort\.jsonl|HALT\.json)$'; then
+            echo "::error::refusing to commit outside the underdog cohort's own evidence"
+            git diff --cached --name-only; exit 1
+          fi
+          git commit -m "evidence(gemini): btc5m underdog cohort [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:research/gemini-btc5m-information-edge; then exit 0; fi
+            git fetch origin research/gemini-btc5m-information-edge
+            git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
+            sleep $((attempt * 3))
+          done
+          echo "::error::could not push evidence"; exit 1
