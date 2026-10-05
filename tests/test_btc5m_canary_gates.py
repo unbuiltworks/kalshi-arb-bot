@@ -262,3 +262,32 @@ def test_refuses_when_either_authorization_constant_disagrees(tmp_path,
         asyncio.run(C.attempt("GEMI-BTC05M1-UP",
                               _good_decision(monkeypatch)))
     assert "taker_key_matches" in str(e.value) and sent["n"] == 0
+
+
+def test_every_external_callable_the_runner_uses_actually_exists():
+    """The bug class that has bitten this programme three times: a guessed
+    function name inside a try/except, failing silently.
+
+    An earlier draft of the runner called metadata.list_events and
+    metadata.active_events -- neither exists -- and discovery would have
+    returned empty, so the canary would have found no windows and done
+    nothing while reporting success.
+    """
+    from src.gemini_execution import ci15m_probe as PR
+    from src.gemini_execution.r2_exec_runner import _active_events_public
+    assert callable(_active_events_public)
+    for name in ("book_from_venue", "one_outstanding_order", "poll_terminal",
+                 "authenticated_fills", "classify_ack"):
+        assert callable(getattr(PR, name)), name
+    import src.gemini_execution.metadata as M
+    for absent in ("list_events", "active_events"):
+        assert not hasattr(M, absent), (
+            "%s exists now; the runner's comment is stale" % absent)
+
+
+def test_runner_preflight_is_credential_free_and_passes():
+    from scripts import gemini_btc5m_canary_run as R
+    pf = R.preflight()
+    assert pf["ok"] is True, pf["failed"]
+    assert pf["checks"]["btc15m_persist4_path_is_closed"] is True
+    assert pf["checks"]["arithmetic_matches_authorized_cap"] is True
