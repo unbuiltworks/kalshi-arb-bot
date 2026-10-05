@@ -1,6 +1,6 @@
 {
-  "btc5m_windows_completed_early_and_late": 1,
-  "btc5m_windows_seen": 3,
+  "btc5m_windows_completed_early_and_late": 2,
+  "btc5m_windows_seen": 2,
   "checks": {
     "a_completed_btc5m_window": true,
     "availableAt_seen": true,
@@ -13,31 +13,44 @@
     "venue_timestamps": true
   },
   "early_book_states": {
-    "TWO_SIDED": 17
+    "EMPTY": 9,
+    "TWO_SIDED": 13
   },
   "examples": {
     "early_two_sided_ladder": {
       "book_state": "TWO_SIDED",
-      "label": "T+5s",
-      "market": "GEMI-BTC05M2610051755-UP",
-      "quote_age_s": 0.2276,
+      "label": "T+90s",
+      "market": "GEMI-BTC05M2610051930-UP",
+      "quote_age_s": 0.6962,
       "reference": {
-        "age_s": 0.1444,
+        "age_s": 0.9498,
         "agency": "lukka",
-        "event_time": 1791222602,
+        "event_time": 1791228386,
         "index": "LS-LRRR-XBTUSD",
         "key": "btcusd",
-        "value": "85245.7195"
+        "value": "85765.66583333333"
       },
       "yes_ladder": {
         "asks": [
           [
-            "0.87",
-            "1153.00"
+            "0.78",
+            "25.00"
+          ],
+          [
+            "0.79",
+            "714.00"
+          ],
+          [
+            "0.88",
+            "41.00"
+          ],
+          [
+            "0.95",
+            "872.00"
           ],
           [
             "0.98",
-            "2499.00"
+            "1.00"
           ],
           [
             "0.99",
@@ -46,16 +59,20 @@
         ],
         "bids": [
           [
-            "0.57",
-            "25.00"
+            "0.47",
+            "344.00"
           ],
           [
-            "0.56",
-            "267.00"
+            "0.27",
+            "18.00"
+          ],
+          [
+            "0.12",
+            "374.00"
           ],
           [
             "0.02",
-            "2501.00"
+            "1.00"
           ],
           [
             "0.01",
@@ -67,78 +84,55 @@
     "index_price": {
       "kind": "index_price",
       "parse_note": "field names are best-effort; the raw message is the authority",
-      "parsed_event_time": 1791222569,
+      "parsed_event_time": 1791228384,
       "parsed_key": "btcusd",
-      "parsed_value": "85248.47916666667",
+      "parsed_value": "85765.91266666667",
       "raw": {
-        "E": 1791222569,
+        "E": 1791228384,
         "I": "LRRR_XBT",
         "P": "",
         "e": "thirdPartyPrice",
-        "p": "85248.47916666667",
+        "p": "85765.91266666667",
         "s": "btcusd",
-        "u": 312626,
+        "u": 347520,
         "x": null
       },
-      "t_ns": 1791222573169237382
+      "t_ns": 1791228387668851521
     }
   },
   "kinds": {
-    "book_ctrl": 3,
+    "book_ctrl": 4,
     "book_open": 1,
-    "checkpoint": 39,
+    "checkpoint": 49,
     "index_ctrl": 3,
     "index_open": 1,
     "index_price": 480,
     "index_subscribe": 3,
-    "p_depth": 388,
-    "p_snapshot": 1227,
-    "p_trade": 11,
+    "p_depth": 275,
+    "p_snapshot": 1257,
+    "p_trade": 4,
     "recorder_start": 1,
     "recorder_stop": 1,
     "settlement": 49,
-    "subscribe": 2,
+    "subscribe": 3,
     "unsubscribe": 1,
-    "window": 22,
+    "window": 21,
     "window_poll": 876
   },
   "late_book_states": {
     "EMPTY": 2,
-    "ONE_SIDED": 6,
-    "TWO_SIDED": 14
+    "TWO_SIDED": 25
   },
   "missing": [],
   "pass": true,
-  "path": "data/gemini_btc5m_snapshot/btc5m_rec_20261005T174931Z.jsonl",
+  "path": "data/gemini_btc5m_snapshot/btc5m_rec_20261005T192626Z.jsonl",
   "per_window": {
-    "GEMI-BTC05M2610051750-UP": {
+    "GEMI-BTC05M2610051930-UP": {
       "duration": "BTC05M",
-      "early": 0,
-      "early_two_sided": 0,
-      "early_with_sizes": 0,
+      "early": 4,
+      "early_two_sided": 4,
+      "early_with_sizes": 4,
       "labels": [
-        "tte20s",
-        "tte15s",
-        "tte10s",
-        "tte5s",
-        "tte2s",
-        "tte1s"
-      ],
-      "late": 6,
-      "ref_at_checkpoint": 6,
-      "t0_from_availableAt": 0
-    },
-    "GEMI-BTC05M2610051755-UP": {
-      "duration": "BTC05M",
-      "early": 9,
-      "early_two_sided": 9,
-      "early_with_sizes": 9,
-      "labels": [
-        "T+5s",
-        "T+15s",
-        "T+30s",
-        "T+45s",
-        "T+60s",
         "T+90s",
         "T+120s",
         "T+150s",
@@ -155,14 +149,14 @@
         "tte1s"
       ],
       "late": 10,
-      "ref_at_checkpoint": 19,
-      "t0_from_availableAt": 9
+      "ref_at_checkpoint": 14,
+      "t0_from_availableAt": 4
     },
-    "GEMI-BTC05M2610051800-UP": {
+    "GEMI-BTC05M2610051935-UP": {
       "duration": "BTC05M",
-      "early": 8,
-      "early_two_sided": 8,
-      "early_with_sizes": 8,
+      "early": 9,
+      "early_two_sided": 9,
+      "early_with_sizes": 9,
       "labels": [
         "T+5s",
         "T+15s",
@@ -171,28 +165,60 @@
         "T+60s",
         "T+90s",
         "T+120s",
-        "T+150s"
+        "T+150s",
+        "T+180s",
+        "tte90s",
+        "tte60s",
+        "tte45s"
       ],
-      "late": 0,
-      "ref_at_checkpoint": 8,
-      "t0_from_availableAt": 8
+      "late": 3,
+      "ref_at_checkpoint": 12,
+      "t0_from_availableAt": 9
     },
-    "GEMI-BTC15M2610051800-UP": {
+    "GEMI-BTC15M2610051930-UP": {
       "duration": "BTC15M",
       "early": 0,
       "early_two_sided": 0,
       "early_with_sizes": 0,
       "labels": [
-        "tte600s",
-        "tte480s",
-        "tte360s",
-        "tte300s",
-        "tte240s",
-        "tte180s"
+        "tte180s",
+        "tte120s",
+        "tte90s",
+        "tte60s",
+        "tte45s",
+        "tte30s",
+        "tte20s",
+        "tte15s",
+        "tte10s",
+        "tte5s",
+        "tte2s",
+        "tte1s"
       ],
-      "late": 6,
-      "ref_at_checkpoint": 6,
+      "late": 12,
+      "ref_at_checkpoint": 12,
       "t0_from_availableAt": 0
+    },
+    "GEMI-BTC15M2610051945-UP": {
+      "duration": "BTC15M",
+      "early": 9,
+      "early_two_sided": 0,
+      "early_with_sizes": 0,
+      "labels": [
+        "T+5s",
+        "T+15s",
+        "T+30s",
+        "T+45s",
+        "T+60s",
+        "tte840s",
+        "T+90s",
+        "T+120s",
+        "T+150s",
+        "T+180s",
+        "tte720s"
+      ],
+      "late": 2,
+      "ref_at_checkpoint": 11,
+      "t0_from_availableAt": 9
     }
   },
   "reading": "the decisive line is early_book_states: if TWO_SIDED is absent there, the first 180 seconds are NOT two-sided and the frontier moves again -- which would itself be the finding, not a recorder fault",
@@ -207,5 +233,5 @@
     "t0_from_availableAt": "an EARLY checkpoint whose t0_source is availableAt, not the inferred fallback -- otherwise T+X is our arithmetic rather than the venue's",
     "venue_timestamps": "a p_depth row carrying a venue E"
   },
-  "rows": 3108
+  "rows": 3029
 }
