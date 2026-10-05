@@ -153,6 +153,16 @@ jobs:
           set -euo pipefail
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # The borrowed analysis files are untracked here unless this branch
+          # also tracks them, and an untracked file that the upstream branch
+          # DOES track makes the rebase refuse to check out. Drop the ones we
+          # only borrowed; keep anything this branch tracks.
+          for f in src/pmus_fees.py src/pmus_ws_evidence_recorder.py \
+                   scripts/pmus_oos_derive_rows.py \
+                   scripts/pmus_underdog_calibration.py \
+                   data/pmus_settlement_history/settlements.jsonl.gz; do
+            git ls-files --error-unmatch "$f" >/dev/null 2>&1 || rm -f "$f"
+          done
           git add -f analysis/pmus/underdog_calibration/
           if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
           git commit \

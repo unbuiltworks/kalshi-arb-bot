@@ -9,4 +9,4 @@ Partial by construction: the archive run is still in flight, so a later touch of
 this file will see more chunks. The part list actually used is committed with
 each result, so no two runs can be confused for one another.
 
-REQUEST=1
+REQUEST=2
