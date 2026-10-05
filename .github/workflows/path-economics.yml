@@ -64,13 +64,22 @@ jobs:
             --state work/state_table_oos.jsonl --label OOS \
             | tee FIXED_SIDE_BASELINE.txt
 
+      - name: Previous-window reversal, in-sample descriptive economics
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_reversal_descriptive.py \
+            --state work/state_table_oos.jsonl --label OOS \
+            | tee REVERSAL_DESCRIPTIVE.txt
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: fixed-side-baseline-${{ github.run_id }}
           path: |
             FIXED_SIDE_BASELINE.txt
+            REVERSAL_DESCRIPTIVE.txt
             analysis/l5/path_economics/fixed_side_baseline_oos.json
+            analysis/l5/path_economics/reversal_descriptive_oos.json
           retention-days: 30
           if-no-files-found: error
 
