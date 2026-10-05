@@ -284,10 +284,23 @@ async def work_window(w: Dict[str, Any], *, deadline: float,
     if term.get("state") in ("UNKNOWN", "UNKNOWN_POSITION"):
         C.halt("UNKNOWN_TERMINAL_STATE", term)
         return {"window": sym, "outcome": "HALTED_UNKNOWN", "detail": term}
-    fills = await P.authenticated_fills("BTC5M-CANARY-1", sym)
-    trace("AUTHENTICATED_FILLS", window=sym, fills=fills)
+    # ATTRIBUTE WITH THIS COHORT'S OWN LEDGER. P.authenticated_fills
+    # attributes against the CI15M cohort root, which is why cohort 1's five
+    # genuine fills came back FOREIGN and why this run's single fill did too.
+    # The venue rows are re-attributed here by exact order_id against our own
+    # durable authorizations; an unattributable fill still HALTs.
+    fills = await P.authenticated_fills("BTC5M-UNDERDOG-1", sym)
+    raw = ((fills.get("rows") or []) + (fills.get("foreign") or []))
+    att = C.attribute_fills(sym, raw)
+    trace("AUTHENTICATED_FILLS", window=sym, n_rows=len(raw),
+          attributed=att.get("ok"), routes=att.get("routes"),
+          foreign=len(att.get("foreign") or []))
     evidence.append({"kind": "AUTHENTICATED_FILLS", "window": sym,
-                     "fills": fills, "utc": _utc()})
+                     "fills": fills, "attribution": att, "utc": _utc()})
+    if not att.get("ok"):
+        C.halt("ATTRIBUTION_UNCERTAIN", {"window": sym, "att": att})
+        return {"window": sym, "outcome": "HALTED_ATTRIBUTION",
+                "detail": att}
     return {"window": sym, "outcome": "ATTEMPTED", "order_id": oid,
             "terminal": term, "fills": fills, "attribution": att,
             "probe_contaminated": True}

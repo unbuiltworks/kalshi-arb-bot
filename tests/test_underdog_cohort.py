@@ -414,3 +414,55 @@ def test_the_workflow_does_not_swallow_a_crash():
                      if not ln.strip().startswith("#"))
     assert "|| echo" not in code and "|| true" not in code, code
     assert "if: always()" in wf
+
+
+def test_work_window_has_no_use_before_assignment():
+    """RUN 2's crash, as a test.
+
+    The run placed a live order, confirmed it FILLED, and THEN died of
+    `NameError: name 'att' is not defined` -- because a str.replace patch of
+    mine silently no-op'd (no match) while a second patch that referenced its
+    variable did apply. A non-matching patch must never again pass silently,
+    and the function must not reference a name it never binds.
+    """
+    import ast
+    import builtins
+    import inspect
+    from scripts import gemini_btc5m_underdog_run as R
+
+    fn = ast.parse(inspect.getsource(R.work_window)).body[0]
+    bound = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                bound |= {n.id for n in ast.walk(t)
+                          if isinstance(n, ast.Name)}
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            bound |= {n.id for n in ast.walk(node.target)
+                      if isinstance(n, ast.Name)}
+        elif isinstance(node, ast.comprehension):
+            bound |= {n.id for n in ast.walk(node.target)
+                      if isinstance(n, ast.Name)}
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            bound.add(node.name)
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            bound |= {n.id for n in ast.walk(node.target)
+                      if isinstance(n, ast.Name)}
+        elif isinstance(node, ast.withitem) and node.optional_vars:
+            bound |= {n.id for n in ast.walk(node.optional_vars)
+                      if isinstance(n, ast.Name)}
+    used = {n.id for n in ast.walk(fn)
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+    unbound = sorted(u for u in used - bound
+                     if not hasattr(builtins, u) and not hasattr(R, u))
+    assert not unbound, ("work_window reads names it never binds: %r"
+                         % unbound)
+
+
+def test_the_runner_attributes_with_this_cohorts_own_ledger():
+    import inspect
+    from scripts import gemini_btc5m_underdog_run as R
+
+    src = inspect.getsource(R.work_window)
+    assert "BTC5M-CANARY-1" not in src, "still labelled as the canary cohort"
+    assert "C.attribute_fills" in src
