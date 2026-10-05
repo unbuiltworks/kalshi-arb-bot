@@ -1,0 +1,1060 @@
+{
+  "accounting_labels": "SUBMITTED -> FILLED -> SETTLED -> CASH_CONFIRMED -> REALIZED; nothing is called realized without the venue's own cashflow record",
+  "cohort_final": {
+    "attempts_consumed": 5,
+    "attempts_remaining": 0,
+    "committed_headroom_usd": "0.8300",
+    "committed_usd": "2.2700",
+    "expired": true,
+    "halted": null,
+    "windows_touched": [
+      "GEMI-BTC05M2610051730-UP",
+      "GEMI-BTC05M2610051755-UP",
+      "GEMI-BTC05M2610051800-UP",
+      "GEMI-BTC05M2610051805-UP",
+      "GEMI-BTC05M2610051810-UP"
+    ]
+  },
+  "evidence": [
+    {
+      "above_ceiling_no_trade": false,
+      "book_integrity_detail": {
+        "both_sides_have_levels": true,
+        "depth_readable": true,
+        "not_crossed": true,
+        "venue_timestamped": true
+      },
+      "combined_q1_cost": "1.16",
+      "depth": {
+        "down_available": "1",
+        "touch_ask_size": "1.0",
+        "touch_bid_size": "25.0",
+        "up_available": "1"
+      },
+      "down_q1_vwap": "0.18",
+      "elapsed_since_open_s": 131.60329294204712,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "leader": "UP",
+      "projected_fee_usd": "0.02",
+      "projected_outlay_usd": "0.2000",
+      "qualifies": true,
+      "quote_age_s": 0.614,
+      "requested_price": "0.18",
+      "requested_quantity": "1",
+      "side": "DOWN",
+      "spread_touch": "0.16",
+      "underdog": "DOWN",
+      "up_q1_vwap": "0.98",
+      "utc": "2026-10-05T17:52:11.933014+00:00",
+      "window": "GEMI-BTC05M2610051755-UP"
+    },
+    {
+      "classification": {
+        "filled": "1",
+        "order": "OrderState(state='FILLED', status='filled', filled=Decimal('1'), price=Decimal('0.18'), outcome='no', order_id='145828836800314979', why=None, raw_keys=('avgExecutionPrice', 'clientOrderId', 'createdAt', 'filledQuantity', 'globalOrderId', 'hashOrderId', 'orderId', 'orderType', 'outcome', 'price', 'quantity', 'remainingQuantity', 'side', 'status', 'symbol', 'timeInForce', 'updatedAt'))",
+        "state": "ACK_FILLED",
+        "status": "filled",
+        "terminal": true,
+        "why": null
+      },
+      "kind": "ACK",
+      "latency_ms": 196.966,
+      "order_id": 145828836800314979,
+      "utc": "2026-10-05T17:52:12.277556+00:00",
+      "window": "GEMI-BTC05M2610051755-UP"
+    },
+    {
+      "kind": "TERMINAL",
+      "order_id": 145828836800314979,
+      "terminal": {
+        "attempts": 2,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800314979",
+          "outcome": "no",
+          "price": "0.18"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "utc": "2026-10-05T17:52:19.103161+00:00",
+      "window": "GEMI-BTC05M2610051755-UP"
+    },
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 2,
+            "aggressor": true,
+            "client_order_id": "12a1d67e-94df-4f45-9d83-e07351ad40e7",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800314979",
+            "price": "0.18",
+            "qty": "1",
+            "tid": 1893456012230365,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222732252
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "12a1d67e-94df-4f45-9d83-e07351ad40e7",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800314979",
+            "price": "0.18",
+            "qty": "1",
+            "tid": 1893456012230365,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222732252
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "kind": "AUTHENTICATED_FILLS",
+      "utc": "2026-10-05T17:52:19.638420+00:00",
+      "window": "GEMI-BTC05M2610051755-UP"
+    },
+    {
+      "above_ceiling_no_trade": false,
+      "book_integrity_detail": {
+        "both_sides_have_levels": true,
+        "depth_readable": true,
+        "not_crossed": true,
+        "venue_timestamped": true
+      },
+      "combined_q1_cost": "1.31",
+      "depth": {
+        "down_available": "1",
+        "touch_ask_size": "25.0",
+        "touch_bid_size": "25.0",
+        "up_available": "1"
+      },
+      "down_q1_vwap": "0.59",
+      "elapsed_since_open_s": 15.995664119720459,
+      "failed_checks": [
+        "quote_fresh"
+      ],
+      "kind": "DECISION",
+      "leader": "UP",
+      "projected_fee_usd": "0.02",
+      "projected_outlay_usd": "0.6100",
+      "qualifies": false,
+      "quote_age_s": -0.004,
+      "requested_price": "0.59",
+      "requested_quantity": "1",
+      "side": "DOWN",
+      "spread_touch": "0.31",
+      "underdog": "DOWN",
+      "up_q1_vwap": "0.72",
+      "utc": "2026-10-05T17:55:16.467547+00:00",
+      "window": "GEMI-BTC05M2610051800-UP"
+    },
+    {
+      "above_ceiling_no_trade": false,
+      "book_integrity_detail": {
+        "both_sides_have_levels": true,
+        "depth_readable": true,
+        "not_crossed": true,
+        "venue_timestamped": true
+      },
+      "combined_q1_cost": "1.31",
+      "depth": {
+        "down_available": "1",
+        "touch_ask_size": "25.0",
+        "touch_bid_size": "25.0",
+        "up_available": "1"
+      },
+      "down_q1_vwap": "0.59",
+      "elapsed_since_open_s": 17.46888303756714,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "leader": "UP",
+      "projected_fee_usd": "0.02",
+      "projected_outlay_usd": "0.6100",
+      "qualifies": true,
+      "quote_age_s": 0.469,
+      "requested_price": "0.59",
+      "requested_quantity": "1",
+      "side": "DOWN",
+      "spread_touch": "0.31",
+      "underdog": "DOWN",
+      "up_q1_vwap": "0.72",
+      "utc": "2026-10-05T17:55:17.794495+00:00",
+      "window": "GEMI-BTC05M2610051800-UP"
+    },
+    {
+      "classification": {
+        "filled": "1",
+        "order": "OrderState(state='FILLED', status='filled', filled=Decimal('1'), price=Decimal('0.59'), outcome='no', order_id='145828836800370626', why=None, raw_keys=('avgExecutionPrice', 'clientOrderId', 'createdAt', 'filledQuantity', 'globalOrderId', 'hashOrderId', 'orderId', 'orderType', 'outcome', 'price', 'quantity', 'remainingQuantity', 'side', 'status', 'symbol', 'timeInForce', 'updatedAt'))",
+        "state": "ACK_FILLED",
+        "status": "filled",
+        "terminal": true,
+        "why": null
+      },
+      "kind": "ACK",
+      "latency_ms": 166.087,
+      "order_id": 145828836800370626,
+      "utc": "2026-10-05T17:55:18.053105+00:00",
+      "window": "GEMI-BTC05M2610051800-UP"
+    },
+    {
+      "kind": "TERMINAL",
+      "order_id": 145828836800370626,
+      "terminal": {
+        "attempts": 1,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800370626",
+          "outcome": "no",
+          "price": "0.59"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "utc": "2026-10-05T17:55:18.774271+00:00",
+      "window": "GEMI-BTC05M2610051800-UP"
+    },
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 3,
+            "aggressor": true,
+            "client_order_id": "9c3f0aa0-d769-4791-ad03-ba7a1269c77e",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800370626",
+            "price": "0.59",
+            "qty": "1",
+            "tid": 1893456012230388,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222918039
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "9c3f0aa0-d769-4791-ad03-ba7a1269c77e",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800370626",
+            "price": "0.59",
+            "qty": "1",
+            "tid": 1893456012230388,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222918039
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "kind": "AUTHENTICATED_FILLS",
+      "utc": "2026-10-05T17:55:19.570104+00:00",
+      "window": "GEMI-BTC05M2610051800-UP"
+    },
+    {
+      "above_ceiling_no_trade": false,
+      "book_integrity_detail": {
+        "both_sides_have_levels": true,
+        "depth_readable": true,
+        "not_crossed": true,
+        "venue_timestamped": true
+      },
+      "combined_q1_cost": "1.26",
+      "depth": {
+        "down_available": "1",
+        "touch_ask_size": "25.0",
+        "touch_bid_size": "500.0",
+        "up_available": "1"
+      },
+      "down_q1_vwap": "0.7",
+      "elapsed_since_open_s": 15.030730724334717,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "leader": "DOWN",
+      "projected_fee_usd": "0.02",
+      "projected_outlay_usd": "0.5800",
+      "qualifies": true,
+      "quote_age_s": 0.031,
+      "requested_price": "0.56",
+      "requested_quantity": "1",
+      "side": "UP",
+      "spread_touch": "0.26",
+      "underdog": "UP",
+      "up_q1_vwap": "0.56",
+      "utc": "2026-10-05T18:00:15.561489+00:00",
+      "window": "GEMI-BTC05M2610051805-UP"
+    },
+    {
+      "classification": {
+        "filled": "1",
+        "order": "OrderState(state='FILLED', status='filled', filled=Decimal('1'), price=Decimal('0.56'), outcome='yes', order_id='145828836800430649', why=None, raw_keys=('avgExecutionPrice', 'clientOrderId', 'createdAt', 'filledQuantity', 'globalOrderId', 'hashOrderId', 'orderId', 'orderType', 'outcome', 'price', 'quantity', 'remainingQuantity', 'side', 'status', 'symbol', 'timeInForce', 'updatedAt'))",
+        "state": "ACK_FILLED",
+        "status": "filled",
+        "terminal": true,
+        "why": null
+      },
+      "kind": "ACK",
+      "latency_ms": 183.362,
+      "order_id": 145828836800430649,
+      "utc": "2026-10-05T18:00:15.892995+00:00",
+      "window": "GEMI-BTC05M2610051805-UP"
+    },
+    {
+      "kind": "TERMINAL",
+      "order_id": 145828836800430649,
+      "terminal": {
+        "attempts": 1,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800430649",
+          "outcome": "yes",
+          "price": "0.56"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "utc": "2026-10-05T18:00:16.625685+00:00",
+      "window": "GEMI-BTC05M2610051805-UP"
+    },
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 4,
+            "aggressor": true,
+            "client_order_id": "51446d89-30e2-4208-bccf-4515fffccde2",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800430649",
+            "price": "0.56",
+            "qty": "1",
+            "tid": 1893456012230445,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223215868
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "51446d89-30e2-4208-bccf-4515fffccde2",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800430649",
+            "price": "0.56",
+            "qty": "1",
+            "tid": 1893456012230445,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223215868
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "kind": "AUTHENTICATED_FILLS",
+      "utc": "2026-10-05T18:00:17.163143+00:00",
+      "window": "GEMI-BTC05M2610051805-UP"
+    },
+    {
+      "above_ceiling_no_trade": false,
+      "book_integrity_detail": {
+        "both_sides_have_levels": true,
+        "depth_readable": true,
+        "not_crossed": true,
+        "venue_timestamped": true
+      },
+      "combined_q1_cost": "1.26",
+      "depth": {
+        "down_available": "1",
+        "touch_ask_size": "25.0",
+        "touch_bid_size": "1875.0",
+        "up_available": "1"
+      },
+      "down_q1_vwap": "0.91",
+      "elapsed_since_open_s": 15.659299612045288,
+      "failed_checks": [
+        "quote_fresh"
+      ],
+      "kind": "DECISION",
+      "leader": "DOWN",
+      "projected_fee_usd": "0.02",
+      "projected_outlay_usd": "0.3700",
+      "qualifies": false,
+      "quote_age_s": -0.341,
+      "requested_price": "0.35",
+      "requested_quantity": "1",
+      "side": "UP",
+      "spread_touch": "0.26",
+      "underdog": "UP",
+      "up_q1_vwap": "0.35",
+      "utc": "2026-10-05T18:05:17.292848+00:00",
+      "window": "GEMI-BTC05M2610051810-UP"
+    },
+    {
+      "above_ceiling_no_trade": false,
+      "book_integrity_detail": {
+        "both_sides_have_levels": true,
+        "depth_readable": true,
+        "not_crossed": true,
+        "venue_timestamped": true
+      },
+      "combined_q1_cost": "1.25",
+      "depth": {
+        "down_available": "1",
+        "touch_ask_size": "25.0",
+        "touch_bid_size": "25.0",
+        "up_available": "1"
+      },
+      "down_q1_vwap": "0.91",
+      "elapsed_since_open_s": 18.294251441955566,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "leader": "DOWN",
+      "projected_fee_usd": "0.02",
+      "projected_outlay_usd": "0.3600",
+      "qualifies": true,
+      "quote_age_s": 0.294,
+      "requested_price": "0.34",
+      "requested_quantity": "1",
+      "side": "UP",
+      "spread_touch": "0.25",
+      "underdog": "UP",
+      "up_q1_vwap": "0.34",
+      "utc": "2026-10-05T18:05:18.807487+00:00",
+      "window": "GEMI-BTC05M2610051810-UP"
+    },
+    {
+      "classification": {
+        "filled": "1",
+        "order": "OrderState(state='FILLED', status='filled', filled=Decimal('1'), price=Decimal('0.34'), outcome='yes', order_id='145828836800519491', why=None, raw_keys=('avgExecutionPrice', 'clientOrderId', 'createdAt', 'filledQuantity', 'globalOrderId', 'hashOrderId', 'orderId', 'orderType', 'outcome', 'price', 'quantity', 'remainingQuantity', 'side', 'status', 'symbol', 'timeInForce', 'updatedAt'))",
+        "state": "ACK_FILLED",
+        "status": "filled",
+        "terminal": true,
+        "why": null
+      },
+      "kind": "ACK",
+      "latency_ms": 179.173,
+      "order_id": 145828836800519491,
+      "utc": "2026-10-05T18:05:19.114483+00:00",
+      "window": "GEMI-BTC05M2610051810-UP"
+    },
+    {
+      "kind": "TERMINAL",
+      "order_id": 145828836800519491,
+      "terminal": {
+        "attempts": 1,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800519491",
+          "outcome": "yes",
+          "price": "0.34"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "utc": "2026-10-05T18:05:19.880221+00:00",
+      "window": "GEMI-BTC05M2610051810-UP"
+    },
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 5,
+            "aggressor": true,
+            "client_order_id": "81478d98-b538-4dcc-9e6e-d782f7f6c3b6",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800519491",
+            "price": "0.34",
+            "qty": "1",
+            "tid": 1893456012230519,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223519098
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "81478d98-b538-4dcc-9e6e-d782f7f6c3b6",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800519491",
+            "price": "0.34",
+            "qty": "1",
+            "tid": 1893456012230519,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223519098
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "kind": "AUTHENTICATED_FILLS",
+      "utc": "2026-10-05T18:05:20.451500+00:00",
+      "window": "GEMI-BTC05M2610051810-UP"
+    }
+  ],
+  "label": "GEMINI_BTC5M_UNDERDOG_RUN_V1",
+  "note": "EXECUTION CANARY. Its P&L is mechanics evidence, not strategy evidence.",
+  "preflight": {
+    "arming_state": {
+      "armed": true,
+      "auth_id_matches": true,
+      "auth_id_present": true,
+      "expected_auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1",
+      "expired": false,
+      "expiry_supplied": true,
+      "live_flag": true,
+      "why_not": null
+    },
+    "auth_gate": {
+      "arming_matches": true,
+      "build_expected_auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1",
+      "ci15m_submit_is_now_refused": true,
+      "env_matches": true,
+      "live_auth_id_from_env": "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1",
+      "note": "exactly one authorization holds the taker key. This grant holding it closes both the BTC15m PERSIST4 path and the spent CANARY-1 cohort.",
+      "taker_key_holder": "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1",
+      "taker_key_matches": true,
+      "underdog_auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1"
+    },
+    "authenticated_read_path_why": null,
+    "checks": {
+      "arming_constant_names_this_grant": true,
+      "attempts_remaining": true,
+      "authenticated_read_path_imports": true,
+      "ceiling_is_0_60": true,
+      "cohort_cap_is_principal_plus_fees": true,
+      "cohort_not_expired": true,
+      "depth_variant_is_cumulative": true,
+      "envelope_attempts_is_5": true,
+      "envelope_quantity_is_one": true,
+      "max_principal_is_3": true,
+      "not_halted": true,
+      "other_cohort_paths_are_closed": true,
+      "price_chasing_forbidden": true,
+      "q1_at_or_above_venue_minimum": true,
+      "sell_not_permitted": true,
+      "side_rule_is_underdog": true,
+      "size_changes_not_permitted": true,
+      "taker_key_names_this_grant": true
+    },
+    "cohort": {
+      "attempts_consumed": 1,
+      "attempts_remaining": 4,
+      "committed_headroom_usd": "2.5800",
+      "committed_usd": "0.5200",
+      "expired": false,
+      "halted": null,
+      "windows_touched": [
+        "GEMI-BTC05M2610051730-UP"
+      ]
+    },
+    "credential_free": "this preflight touches no account surface and needs no secret",
+    "envelope": {
+      "auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-UNDERDOG-1",
+      "envelope": {
+        "above_ceiling_is": "NO_TRADE_AND_DOES_NOT_CONSUME_AN_ATTEMPT",
+        "averaging_down_permitted": false,
+        "deadman": true,
+        "depth_variant": "CUMULATIVE",
+        "duration": "BTC05M",
+        "hold_to_settlement": true,
+        "max_acquisition_price": "0.60",
+        "max_attempts_per_window": 1,
+        "max_entry_attempts": 5,
+        "max_outstanding_orders": 1,
+        "max_quote_age_s": 2.0,
+        "min_checkpoint_s_since_open": 15.0,
+        "price_chasing_permitted": false,
+        "quantity": "1",
+        "sell_permitted": false,
+        "side_rule": "UNDERDOG_LOWER_EXECUTABLE_Q1_VWAP",
+        "size_changes_permitted": false
+      },
+      "exposure": {
+        "acquisition_ceiling_usd_per_share": "0.60",
+        "basis": "principal at the ceiling, plus the venue's reconciled taker fee at its worst admissible price, rounded UP to the cent",
+        "exact_cohort_cap_usd": "3.1000",
+        "max_attempts": 5,
+        "max_fees_usd": "0.1000",
+        "max_principal_usd": "3.0000",
+        "quantity_per_trade": "1",
+        "worst_case_fee_detail": {
+          "at_price": "0.18",
+          "note": "the raw fee is p*(1-p)-shaped and peaks at p=0.50, INSIDE the ceiling rather than at it, so evaluating it only at the ceiling would understate the bound. `at_price` is the FIRST price on the grid that attains the ceiling-rounded maximum, not the peak of the raw fee.",
+          "searched": "every 0.01 price from 0.01 to the 0.60 ceiling",
+          "worst_fee_usd": "0.02"
+        },
+        "worst_case_per_trade_usd": "0.6200"
+      }
+    },
+    "exposure": {
+      "acquisition_ceiling_usd_per_share": "0.60",
+      "basis": "principal at the ceiling, plus the venue's reconciled taker fee at its worst admissible price, rounded UP to the cent",
+      "exact_cohort_cap_usd": "3.1000",
+      "max_attempts": 5,
+      "max_fees_usd": "0.1000",
+      "max_principal_usd": "3.0000",
+      "quantity_per_trade": "1",
+      "worst_case_fee_detail": {
+        "at_price": "0.18",
+        "note": "the raw fee is p*(1-p)-shaped and peaks at p=0.50, INSIDE the ceiling rather than at it, so evaluating it only at the ceiling would understate the bound. `at_price` is the FIRST price on the grid that attains the ceiling-rounded maximum, not the peak of the raw fee.",
+        "searched": "every 0.01 price from 0.01 to the 0.60 ceiling",
+        "worst_fee_usd": "0.02"
+      },
+      "worst_case_per_trade_usd": "0.6200"
+    },
+    "failed": [],
+    "label": "GEMINI_BTC5M_UNDERDOG_RUN_V1",
+    "ok": true,
+    "utc": "2026-10-05T17:52:11.381993+00:00"
+  },
+  "stop_reason": "COHORT_EXPIRED_AT_ATTEMPT_5",
+  "strategy_evidence": false,
+  "utc": "2026-10-05T17:52:11.382330+00:00",
+  "windows": [
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 2,
+            "aggressor": true,
+            "client_order_id": "12a1d67e-94df-4f45-9d83-e07351ad40e7",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800314979",
+            "price": "0.18",
+            "qty": "1",
+            "tid": 1893456012230365,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222732252
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "contract_status": "active",
+      "expiry_t": 1791222900.0,
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "12a1d67e-94df-4f45-9d83-e07351ad40e7",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800314979",
+            "price": "0.18",
+            "qty": "1",
+            "tid": 1893456012230365,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222732252
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "order_id": 145828836800314979,
+      "outcome": "ATTEMPTED",
+      "probe_contaminated": true,
+      "strike": "85245.52",
+      "strike_raw": {
+        "availableAt": "2026-10-05T17:50:00.000Z",
+        "type": "reference",
+        "value": "85245.52"
+      },
+      "strike_source": "contract.strike.value",
+      "strike_value": "85245.52",
+      "symbol": "GEMI-BTC05M2610051755-UP",
+      "t0": 1791222600.0,
+      "t0_source": "availableAt",
+      "terminal": {
+        "attempts": 2,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800314979",
+          "outcome": "no",
+          "price": "0.18"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "ticker": "BTC05M2610051755",
+      "window": "GEMI-BTC05M2610051755-UP"
+    },
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 3,
+            "aggressor": true,
+            "client_order_id": "9c3f0aa0-d769-4791-ad03-ba7a1269c77e",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800370626",
+            "price": "0.59",
+            "qty": "1",
+            "tid": 1893456012230388,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222918039
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "contract_status": "active",
+      "expiry_t": 1791223200.0,
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "9c3f0aa0-d769-4791-ad03-ba7a1269c77e",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "no",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800370626",
+            "price": "0.59",
+            "qty": "1",
+            "tid": 1893456012230388,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791222918039
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "order_id": 145828836800370626,
+      "outcome": "ATTEMPTED",
+      "probe_contaminated": true,
+      "strike": null,
+      "strike_raw": {
+        "availableAt": "2026-10-05T17:55:00.000Z",
+        "type": "reference"
+      },
+      "strike_source": "ABSENT",
+      "strike_value": null,
+      "symbol": "GEMI-BTC05M2610051800-UP",
+      "t0": 1791222900.0,
+      "t0_source": "availableAt",
+      "terminal": {
+        "attempts": 1,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800370626",
+          "outcome": "no",
+          "price": "0.59"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "ticker": "BTC05M2610051800",
+      "window": "GEMI-BTC05M2610051800-UP"
+    },
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 4,
+            "aggressor": true,
+            "client_order_id": "51446d89-30e2-4208-bccf-4515fffccde2",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800430649",
+            "price": "0.56",
+            "qty": "1",
+            "tid": 1893456012230445,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223215868
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "contract_status": "active",
+      "expiry_t": 1791223500.0,
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "51446d89-30e2-4208-bccf-4515fffccde2",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800430649",
+            "price": "0.56",
+            "qty": "1",
+            "tid": 1893456012230445,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223215868
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "order_id": 145828836800430649,
+      "outcome": "ATTEMPTED",
+      "probe_contaminated": true,
+      "strike": null,
+      "strike_raw": {
+        "availableAt": "2026-10-05T18:00:00.000Z",
+        "type": "reference"
+      },
+      "strike_source": "ABSENT",
+      "strike_value": null,
+      "symbol": "GEMI-BTC05M2610051805-UP",
+      "t0": 1791223200.0,
+      "t0_source": "availableAt",
+      "terminal": {
+        "attempts": 1,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800430649",
+          "outcome": "yes",
+          "price": "0.56"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "ticker": "BTC05M2610051805",
+      "window": "GEMI-BTC05M2610051805-UP"
+    },
+    {
+      "attribution": {
+        "attributed": [
+          {
+            "_attribution_route": "ORDER_ID",
+            "_slot": 5,
+            "aggressor": true,
+            "client_order_id": "81478d98-b538-4dcc-9e6e-d782f7f6c3b6",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800519491",
+            "price": "0.34",
+            "qty": "1",
+            "tid": 1893456012230519,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223519098
+          }
+        ],
+        "foreign": [],
+        "n_attributed": 1,
+        "n_intents": 1,
+        "ok": true,
+        "routes": [
+          "ORDER_ID"
+        ]
+      },
+      "contract_status": "active",
+      "expiry_t": 1791223800.0,
+      "fills": {
+        "foreign": [
+          {
+            "aggressor": true,
+            "client_order_id": "81478d98-b538-4dcc-9e6e-d782f7f6c3b6",
+            "fee_amount": "0.02",
+            "fee_currency": "USD",
+            "leg": "yes",
+            "leg_resolved": true,
+            "maker": "taker",
+            "order_id": "145828836800519491",
+            "price": "0.34",
+            "qty": "1",
+            "tid": 1893456012230519,
+            "time_in_force": "good-til-cancel",
+            "timestampms": 1791223519098
+          }
+        ],
+        "ok": false,
+        "why": "unattributable venue fill(s)"
+      },
+      "order_id": 145828836800519491,
+      "outcome": "ATTEMPTED",
+      "probe_contaminated": true,
+      "strike": null,
+      "strike_raw": {
+        "availableAt": "2026-10-05T18:05:00.000Z",
+        "type": "reference"
+      },
+      "strike_source": "ABSENT",
+      "strike_value": null,
+      "symbol": "GEMI-BTC05M2610051810-UP",
+      "t0": 1791223500.0,
+      "t0_source": "availableAt",
+      "terminal": {
+        "attempts": 1,
+        "filled": "1",
+        "partial": false,
+        "readable_statuses": [
+          "filled",
+          "cancelled"
+        ],
+        "resolved": true,
+        "row": {
+          "orderId": "145828836800519491",
+          "outcome": "yes",
+          "price": "0.34"
+        },
+        "state": "TERMINAL_FILLED",
+        "status": "filled",
+        "unreadable_statuses": []
+      },
+      "ticker": "BTC05M2610051810",
+      "window": "GEMI-BTC05M2610051810-UP"
+    }
+  ]
+}
