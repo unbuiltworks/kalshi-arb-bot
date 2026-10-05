@@ -1,0 +1,6478 @@
+{
+  "generated_utc": "2026-10-05T22:31:23.489271+00:00",
+  "disclaimer": "Public activity of Polymarket trader l5zn1bwom8etsk. No figure here is realized profit for our account.",
+  "identity_rule": {
+    "rule": "provenance; params.user == L5 address makes the record L5's",
+    "disqualifier": "only a CONTRADICTING name/proxyWallet",
+    "never_applied": "name == 'l5Zn1bWoM8eTsK' equality filter",
+    "records_without_name_field_kept": 706500,
+    "records_contradicting_identity_dropped": 0
+  },
+  "ingest_diagnostics": {
+    "files": {
+      "activity": {
+        "envelopes": 157,
+        "records": 78000,
+        "kept": 74020
+      },
+      "activity_gap": {
+        "envelopes": 1413,
+        "records": 706500,
+        "kept": 702729
+      }
+    },
+    "envelopes_total": 1570,
+    "envelopes_unparseable": 0,
+    "envelopes_wrong_user": 0,
+    "envelopes_no_payload": 1,
+    "records_seen": 784500,
+    "records_contradicting_identity": 0,
+    "records_malformed": 0,
+    "records_with_name_field": 78000,
+    "records_without_name_field": 706500,
+    "name_values": {
+      "l5Zn1bWoM8eTsK": 78000
+    },
+    "proxy_values": {
+      "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68": 78000
+    },
+    "duplicates_dropped": 7751,
+    "dup_dropped_within_file": {
+      "same_file": 4464,
+      "cross_file": 3287
+    },
+    "type_counts": {
+      "TRADE": 760817,
+      "REDEEM": 15729,
+      "MAKER_REBATE": 110,
+      "TAKER_REBATE": 73,
+      "REWARD": 20
+    },
+    "trades_unresolved_slug": 0,
+    "trades_unresolved_epoch": 0,
+    "trades_bad_numeric": 0,
+    "records_nonhex_conditionid": 204,
+    "records_empty_slug": 203
+  },
+  "corpus": {
+    "fills_TRADE": 760817,
+    "window_events": 17046,
+    "span": [
+      "2026-03-19",
+      "2026-08-31"
+    ],
+    "unavailable": {
+      "maker_taker_role": "The /activity endpoint carries no liquidity/role flag. Maker vs taker is NOT estimated anywhere here.",
+      "order_placements_and_cancels": "Only fills are public; quoting behaviour and patience-in-book are UNAVAILABLE.",
+      "L5_pnl": "No cost basis beyond these fills; settlement credit for events outside the fetch span is UNAVAILABLE."
+    }
+  },
+  "changepoint_method": {
+    "grid": "calendar day, UTC",
+    "observables": {
+      "events": "independent window-events that day",
+      "trades_per_event": "fills per window-event",
+      "trades_per_min": "fills per minute of active window span",
+      "first_price": "price of the first acquisition",
+      "first_favored_frac": "fraction of events whose first buy is the favorite (p>0.5)",
+      "first_tte_s": "seconds from first acquisition to window CLOSE (epoch+duration)",
+      "extend_per_event": "same-side EXTEND actions per event",
+      "switch_per_event": "outcome-switch actions per event",
+      "complement_per_event": "complement actions per event",
+      "completion_rate": "fraction of events reaching any matched inventory",
+      "pair_cost": "effective matched pair cost (VWAP_up + VWAP_dn)",
+      "t_to_match_s": "seconds from first acquisition to first matched inventory",
+      "peak_resid": "peak |up-down| share residual",
+      "term_resid_frac": "terminal residual / gross shares",
+      "mean_size": "mean fill size (shares)",
+      "notional_per_event": "USDC notional per event",
+      "concurrency": "max distinct windows open simultaneously that day"
+    },
+    "algorithm": "multivariate binary segmentation, L2 mean-shift cost on sqrt(event-count)-weighted z-scores",
+    "min_segment_days": 7,
+    "min_segment_events": 300,
+    "significance": "day-label permutation test, 400 draws, alpha=0.01",
+    "trace": [
+      {
+        "candidate_day": "2026-06-23",
+        "gain": 6805.529,
+        "p_perm": 0.00249,
+        "accepted": true,
+        "events_left": 2070,
+        "events_right": 14976
+      },
+      {
+        "candidate_day": "2026-04-25",
+        "gain": 1412.736,
+        "p_perm": 0.00249,
+        "accepted": true,
+        "events_left": 386,
+        "events_right": 1684
+      },
+      {
+        "candidate_day": "2026-08-19",
+        "gain": 929.336,
+        "p_perm": 0.00249,
+        "accepted": true,
+        "events_left": 8235,
+        "events_right": 6741
+      },
+      {
+        "candidate_day": "2026-08-08",
+        "gain": 245.268,
+        "p_perm": 0.01995,
+        "accepted": false,
+        "events_left": 5218,
+        "events_right": 3017
+      }
+    ],
+    "all_significant_changepoint_days": [
+      "2026-04-25",
+      "2026-06-23",
+      "2026-08-19"
+    ],
+    "dominance_filter": "keep a change point only if its cost reduction is >= 10% of the largest accepted reduction",
+    "changepoint_days": [
+      "2026-04-25",
+      "2026-06-23",
+      "2026-08-19"
+    ],
+    "accepted_gains": {
+      "2026-04-25": 1412.736,
+      "2026-06-23": 6805.529,
+      "2026-08-19": 929.336
+    }
+  },
+  "daily": [
+    {
+      "day": "2026-03-19",
+      "events": 3,
+      "fills": 5,
+      "trades_per_event": 1.6666666666666667,
+      "trades_per_min": 2.127659574468085,
+      "first_price": 0.48666665856666663,
+      "first_favored_frac": 0.6666666666666666,
+      "first_tte_s": 130.33333333333334,
+      "extend_per_event": 0.6666666666666666,
+      "switch_per_event": 0.0,
+      "complement_per_event": 0.0,
+      "completion_rate": 0.0,
+      "pair_cost": null,
+      "t_to_match_s": null,
+      "peak_resid": 2.599021,
+      "term_resid_frac": 1.0,
+      "mean_size": 2.5928438333333332,
+      "notional_per_event": 1.4086653333333334,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-03-25",
+      "events": 4,
+      "fills": 4,
+      "trades_per_event": 1.0,
+      "trades_per_min": 60.0,
+      "first_price": 0.7299999187499999,
+      "first_favored_frac": 0.75,
+      "first_tte_s": 514.0,
+      "extend_per_event": 0.0,
+      "switch_per_event": 0.0,
+      "complement_per_event": 0.0,
+      "completion_rate": 0.0,
+      "pair_cost": null,
+      "t_to_match_s": null,
+      "peak_resid": 1.8222584999999998,
+      "term_resid_frac": 1.0,
+      "mean_size": 1.8222584999999998,
+      "notional_per_event": 0.9999947499999999,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 5.882902,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-03-26",
+      "events": 8,
+      "fills": 128,
+      "trades_per_event": 16.0,
+      "trades_per_min": 2.771562612775172,
+      "first_price": 0.4849999918875001,
+      "first_favored_frac": 0.25,
+      "first_tte_s": 721.5,
+      "extend_per_event": 10.0,
+      "switch_per_event": 2.25,
+      "complement_per_event": 2.75,
+      "completion_rate": 0.5,
+      "pair_cost": 0.9427365056032385,
+      "t_to_match_s": 85.5,
+      "peak_resid": 27.587822250000002,
+      "term_resid_frac": 0.665819040519831,
+      "mean_size": 5.031896030681818,
+      "notional_per_event": 36.041347625,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 300.390859,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-03-27",
+      "events": 28,
+      "fills": 864,
+      "trades_per_event": 30.857142857142858,
+      "trades_per_min": 2.94712905059693,
+      "first_price": 0.5032142792285714,
+      "first_favored_frac": 0.39285714285714285,
+      "first_tte_s": 780.0714285714286,
+      "extend_per_event": 17.857142857142858,
+      "switch_per_event": 4.857142857142857,
+      "complement_per_event": 7.142857142857143,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9722758159292592,
+      "t_to_match_s": 56.92857142857143,
+      "peak_resid": 62.140848178571424,
+      "term_resid_frac": 0.2358519821429501,
+      "mean_size": 7.66165680551154,
+      "notional_per_event": 112.64669646428571,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 991.450721,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-03-28",
+      "events": 15,
+      "fills": 285,
+      "trades_per_event": 19.0,
+      "trades_per_min": 2.0830795468388357,
+      "first_price": 0.5219999874000001,
+      "first_favored_frac": 0.4,
+      "first_tte_s": 730.2,
+      "extend_per_event": 11.933333333333334,
+      "switch_per_event": 1.8,
+      "complement_per_event": 4.266666666666667,
+      "completion_rate": 0.9333333333333333,
+      "pair_cost": 0.9670046485440581,
+      "t_to_match_s": 115.71428571428571,
+      "peak_resid": 61.89278173333332,
+      "term_resid_frac": 0.34009641706258054,
+      "mean_size": 9.821246580598476,
+      "notional_per_event": 86.04443666666666,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-03-30",
+      "events": 20,
+      "fills": 448,
+      "trades_per_event": 22.4,
+      "trades_per_min": 2.1798718676506366,
+      "first_price": 0.515499990335,
+      "first_favored_frac": 0.55,
+      "first_tte_s": 825.8,
+      "extend_per_event": 11.55,
+      "switch_per_event": 3.95,
+      "complement_per_event": 5.9,
+      "completion_rate": 0.95,
+      "pair_cost": 0.9967574933952758,
+      "t_to_match_s": 70.63157894736842,
+      "peak_resid": 50.9321615,
+      "term_resid_frac": 0.19865837154278984,
+      "mean_size": 9.596727376420485,
+      "notional_per_event": 106.1056628,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 4660.107189,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-03-31",
+      "events": 10,
+      "fills": 197,
+      "trades_per_event": 19.7,
+      "trades_per_min": 3.0130002549069586,
+      "first_price": 0.5759999936,
+      "first_favored_frac": 0.5,
+      "first_tte_s": 642.2,
+      "extend_per_event": 7.5,
+      "switch_per_event": 3.9,
+      "complement_per_event": 7.3,
+      "completion_rate": 0.8,
+      "pair_cost": 0.981715976295184,
+      "t_to_match_s": 40.75,
+      "peak_resid": 33.33475,
+      "term_resid_frac": 0.31728373545375493,
+      "mean_size": 10.794274084865183,
+      "notional_per_event": 92.795058,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-01",
+      "events": 4,
+      "fills": 85,
+      "trades_per_event": 21.25,
+      "trades_per_min": 2.9929577464788735,
+      "first_price": 0.40499999999999997,
+      "first_favored_frac": 0.25,
+      "first_tte_s": 689.0,
+      "extend_per_event": 7.25,
+      "switch_per_event": 3.75,
+      "complement_per_event": 9.25,
+      "completion_rate": 1.0,
+      "pair_cost": 1.0445455303720457,
+      "t_to_match_s": 37.0,
+      "peak_resid": 33.36493275,
+      "term_resid_frac": 0.09019277579139882,
+      "mean_size": 9.59640661545139,
+      "notional_per_event": 106.41579975000002,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 2106.357262,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-02",
+      "events": 9,
+      "fills": 150,
+      "trades_per_event": 16.666666666666668,
+      "trades_per_min": 1.8412438625204581,
+      "first_price": 0.4788888831777778,
+      "first_favored_frac": 0.4444444444444444,
+      "first_tte_s": 774.5555555555555,
+      "extend_per_event": 7.555555555555555,
+      "switch_per_event": 2.4444444444444446,
+      "complement_per_event": 5.666666666666667,
+      "completion_rate": 0.8888888888888888,
+      "pair_cost": 1.0072920023099228,
+      "t_to_match_s": 117.5,
+      "peak_resid": 39.206861999999994,
+      "term_resid_frac": 0.24713632927151735,
+      "mean_size": 9.785030449513078,
+      "notional_per_event": 80.47968766666666,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-06",
+      "events": 5,
+      "fills": 41,
+      "trades_per_event": 8.2,
+      "trades_per_min": 1.1243144424131626,
+      "first_price": 0.4239999921799999,
+      "first_favored_frac": 0.2,
+      "first_tte_s": 795.0,
+      "extend_per_event": 3.8,
+      "switch_per_event": 1.2,
+      "complement_per_event": 2.2,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9807517493423973,
+      "t_to_match_s": 133.6,
+      "peak_resid": 34.6899538,
+      "term_resid_frac": 0.3599273098823889,
+      "mean_size": 9.548262822222222,
+      "notional_per_event": 38.034819,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-09",
+      "events": 16,
+      "fills": 299,
+      "trades_per_event": 18.6875,
+      "trades_per_min": 1.834355828220859,
+      "first_price": 0.5124999971375,
+      "first_favored_frac": 0.5,
+      "first_tte_s": 831.875,
+      "extend_per_event": 10.5625,
+      "switch_per_event": 2.625,
+      "complement_per_event": 4.5,
+      "completion_rate": 0.875,
+      "pair_cost": 0.9159503987754941,
+      "t_to_match_s": 156.0,
+      "peak_resid": 46.3601686875,
+      "term_resid_frac": 0.29823305380827136,
+      "mean_size": 9.407777322669542,
+      "notional_per_event": 82.89731587499999,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 2279.281449,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-10",
+      "events": 9,
+      "fills": 106,
+      "trades_per_event": 11.777777777777779,
+      "trades_per_min": 1.533269045323047,
+      "first_price": 0.5111111111111112,
+      "first_favored_frac": 0.3333333333333333,
+      "first_tte_s": 781.4444444444445,
+      "extend_per_event": 6.666666666666667,
+      "switch_per_event": 0.8888888888888888,
+      "complement_per_event": 3.2222222222222223,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9846993361802894,
+      "t_to_match_s": 97.33333333333333,
+      "peak_resid": 39.68611111111111,
+      "term_resid_frac": 0.21743345751758258,
+      "mean_size": 9.240878637721757,
+      "notional_per_event": 54.80914411111111,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-13",
+      "events": 19,
+      "fills": 337,
+      "trades_per_event": 17.736842105263158,
+      "trades_per_min": 1.9462893444989893,
+      "first_price": 0.4961210092789473,
+      "first_favored_frac": 0.2631578947368421,
+      "first_tte_s": 790.2631578947369,
+      "extend_per_event": 8.631578947368421,
+      "switch_per_event": 2.3684210526315788,
+      "complement_per_event": 5.7368421052631575,
+      "completion_rate": 0.9473684210526315,
+      "pair_cost": 1.0253587516038043,
+      "t_to_match_s": 81.33333333333333,
+      "peak_resid": 51.53350494736842,
+      "term_resid_frac": 0.2172033150748527,
+      "mean_size": 12.189526343170392,
+      "notional_per_event": 111.17732010526316,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 1790.656386,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-14",
+      "events": 21,
+      "fills": 433,
+      "trades_per_event": 20.61904761904762,
+      "trades_per_min": 2.085741811175337,
+      "first_price": 0.4552380944238096,
+      "first_favored_frac": 0.19047619047619047,
+      "first_tte_s": 757.4761904761905,
+      "extend_per_event": 9.952380952380953,
+      "switch_per_event": 2.857142857142857,
+      "complement_per_event": 6.809523809523809,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9383243597701986,
+      "t_to_match_s": 84.0952380952381,
+      "peak_resid": 81.56792171428569,
+      "term_resid_frac": 0.21528771183203088,
+      "mean_size": 18.08126198905124,
+      "notional_per_event": 172.19574595238095,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-15",
+      "events": 6,
+      "fills": 112,
+      "trades_per_event": 18.666666666666668,
+      "trades_per_min": 2.1279290690310324,
+      "first_price": 0.4483333333333333,
+      "first_favored_frac": 0.16666666666666666,
+      "first_tte_s": 763.3333333333334,
+      "extend_per_event": 8.333333333333334,
+      "switch_per_event": 2.8333333333333335,
+      "complement_per_event": 6.5,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9456177397458377,
+      "t_to_match_s": 53.0,
+      "peak_resid": 66.87842566666667,
+      "term_resid_frac": 0.2989211545720609,
+      "mean_size": 16.601071743093183,
+      "notional_per_event": 143.81208249999997,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 0.0,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-17",
+      "events": 9,
+      "fills": 118,
+      "trades_per_event": 13.11111111111111,
+      "trades_per_min": 1.9949281487743027,
+      "first_price": 0.5199999983888888,
+      "first_favored_frac": 0.4444444444444444,
+      "first_tte_s": 757.5555555555555,
+      "extend_per_event": 7.111111111111111,
+      "switch_per_event": 1.3333333333333333,
+      "complement_per_event": 3.6666666666666665,
+      "completion_rate": 0.5555555555555556,
+      "pair_cost": 0.8899912452889922,
+      "t_to_match_s": 102.4,
+      "peak_resid": 44.53972344444444,
+      "term_resid_frac": 0.557185724607212,
+      "mean_size": 10.184400289590737,
+      "notional_per_event": 80.53913488888888,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 5298.425716,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-20",
+      "events": 25,
+      "fills": 1416,
+      "trades_per_event": 56.64,
+      "trades_per_min": 4.920083391243919,
+      "first_price": 0.524399999576,
+      "first_favored_frac": 0.64,
+      "first_tte_s": 837.68,
+      "extend_per_event": 31.12,
+      "switch_per_event": 8.52,
+      "complement_per_event": 16.0,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9603790729989647,
+      "t_to_match_s": 57.12,
+      "peak_resid": 101.41766208000001,
+      "term_resid_frac": 0.0973477928115039,
+      "mean_size": 14.799174728273075,
+      "notional_per_event": 394.33304483999996,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 10520.351221,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-21",
+      "events": 52,
+      "fills": 3191,
+      "trades_per_event": 61.36538461538461,
+      "trades_per_min": 5.187212137632079,
+      "first_price": 0.5034154445653846,
+      "first_favored_frac": 0.4807692307692308,
+      "first_tte_s": 856.1153846153846,
+      "extend_per_event": 36.05769230769231,
+      "switch_per_event": 8.615384615384615,
+      "complement_per_event": 15.692307692307692,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9669293417195081,
+      "t_to_match_s": 34.5,
+      "peak_resid": 139.4096037115385,
+      "term_resid_frac": 0.1238272405427485,
+      "mean_size": 17.18555374069864,
+      "notional_per_event": 474.13431813461557,
+      "concurrency": 1,
+      "rebate_usdc": 29.9379,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 22351.065854,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-22",
+      "events": 40,
+      "fills": 2544,
+      "trades_per_event": 63.6,
+      "trades_per_min": 5.7172821934227285,
+      "first_price": 0.46250000824500015,
+      "first_favored_frac": 0.225,
+      "first_tte_s": 826.95,
+      "extend_per_event": 37.7,
+      "switch_per_event": 9.6,
+      "complement_per_event": 15.3,
+      "completion_rate": 0.95,
+      "pair_cost": 0.9676285768565278,
+      "t_to_match_s": 55.89473684210526,
+      "peak_resid": 177.18599377499996,
+      "term_resid_frac": 0.14174617986694377,
+      "mean_size": 21.211997744525966,
+      "notional_per_event": 633.8131565000001,
+      "concurrency": 1,
+      "rebate_usdc": 77.7858,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 27553.086586,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-23",
+      "events": 38,
+      "fills": 2451,
+      "trades_per_event": 64.5,
+      "trades_per_min": 5.404233426429516,
+      "first_price": 0.5318421186421051,
+      "first_favored_frac": 0.6052631578947368,
+      "first_tte_s": 850.0,
+      "extend_per_event": 42.921052631578945,
+      "switch_per_event": 8.578947368421053,
+      "complement_per_event": 12.0,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9552472111503294,
+      "t_to_match_s": 89.94736842105263,
+      "peak_resid": 205.19809281578947,
+      "term_resid_frac": 0.13902448744335366,
+      "mean_size": 20.097200394128627,
+      "notional_per_event": 574.2174803157895,
+      "concurrency": 1,
+      "rebate_usdc": 113.1981,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 22394.999236,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-24",
+      "events": 45,
+      "fills": 2457,
+      "trades_per_event": 54.6,
+      "trades_per_min": 4.75701839303001,
+      "first_price": 0.4970265246866667,
+      "first_favored_frac": 0.5111111111111111,
+      "first_tte_s": 819.2444444444444,
+      "extend_per_event": 36.888888888888886,
+      "switch_per_event": 6.511111111111111,
+      "complement_per_event": 10.2,
+      "completion_rate": 0.9777777777777777,
+      "pair_cost": 0.954952091623957,
+      "t_to_match_s": 72.31818181818181,
+      "peak_resid": 173.26323431111112,
+      "term_resid_frac": 0.1652043735343675,
+      "mean_size": 19.925297010556815,
+      "notional_per_event": 491.02470126666645,
+      "concurrency": 1,
+      "rebate_usdc": 106.8854,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 22184.748928,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-25",
+      "events": 27,
+      "fills": 1988,
+      "trades_per_event": 73.62962962962963,
+      "trades_per_min": 5.895610913404508,
+      "first_price": 0.44814814935925923,
+      "first_favored_frac": 0.2962962962962963,
+      "first_tte_s": 821.0370370370371,
+      "extend_per_event": 49.48148148148148,
+      "switch_per_event": 9.25925925925926,
+      "complement_per_event": 13.88888888888889,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9733343544867852,
+      "t_to_match_s": 73.62962962962963,
+      "peak_resid": 195.2236864444445,
+      "term_resid_frac": 0.10433459116201815,
+      "mean_size": 19.368586592432912,
+      "notional_per_event": 653.0205117037038,
+      "concurrency": 1,
+      "rebate_usdc": 79.6787,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 18520.403394,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-26",
+      "events": 19,
+      "fills": 1535,
+      "trades_per_event": 80.78947368421052,
+      "trades_per_min": 6.251696986152593,
+      "first_price": 0.4999999990421052,
+      "first_favored_frac": 0.47368421052631576,
+      "first_tte_s": 841.6842105263158,
+      "extend_per_event": 54.31578947368421,
+      "switch_per_event": 8.526315789473685,
+      "complement_per_event": 16.94736842105263,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9481891925290511,
+      "t_to_match_s": 51.36842105263158,
+      "peak_resid": 183.64952084210526,
+      "term_resid_frac": 0.07476993031228486,
+      "mean_size": 18.502041162463644,
+      "notional_per_event": 683.0054219473684,
+      "concurrency": 1,
+      "rebate_usdc": 69.0054,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 13179.815879,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-27",
+      "events": 57,
+      "fills": 4668,
+      "trades_per_event": 81.89473684210526,
+      "trades_per_min": 6.473742603550296,
+      "first_price": 0.5159649673578949,
+      "first_favored_frac": 0.5263157894736842,
+      "first_tte_s": 863.719298245614,
+      "extend_per_event": 54.94736842105263,
+      "switch_per_event": 10.298245614035087,
+      "complement_per_event": 15.649122807017545,
+      "completion_rate": 1.0,
+      "pair_cost": 0.959828910790384,
+      "t_to_match_s": 42.0,
+      "peak_resid": 319.60741600000006,
+      "term_resid_frac": 0.09779333535762263,
+      "mean_size": 26.41832817599269,
+      "notional_per_event": 983.8778735087719,
+      "concurrency": 1,
+      "rebate_usdc": 55.3972,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 53994.13416,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-28",
+      "events": 39,
+      "fills": 2554,
+      "trades_per_event": 65.48717948717949,
+      "trades_per_min": 5.444855031267766,
+      "first_price": 0.5139279554769233,
+      "first_favored_frac": 0.5128205128205128,
+      "first_tte_s": 822.3076923076923,
+      "extend_per_event": 49.282051282051285,
+      "switch_per_event": 5.948717948717949,
+      "complement_per_event": 9.256410256410257,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9530783498927494,
+      "t_to_match_s": 79.58974358974359,
+      "peak_resid": 280.66300184615386,
+      "term_resid_frac": 0.17105790733016144,
+      "mean_size": 20.249696536915703,
+      "notional_per_event": 595.2131514358973,
+      "concurrency": 1,
+      "rebate_usdc": 196.732,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 26025.671511,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-29",
+      "events": 53,
+      "fills": 4313,
+      "trades_per_event": 81.37735849056604,
+      "trades_per_min": 6.556704165399818,
+      "first_price": 0.46433963441132065,
+      "first_favored_frac": 0.32075471698113206,
+      "first_tte_s": 846.4905660377359,
+      "extend_per_event": 65.50943396226415,
+      "switch_per_event": 5.943396226415095,
+      "complement_per_event": 8.924528301886792,
+      "completion_rate": 0.9811320754716981,
+      "pair_cost": 0.9612202664762729,
+      "t_to_match_s": 67.38461538461539,
+      "peak_resid": 417.2604081320755,
+      "term_resid_frac": 0.2124931607148428,
+      "mean_size": 22.179994759913928,
+      "notional_per_event": 753.4958497924529,
+      "concurrency": 2,
+      "rebate_usdc": 38.8784,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 41339.689991,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-04-30",
+      "events": 55,
+      "fills": 5425,
+      "trades_per_event": 98.63636363636364,
+      "trades_per_min": 7.987730061349693,
+      "first_price": 0.5001214332545455,
+      "first_favored_frac": 0.36363636363636365,
+      "first_tte_s": 823.3454545454546,
+      "extend_per_event": 73.8,
+      "switch_per_event": 9.981818181818182,
+      "complement_per_event": 13.854545454545455,
+      "completion_rate": 0.9818181818181818,
+      "pair_cost": 0.9572414050890055,
+      "t_to_match_s": 43.7037037037037,
+      "peak_resid": 409.4716971818181,
+      "term_resid_frac": 0.19269004910806067,
+      "mean_size": 20.04524197954854,
+      "notional_per_event": 888.4506477090908,
+      "concurrency": 1,
+      "rebate_usdc": 150.3769,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 48193.420208,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-01",
+      "events": 54,
+      "fills": 5132,
+      "trades_per_event": 95.03703703703704,
+      "trades_per_min": 8.237119469263282,
+      "first_price": 0.4879629699777779,
+      "first_favored_frac": 0.42592592592592593,
+      "first_tte_s": 832.7777777777778,
+      "extend_per_event": 69.87037037037037,
+      "switch_per_event": 10.0,
+      "complement_per_event": 14.166666666666666,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9671544419839884,
+      "t_to_match_s": 54.96296296296296,
+      "peak_resid": 344.9427023703704,
+      "term_resid_frac": 0.13967195033112303,
+      "mean_size": 23.009822570529582,
+      "notional_per_event": 1027.9055455,
+      "concurrency": 1,
+      "rebate_usdc": 173.6918,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 54458.362655,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-02",
+      "events": 25,
+      "fills": 2141,
+      "trades_per_event": 85.64,
+      "trades_per_min": 8.48256735340729,
+      "first_price": 0.5268,
+      "first_favored_frac": 0.6,
+      "first_tte_s": 775.28,
+      "extend_per_event": 68.2,
+      "switch_per_event": 6.6,
+      "complement_per_event": 9.84,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9817149044479998,
+      "t_to_match_s": 43.2,
+      "peak_resid": 423.52205127999986,
+      "term_resid_frac": 0.15325156831102896,
+      "mean_size": 24.957926612217207,
+      "notional_per_event": 909.1193080799998,
+      "concurrency": 1,
+      "rebate_usdc": 199.4925,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 23807.228404,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-03",
+      "events": 30,
+      "fills": 3044,
+      "trades_per_event": 101.46666666666667,
+      "trades_per_min": 8.822336006182978,
+      "first_price": 0.5236360840833334,
+      "first_favored_frac": 0.5333333333333333,
+      "first_tte_s": 852.5333333333333,
+      "extend_per_event": 77.96666666666667,
+      "switch_per_event": 9.366666666666667,
+      "complement_per_event": 13.133333333333333,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9458396129620087,
+      "t_to_match_s": 59.46666666666667,
+      "peak_resid": 380.5210173333333,
+      "term_resid_frac": 0.13733488204334338,
+      "mean_size": 20.33067081287698,
+      "notional_per_event": 959.8658761000002,
+      "concurrency": 1,
+      "rebate_usdc": 63.3019,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 28835.753034,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-04",
+      "events": 48,
+      "fills": 4768,
+      "trades_per_event": 99.33333333333333,
+      "trades_per_min": 8.922155688622755,
+      "first_price": 0.4777083353354166,
+      "first_favored_frac": 0.3958333333333333,
+      "first_tte_s": 832.75,
+      "extend_per_event": 74.5,
+      "switch_per_event": 10.020833333333334,
+      "complement_per_event": 13.8125,
+      "completion_rate": 1.0,
+      "pair_cost": 0.983634585484539,
+      "t_to_match_s": 46.166666666666664,
+      "peak_resid": 414.94267127083344,
+      "term_resid_frac": 0.11709336440176647,
+      "mean_size": 25.309265131346255,
+      "notional_per_event": 1207.2113120625,
+      "concurrency": 1,
+      "rebate_usdc": 94.469,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 56470.993206,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-05",
+      "events": 63,
+      "fills": 6030,
+      "trades_per_event": 95.71428571428571,
+      "trades_per_min": 8.072649381944753,
+      "first_price": 0.49238560674920634,
+      "first_favored_frac": 0.38095238095238093,
+      "first_tte_s": 825.5873015873016,
+      "extend_per_event": 71.15873015873017,
+      "switch_per_event": 9.53968253968254,
+      "complement_per_event": 14.015873015873016,
+      "completion_rate": 1.0,
+      "pair_cost": 0.999460948858151,
+      "t_to_match_s": 63.682539682539684,
+      "peak_resid": 380.1778958253969,
+      "term_resid_frac": 0.10038027043111841,
+      "mean_size": 26.449061875334323,
+      "notional_per_event": 1228.62082968254,
+      "concurrency": 1,
+      "rebate_usdc": 148.6204,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 75789.870545,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-06",
+      "events": 20,
+      "fills": 1438,
+      "trades_per_event": 71.9,
+      "trades_per_min": 8.851954447522315,
+      "first_price": 0.49450000094000013,
+      "first_favored_frac": 0.35,
+      "first_tte_s": 722.65,
+      "extend_per_event": 47.0,
+      "switch_per_event": 10.2,
+      "complement_per_event": 13.7,
+      "completion_rate": 0.9,
+      "pair_cost": 0.9931485855146239,
+      "t_to_match_s": 29.27777777777778,
+      "peak_resid": 164.37600280000004,
+      "term_resid_frac": 0.18922527308690446,
+      "mean_size": 15.138590560623816,
+      "notional_per_event": 552.0426150499999,
+      "concurrency": 1,
+      "rebate_usdc": 217.6823,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 11404.85997,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-07",
+      "events": 31,
+      "fills": 2365,
+      "trades_per_event": 76.29032258064517,
+      "trades_per_min": 7.397560212699406,
+      "first_price": 0.48548387648387104,
+      "first_favored_frac": 0.3870967741935484,
+      "first_tte_s": 793.9032258064516,
+      "extend_per_event": 49.645161290322584,
+      "switch_per_event": 10.903225806451612,
+      "complement_per_event": 14.741935483870968,
+      "completion_rate": 0.9354838709677419,
+      "pair_cost": 0.9965357506812321,
+      "t_to_match_s": 35.827586206896555,
+      "peak_resid": 170.61862212903222,
+      "term_resid_frac": 0.1854793043507869,
+      "mean_size": 13.639819939590858,
+      "notional_per_event": 555.327502032258,
+      "concurrency": 1,
+      "rebate_usdc": 26.8042,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 17789.699389,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-08",
+      "events": 53,
+      "fills": 4334,
+      "trades_per_event": 81.77358490566037,
+      "trades_per_min": 7.277714029834038,
+      "first_price": 0.5201887796735848,
+      "first_favored_frac": 0.49056603773584906,
+      "first_tte_s": 818.9622641509434,
+      "extend_per_event": 57.18867924528302,
+      "switch_per_event": 9.660377358490566,
+      "complement_per_event": 13.924528301886792,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9978945722265649,
+      "t_to_match_s": 48.60377358490566,
+      "peak_resid": 214.71477524528302,
+      "term_resid_frac": 0.12997889913764898,
+      "mean_size": 14.983686884157828,
+      "notional_per_event": 606.9199498301884,
+      "concurrency": 1,
+      "rebate_usdc": 36.4471,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 32137.937587,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-09",
+      "events": 12,
+      "fills": 1231,
+      "trades_per_event": 102.58333333333333,
+      "trades_per_min": 8.105794556628622,
+      "first_price": 0.5141666749499999,
+      "first_favored_frac": 0.3333333333333333,
+      "first_tte_s": 826.1666666666666,
+      "extend_per_event": 75.75,
+      "switch_per_event": 10.5,
+      "complement_per_event": 15.333333333333334,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9980390485555678,
+      "t_to_match_s": 45.333333333333336,
+      "peak_resid": 237.32502241666668,
+      "term_resid_frac": 0.11260713836395979,
+      "mean_size": 14.182459144478768,
+      "notional_per_event": 716.9066581666665,
+      "concurrency": 1,
+      "rebate_usdc": 75.0006,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 8284.056985,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-10",
+      "events": 4,
+      "fills": 347,
+      "trades_per_event": 86.75,
+      "trades_per_min": 8.161505292042337,
+      "first_price": 0.407500000925,
+      "first_favored_frac": 0.0,
+      "first_tte_s": 765.25,
+      "extend_per_event": 64.25,
+      "switch_per_event": 9.25,
+      "complement_per_event": 12.25,
+      "completion_rate": 1.0,
+      "pair_cost": 1.0159897535358253,
+      "t_to_match_s": 61.25,
+      "peak_resid": 224.43609874999999,
+      "term_resid_frac": 0.11628773307782975,
+      "mean_size": 13.717873814013512,
+      "notional_per_event": 581.3458565000001,
+      "concurrency": 1,
+      "rebate_usdc": 21.3733,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 2407.265162,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-11",
+      "events": 36,
+      "fills": 4018,
+      "trades_per_event": 111.61111111111111,
+      "trades_per_min": 10.401242557597723,
+      "first_price": 0.4938888883777779,
+      "first_favored_frac": 0.4444444444444444,
+      "first_tte_s": 798.8888888888889,
+      "extend_per_event": 78.69444444444444,
+      "switch_per_event": 13.0,
+      "complement_per_event": 18.916666666666668,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9791634196750985,
+      "t_to_match_s": 27.02777777777778,
+      "peak_resid": 219.76365413888885,
+      "term_resid_frac": 0.08614552123667817,
+      "mean_size": 14.708381854695915,
+      "notional_per_event": 791.6920476388891,
+      "concurrency": 1,
+      "rebate_usdc": 5.8437,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 29176.590956,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-12",
+      "events": 27,
+      "fills": 2154,
+      "trades_per_event": 79.77777777777777,
+      "trades_per_min": 7.809063444108762,
+      "first_price": 0.5007506901851853,
+      "first_favored_frac": 0.48148148148148145,
+      "first_tte_s": 778.6666666666666,
+      "extend_per_event": 53.407407407407405,
+      "switch_per_event": 10.333333333333334,
+      "complement_per_event": 15.037037037037036,
+      "completion_rate": 1.0,
+      "pair_cost": 0.985633248380713,
+      "t_to_match_s": 31.185185185185187,
+      "peak_resid": 164.12907181481484,
+      "term_resid_frac": 0.08979047759306714,
+      "mean_size": 15.17213349991305,
+      "notional_per_event": 587.1214424444445,
+      "concurrency": 1,
+      "rebate_usdc": 77.8588,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 16040.273364,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-13",
+      "events": 41,
+      "fills": 3037,
+      "trades_per_event": 74.07317073170732,
+      "trades_per_min": 6.6676424311171285,
+      "first_price": 0.5026829334463415,
+      "first_favored_frac": 0.43902439024390244,
+      "first_tte_s": 820.6829268292682,
+      "extend_per_event": 51.34146341463415,
+      "switch_per_event": 9.073170731707316,
+      "complement_per_event": 12.658536585365853,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9906782163561575,
+      "t_to_match_s": 41.21951219512195,
+      "peak_resid": 179.03293219512193,
+      "term_resid_frac": 0.12397367617175532,
+      "mean_size": 14.117788128344104,
+      "notional_per_event": 505.013117,
+      "concurrency": 1,
+      "rebate_usdc": 37.1636,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 19890.759778,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-14",
+      "events": 43,
+      "fills": 3196,
+      "trades_per_event": 74.32558139534883,
+      "trades_per_min": 6.744513224535734,
+      "first_price": 0.49906978497441873,
+      "first_favored_frac": 0.46511627906976744,
+      "first_tte_s": 830.8139534883721,
+      "extend_per_event": 49.093023255813954,
+      "switch_per_event": 10.209302325581396,
+      "complement_per_event": 14.023255813953488,
+      "completion_rate": 1.0,
+      "pair_cost": 0.975451340568438,
+      "t_to_match_s": 37.97674418604651,
+      "peak_resid": 180.72385174418602,
+      "term_resid_frac": 0.13606939483607675,
+      "mean_size": 14.711736707254806,
+      "notional_per_event": 513.0857421162792,
+      "concurrency": 1,
+      "rebate_usdc": 54.8784,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 21855.925322,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-15",
+      "events": 38,
+      "fills": 3960,
+      "trades_per_event": 104.21052631578948,
+      "trades_per_min": 8.934010152284264,
+      "first_price": 0.4762669224131577,
+      "first_favored_frac": 0.3684210526315789,
+      "first_tte_s": 839.921052631579,
+      "extend_per_event": 71.76315789473684,
+      "switch_per_event": 12.5,
+      "complement_per_event": 18.94736842105263,
+      "completion_rate": 0.9736842105263158,
+      "pair_cost": 0.959431367485146,
+      "t_to_match_s": 36.21621621621622,
+      "peak_resid": 183.0246780789474,
+      "term_resid_frac": 0.109203457790176,
+      "mean_size": 14.143705584238385,
+      "notional_per_event": 683.8752294473684,
+      "concurrency": 1,
+      "rebate_usdc": 61.9565,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 27241.255102,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-18",
+      "events": 36,
+      "fills": 4219,
+      "trades_per_event": 117.19444444444444,
+      "trades_per_min": 9.297730110923382,
+      "first_price": 0.5116666801166666,
+      "first_favored_frac": 0.5277777777777778,
+      "first_tte_s": 858.5555555555555,
+      "extend_per_event": 79.16666666666667,
+      "switch_per_event": 15.36111111111111,
+      "complement_per_event": 21.666666666666668,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9754709849006983,
+      "t_to_match_s": 23.61111111111111,
+      "peak_resid": 206.70425824999998,
+      "term_resid_frac": 0.06739986207186673,
+      "mean_size": 14.653146429232217,
+      "notional_per_event": 840.7233339722223,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 30860.686151,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-19",
+      "events": 33,
+      "fills": 3028,
+      "trades_per_event": 91.75757575757575,
+      "trades_per_min": 7.860511400510536,
+      "first_price": 0.5000000287363637,
+      "first_favored_frac": 0.48484848484848486,
+      "first_tte_s": 841.1818181818181,
+      "extend_per_event": 61.18181818181818,
+      "switch_per_event": 11.818181818181818,
+      "complement_per_event": 17.757575757575758,
+      "completion_rate": 0.9696969696969697,
+      "pair_cost": 0.9870832810406821,
+      "t_to_match_s": 38.5,
+      "peak_resid": 193.1925743030303,
+      "term_resid_frac": 0.15086049116328154,
+      "mean_size": 15.03803146842616,
+      "notional_per_event": 676.9931184848485,
+      "concurrency": 1,
+      "rebate_usdc": 75.8124,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 22289.856614,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-20",
+      "events": 39,
+      "fills": 4160,
+      "trades_per_event": 106.66666666666667,
+      "trades_per_min": 8.510928495925256,
+      "first_price": 0.5089040496846154,
+      "first_favored_frac": 0.46153846153846156,
+      "first_tte_s": 841.2564102564103,
+      "extend_per_event": 76.74358974358974,
+      "switch_per_event": 11.923076923076923,
+      "complement_per_event": 17.0,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9776612896349246,
+      "t_to_match_s": 42.256410256410255,
+      "peak_resid": 245.53939910256406,
+      "term_resid_frac": 0.11360643944054165,
+      "mean_size": 14.448124488594832,
+      "notional_per_event": 725.5919844871794,
+      "concurrency": 1,
+      "rebate_usdc": 39.5662,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 27412.494427,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-21",
+      "events": 32,
+      "fills": 3006,
+      "trades_per_event": 93.9375,
+      "trades_per_min": 8.49192523188474,
+      "first_price": 0.5112499995218749,
+      "first_favored_frac": 0.53125,
+      "first_tte_s": 791.0625,
+      "extend_per_event": 67.3125,
+      "switch_per_event": 10.21875,
+      "complement_per_event": 15.40625,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9587213542833586,
+      "t_to_match_s": 38.75,
+      "peak_resid": 213.44243256250002,
+      "term_resid_frac": 0.1567310643908978,
+      "mean_size": 14.234048163077688,
+      "notional_per_event": 612.2138226250003,
+      "concurrency": 1,
+      "rebate_usdc": 64.968,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 20015.712277,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-22",
+      "events": 51,
+      "fills": 5829,
+      "trades_per_event": 114.29411764705883,
+      "trades_per_min": 8.973214285714285,
+      "first_price": 0.498235377845098,
+      "first_favored_frac": 0.47058823529411764,
+      "first_tte_s": 856.0,
+      "extend_per_event": 81.74509803921569,
+      "switch_per_event": 12.843137254901961,
+      "complement_per_event": 18.705882352941178,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9477088417877556,
+      "t_to_match_s": 29.058823529411764,
+      "peak_resid": 215.2514366078432,
+      "term_resid_frac": 0.09177405523813062,
+      "mean_size": 14.376071101951633,
+      "notional_per_event": 768.2374337254901,
+      "concurrency": 1,
+      "rebate_usdc": 52.2021,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 39846.720771,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-23",
+      "events": 13,
+      "fills": 1591,
+      "trades_per_event": 122.38461538461539,
+      "trades_per_min": 9.11486680034374,
+      "first_price": 0.5246153863923076,
+      "first_favored_frac": 0.46153846153846156,
+      "first_tte_s": 881.5384615384615,
+      "extend_per_event": 86.53846153846153,
+      "switch_per_event": 14.307692307692308,
+      "complement_per_event": 20.53846153846154,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9266910370577655,
+      "t_to_match_s": 45.92307692307692,
+      "peak_resid": 255.8975198461538,
+      "term_resid_frac": 0.09293899650787063,
+      "mean_size": 14.553473825400632,
+      "notional_per_event": 807.4090282307692,
+      "concurrency": 1,
+      "rebate_usdc": 94.055,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 11192.987453,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-24",
+      "events": 8,
+      "fills": 894,
+      "trades_per_event": 111.75,
+      "trades_per_min": 8.561851556264964,
+      "first_price": 0.5449999950500001,
+      "first_favored_frac": 0.875,
+      "first_tte_s": 822.375,
+      "extend_per_event": 85.0,
+      "switch_per_event": 11.0,
+      "complement_per_event": 14.75,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9882065909613016,
+      "t_to_match_s": 21.375,
+      "peak_resid": 266.58565400000003,
+      "term_resid_frac": 0.11536399245595595,
+      "mean_size": 14.966609299457621,
+      "notional_per_event": 765.2329372500001,
+      "concurrency": 1,
+      "rebate_usdc": 28.8158,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 5904.732543,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-25",
+      "events": 33,
+      "fills": 3699,
+      "trades_per_event": 112.0909090909091,
+      "trades_per_min": 9.108967781654012,
+      "first_price": 0.5064548155787878,
+      "first_favored_frac": 0.42424242424242425,
+      "first_tte_s": 819.5454545454545,
+      "extend_per_event": 86.0,
+      "switch_per_event": 9.969696969696969,
+      "complement_per_event": 15.121212121212121,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9404271697281062,
+      "t_to_match_s": 43.666666666666664,
+      "peak_resid": 268.6091032424243,
+      "term_resid_frac": 0.14079792245050513,
+      "mean_size": 14.347641683150359,
+      "notional_per_event": 720.588473848485,
+      "concurrency": 1,
+      "rebate_usdc": 13.2504,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 23297.288491,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-26",
+      "events": 42,
+      "fills": 4146,
+      "trades_per_event": 98.71428571428571,
+      "trades_per_min": 8.778938452851497,
+      "first_price": 0.4865078046,
+      "first_favored_frac": 0.40476190476190477,
+      "first_tte_s": 829.6190476190476,
+      "extend_per_event": 73.07142857142857,
+      "switch_per_event": 9.857142857142858,
+      "complement_per_event": 14.785714285714286,
+      "completion_rate": 0.9761904761904762,
+      "pair_cost": 0.9514201425589375,
+      "t_to_match_s": 41.65853658536585,
+      "peak_resid": 209.77351871428576,
+      "term_resid_frac": 0.13234615465662872,
+      "mean_size": 14.747313633855892,
+      "notional_per_event": 689.4893321904761,
+      "concurrency": 1,
+      "rebate_usdc": 49.3305,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 29167.762438,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-27",
+      "events": 41,
+      "fills": 4227,
+      "trades_per_event": 103.09756097560975,
+      "trades_per_min": 8.694251139830653,
+      "first_price": 0.5028105205024391,
+      "first_favored_frac": 0.4878048780487805,
+      "first_tte_s": 840.0975609756098,
+      "extend_per_event": 75.8780487804878,
+      "switch_per_event": 11.024390243902438,
+      "complement_per_event": 15.195121951219512,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9506536886322953,
+      "t_to_match_s": 38.390243902439025,
+      "peak_resid": 225.02129653658537,
+      "term_resid_frac": 0.11971254627355066,
+      "mean_size": 14.414204739081397,
+      "notional_per_event": 682.5108382439025,
+      "concurrency": 1,
+      "rebate_usdc": 46.9708,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 29325.420059,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-28",
+      "events": 42,
+      "fills": 4240,
+      "trades_per_event": 100.95238095238095,
+      "trades_per_min": 8.712627144765232,
+      "first_price": 0.4947033089380952,
+      "first_favored_frac": 0.47619047619047616,
+      "first_tte_s": 818.2619047619048,
+      "extend_per_event": 73.14285714285714,
+      "switch_per_event": 10.69047619047619,
+      "complement_per_event": 16.11904761904762,
+      "completion_rate": 1.0,
+      "pair_cost": 0.952263034365313,
+      "t_to_match_s": 42.714285714285715,
+      "peak_resid": 227.2800279047619,
+      "term_resid_frac": 0.11828689905183981,
+      "mean_size": 14.978552514833304,
+      "notional_per_event": 685.8334027619047,
+      "concurrency": 1,
+      "rebate_usdc": 57.9291,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 29157.869881,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-05-29",
+      "events": 24,
+      "fills": 2861,
+      "trades_per_event": 119.20833333333333,
+      "trades_per_min": 10.962385848393895,
+      "first_price": 0.46375000937916666,
+      "first_favored_frac": 0.3333333333333333,
+      "first_tte_s": 800.5,
+      "extend_per_event": 90.625,
+      "switch_per_event": 10.833333333333334,
+      "complement_per_event": 16.75,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9500114458272738,
+      "t_to_match_s": 29.416666666666668,
+      "peak_resid": 230.80793183333324,
+      "term_resid_frac": 0.10138253208099014,
+      "mean_size": 14.483016101372206,
+      "notional_per_event": 805.7615092083333,
+      "concurrency": 1,
+      "rebate_usdc": 59.8548,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 19834.324778,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-01",
+      "events": 41,
+      "fills": 5589,
+      "trades_per_event": 136.3170731707317,
+      "trades_per_min": 11.013169562218792,
+      "first_price": 0.5040857548317073,
+      "first_favored_frac": 0.3902439024390244,
+      "first_tte_s": 837.9268292682926,
+      "extend_per_event": 99.0,
+      "switch_per_event": 14.536585365853659,
+      "complement_per_event": 21.78048780487805,
+      "completion_rate": 1.0,
+      "pair_cost": 0.957978372327261,
+      "t_to_match_s": 33.51219512195122,
+      "peak_resid": 213.28798699999996,
+      "term_resid_frac": 0.0710331538885565,
+      "mean_size": 14.126403515625512,
+      "notional_per_event": 892.8110656829268,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 37537.849853,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-02",
+      "events": 46,
+      "fills": 5555,
+      "trades_per_event": 120.76086956521739,
+      "trades_per_min": 9.974263825712235,
+      "first_price": 0.48471101626086954,
+      "first_favored_frac": 0.391304347826087,
+      "first_tte_s": 829.9782608695652,
+      "extend_per_event": 86.69565217391305,
+      "switch_per_event": 13.521739130434783,
+      "complement_per_event": 19.543478260869566,
+      "completion_rate": 1.0,
+      "pair_cost": 0.952075549238267,
+      "t_to_match_s": 27.91304347826087,
+      "peak_resid": 272.26536082608703,
+      "term_resid_frac": 0.11119816820317183,
+      "mean_size": 15.693203826621312,
+      "notional_per_event": 883.0498207391304,
+      "concurrency": 1,
+      "rebate_usdc": 94.2965,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 41295.725987,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-03",
+      "events": 39,
+      "fills": 4966,
+      "trades_per_event": 127.33333333333333,
+      "trades_per_min": 10.611866942089893,
+      "first_price": 0.48589743793589746,
+      "first_favored_frac": 0.46153846153846156,
+      "first_tte_s": 834.9230769230769,
+      "extend_per_event": 91.48717948717949,
+      "switch_per_event": 14.205128205128204,
+      "complement_per_event": 20.641025641025642,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9848558380405412,
+      "t_to_match_s": 38.02564102564103,
+      "peak_resid": 268.3188200256409,
+      "term_resid_frac": 0.09833695204445375,
+      "mean_size": 17.389895072156843,
+      "notional_per_event": 1057.7264633333332,
+      "concurrency": 1,
+      "rebate_usdc": 95.1864,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 41351.450723,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-04",
+      "events": 41,
+      "fills": 4812,
+      "trades_per_event": 117.36585365853658,
+      "trades_per_min": 9.705200174795792,
+      "first_price": 0.5024390306609756,
+      "first_favored_frac": 0.5121951219512195,
+      "first_tte_s": 858.6829268292682,
+      "extend_per_event": 83.2439024390244,
+      "switch_per_event": 13.853658536585366,
+      "complement_per_event": 19.26829268292683,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9695834789599498,
+      "t_to_match_s": 26.073170731707318,
+      "peak_resid": 310.5837606585366,
+      "term_resid_frac": 0.10572996008050667,
+      "mean_size": 18.620602508261133,
+      "notional_per_event": 1005.1001852682924,
+      "concurrency": 1,
+      "rebate_usdc": 106.5082,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 41314.383782,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-05",
+      "events": 34,
+      "fills": 4007,
+      "trades_per_event": 117.8529411764706,
+      "trades_per_min": 10.017082621557435,
+      "first_price": 0.5102941206735294,
+      "first_favored_frac": 0.5,
+      "first_tte_s": 818.8235294117648,
+      "extend_per_event": 84.3529411764706,
+      "switch_per_event": 12.441176470588236,
+      "complement_per_event": 20.058823529411764,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9710492867742407,
+      "t_to_match_s": 25.58823529411765,
+      "peak_resid": 279.96653305882353,
+      "term_resid_frac": 0.08539904517930903,
+      "mean_size": 19.492485572947064,
+      "notional_per_event": 1082.268084764706,
+      "concurrency": 1,
+      "rebate_usdc": 100.2115,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 37037.550241,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-08",
+      "events": 48,
+      "fills": 5894,
+      "trades_per_event": 122.79166666666667,
+      "trades_per_min": 9.704187475989244,
+      "first_price": 0.5045833362708333,
+      "first_favored_frac": 0.4583333333333333,
+      "first_tte_s": 838.4583333333334,
+      "extend_per_event": 89.83333333333333,
+      "switch_per_event": 12.479166666666666,
+      "complement_per_event": 19.479166666666668,
+      "completion_rate": 1.0,
+      "pair_cost": 0.97596608970714,
+      "t_to_match_s": 41.5,
+      "peak_resid": 327.00734895833324,
+      "term_resid_frac": 0.10303937924132633,
+      "mean_size": 20.17596033555888,
+      "notional_per_event": 1150.0685826666668,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 54308.424524,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-09",
+      "events": 35,
+      "fills": 2827,
+      "trades_per_event": 80.77142857142857,
+      "trades_per_min": 6.589743589743589,
+      "first_price": 0.5220000060571427,
+      "first_favored_frac": 0.5428571428571428,
+      "first_tte_s": 832.0857142857143,
+      "extend_per_event": 59.17142857142857,
+      "switch_per_event": 8.314285714285715,
+      "complement_per_event": 12.285714285714286,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9426170897593333,
+      "t_to_match_s": 65.94285714285714,
+      "peak_resid": 228.79514922857138,
+      "term_resid_frac": 0.12434232352449719,
+      "mean_size": 16.651508500688823,
+      "notional_per_event": 625.6568388285714,
+      "concurrency": 1,
+      "rebate_usdc": 93.4289,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 22743.430092,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-10",
+      "events": 17,
+      "fills": 1732,
+      "trades_per_event": 101.88235294117646,
+      "trades_per_min": 9.835320840431573,
+      "first_price": 0.5741176542,
+      "first_favored_frac": 0.7647058823529411,
+      "first_tte_s": 726.1176470588235,
+      "extend_per_event": 77.11764705882354,
+      "switch_per_event": 9.882352941176471,
+      "complement_per_event": 13.882352941176471,
+      "completion_rate": 0.9411764705882353,
+      "pair_cost": 0.975177390325208,
+      "t_to_match_s": 45.25,
+      "peak_resid": 243.06912541176473,
+      "term_resid_frac": 0.14761411736597435,
+      "mean_size": 19.207587319524546,
+      "notional_per_event": 912.6425363529413,
+      "concurrency": 1,
+      "rebate_usdc": 88.5242,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 15630.100588,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-11",
+      "events": 18,
+      "fills": 1148,
+      "trades_per_event": 63.77777777777778,
+      "trades_per_min": 6.2447869446962825,
+      "first_price": 0.4683333427888889,
+      "first_favored_frac": 0.3333333333333333,
+      "first_tte_s": 675.6111111111111,
+      "extend_per_event": 45.833333333333336,
+      "switch_per_event": 6.944444444444445,
+      "complement_per_event": 10.0,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9097803821005898,
+      "t_to_match_s": 65.94444444444444,
+      "peak_resid": 295.77975594444456,
+      "term_resid_frac": 0.2301373771917442,
+      "mean_size": 18.19390595448723,
+      "notional_per_event": 496.3336587777779,
+      "concurrency": 1,
+      "rebate_usdc": 45.4216,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 9357.311802,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-12",
+      "events": 22,
+      "fills": 1564,
+      "trades_per_event": 71.0909090909091,
+      "trades_per_min": 6.450371185042617,
+      "first_price": 0.49772727272727263,
+      "first_favored_frac": 0.4090909090909091,
+      "first_tte_s": 742.4090909090909,
+      "extend_per_event": 52.31818181818182,
+      "switch_per_event": 6.7727272727272725,
+      "complement_per_event": 11.0,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9554350693777951,
+      "t_to_match_s": 76.77272727272727,
+      "peak_resid": 271.77134572727266,
+      "term_resid_frac": 0.15743059486885982,
+      "mean_size": 19.509622257561265,
+      "notional_per_event": 626.9123741363636,
+      "concurrency": 1,
+      "rebate_usdc": 22.9186,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 14440.841892,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-15",
+      "events": 35,
+      "fills": 2935,
+      "trades_per_event": 83.85714285714286,
+      "trades_per_min": 7.924935871472931,
+      "first_price": 0.4371428671542857,
+      "first_favored_frac": 0.34285714285714286,
+      "first_tte_s": 729.8,
+      "extend_per_event": 61.91428571428571,
+      "switch_per_event": 8.714285714285714,
+      "complement_per_event": 12.228571428571428,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9331803497897729,
+      "t_to_match_s": 37.51428571428571,
+      "peak_resid": 331.0407477428571,
+      "term_resid_frac": 0.1794955409377592,
+      "mean_size": 18.729403004525672,
+      "notional_per_event": 672.2785592857142,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 23608.412486,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-16",
+      "events": 43,
+      "fills": 3951,
+      "trades_per_event": 91.88372093023256,
+      "trades_per_min": 8.121830889406606,
+      "first_price": 0.5123255913116279,
+      "first_favored_frac": 0.5348837209302325,
+      "first_tte_s": 752.9302325581396,
+      "extend_per_event": 67.69767441860465,
+      "switch_per_event": 9.511627906976743,
+      "complement_per_event": 13.674418604651162,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9353079712517626,
+      "t_to_match_s": 48.95348837209303,
+      "peak_resid": 321.4514632093023,
+      "term_resid_frac": 0.1594880372553449,
+      "mean_size": 18.43622507798517,
+      "notional_per_event": 747.3977347209303,
+      "concurrency": 1,
+      "rebate_usdc": 60.2588,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 33356.596542,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-17",
+      "events": 26,
+      "fills": 2301,
+      "trades_per_event": 88.5,
+      "trades_per_min": 7.5541694024950745,
+      "first_price": 0.4784615477730769,
+      "first_favored_frac": 0.4230769230769231,
+      "first_tte_s": 773.7307692307693,
+      "extend_per_event": 64.6923076923077,
+      "switch_per_event": 9.423076923076923,
+      "complement_per_event": 13.384615384615385,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9575044948287827,
+      "t_to_match_s": 54.34615384615385,
+      "peak_resid": 342.2570206538461,
+      "term_resid_frac": 0.1840427648210085,
+      "mean_size": 17.84856679761371,
+      "notional_per_event": 690.7786661153847,
+      "concurrency": 1,
+      "rebate_usdc": 85.6735,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 17603.988332,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-18",
+      "events": 22,
+      "fills": 1525,
+      "trades_per_event": 69.31818181818181,
+      "trades_per_min": 6.86267156678917,
+      "first_price": 0.4168181837772727,
+      "first_favored_frac": 0.2727272727272727,
+      "first_tte_s": 706.0,
+      "extend_per_event": 51.45454545454545,
+      "switch_per_event": 7.318181818181818,
+      "complement_per_event": 9.545454545454545,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9413562811468974,
+      "t_to_match_s": 71.9090909090909,
+      "peak_resid": 351.96144350000003,
+      "term_resid_frac": 0.2756242519705536,
+      "mean_size": 19.0669665021153,
+      "notional_per_event": 534.340416409091,
+      "concurrency": 1,
+      "rebate_usdc": 51.5754,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 12116.972633,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-19",
+      "events": 24,
+      "fills": 1693,
+      "trades_per_event": 70.54166666666667,
+      "trades_per_min": 7.7347140790375395,
+      "first_price": 0.5008333599541667,
+      "first_favored_frac": 0.5,
+      "first_tte_s": 642.2083333333334,
+      "extend_per_event": 53.125,
+      "switch_per_event": 6.958333333333333,
+      "complement_per_event": 9.458333333333334,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9828527158403796,
+      "t_to_match_s": 88.70833333333333,
+      "peak_resid": 296.92626275000003,
+      "term_resid_frac": 0.22923132215202321,
+      "mean_size": 17.87455861153653,
+      "notional_per_event": 544.9575470416665,
+      "concurrency": 1,
+      "rebate_usdc": 32.7455,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 13503.099857,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-22",
+      "events": 24,
+      "fills": 2097,
+      "trades_per_event": 87.375,
+      "trades_per_min": 7.86768384192096,
+      "first_price": 0.4770833453875,
+      "first_favored_frac": 0.5,
+      "first_tte_s": 762.9583333333334,
+      "extend_per_event": 60.916666666666664,
+      "switch_per_event": 9.791666666666666,
+      "complement_per_event": 15.666666666666666,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9704314524763489,
+      "t_to_match_s": 54.041666666666664,
+      "peak_resid": 263.346424625,
+      "term_resid_frac": 0.13752190091512775,
+      "mean_size": 18.319566483002472,
+      "notional_per_event": 734.9694198333332,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 17798.039981,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-23",
+      "events": 26,
+      "fills": 965,
+      "trades_per_event": 37.11538461538461,
+      "trades_per_min": 6.496129249410973,
+      "first_price": 0.5661538461538462,
+      "first_favored_frac": 0.7307692307692307,
+      "first_tte_s": 430.2692307692308,
+      "extend_per_event": 25.96153846153846,
+      "switch_per_event": 3.8846153846153846,
+      "complement_per_event": 6.269230769230769,
+      "completion_rate": 0.9615384615384616,
+      "pair_cost": 0.9512991691955834,
+      "t_to_match_s": 57.36,
+      "peak_resid": 186.84231776923082,
+      "term_resid_frac": 0.2900168566886579,
+      "mean_size": 18.628220027684435,
+      "notional_per_event": 319.17274780769236,
+      "concurrency": 2,
+      "rebate_usdc": 308.0651,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 8381.493427,
+      "rebate_n": 15,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-24",
+      "events": 121,
+      "fills": 5451,
+      "trades_per_event": 45.049586776859506,
+      "trades_per_min": 7.857486065731309,
+      "first_price": 0.5145965743735537,
+      "first_favored_frac": 0.5702479338842975,
+      "first_tte_s": 403.91735537190084,
+      "extend_per_event": 29.892561983471076,
+      "switch_per_event": 5.479338842975206,
+      "complement_per_event": 8.677685950413224,
+      "completion_rate": 0.9752066115702479,
+      "pair_cost": 0.9760922276727206,
+      "t_to_match_s": 42.20338983050848,
+      "peak_resid": 201.85452620661147,
+      "term_resid_frac": 0.21406208170197125,
+      "mean_size": 24.672188991261457,
+      "notional_per_event": 472.3521060743801,
+      "concurrency": 2,
+      "rebate_usdc": 26.3045,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 58100.896993,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-25",
+      "events": 103,
+      "fills": 3456,
+      "trades_per_event": 33.55339805825243,
+      "trades_per_min": 7.5725815286856815,
+      "first_price": 0.5323883508349513,
+      "first_favored_frac": 0.6019417475728155,
+      "first_tte_s": 325.6796116504854,
+      "extend_per_event": 22.92233009708738,
+      "switch_per_event": 3.592233009708738,
+      "complement_per_event": 6.038834951456311,
+      "completion_rate": 0.970873786407767,
+      "pair_cost": 1.007837725795584,
+      "t_to_match_s": 52.62,
+      "peak_resid": 205.54787199029116,
+      "term_resid_frac": 0.26211257109148456,
+      "mean_size": 26.12796854229046,
+      "notional_per_event": 382.09561003883505,
+      "concurrency": 2,
+      "rebate_usdc": 161.0002,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 39252.588207,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-26",
+      "events": 131,
+      "fills": 6323,
+      "trades_per_event": 48.267175572519086,
+      "trades_per_min": 8.184406955171074,
+      "first_price": 0.5299445411809159,
+      "first_favored_frac": 0.6564885496183206,
+      "first_tte_s": 413.6641221374046,
+      "extend_per_event": 34.63358778625954,
+      "switch_per_event": 5.259541984732825,
+      "complement_per_event": 7.374045801526718,
+      "completion_rate": 0.9694656488549618,
+      "pair_cost": 1.014899328281652,
+      "t_to_match_s": 68.07874015748031,
+      "peak_resid": 202.11879951908398,
+      "term_resid_frac": 0.26029217122106524,
+      "mean_size": 23.79265457819546,
+      "notional_per_event": 480.47566891603054,
+      "concurrency": 2,
+      "rebate_usdc": 27.1769,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 63734.434585,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-29",
+      "events": 41,
+      "fills": 4761,
+      "trades_per_event": 116.1219512195122,
+      "trades_per_min": 10.56513055699386,
+      "first_price": 0.5246341625926829,
+      "first_favored_frac": 0.6097560975609756,
+      "first_tte_s": 762.9268292682926,
+      "extend_per_event": 83.02439024390245,
+      "switch_per_event": 13.146341463414634,
+      "complement_per_event": 18.951219512195124,
+      "completion_rate": 1.0,
+      "pair_cost": 0.9825097675964438,
+      "t_to_match_s": 42.53658536585366,
+      "peak_resid": 269.60945399999997,
+      "term_resid_frac": 0.13691084790817676,
+      "mean_size": 18.310641917479206,
+      "notional_per_event": 974.5870113902439,
+      "concurrency": 2,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 39817.636683,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-06-30",
+      "events": 94,
+      "fills": 3545,
+      "trades_per_event": 37.712765957446805,
+      "trades_per_min": 7.396459992349689,
+      "first_price": 0.5325532049606383,
+      "first_favored_frac": 0.5531914893617021,
+      "first_tte_s": 364.3936170212766,
+      "extend_per_event": 25.170212765957448,
+      "switch_per_event": 4.5638297872340425,
+      "complement_per_event": 6.9787234042553195,
+      "completion_rate": 0.8085106382978723,
+      "pair_cost": 1.004494342998325,
+      "t_to_match_s": 76.05263157894737,
+      "peak_resid": 165.943477606383,
+      "term_resid_frac": 0.4021495963191963,
+      "mean_size": 23.451068306339028,
+      "notional_per_event": 377.7251800531913,
+      "concurrency": 2,
+      "rebate_usdc": 105.8428,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 35435.692736,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-01",
+      "events": 126,
+      "fills": 2187,
+      "trades_per_event": 17.357142857142858,
+      "trades_per_min": 5.516226668908693,
+      "first_price": 0.5346825403984127,
+      "first_favored_frac": 0.5873015873015873,
+      "first_tte_s": 280.7063492063492,
+      "extend_per_event": 11.857142857142858,
+      "switch_per_event": 1.7777777777777777,
+      "complement_per_event": 2.7222222222222223,
+      "completion_rate": 0.5396825396825397,
+      "pair_cost": 0.9782141084990966,
+      "t_to_match_s": 79.19117647058823,
+      "peak_resid": 106.01003968253967,
+      "term_resid_frac": 0.6346110190516735,
+      "mean_size": 25.22870954160562,
+      "notional_per_event": 165.6630252936508,
+      "concurrency": 2,
+      "rebate_usdc": 213.3913,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 21195.224711,
+      "rebate_n": 4,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-02",
+      "events": 148,
+      "fills": 4354,
+      "trades_per_event": 29.41891891891892,
+      "trades_per_min": 6.1993355481727574,
+      "first_price": 0.5683494263189193,
+      "first_favored_frac": 0.6824324324324325,
+      "first_tte_s": 368.6756756756757,
+      "extend_per_event": 20.972972972972972,
+      "switch_per_event": 2.8513513513513513,
+      "complement_per_event": 4.594594594594595,
+      "completion_rate": 0.6891891891891891,
+      "pair_cost": 1.0088151086395367,
+      "t_to_match_s": 76.41176470588235,
+      "peak_resid": 142.33761768243244,
+      "term_resid_frac": 0.5246796492638306,
+      "mean_size": 23.03644240876574,
+      "notional_per_event": 285.3380468378379,
+      "concurrency": 2,
+      "rebate_usdc": 66.0657,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 43759.640537,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-03",
+      "events": 157,
+      "fills": 4359,
+      "trades_per_event": 27.764331210191084,
+      "trades_per_min": 5.737791233381597,
+      "first_price": 0.5681528692624206,
+      "first_favored_frac": 0.6687898089171974,
+      "first_tte_s": 380.5796178343949,
+      "extend_per_event": 19.35031847133758,
+      "switch_per_event": 3.0,
+      "complement_per_event": 4.414012738853503,
+      "completion_rate": 0.5923566878980892,
+      "pair_cost": 1.0394279823963628,
+      "t_to_match_s": 69.55913978494624,
+      "peak_resid": 133.5429166751593,
+      "term_resid_frac": 0.5343972390749321,
+      "mean_size": 22.88113928644201,
+      "notional_per_event": 268.3803070700635,
+      "concurrency": 2,
+      "rebate_usdc": 134.6653,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 43214.267968,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-06",
+      "events": 159,
+      "fills": 4265,
+      "trades_per_event": 26.82389937106918,
+      "trades_per_min": 5.672925580261145,
+      "first_price": 0.534678662510063,
+      "first_favored_frac": 0.5974842767295597,
+      "first_tte_s": 366.69182389937106,
+      "extend_per_event": 18.767295597484278,
+      "switch_per_event": 2.8176100628930816,
+      "complement_per_event": 4.238993710691824,
+      "completion_rate": 0.6792452830188679,
+      "pair_cost": 1.002179178451868,
+      "t_to_match_s": 85.08333333333333,
+      "peak_resid": 136.53621189937107,
+      "term_resid_frac": 0.5200015644642173,
+      "mean_size": 23.670788016634543,
+      "notional_per_event": 258.9913582830187,
+      "concurrency": 2,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 41389.545867,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-07",
+      "events": 151,
+      "fills": 2674,
+      "trades_per_event": 17.70860927152318,
+      "trades_per_min": 5.156686915437278,
+      "first_price": 0.5633864112019865,
+      "first_favored_frac": 0.6291390728476821,
+      "first_tte_s": 305.35099337748346,
+      "extend_per_event": 12.52980132450331,
+      "switch_per_event": 1.4768211920529801,
+      "complement_per_event": 2.7019867549668874,
+      "completion_rate": 0.7218543046357616,
+      "pair_cost": 1.009570811390508,
+      "t_to_match_s": 83.58715596330275,
+      "peak_resid": 121.29812235099334,
+      "term_resid_frac": 0.5264799706265373,
+      "mean_size": 25.362177002793345,
+      "notional_per_event": 190.64192950993368,
+      "concurrency": 2,
+      "rebate_usdc": 162.0902,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 29603.854259,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-08",
+      "events": 105,
+      "fills": 3623,
+      "trades_per_event": 34.50476190476191,
+      "trades_per_min": 5.950562535928389,
+      "first_price": 0.5559047719371429,
+      "first_favored_frac": 0.6190476190476191,
+      "first_tte_s": 423.1047619047619,
+      "extend_per_event": 24.771428571428572,
+      "switch_per_event": 3.257142857142857,
+      "complement_per_event": 5.476190476190476,
+      "completion_rate": 0.8380952380952381,
+      "pair_cost": 0.9787629959243379,
+      "t_to_match_s": 77.8409090909091,
+      "peak_resid": 160.84082283809525,
+      "term_resid_frac": 0.37551347621289133,
+      "mean_size": 23.554107881248637,
+      "notional_per_event": 319.98576043809527,
+      "concurrency": 2,
+      "rebate_usdc": 108.6932,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 33579.204034,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-09",
+      "events": 158,
+      "fills": 4527,
+      "trades_per_event": 28.651898734177216,
+      "trades_per_min": 6.218121880866261,
+      "first_price": 0.5615728552424054,
+      "first_favored_frac": 0.6772151898734177,
+      "first_tte_s": 350.8544303797468,
+      "extend_per_event": 20.00632911392405,
+      "switch_per_event": 2.810126582278481,
+      "complement_per_event": 4.8354430379746836,
+      "completion_rate": 0.7848101265822784,
+      "pair_cost": 1.0037720928947371,
+      "t_to_match_s": 75.25806451612904,
+      "peak_resid": 138.41276891139233,
+      "term_resid_frac": 0.40240895644470565,
+      "mean_size": 25.73832532775745,
+      "notional_per_event": 297.91745175316464,
+      "concurrency": 2,
+      "rebate_usdc": 724.9929,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 47183.062922,
+      "rebate_n": 3,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-10",
+      "events": 177,
+      "fills": 4934,
+      "trades_per_event": 27.875706214689266,
+      "trades_per_min": 6.384850968382004,
+      "first_price": 0.568965684921469,
+      "first_favored_frac": 0.6440677966101694,
+      "first_tte_s": 335.2881355932203,
+      "extend_per_event": 18.870056497175142,
+      "switch_per_event": 3.1129943502824857,
+      "complement_per_event": 4.892655367231638,
+      "completion_rate": 0.7570621468926554,
+      "pair_cost": 0.9829706791753298,
+      "t_to_match_s": 78.66417910447761,
+      "peak_resid": 151.4646122655367,
+      "term_resid_frac": 0.4513153248751626,
+      "mean_size": 31.054021260978125,
+      "notional_per_event": 297.01120583050863,
+      "concurrency": 2,
+      "rebate_usdc": 163.8468,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 51953.720788,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-13",
+      "events": 118,
+      "fills": 1739,
+      "trades_per_event": 14.73728813559322,
+      "trades_per_min": 5.412106437055864,
+      "first_price": 0.592942458361017,
+      "first_favored_frac": 0.6694915254237288,
+      "first_tte_s": 230.6271186440678,
+      "extend_per_event": 9.296610169491526,
+      "switch_per_event": 1.4915254237288136,
+      "complement_per_event": 2.9491525423728815,
+      "completion_rate": 0.7542372881355932,
+      "pair_cost": 1.0072415466424882,
+      "t_to_match_s": 74.08988764044943,
+      "peak_resid": 114.3176201864407,
+      "term_resid_frac": 0.4765668054675203,
+      "mean_size": 34.676713730105995,
+      "notional_per_event": 181.74868222881352,
+      "concurrency": 2,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 21282.121972,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-14",
+      "events": 123,
+      "fills": 4689,
+      "trades_per_event": 38.1219512195122,
+      "trades_per_min": 8.085876875323333,
+      "first_price": 0.5185365886894306,
+      "first_favored_frac": 0.5934959349593496,
+      "first_tte_s": 350.1707317073171,
+      "extend_per_event": 26.0,
+      "switch_per_event": 4.040650406504065,
+      "complement_per_event": 7.08130081300813,
+      "completion_rate": 0.7804878048780488,
+      "pair_cost": 0.9866931511923959,
+      "t_to_match_s": 77.875,
+      "peak_resid": 175.75052763414627,
+      "term_resid_frac": 0.45023326435873695,
+      "mean_size": 35.35554798668275,
+      "notional_per_event": 393.2371253658538,
+      "concurrency": 2,
+      "rebate_usdc": 75.9369,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 49231.42947,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-15",
+      "events": 236,
+      "fills": 8380,
+      "trades_per_event": 35.50847457627118,
+      "trades_per_min": 7.298909808817339,
+      "first_price": 0.530022993261017,
+      "first_favored_frac": 0.5508474576271186,
+      "first_tte_s": 360.8813559322034,
+      "extend_per_event": 24.114406779661017,
+      "switch_per_event": 3.9279661016949152,
+      "complement_per_event": 6.466101694915254,
+      "completion_rate": 0.7754237288135594,
+      "pair_cost": 0.9893341648590215,
+      "t_to_match_s": 77.38251366120218,
+      "peak_resid": 158.42619536016957,
+      "term_resid_frac": 0.425105469044648,
+      "mean_size": 35.21771861002828,
+      "notional_per_event": 382.21737319915235,
+      "concurrency": 2,
+      "rebate_usdc": 199.6554,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 90846.467578,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-16",
+      "events": 208,
+      "fills": 7738,
+      "trades_per_event": 37.20192307692308,
+      "trades_per_min": 8.190382104928906,
+      "first_price": 0.5628622301072114,
+      "first_favored_frac": 0.6298076923076923,
+      "first_tte_s": 364.50961538461536,
+      "extend_per_event": 26.73076923076923,
+      "switch_per_event": 3.7451923076923075,
+      "complement_per_event": 5.725961538461538,
+      "completion_rate": 0.6730769230769231,
+      "pair_cost": 0.9949713680030658,
+      "t_to_match_s": 67.25714285714285,
+      "peak_resid": 165.77913525961537,
+      "term_resid_frac": 0.49184127386921495,
+      "mean_size": 30.426277579212826,
+      "notional_per_event": 375.09560326923054,
+      "concurrency": 2,
+      "rebate_usdc": 369.0477,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 79002.937663,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-17",
+      "events": 113,
+      "fills": 4843,
+      "trades_per_event": 42.85840707964602,
+      "trades_per_min": 8.153427425011925,
+      "first_price": 0.5417376621663716,
+      "first_favored_frac": 0.5752212389380531,
+      "first_tte_s": 393.7787610619469,
+      "extend_per_event": 29.920353982300885,
+      "switch_per_event": 4.734513274336283,
+      "complement_per_event": 7.20353982300885,
+      "completion_rate": 0.672566371681416,
+      "pair_cost": 1.0007263285150345,
+      "t_to_match_s": 56.88157894736842,
+      "peak_resid": 185.1271242477876,
+      "term_resid_frac": 0.4902600249262122,
+      "mean_size": 32.69666650162167,
+      "notional_per_event": 461.86002110619484,
+      "concurrency": 2,
+      "rebate_usdc": 314.4921,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 51929.692086,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-19",
+      "events": 40,
+      "fills": 386,
+      "trades_per_event": 9.65,
+      "trades_per_min": 4.180505415162455,
+      "first_price": 0.509911992115,
+      "first_favored_frac": 0.525,
+      "first_tte_s": 201.7,
+      "extend_per_event": 6.95,
+      "switch_per_event": 0.375,
+      "complement_per_event": 1.325,
+      "completion_rate": 0.775,
+      "pair_cost": 0.9951162770270168,
+      "t_to_match_s": 76.16129032258064,
+      "peak_resid": 195.075647625,
+      "term_resid_frac": 0.5056392091496904,
+      "mean_size": 33.94074008975741,
+      "notional_per_event": 163.96889620000005,
+      "concurrency": 1,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 6862.335486,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-20",
+      "events": 129,
+      "fills": 8565,
+      "trades_per_event": 66.3953488372093,
+      "trades_per_min": 9.939077458659703,
+      "first_price": 0.5449963895426355,
+      "first_favored_frac": 0.5348837209302325,
+      "first_tte_s": 483.7674418604651,
+      "extend_per_event": 47.14728682170543,
+      "switch_per_event": 7.387596899224806,
+      "complement_per_event": 10.86046511627907,
+      "completion_rate": 0.7209302325581395,
+      "pair_cost": 1.0099751999456088,
+      "t_to_match_s": 51.096774193548384,
+      "peak_resid": 191.58909372093026,
+      "term_resid_frac": 0.4064631202422152,
+      "mean_size": 26.406031396652907,
+      "notional_per_event": 621.7714442635659,
+      "concurrency": 2,
+      "rebate_usdc": 25.7966,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 78846.883477,
+      "rebate_n": 1,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-21",
+      "events": 185,
+      "fills": 12854,
+      "trades_per_event": 69.48108108108109,
+      "trades_per_min": 9.358459428959726,
+      "first_price": 0.5268561738783784,
+      "first_favored_frac": 0.5459459459459459,
+      "first_tte_s": 512.2378378378378,
+      "extend_per_event": 49.70810810810811,
+      "switch_per_event": 7.481081081081081,
+      "complement_per_event": 11.291891891891892,
+      "completion_rate": 0.8702702702702703,
+      "pair_cost": 0.9869803916988616,
+      "t_to_match_s": 57.32298136645963,
+      "peak_resid": 230.03119214594594,
+      "term_resid_frac": 0.29673359840593627,
+      "mean_size": 29.88401681505852,
+      "notional_per_event": 657.886982318919,
+      "concurrency": 2,
+      "rebate_usdc": 330.1175,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 122492.724694,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-22",
+      "events": 162,
+      "fills": 6585,
+      "trades_per_event": 40.648148148148145,
+      "trades_per_min": 6.937542799950835,
+      "first_price": 0.5545457172753084,
+      "first_favored_frac": 0.6172839506172839,
+      "first_tte_s": 450.74691358024694,
+      "extend_per_event": 29.574074074074073,
+      "switch_per_event": 3.7160493827160495,
+      "complement_per_event": 6.3580246913580245,
+      "completion_rate": 0.7716049382716049,
+      "pair_cost": 0.9889804834905381,
+      "t_to_match_s": 75.92,
+      "peak_resid": 196.84101026543212,
+      "term_resid_frac": 0.4345256596993719,
+      "mean_size": 31.51394511060905,
+      "notional_per_event": 399.7555248024689,
+      "concurrency": 2,
+      "rebate_usdc": 560.6707,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 66334.877805,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-23",
+      "events": 219,
+      "fills": 9838,
+      "trades_per_event": 44.922374429223744,
+      "trades_per_min": 7.285518569259822,
+      "first_price": 0.5473255765000001,
+      "first_favored_frac": 0.547945205479452,
+      "first_tte_s": 464.9771689497717,
+      "extend_per_event": 33.02739726027397,
+      "switch_per_event": 4.310502283105023,
+      "complement_per_event": 6.584474885844749,
+      "completion_rate": 0.684931506849315,
+      "pair_cost": 0.9937931792974859,
+      "t_to_match_s": 70.55333333333333,
+      "peak_resid": 179.19927789041097,
+      "term_resid_frac": 0.4621240054253198,
+      "mean_size": 23.86417924343725,
+      "notional_per_event": 404.0032777625571,
+      "concurrency": 2,
+      "rebate_usdc": 263.5179,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 89397.514439,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-24",
+      "events": 182,
+      "fills": 8603,
+      "trades_per_event": 47.26923076923077,
+      "trades_per_min": 8.307528889175009,
+      "first_price": 0.5591042133357141,
+      "first_favored_frac": 0.6758241758241759,
+      "first_tte_s": 455.65384615384613,
+      "extend_per_event": 34.505494505494504,
+      "switch_per_event": 4.450549450549451,
+      "complement_per_event": 7.313186813186813,
+      "completion_rate": 0.5879120879120879,
+      "pair_cost": 1.0185299315848697,
+      "t_to_match_s": 52.51401869158879,
+      "peak_resid": 155.16894425274725,
+      "term_resid_frac": 0.5162614642589455,
+      "mean_size": 25.915129570197408,
+      "notional_per_event": 404.4776506593407,
+      "concurrency": 2,
+      "rebate_usdc": 396.0674,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 73535.273553,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-27",
+      "events": 96,
+      "fills": 7286,
+      "trades_per_event": 75.89583333333333,
+      "trades_per_min": 8.812821288176595,
+      "first_price": 0.5473828604885419,
+      "first_favored_frac": 0.6458333333333334,
+      "first_tte_s": 627.65625,
+      "extend_per_event": 54.1875,
+      "switch_per_event": 8.052083333333334,
+      "complement_per_event": 12.65625,
+      "completion_rate": 0.71875,
+      "pair_cost": 0.9796832822175217,
+      "t_to_match_s": 52.98550724637681,
+      "peak_resid": 160.92048283333338,
+      "term_resid_frac": 0.3418316745592831,
+      "mean_size": 21.641266536230706,
+      "notional_per_event": 593.3525485833335,
+      "concurrency": 2,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 57576.4701,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-28",
+      "events": 95,
+      "fills": 3614,
+      "trades_per_event": 38.04210526315789,
+      "trades_per_min": 6.516016587535309,
+      "first_price": 0.59171207986,
+      "first_favored_frac": 0.7052631578947368,
+      "first_tte_s": 463.90526315789475,
+      "extend_per_event": 27.83157894736842,
+      "switch_per_event": 3.4210526315789473,
+      "complement_per_event": 5.7894736842105265,
+      "completion_rate": 0.5894736842105263,
+      "pair_cost": 0.9866295071269823,
+      "t_to_match_s": 67.98214285714286,
+      "peak_resid": 137.59139647368423,
+      "term_resid_frac": 0.507603950987764,
+      "mean_size": 27.802987925995698,
+      "notional_per_event": 300.37641584210525,
+      "concurrency": 2,
+      "rebate_usdc": 240.8439,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 27688.617476,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-29",
+      "events": 201,
+      "fills": 6712,
+      "trades_per_event": 33.39303482587065,
+      "trades_per_min": 6.280821597342441,
+      "first_price": 0.532321887902985,
+      "first_favored_frac": 0.572139303482587,
+      "first_tte_s": 416.3532338308458,
+      "extend_per_event": 23.696517412935325,
+      "switch_per_event": 3.1691542288557213,
+      "complement_per_event": 5.527363184079602,
+      "completion_rate": 0.6119402985074627,
+      "pair_cost": 0.9713656224319207,
+      "t_to_match_s": 76.65040650406505,
+      "peak_resid": 138.31934765671642,
+      "term_resid_frac": 0.5074930711935951,
+      "mean_size": 30.876860803071843,
+      "notional_per_event": 291.7932234477612,
+      "concurrency": 2,
+      "rebate_usdc": 112.5851,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 58959.159774,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-30",
+      "events": 160,
+      "fills": 4473,
+      "trades_per_event": 27.95625,
+      "trades_per_min": 5.606668337929306,
+      "first_price": 0.5248241595456249,
+      "first_favored_frac": 0.56875,
+      "first_tte_s": 395.575,
+      "extend_per_event": 20.16875,
+      "switch_per_event": 2.54375,
+      "complement_per_event": 4.24375,
+      "completion_rate": 0.7375,
+      "pair_cost": 1.000430508952909,
+      "t_to_match_s": 77.88983050847457,
+      "peak_resid": 163.69118871250004,
+      "term_resid_frac": 0.47272801278599347,
+      "mean_size": 33.176995798794664,
+      "notional_per_event": 280.64365654375,
+      "concurrency": 2,
+      "rebate_usdc": 240.8148,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 45859.963735,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-07-31",
+      "events": 218,
+      "fills": 6768,
+      "trades_per_event": 31.045871559633028,
+      "trades_per_min": 6.080862533692723,
+      "first_price": 0.5573902158761469,
+      "first_favored_frac": 0.6605504587155964,
+      "first_tte_s": 399.42660550458714,
+      "extend_per_event": 22.041284403669724,
+      "switch_per_event": 2.9220183486238533,
+      "complement_per_event": 5.08256880733945,
+      "completion_rate": 0.6238532110091743,
+      "pair_cost": 0.9701177785835706,
+      "t_to_match_s": 92.04411764705883,
+      "peak_resid": 166.0456769999999,
+      "term_resid_frac": 0.5358530511197632,
+      "mean_size": 33.717710243725556,
+      "notional_per_event": 294.72813655504586,
+      "concurrency": 2,
+      "rebate_usdc": 185.4451,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 63139.840042,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-01",
+      "events": 15,
+      "fills": 489,
+      "trades_per_event": 32.6,
+      "trades_per_min": 6.411713286713287,
+      "first_price": 0.5473333333333333,
+      "first_favored_frac": 0.5333333333333333,
+      "first_tte_s": 404.3333333333333,
+      "extend_per_event": 23.466666666666665,
+      "switch_per_event": 2.466666666666667,
+      "complement_per_event": 5.666666666666667,
+      "completion_rate": 0.8666666666666667,
+      "pair_cost": 1.017837055329281,
+      "t_to_match_s": 76.84615384615384,
+      "peak_resid": 209.9982344666667,
+      "term_resid_frac": 0.3905873604492666,
+      "mean_size": 34.90428155155623,
+      "notional_per_event": 352.8227224,
+      "concurrency": 2,
+      "rebate_usdc": 273.2023,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 5249.580916,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-03",
+      "events": 184,
+      "fills": 5978,
+      "trades_per_event": 32.48913043478261,
+      "trades_per_min": 6.576819407008086,
+      "first_price": 0.5297362733891299,
+      "first_favored_frac": 0.5597826086956522,
+      "first_tte_s": 399.5108695652174,
+      "extend_per_event": 22.934782608695652,
+      "switch_per_event": 3.1739130434782608,
+      "complement_per_event": 5.380434782608695,
+      "completion_rate": 0.6304347826086957,
+      "pair_cost": 0.9881260071311465,
+      "t_to_match_s": 88.65517241379311,
+      "peak_resid": 146.01350273369573,
+      "term_resid_frac": 0.5039774452023379,
+      "mean_size": 32.12061906119372,
+      "notional_per_event": 290.07530208695636,
+      "concurrency": 2,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 52348.174487,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-04",
+      "events": 234,
+      "fills": 9700,
+      "trades_per_event": 41.452991452991455,
+      "trades_per_min": 6.859809999764268,
+      "first_price": 0.5296291052854705,
+      "first_favored_frac": 0.5982905982905983,
+      "first_tte_s": 459.8119658119658,
+      "extend_per_event": 30.78205128205128,
+      "switch_per_event": 3.217948717948718,
+      "complement_per_event": 6.452991452991453,
+      "completion_rate": 0.8034188034188035,
+      "pair_cost": 1.013035585643874,
+      "t_to_match_s": 72.86170212765957,
+      "peak_resid": 201.99718746581195,
+      "term_resid_frac": 0.3820706843511253,
+      "mean_size": 31.674765128503125,
+      "notional_per_event": 405.2489198376069,
+      "concurrency": 2,
+      "rebate_usdc": 214.0596,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 95342.051058,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-05",
+      "events": 137,
+      "fills": 7282,
+      "trades_per_event": 53.153284671532845,
+      "trades_per_min": 7.634190662566397,
+      "first_price": 0.5160584037065694,
+      "first_favored_frac": 0.5182481751824818,
+      "first_tte_s": 532.1678832116788,
+      "extend_per_event": 38.56934306569343,
+      "switch_per_event": 4.846715328467154,
+      "complement_per_event": 8.737226277372264,
+      "completion_rate": 0.6715328467153284,
+      "pair_cost": 0.979258225604913,
+      "t_to_match_s": 63.16304347826087,
+      "peak_resid": 171.58796151094887,
+      "term_resid_frac": 0.43511659986111995,
+      "mean_size": 29.152715014351436,
+      "notional_per_event": 507.2975914525549,
+      "concurrency": 2,
+      "rebate_usdc": 369.1108,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 69405.609757,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-06",
+      "events": 131,
+      "fills": 7057,
+      "trades_per_event": 53.87022900763359,
+      "trades_per_min": 8.239987545245787,
+      "first_price": 0.558167953635878,
+      "first_favored_frac": 0.6030534351145038,
+      "first_tte_s": 504.0610687022901,
+      "extend_per_event": 39.37404580152672,
+      "switch_per_event": 4.633587786259542,
+      "complement_per_event": 8.86259541984733,
+      "completion_rate": 0.7175572519083969,
+      "pair_cost": 1.0022103548416628,
+      "t_to_match_s": 53.3936170212766,
+      "peak_resid": 157.4409330229007,
+      "term_resid_frac": 0.41597022182926463,
+      "mean_size": 30.072157488137233,
+      "notional_per_event": 500.1347176564886,
+      "concurrency": 2,
+      "rebate_usdc": 309.4758,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 68330.856967,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-07",
+      "events": 335,
+      "fills": 9016,
+      "trades_per_event": 26.913432835820895,
+      "trades_per_min": 5.702359117070395,
+      "first_price": 0.5672095741510446,
+      "first_favored_frac": 0.6686567164179105,
+      "first_tte_s": 384.67462686567166,
+      "extend_per_event": 19.34626865671642,
+      "switch_per_event": 2.256716417910448,
+      "complement_per_event": 4.3104477611940295,
+      "completion_rate": 0.6626865671641791,
+      "pair_cost": 1.0067997119570624,
+      "t_to_match_s": 82.24324324324324,
+      "peak_resid": 134.44543733432837,
+      "term_resid_frac": 0.4900562387827507,
+      "mean_size": 36.338996717687266,
+      "notional_per_event": 319.06226523880616,
+      "concurrency": 2,
+      "rebate_usdc": 447.8093,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 106621.567918,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-08",
+      "events": 97,
+      "fills": 10882,
+      "trades_per_event": 112.18556701030928,
+      "trades_per_min": 9.564911663883272,
+      "first_price": 0.5234020762164948,
+      "first_favored_frac": 0.5257731958762887,
+      "first_tte_s": 819.3092783505155,
+      "extend_per_event": 85.0721649484536,
+      "switch_per_event": 9.927835051546392,
+      "complement_per_event": 16.185567010309278,
+      "completion_rate": 0.9690721649484536,
+      "pair_cost": 0.9719286439570733,
+      "t_to_match_s": 53.61702127659574,
+      "peak_resid": 390.4587587938143,
+      "term_resid_frac": 0.15077677127486755,
+      "mean_size": 24.36974916896913,
+      "notional_per_event": 1118.6699481340204,
+      "concurrency": 2,
+      "rebate_usdc": 734.0998,
+      "reward_usdc": 471.5112,
+      "redeem_usdc": 107425.271935,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-10",
+      "events": 205,
+      "fills": 8685,
+      "trades_per_event": 42.36585365853659,
+      "trades_per_min": 8.302794684681814,
+      "first_price": 0.5191320381043903,
+      "first_favored_frac": 0.5902439024390244,
+      "first_tte_s": 414.1170731707317,
+      "extend_per_event": 30.721951219512196,
+      "switch_per_event": 3.868292682926829,
+      "complement_per_event": 6.775609756097561,
+      "completion_rate": 0.6487804878048781,
+      "pair_cost": 1.0071377104962673,
+      "t_to_match_s": 77.55639097744361,
+      "peak_resid": 156.44450387804875,
+      "term_resid_frac": 0.4833289436499096,
+      "mean_size": 35.230175630931555,
+      "notional_per_event": 483.1541036341466,
+      "concurrency": 2,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 98505.576042,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-11",
+      "events": 284,
+      "fills": 12616,
+      "trades_per_event": 44.42253521126761,
+      "trades_per_min": 8.836487164820284,
+      "first_price": 0.5649800585883805,
+      "first_favored_frac": 0.6197183098591549,
+      "first_tte_s": 403.38732394366195,
+      "extend_per_event": 33.105633802816904,
+      "switch_per_event": 3.8309859154929575,
+      "complement_per_event": 6.485915492957746,
+      "completion_rate": 0.6584507042253521,
+      "pair_cost": 1.0030917472161511,
+      "t_to_match_s": 72.59893048128342,
+      "peak_resid": 159.8696652042253,
+      "term_resid_frac": 0.47411693858415777,
+      "mean_size": 35.14357108361289,
+      "notional_per_event": 487.02947822887324,
+      "concurrency": 2,
+      "rebate_usdc": 722.6266,
+      "reward_usdc": 750.0216,
+      "redeem_usdc": 137631.959652,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-12",
+      "events": 315,
+      "fills": 16403,
+      "trades_per_event": 52.073015873015876,
+      "trades_per_min": 10.789199618500533,
+      "first_price": 0.5307359505946032,
+      "first_favored_frac": 0.580952380952381,
+      "first_tte_s": 395.1968253968254,
+      "extend_per_event": 39.44444444444444,
+      "switch_per_event": 4.352380952380952,
+      "complement_per_event": 7.276190476190476,
+      "completion_rate": 0.5841269841269842,
+      "pair_cost": 0.9925688366688712,
+      "t_to_match_s": 59.16304347826087,
+      "peak_resid": 156.1541941079366,
+      "term_resid_frac": 0.5191443139127075,
+      "mean_size": 34.62222109674919,
+      "notional_per_event": 546.0536178095238,
+      "concurrency": 2,
+      "rebate_usdc": 1032.7283,
+      "reward_usdc": 1207.239,
+      "redeem_usdc": 172641.992534,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-13",
+      "events": 277,
+      "fills": 13536,
+      "trades_per_event": 48.86642599277978,
+      "trades_per_min": 10.078427479400379,
+      "first_price": 0.5193260767375454,
+      "first_favored_frac": 0.5487364620938628,
+      "first_tte_s": 405.85559566787003,
+      "extend_per_event": 37.064981949458485,
+      "switch_per_event": 4.1985559566787005,
+      "complement_per_event": 6.602888086642599,
+      "completion_rate": 0.6534296028880866,
+      "pair_cost": 0.996111978748689,
+      "t_to_match_s": 58.65745856353591,
+      "peak_resid": 181.53423293862818,
+      "term_resid_frac": 0.47489292570383557,
+      "mean_size": 34.031546182425544,
+      "notional_per_event": 502.29061646209374,
+      "concurrency": 3,
+      "rebate_usdc": 1349.0958,
+      "reward_usdc": 1016.6514,
+      "redeem_usdc": 139671.491748,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-14",
+      "events": 426,
+      "fills": 19454,
+      "trades_per_event": 45.666666666666664,
+      "trades_per_min": 11.195150724609881,
+      "first_price": 0.5711981226708923,
+      "first_favored_frac": 0.6643192488262911,
+      "first_tte_s": 355.4319248826291,
+      "extend_per_event": 34.14319248826291,
+      "switch_per_event": 4.291079812206573,
+      "complement_per_event": 6.232394366197183,
+      "completion_rate": 0.6009389671361502,
+      "pair_cost": 1.04980528597025,
+      "t_to_match_s": 71.18359375,
+      "peak_resid": 153.03467730516434,
+      "term_resid_frac": 0.5502307220813919,
+      "mean_size": 32.847635503168156,
+      "notional_per_event": 495.2135693591544,
+      "concurrency": 3,
+      "rebate_usdc": 1076.4907,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 210401.857699,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-15",
+      "events": 289,
+      "fills": 19609,
+      "trades_per_event": 67.85121107266436,
+      "trades_per_min": 11.82535454755611,
+      "first_price": 0.5414970429678195,
+      "first_favored_frac": 0.6228373702422145,
+      "first_tte_s": 439.3529411764706,
+      "extend_per_event": 50.00692041522491,
+      "switch_per_event": 6.882352941176471,
+      "complement_per_event": 9.961937716262975,
+      "completion_rate": 0.740484429065744,
+      "pair_cost": 0.9816380977674416,
+      "t_to_match_s": 57.97663551401869,
+      "peak_resid": 180.44189321107265,
+      "term_resid_frac": 0.42388494698062756,
+      "mean_size": 31.84309245341466,
+      "notional_per_event": 577.0939790692044,
+      "concurrency": 3,
+      "rebate_usdc": 1647.9029,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 167047.879955,
+      "rebate_n": 2,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-16",
+      "events": 37,
+      "fills": 2165,
+      "trades_per_event": 58.513513513513516,
+      "trades_per_min": 11.16458960034379,
+      "first_price": 0.5010485871351353,
+      "first_favored_frac": 0.6216216216216216,
+      "first_tte_s": 427.97297297297297,
+      "extend_per_event": 42.37837837837838,
+      "switch_per_event": 6.405405405405405,
+      "complement_per_event": 8.72972972972973,
+      "completion_rate": 0.6756756756756757,
+      "pair_cost": 0.9448191938092162,
+      "t_to_match_s": 73.2,
+      "peak_resid": 155.22544429729726,
+      "term_resid_frac": 0.4344783355044134,
+      "mean_size": 32.91501582719432,
+      "notional_per_event": 500.2316376216217,
+      "concurrency": 2,
+      "rebate_usdc": 1393.2828,
+      "reward_usdc": 442.359,
+      "redeem_usdc": 18976.379588,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-17",
+      "events": 425,
+      "fills": 19334,
+      "trades_per_event": 45.49176470588235,
+      "trades_per_min": 10.043462450866652,
+      "first_price": 0.5436772531750591,
+      "first_favored_frac": 0.6705882352941176,
+      "first_tte_s": 369.9011764705882,
+      "extend_per_event": 32.62352941176471,
+      "switch_per_event": 4.668235294117647,
+      "complement_per_event": 7.2,
+      "completion_rate": 0.8352941176470589,
+      "pair_cost": 0.9945597454586679,
+      "t_to_match_s": 63.74366197183099,
+      "peak_resid": 164.5440800117647,
+      "term_resid_frac": 0.3925628808468777,
+      "mean_size": 31.53557440430013,
+      "notional_per_event": 514.331332465882,
+      "concurrency": 3,
+      "rebate_usdc": 142.6366,
+      "reward_usdc": 201.043,
+      "redeem_usdc": 218644.742201,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-18",
+      "events": 662,
+      "fills": 28463,
+      "trades_per_event": 42.99546827794562,
+      "trades_per_min": 9.985207360069227,
+      "first_price": 0.5405957544182777,
+      "first_favored_frac": 0.6616314199395771,
+      "first_tte_s": 353.07401812688823,
+      "extend_per_event": 30.546827794561935,
+      "switch_per_event": 4.459214501510574,
+      "complement_per_event": 6.9894259818731115,
+      "completion_rate": 0.8836858006042296,
+      "pair_cost": 0.9891580662069247,
+      "t_to_match_s": 61.36923076923077,
+      "peak_resid": 166.2853317915406,
+      "term_resid_frac": 0.3782236494643725,
+      "mean_size": 30.076250016691795,
+      "notional_per_event": 482.4243668006048,
+      "concurrency": 3,
+      "rebate_usdc": 1594.2442,
+      "reward_usdc": 1664.9336,
+      "redeem_usdc": 324033.409172,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-19",
+      "events": 571,
+      "fills": 25787,
+      "trades_per_event": 45.161120840630474,
+      "trades_per_min": 10.661879724635982,
+      "first_price": 0.5319508772213665,
+      "first_favored_frac": 0.6059544658493871,
+      "first_tte_s": 369.5744308231173,
+      "extend_per_event": 32.55516637478109,
+      "switch_per_event": 4.502626970227671,
+      "complement_per_event": 7.103327495621716,
+      "completion_rate": 0.7933450087565674,
+      "pair_cost": 0.9864214388256635,
+      "t_to_match_s": 82.97130242825607,
+      "peak_resid": 172.6925648091069,
+      "term_resid_frac": 0.43494211628770413,
+      "mean_size": 32.6078504602171,
+      "notional_per_event": 507.9846288739051,
+      "concurrency": 4,
+      "rebate_usdc": 2183.0477,
+      "reward_usdc": 2559.3694,
+      "redeem_usdc": 288937.219099,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-20",
+      "events": 721,
+      "fills": 22546,
+      "trades_per_event": 31.270457697642165,
+      "trades_per_min": 7.130710720102894,
+      "first_price": 0.516359152168794,
+      "first_favored_frac": 0.6116504854368932,
+      "first_tte_s": 382.65880721220526,
+      "extend_per_event": 22.195561719833563,
+      "switch_per_event": 2.9209431345353676,
+      "complement_per_event": 5.153952843273232,
+      "completion_rate": 0.7864077669902912,
+      "pair_cost": 0.9980987116836303,
+      "t_to_match_s": 103.26455026455027,
+      "peak_resid": 163.3083399237169,
+      "term_resid_frac": 0.4482855219043139,
+      "mean_size": 36.28744547018661,
+      "notional_per_event": 407.1496068321777,
+      "concurrency": 4,
+      "rebate_usdc": 2124.5115,
+      "reward_usdc": 2061.7337,
+      "redeem_usdc": 293911.527849,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-21",
+      "events": 698,
+      "fills": 24694,
+      "trades_per_event": 35.378223495702,
+      "trades_per_min": 8.146653397188116,
+      "first_price": 0.5087097645401147,
+      "first_favored_frac": 0.6074498567335244,
+      "first_tte_s": 372.61747851002866,
+      "extend_per_event": 25.8810888252149,
+      "switch_per_event": 3.140401146131805,
+      "complement_per_event": 5.356733524355301,
+      "completion_rate": 0.7263610315186246,
+      "pair_cost": 0.9838163718757995,
+      "t_to_match_s": 105.10453648915187,
+      "peak_resid": 168.95204522349576,
+      "term_resid_frac": 0.49403520414870195,
+      "mean_size": 37.02555366014065,
+      "notional_per_event": 432.75383152578803,
+      "concurrency": 4,
+      "rebate_usdc": 1942.4044,
+      "reward_usdc": 1871.4363,
+      "redeem_usdc": 298457.140061,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-22",
+      "events": 197,
+      "fills": 6741,
+      "trades_per_event": 34.21827411167513,
+      "trades_per_min": 8.491172086578633,
+      "first_price": 0.500393852405584,
+      "first_favored_frac": 0.5279187817258884,
+      "first_tte_s": 369.492385786802,
+      "extend_per_event": 24.883248730964468,
+      "switch_per_event": 3.1015228426395938,
+      "complement_per_event": 5.233502538071066,
+      "completion_rate": 0.7360406091370558,
+      "pair_cost": 0.9451166162548006,
+      "t_to_match_s": 104.11724137931034,
+      "peak_resid": 144.88609336040608,
+      "term_resid_frac": 0.4819794883537831,
+      "mean_size": 34.90267360480579,
+      "notional_per_event": 368.7621770253808,
+      "concurrency": 4,
+      "rebate_usdc": 2058.0684,
+      "reward_usdc": 1637.9055,
+      "redeem_usdc": 75885.247217,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-24",
+      "events": 476,
+      "fills": 16056,
+      "trades_per_event": 33.73109243697479,
+      "trades_per_min": 7.9178104709460015,
+      "first_price": 0.5236413894088241,
+      "first_favored_frac": 0.6365546218487395,
+      "first_tte_s": 370.281512605042,
+      "extend_per_event": 24.264705882352942,
+      "switch_per_event": 3.3592436974789917,
+      "complement_per_event": 5.107142857142857,
+      "completion_rate": 0.7247899159663865,
+      "pair_cost": 0.9651175050086731,
+      "t_to_match_s": 103.36521739130434,
+      "peak_resid": 175.69744822689077,
+      "term_resid_frac": 0.5185274108428,
+      "mean_size": 36.39277929903429,
+      "notional_per_event": 373.3995116995799,
+      "concurrency": 4,
+      "rebate_usdc": 0.0,
+      "reward_usdc": 0.0,
+      "redeem_usdc": 168515.530093,
+      "rebate_n": 0,
+      "reward_n": 0
+    },
+    {
+      "day": "2026-08-25",
+      "events": 702,
+      "fills": 22408,
+      "trades_per_event": 31.92022792022792,
+      "trades_per_min": 7.899412455934195,
+      "first_price": 0.5172113160905984,
+      "first_favored_frac": 0.6196581196581197,
+      "first_tte_s": 362.04700854700855,
+      "extend_per_event": 22.88034188034188,
+      "switch_per_event": 3.0014245014245016,
+      "complement_per_event": 5.038461538461538,
+      "completion_rate": 0.7507122507122507,
+      "pair_cost": 0.988744597343231,
+      "t_to_match_s": 86.86148007590133,
+      "peak_resid": 175.67160667236448,
+      "term_resid_frac": 0.481869418772168,
+      "mean_size": 34.58851520315056,
+      "notional_per_event": 385.91368704843273,
+      "concurrency": 4,
+      "rebate_usdc": 1268.3051,
+      "reward_usdc": 1622.2443,
+      "redeem_usdc": 277955.296671,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-26",
+      "events": 554,
+      "fills": 18969,
+      "trades_per_event": 34.24007220216607,
+      "trades_per_min": 8.585135512291526,
+      "first_price": 0.5555016429341159,
+      "first_favored_frac": 0.7057761732851986,
+      "first_tte_s": 373.3465703971119,
+      "extend_per_event": 24.21480144404332,
+      "switch_per_event": 3.601083032490975,
+      "complement_per_event": 5.424187725631769,
+      "completion_rate": 0.7003610108303249,
+      "pair_cost": 0.9863268092302366,
+      "t_to_match_s": 87.33247422680412,
+      "peak_resid": 161.1585267148014,
+      "term_resid_frac": 0.5112308629422365,
+      "mean_size": 34.27659165657141,
+      "notional_per_event": 374.4141539638989,
+      "concurrency": 4,
+      "rebate_usdc": 1919.0124,
+      "reward_usdc": 2303.3744,
+      "redeem_usdc": 202892.992843,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-27",
+      "events": 654,
+      "fills": 23697,
+      "trades_per_event": 36.23394495412844,
+      "trades_per_min": 9.114931917839833,
+      "first_price": 0.5288813745191128,
+      "first_favored_frac": 0.6162079510703364,
+      "first_tte_s": 367.47553516819573,
+      "extend_per_event": 25.888379204892967,
+      "switch_per_event": 3.732415902140673,
+      "complement_per_event": 5.613149847094801,
+      "completion_rate": 0.7247706422018348,
+      "pair_cost": 1.0064745010957583,
+      "t_to_match_s": 88.36075949367088,
+      "peak_resid": 150.0983573562691,
+      "term_resid_frac": 0.49839572215904504,
+      "mean_size": 34.9187813965019,
+      "notional_per_event": 384.5921511773702,
+      "concurrency": 4,
+      "rebate_usdc": 1573.137,
+      "reward_usdc": 1489.2451,
+      "redeem_usdc": 250450.546544,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-28",
+      "events": 569,
+      "fills": 18518,
+      "trades_per_event": 32.54481546572935,
+      "trades_per_min": 9.383883854294233,
+      "first_price": 0.5559481304437611,
+      "first_favored_frac": 0.6432337434094904,
+      "first_tte_s": 321.47275922671355,
+      "extend_per_event": 22.75219683655536,
+      "switch_per_event": 3.507908611599297,
+      "complement_per_event": 5.284710017574692,
+      "completion_rate": 0.680140597539543,
+      "pair_cost": 1.0108481968399816,
+      "t_to_match_s": 73.02842377260981,
+      "peak_resid": 147.0207472882248,
+      "term_resid_frac": 0.5268207051889832,
+      "mean_size": 35.84565591204818,
+      "notional_per_event": 349.0372739929699,
+      "concurrency": 4,
+      "rebate_usdc": 1934.9862,
+      "reward_usdc": 1842.771,
+      "redeem_usdc": 200965.474108,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-29",
+      "events": 567,
+      "fills": 20026,
+      "trades_per_event": 35.31922398589065,
+      "trades_per_min": 9.779593697095976,
+      "first_price": 0.5434511972135805,
+      "first_favored_frac": 0.6490299823633157,
+      "first_tte_s": 311.7495590828924,
+      "extend_per_event": 24.45679012345679,
+      "switch_per_event": 3.931216931216931,
+      "complement_per_event": 5.931216931216931,
+      "completion_rate": 0.7195767195767195,
+      "pair_cost": 0.9847140378341602,
+      "t_to_match_s": 70.61274509803921,
+      "peak_resid": 142.40550015343928,
+      "term_resid_frac": 0.4800866489627555,
+      "mean_size": 32.3368164753369,
+      "notional_per_event": 369.2865161040563,
+      "concurrency": 3,
+      "rebate_usdc": 1425.6798,
+      "reward_usdc": 1794.6578,
+      "redeem_usdc": 209786.817623,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-30",
+      "events": 558,
+      "fills": 19460,
+      "trades_per_event": 34.87455197132616,
+      "trades_per_min": 9.51837480027391,
+      "first_price": 0.5526381507245522,
+      "first_favored_frac": 0.6523297491039427,
+      "first_tte_s": 325.9301075268817,
+      "extend_per_event": 23.844086021505376,
+      "switch_per_event": 4.086021505376344,
+      "complement_per_event": 5.944444444444445,
+      "completion_rate": 0.7204301075268817,
+      "pair_cost": 0.99973336879759,
+      "t_to_match_s": 67.71641791044776,
+      "peak_resid": 152.1059727849462,
+      "term_resid_frac": 0.49713537062737895,
+      "mean_size": 29.63709490041908,
+      "notional_per_event": 365.57601044444436,
+      "concurrency": 3,
+      "rebate_usdc": 1539.089,
+      "reward_usdc": 2205.7187,
+      "redeem_usdc": 200039.877069,
+      "rebate_n": 2,
+      "reward_n": 1
+    },
+    {
+      "day": "2026-08-31",
+      "events": 474,
+      "fills": 14904,
+      "trades_per_event": 31.443037974683545,
+      "trades_per_min": 8.826943577999764,
+      "first_price": 0.5477276905314347,
+      "first_favored_frac": 0.6434599156118144,
+      "first_tte_s": 324.86286919831224,
+      "extend_per_event": 21.662447257383967,
+      "switch_per_event": 3.529535864978903,
+      "complement_per_event": 5.251054852320675,
+      "completion_rate": 0.7067510548523207,
+      "pair_cost": 0.9953641879451479,
+      "t_to_match_s": 74.47462686567164,
+      "peak_resid": 131.07437356118143,
+      "term_resid_frac": 0.505088973415918,
+      "mean_size": 29.35736636626718,
+      "notional_per_event": 315.65823095991556,
+      "concurrency": 4,
+      "rebate_usdc": 1501.9156,
+      "reward_usdc": 1841.424,
+      "redeem_usdc": 153527.324437,
+      "rebate_n": 2,
+      "reward_n": 1
+    }
+  ],
+  "regimes": [
+    {
+      "label": "R1",
+      "start_day": "2026-03-19",
+      "end_day": "2026-04-24",
+      "n_days": 21,
+      "independent_events": 386,
+      "fills": 15671,
+      "sells": 2,
+      "trades_per_event": 40.5984,
+      "mean_fill_size": 14.76669,
+      "notional_per_event": 316.19069,
+      "first_price_mean": 0.50212,
+      "first_favored_frac": 0.43264,
+      "first_tte_s_mean": 797.98187,
+      "extend_per_event": 24.2254,
+      "switch_per_event": 5.6736,
+      "complement_per_event": 9.6995,
+      "completion_rate": 0.93264,
+      "t_to_match_s_mean": 72.35,
+      "pair_cost_mean": 0.96615,
+      "pair_cost_p10": 0.8615,
+      "pair_cost_median": 0.95915,
+      "pair_cost_p90": 1.07694,
+      "pair_cost_frac_le_0_96": 0.50556,
+      "pair_cost_frac_lt_1_00": 0.72222,
+      "peak_resid_mean": 108.745,
+      "term_resid_frac_mean": 0.22023,
+      "maker_rebate_usdc": 327.8072,
+      "taker_rebate_usdc": 0,
+      "reward_usdc": 0,
+      "redeem_usdc": 122436.804309,
+      "maker_rebate_n": 4,
+      "taker_rebate_n": 0,
+      "rebate_events_n": 4,
+      "reward_events_n": 0,
+      "redeem_n": 526,
+      "motifs": {
+        "OPEN_EXTEND_only": 11,
+        "OPEN_only_or_switch": 15,
+        "OPEN_EXTEND_COMPLETE": 359,
+        "repeated_compression": 334,
+        "OPEN_COMPLETE_only": 1
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 15671,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.5967,
+            "SWITCH": 0.1397,
+            "COMPLEMENT": 0.2389,
+            "STOP": 0.0246
+          },
+          "counts": {
+            "EXTEND": 9351,
+            "STOP": 386,
+            "COMPLEMENT": 3744,
+            "SWITCH": 2190
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 1467,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.6987,
+            "SWITCH": 0.013,
+            "COMPLEMENT": 0.2679,
+            "STOP": 0.0204
+          },
+          "counts": {
+            "EXTEND": 1025,
+            "STOP": 30,
+            "COMPLEMENT": 393,
+            "SWITCH": 19
+          }
+        },
+        "balanced<=5%": {
+          "states": 4130,
+          "independent_events": 289,
+          "p": {
+            "EXTEND": 0.5835,
+            "SWITCH": 0.1676,
+            "COMPLEMENT": 0.2208,
+            "STOP": 0.0281
+          },
+          "counts": {
+            "EXTEND": 2410,
+            "SWITCH": 692,
+            "COMPLEMENT": 912,
+            "STOP": 116
+          }
+        },
+        "mild 5-35%": {
+          "states": 8214,
+          "independent_events": 343,
+          "p": {
+            "EXTEND": 0.5906,
+            "SWITCH": 0.1516,
+            "COMPLEMENT": 0.2346,
+            "STOP": 0.0233
+          },
+          "counts": {
+            "COMPLEMENT": 1927,
+            "EXTEND": 4851,
+            "STOP": 191,
+            "SWITCH": 1245
+          }
+        },
+        "heavy 35-80%": {
+          "states": 1860,
+          "independent_events": 325,
+          "p": {
+            "EXTEND": 0.5726,
+            "SWITCH": 0.1258,
+            "COMPLEMENT": 0.2753,
+            "STOP": 0.0263
+          },
+          "counts": {
+            "EXTEND": 1065,
+            "COMPLEMENT": 512,
+            "SWITCH": 234,
+            "STOP": 49
+          }
+        }
+      },
+      "transitions_by_tte": {
+        "0-30s": {
+          "states": 720,
+          "independent_events": 104,
+          "p": {
+            "EXTEND": 0.625,
+            "SWITCH": 0.0764,
+            "COMPLEMENT": 0.1722,
+            "STOP": 0.1264
+          },
+          "counts": {
+            "EXTEND": 450,
+            "STOP": 91,
+            "SWITCH": 55,
+            "COMPLEMENT": 124
+          }
+        },
+        "past-close": {
+          "states": 48,
+          "independent_events": 16,
+          "p": {
+            "EXTEND": 0.3958,
+            "SWITCH": 0.1042,
+            "COMPLEMENT": 0.1667,
+            "STOP": 0.3333
+          },
+          "counts": {
+            "STOP": 16,
+            "EXTEND": 19,
+            "SWITCH": 5,
+            "COMPLEMENT": 8
+          }
+        },
+        "120-300s": {
+          "states": 3288,
+          "independent_events": 285,
+          "p": {
+            "EXTEND": 0.5499,
+            "SWITCH": 0.1658,
+            "COMPLEMENT": 0.2561,
+            "STOP": 0.0283
+          },
+          "counts": {
+            "EXTEND": 1808,
+            "STOP": 93,
+            "SWITCH": 545,
+            "COMPLEMENT": 842
+          }
+        },
+        "60-120s": {
+          "states": 1343,
+          "independent_events": 189,
+          "p": {
+            "EXTEND": 0.6009,
+            "SWITCH": 0.1206,
+            "COMPLEMENT": 0.2375,
+            "STOP": 0.041
+          },
+          "counts": {
+            "STOP": 55,
+            "COMPLEMENT": 319,
+            "SWITCH": 162,
+            "EXTEND": 807
+          }
+        },
+        ">300s": {
+          "states": 9561,
+          "independent_events": 375,
+          "p": {
+            "EXTEND": 0.6088,
+            "SWITCH": 0.1412,
+            "COMPLEMENT": 0.2404,
+            "STOP": 0.0096
+          },
+          "counts": {
+            "STOP": 92,
+            "EXTEND": 5821,
+            "COMPLEMENT": 2298,
+            "SWITCH": 1350
+          }
+        },
+        "30-60s": {
+          "states": 711,
+          "independent_events": 131,
+          "p": {
+            "EXTEND": 0.6273,
+            "SWITCH": 0.1027,
+            "COMPLEMENT": 0.2152,
+            "STOP": 0.0549
+          },
+          "counts": {
+            "EXTEND": 446,
+            "SWITCH": 73,
+            "COMPLEMENT": 153,
+            "STOP": 39
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 6836,
+          "independent_events": 373,
+          "p": {
+            "EXTEND": 0.568,
+            "SWITCH": 0.164,
+            "COMPLEMENT": 0.2387,
+            "STOP": 0.0293
+          },
+          "counts": {
+            "EXTEND": 3883,
+            "STOP": 200,
+            "COMPLEMENT": 1632,
+            "SWITCH": 1121
+          }
+        },
+        "underdog": {
+          "states": 8835,
+          "independent_events": 371,
+          "p": {
+            "EXTEND": 0.6189,
+            "SWITCH": 0.121,
+            "COMPLEMENT": 0.239,
+            "STOP": 0.0211
+          },
+          "counts": {
+            "STOP": 186,
+            "EXTEND": 5468,
+            "COMPLEMENT": 2112,
+            "SWITCH": 1069
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 1306,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.7044,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2757,
+            "STOP": 0.0199
+          },
+          "counts": {
+            "EXTEND": 920,
+            "STOP": 26,
+            "COMPLEMENT": 360
+          }
+        },
+        "has_matched": {
+          "states": 14365,
+          "independent_events": 360,
+          "p": {
+            "EXTEND": 0.5869,
+            "SWITCH": 0.1525,
+            "COMPLEMENT": 0.2356,
+            "STOP": 0.0251
+          },
+          "counts": {
+            "EXTEND": 8431,
+            "COMPLEMENT": 3384,
+            "SWITCH": 2190,
+            "STOP": 360
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 386,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.6995,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2617,
+            "STOP": 0.0389
+          },
+          "counts": {
+            "EXTEND": 270,
+            "STOP": 15,
+            "COMPLEMENT": 101
+          }
+        },
+        "step1-4": {
+          "states": 1453,
+          "independent_events": 371,
+          "p": {
+            "EXTEND": 0.6435,
+            "SWITCH": 0.1032,
+            "COMPLEMENT": 0.2388,
+            "STOP": 0.0145
+          },
+          "counts": {
+            "STOP": 21,
+            "EXTEND": 935,
+            "COMPLEMENT": 347,
+            "SWITCH": 150
+          }
+        },
+        "step5-19": {
+          "states": 4618,
+          "independent_events": 350,
+          "p": {
+            "EXTEND": 0.5652,
+            "SWITCH": 0.1568,
+            "COMPLEMENT": 0.2575,
+            "STOP": 0.0206
+          },
+          "counts": {
+            "EXTEND": 2610,
+            "COMPLEMENT": 1189,
+            "STOP": 95,
+            "SWITCH": 724
+          }
+        },
+        "step20+": {
+          "states": 9214,
+          "independent_events": 255,
+          "p": {
+            "EXTEND": 0.6008,
+            "SWITCH": 0.1428,
+            "COMPLEMENT": 0.2287,
+            "STOP": 0.0277
+          },
+          "counts": {
+            "EXTEND": 5536,
+            "COMPLEMENT": 2107,
+            "SWITCH": 1316,
+            "STOP": 255
+          }
+        }
+      }
+    },
+    {
+      "label": "R2",
+      "start_day": "2026-04-25",
+      "end_day": "2026-06-22",
+      "n_days": 49,
+      "independent_events": 1684,
+      "fills": 162174,
+      "sells": 0,
+      "trades_per_event": 96.3029,
+      "mean_fill_size": 17.94791,
+      "notional_per_event": 794.90994,
+      "first_price_mean": 0.49609,
+      "first_favored_frac": 0.44656,
+      "first_tte_s_mean": 814.77316,
+      "extend_per_event": 69.5802,
+      "switch_per_event": 10.4501,
+      "complement_per_event": 15.2726,
+      "completion_rate": 0.99406,
+      "t_to_match_s_mean": 45.43429,
+      "pair_cost_mean": 0.96587,
+      "pair_cost_p10": 0.89039,
+      "pair_cost_median": 0.96666,
+      "pair_cost_p90": 1.04101,
+      "pair_cost_frac_le_0_96": 0.44624,
+      "pair_cost_frac_lt_1_00": 0.74373,
+      "peak_resid_mean": 274.60735,
+      "term_resid_frac_mean": 0.1319,
+      "maker_rebate_usdc": 3344.1569,
+      "taker_rebate_usdc": 0,
+      "reward_usdc": 0,
+      "redeem_usdc": 1348154.0018,
+      "maker_rebate_n": 44,
+      "taker_rebate_n": 0,
+      "rebate_events_n": 44,
+      "reward_events_n": 0,
+      "redeem_n": 1689,
+      "motifs": {
+        "OPEN_EXTEND_COMPLETE": 1671,
+        "repeated_compression": 1658,
+        "OPEN_EXTEND_only": 10,
+        "OPEN_COMPLETE_only": 3
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 162174,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7225,
+            "SWITCH": 0.1085,
+            "COMPLEMENT": 0.1586,
+            "STOP": 0.0104
+          },
+          "counts": {
+            "EXTEND": 117173,
+            "COMPLEMENT": 25719,
+            "STOP": 1684,
+            "SWITCH": 17598
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 8868,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7722,
+            "SWITCH": 0.0103,
+            "COMPLEMENT": 0.2163,
+            "STOP": 0.0012
+          },
+          "counts": {
+            "EXTEND": 6848,
+            "COMPLEMENT": 1918,
+            "SWITCH": 91,
+            "STOP": 11
+          }
+        },
+        "heavy 35-80%": {
+          "states": 19386,
+          "independent_events": 1622,
+          "p": {
+            "EXTEND": 0.7251,
+            "SWITCH": 0.0857,
+            "COMPLEMENT": 0.1845,
+            "STOP": 0.0047
+          },
+          "counts": {
+            "EXTEND": 14056,
+            "COMPLEMENT": 3577,
+            "SWITCH": 1662,
+            "STOP": 91
+          }
+        },
+        "mild 5-35%": {
+          "states": 98238,
+          "independent_events": 1647,
+          "p": {
+            "EXTEND": 0.7205,
+            "SWITCH": 0.113,
+            "COMPLEMENT": 0.1554,
+            "STOP": 0.011
+          },
+          "counts": {
+            "EXTEND": 70785,
+            "STOP": 1080,
+            "SWITCH": 11103,
+            "COMPLEMENT": 15270
+          }
+        },
+        "balanced<=5%": {
+          "states": 35682,
+          "independent_events": 1462,
+          "p": {
+            "EXTEND": 0.7142,
+            "SWITCH": 0.1329,
+            "COMPLEMENT": 0.1388,
+            "STOP": 0.0141
+          },
+          "counts": {
+            "SWITCH": 4742,
+            "EXTEND": 25484,
+            "COMPLEMENT": 4954,
+            "STOP": 502
+          }
+        }
+      },
+      "transitions_by_tte": {
+        "120-300s": {
+          "states": 39455,
+          "independent_events": 1501,
+          "p": {
+            "EXTEND": 0.7254,
+            "SWITCH": 0.1119,
+            "COMPLEMENT": 0.1515,
+            "STOP": 0.0112
+          },
+          "counts": {
+            "EXTEND": 28622,
+            "COMPLEMENT": 5979,
+            "STOP": 440,
+            "SWITCH": 4414
+          }
+        },
+        ">300s": {
+          "states": 96133,
+          "independent_events": 1661,
+          "p": {
+            "EXTEND": 0.7186,
+            "SWITCH": 0.1098,
+            "COMPLEMENT": 0.1699,
+            "STOP": 0.0017
+          },
+          "counts": {
+            "EXTEND": 69077,
+            "COMPLEMENT": 16334,
+            "SWITCH": 10560,
+            "STOP": 162
+          }
+        },
+        "60-120s": {
+          "states": 13532,
+          "independent_events": 1032,
+          "p": {
+            "EXTEND": 0.7414,
+            "SWITCH": 0.1029,
+            "COMPLEMENT": 0.1355,
+            "STOP": 0.0202
+          },
+          "counts": {
+            "EXTEND": 10032,
+            "COMPLEMENT": 1834,
+            "SWITCH": 1393,
+            "STOP": 273
+          }
+        },
+        "30-60s": {
+          "states": 7735,
+          "independent_events": 755,
+          "p": {
+            "EXTEND": 0.7352,
+            "SWITCH": 0.1017,
+            "COMPLEMENT": 0.131,
+            "STOP": 0.0321
+          },
+          "counts": {
+            "SWITCH": 787,
+            "COMPLEMENT": 1013,
+            "STOP": 248,
+            "EXTEND": 5687
+          }
+        },
+        "0-30s": {
+          "states": 4841,
+          "independent_events": 535,
+          "p": {
+            "EXTEND": 0.7127,
+            "SWITCH": 0.0832,
+            "COMPLEMENT": 0.1039,
+            "STOP": 0.1002
+          },
+          "counts": {
+            "SWITCH": 403,
+            "COMPLEMENT": 503,
+            "EXTEND": 3450,
+            "STOP": 485
+          }
+        },
+        "past-close": {
+          "states": 478,
+          "independent_events": 76,
+          "p": {
+            "EXTEND": 0.6381,
+            "SWITCH": 0.0858,
+            "COMPLEMENT": 0.1172,
+            "STOP": 0.159
+          },
+          "counts": {
+            "COMPLEMENT": 56,
+            "EXTEND": 305,
+            "STOP": 76,
+            "SWITCH": 41
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 70787,
+          "independent_events": 1679,
+          "p": {
+            "EXTEND": 0.6953,
+            "SWITCH": 0.1266,
+            "COMPLEMENT": 0.1691,
+            "STOP": 0.009
+          },
+          "counts": {
+            "EXTEND": 49220,
+            "COMPLEMENT": 11967,
+            "STOP": 635,
+            "SWITCH": 8965
+          }
+        },
+        "underdog": {
+          "states": 91387,
+          "independent_events": 1680,
+          "p": {
+            "EXTEND": 0.7436,
+            "SWITCH": 0.0945,
+            "COMPLEMENT": 0.1505,
+            "STOP": 0.0115
+          },
+          "counts": {
+            "EXTEND": 67953,
+            "COMPLEMENT": 13752,
+            "SWITCH": 8633,
+            "STOP": 1049
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 7411,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7728,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2259,
+            "STOP": 0.0013
+          },
+          "counts": {
+            "EXTEND": 5727,
+            "COMPLEMENT": 1674,
+            "STOP": 10
+          }
+        },
+        "has_matched": {
+          "states": 154763,
+          "independent_events": 1674,
+          "p": {
+            "EXTEND": 0.7201,
+            "SWITCH": 0.1137,
+            "COMPLEMENT": 0.1554,
+            "STOP": 0.0108
+          },
+          "counts": {
+            "EXTEND": 111446,
+            "STOP": 1674,
+            "SWITCH": 17598,
+            "COMPLEMENT": 24045
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 1684,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.772,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.228,
+            "STOP": 0.0
+          },
+          "counts": {
+            "EXTEND": 1300,
+            "COMPLEMENT": 384
+          }
+        },
+        "step1-4": {
+          "states": 6711,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7358,
+            "SWITCH": 0.063,
+            "COMPLEMENT": 0.1992,
+            "STOP": 0.0019
+          },
+          "counts": {
+            "COMPLEMENT": 1337,
+            "EXTEND": 4938,
+            "SWITCH": 423,
+            "STOP": 13
+          }
+        },
+        "step5-19": {
+          "states": 24877,
+          "independent_events": 1671,
+          "p": {
+            "EXTEND": 0.7199,
+            "SWITCH": 0.1035,
+            "COMPLEMENT": 0.1754,
+            "STOP": 0.0012
+          },
+          "counts": {
+            "EXTEND": 17909,
+            "STOP": 29,
+            "COMPLEMENT": 4363,
+            "SWITCH": 2576
+          }
+        },
+        "step20+": {
+          "states": 128902,
+          "independent_events": 1642,
+          "p": {
+            "EXTEND": 0.7217,
+            "SWITCH": 0.1133,
+            "COMPLEMENT": 0.1523,
+            "STOP": 0.0127
+          },
+          "counts": {
+            "COMPLEMENT": 19635,
+            "EXTEND": 93026,
+            "SWITCH": 14599,
+            "STOP": 1642
+          }
+        }
+      }
+    },
+    {
+      "label": "R3",
+      "start_day": "2026-06-23",
+      "end_day": "2026-08-18",
+      "n_days": 46,
+      "independent_events": 8235,
+      "fills": 349166,
+      "sells": 0,
+      "trades_per_event": 42.4002,
+      "mean_fill_size": 30.27587,
+      "notional_per_event": 427.09634,
+      "first_price_mean": 0.54509,
+      "first_favored_frac": 0.61651,
+      "first_tte_s_mean": 403.13018,
+      "extend_per_event": 30.6006,
+      "switch_per_event": 4.1392,
+      "complement_per_event": 6.6605,
+      "completion_rate": 0.7292,
+      "t_to_match_s_mean": 68.37868,
+      "pair_cost_mean": 0.99692,
+      "pair_cost_p10": 0.83009,
+      "pair_cost_median": 0.98437,
+      "pair_cost_p90": 1.19648,
+      "pair_cost_frac_le_0_96": 0.37469,
+      "pair_cost_frac_lt_1_00": 0.58085,
+      "peak_resid_mean": 166.36228,
+      "term_resid_frac_mean": 0.44477,
+      "maker_rebate_usdc": 12900.3187,
+      "taker_rebate_usdc": 3923.5728,
+      "reward_usdc": 5753.7588,
+      "redeem_usdc": 3531865.974696,
+      "maker_rebate_n": 38,
+      "taker_rebate_n": 53,
+      "rebate_events_n": 91,
+      "reward_events_n": 7,
+      "redeem_n": 7515,
+      "motifs": {
+        "OPEN_EXTEND_COMPLETE": 5578,
+        "repeated_compression": 3926,
+        "OPEN_only_or_switch": 917,
+        "OPEN_EXTEND_only": 1313,
+        "OPEN_COMPLETE_only": 427
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 349166,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.7217,
+            "SWITCH": 0.0976,
+            "COMPLEMENT": 0.1571,
+            "STOP": 0.0236
+          },
+          "counts": {
+            "EXTEND": 251996,
+            "COMPLEMENT": 54849,
+            "SWITCH": 34086,
+            "STOP": 8235
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 29597,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.6805,
+            "SWITCH": 0.0109,
+            "COMPLEMENT": 0.2271,
+            "STOP": 0.0815
+          },
+          "counts": {
+            "EXTEND": 20141,
+            "COMPLEMENT": 6721,
+            "STOP": 2411,
+            "SWITCH": 324
+          }
+        },
+        "mild 5-35%": {
+          "states": 188911,
+          "independent_events": 5020,
+          "p": {
+            "EXTEND": 0.7262,
+            "SWITCH": 0.1023,
+            "COMPLEMENT": 0.1553,
+            "STOP": 0.0162
+          },
+          "counts": {
+            "EXTEND": 137180,
+            "COMPLEMENT": 29336,
+            "SWITCH": 19330,
+            "STOP": 3065
+          }
+        },
+        "heavy 35-80%": {
+          "states": 33355,
+          "independent_events": 4983,
+          "p": {
+            "EXTEND": 0.6889,
+            "SWITCH": 0.0878,
+            "COMPLEMENT": 0.1816,
+            "STOP": 0.0418
+          },
+          "counts": {
+            "COMPLEMENT": 6056,
+            "EXTEND": 22977,
+            "SWITCH": 2929,
+            "STOP": 1393
+          }
+        },
+        "balanced<=5%": {
+          "states": 97303,
+          "independent_events": 3642,
+          "p": {
+            "EXTEND": 0.7369,
+            "SWITCH": 0.1182,
+            "COMPLEMENT": 0.1309,
+            "STOP": 0.014
+          },
+          "counts": {
+            "EXTEND": 71698,
+            "COMPLEMENT": 12736,
+            "STOP": 1366,
+            "SWITCH": 11503
+          }
+        }
+      },
+      "transitions_by_tte": {
+        ">300s": {
+          "states": 190948,
+          "independent_events": 2474,
+          "p": {
+            "EXTEND": 0.7432,
+            "SWITCH": 0.0979,
+            "COMPLEMENT": 0.158,
+            "STOP": 0.0009
+          },
+          "counts": {
+            "EXTEND": 141908,
+            "COMPLEMENT": 30166,
+            "SWITCH": 18696,
+            "STOP": 178
+          }
+        },
+        "120-300s": {
+          "states": 93189,
+          "independent_events": 6829,
+          "p": {
+            "EXTEND": 0.7112,
+            "SWITCH": 0.0992,
+            "COMPLEMENT": 0.1668,
+            "STOP": 0.0228
+          },
+          "counts": {
+            "EXTEND": 66274,
+            "COMPLEMENT": 15544,
+            "SWITCH": 9243,
+            "STOP": 2128
+          }
+        },
+        "60-120s": {
+          "states": 35189,
+          "independent_events": 4870,
+          "p": {
+            "EXTEND": 0.6885,
+            "SWITCH": 0.102,
+            "COMPLEMENT": 0.152,
+            "STOP": 0.0575
+          },
+          "counts": {
+            "EXTEND": 24229,
+            "SWITCH": 3588,
+            "STOP": 2025,
+            "COMPLEMENT": 5347
+          }
+        },
+        "30-60s": {
+          "states": 19795,
+          "independent_events": 3390,
+          "p": {
+            "EXTEND": 0.6723,
+            "SWITCH": 0.0938,
+            "COMPLEMENT": 0.1429,
+            "STOP": 0.091
+          },
+          "counts": {
+            "COMPLEMENT": 2829,
+            "EXTEND": 13308,
+            "SWITCH": 1856,
+            "STOP": 1802
+          }
+        },
+        "0-30s": {
+          "states": 10039,
+          "independent_events": 2102,
+          "p": {
+            "EXTEND": 0.6251,
+            "SWITCH": 0.07,
+            "COMPLEMENT": 0.0959,
+            "STOP": 0.209
+          },
+          "counts": {
+            "SWITCH": 703,
+            "EXTEND": 6275,
+            "COMPLEMENT": 963,
+            "STOP": 2098
+          }
+        },
+        "past-close": {
+          "states": 6,
+          "independent_events": 4,
+          "p": {
+            "EXTEND": 0.3333,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.0,
+            "STOP": 0.6667
+          },
+          "counts": {
+            "EXTEND": 2,
+            "STOP": 4
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 165456,
+          "independent_events": 7564,
+          "p": {
+            "EXTEND": 0.7011,
+            "SWITCH": 0.0831,
+            "COMPLEMENT": 0.1891,
+            "STOP": 0.0267
+          },
+          "counts": {
+            "EXTEND": 116007,
+            "COMPLEMENT": 31283,
+            "SWITCH": 13751,
+            "STOP": 4415
+          }
+        },
+        "underdog": {
+          "states": 183710,
+          "independent_events": 6684,
+          "p": {
+            "EXTEND": 0.7402,
+            "SWITCH": 0.1107,
+            "COMPLEMENT": 0.1283,
+            "STOP": 0.0208
+          },
+          "counts": {
+            "EXTEND": 135989,
+            "COMPLEMENT": 23566,
+            "STOP": 3820,
+            "SWITCH": 20335
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 25524,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.6774,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2353,
+            "STOP": 0.0874
+          },
+          "counts": {
+            "EXTEND": 17289,
+            "COMPLEMENT": 6005,
+            "STOP": 2230
+          }
+        },
+        "has_matched": {
+          "states": 323642,
+          "independent_events": 6005,
+          "p": {
+            "EXTEND": 0.7252,
+            "SWITCH": 0.1053,
+            "COMPLEMENT": 0.1509,
+            "STOP": 0.0186
+          },
+          "counts": {
+            "EXTEND": 234707,
+            "COMPLEMENT": 48844,
+            "SWITCH": 34086,
+            "STOP": 6005
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 8235,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.635,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2537,
+            "STOP": 0.1114
+          },
+          "counts": {
+            "EXTEND": 5229,
+            "STOP": 917,
+            "COMPLEMENT": 2089
+          }
+        },
+        "step1-4": {
+          "states": 24895,
+          "independent_events": 7318,
+          "p": {
+            "EXTEND": 0.6298,
+            "SWITCH": 0.068,
+            "COMPLEMENT": 0.2002,
+            "STOP": 0.102
+          },
+          "counts": {
+            "EXTEND": 15679,
+            "COMPLEMENT": 4984,
+            "SWITCH": 1692,
+            "STOP": 2540
+          }
+        },
+        "step5-19": {
+          "states": 50206,
+          "independent_events": 4778,
+          "p": {
+            "EXTEND": 0.6957,
+            "SWITCH": 0.0951,
+            "COMPLEMENT": 0.1671,
+            "STOP": 0.0421
+          },
+          "counts": {
+            "EXTEND": 34929,
+            "COMPLEMENT": 8390,
+            "SWITCH": 4775,
+            "STOP": 2112
+          }
+        },
+        "step20+": {
+          "states": 265830,
+          "independent_events": 2666,
+          "p": {
+            "EXTEND": 0.7379,
+            "SWITCH": 0.1039,
+            "COMPLEMENT": 0.1482,
+            "STOP": 0.01
+          },
+          "counts": {
+            "EXTEND": 196159,
+            "COMPLEMENT": 39386,
+            "SWITCH": 27619,
+            "STOP": 2666
+          }
+        }
+      }
+    },
+    {
+      "label": "R4",
+      "start_day": "2026-08-19",
+      "end_day": "2026-08-31",
+      "n_days": 12,
+      "independent_events": 6741,
+      "fills": 233806,
+      "sells": 0,
+      "trades_per_event": 34.6842,
+      "mean_fill_size": 34.13681,
+      "notional_per_event": 389.78219,
+      "first_price_mean": 0.53229,
+      "first_favored_frac": 0.63047,
+      "first_tte_s_mean": 354.97834,
+      "extend_per_event": 24.611,
+      "switch_per_event": 3.5306,
+      "complement_per_event": 5.5425,
+      "completion_rate": 0.73253,
+      "t_to_match_s_mean": 87.27623,
+      "pair_cost_mean": 0.99042,
+      "pair_cost_p10": 0.76679,
+      "pair_cost_median": 0.97052,
+      "pair_cost_p90": 1.25006,
+      "pair_cost_frac_le_0_96": 0.45443,
+      "pair_cost_frac_lt_1_00": 0.60976,
+      "peak_resid_mean": 158.52642,
+      "term_resid_frac_mean": 0.48871,
+      "maker_rebate_usdc": 16477.388,
+      "taker_rebate_usdc": 2992.7691,
+      "reward_usdc": 21229.8802,
+      "redeem_usdc": 2621324.993614,
+      "maker_rebate_n": 11,
+      "taker_rebate_n": 11,
+      "rebate_events_n": 22,
+      "reward_events_n": 11,
+      "redeem_n": 5999,
+      "motifs": {
+        "OPEN_EXTEND_COMPLETE": 4470,
+        "repeated_compression": 2727,
+        "OPEN_COMPLETE_only": 468,
+        "OPEN_EXTEND_only": 1047,
+        "OPEN_only_or_switch": 756
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 233806,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.7096,
+            "SWITCH": 0.1018,
+            "COMPLEMENT": 0.1598,
+            "STOP": 0.0288
+          },
+          "counts": {
+            "EXTEND": 165903,
+            "COMPLEMENT": 37362,
+            "STOP": 6741,
+            "SWITCH": 23800
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 19810,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.6037,
+            "SWITCH": 0.0135,
+            "COMPLEMENT": 0.2782,
+            "STOP": 0.1045
+          },
+          "counts": {
+            "EXTEND": 11960,
+            "COMPLEMENT": 5512,
+            "SWITCH": 268,
+            "STOP": 2070
+          }
+        },
+        "heavy 35-80%": {
+          "states": 18580,
+          "independent_events": 3857,
+          "p": {
+            "EXTEND": 0.6214,
+            "SWITCH": 0.0992,
+            "COMPLEMENT": 0.1964,
+            "STOP": 0.083
+          },
+          "counts": {
+            "EXTEND": 11545,
+            "COMPLEMENT": 3649,
+            "SWITCH": 1844,
+            "STOP": 1542
+          }
+        },
+        "mild 5-35%": {
+          "states": 119146,
+          "independent_events": 3816,
+          "p": {
+            "EXTEND": 0.7201,
+            "SWITCH": 0.1063,
+            "COMPLEMENT": 0.1534,
+            "STOP": 0.0202
+          },
+          "counts": {
+            "COMPLEMENT": 18276,
+            "EXTEND": 85796,
+            "STOP": 2403,
+            "SWITCH": 12671
+          }
+        },
+        "balanced<=5%": {
+          "states": 76270,
+          "independent_events": 2228,
+          "p": {
+            "EXTEND": 0.7421,
+            "SWITCH": 0.1182,
+            "COMPLEMENT": 0.1301,
+            "STOP": 0.0095
+          },
+          "counts": {
+            "STOP": 726,
+            "EXTEND": 56602,
+            "SWITCH": 9017,
+            "COMPLEMENT": 9925
+          }
+        }
+      },
+      "transitions_by_tte": {
+        "120-300s": {
+          "states": 61345,
+          "independent_events": 5794,
+          "p": {
+            "EXTEND": 0.6888,
+            "SWITCH": 0.0986,
+            "COMPLEMENT": 0.1793,
+            "STOP": 0.0333
+          },
+          "counts": {
+            "EXTEND": 42255,
+            "COMPLEMENT": 11002,
+            "STOP": 2041,
+            "SWITCH": 6047
+          }
+        },
+        "60-120s": {
+          "states": 22718,
+          "independent_events": 4026,
+          "p": {
+            "EXTEND": 0.6291,
+            "SWITCH": 0.1094,
+            "COMPLEMENT": 0.1744,
+            "STOP": 0.0871
+          },
+          "counts": {
+            "STOP": 1979,
+            "COMPLEMENT": 3963,
+            "EXTEND": 14291,
+            "SWITCH": 2485
+          }
+        },
+        ">300s": {
+          "states": 135784,
+          "independent_events": 1500,
+          "p": {
+            "EXTEND": 0.7415,
+            "SWITCH": 0.1044,
+            "COMPLEMENT": 0.1524,
+            "STOP": 0.0018
+          },
+          "counts": {
+            "EXTEND": 100679,
+            "COMPLEMENT": 20688,
+            "SWITCH": 14171,
+            "STOP": 246
+          }
+        },
+        "30-60s": {
+          "states": 11341,
+          "independent_events": 2394,
+          "p": {
+            "EXTEND": 0.6445,
+            "SWITCH": 0.0804,
+            "COMPLEMENT": 0.1257,
+            "STOP": 0.1495
+          },
+          "counts": {
+            "STOP": 1695,
+            "EXTEND": 7309,
+            "SWITCH": 912,
+            "COMPLEMENT": 1425
+          }
+        },
+        "0-30s": {
+          "states": 2616,
+          "independent_events": 780,
+          "p": {
+            "EXTEND": 0.5233,
+            "SWITCH": 0.0707,
+            "COMPLEMENT": 0.1086,
+            "STOP": 0.2974
+          },
+          "counts": {
+            "EXTEND": 1369,
+            "STOP": 778,
+            "COMPLEMENT": 284,
+            "SWITCH": 185
+          }
+        },
+        "past-close": {
+          "states": 2,
+          "independent_events": 2,
+          "p": {
+            "EXTEND": 0.0,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.0,
+            "STOP": 1.0
+          },
+          "counts": {
+            "STOP": 2
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 104964,
+          "independent_events": 6110,
+          "p": {
+            "EXTEND": 0.6731,
+            "SWITCH": 0.1196,
+            "COMPLEMENT": 0.1775,
+            "STOP": 0.0298
+          },
+          "counts": {
+            "EXTEND": 70655,
+            "COMPLEMENT": 18627,
+            "SWITCH": 12554,
+            "STOP": 3128
+          }
+        },
+        "underdog": {
+          "states": 128842,
+          "independent_events": 5506,
+          "p": {
+            "EXTEND": 0.7393,
+            "SWITCH": 0.0873,
+            "COMPLEMENT": 0.1454,
+            "STOP": 0.028
+          },
+          "counts": {
+            "STOP": 3613,
+            "COMPLEMENT": 18735,
+            "EXTEND": 95248,
+            "SWITCH": 11246
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 16925,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.6017,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2918,
+            "STOP": 0.1065
+          },
+          "counts": {
+            "EXTEND": 10184,
+            "COMPLEMENT": 4938,
+            "STOP": 1803
+          }
+        },
+        "has_matched": {
+          "states": 216881,
+          "independent_events": 4938,
+          "p": {
+            "EXTEND": 0.718,
+            "SWITCH": 0.1097,
+            "COMPLEMENT": 0.1495,
+            "STOP": 0.0228
+          },
+          "counts": {
+            "EXTEND": 155719,
+            "COMPLEMENT": 32424,
+            "STOP": 4938,
+            "SWITCH": 23800
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 6741,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.5803,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.3075,
+            "STOP": 0.1121
+          },
+          "counts": {
+            "EXTEND": 3912,
+            "COMPLEMENT": 2073,
+            "STOP": 756
+          }
+        },
+        "step1-4": {
+          "states": 19432,
+          "independent_events": 5985,
+          "p": {
+            "EXTEND": 0.5376,
+            "SWITCH": 0.0866,
+            "COMPLEMENT": 0.2361,
+            "STOP": 0.1398
+          },
+          "counts": {
+            "COMPLEMENT": 4587,
+            "EXTEND": 10447,
+            "STOP": 2716,
+            "SWITCH": 1682
+          }
+        },
+        "step5-19": {
+          "states": 24920,
+          "independent_events": 3269,
+          "p": {
+            "EXTEND": 0.6144,
+            "SWITCH": 0.109,
+            "COMPLEMENT": 0.1863,
+            "STOP": 0.0902
+          },
+          "counts": {
+            "STOP": 2249,
+            "EXTEND": 15312,
+            "SWITCH": 2716,
+            "COMPLEMENT": 4643
+          }
+        },
+        "step20+": {
+          "states": 182713,
+          "independent_events": 1020,
+          "p": {
+            "EXTEND": 0.7456,
+            "SWITCH": 0.1062,
+            "COMPLEMENT": 0.1426,
+            "STOP": 0.0056
+          },
+          "counts": {
+            "EXTEND": 136232,
+            "COMPLEMENT": 26059,
+            "SWITCH": 19402,
+            "STOP": 1020
+          }
+        }
+      }
+    }
+  ],
+  "regimes_fine_partition": [
+    {
+      "label": "F1",
+      "start_day": "2026-03-19",
+      "end_day": "2026-04-24",
+      "n_days": 21,
+      "independent_events": 386,
+      "fills": 15671,
+      "sells": 2,
+      "trades_per_event": 40.5984,
+      "mean_fill_size": 14.76669,
+      "notional_per_event": 316.19069,
+      "first_price_mean": 0.50212,
+      "first_favored_frac": 0.43264,
+      "first_tte_s_mean": 797.98187,
+      "extend_per_event": 24.2254,
+      "switch_per_event": 5.6736,
+      "complement_per_event": 9.6995,
+      "completion_rate": 0.93264,
+      "t_to_match_s_mean": 72.35,
+      "pair_cost_mean": 0.96615,
+      "pair_cost_p10": 0.8615,
+      "pair_cost_median": 0.95915,
+      "pair_cost_p90": 1.07694,
+      "pair_cost_frac_le_0_96": 0.50556,
+      "pair_cost_frac_lt_1_00": 0.72222,
+      "peak_resid_mean": 108.745,
+      "term_resid_frac_mean": 0.22023,
+      "maker_rebate_usdc": 327.8072,
+      "taker_rebate_usdc": 0,
+      "reward_usdc": 0,
+      "redeem_usdc": 122436.804309,
+      "maker_rebate_n": 4,
+      "taker_rebate_n": 0,
+      "rebate_events_n": 4,
+      "reward_events_n": 0,
+      "redeem_n": 526,
+      "motifs": {
+        "OPEN_EXTEND_only": 11,
+        "OPEN_only_or_switch": 15,
+        "OPEN_EXTEND_COMPLETE": 359,
+        "repeated_compression": 334,
+        "OPEN_COMPLETE_only": 1
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 15671,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.5967,
+            "SWITCH": 0.1397,
+            "COMPLEMENT": 0.2389,
+            "STOP": 0.0246
+          },
+          "counts": {
+            "EXTEND": 9351,
+            "STOP": 386,
+            "COMPLEMENT": 3744,
+            "SWITCH": 2190
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 1467,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.6987,
+            "SWITCH": 0.013,
+            "COMPLEMENT": 0.2679,
+            "STOP": 0.0204
+          },
+          "counts": {
+            "EXTEND": 1025,
+            "STOP": 30,
+            "COMPLEMENT": 393,
+            "SWITCH": 19
+          }
+        },
+        "balanced<=5%": {
+          "states": 4130,
+          "independent_events": 289,
+          "p": {
+            "EXTEND": 0.5835,
+            "SWITCH": 0.1676,
+            "COMPLEMENT": 0.2208,
+            "STOP": 0.0281
+          },
+          "counts": {
+            "EXTEND": 2410,
+            "SWITCH": 692,
+            "COMPLEMENT": 912,
+            "STOP": 116
+          }
+        },
+        "mild 5-35%": {
+          "states": 8214,
+          "independent_events": 343,
+          "p": {
+            "EXTEND": 0.5906,
+            "SWITCH": 0.1516,
+            "COMPLEMENT": 0.2346,
+            "STOP": 0.0233
+          },
+          "counts": {
+            "COMPLEMENT": 1927,
+            "EXTEND": 4851,
+            "STOP": 191,
+            "SWITCH": 1245
+          }
+        },
+        "heavy 35-80%": {
+          "states": 1860,
+          "independent_events": 325,
+          "p": {
+            "EXTEND": 0.5726,
+            "SWITCH": 0.1258,
+            "COMPLEMENT": 0.2753,
+            "STOP": 0.0263
+          },
+          "counts": {
+            "EXTEND": 1065,
+            "COMPLEMENT": 512,
+            "SWITCH": 234,
+            "STOP": 49
+          }
+        }
+      },
+      "transitions_by_tte": {
+        "0-30s": {
+          "states": 720,
+          "independent_events": 104,
+          "p": {
+            "EXTEND": 0.625,
+            "SWITCH": 0.0764,
+            "COMPLEMENT": 0.1722,
+            "STOP": 0.1264
+          },
+          "counts": {
+            "EXTEND": 450,
+            "STOP": 91,
+            "SWITCH": 55,
+            "COMPLEMENT": 124
+          }
+        },
+        "past-close": {
+          "states": 48,
+          "independent_events": 16,
+          "p": {
+            "EXTEND": 0.3958,
+            "SWITCH": 0.1042,
+            "COMPLEMENT": 0.1667,
+            "STOP": 0.3333
+          },
+          "counts": {
+            "STOP": 16,
+            "EXTEND": 19,
+            "SWITCH": 5,
+            "COMPLEMENT": 8
+          }
+        },
+        "120-300s": {
+          "states": 3288,
+          "independent_events": 285,
+          "p": {
+            "EXTEND": 0.5499,
+            "SWITCH": 0.1658,
+            "COMPLEMENT": 0.2561,
+            "STOP": 0.0283
+          },
+          "counts": {
+            "EXTEND": 1808,
+            "STOP": 93,
+            "SWITCH": 545,
+            "COMPLEMENT": 842
+          }
+        },
+        "60-120s": {
+          "states": 1343,
+          "independent_events": 189,
+          "p": {
+            "EXTEND": 0.6009,
+            "SWITCH": 0.1206,
+            "COMPLEMENT": 0.2375,
+            "STOP": 0.041
+          },
+          "counts": {
+            "STOP": 55,
+            "COMPLEMENT": 319,
+            "SWITCH": 162,
+            "EXTEND": 807
+          }
+        },
+        ">300s": {
+          "states": 9561,
+          "independent_events": 375,
+          "p": {
+            "EXTEND": 0.6088,
+            "SWITCH": 0.1412,
+            "COMPLEMENT": 0.2404,
+            "STOP": 0.0096
+          },
+          "counts": {
+            "STOP": 92,
+            "EXTEND": 5821,
+            "COMPLEMENT": 2298,
+            "SWITCH": 1350
+          }
+        },
+        "30-60s": {
+          "states": 711,
+          "independent_events": 131,
+          "p": {
+            "EXTEND": 0.6273,
+            "SWITCH": 0.1027,
+            "COMPLEMENT": 0.2152,
+            "STOP": 0.0549
+          },
+          "counts": {
+            "EXTEND": 446,
+            "SWITCH": 73,
+            "COMPLEMENT": 153,
+            "STOP": 39
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 6836,
+          "independent_events": 373,
+          "p": {
+            "EXTEND": 0.568,
+            "SWITCH": 0.164,
+            "COMPLEMENT": 0.2387,
+            "STOP": 0.0293
+          },
+          "counts": {
+            "EXTEND": 3883,
+            "STOP": 200,
+            "COMPLEMENT": 1632,
+            "SWITCH": 1121
+          }
+        },
+        "underdog": {
+          "states": 8835,
+          "independent_events": 371,
+          "p": {
+            "EXTEND": 0.6189,
+            "SWITCH": 0.121,
+            "COMPLEMENT": 0.239,
+            "STOP": 0.0211
+          },
+          "counts": {
+            "STOP": 186,
+            "EXTEND": 5468,
+            "COMPLEMENT": 2112,
+            "SWITCH": 1069
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 1306,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.7044,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2757,
+            "STOP": 0.0199
+          },
+          "counts": {
+            "EXTEND": 920,
+            "STOP": 26,
+            "COMPLEMENT": 360
+          }
+        },
+        "has_matched": {
+          "states": 14365,
+          "independent_events": 360,
+          "p": {
+            "EXTEND": 0.5869,
+            "SWITCH": 0.1525,
+            "COMPLEMENT": 0.2356,
+            "STOP": 0.0251
+          },
+          "counts": {
+            "EXTEND": 8431,
+            "COMPLEMENT": 3384,
+            "SWITCH": 2190,
+            "STOP": 360
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 386,
+          "independent_events": 386,
+          "p": {
+            "EXTEND": 0.6995,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2617,
+            "STOP": 0.0389
+          },
+          "counts": {
+            "EXTEND": 270,
+            "STOP": 15,
+            "COMPLEMENT": 101
+          }
+        },
+        "step1-4": {
+          "states": 1453,
+          "independent_events": 371,
+          "p": {
+            "EXTEND": 0.6435,
+            "SWITCH": 0.1032,
+            "COMPLEMENT": 0.2388,
+            "STOP": 0.0145
+          },
+          "counts": {
+            "STOP": 21,
+            "EXTEND": 935,
+            "COMPLEMENT": 347,
+            "SWITCH": 150
+          }
+        },
+        "step5-19": {
+          "states": 4618,
+          "independent_events": 350,
+          "p": {
+            "EXTEND": 0.5652,
+            "SWITCH": 0.1568,
+            "COMPLEMENT": 0.2575,
+            "STOP": 0.0206
+          },
+          "counts": {
+            "EXTEND": 2610,
+            "COMPLEMENT": 1189,
+            "STOP": 95,
+            "SWITCH": 724
+          }
+        },
+        "step20+": {
+          "states": 9214,
+          "independent_events": 255,
+          "p": {
+            "EXTEND": 0.6008,
+            "SWITCH": 0.1428,
+            "COMPLEMENT": 0.2287,
+            "STOP": 0.0277
+          },
+          "counts": {
+            "EXTEND": 5536,
+            "COMPLEMENT": 2107,
+            "SWITCH": 1316,
+            "STOP": 255
+          }
+        }
+      }
+    },
+    {
+      "label": "F2",
+      "start_day": "2026-04-25",
+      "end_day": "2026-06-22",
+      "n_days": 49,
+      "independent_events": 1684,
+      "fills": 162174,
+      "sells": 0,
+      "trades_per_event": 96.3029,
+      "mean_fill_size": 17.94791,
+      "notional_per_event": 794.90994,
+      "first_price_mean": 0.49609,
+      "first_favored_frac": 0.44656,
+      "first_tte_s_mean": 814.77316,
+      "extend_per_event": 69.5802,
+      "switch_per_event": 10.4501,
+      "complement_per_event": 15.2726,
+      "completion_rate": 0.99406,
+      "t_to_match_s_mean": 45.43429,
+      "pair_cost_mean": 0.96587,
+      "pair_cost_p10": 0.89039,
+      "pair_cost_median": 0.96666,
+      "pair_cost_p90": 1.04101,
+      "pair_cost_frac_le_0_96": 0.44624,
+      "pair_cost_frac_lt_1_00": 0.74373,
+      "peak_resid_mean": 274.60735,
+      "term_resid_frac_mean": 0.1319,
+      "maker_rebate_usdc": 3344.1569,
+      "taker_rebate_usdc": 0,
+      "reward_usdc": 0,
+      "redeem_usdc": 1348154.0018,
+      "maker_rebate_n": 44,
+      "taker_rebate_n": 0,
+      "rebate_events_n": 44,
+      "reward_events_n": 0,
+      "redeem_n": 1689,
+      "motifs": {
+        "OPEN_EXTEND_COMPLETE": 1671,
+        "repeated_compression": 1658,
+        "OPEN_EXTEND_only": 10,
+        "OPEN_COMPLETE_only": 3
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 162174,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7225,
+            "SWITCH": 0.1085,
+            "COMPLEMENT": 0.1586,
+            "STOP": 0.0104
+          },
+          "counts": {
+            "EXTEND": 117173,
+            "COMPLEMENT": 25719,
+            "STOP": 1684,
+            "SWITCH": 17598
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 8868,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7722,
+            "SWITCH": 0.0103,
+            "COMPLEMENT": 0.2163,
+            "STOP": 0.0012
+          },
+          "counts": {
+            "EXTEND": 6848,
+            "COMPLEMENT": 1918,
+            "SWITCH": 91,
+            "STOP": 11
+          }
+        },
+        "heavy 35-80%": {
+          "states": 19386,
+          "independent_events": 1622,
+          "p": {
+            "EXTEND": 0.7251,
+            "SWITCH": 0.0857,
+            "COMPLEMENT": 0.1845,
+            "STOP": 0.0047
+          },
+          "counts": {
+            "EXTEND": 14056,
+            "COMPLEMENT": 3577,
+            "SWITCH": 1662,
+            "STOP": 91
+          }
+        },
+        "mild 5-35%": {
+          "states": 98238,
+          "independent_events": 1647,
+          "p": {
+            "EXTEND": 0.7205,
+            "SWITCH": 0.113,
+            "COMPLEMENT": 0.1554,
+            "STOP": 0.011
+          },
+          "counts": {
+            "EXTEND": 70785,
+            "STOP": 1080,
+            "SWITCH": 11103,
+            "COMPLEMENT": 15270
+          }
+        },
+        "balanced<=5%": {
+          "states": 35682,
+          "independent_events": 1462,
+          "p": {
+            "EXTEND": 0.7142,
+            "SWITCH": 0.1329,
+            "COMPLEMENT": 0.1388,
+            "STOP": 0.0141
+          },
+          "counts": {
+            "SWITCH": 4742,
+            "EXTEND": 25484,
+            "COMPLEMENT": 4954,
+            "STOP": 502
+          }
+        }
+      },
+      "transitions_by_tte": {
+        "120-300s": {
+          "states": 39455,
+          "independent_events": 1501,
+          "p": {
+            "EXTEND": 0.7254,
+            "SWITCH": 0.1119,
+            "COMPLEMENT": 0.1515,
+            "STOP": 0.0112
+          },
+          "counts": {
+            "EXTEND": 28622,
+            "COMPLEMENT": 5979,
+            "STOP": 440,
+            "SWITCH": 4414
+          }
+        },
+        ">300s": {
+          "states": 96133,
+          "independent_events": 1661,
+          "p": {
+            "EXTEND": 0.7186,
+            "SWITCH": 0.1098,
+            "COMPLEMENT": 0.1699,
+            "STOP": 0.0017
+          },
+          "counts": {
+            "EXTEND": 69077,
+            "COMPLEMENT": 16334,
+            "SWITCH": 10560,
+            "STOP": 162
+          }
+        },
+        "60-120s": {
+          "states": 13532,
+          "independent_events": 1032,
+          "p": {
+            "EXTEND": 0.7414,
+            "SWITCH": 0.1029,
+            "COMPLEMENT": 0.1355,
+            "STOP": 0.0202
+          },
+          "counts": {
+            "EXTEND": 10032,
+            "COMPLEMENT": 1834,
+            "SWITCH": 1393,
+            "STOP": 273
+          }
+        },
+        "30-60s": {
+          "states": 7735,
+          "independent_events": 755,
+          "p": {
+            "EXTEND": 0.7352,
+            "SWITCH": 0.1017,
+            "COMPLEMENT": 0.131,
+            "STOP": 0.0321
+          },
+          "counts": {
+            "SWITCH": 787,
+            "COMPLEMENT": 1013,
+            "STOP": 248,
+            "EXTEND": 5687
+          }
+        },
+        "0-30s": {
+          "states": 4841,
+          "independent_events": 535,
+          "p": {
+            "EXTEND": 0.7127,
+            "SWITCH": 0.0832,
+            "COMPLEMENT": 0.1039,
+            "STOP": 0.1002
+          },
+          "counts": {
+            "SWITCH": 403,
+            "COMPLEMENT": 503,
+            "EXTEND": 3450,
+            "STOP": 485
+          }
+        },
+        "past-close": {
+          "states": 478,
+          "independent_events": 76,
+          "p": {
+            "EXTEND": 0.6381,
+            "SWITCH": 0.0858,
+            "COMPLEMENT": 0.1172,
+            "STOP": 0.159
+          },
+          "counts": {
+            "COMPLEMENT": 56,
+            "EXTEND": 305,
+            "STOP": 76,
+            "SWITCH": 41
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 70787,
+          "independent_events": 1679,
+          "p": {
+            "EXTEND": 0.6953,
+            "SWITCH": 0.1266,
+            "COMPLEMENT": 0.1691,
+            "STOP": 0.009
+          },
+          "counts": {
+            "EXTEND": 49220,
+            "COMPLEMENT": 11967,
+            "STOP": 635,
+            "SWITCH": 8965
+          }
+        },
+        "underdog": {
+          "states": 91387,
+          "independent_events": 1680,
+          "p": {
+            "EXTEND": 0.7436,
+            "SWITCH": 0.0945,
+            "COMPLEMENT": 0.1505,
+            "STOP": 0.0115
+          },
+          "counts": {
+            "EXTEND": 67953,
+            "COMPLEMENT": 13752,
+            "SWITCH": 8633,
+            "STOP": 1049
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 7411,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7728,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2259,
+            "STOP": 0.0013
+          },
+          "counts": {
+            "EXTEND": 5727,
+            "COMPLEMENT": 1674,
+            "STOP": 10
+          }
+        },
+        "has_matched": {
+          "states": 154763,
+          "independent_events": 1674,
+          "p": {
+            "EXTEND": 0.7201,
+            "SWITCH": 0.1137,
+            "COMPLEMENT": 0.1554,
+            "STOP": 0.0108
+          },
+          "counts": {
+            "EXTEND": 111446,
+            "STOP": 1674,
+            "SWITCH": 17598,
+            "COMPLEMENT": 24045
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 1684,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.772,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.228,
+            "STOP": 0.0
+          },
+          "counts": {
+            "EXTEND": 1300,
+            "COMPLEMENT": 384
+          }
+        },
+        "step1-4": {
+          "states": 6711,
+          "independent_events": 1684,
+          "p": {
+            "EXTEND": 0.7358,
+            "SWITCH": 0.063,
+            "COMPLEMENT": 0.1992,
+            "STOP": 0.0019
+          },
+          "counts": {
+            "COMPLEMENT": 1337,
+            "EXTEND": 4938,
+            "SWITCH": 423,
+            "STOP": 13
+          }
+        },
+        "step5-19": {
+          "states": 24877,
+          "independent_events": 1671,
+          "p": {
+            "EXTEND": 0.7199,
+            "SWITCH": 0.1035,
+            "COMPLEMENT": 0.1754,
+            "STOP": 0.0012
+          },
+          "counts": {
+            "EXTEND": 17909,
+            "STOP": 29,
+            "COMPLEMENT": 4363,
+            "SWITCH": 2576
+          }
+        },
+        "step20+": {
+          "states": 128902,
+          "independent_events": 1642,
+          "p": {
+            "EXTEND": 0.7217,
+            "SWITCH": 0.1133,
+            "COMPLEMENT": 0.1523,
+            "STOP": 0.0127
+          },
+          "counts": {
+            "COMPLEMENT": 19635,
+            "EXTEND": 93026,
+            "SWITCH": 14599,
+            "STOP": 1642
+          }
+        }
+      }
+    },
+    {
+      "label": "F3",
+      "start_day": "2026-06-23",
+      "end_day": "2026-08-18",
+      "n_days": 46,
+      "independent_events": 8235,
+      "fills": 349166,
+      "sells": 0,
+      "trades_per_event": 42.4002,
+      "mean_fill_size": 30.27587,
+      "notional_per_event": 427.09634,
+      "first_price_mean": 0.54509,
+      "first_favored_frac": 0.61651,
+      "first_tte_s_mean": 403.13018,
+      "extend_per_event": 30.6006,
+      "switch_per_event": 4.1392,
+      "complement_per_event": 6.6605,
+      "completion_rate": 0.7292,
+      "t_to_match_s_mean": 68.37868,
+      "pair_cost_mean": 0.99692,
+      "pair_cost_p10": 0.83009,
+      "pair_cost_median": 0.98437,
+      "pair_cost_p90": 1.19648,
+      "pair_cost_frac_le_0_96": 0.37469,
+      "pair_cost_frac_lt_1_00": 0.58085,
+      "peak_resid_mean": 166.36228,
+      "term_resid_frac_mean": 0.44477,
+      "maker_rebate_usdc": 12900.3187,
+      "taker_rebate_usdc": 3923.5728,
+      "reward_usdc": 5753.7588,
+      "redeem_usdc": 3531865.974696,
+      "maker_rebate_n": 38,
+      "taker_rebate_n": 53,
+      "rebate_events_n": 91,
+      "reward_events_n": 7,
+      "redeem_n": 7515,
+      "motifs": {
+        "OPEN_EXTEND_COMPLETE": 5578,
+        "repeated_compression": 3926,
+        "OPEN_only_or_switch": 917,
+        "OPEN_EXTEND_only": 1313,
+        "OPEN_COMPLETE_only": 427
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 349166,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.7217,
+            "SWITCH": 0.0976,
+            "COMPLEMENT": 0.1571,
+            "STOP": 0.0236
+          },
+          "counts": {
+            "EXTEND": 251996,
+            "COMPLEMENT": 54849,
+            "SWITCH": 34086,
+            "STOP": 8235
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 29597,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.6805,
+            "SWITCH": 0.0109,
+            "COMPLEMENT": 0.2271,
+            "STOP": 0.0815
+          },
+          "counts": {
+            "EXTEND": 20141,
+            "COMPLEMENT": 6721,
+            "STOP": 2411,
+            "SWITCH": 324
+          }
+        },
+        "mild 5-35%": {
+          "states": 188911,
+          "independent_events": 5020,
+          "p": {
+            "EXTEND": 0.7262,
+            "SWITCH": 0.1023,
+            "COMPLEMENT": 0.1553,
+            "STOP": 0.0162
+          },
+          "counts": {
+            "EXTEND": 137180,
+            "COMPLEMENT": 29336,
+            "SWITCH": 19330,
+            "STOP": 3065
+          }
+        },
+        "heavy 35-80%": {
+          "states": 33355,
+          "independent_events": 4983,
+          "p": {
+            "EXTEND": 0.6889,
+            "SWITCH": 0.0878,
+            "COMPLEMENT": 0.1816,
+            "STOP": 0.0418
+          },
+          "counts": {
+            "COMPLEMENT": 6056,
+            "EXTEND": 22977,
+            "SWITCH": 2929,
+            "STOP": 1393
+          }
+        },
+        "balanced<=5%": {
+          "states": 97303,
+          "independent_events": 3642,
+          "p": {
+            "EXTEND": 0.7369,
+            "SWITCH": 0.1182,
+            "COMPLEMENT": 0.1309,
+            "STOP": 0.014
+          },
+          "counts": {
+            "EXTEND": 71698,
+            "COMPLEMENT": 12736,
+            "STOP": 1366,
+            "SWITCH": 11503
+          }
+        }
+      },
+      "transitions_by_tte": {
+        ">300s": {
+          "states": 190948,
+          "independent_events": 2474,
+          "p": {
+            "EXTEND": 0.7432,
+            "SWITCH": 0.0979,
+            "COMPLEMENT": 0.158,
+            "STOP": 0.0009
+          },
+          "counts": {
+            "EXTEND": 141908,
+            "COMPLEMENT": 30166,
+            "SWITCH": 18696,
+            "STOP": 178
+          }
+        },
+        "120-300s": {
+          "states": 93189,
+          "independent_events": 6829,
+          "p": {
+            "EXTEND": 0.7112,
+            "SWITCH": 0.0992,
+            "COMPLEMENT": 0.1668,
+            "STOP": 0.0228
+          },
+          "counts": {
+            "EXTEND": 66274,
+            "COMPLEMENT": 15544,
+            "SWITCH": 9243,
+            "STOP": 2128
+          }
+        },
+        "60-120s": {
+          "states": 35189,
+          "independent_events": 4870,
+          "p": {
+            "EXTEND": 0.6885,
+            "SWITCH": 0.102,
+            "COMPLEMENT": 0.152,
+            "STOP": 0.0575
+          },
+          "counts": {
+            "EXTEND": 24229,
+            "SWITCH": 3588,
+            "STOP": 2025,
+            "COMPLEMENT": 5347
+          }
+        },
+        "30-60s": {
+          "states": 19795,
+          "independent_events": 3390,
+          "p": {
+            "EXTEND": 0.6723,
+            "SWITCH": 0.0938,
+            "COMPLEMENT": 0.1429,
+            "STOP": 0.091
+          },
+          "counts": {
+            "COMPLEMENT": 2829,
+            "EXTEND": 13308,
+            "SWITCH": 1856,
+            "STOP": 1802
+          }
+        },
+        "0-30s": {
+          "states": 10039,
+          "independent_events": 2102,
+          "p": {
+            "EXTEND": 0.6251,
+            "SWITCH": 0.07,
+            "COMPLEMENT": 0.0959,
+            "STOP": 0.209
+          },
+          "counts": {
+            "SWITCH": 703,
+            "EXTEND": 6275,
+            "COMPLEMENT": 963,
+            "STOP": 2098
+          }
+        },
+        "past-close": {
+          "states": 6,
+          "independent_events": 4,
+          "p": {
+            "EXTEND": 0.3333,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.0,
+            "STOP": 0.6667
+          },
+          "counts": {
+            "EXTEND": 2,
+            "STOP": 4
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 165456,
+          "independent_events": 7564,
+          "p": {
+            "EXTEND": 0.7011,
+            "SWITCH": 0.0831,
+            "COMPLEMENT": 0.1891,
+            "STOP": 0.0267
+          },
+          "counts": {
+            "EXTEND": 116007,
+            "COMPLEMENT": 31283,
+            "SWITCH": 13751,
+            "STOP": 4415
+          }
+        },
+        "underdog": {
+          "states": 183710,
+          "independent_events": 6684,
+          "p": {
+            "EXTEND": 0.7402,
+            "SWITCH": 0.1107,
+            "COMPLEMENT": 0.1283,
+            "STOP": 0.0208
+          },
+          "counts": {
+            "EXTEND": 135989,
+            "COMPLEMENT": 23566,
+            "STOP": 3820,
+            "SWITCH": 20335
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 25524,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.6774,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2353,
+            "STOP": 0.0874
+          },
+          "counts": {
+            "EXTEND": 17289,
+            "COMPLEMENT": 6005,
+            "STOP": 2230
+          }
+        },
+        "has_matched": {
+          "states": 323642,
+          "independent_events": 6005,
+          "p": {
+            "EXTEND": 0.7252,
+            "SWITCH": 0.1053,
+            "COMPLEMENT": 0.1509,
+            "STOP": 0.0186
+          },
+          "counts": {
+            "EXTEND": 234707,
+            "COMPLEMENT": 48844,
+            "SWITCH": 34086,
+            "STOP": 6005
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 8235,
+          "independent_events": 8235,
+          "p": {
+            "EXTEND": 0.635,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2537,
+            "STOP": 0.1114
+          },
+          "counts": {
+            "EXTEND": 5229,
+            "STOP": 917,
+            "COMPLEMENT": 2089
+          }
+        },
+        "step1-4": {
+          "states": 24895,
+          "independent_events": 7318,
+          "p": {
+            "EXTEND": 0.6298,
+            "SWITCH": 0.068,
+            "COMPLEMENT": 0.2002,
+            "STOP": 0.102
+          },
+          "counts": {
+            "EXTEND": 15679,
+            "COMPLEMENT": 4984,
+            "SWITCH": 1692,
+            "STOP": 2540
+          }
+        },
+        "step5-19": {
+          "states": 50206,
+          "independent_events": 4778,
+          "p": {
+            "EXTEND": 0.6957,
+            "SWITCH": 0.0951,
+            "COMPLEMENT": 0.1671,
+            "STOP": 0.0421
+          },
+          "counts": {
+            "EXTEND": 34929,
+            "COMPLEMENT": 8390,
+            "SWITCH": 4775,
+            "STOP": 2112
+          }
+        },
+        "step20+": {
+          "states": 265830,
+          "independent_events": 2666,
+          "p": {
+            "EXTEND": 0.7379,
+            "SWITCH": 0.1039,
+            "COMPLEMENT": 0.1482,
+            "STOP": 0.01
+          },
+          "counts": {
+            "EXTEND": 196159,
+            "COMPLEMENT": 39386,
+            "SWITCH": 27619,
+            "STOP": 2666
+          }
+        }
+      }
+    },
+    {
+      "label": "F4",
+      "start_day": "2026-08-19",
+      "end_day": "2026-08-31",
+      "n_days": 12,
+      "independent_events": 6741,
+      "fills": 233806,
+      "sells": 0,
+      "trades_per_event": 34.6842,
+      "mean_fill_size": 34.13681,
+      "notional_per_event": 389.78219,
+      "first_price_mean": 0.53229,
+      "first_favored_frac": 0.63047,
+      "first_tte_s_mean": 354.97834,
+      "extend_per_event": 24.611,
+      "switch_per_event": 3.5306,
+      "complement_per_event": 5.5425,
+      "completion_rate": 0.73253,
+      "t_to_match_s_mean": 87.27623,
+      "pair_cost_mean": 0.99042,
+      "pair_cost_p10": 0.76679,
+      "pair_cost_median": 0.97052,
+      "pair_cost_p90": 1.25006,
+      "pair_cost_frac_le_0_96": 0.45443,
+      "pair_cost_frac_lt_1_00": 0.60976,
+      "peak_resid_mean": 158.52642,
+      "term_resid_frac_mean": 0.48871,
+      "maker_rebate_usdc": 16477.388,
+      "taker_rebate_usdc": 2992.7691,
+      "reward_usdc": 21229.8802,
+      "redeem_usdc": 2621324.993614,
+      "maker_rebate_n": 11,
+      "taker_rebate_n": 11,
+      "rebate_events_n": 22,
+      "reward_events_n": 11,
+      "redeem_n": 5999,
+      "motifs": {
+        "OPEN_EXTEND_COMPLETE": 4470,
+        "repeated_compression": 2727,
+        "OPEN_COMPLETE_only": 468,
+        "OPEN_EXTEND_only": 1047,
+        "OPEN_only_or_switch": 756
+      },
+      "maker_taker_split": "UNAVAILABLE",
+      "transitions_overall": {
+        "ALL": {
+          "states": 233806,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.7096,
+            "SWITCH": 0.1018,
+            "COMPLEMENT": 0.1598,
+            "STOP": 0.0288
+          },
+          "counts": {
+            "EXTEND": 165903,
+            "COMPLEMENT": 37362,
+            "STOP": 6741,
+            "SWITCH": 23800
+          }
+        }
+      },
+      "transitions_by_imbalance": {
+        "one-sided>80%": {
+          "states": 19810,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.6037,
+            "SWITCH": 0.0135,
+            "COMPLEMENT": 0.2782,
+            "STOP": 0.1045
+          },
+          "counts": {
+            "EXTEND": 11960,
+            "COMPLEMENT": 5512,
+            "SWITCH": 268,
+            "STOP": 2070
+          }
+        },
+        "heavy 35-80%": {
+          "states": 18580,
+          "independent_events": 3857,
+          "p": {
+            "EXTEND": 0.6214,
+            "SWITCH": 0.0992,
+            "COMPLEMENT": 0.1964,
+            "STOP": 0.083
+          },
+          "counts": {
+            "EXTEND": 11545,
+            "COMPLEMENT": 3649,
+            "SWITCH": 1844,
+            "STOP": 1542
+          }
+        },
+        "mild 5-35%": {
+          "states": 119146,
+          "independent_events": 3816,
+          "p": {
+            "EXTEND": 0.7201,
+            "SWITCH": 0.1063,
+            "COMPLEMENT": 0.1534,
+            "STOP": 0.0202
+          },
+          "counts": {
+            "COMPLEMENT": 18276,
+            "EXTEND": 85796,
+            "STOP": 2403,
+            "SWITCH": 12671
+          }
+        },
+        "balanced<=5%": {
+          "states": 76270,
+          "independent_events": 2228,
+          "p": {
+            "EXTEND": 0.7421,
+            "SWITCH": 0.1182,
+            "COMPLEMENT": 0.1301,
+            "STOP": 0.0095
+          },
+          "counts": {
+            "STOP": 726,
+            "EXTEND": 56602,
+            "SWITCH": 9017,
+            "COMPLEMENT": 9925
+          }
+        }
+      },
+      "transitions_by_tte": {
+        "120-300s": {
+          "states": 61345,
+          "independent_events": 5794,
+          "p": {
+            "EXTEND": 0.6888,
+            "SWITCH": 0.0986,
+            "COMPLEMENT": 0.1793,
+            "STOP": 0.0333
+          },
+          "counts": {
+            "EXTEND": 42255,
+            "COMPLEMENT": 11002,
+            "STOP": 2041,
+            "SWITCH": 6047
+          }
+        },
+        "60-120s": {
+          "states": 22718,
+          "independent_events": 4026,
+          "p": {
+            "EXTEND": 0.6291,
+            "SWITCH": 0.1094,
+            "COMPLEMENT": 0.1744,
+            "STOP": 0.0871
+          },
+          "counts": {
+            "STOP": 1979,
+            "COMPLEMENT": 3963,
+            "EXTEND": 14291,
+            "SWITCH": 2485
+          }
+        },
+        ">300s": {
+          "states": 135784,
+          "independent_events": 1500,
+          "p": {
+            "EXTEND": 0.7415,
+            "SWITCH": 0.1044,
+            "COMPLEMENT": 0.1524,
+            "STOP": 0.0018
+          },
+          "counts": {
+            "EXTEND": 100679,
+            "COMPLEMENT": 20688,
+            "SWITCH": 14171,
+            "STOP": 246
+          }
+        },
+        "30-60s": {
+          "states": 11341,
+          "independent_events": 2394,
+          "p": {
+            "EXTEND": 0.6445,
+            "SWITCH": 0.0804,
+            "COMPLEMENT": 0.1257,
+            "STOP": 0.1495
+          },
+          "counts": {
+            "STOP": 1695,
+            "EXTEND": 7309,
+            "SWITCH": 912,
+            "COMPLEMENT": 1425
+          }
+        },
+        "0-30s": {
+          "states": 2616,
+          "independent_events": 780,
+          "p": {
+            "EXTEND": 0.5233,
+            "SWITCH": 0.0707,
+            "COMPLEMENT": 0.1086,
+            "STOP": 0.2974
+          },
+          "counts": {
+            "EXTEND": 1369,
+            "STOP": 778,
+            "COMPLEMENT": 284,
+            "SWITCH": 185
+          }
+        },
+        "past-close": {
+          "states": 2,
+          "independent_events": 2,
+          "p": {
+            "EXTEND": 0.0,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.0,
+            "STOP": 1.0
+          },
+          "counts": {
+            "STOP": 2
+          }
+        }
+      },
+      "transitions_by_favored": {
+        "favored": {
+          "states": 104964,
+          "independent_events": 6110,
+          "p": {
+            "EXTEND": 0.6731,
+            "SWITCH": 0.1196,
+            "COMPLEMENT": 0.1775,
+            "STOP": 0.0298
+          },
+          "counts": {
+            "EXTEND": 70655,
+            "COMPLEMENT": 18627,
+            "SWITCH": 12554,
+            "STOP": 3128
+          }
+        },
+        "underdog": {
+          "states": 128842,
+          "independent_events": 5506,
+          "p": {
+            "EXTEND": 0.7393,
+            "SWITCH": 0.0873,
+            "COMPLEMENT": 0.1454,
+            "STOP": 0.028
+          },
+          "counts": {
+            "STOP": 3613,
+            "COMPLEMENT": 18735,
+            "EXTEND": 95248,
+            "SWITCH": 11246
+          }
+        }
+      },
+      "transitions_by_match_state": {
+        "no_matched": {
+          "states": 16925,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.6017,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.2918,
+            "STOP": 0.1065
+          },
+          "counts": {
+            "EXTEND": 10184,
+            "COMPLEMENT": 4938,
+            "STOP": 1803
+          }
+        },
+        "has_matched": {
+          "states": 216881,
+          "independent_events": 4938,
+          "p": {
+            "EXTEND": 0.718,
+            "SWITCH": 0.1097,
+            "COMPLEMENT": 0.1495,
+            "STOP": 0.0228
+          },
+          "counts": {
+            "EXTEND": 155719,
+            "COMPLEMENT": 32424,
+            "STOP": 4938,
+            "SWITCH": 23800
+          }
+        }
+      },
+      "transitions_by_step": {
+        "step0": {
+          "states": 6741,
+          "independent_events": 6741,
+          "p": {
+            "EXTEND": 0.5803,
+            "SWITCH": 0.0,
+            "COMPLEMENT": 0.3075,
+            "STOP": 0.1121
+          },
+          "counts": {
+            "EXTEND": 3912,
+            "COMPLEMENT": 2073,
+            "STOP": 756
+          }
+        },
+        "step1-4": {
+          "states": 19432,
+          "independent_events": 5985,
+          "p": {
+            "EXTEND": 0.5376,
+            "SWITCH": 0.0866,
+            "COMPLEMENT": 0.2361,
+            "STOP": 0.1398
+          },
+          "counts": {
+            "COMPLEMENT": 4587,
+            "EXTEND": 10447,
+            "STOP": 2716,
+            "SWITCH": 1682
+          }
+        },
+        "step5-19": {
+          "states": 24920,
+          "independent_events": 3269,
+          "p": {
+            "EXTEND": 0.6144,
+            "SWITCH": 0.109,
+            "COMPLEMENT": 0.1863,
+            "STOP": 0.0902
+          },
+          "counts": {
+            "STOP": 2249,
+            "EXTEND": 15312,
+            "SWITCH": 2716,
+            "COMPLEMENT": 4643
+          }
+        },
+        "step20+": {
+          "states": 182713,
+          "independent_events": 1020,
+          "p": {
+            "EXTEND": 0.7456,
+            "SWITCH": 0.1062,
+            "COMPLEMENT": 0.1426,
+            "STOP": 0.0056
+          },
+          "counts": {
+            "EXTEND": 136232,
+            "COMPLEMENT": 26059,
+            "SWITCH": 19402,
+            "STOP": 1020
+          }
+        }
+      }
+    }
+  ],
+  "verdict_open_extend_complete_vs_compensated_lp": {
+    "per_regime": [
+      {
+        "regime": "R1",
+        "span": [
+          "2026-03-19",
+          "2026-04-24"
+        ],
+        "independent_events": 386,
+        "frac_OPEN_EXTEND_COMPLETE": 0.9301,
+        "frac_repeated_compression": 0.8653,
+        "completion_rate": 0.93264,
+        "pair_cost_median": 0.95915,
+        "pair_cost_frac_le_0_96": 0.50556,
+        "trades_per_event": 40.5984,
+        "extend_per_event": 24.2254,
+        "complement_per_event": 9.6995,
+        "rebate_events_n": 4,
+        "reward_events_n": 0,
+        "rebate_plus_reward_usdc": 327.8072
+      },
+      {
+        "regime": "R2",
+        "span": [
+          "2026-04-25",
+          "2026-06-22"
+        ],
+        "independent_events": 1684,
+        "frac_OPEN_EXTEND_COMPLETE": 0.9923,
+        "frac_repeated_compression": 0.9846,
+        "completion_rate": 0.99406,
+        "pair_cost_median": 0.96666,
+        "pair_cost_frac_le_0_96": 0.44624,
+        "trades_per_event": 96.3029,
+        "extend_per_event": 69.5802,
+        "complement_per_event": 15.2726,
+        "rebate_events_n": 44,
+        "reward_events_n": 0,
+        "rebate_plus_reward_usdc": 3344.1569
+      },
+      {
+        "regime": "R3",
+        "span": [
+          "2026-06-23",
+          "2026-08-18"
+        ],
+        "independent_events": 8235,
+        "frac_OPEN_EXTEND_COMPLETE": 0.6774,
+        "frac_repeated_compression": 0.4767,
+        "completion_rate": 0.7292,
+        "pair_cost_median": 0.98437,
+        "pair_cost_frac_le_0_96": 0.37469,
+        "trades_per_event": 42.4002,
+        "extend_per_event": 30.6006,
+        "complement_per_event": 6.6605,
+        "rebate_events_n": 91,
+        "reward_events_n": 7,
+        "rebate_plus_reward_usdc": 22577.6503
+      },
+      {
+        "regime": "R4",
+        "span": [
+          "2026-08-19",
+          "2026-08-31"
+        ],
+        "independent_events": 6741,
+        "frac_OPEN_EXTEND_COMPLETE": 0.6631,
+        "frac_repeated_compression": 0.4045,
+        "completion_rate": 0.73253,
+        "pair_cost_median": 0.97052,
+        "pair_cost_frac_le_0_96": 0.45443,
+        "trades_per_event": 34.6842,
+        "extend_per_event": 24.611,
+        "complement_per_event": 5.5425,
+        "rebate_events_n": 22,
+        "reward_events_n": 11,
+        "rebate_plus_reward_usdc": 40700.0373
+      }
+    ],
+    "call": "SUPPORTED. OPEN -> EXTEND -> COMPLETE -> repeated inventory compression belongs primarily to the EARLY regimes. Across the dominant change point the OPEN/EXTEND half of the motif is unchanged (P(EXTEND) ~constant) while the COMPLETE/compression half collapses: completion rate and the repeated-compression motif fall sharply, terminal residual rises several-fold, and median matched pair cost moves toward $1. Late behaviour is better described as persistent two-sided quoting that is NOT reliably compressed into matched pairs -- i.e. compensated liquidity provision -- and the first TAKER_REBATE and REWARD records in the corpus appear in the late regimes only.",
+    "tests": {
+      "completion_falls": true,
+      "compression_motif_falls": true,
+      "terminal_residual_rises": true,
+      "pair_cost_worsens": true,
+      "extend_rate_unchanged": true,
+      "incentive_records_appear_only_late": true
+    },
+    "compression_signature_early_vs_late": {
+      "early_regimes": [
+        "R1",
+        "R2"
+      ],
+      "late_regimes": [
+        "R3",
+        "R4"
+      ],
+      "completion_rate": [
+        0.98261,
+        0.7307
+      ],
+      "pair_cost_median": [
+        0.96526,
+        0.97814
+      ],
+      "pair_cost_frac_le_0_96": [
+        0.4573,
+        0.41058
+      ],
+      "terminal_residual_frac": [
+        0.14837,
+        0.46455
+      ],
+      "frac_repeated_compression": [
+        0.96232,
+        0.44424
+      ],
+      "p_EXTEND_overall": [
+        0.69904,
+        0.71625
+      ],
+      "p_COMPLEMENT_overall": [
+        0.17357,
+        0.15832
+      ],
+      "taker_rebate_records": [
+        0,
+        64
+      ],
+      "reward_records": [
+        0,
+        18
+      ],
+      "maker_rebate_records": [
+        48,
+        49
+      ]
+    },
+    "caveat": "Rebate/reward cashflows in /activity are sparse (183 rebate + 20 reward records in 760,817 fills). Absence of rebate records is NOT proof of absence of rebates; the endpoint may simply not surface them. Maker/taker role is UNAVAILABLE, so 'liquidity provision' is inferred from price placement and pair economics only."
+  }
+}
