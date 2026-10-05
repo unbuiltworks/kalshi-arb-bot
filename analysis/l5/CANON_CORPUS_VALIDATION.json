@@ -1,0 +1,84 @@
+{
+  "label": "L5_CORPUS_VALIDATION_V1",
+  "identity_rule": "PROVENANCE: admitted iff the envelope's params.user is L5's address AND the record carries no CONTRADICTING name. The `name` field is NEVER used as a positive filter because the /activity pages omit it entirely.",
+  "provenance_by_file_and_status": {
+    "data/l5/raw/activity.jsonl | params.user_matches_L5 | status=200": 156,
+    "data/l5/raw/activity.jsonl | params.user_matches_L5 | status=400": 1,
+    "data/l5/raw/activity_gap.jsonl.gz | params.user_matches_L5 | status=200": 1413
+  },
+  "payload_records_per_file": {
+    "data/l5/raw/activity.jsonl": 78000,
+    "data/l5/raw/activity_gap.jsonl.gz": 706500
+  },
+  "name_field": {
+    "matches_L5": 78000,
+    "absent": 706500
+  },
+  "contradicting_name_examples": [],
+  "cross_file_corroboration": {
+    "transactions_in_NAMED_file": 70410,
+    "transactions_in_NAMELESS_file": 676750,
+    "SHARED_transactions": 3175,
+    "interpretation": "shared transactions carry an independent identity signal: the named file confirms L5 on them, so the nameless file's provenance claim is corroborated rather than assumed. A zero overlap would mean provenance is the ONLY evidence."
+  },
+  "malformed": {
+    "data/l5/raw/activity.jsonl:payload_not_list": 1
+  },
+  "dedupe": {
+    "unique_after_dedupe": 776749,
+    "exact_duplicates_dropped": 7751,
+    "KEY_COLLISIONS_WITH_DIFFERENT_FIELDS": 0,
+    "collision_examples": [],
+    "key_used": "(transactionHash, conditionId, outcomeIndex, timestamp, price, size, type) -- 0 collisions",
+    "key_rejected": "(transactionHash, asset, timestamp) -- the prescribed key, 33,057 collisions, because the /activity pages carry no `asset` field"
+  },
+  "record_types_deduped": {
+    "TRADE": 768325,
+    "REDEEM": 15971,
+    "MAKER_REBATE": 111,
+    "TAKER_REBATE": 73,
+    "REWARD": 20
+  },
+  "fills_TRADE_only": {
+    "TRADE": 768325
+  },
+  "side_classification": {
+    "BUY": 760815,
+    "SELL": 2,
+    "": 15932
+  },
+  "field_validation": {
+    "unresolved_counts": {
+      "missing:side": 15932,
+      "missing:outcome": 204,
+      "missing:conditionId": 203,
+      "missing:eventSlug": 3448
+    },
+    "price_out_of_0_1_or_unparseable": 0,
+    "quantity_nonpositive_or_unparseable": 0,
+    "timestamp_invalid": 0,
+    "timestamp_span": {
+      "min": "2026-03-19 10:09:37Z",
+      "max": "2026-08-31 23:17:16Z"
+    }
+  },
+  "market_id_shape": {
+    "0x64": 776546,
+    "NON_HEX": 203
+  },
+  "window_duration_classification": {
+    "5m": 72316,
+    "15m": 700985,
+    "UNRESOLVED": 3448
+  },
+  "asset_classification": {
+    "BTC": 755171,
+    "UNRESOLVED": 3448,
+    "ETH": 18130
+  },
+  "event_slugs_without_parseable_epoch": {
+    "<empty>": 3448
+  },
+  "NOT_INFERRED": "no missing field is imputed anywhere; every unresolved record is counted and attributed",
+  "profit_attribution": "NONE. This is another trader's public activity. No figure here is realized, filled, submitted or settled profit for our account."
+}
