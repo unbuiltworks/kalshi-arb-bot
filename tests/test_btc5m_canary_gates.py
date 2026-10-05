@@ -291,3 +291,46 @@ def test_runner_preflight_is_credential_free_and_passes():
     assert pf["ok"] is True, pf["failed"]
     assert pf["checks"]["btc15m_persist4_path_is_closed"] is True
     assert pf["checks"]["arithmetic_matches_authorized_cap"] is True
+
+
+# --------------------------------------------------------------------------
+# PLUMBING REGRESSIONS found while diagnosing a zero-attempt live cohort.
+# Neither of these touches the frozen entry rule.
+def test_a_window_without_availableAt_is_retried_not_burned():
+    """`seen.add` must be reachable ONLY when the window was really worked.
+
+    The first build added the symbol to `seen` before work_window ran, so a
+    window discovered in the instant before the venue published its
+    strike.availableAt was skipped and then never revisited -- a silent route
+    to a cohort that spends no attempts while reporting success.
+    """
+    import ast
+    import inspect
+    from scripts import gemini_btc5m_canary_run as R
+
+    tree = ast.parse(inspect.getsource(R.main_async))
+    adds = [n for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute)
+            and n.func.attr == "add"
+            and getattr(n.func.value, "id", None) == "seen"]
+    assert adds, "the loop no longer records worked windows at all"
+    for node in adds:
+        guarded = any(
+            isinstance(p, ast.If)
+            and any(a is node for a in ast.walk(p))
+            for p in ast.walk(tree))
+        assert guarded, "seen.add is unconditional again"
+
+
+def test_the_runner_traces_every_decision(capsys):
+    """A live run must be observable WHILE it runs, not only at the end."""
+    import json as _json
+    from scripts import gemini_btc5m_canary_run as R
+
+    R.trace("DECISION", window="BTC05M9999999999", qualifies=False,
+            failed_checks=["ladder_readable"])
+    rec = _json.loads(capsys.readouterr().out.strip())
+    assert rec["kind"] == "DECISION"
+    assert rec["failed_checks"] == ["ladder_readable"]
+    assert rec["utc"]

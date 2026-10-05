@@ -47,6 +47,21 @@ def _utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def trace(kind: str, **kw: Any) -> None:
+    """One flushed JSON line per event.
+
+    WHY THIS EXISTS. The first dispatch of this cohort printed NOTHING between
+    the preflight and the final summary, and GitHub serves no logs for a job
+    that is still running -- so a 60-minute live run was unobservable from
+    outside, and "no trades" could not be told apart from "never evaluated".
+    Every line is flushed so the live log is readable as it happens. This is
+    instrumentation only: it reads no new venue surface and changes no gate.
+    """
+    rec = {"kind": kind, "utc": _utc()}
+    rec.update(kw)
+    print(json.dumps(rec, sort_keys=True, default=str), flush=True)
+
+
 def _ts(s: Any) -> Optional[float]:
     if not s:
         return None
@@ -132,16 +147,29 @@ async def work_window(w: Dict[str, Any], *, deadline: float,
     sym = w["symbol"]
     t0 = w.get("t0")
     if t0 is None:
+        trace("SKIPPED_NO_AVAILABLE_AT", window=sym,
+              secs_to_expiry=round(w["expiry_t"] - time.time(), 1))
         return {"window": sym, "outcome": "SKIPPED_NO_AVAILABLE_AT",
                 "why": ("T is not published yet, and T+X is not inferred for "
                         "a money-moving decision")}
     taken: Optional[Dict[str, Any]] = None
+    trace("WINDOW_OPEN", window=sym, t0_source=w["t0_source"],
+          age_s=round(time.time() - t0, 1),
+          secs_to_expiry=round(w["expiry_t"] - time.time(), 1),
+          strike=w.get("strike"))
+    polls = 0
     while time.time() < min(deadline, w["expiry_t"]):
         age = time.time() - t0
         if age < C.AUTHORIZED_ENVELOPE["min_checkpoint_s_since_open"]:
             await asyncio.sleep(POLL_S)
             continue
         dec = C.evaluate(sym, elapsed_since_open_s=age, quote_age_s=None)
+        polls += 1
+        trace("DECISION", window=sym, poll=polls,
+              age_s=round(age, 1), qualifies=dec["qualifies"],
+              failed_checks=dec["failed_checks"], book=dec["book"],
+              quote_age_s=dec["quote_age_s"],
+              requested_price=dec["requested_price"])
         evidence.append({"kind": "DECISION", "window": sym, **{
             k: dec[k] for k in ("utc", "qualifies", "failed_checks",
                                 "requested_price", "requested_quantity",
@@ -158,6 +186,7 @@ async def work_window(w: Dict[str, Any], *, deadline: float,
             break
         await asyncio.sleep(POLL_S)
     if taken is None:
+        trace("NO_TRADE", window=sym, polls=polls)
         return {"window": sym, "outcome": "NO_TRADE",
                 "why": ("no instant satisfied the frozen rule before the "
                         "window ended; this does not consume an attempt")}
@@ -165,17 +194,22 @@ async def work_window(w: Dict[str, Any], *, deadline: float,
         return {"window": sym, "outcome": taken.get("kind"),
                 "detail": taken}
     oid = ((taken.get("venue") or {}).get("body") or {}).get("orderId")
+    trace("SUBMITTED", window=sym, order_id=oid,
+          classification=taken.get("ack_classification"),
+          latency_ms=taken.get("latency_ms"))
     evidence.append({"kind": "ACK", "window": sym, "order_id": oid,
                      "classification": taken.get("ack_classification"),
                      "latency_ms": taken.get("latency_ms"),
                      "utc": _utc()})
     term = await P.poll_terminal("BTC5M-CANARY-1", sym, oid)
+    trace("TERMINAL", window=sym, order_id=oid, terminal=term)
     evidence.append({"kind": "TERMINAL", "window": sym, "order_id": oid,
                      "terminal": term, "utc": _utc()})
     if term.get("state") in ("UNKNOWN", "UNKNOWN_POSITION"):
         C.halt("UNKNOWN_TERMINAL_STATE", term)
         return {"window": sym, "outcome": "HALTED_UNKNOWN", "detail": term}
     fills = await P.authenticated_fills("BTC5M-CANARY-1", sym)
+    trace("AUTHENTICATED_FILLS", window=sym, fills=fills)
     evidence.append({"kind": "AUTHENTICATED_FILLS", "window": sym,
                      "fills": fills, "utc": _utc()})
     return {"window": sym, "outcome": "ATTEMPTED", "order_id": oid,
@@ -221,17 +255,37 @@ async def main_async(a) -> int:
         if C.halted():
             report["stop_reason"] = "HALTED"
             break
-        wins = [w for w in await discover() if w["symbol"] not in seen]
+        found = await discover()
+        wins = [w for w in found if w["symbol"] not in seen]
         wins = [w for w in wins
                 if w["expiry_t"] - time.time() > 60.0]
         wins.sort(key=lambda w: w["expiry_t"])
+        trace("DISCOVERY", n_live=len(found), n_eligible=len(wins),
+              live=[{"symbol": x["symbol"], "t0_source": x["t0_source"],
+                     "secs_to_expiry": round(x["expiry_t"] - time.time(), 1),
+                     "age_s": (None if x.get("t0") is None
+                               else round(time.time() - x["t0"], 1))}
+                    for x in found],
+              cohort=C.cohort_state())
         if not wins:
             await asyncio.sleep(5.0)
             continue
         w = wins[0]
-        seen.add(w["symbol"])
+        # A WINDOW IS ONLY BURNED ONCE IT WAS ACTUALLY WORKED. The first build
+        # added every selected symbol to `seen` before working it, so a window
+        # discovered in the instant before the venue published its
+        # strike.availableAt returned SKIPPED_NO_AVAILABLE_AT and was then
+        # never looked at again -- a silent path to a zero-attempt cohort. T is
+        # still never inferred; the window is simply retried until it has one.
         res = await work_window(w, deadline=deadline,
                                 evidence=report["evidence"])
+        if res.get("outcome") != "SKIPPED_NO_AVAILABLE_AT":
+            seen.add(w["symbol"])
+        else:
+            # retried, not burned -- but not in a hot loop either
+            await asyncio.sleep(2.0)
+        trace("WINDOW_RESULT", window=w["symbol"], **{
+            k: v for k, v in res.items() if k != "window"})
         report["windows"].append(dict(w, **res))
         save()
     report["cohort_final"] = C.cohort_state()
