@@ -285,8 +285,19 @@ def test_every_external_callable_the_runner_uses_actually_exists():
             "%s exists now; the runner's comment is stale" % absent)
 
 
-def test_runner_preflight_is_credential_free_and_passes():
+def test_runner_preflight_is_credential_free_and_passes(tmp_path,
+                                                         monkeypatch):
+    """On an EMPTY ledger. Cohort 1 spent all five attempts, so against the
+    real ledger this preflight now correctly reports attempts_remaining
+    false -- which is the cap working, not a regression. The test isolates
+    the ledger so it keeps testing the logic rather than today's balance."""
+    from src.gemini_execution import btc5m_canary as B
     from scripts import gemini_btc5m_canary_run as R
+    d = tmp_path / "led"
+    d.mkdir()
+    monkeypatch.setattr(B, "LEDGER_DIR", str(d))
+    monkeypatch.setattr(B, "LEDGER", str(d / "cohort.jsonl"))
+    monkeypatch.setattr(B, "HALT", str(d / "HALT.json"))
     pf = R.preflight()
     assert pf["ok"] is True, pf["failed"]
     assert pf["checks"]["btc15m_persist4_path_is_closed"] is True
@@ -376,3 +387,99 @@ def test_the_canary_workflow_installs_the_auth_dependency():
     install = [ln for ln in wf.splitlines() if "pip install" in ln]
     assert install, "the workflow no longer installs anything"
     assert any("python-dotenv" in ln for ln in install), install
+
+
+# --------------------------------------------------------------------------
+# ATTRIBUTION. Cohort 1's five genuine fills came back FOREIGN because
+# ci15m_probe.attribute_fills reads intents from the CI15M cohort root while
+# this cohort's authorizations are in its own ledger. The fix adds an exact
+# order_id route and TIGHTENS the envelope route rather than relaxing it.
+def _attrib_ledger(tmp_path, monkeypatch, *, price="0.72", oid="111"):
+    import json as _json
+    from src.gemini_execution import btc5m_canary as B
+    d = tmp_path / "led"
+    d.mkdir()
+    monkeypatch.setattr(B, "LEDGER_DIR", str(d))
+    monkeypatch.setattr(B, "LEDGER", str(d / "cohort.jsonl"))
+    monkeypatch.setattr(B, "HALT", str(d / "HALT.json"))
+    with open(d / "cohort.jsonl", "w", encoding="utf-8") as fh:
+        fh.write(_json.dumps({"kind": "SLOT", "slot": 1, "market": "M",
+                              "requested_price": price,
+                              "requested_quantity": "1"}) + "\n")
+        fh.write(_json.dumps({"kind": "SUBMITTED", "slot": 1, "market": "M",
+                              "venue": {"body": {"orderId": oid}}}) + "\n")
+    return B
+
+
+def test_our_exact_order_id_is_attributed(tmp_path, monkeypatch):
+    B = _attrib_ledger(tmp_path, monkeypatch)
+    got = B.attribute_fills("M", [{"order_id": "111", "leg": "yes",
+                                   "price": "0.72", "qty": "1", "tid": 1}])
+    assert got["ok"] is True
+    assert got["attributed"][0]["_attribution_route"] == "ORDER_ID"
+
+
+def test_a_stranger_order_id_is_foreign_even_inside_our_envelope(
+        tmp_path, monkeypatch):
+    """The hole the order_id route closes, not one it opens.
+
+    The envelope route alone absorbed order_id 999 at 0.50 against our 0.72
+    authorization -- a stranger's fill on our symbol, taken onto our books
+    because its price looked good. A fill that carries an identifier we never
+    minted is FOREIGN however well-behaved its price.
+    """
+    B = _attrib_ledger(tmp_path, monkeypatch)
+    got = B.attribute_fills("M", [{"order_id": "999", "leg": "yes",
+                                   "price": "0.50", "qty": "1", "tid": 1}])
+    assert got["ok"] is False
+    assert got["foreign"]
+    assert B.halted() is not None
+
+
+def test_our_order_id_above_our_limit_is_still_refused(tmp_path, monkeypatch):
+    """An exact identifier does not license paying above the envelope."""
+    B = _attrib_ledger(tmp_path, monkeypatch)
+    got = B.attribute_fills("M", [{"order_id": "111", "leg": "yes",
+                                   "price": "0.95", "qty": "1", "tid": 1}])
+    assert got["ok"] is False
+
+
+def test_one_authorization_absorbs_one_fill(tmp_path, monkeypatch):
+    B = _attrib_ledger(tmp_path, monkeypatch)
+    got = B.attribute_fills("M", [
+        {"order_id": "111", "leg": "yes", "price": "0.72", "qty": "1",
+         "tid": 1},
+        {"order_id": "111", "leg": "yes", "price": "0.72", "qty": "1",
+         "tid": 2}])
+    assert got["ok"] is False
+
+
+def test_a_fill_with_no_order_id_still_matches_the_envelope(
+        tmp_path, monkeypatch):
+    """The crash case: the venue executed an authorization whose orderId we
+    never recorded. That must stay attributable."""
+    B = _attrib_ledger(tmp_path, monkeypatch, oid=None)
+    got = B.attribute_fills("M", [{"order_id": None, "leg": "yes",
+                                   "price": "0.70", "qty": "1", "tid": 1}])
+    assert got["ok"] is True
+    assert got["attributed"][0]["_attribution_route"] == "INTENT_ENVELOPE"
+
+
+def test_the_runner_records_strike_provenance_not_a_bare_number():
+    import ast
+    import inspect
+    from scripts import gemini_btc5m_canary_run as R
+
+    src = inspect.getsource(R.discover)
+    tree = ast.parse(src)
+    keys = {n.value for n in ast.walk(tree)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    assert "strike_source" in keys and "strike_value" in keys
+    assert "ABSENT" in keys, "an absent strike must stay ABSENT"
+
+
+def test_the_audit_reports_cash_separately_from_settlement():
+    from scripts import gemini_btc5m_cohort_audit as A
+    chain = A.cohort_chain()
+    assert chain, "the cohort ledger is unreadable"
+    assert all(c["ACK"]["order_id"] for c in chain)

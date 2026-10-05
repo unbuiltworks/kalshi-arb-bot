@@ -47,7 +47,7 @@ import json
 import os
 import time
 from decimal import Decimal as D
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src.gemini_execution import arming
 from src.gemini_execution import ci15m_probe as P
@@ -199,6 +199,132 @@ def cohort_state() -> Dict[str, Any]:
         "windows_touched": sorted(w for w in windows if w),
         "halted": halted(),
     }
+
+
+def _d(v: Any) -> Optional[D]:
+    """A Decimal, or None. An unreadable number is never a zero."""
+    if v is None or v == "":
+        return None
+    try:
+        return D(str(v))
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
+def authorized_intents(market: str = "") -> List[Dict[str, Any]]:
+    """THIS COHORT's durable authorizations, read from ITS OWN ledger.
+
+    WHY THIS EXISTS. Cohort 1's five fills all came back `ok: false --
+    unattributable venue fill(s)` and were classified FOREIGN, because
+    ci15m_probe.attribute_fills reads authorized intents from the CI15M
+    cohort root and this cohort writes SLOT/SUBMITTED rows here. Zero
+    intents were found, so every genuine fill matched nothing. The fills
+    were ours and the ledger proved it one directory away.
+    """
+    out: List[Dict[str, Any]] = []
+    rows = ledger_rows()
+    for r in rows:
+        if r.get("kind") != "SLOT":
+            continue
+        if market and r.get("market") != market:
+            continue
+        body = {}
+        for s_ in rows:
+            if (s_.get("kind") == "SUBMITTED"
+                    and s_.get("slot") == r.get("slot")):
+                body = ((s_.get("venue") or {}).get("body") or {})
+                break
+        oid = body.get("orderId")
+        out.append({
+            "slot": r.get("slot"), "market": r.get("market"),
+            "utc": r.get("utc"),
+            "price": r.get("requested_price"),
+            "quantity": r.get("requested_quantity"),
+            "outcome": payload.spec.OUTCOME_YES,
+            "order_id": (None if oid is None else str(oid)),
+            "client_order_id": body.get("clientOrderId"),
+        })
+    return out
+
+
+def attribute_fills(market: str,
+                    fills: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Is every venue fill on this market OURS? Two routes, both positive.
+
+    THE INVARIANT IS NOT WEAKENED, it is strengthened. A fill is ours only
+    if it carries evidence we hold on disk:
+
+      ORDER_ID -- the fill's own order_id equals an orderId the venue
+      returned to us and we durably recorded as SUBMITTED for this market.
+      That is the strongest attribution available: an exact identifier the
+      venue itself minted for our order. It replaces nothing; it is the
+      route cohort 1's fills should have matched.
+
+      INTENT -- ONLY for a fill that carries NO order_id at all: the older
+      envelope match, same outcome, a price AT OR BELOW an authorized limit
+      (a capped marketable limit never pays more) and a quantity no larger
+      than authorized. This is the crash case, where the venue executed an
+      authorization whose orderId we never got to record.
+
+    A FILL THAT CARRIES AN ORDER_ID MUST MATCH ONE OF OURS. The envelope
+    route alone would absorb a stranger's fill on our symbol whenever its
+    price happened to sit under our limit -- a test with order_id 999 at
+    0.50 against our 0.72 authorization was absorbed, which is precisely the
+    position we refuse to take on. An identifier we never minted is now
+    FOREIGN however well-behaved its price looks.
+
+    Either way each authorization absorbs at most ONE fill, so a second fill
+    cannot hide behind a genuine one, and a fill matching neither route is
+    FOREIGN and halts. A fill whose order_id matches an authorization but
+    whose price EXCEEDS the limit we submitted is NOT absorbed -- an exact
+    identifier does not license paying more than the envelope allowed.
+    """
+    intents = authorized_intents(market)
+    used: set = set()
+    attributed: List[Dict[str, Any]] = []
+    foreign: List[Mapping[str, Any]] = []
+    for f in fills:
+        px = _d(f.get("price"))
+        qty = _d(f.get("qty"))
+        leg = str(f.get("leg") or "").strip().lower()
+        f_oid = f.get("order_id")
+        f_oid = None if f_oid is None else str(f_oid)
+        hit, route = None, None
+        for n, i in enumerate(intents):
+            if n in used:
+                continue
+            lim, aq = _d(i.get("price")), _d(i.get("quantity"))
+            if lim is None or aq is None or px is None or qty is None:
+                continue
+            # the envelope binds on BOTH routes
+            if px > lim or qty > aq:
+                continue
+            if f_oid is not None:
+                if i.get("order_id") == f_oid:
+                    hit, route = n, "ORDER_ID"
+                    break
+                continue
+            if str(i.get("outcome") or "").strip().lower() == leg:
+                hit, route = n, "INTENT_ENVELOPE"
+                break
+        if hit is None:
+            foreign.append(f)
+            continue
+        used.add(hit)
+        attributed.append(dict(f, _slot=intents[hit]["slot"],
+                               _attribution_route=route))
+    if foreign:
+        halt("UNATTRIBUTABLE_FILL",
+             {"market": market, "n_foreign": len(foreign),
+              "n_intents": len(intents),
+              "foreign": [{k: f.get(k) for k in
+                           ("tid", "order_id", "leg", "price", "qty")}
+                          for f in foreign[:4]]})
+        return {"ok": False, "attributed": attributed, "foreign": foreign,
+                "why": "unattributable venue fill(s)"}
+    return {"ok": True, "attributed": attributed, "foreign": [],
+            "n_intents": len(intents), "n_attributed": len(attributed),
+            "routes": sorted({r["_attribution_route"] for r in attributed})}
 
 
 # -------------------------------------------------------- the frozen rule

@@ -152,10 +152,29 @@ async def discover() -> List[Dict[str, Any]]:
             t0 = _ts(strike.get("availableAt"))
             if exp is None:
                 continue
+            # STRIKE PROVENANCE, NEVER INFERENCE. Cohort 1 recorded
+            # `strike: null` on all five windows: `strike` was read only when
+            # the contract's own key was already a mapping, and the value was
+            # flattened to a bare number with no record of where it came from
+            # or whether it was absent. The strike is the whole settlement
+            # rule (UP resolves yes when settlementValue >= strike.value), so
+            # a null one makes the audit impossible from the artifact alone.
+            # The authoritative source is the contract object's
+            # strike.value; it is carried through verbatim with its source
+            # named, and ABSENT stays ABSENT rather than being derived from
+            # the index, the reference or a neighbouring window.
+            k_val = strike.get("value") if isinstance(strike, dict) else None
             out.append({"symbol": sym, "ticker": tick, "expiry_t": exp,
                         "t0": t0,
                         "t0_source": "availableAt" if t0 else "ABSENT",
-                        "strike": strike.get("value")})
+                        "strike": k_val,
+                        "strike_value": (None if k_val in (None, "")
+                                         else str(k_val)),
+                        "strike_source": ("contract.strike.value"
+                                          if k_val not in (None, "")
+                                          else "ABSENT"),
+                        "strike_raw": strike,
+                        "contract_status": c.get("status")})
     out.sort(key=lambda w: w["expiry_t"])
     return out
 
