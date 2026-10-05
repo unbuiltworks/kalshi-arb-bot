@@ -72,9 +72,26 @@ def main(argv=None) -> int:
         tk = r.get("ticker")
         if not tk or not str(tk).startswith("BTC05M"):
             continue
-        if r.get("kind") == "window" and r.get("strike"):
+        # THE AUTHORITATIVE STRIKE ARRIVES ON A RE-READ, NOT THE FIRST READ.
+        # The venue sets strike.value AT availableAt, and the recorder's
+        # metadata poll re-reads the contract every cycle -- writing the
+        # first read as `window` and every subsequent one as `window_poll`.
+        # This census read only `window`, so it saw the pre-availableAt null
+        # on 51 of 53 tickers and I reported a recorder data-capture gap that
+        # does not exist: 62 `window` rows against 9,200 `window_poll` rows,
+        # and the strike is on the latter. The defect was the measurement.
+        # The value taken is still EXACTLY what the venue supplied -- the
+        # FIRST non-null reading, with its kind, its strike_type and the
+        # row's own timestamp kept as provenance. Nothing is inferred.
+        if (r.get("kind") in ("window", "window_poll") and r.get("strike")
+                and tk not in strikes):
             strikes[tk] = {"strike": r["strike"],
-                           "strike_type": r.get("strike_type")}
+                           "strike_type": r.get("strike_type"),
+                           "source_kind": r.get("kind"),
+                           "source": "venue contract strike.value",
+                           "availableAt": r.get("availableAt"),
+                           "observed_t_ns": r.get("t_ns"),
+                           "inferred": False}
         elif r.get("kind") == "checkpoint":
             if r.get("checkpoint_family") == "EARLY_FROM_T0":
                 cps[tk].append(r)
@@ -125,9 +142,49 @@ def main(argv=None) -> int:
                          "books": len(books), "reference_covered": covered,
                          "strike": strikes[tk]["strike"],
                          "strike_type": strikes[tk].get("strike_type"),
+                         "strike_source_kind": strikes[tk].get("source_kind"),
+                         "strike_source": strikes[tk].get("source"),
+                         "strike_observed_t_ns": strikes[tk].get(
+                             "observed_t_ns"),
+                         "strike_inferred": False,
                          "up_resolution_side": settles[tk]})
 
+    # CHAINING IS A VALIDATION CHECK, NOT A STRIKE SOURCE. Eligibility above
+    # requires an AUTHORITATIVE strike and fails closed without one; this
+    # only reports whether the venue's own next strike equals the previous
+    # window's settlementValue, so the relation stays visible without ever
+    # supplying a value the census depends on.
+    sv = {}
+    for r in rs:
+        if r.get("kind") == "settlement" and str(
+                r.get("ticker", "")).startswith("BTC05M"):
+            v = (r.get("settlement") or {}).get("value")
+            if v:
+                sv[r["ticker"]] = v
+    chain = []
+    order = sorted(strikes)
+    for i in range(1, len(order)):
+        prev, cur = order[i - 1], order[i]
+        if prev in sv:
+            try:
+                agree = abs(float(sv[prev])
+                            - float(strikes[cur]["strike"])) < 0.01
+            except Exception:                                  # noqa: BLE001
+                continue
+            chain.append({"window": cur,
+                          "authoritative_strike": strikes[cur]["strike"],
+                          "previous_settlement_value": sv[prev],
+                          "agrees_to_the_cent": agree})
     rep = {"label": LABEL, "tapes_glob": a.tapes,
+           "chaining_validation_check": {
+               "pairs_checked": len(chain),
+               "agree_to_the_cent": sum(1 for c in chain
+                                        if c["agrees_to_the_cent"]),
+               "rows": chain,
+               "role": ("a SEPARATELY REPORTED validation check. It is NOT "
+                        "the study's strike source and no eligibility "
+                        "decision uses it; a window without an authoritative "
+                        "strike fails closed.")},
            "tape_rows": len(rs),
            "reference_observations": len(ref),
            "btc5m_tickers_seen": len(seen),

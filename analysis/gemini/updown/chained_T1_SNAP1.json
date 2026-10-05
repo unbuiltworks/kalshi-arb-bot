@@ -1,0 +1,2396 @@
+{
+  "Z_status": "NOT IDENTIFIED. D_t is an observed difference, not a normalised state; no sigma and no time scale are applied.",
+  "accounting": "historical replay only. No order was sent and nothing here is realized.",
+  "analysis_fingerprint_sha256": "b2f6d50a035b56c0edc4efea49d4ade8fc5eec292e2dada2e58e405a142f9bc6",
+  "candidates": [
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_UP_ge5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_UP_ge25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_UP_le5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_UP_le25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_DOWN_ge5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_DOWN_ge25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_DOWN_le5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 15,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c15_DOWN_le25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_UP_ge5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_UP_ge25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_UP_le5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_UP_le25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_DOWN_ge5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_DOWN_ge25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_DOWN_le5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 30,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c30_DOWN_le25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_UP_ge5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_UP_ge25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_UP_le5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_UP_le25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_DOWN_ge5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_DOWN_ge25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_DOWN_le5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 60,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c60_DOWN_le25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_UP_ge5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_UP_ge25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_UP_le5p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_UP_le25p0",
+        "side": "UP"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_DOWN_ge5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": 1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_DOWN_ge25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 5.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_DOWN_le5p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    },
+    {
+      "candidate": {
+        "checkpoint_s": 120,
+        "d_bps_sign": -1,
+        "d_bps_threshold": 25.0,
+        "max_price": 0.9,
+        "min_size": 1,
+        "name": "c120_DOWN_le25p0",
+        "side": "DOWN"
+      },
+      "denominator_note": "per-window figures divide by ALL windows with a settlement, NO_TRADE included",
+      "ev_per_all_windows_usd": "0.0000",
+      "ev_per_trade_usd": null,
+      "max_drawdown_usd": "0",
+      "no_trade_windows": 11,
+      "opportunity_rate_per_window": 0.0,
+      "total_usd": "0",
+      "trades": 0,
+      "windows_available": 11
+    }
+  ],
+  "capacity": {
+    "size_1": {
+      "avg_combined_cost_when_two_sided": "1.2800",
+      "avg_down_vwap_when_fillable": "0.4650",
+      "avg_up_vwap_when_fillable": "0.8150",
+      "down_fillable": 8,
+      "economic_two_sided": 8,
+      "economic_two_sided_pct": 100.0,
+      "notional_per_trade_usd_at_avg_up": "0.8150",
+      "observations": 8,
+      "up_fillable": 8
+    },
+    "size_10": {
+      "avg_combined_cost_when_two_sided": "1.2929",
+      "avg_down_vwap_when_fillable": "0.4650",
+      "avg_up_vwap_when_fillable": "0.7914",
+      "down_fillable": 8,
+      "economic_two_sided": 7,
+      "economic_two_sided_pct": 87.5,
+      "notional_per_trade_usd_at_avg_up": "7.9140",
+      "observations": 8,
+      "up_fillable": 7
+    },
+    "size_100": {
+      "avg_combined_cost_when_two_sided": "1.3052",
+      "avg_down_vwap_when_fillable": "0.4688",
+      "avg_up_vwap_when_fillable": "0.7995",
+      "down_fillable": 8,
+      "economic_two_sided": 7,
+      "economic_two_sided_pct": 87.5,
+      "notional_per_trade_usd_at_avg_up": "79.9500",
+      "observations": 8,
+      "up_fillable": 7
+    },
+    "size_25": {
+      "avg_combined_cost_when_two_sided": "1.2929",
+      "avg_down_vwap_when_fillable": "0.4650",
+      "avg_up_vwap_when_fillable": "0.7914",
+      "down_fillable": 8,
+      "economic_two_sided": 7,
+      "economic_two_sided_pct": 87.5,
+      "notional_per_trade_usd_at_avg_up": "19.7850",
+      "observations": 8,
+      "up_fillable": 7
+    },
+    "size_5": {
+      "avg_combined_cost_when_two_sided": "1.2929",
+      "avg_down_vwap_when_fillable": "0.4650",
+      "avg_up_vwap_when_fillable": "0.7914",
+      "down_fillable": 8,
+      "economic_two_sided": 7,
+      "economic_two_sided_pct": 87.5,
+      "notional_per_trade_usd_at_avg_up": "3.9570",
+      "observations": 8,
+      "up_fillable": 7
+    },
+    "size_50": {
+      "avg_combined_cost_when_two_sided": "1.3005",
+      "avg_down_vwap_when_fillable": "0.4675",
+      "avg_up_vwap_when_fillable": "0.7962",
+      "down_fillable": 8,
+      "economic_two_sided": 7,
+      "economic_two_sided_pct": 87.5,
+      "notional_per_trade_usd_at_avg_up": "39.8100",
+      "observations": 8,
+      "up_fillable": 7
+    }
+  },
+  "causal_state": "D_t = published LRRR_XBT(t) - the current window's authoritative strike, which the venue sets to the PREVIOUS window's settlementValue",
+  "chaining_check": [
+    {
+      "matches_to_the_cent": true,
+      "previous_settlement_value": "85359.2855",
+      "strike": "85359.29",
+      "window": "BTC05M2610051800"
+    }
+  ],
+  "chaining_label": "SETTLEMENT MECHANICS, not a trading signal. It says what the strike IS, which is why D_t is anchored to it.",
+  "checkpoints_s": [
+    15,
+    30,
+    45,
+    60,
+    90,
+    120,
+    150,
+    180
+  ],
+  "excluded_tickers": [
+    "BTC05M2610051550",
+    "BTC05M2610051555",
+    "BTC05M2610051600",
+    "BTC05M2610051605",
+    "BTC05M2610051610"
+  ],
+  "exclusion_reason": "cohort-1 probe-contaminated windows; its 1-of-5 UP outcome informs no threshold here",
+  "fee_model": {
+    "breakeven": "p + 0.07*p*(1-p)",
+    "reconciled": "against cohort 1's own charged fees: 0.0155 / 0.0168 / 0.0161 / 0.0135 predicted, $0.02 charged each",
+    "rounding": "quantized to the cent, as the venue applied it",
+    "taker_rate": "0.07"
+  },
+  "incorporation_lag": {
+    "label": "DESCRIPTIVE. The outcome is a later price, not a settlement, and nothing here is a trading rule.",
+    "n_pairs": 7,
+    "per_checkpoint": {
+      "from_015s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 1
+      },
+      "from_030s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 1
+      },
+      "from_045s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 1
+      },
+      "from_060s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 1
+      },
+      "from_090s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 1
+      },
+      "from_120s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 1
+      },
+      "from_150s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 1
+      },
+      "from_180s": {
+        "corr_D_level_vs_next_price_change": null,
+        "corr_D_step_vs_next_price_change": null,
+        "n": 0
+      }
+    },
+    "reading": "a correlation near zero means the executable price already embeds D_t and there is NO informational lead to trade; a positive one means the price moves AFTER the reference does, which is the only version of this that could pay"
+  },
+  "label": "GEMINI_BTC5M_CHAINED_D_STUDY_V1_FROZEN",
+  "max_reference_age_s": 10.0,
+  "no_threshold_optimization": "bins and candidates are predeclared constants; there is no search, no argmax over cutoffs and no best-cell output",
+  "observations_by_size": {
+    "1": 8,
+    "10": 8,
+    "100": 8,
+    "25": 8,
+    "5": 8,
+    "50": 8
+  },
+  "oos_seal": "the last 6 of 17 settled windows are SEALED and were NOT read",
+  "preregistered": "written and fingerprinted BEFORE any profitability number from the prospective recorder was inspected; run UNCHANGED per tranche",
+  "primary_question": "does any causal state produce a settlement probability far enough from the contemporaneous executable price to clear the venue's actual fees -- symmetrically for UP and DOWN",
+  "reference_series_points": 4983,
+  "selection_rule": "among candidates whose DISCOVERY ev_per_all_windows exceeds 0.01 at size 1, carry the highest opportunity_rate to OOS -- exactly one, tested once",
+  "size_levels": [
+    1,
+    5,
+    10,
+    25,
+    50,
+    100
+  ],
+  "tables": {
+    "size100_DOWN": {
+      "cp015|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.5975",
+        "breakeven_pct_with_fees": 61.43,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -61.43,
+        "ev_per_trade_usd": "-61.4300",
+        "fees_usd": "1.68",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.5975",
+        "breakeven_pct_with_fees": 61.43,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -61.43,
+        "ev_per_trade_usd": "-61.4300",
+        "fees_usd": "1.68",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-60.6900",
+        "fees_usd": "1.69",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.5675",
+        "breakeven_pct_with_fees": 58.47,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -58.47,
+        "ev_per_trade_usd": "-58.4700",
+        "fees_usd": "1.72",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.52",
+        "breakeven_pct_with_fees": 53.75,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -53.75,
+        "ev_per_trade_usd": "-53.7500",
+        "fees_usd": "1.75",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.36",
+        "breakeven_pct_with_fees": 37.61,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -37.61,
+        "ev_per_trade_usd": "-37.6100",
+        "fees_usd": "1.61",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.3075",
+        "breakeven_pct_with_fees": 32.24,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -32.24,
+        "ev_per_trade_usd": "-32.2400",
+        "fees_usd": "1.49",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp180|D[2.0,5.0)|P[0.2,0.3)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.21",
+        "breakeven_pct_with_fees": 22.16,
+        "checkpoint_s": 180,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -22.16,
+        "ev_per_trade_usd": "-22.1600",
+        "fees_usd": "1.16",
+        "observations": 1,
+        "price_bin": "[0.2,0.3)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      }
+    },
+    "size100_UP": {
+      "cp015|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.7275",
+        "breakeven_pct_with_fees": 74.14,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 25.86,
+        "ev_per_trade_usd": "25.8600",
+        "fees_usd": "1.39",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7275",
+        "breakeven_pct_with_fees": 74.14,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 25.86,
+        "ev_per_trade_usd": "25.8600",
+        "fees_usd": "1.39",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7191",
+        "breakeven_pct_with_fees": 73.32,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.68,
+        "ev_per_trade_usd": "26.6800",
+        "fees_usd": "1.41",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.7275",
+        "breakeven_pct_with_fees": 74.14,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 25.86,
+        "ev_per_trade_usd": "25.8600",
+        "fees_usd": "1.39",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.8,0.9)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.8075",
+        "breakeven_pct_with_fees": 81.84,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 18.16,
+        "ev_per_trade_usd": "18.1600",
+        "fees_usd": "1.09",
+        "observations": 1,
+        "price_bin": "[0.8,0.9)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.9375",
+        "breakeven_pct_with_fees": 94.16,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 5.84,
+        "ev_per_trade_usd": "5.8400",
+        "fees_usd": "0.41",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.95",
+        "breakeven_pct_with_fees": 95.33,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 4.67,
+        "ev_per_trade_usd": "4.6700",
+        "fees_usd": "0.33",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      }
+    },
+    "size10_DOWN": {
+      "cp015|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-6.0700",
+        "fees_usd": "0.17",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-6.0700",
+        "fees_usd": "0.17",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-6.0700",
+        "fees_usd": "0.17",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.56",
+        "breakeven_pct_with_fees": 57.72,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -57.72,
+        "ev_per_trade_usd": "-5.7700",
+        "fees_usd": "0.17",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.52",
+        "breakeven_pct_with_fees": 53.75,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -53.75,
+        "ev_per_trade_usd": "-5.3700",
+        "fees_usd": "0.17",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.36",
+        "breakeven_pct_with_fees": 37.61,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -37.61,
+        "ev_per_trade_usd": "-3.7600",
+        "fees_usd": "0.16",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.3",
+        "breakeven_pct_with_fees": 31.47,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -31.47,
+        "ev_per_trade_usd": "-3.1500",
+        "fees_usd": "0.15",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp180|D[2.0,5.0)|P[0.2,0.3)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.21",
+        "breakeven_pct_with_fees": 22.16,
+        "checkpoint_s": 180,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -22.16,
+        "ev_per_trade_usd": "-2.2200",
+        "fees_usd": "0.12",
+        "observations": 1,
+        "price_bin": "[0.2,0.3)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      }
+    },
+    "size10_UP": {
+      "cp015|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "2.6600",
+        "fees_usd": "0.14",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "2.6600",
+        "fees_usd": "0.14",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7",
+        "breakeven_pct_with_fees": 71.47,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 28.53,
+        "ev_per_trade_usd": "2.8500",
+        "fees_usd": "0.15",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "2.6600",
+        "fees_usd": "0.14",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.8,0.9)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.8",
+        "breakeven_pct_with_fees": 81.12,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 18.88,
+        "ev_per_trade_usd": "1.8900",
+        "fees_usd": "0.11",
+        "observations": 1,
+        "price_bin": "[0.8,0.9)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.93",
+        "breakeven_pct_with_fees": 93.46,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 6.54,
+        "ev_per_trade_usd": "0.6500",
+        "fees_usd": "0.05",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.95",
+        "breakeven_pct_with_fees": 95.33,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 4.67,
+        "ev_per_trade_usd": "0.4700",
+        "fees_usd": "0.03",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      }
+    },
+    "size1_DOWN": {
+      "cp015|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-0.6100",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-0.6100",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-0.6100",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.56",
+        "breakeven_pct_with_fees": 57.72,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -57.72,
+        "ev_per_trade_usd": "-0.5800",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.52",
+        "breakeven_pct_with_fees": 53.75,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -53.75,
+        "ev_per_trade_usd": "-0.5400",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.36",
+        "breakeven_pct_with_fees": 37.61,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -37.61,
+        "ev_per_trade_usd": "-0.3800",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.3",
+        "breakeven_pct_with_fees": 31.47,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -31.47,
+        "ev_per_trade_usd": "-0.3100",
+        "fees_usd": "0.01",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp180|D[2.0,5.0)|P[0.2,0.3)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.21",
+        "breakeven_pct_with_fees": 22.16,
+        "checkpoint_s": 180,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -22.16,
+        "ev_per_trade_usd": "-0.2200",
+        "fees_usd": "0.01",
+        "observations": 1,
+        "price_bin": "[0.2,0.3)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      }
+    },
+    "size1_UP": {
+      "cp015|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "0.2700",
+        "fees_usd": "0.01",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "0.2700",
+        "fees_usd": "0.01",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7",
+        "breakeven_pct_with_fees": 71.47,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 28.53,
+        "ev_per_trade_usd": "0.2900",
+        "fees_usd": "0.01",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "0.2700",
+        "fees_usd": "0.01",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.8,0.9)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.8",
+        "breakeven_pct_with_fees": 81.12,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 18.88,
+        "ev_per_trade_usd": "0.1900",
+        "fees_usd": "0.01",
+        "observations": 1,
+        "price_bin": "[0.8,0.9)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.93",
+        "breakeven_pct_with_fees": 93.46,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 6.54,
+        "ev_per_trade_usd": "0.0700",
+        "fees_usd": "0",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.95",
+        "breakeven_pct_with_fees": 95.33,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 4.67,
+        "ev_per_trade_usd": "0.0500",
+        "fees_usd": "0",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp180|D[2.0,5.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.98",
+        "breakeven_pct_with_fees": 98.14,
+        "checkpoint_s": 180,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 1.86,
+        "ev_per_trade_usd": "0.0200",
+        "fees_usd": "0",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      }
+    },
+    "size25_DOWN": {
+      "cp015|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-15.1700",
+        "fees_usd": "0.42",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-15.1700",
+        "fees_usd": "0.42",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-15.1700",
+        "fees_usd": "0.42",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.56",
+        "breakeven_pct_with_fees": 57.72,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -57.72,
+        "ev_per_trade_usd": "-14.4300",
+        "fees_usd": "0.43",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.52",
+        "breakeven_pct_with_fees": 53.75,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -53.75,
+        "ev_per_trade_usd": "-13.4400",
+        "fees_usd": "0.44",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.36",
+        "breakeven_pct_with_fees": 37.61,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -37.61,
+        "ev_per_trade_usd": "-9.4000",
+        "fees_usd": "0.40",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.3",
+        "breakeven_pct_with_fees": 31.47,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -31.47,
+        "ev_per_trade_usd": "-7.8700",
+        "fees_usd": "0.37",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp180|D[2.0,5.0)|P[0.2,0.3)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.21",
+        "breakeven_pct_with_fees": 22.16,
+        "checkpoint_s": 180,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -22.16,
+        "ev_per_trade_usd": "-5.5400",
+        "fees_usd": "0.29",
+        "observations": 1,
+        "price_bin": "[0.2,0.3)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      }
+    },
+    "size25_UP": {
+      "cp015|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "6.6500",
+        "fees_usd": "0.35",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "6.6500",
+        "fees_usd": "0.35",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7",
+        "breakeven_pct_with_fees": 71.47,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 28.53,
+        "ev_per_trade_usd": "7.1300",
+        "fees_usd": "0.37",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "6.6500",
+        "fees_usd": "0.35",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.8,0.9)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.8",
+        "breakeven_pct_with_fees": 81.12,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 18.88,
+        "ev_per_trade_usd": "4.7200",
+        "fees_usd": "0.28",
+        "observations": 1,
+        "price_bin": "[0.8,0.9)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.93",
+        "breakeven_pct_with_fees": 93.46,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 6.54,
+        "ev_per_trade_usd": "1.6400",
+        "fees_usd": "0.11",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.95",
+        "breakeven_pct_with_fees": 95.33,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 4.67,
+        "ev_per_trade_usd": "1.1700",
+        "fees_usd": "0.08",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      }
+    },
+    "size50_DOWN": {
+      "cp015|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.5950",
+        "breakeven_pct_with_fees": 61.19,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -61.19,
+        "ev_per_trade_usd": "-30.5900",
+        "fees_usd": "0.84",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.5950",
+        "breakeven_pct_with_fees": 61.19,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -61.19,
+        "ev_per_trade_usd": "-30.5900",
+        "fees_usd": "0.84",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-30.3500",
+        "fees_usd": "0.85",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.5650",
+        "breakeven_pct_with_fees": 58.22,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -58.22,
+        "ev_per_trade_usd": "-29.1100",
+        "fees_usd": "0.86",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.52",
+        "breakeven_pct_with_fees": 53.75,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -53.75,
+        "ev_per_trade_usd": "-26.8700",
+        "fees_usd": "0.87",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.36",
+        "breakeven_pct_with_fees": 37.61,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -37.61,
+        "ev_per_trade_usd": "-18.8100",
+        "fees_usd": "0.81",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.3050",
+        "breakeven_pct_with_fees": 31.98,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -31.98,
+        "ev_per_trade_usd": "-15.9900",
+        "fees_usd": "0.74",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp180|D[2.0,5.0)|P[0.2,0.3)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.21",
+        "breakeven_pct_with_fees": 22.16,
+        "checkpoint_s": 180,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -22.16,
+        "ev_per_trade_usd": "-11.0800",
+        "fees_usd": "0.58",
+        "observations": 1,
+        "price_bin": "[0.2,0.3)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      }
+    },
+    "size50_UP": {
+      "cp015|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.7250",
+        "breakeven_pct_with_fees": 73.9,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.1,
+        "ev_per_trade_usd": "13.0500",
+        "fees_usd": "0.70",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7250",
+        "breakeven_pct_with_fees": 73.9,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.1,
+        "ev_per_trade_usd": "13.0500",
+        "fees_usd": "0.70",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7082",
+        "breakeven_pct_with_fees": 72.27,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 27.73,
+        "ev_per_trade_usd": "13.8700",
+        "fees_usd": "0.72",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.7250",
+        "breakeven_pct_with_fees": 73.9,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.1,
+        "ev_per_trade_usd": "13.0500",
+        "fees_usd": "0.70",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.8,0.9)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.8050",
+        "breakeven_pct_with_fees": 81.6,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 18.4,
+        "ev_per_trade_usd": "9.2000",
+        "fees_usd": "0.55",
+        "observations": 1,
+        "price_bin": "[0.8,0.9)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.9350",
+        "breakeven_pct_with_fees": 93.93,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 6.07,
+        "ev_per_trade_usd": "3.0400",
+        "fees_usd": "0.21",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.95",
+        "breakeven_pct_with_fees": 95.33,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 4.67,
+        "ev_per_trade_usd": "2.3300",
+        "fees_usd": "0.17",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      }
+    },
+    "size5_DOWN": {
+      "cp015|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-3.0300",
+        "fees_usd": "0.08",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-3.0300",
+        "fees_usd": "0.08",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.59",
+        "breakeven_pct_with_fees": 60.69,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -60.69,
+        "ev_per_trade_usd": "-3.0300",
+        "fees_usd": "0.08",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.56",
+        "breakeven_pct_with_fees": 57.72,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -57.72,
+        "ev_per_trade_usd": "-2.8900",
+        "fees_usd": "0.09",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.5,0.6)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.52",
+        "breakeven_pct_with_fees": 53.75,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -53.75,
+        "ev_per_trade_usd": "-2.6900",
+        "fees_usd": "0.09",
+        "observations": 1,
+        "price_bin": "[0.5,0.6)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.36",
+        "breakeven_pct_with_fees": 37.61,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -37.61,
+        "ev_per_trade_usd": "-1.8800",
+        "fees_usd": "0.08",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.3,0.4)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.3",
+        "breakeven_pct_with_fees": 31.47,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -31.47,
+        "ev_per_trade_usd": "-1.5700",
+        "fees_usd": "0.07",
+        "observations": 1,
+        "price_bin": "[0.3,0.4)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      },
+      "cp180|D[2.0,5.0)|P[0.2,0.3)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.21",
+        "breakeven_pct_with_fees": 22.16,
+        "checkpoint_s": 180,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": -22.16,
+        "ev_per_trade_usd": "-1.1100",
+        "fees_usd": "0.06",
+        "observations": 1,
+        "price_bin": "[0.2,0.3)",
+        "settlement_win_pct": 0.0,
+        "wilson95": [
+          0.0,
+          79.35
+        ]
+      }
+    },
+    "size5_UP": {
+      "cp015|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 15,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "1.3300",
+        "fees_usd": "0.07",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp030|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 30,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "1.3300",
+        "fees_usd": "0.07",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp045|D[0.0,2.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.7",
+        "breakeven_pct_with_fees": 71.47,
+        "checkpoint_s": 45,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 28.53,
+        "ev_per_trade_usd": "1.4300",
+        "fees_usd": "0.07",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp060|D[-2.0,0.0)|P[0.7,0.8)": {
+        "D_bin_bps": "[-2.0,0.0)",
+        "avg_executable_vwap": "0.72",
+        "breakeven_pct_with_fees": 73.41,
+        "checkpoint_s": 60,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 26.59,
+        "ev_per_trade_usd": "1.3300",
+        "fees_usd": "0.07",
+        "observations": 1,
+        "price_bin": "[0.7,0.8)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp090|D[0.0,2.0)|P[0.8,0.9)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.8",
+        "breakeven_pct_with_fees": 81.12,
+        "checkpoint_s": 90,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 18.88,
+        "ev_per_trade_usd": "0.9400",
+        "fees_usd": "0.06",
+        "observations": 1,
+        "price_bin": "[0.8,0.9)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp120|D[0.0,2.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[0.0,2.0)",
+        "avg_executable_vwap": "0.93",
+        "breakeven_pct_with_fees": 93.46,
+        "checkpoint_s": 120,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 6.54,
+        "ev_per_trade_usd": "0.3300",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      },
+      "cp150|D[2.0,5.0)|P[0.9,1.0)": {
+        "D_bin_bps": "[2.0,5.0)",
+        "avg_executable_vwap": "0.95",
+        "breakeven_pct_with_fees": 95.33,
+        "checkpoint_s": 150,
+        "distinct_windows": 1,
+        "edge_pp_win_minus_breakeven": 4.67,
+        "ev_per_trade_usd": "0.2300",
+        "fees_usd": "0.02",
+        "observations": 1,
+        "price_bin": "[0.9,1.0)",
+        "settlement_win_pct": 100.0,
+        "wilson95": [
+          20.65,
+          100.0
+        ]
+      }
+    }
+  },
+  "tranche": "T1_SNAP1",
+  "windows_settled_total": 17,
+  "windows_used": 11
+}
