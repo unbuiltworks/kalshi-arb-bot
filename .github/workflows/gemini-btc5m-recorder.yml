@@ -119,8 +119,16 @@ jobs:
           if not v["pass"]:
               print("::error::validation FAILED; missing %s" % v["missing"])
               sys.exit(1)
-          print("validation PASSED: %d rows, states %s"
-                % (v["rows"], v["book_states"]))
+          # THE SECOND PLACE THE RENAMED KEY APPEARED. I fixed the
+          # informational echo above and reported it fixed WITHOUT grepping
+          # for the other reference, so a PASSING validation still raised
+          # KeyError here and exited non-zero -- the gate failed on success,
+          # deterministically, and stage 2 never ran. Every lookup in this
+          # block is now .get(), so the assertion above is the only thing
+          # that can fail this step.
+          print("validation PASSED: %s rows, early %s, late %s"
+                % (v.get("rows"), v.get("early_book_states"),
+                   v.get("late_book_states")))
           PY
 
       # ---- STAGE 2: the long run. Only reached on a passing validation.

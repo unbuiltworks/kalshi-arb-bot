@@ -1,0 +1,4 @@
+BTC5m EXECUTION CANARY dispatch request
+authorization: OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1 (LIVE, money-moving)
+requested: 2026-10-05T14:33:25Z
+envelope: q=1 fixed, acquisition cap 0.90, 5 attempts, 1/window, 1 outstanding, hold to settlement, no SELL, no averaging down, no size change, cohort outlay cap $4.5315, deadman on
