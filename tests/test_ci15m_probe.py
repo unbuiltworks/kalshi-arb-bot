@@ -795,8 +795,19 @@ def test_the_authorized_fingerprint_is_the_one_the_owner_granted():
 
 def test_a_policy_edit_halts_the_live_path(root, monkeypatch):
     """The enforcement, not just the constant: if the frozen policy changes,
-    `submit` must HALT rather than send."""
+    `submit` must HALT rather than send.
+
+    DECOUPLED 2026-10-05 from whichever authorization happens to be live. This
+    test asserts the FINGERPRINT gate, so it installs CI15M's own
+    authorization first; otherwise `submit` refuses one check earlier -- at
+    the authorization -- and never reaches the fingerprint, which made the
+    test fail the moment the BTC5m canary took the grant. That earlier refusal
+    is correct and is asserted separately below.
+    """
     import src.gemini_execution.ci15m_policy as pol
+    from src.gemini_execution import arming, payload as PL
+    monkeypatch.setattr(arming, "EXPECTED_AUTH_ID", P.PROBE_AUTH_ID)
+    monkeypatch.setattr(PL, "SEMANTICS_PROBE_AUTH_ID", P.PROBE_AUTH_ID)
     tk = _open(root)
     monkeypatch.setattr(pol, "fingerprint", lambda: "deadbeef")
     monkeypatch.setattr(P, "fingerprint", lambda: "deadbeef")
@@ -809,7 +820,30 @@ def test_a_policy_edit_halts_the_live_path(root, monkeypatch):
         "a fingerprint mismatch must refuse BEFORE spending a slot")
 
 
-def test_the_runtime_gate_answers_every_owner_condition(root):
+def test_the_live_path_is_refused_while_another_grant_holds_the_auth():
+    """The BTC5m canary holding the authorization must CLOSE the BTC15m path.
+
+    Added 2026-10-05. This is the separation the owner required: authorizing
+    the canary must not authorize the PERSIST4 cohort. It is asserted on the
+    REAL constants, not on a monkeypatched pair.
+    """
+    import asyncio
+    from src.gemini_execution import arming
+    if arming.EXPECTED_AUTH_ID == P.PROBE_AUTH_ID:
+        pytest.skip("CI15M currently holds the authorization")
+    with pytest.raises(P.ProbeRefused) as e:
+        asyncio.run(P.submit("CI15M-4", "GEMI-BTC15M2610031530-UP", "T",
+                             _intent(OPEN, "UP", "0.40")))
+    assert "authorization" in str(e.value).lower()
+
+
+def test_the_runtime_gate_answers_every_owner_condition(root, monkeypatch):
+    """DECOUPLED 2026-10-05: the gate reports authorization_installed against
+    the LIVE grant, so this test installs CI15M's own before checking the
+    conditions it was written to check."""
+    from src.gemini_execution import arming, payload as PL
+    monkeypatch.setattr(arming, "EXPECTED_AUTH_ID", P.PROBE_AUTH_ID)
+    monkeypatch.setattr(PL, "SEMANTICS_PROBE_AUTH_ID", P.PROBE_AUTH_ID)
     v = P.verify_runtime(CID, root=root)
     for k in ("policy_fingerprint_matches", "authorization_installed",
               "quantity_is_one", "consumed_slots_zero",

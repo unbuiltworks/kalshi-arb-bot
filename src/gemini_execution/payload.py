@@ -58,7 +58,14 @@ ALLOWED_ORDER_FIELDS = ("symbol", "orderType", "side", "quantity", "price",
 #: It is still a LIMIT order with an explicit price: `orderType` stays
 #: "limit" and the price is bounded by the policy's own 0.90 ceiling, so
 #: this is not and cannot become an unrestricted market order.
-SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-4"
+#: MOVED 2026-10-05 to the BTC5m EXECUTION CANARY. The canary's entry is a
+#: CAPPED MARKETABLE LIMIT and therefore needs `makerOrCancel: false`. This
+#: constant and `arming.EXPECTED_AUTH_ID` must AGREE for a crossing order to
+#: be constructible at all, and exactly one authorization holds that key at a
+#: time -- so this move simultaneously REVOKES crossing orders for CI15M-4.
+#: It remains a LIMIT order with an explicit price bounded by the canary's own
+#: 0.90 acquisition cap; it is not and cannot become a market order.
+SEMANTICS_PROBE_AUTH_ID = "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1"
 
 #: fields that must never appear, with the reason, so a refusal explains itself
 FORBIDDEN = {

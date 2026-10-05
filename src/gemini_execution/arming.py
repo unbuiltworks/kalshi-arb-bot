@@ -202,7 +202,19 @@ EXPIRY_ENV = "GEMINI_CANARY_AUTH_EXPIRES"
 #: that cannot be crash-recovered, unreadable authoritative fills,
 #: unresolved-order ambiguity, a risk-cap violation, a fill above limit, or
 #: any fingerprint/provenance failure.
-EXPECTED_AUTH_ID = "OWNER-2026-10-03-GEMINI-CI15M-4"
+#: MOVED 2026-10-05 on the owner's explicit LIVE money-moving authorization:
+#: the bounded BTC5m EXECUTION CANARY. CI15M-4 is retired. This is NOT a
+#: strategy authorization -- there is no proven BTC5m directional rule -- and
+#: its envelope is q=1 fixed, acquisition cap 0.90, 5 attempts, one per
+#: window, one outstanding order, hold to settlement, no SELL, no averaging
+#: down, no size change, cohort outlay cap $4.5315. See
+#: src/gemini_execution/btc5m_canary.py and
+#: analysis/gemini/updown/BTC5M_PROBE_SPEC.md.
+#:
+#: MOVING THIS CLOSES THE BTC15m PATH, which is the point: ci15m_probe.submit()
+#: refuses when its own PROBE_AUTH_ID is not the live authorization, so the
+#: separate PERSIST4 cohort cannot be spent on this grant.
+EXPECTED_AUTH_ID = "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1"
 
 
 class NotArmed(Exception):
