@@ -44,10 +44,10 @@ jobs:
         run: |
           set -euo pipefail
           f=.github/settlement_history_request
-          stage="$(sed -n -E 's/^STAGE=(probe|harvest)[[:space:]]*$/\1/p' "$f" | tail -1)"
+          stage="$(sed -n -E 's/^STAGE=(probe|harvest|survival)[[:space:]]*$/\1/p' "$f" | tail -1)"
           case "$stage" in
-            probe|harvest) ;;
-            *) echo "::error::STAGE must be probe or harvest, got '$stage'"; exit 1 ;;
+            probe|harvest|survival) ;;
+            *) echo "::error::STAGE must be probe, harvest or survival, got '$stage'"; exit 1 ;;
           esac
           echo "stage=$stage" >> "$GITHUB_OUTPUT"
           echo "stage=$stage"
@@ -148,4 +148,29 @@ jobs:
             data/pmus_settlement_history/
             analysis/l5/settlement_history/
           retention-days: 90
+          if-no-files-found: error
+
+  survival:
+    needs: plan
+    if: ${{ needs.plan.outputs.stage == 'survival' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Which historical executable routes still answer
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_executable_survival_probe.py \
+            | tee SURVIVAL.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: executable-survival-${{ github.run_id }}
+          path: |
+            SURVIVAL.log
+            executable_survival_probe.json
+          retention-days: 30
           if-no-files-found: error
