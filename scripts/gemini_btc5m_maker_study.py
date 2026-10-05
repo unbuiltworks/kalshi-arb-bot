@@ -49,7 +49,24 @@ import statistics
 from decimal import ROUND_CEILING, ROUND_DOWN, ROUND_UP, Decimal as D
 from typing import Any, Dict, List, Optional, Tuple
 
-LABEL = "GEMINI_BTC5M_INSIDE_SPREAD_MAKER_STUDY_V1"
+LABEL = "GEMINI_BTC5M_STATIC_MAKER_BASELINE_V1_FROZEN"
+
+#: FROZEN AS THE STATIC_MAKER BASELINE. Its self-sha256 is printed on every
+#: run and recorded in MAKER_STUDY_FINDINGS.md. If it differs, this is no
+#: longer the baseline the comparison was frozen against and the run must be
+#: discarded rather than reported.
+#:
+#: NOT TUNED ON THE VALIDATION SAMPLE. The placements, the queue convention,
+#: the evidence tiers and the fee model were all fixed before the seven
+#: proof-run fills were seen, and nothing here may be adjusted because of
+#: them. The two corrections made before freezing were DEFECTS, not tuning:
+#: the aggressor side was being ignored, and unsettled windows were being
+#: counted as unfilled orders. Neither changed a threshold.
+
+
+def self_fingerprint() -> str:
+    import hashlib
+    return hashlib.sha256(open(__file__, "rb").read()).hexdigest()
 CHECKPOINTS = (15, 30, 45, 60, 90, 120, 150, 180)
 #: structural placements, as a fraction of the spread from the PASSIVE side
 PLACEMENTS: Tuple[Tuple[str, D], ...] = (("p25", D("0.25")),
@@ -456,6 +473,10 @@ def main(argv=None) -> int:
     n_trades = sum(len(v) for v in trades.values())
     rep = {
         "label": LABEL,
+        "baseline_fingerprint_sha256": self_fingerprint(),
+        "frozen": ("STATIC_MAKER baseline. Not tuned on the validation "
+                   "sample; run UNCHANGED on the prospective tape and "
+                   "reported BEFORE any change is made."),
         "status": "RESEARCH ONLY / EXPLORATORY. No live maker orders.",
         "authorizes_nothing": ("changes no cohort, recorder, frozen analyzer "
                                "or authorization, and opens no venue "
@@ -495,7 +516,9 @@ def main(argv=None) -> int:
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(rep, fh, indent=2, sort_keys=True, default=str)
-    print(json.dumps({"label": LABEL, "tape_rows": len(rows),
+    print(json.dumps({"label": LABEL,
+                      "fingerprint": rep["baseline_fingerprint_sha256"],
+                      "tape_rows": len(rows),
                       "markets": len(cps), "trade_prints": n_trades,
                       "opportunities": rep["result"]["opportunities"],
                       "headline": rep["result"]["headline"]["comparison"]},
