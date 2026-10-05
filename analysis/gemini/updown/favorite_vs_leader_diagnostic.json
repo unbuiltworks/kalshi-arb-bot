@@ -1,0 +1,163 @@
+{
+  "accounting_label": "historical replay on Gemini's own books and settlements; no order was sent",
+  "by_duration": {
+    "BTC5M": {
+      "by_checkpoint": {
+        "10s": {
+          "agreement_pct": 89.29,
+          "executable_favorite_present": 28,
+          "executable_sides_histogram": {
+            "0": 57,
+            "1": 75,
+            "2": 1
+          },
+          "favorite_equals_leader": 25,
+          "leader_wins_pct_ALL": 69.74,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 17.86,
+          "leadership_known": 76,
+          "observations": 133
+        },
+        "120s": {
+          "agreement_pct": 100.0,
+          "executable_favorite_present": 58,
+          "executable_sides_histogram": {
+            "0": 1,
+            "1": 76,
+            "2": 56
+          },
+          "favorite_equals_leader": 58,
+          "leader_wins_pct_ALL": 83.33,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 70.69,
+          "leadership_known": 132,
+          "observations": 133
+        },
+        "15s": {
+          "agreement_pct": 89.66,
+          "executable_favorite_present": 29,
+          "executable_sides_histogram": {
+            "0": 55,
+            "1": 76,
+            "2": 2
+          },
+          "favorite_equals_leader": 26,
+          "leader_wins_pct_ALL": 69.23,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 17.24,
+          "leadership_known": 78,
+          "observations": 133
+        },
+        "1s": {
+          "agreement_pct": 83.33,
+          "executable_favorite_present": 24,
+          "executable_sides_histogram": {
+            "0": 73,
+            "1": 60
+          },
+          "favorite_equals_leader": 20,
+          "leader_wins_pct_ALL": 70.0,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 25.0,
+          "leadership_known": 60,
+          "observations": 133
+        },
+        "20s": {
+          "agreement_pct": 90.62,
+          "executable_favorite_present": 32,
+          "executable_sides_histogram": {
+            "0": 53,
+            "1": 80
+          },
+          "favorite_equals_leader": 29,
+          "leader_wins_pct_ALL": 67.5,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 18.75,
+          "leadership_known": 80,
+          "observations": 133
+        },
+        "2s": {
+          "agreement_pct": 81.48,
+          "executable_favorite_present": 27,
+          "executable_sides_histogram": {
+            "0": 63,
+            "1": 70
+          },
+          "favorite_equals_leader": 22,
+          "leader_wins_pct_ALL": 71.43,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 25.93,
+          "leadership_known": 70,
+          "observations": 133
+        },
+        "30s": {
+          "agreement_pct": 87.5,
+          "executable_favorite_present": 24,
+          "executable_sides_histogram": {
+            "0": 30,
+            "1": 101,
+            "2": 2
+          },
+          "favorite_equals_leader": 21,
+          "leader_wins_pct_ALL": 78.64,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 20.83,
+          "leadership_known": 103,
+          "observations": 133
+        },
+        "45s": {
+          "agreement_pct": 100.0,
+          "executable_favorite_present": 16,
+          "executable_sides_histogram": {
+            "0": 7,
+            "1": 112,
+            "2": 14
+          },
+          "favorite_equals_leader": 16,
+          "leader_wins_pct_ALL": 90.48,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 50.0,
+          "leadership_known": 126,
+          "observations": 133
+        },
+        "5s": {
+          "agreement_pct": 85.19,
+          "executable_favorite_present": 27,
+          "executable_sides_histogram": {
+            "0": 58,
+            "1": 75
+          },
+          "favorite_equals_leader": 23,
+          "leader_wins_pct_ALL": 73.33,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 25.93,
+          "leadership_known": 75,
+          "observations": 133
+        },
+        "60s": {
+          "agreement_pct": 100.0,
+          "executable_favorite_present": 13,
+          "executable_sides_histogram": {
+            "0": 9,
+            "1": 111,
+            "2": 13
+          },
+          "favorite_equals_leader": 13,
+          "leader_wins_pct_ALL": 91.13,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 61.54,
+          "leadership_known": 124,
+          "observations": 133
+        },
+        "90s": {
+          "agreement_pct": 100.0,
+          "executable_favorite_present": 36,
+          "executable_sides_histogram": {
+            "0": 4,
+            "1": 99,
+            "2": 30
+          },
+          "favorite_equals_leader": 36,
+          "leader_wins_pct_ALL": 86.82,
+          "leader_wins_pct_WHERE_FAVORITE_EXECUTABLE": 63.89,
+          "leadership_known": 129,
+          "observations": 133
+        }
+      },
+      "reading": "at >= 45s the executable favorite IS the leader in 100% of cases and the two agree on outcome. At <= 30s they still agree on IDENTITY 82-91% of the time, but the leader's win rate collapses from 67-79% over all observations to 17-26% on the subset where a >= 50c ask exists. Availability of a >= 50c ask late in the window is therefore itself an adverse signal: it selects the moments when the quote is stale and on the wrong side. The late favorite cells are not a market fact about favorites, they are a fact about which late quotes remain standing.",
+      "windows": 133
+    }
+  },
+  "label": "GEMINI_FAVORITE_VS_LEADER_DIAGNOSTIC_V1",
+  "question": "when a side is EXECUTABLE at >= 50c late in the window, is it the same side the book's leadership says is ahead -- and what does conditioning on executability do to the leader's own win rate?"
+}

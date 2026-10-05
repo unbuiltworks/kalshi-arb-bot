@@ -344,3 +344,9 @@ and the settled-contract join used here are preserved for that follow-up.
 `analysis/gemini/updown/underdog_matrix.json` ·
 `settlement_state_calibration.json` · `state_conditioned_favorite.json` ·
 scripts `gemini_underdog_matrix.py`, `gemini_settlement_state.py`.
+
+---
+
+## 12. Addendum — favorite persistence
+
+A descriptive favorite-persistence table was added for both durations: `FAVORITE_PERSISTENCE_FINDINGS.md`. Headline: BTC5m leadership flip probability falls 33.3% -> 26.6% -> 15.5% -> 5.0% -> 0.0% at 120s/60s/30s/20s/1-2s, but flip INTENSITY per unit remaining time is the same as BTC15m (4.04 vs 3.86 per 1000s at an equal fraction of the window), so the stickiness is a time budget rather than a different process. Persistence does not become expectancy: flips reach 0% while the leader still wins only ~70%, and where a favorite is executable inside 30s it wins 7-11% because a standing >=50c ask that late selects the stale, wrong side (the leader's win rate drops from 67-79% over all observations to 17-26% on that subset). No cell in either matrix is an established positive. The verdicts are unchanged.
