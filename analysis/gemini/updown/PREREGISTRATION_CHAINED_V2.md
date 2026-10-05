@@ -83,3 +83,25 @@ No live trading authorization. No change to V1, to the frozen early-window
 analyzer `f2800e3e...960e90b`, to the maker studies, to any live execution
 behaviour, or to any OOS boundary. The early-window analyzer's +UP result is
 **not** treated as validation.
+
+---
+
+## ADDENDUM: the preregistered fingerprint was superseded on first execution
+
+| | |
+|---|---|
+| preregistered, never ran | `a60e9aebe2a197b4fb1246d311471f91bfeeea5e0d6dadbcd0ad24c7870824a1` |
+| **executed** | `774f9eb3fde5d97b90c11975c80a1d313f40a67ccbea71d424565fad07b23092` |
+
+`a60e9aeb` crashed on its first run with
+`TypeError: fee_for() missing 1 required positional argument: 'size'` --
+V1's `fee_for` takes `(price, size)` and V2 called it with one argument. The
+crash occurred inside the conditional tables, so **no outcome was ever
+evaluated under `a60e9aeb`**; the first and only outcome evaluation is under
+`774f9eb3`.
+
+**The sole difference is `V1.fee_for(p)` -> `V1.fee_for(p, D("1"))`**, size
+1 contract, matching the q=1 observations V2 is built on. No threshold,
+quantile level, bucket edge, checkpoint, D definition, fee rate, inherited
+rule, split or seal changed. This is recorded here rather than quietly
+refingerprinted, for the same reason V1's loader supersession was.

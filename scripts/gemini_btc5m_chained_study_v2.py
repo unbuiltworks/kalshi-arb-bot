@@ -172,7 +172,9 @@ def information_tables(obs: List[Dict[str, Any]], outcomes: Dict[str, Dict],
         wins = sum(1 for _, _, w in use if w)
         avg = sum((p for _, p, _ in use), D("0")) / n
         be = V1.breakeven(avg)
-        ev = sum((((D("1") if w else D("0")) - p - V1.fee_for(p))
+        # V1.fee_for takes (price, size); size is 1 contract throughout V2,
+        # matching the q=1 observations it is built on.
+        ev = sum((((D("1") if w else D("0")) - p - V1.fee_for(p, D("1")))
                   for _, p, w in use), D("0")) / n
         return {
             "observations": n,

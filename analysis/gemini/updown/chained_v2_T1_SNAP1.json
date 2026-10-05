@@ -1,0 +1,513 @@
+{
+  "capacity": {
+    "size_1": {
+      "avg_combined_cost_when_two_sided": "1.2716",
+      "avg_down_vwap_when_fillable": "0.5514",
+      "avg_up_vwap_when_fillable": "0.7202",
+      "down_fillable": 80,
+      "economic_two_sided": 80,
+      "economic_two_sided_pct": 100.0,
+      "notional_per_trade_usd_at_avg_up": "0.7202",
+      "observations": 80,
+      "up_fillable": 80
+    },
+    "size_10": {
+      "observations": 0
+    },
+    "size_100": {
+      "observations": 0
+    },
+    "size_25": {
+      "observations": 0
+    },
+    "size_5": {
+      "observations": 0
+    },
+    "size_50": {
+      "observations": 0
+    }
+  },
+  "discovery_observations": 80,
+  "economic_question": "does causal D_t = published LRRR_XBT(t) minus the AUTHORITATIVE strike contain information NOT adequately reflected in the executable contract price",
+  "fingerprint_sha256": "774f9eb3fde5d97b90c11975c80a1d313f40a67ccbea71d424565fad07b23092",
+  "incorporation": {
+    "by_lag": {
+      "lag_1_checkpoints": {
+        "corr_D_vs_later_price_change": -0.1376,
+        "decidable_pairs": 48,
+        "distinct_windows": 10,
+        "pairs": 70,
+        "sign_agreement_pct": 56.25,
+        "sign_agreement_wilson95": [
+          42.27,
+          69.3
+        ],
+        "zero_change_pairs": 22
+      },
+      "lag_2_checkpoints": {
+        "corr_D_vs_later_price_change": -0.1272,
+        "decidable_pairs": 50,
+        "distinct_windows": 10,
+        "pairs": 60,
+        "sign_agreement_pct": 52.0,
+        "sign_agreement_wilson95": [
+          38.51,
+          65.2
+        ],
+        "zero_change_pairs": 10
+      },
+      "lag_3_checkpoints": {
+        "corr_D_vs_later_price_change": -0.1289,
+        "decidable_pairs": 45,
+        "distinct_windows": 10,
+        "pairs": 50,
+        "sign_agreement_pct": 46.67,
+        "sign_agreement_wilson95": [
+          32.93,
+          60.92
+        ],
+        "zero_change_pairs": 5
+      }
+    },
+    "pairs": 180,
+    "reading": "sign agreement at ~50% means the executable price already embeds D and there is NO informational lead. Above 50% means the price moves AFTER the reference does, which is the only version that could pay. The outcome here is a PRICE, never a settlement."
+  },
+  "information": {
+    "by_D_magnitude_bucket": {
+      "[0.00,0.73)": {
+        "DOWN": {
+          "avg_executable_vwap": "0.6050",
+          "breakeven_pct_with_fees": 62.17,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 9,
+          "ev_per_trade_usd": "-0.4720",
+          "observations": 20,
+          "settlement_win_pct": 15.0,
+          "wilson95": [
+            5.24,
+            36.04
+          ],
+          "win_minus_breakeven_pp": -47.17
+        },
+        "UP": {
+          "avg_executable_vwap": "0.6960",
+          "breakeven_pct_with_fees": 71.08,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 9,
+          "ev_per_trade_usd": "0.1400",
+          "observations": 20,
+          "settlement_win_pct": 85.0,
+          "wilson95": [
+            63.96,
+            94.76
+          ],
+          "win_minus_breakeven_pp": 13.92
+        }
+      },
+      "[0.73,1.48)": {
+        "DOWN": {
+          "avg_executable_vwap": "0.5740",
+          "breakeven_pct_with_fees": 59.11,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 8,
+          "ev_per_trade_usd": "-0.3410",
+          "observations": 20,
+          "settlement_win_pct": 25.0,
+          "wilson95": [
+            11.19,
+            46.87
+          ],
+          "win_minus_breakeven_pp": -34.11
+        },
+        "UP": {
+          "avg_executable_vwap": "0.7305",
+          "breakeven_pct_with_fees": 74.43,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 8,
+          "ev_per_trade_usd": "0.0075",
+          "observations": 20,
+          "settlement_win_pct": 75.0,
+          "wilson95": [
+            53.13,
+            88.81
+          ],
+          "win_minus_breakeven_pp": 0.57
+        }
+      },
+      "[1.48,3.30)": {
+        "DOWN": {
+          "avg_executable_vwap": "0.5835",
+          "breakeven_pct_with_fees": 60.05,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 7,
+          "ev_per_trade_usd": "-0.4490",
+          "observations": 20,
+          "settlement_win_pct": 15.0,
+          "wilson95": [
+            5.24,
+            36.04
+          ],
+          "win_minus_breakeven_pp": -45.05
+        },
+        "UP": {
+          "avg_executable_vwap": "0.6960",
+          "breakeven_pct_with_fees": 71.08,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 7,
+          "ev_per_trade_usd": "0.1410",
+          "observations": 20,
+          "settlement_win_pct": 85.0,
+          "wilson95": [
+            63.96,
+            94.76
+          ],
+          "win_minus_breakeven_pp": 13.92
+        }
+      },
+      "[3.30,7.00]": {
+        "DOWN": {
+          "avg_executable_vwap": "0.4430",
+          "breakeven_pct_with_fees": 46.03,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 7,
+          "ev_per_trade_usd": "-0.2025",
+          "observations": 20,
+          "settlement_win_pct": 25.0,
+          "wilson95": [
+            11.19,
+            46.87
+          ],
+          "win_minus_breakeven_pp": -21.03
+        },
+        "UP": {
+          "avg_executable_vwap": "0.7585",
+          "breakeven_pct_with_fees": 77.13,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 7,
+          "ev_per_trade_usd": "-0.0155",
+          "observations": 20,
+          "settlement_win_pct": 75.0,
+          "wilson95": [
+            53.13,
+            88.81
+          ],
+          "win_minus_breakeven_pp": -2.13
+        }
+      }
+    },
+    "by_D_sign": {
+      "D_NEGATIVE": {
+        "DOWN": {
+          "avg_executable_vwap": "0.7729",
+          "breakeven_pct_with_fees": 78.51,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 5,
+          "ev_per_trade_usd": "-0.3196",
+          "observations": 28,
+          "settlement_win_pct": 46.43,
+          "wilson95": [
+            29.53,
+            64.19
+          ],
+          "win_minus_breakeven_pp": -32.09
+        },
+        "UP": {
+          "avg_executable_vwap": "0.5075",
+          "breakeven_pct_with_fees": 52.5,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 5,
+          "ev_per_trade_usd": "0.0104",
+          "observations": 28,
+          "settlement_win_pct": 53.57,
+          "wilson95": [
+            35.81,
+            70.47
+          ],
+          "win_minus_breakeven_pp": 1.07
+        }
+      },
+      "D_POSITIVE": {
+        "DOWN": {
+          "avg_executable_vwap": "0.4321",
+          "breakeven_pct_with_fees": 44.93,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 8,
+          "ev_per_trade_usd": "-0.3912",
+          "observations": 52,
+          "settlement_win_pct": 5.77,
+          "wilson95": [
+            1.98,
+            15.64
+          ],
+          "win_minus_breakeven_pp": -39.16
+        },
+        "UP": {
+          "avg_executable_vwap": "0.8348",
+          "breakeven_pct_with_fees": 84.45,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 8,
+          "ev_per_trade_usd": "0.0994",
+          "observations": 52,
+          "settlement_win_pct": 94.23,
+          "wilson95": [
+            84.36,
+            98.02
+          ],
+          "win_minus_breakeven_pp": 9.78
+        }
+      },
+      "D_ZERO": {
+        "DOWN": null,
+        "UP": null
+      }
+    },
+    "by_signed_magnitude": {
+      "NEG_[0.00,0.73)": {
+        "UP": {
+          "avg_executable_vwap": "0.6478",
+          "breakeven_pct_with_fees": 66.37,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 4,
+          "ev_per_trade_usd": "0.0033",
+          "observations": 9,
+          "settlement_win_pct": 66.67,
+          "wilson95": [
+            35.42,
+            87.94
+          ],
+          "win_minus_breakeven_pp": 0.29
+        }
+      },
+      "NEG_[0.73,1.48)": {
+        "UP": {
+          "avg_executable_vwap": "0.5417",
+          "breakeven_pct_with_fees": 55.9,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 3,
+          "ev_per_trade_usd": "-0.3950",
+          "observations": 6,
+          "settlement_win_pct": 16.67,
+          "wilson95": [
+            3.01,
+            56.35
+          ],
+          "win_minus_breakeven_pp": -39.24
+        }
+      },
+      "NEG_[1.48,3.30)": {
+        "UP": {
+          "avg_executable_vwap": "0.4233",
+          "breakeven_pct_with_fees": 44.04,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 2,
+          "ev_per_trade_usd": "0.0567",
+          "observations": 6,
+          "settlement_win_pct": 50.0,
+          "wilson95": [
+            18.76,
+            81.24
+          ],
+          "win_minus_breakeven_pp": 5.96
+        }
+      },
+      "NEG_[3.30,7.00]": {
+        "UP": {
+          "avg_executable_vwap": "0.3700",
+          "breakeven_pct_with_fees": 38.63,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 2,
+          "ev_per_trade_usd": "0.3271",
+          "observations": 7,
+          "settlement_win_pct": 71.43,
+          "wilson95": [
+            35.89,
+            91.78
+          ],
+          "win_minus_breakeven_pp": 32.8
+        }
+      },
+      "POS_[0.00,0.73)": {
+        "UP": {
+          "avg_executable_vwap": "0.7355",
+          "breakeven_pct_with_fees": 74.91,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 7,
+          "ev_per_trade_usd": "0.2518",
+          "observations": 11,
+          "settlement_win_pct": 100.0,
+          "wilson95": [
+            74.12,
+            100.0
+          ],
+          "win_minus_breakeven_pp": 25.09
+        }
+      },
+      "POS_[0.73,1.48)": {
+        "UP": {
+          "avg_executable_vwap": "0.8114",
+          "breakeven_pct_with_fees": 82.21,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 6,
+          "ev_per_trade_usd": "0.1800",
+          "observations": 14,
+          "settlement_win_pct": 100.0,
+          "wilson95": [
+            78.47,
+            100.0
+          ],
+          "win_minus_breakeven_pp": 17.79
+        }
+      },
+      "POS_[1.48,3.30)": {
+        "UP": {
+          "avg_executable_vwap": "0.8129",
+          "breakeven_pct_with_fees": 82.35,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 5,
+          "ev_per_trade_usd": "0.1771",
+          "observations": 14,
+          "settlement_win_pct": 100.0,
+          "wilson95": [
+            78.47,
+            100.0
+          ],
+          "win_minus_breakeven_pp": 17.65
+        }
+      },
+      "POS_[3.30,7.00]": {
+        "UP": {
+          "avg_executable_vwap": "0.9677",
+          "breakeven_pct_with_fees": 96.99,
+          "caution": "observations within a window are NOT independent; read distinct_windows, not observations",
+          "distinct_windows": 5,
+          "ev_per_trade_usd": "-0.2000",
+          "observations": 13,
+          "settlement_win_pct": 76.92,
+          "wilson95": [
+            49.74,
+            91.82
+          ],
+          "win_minus_breakeven_pp": -20.07
+        }
+      }
+    },
+    "magnitude_bucket_edges_bps": [
+      0.0036,
+      0.7305,
+      1.48445,
+      3.3024,
+      7.0029
+    ],
+    "monotonicity": {
+      "negative_D_buckets": [
+        {
+          "bucket": "NEG_[0.00,0.73)",
+          "distinct_windows": 4,
+          "observations": 9,
+          "up_win_pct": 66.67
+        },
+        {
+          "bucket": "NEG_[0.73,1.48)",
+          "distinct_windows": 3,
+          "observations": 6,
+          "up_win_pct": 16.67
+        },
+        {
+          "bucket": "NEG_[1.48,3.30)",
+          "distinct_windows": 2,
+          "observations": 6,
+          "up_win_pct": 50.0
+        },
+        {
+          "bucket": "NEG_[3.30,7.00]",
+          "distinct_windows": 2,
+          "observations": 7,
+          "up_win_pct": 71.43
+        }
+      ],
+      "positive_D_buckets": [
+        {
+          "bucket": "POS_[0.00,0.73)",
+          "distinct_windows": 7,
+          "observations": 11,
+          "up_win_pct": 100.0
+        },
+        {
+          "bucket": "POS_[0.73,1.48)",
+          "distinct_windows": 6,
+          "observations": 14,
+          "up_win_pct": 100.0
+        },
+        {
+          "bucket": "POS_[1.48,3.30)",
+          "distinct_windows": 5,
+          "observations": 14,
+          "up_win_pct": 100.0
+        },
+        {
+          "bucket": "POS_[3.30,7.00]",
+          "distinct_windows": 5,
+          "observations": 13,
+          "up_win_pct": 76.92
+        }
+      ],
+      "reading": "the question is whether LARGER positive D raises subsequent UP settlement probability and larger negative D lowers it. With few distinct windows per bucket an ordering is a description, not a test.",
+      "up_win_rises_with_negative_D_magnitude": false,
+      "up_win_rises_with_positive_D": false
+    }
+  },
+  "inherited_from_v1_by_import": [
+    "CHECKPOINTS",
+    "SIZE_LEVELS",
+    "cumulative executable VWAP",
+    "fee_for / breakeven (actual fee treatment)",
+    "integrity and freshness requirements",
+    "observations()",
+    "assert_no_leakage",
+    "capacity()",
+    "EXCLUDED_TICKERS",
+    "OOS_FRACTION and the discovery/OOS split rule"
+  ],
+  "label": "GEMINI_BTC5M_CHAINED_D_STUDY_V2_PREREGISTERED",
+  "no_live_authorization": true,
+  "oos": "SEALED. V2 reads the DISCOVERY partition only, under V1's own split rule and OOS_FRACTION, so the sealed set is identical to V1's. V2 does NOT freeze a candidate-selection procedure and does not unseal anything.",
+  "scale": {
+    "abs_D_bps_distribution": {
+      "max": 7.0029,
+      "mean": 2.0955,
+      "median": 1.48445,
+      "min": 0.0036,
+      "p25": 0.7305,
+      "p75": 3.3024,
+      "p90": 4.660940000000009
+    },
+    "derivation": "quantiles of |D_bps| over DISCOVERY observations only. No outcome, price result or P&L is visible to this computation, and the sealed OOS partition is not read.",
+    "levels": [
+      0.5,
+      0.7,
+      0.85,
+      0.95
+    ],
+    "n_discovery_observations": 80,
+    "thresholds_bps": {
+      "q50": 1.48445,
+      "q70": 2.88579,
+      "q85": 4.14225,
+      "q95": 5.821924999999999
+    },
+    "why_not_5_and_25_bps": "V1's grid was +/-5 and +/-25 bps = $42.50 and $212.50 at an 85,000 strike. The observed |D| had median 1.48 bps and never reached 25, so 31 of 32 candidates could not fire. V1 stands as a null-selection result; it is not evidence about D."
+  },
+  "tranche": "V2_T1_SNAP1",
+  "v1_fingerprint_expected": "0b746c20fba27dd1891c9dab7a8f922dbfc2ed1bb6721363db19c1545ef553bd",
+  "v1_fingerprint_live": "0b746c20fba27dd1891c9dab7a8f922dbfc2ed1bb6721363db19c1545ef553bd",
+  "v1_status": "V1 is a VALID documented NULL-SELECTION result. Its +/-5 and +/-25 bps candidate thresholds sat largely outside the observed |D| distribution, so its candidates were untested at the data's scale rather than refuted. V2 does not modify or overwrite it.",
+  "v1_unmodified": true,
+  "what_v2_changes": [
+    "threshold SCALE: distribution-derived |D| quantiles at the preregistered levels [0.5, 0.7, 0.85, 0.95], replacing +/-5 / +/-25 bps",
+    "D evaluated as INFORMATION: settlement probability and executable breakeven by D sign and magnitude, plus an explicit monotonicity report",
+    "INCORPORATION: sign agreement and correlation between causal D at t and the LATER executable UP price, by lag"
+  ],
+  "windows_sealed_oos": 6,
+  "windows_settled_total": 17,
+  "windows_used_discovery": 11
+}
