@@ -330,14 +330,7 @@ async def main_async(a) -> int:
             },
             "SETTLED": dict(res, payout_usd=(None if payout is None
                                              else str(payout))),
-            "CASH_CONFIRMED": {
-                "confirmed": bool(cash_rows),
-                "rows": cash_rows,
-                "realized_net_usd": None,
-                "why": (None if cash_rows else
-                        ("no cashOuts/settled row for this symbol; realized "
-                         "net P&L is NOT computed from an outcome")),
-            },
+            "CASH_CONFIRMED": cash_confirmed(cash_rows, fee),
             "DESCRIPTIVE": {
                 "reference_at_entry": ref_entry,
                 "strike_value": res.get("strike_value"),
@@ -384,6 +377,57 @@ async def main_async(a) -> int:
                                          for r in audit]},
                      sort_keys=True, default=str))
     return 0
+
+
+def cash_confirmed(cash_rows: List[Dict[str, Any]],
+                   fee: Optional[D]) -> Dict[str, Any]:
+    """REALIZED, from the venue's own settled-position cashflow fields.
+
+    WHERE THE CASH ACTUALLY IS. cashOuts[] came back EMPTY on all five of
+    cohort 1 while the settled POSITION row carried costBasis, payout,
+    netProfit, realizedPnl and settledAt. That is consistent with the SELL
+    research: cashOuts is the EARLY-SELL primitive, and a position held to
+    settlement reports its cashflow on the position itself, with
+    realizedPnl 0 because nothing was cashed out. So an empty cashOuts is
+    not an absent cashflow -- but neither is it the cashflow, and only a
+    row carrying the venue's own payout/netProfit confirms one.
+
+    OUR ARITHMETIC IS A CROSS-CHECK, NEVER THE SOURCE: netProfit is the
+    venue's figure and excludes the trading fee, so payout - costBasis - fee
+    is reported beside it and a disagreement is flagged rather than
+    averaged.
+    """
+    pos = [r for r in cash_rows if r.get("_key") == "positions"]
+    cos = [r for r in cash_rows if r.get("_key") == "cashOuts"]
+    if not pos:
+        return {"confirmed": False, "rows": cash_rows,
+                "realized_net_usd": None,
+                "why": ("no settled-position or cashOut row for this symbol; "
+                        "realized net P&L is NOT computed from an outcome")}
+    r0 = pos[0]
+    payout, cost = _d(r0.get("payout")), _d(r0.get("costBasis"))
+    venue_net = _d(r0.get("netProfit"))
+    ours = (None if (payout is None or cost is None or fee is None)
+            else payout - cost - fee)
+    return {
+        "confirmed": True,
+        "rows": cash_rows,
+        "settled_at": r0.get("settledAt"),
+        "venue_payout_usd": r0.get("payout"),
+        "venue_cost_basis_usd": r0.get("costBasis"),
+        "venue_net_profit_usd": r0.get("netProfit"),
+        "venue_realized_pnl_usd": r0.get("realizedPnl"),
+        "cash_out_rows": len(cos),
+        "venue_fee_usd": None if fee is None else str(fee),
+        "realized_net_usd": None if ours is None else str(ours),
+        "realized_net_basis": ("venue payout minus venue costBasis minus the "
+                               "venue's own charged fee"),
+        "agrees_with_venue_net_profit_before_fees": (
+            None if (venue_net is None or payout is None or cost is None)
+            else bool(venue_net == payout - cost)),
+        "label": ("REALIZED. The venue's own settled-position cashflow "
+                  "record, not a mark and not an outcome."),
+    }
 
 
 def trajectory(ser, t_entry, res) -> Dict[str, Any]:
