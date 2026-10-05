@@ -1,0 +1,1336 @@
+{
+ "label": "VENUE_STRUCTURAL_SCORECARD_V1",
+ "lane": "Lane 4 - venue/category structural selector",
+ "generated_utc": "2026-10-05T21:54:11Z",
+ "mode": "RESEARCH ONLY - read-only over existing on-disk corpora; no network, no venue writes",
+ "key_question": "Does the environment permit repeated inventory cycling AND pair-cost compression similar to L5?",
+ "l5_reference_policy": {
+  "window_s": 900,
+  "pair_cost_median": 0.977,
+  "complement_pct": 71.5,
+  "complement_lag_s": 52,
+  "fills_per_event_median": 6,
+  "fills_per_min": 12.64,
+  "first_price_median": 0.588
+ },
+ "rigour": {
+  "measured": "computed from on-disk data; n and date range stated per metric",
+  "estimated": "labelled explicitly inline where any derivation is approximate",
+  "UNAVAILABLE": "not derivable from on-disk data - emitted literally, never guessed",
+  "scoring_rule": "a dimension with no data scores None and is excluded from that environment's denominator; dimensions_with_data is reported so a thin-data winner cannot hide behind a high mean"
+ },
+ "environments": {
+  "POLYMARKET_CRYPTO_UPDOWN_L5": {
+   "env_id": "POLYMARKET_CRYPTO_UPDOWN_L5",
+   "venue": "Polymarket",
+   "category": "crypto up/down (BTC/ETH 5m + 15m)",
+   "role": "REFERENCE (the environment L5 actually operated in)",
+   "sample": {
+    "source": "data/l5/raw/trades.jsonl",
+    "n_fills": 9901,
+    "n_events": 312,
+    "date_range_utc": [
+     "2026-08-30T07:49:16Z",
+     "2026-08-30T20:52:43Z"
+    ],
+    "span_hours": 13.06,
+    "scope": "L5's OWN fills only; market-wide tape not on disk",
+    "families": [
+     [
+      "btc-updown-15m",
+      8451
+     ],
+     [
+      "btc-updown-5m",
+      1109
+     ],
+     [
+      "eth-updown-5m",
+      341
+     ]
+    ]
+   },
+   "window_duration_seconds": {
+    "value": [
+     300,
+     900
+    ],
+    "basis": "5m and 15m event families",
+    "status": "measured"
+   },
+   "trades_per_minute": {
+    "own_fills_per_min": 12.638,
+    "market_wide": "UNAVAILABLE",
+    "note": "own-fill rate is a LOWER BOUND on venue print rate"
+   },
+   "spread": {
+    "status": "UNAVAILABLE",
+    "note": "no BBO snapshots for these markets on disk"
+   },
+   "depth_q1_q5_q10_q25": {
+    "status": "UNAVAILABLE",
+    "note": "no book snapshots on disk"
+   },
+   "simultaneous_pair_cost": {
+    "status": "UNAVAILABLE",
+    "note": "no synchronous two-sided book; realized sequential VWAP pair cost measured instead"
+   },
+   "maker_economics": {
+    "status": "UNAVAILABLE",
+    "note": "incentive-era rebate/reward terms for this account not source-confirmed; locked per CLAUDE.md"
+   },
+   "adverse_selection": {
+    "status": "UNAVAILABLE",
+    "note": "requires book + print alignment; not on disk"
+   },
+   "executable_capacity_usd": {
+    "observed_per_event_median": 96.816249,
+    "observed_total": 96652.68,
+    "basis": "L5's own realized notional, not a book-depth capacity measure"
+   },
+   "sequence": {
+    "events": 312,
+    "own_fills_per_event": {
+     "n": 312,
+     "min": 1.0,
+     "median": 6.0,
+     "max": 310.0,
+     "mean": 31.733974,
+     "p10": 1.0,
+     "p90": 139.5
+    },
+    "notional_per_event_usd": {
+     "n": 312,
+     "min": 0.25,
+     "median": 96.816249,
+     "max": 2678.560284,
+     "mean": 309.784226,
+     "p10": 7.45534,
+     "p90": 1215.31498,
+     "unit": "USD"
+    },
+    "complement_reach_pct": 71.47,
+    "first_inventory_to_complement_seconds": {
+     "n": 223,
+     "min": 0.0,
+     "median": 52.0,
+     "max": 247.0,
+     "mean": 66.829596,
+     "p10": 5.0,
+     "p90": 147.2,
+     "unit": "s"
+    },
+    "side_switch_rate_per_adjacent_fill": {
+     "n": 278,
+     "min": 0.0,
+     "median": 0.333333,
+     "max": 1.0,
+     "mean": 0.357428,
+     "p10": 0.0,
+     "p90": 0.671429
+    },
+    "realized_vwap_pair_cost_usd": {
+     "n": 223,
+     "min": 0.382857,
+     "median": 0.976974,
+     "max": 1.75,
+     "mean": 0.99186,
+     "p10": 0.75812,
+     "p90": 1.269975,
+     "unit": "USD YES+NO"
+    },
+    "pct_pair_cost_below_1_00": {
+     "n": 223,
+     "pct": 59.64
+    },
+    "pct_pair_cost_at_or_below_0_96": {
+     "n": 223,
+     "pct": 43.95
+    }
+   }
+  },
+  "POLYMARKET_SPORTS": {
+   "env_id": "POLYMARKET_SPORTS",
+   "venue": "Polymarket",
+   "category": "sports moneyline/totals/spreads (MLB, soccer, tennis, EPL, WNBA)",
+   "role": "CANDIDATE",
+   "sample": {
+    "source": "data/transfer_backtest/sports_trades.jsonl.gz",
+    "n_events": 71,
+    "n_prints": 47120,
+    "date_range_utc": [
+     "2026-08-18T10:56:30Z",
+     "2026-09-02T17:08:39Z"
+    ],
+    "span_days": 15.26,
+    "scope": "CENSUS of all participants' prints within these 71 events",
+    "tags": [
+     [
+      "mlb",
+      18
+     ],
+     [
+      "soccer",
+      18
+     ],
+     [
+      "tennis",
+      17
+     ],
+     [
+      "epl",
+      12
+     ],
+     [
+      "wnba",
+      6
+     ]
+    ],
+    "market_types": [
+     [
+      "moneyline",
+      39
+     ],
+     [
+      "totals",
+      25
+     ],
+     [
+      "spreads",
+      7
+     ]
+    ],
+    "n_distinct_actor_event_pairs": 16022,
+    "n_actor_event_pairs_with_2plus_fills": 5898
+   },
+   "window_duration_seconds": {
+    "observed_print_span_per_event": {
+     "n": 71,
+     "min": 5769.0,
+     "median": 150456.0,
+     "max": 1160268.0,
+     "mean": 218187.661972,
+     "p10": 28820.0,
+     "p90": 613941.0,
+     "unit": "s"
+    },
+    "note": "sports markets are multi-day, not fixed short windows; this is the OPPOSITE of L5's 300/900s cadence"
+   },
+   "trades_per_minute": {
+    "per_event_over_own_print_span": {
+     "n": 71,
+     "min": 0.003501,
+     "median": 0.154504,
+     "max": 1.853716,
+     "mean": 0.265624,
+     "p10": 0.027109,
+     "p90": 0.577664,
+     "unit": "prints/min"
+    },
+    "note": "census-based; includes long idle stretches between game days"
+   },
+   "trade_price_distribution": {
+    "n": 47120,
+    "min": 0.001,
+    "median": 0.55,
+    "max": 0.999,
+    "mean": 0.541465,
+    "p10": 0.21,
+    "p90": 0.871,
+    "unit": "USD"
+   },
+   "spread": {
+    "status": "UNAVAILABLE",
+    "note": "no BBO in this file; see POLYMARKET_SPORTS_PMUS_BBO env"
+   },
+   "depth_q1_q5_q10_q25": {
+    "status": "UNAVAILABLE",
+    "note": "no book snapshots in this file"
+   },
+   "simultaneous_pair_cost": {
+    "status": "UNAVAILABLE",
+    "note": "no synchronous book"
+   },
+   "maker_economics": {
+    "maker_fee_bps_reported": [
+     1000
+    ],
+    "taker_fee_bps_reported": [
+     1000
+    ],
+    "rebates_or_rewards": "UNAVAILABLE",
+    "note": "fee bps are the values carried in the market metadata on disk (1000 bps on every one of 71 events). NOT independently confirmed as the effective charged rate; treat as REPORTED, not measured economics. If genuinely 10%/side this environment is uneconomic for cycling."
+   },
+   "adverse_selection": {
+    "status": "UNAVAILABLE",
+    "note": "requires book state at fill time; not on disk"
+   },
+   "executable_capacity_usd": {
+    "event_volume_usd": {
+     "n": 71,
+     "min": 5592.357996,
+     "median": 88328.22936,
+     "max": 11578177.229967,
+     "mean": 356702.783038,
+     "p10": 9463.554397,
+     "p90": 586775.524903,
+     "unit": "USD"
+    },
+    "basis": "lifetime event volume from metadata; NOT instantaneous book capacity"
+   },
+   "sequence_all_actors": {
+    "events": 16022,
+    "own_fills_per_event": {
+     "n": 16022,
+     "min": 1.0,
+     "median": 1.0,
+     "max": 584.0,
+     "mean": 2.940956,
+     "p10": 1.0,
+     "p90": 4.0
+    },
+    "notional_per_event_usd": {
+     "n": 16022,
+     "min": 0.00121,
+     "median": 11.76,
+     "max": 3630608.84673,
+     "mean": 928.619199,
+     "p10": 1.598319,
+     "p90": 454.873668,
+     "unit": "USD"
+    },
+    "complement_reach_pct": 9.97,
+    "first_inventory_to_complement_seconds": {
+     "n": 1597,
+     "min": 0.0,
+     "median": 2017.0,
+     "max": 1125563.0,
+     "mean": 12855.473388,
+     "p10": 113.8,
+     "p90": 24101.0,
+     "unit": "s"
+    },
+    "side_switch_rate_per_adjacent_fill": {
+     "n": 5898,
+     "min": 0.0,
+     "median": 0.0,
+     "max": 1.0,
+     "mean": 0.132886,
+     "p10": 0.0,
+     "p90": 0.5
+    },
+    "realized_vwap_pair_cost_usd": {
+     "n": 1597,
+     "min": 0.162702,
+     "median": 1.01,
+     "max": 1.78,
+     "mean": 1.013545,
+     "p10": 0.771856,
+     "p90": 1.252469,
+     "unit": "USD YES+NO"
+    },
+    "pct_pair_cost_below_1_00": {
+     "n": 1597,
+     "pct": 44.83
+    },
+    "pct_pair_cost_at_or_below_0_96": {
+     "n": 1597,
+     "pct": 33.25
+    }
+   },
+   "sequence_actors_with_2plus_fills": {
+    "events": 5898,
+    "own_fills_per_event": {
+     "n": 5898,
+     "min": 2.0,
+     "median": 2.0,
+     "max": 584.0,
+     "mean": 6.272635,
+     "p10": 2.0,
+     "p90": 10.0
+    },
+    "notional_per_event_usd": {
+     "n": 5898,
+     "min": 0.04848,
+     "median": 44.997796,
+     "max": 3630608.84673,
+     "mean": 2154.165473,
+     "p10": 3.58818,
+     "p90": 1470.28045,
+     "unit": "USD"
+    },
+    "complement_reach_pct": 27.08,
+    "first_inventory_to_complement_seconds": {
+     "n": 1597,
+     "min": 0.0,
+     "median": 2017.0,
+     "max": 1125563.0,
+     "mean": 12855.473388,
+     "p10": 113.8,
+     "p90": 24101.0,
+     "unit": "s"
+    },
+    "side_switch_rate_per_adjacent_fill": {
+     "n": 5898,
+     "min": 0.0,
+     "median": 0.0,
+     "max": 1.0,
+     "mean": 0.132886,
+     "p10": 0.0,
+     "p90": 0.5
+    },
+    "realized_vwap_pair_cost_usd": {
+     "n": 1597,
+     "min": 0.162702,
+     "median": 1.01,
+     "max": 1.78,
+     "mean": 1.013545,
+     "p10": 0.771856,
+     "p90": 1.252469,
+     "unit": "USD YES+NO"
+    },
+    "pct_pair_cost_below_1_00": {
+     "n": 1597,
+     "pct": 44.83
+    },
+    "pct_pair_cost_at_or_below_0_96": {
+     "n": 1597,
+     "pct": 33.25
+    }
+   }
+  },
+  "POLYMARKET_SPORTS_PMUS_BBO": {
+   "env_id": "POLYMARKET_SPORTS_PMUS_BBO",
+   "venue": "Polymarket (PMUS feed)",
+   "category": "sports moneyline (MLB)",
+   "role": "CANDIDATE (sample too small to rank on)",
+   "sample": {
+    "source": "data/transfer_backtest/pmus_live_sample.jsonl",
+    "n_snapshots": 232,
+    "n_distinct_markets": 2,
+    "n_distinct_timestamps": 232,
+    "date_range_utc": [
+     "2026-09-02T18:23:48.378462+00:00",
+     "2026-09-02T18:35:47.732875+00:00"
+    ],
+    "span_minutes": 12.0,
+    "SMALL_SAMPLE_WARNING": "232 snapshots / 2 markets / 12 minutes. NOT comparable to the 24,520-observation Gemini census or the 47,120-print sports census. Cannot support a ranking position."
+   },
+   "window_duration_seconds": {
+    "status": "UNAVAILABLE",
+    "note": "daily sports markets, no fixed short window"
+   },
+   "trades_per_minute": {
+    "status": "UNAVAILABLE",
+    "note": "shares_traded is a cumulative counter, not a print tape; deltas observed were aec-mlb-sd-cin-2026-09-02:76577.45, aec-mlb-atl-wsh-2026-09-02:7887.09 shares over 12 min, but print count and side are unknown"
+   },
+   "spread": {
+    "distribution": {
+     "n": 232,
+     "min": 0.005,
+     "median": 0.005,
+     "max": 0.05,
+     "mean": 0.00694,
+     "p10": 0.005,
+     "p90": 0.005,
+     "unit": "USD"
+    },
+    "histogram": {
+     "0.005": 222,
+     "0.05": 10
+    },
+    "all_bids_on_0.0050_tick_grid": true,
+    "n_distinct_bid_levels_observed": 10,
+    "ARTIFACT_VERDICT": "ARTIFACT (tick floor), NOT a measured spread distribution. 222/232 snapshots sit at the modal 0.0050; every observed bid is an exact multiple of 0.0050, so 0.0050 is one minimum tick and the quote is simply touching. The sample is 232 snapshots of only 2 distinct markets over 12.0 minutes, and one of those two markets is quote-FROZEN for the entire sample (1 distinct bid/ask pair across 116 snapshots), so most rows are the same quote re-sampled. It is neither a single snapshot repeated nor a genuine cross-market distribution: it is a 1-tick-wide touch on two markets, one of them static."
+   },
+   "depth_q1_q5_q10_q25": {
+    "bid_qty_shares": {
+     "n": 232,
+     "min": 7.0,
+     "median": 167120.73,
+     "max": 382635.16,
+     "mean": 151681.525216,
+     "p10": 334.0,
+     "p90": 362280.41,
+     "unit": "shares"
+    },
+    "ask_qty_shares": {
+     "n": 0,
+     "status": "UNAVAILABLE",
+     "note": "ask_qty is null in 232/232 rows"
+    },
+    "q5_q10_q25_levels": {
+     "status": "UNAVAILABLE",
+     "note": "feed carries touch only, no level-2 ladder"
+    },
+    "both_sides_executable": {
+     "status": "UNAVAILABLE",
+     "note": "CANNOT be computed: ask size never populated. The one-sided 167k-share median bid depth is NOT evidence of two-sided capacity."
+    }
+   },
+   "simultaneous_pair_cost": {
+    "status": "UNAVAILABLE",
+    "note": "feed carries one outcome per slug; no complement quote to pair with"
+   },
+   "maker_economics": {
+    "status": "UNAVAILABLE"
+   },
+   "adverse_selection": {
+    "status": "UNAVAILABLE"
+   },
+   "executable_capacity_usd": {
+    "status": "UNAVAILABLE",
+    "note": "one-sided only; a pair-cycling strategy needs both sides"
+   },
+   "per_market_forensics": {
+    "aec-mlb-sd-cin-2026-09-02": {
+     "n_snapshots": 116,
+     "n_distinct_bid_ask_pairs": 10,
+     "frozen": false,
+     "bid_min": 0.275,
+     "bid_max": 0.4,
+     "shares_traded_delta": 76577.45,
+     "bid_qty_median": 193555.52
+    },
+    "aec-mlb-atl-wsh-2026-09-02": {
+     "n_snapshots": 116,
+     "n_distinct_bid_ask_pairs": 1,
+     "frozen": true,
+     "bid_min": 0.69,
+     "bid_max": 0.69,
+     "shares_traded_delta": 7887.09,
+     "bid_qty_median": 166977.68
+    }
+   }
+  },
+  "GEMINI_BTC5M": {
+   "env_id": "GEMINI_BTC5M",
+   "venue": "Gemini",
+   "category": "crypto up/down 5-minute",
+   "role": "INCUMBENT BASELINE (explicitly allowed to lose)",
+   "sample": {
+    "source": "analysis/gemini/updown/STRUCTURAL_EXPANDED.json (frozen census)",
+    "independent_windows": 61,
+    "observations": 24520,
+    "print_tape_source": "data/transfer_backtest/gemini_prints_btc05m.jsonl.gz",
+    "print_symbols": 1962,
+    "n_prints": 15934,
+    "print_date_range_utc": [
+     "2026-08-26T23:54:51Z",
+     "2026-09-02T19:21:43Z"
+    ],
+    "AGE_WARNING": "Gemini BBO/print corpora on disk are AUGUST-SEPTEMBER 2026 HISTORICAL, not current. Structural conclusions are as-of that period."
+   },
+   "window_duration_seconds": {
+    "value": 300,
+    "status": "measured"
+   },
+   "trades_per_minute": {
+    "prints_per_5min_window": {
+     "n": 1962,
+     "min": 0.0,
+     "median": 5.0,
+     "max": 88.0,
+     "mean": 8.121305,
+     "p10": 1.0,
+     "p90": 18.0,
+     "unit": "prints/window"
+    },
+    "implied_prints_per_min": 1.0,
+    "note": "median ~4 prints per 5-minute window = the thinnest tape of any candidate"
+   },
+   "spread": {
+    "distribution": {
+     "n": 24520,
+     "unit": "$ over 1.00",
+     "min": 0.01,
+     "p10": 0.01,
+     "median": 0.24,
+     "p90": 0.96,
+     "max": 0.97,
+     "mean": 0.2748
+    },
+    "note": "spread proxy = (pair cost - 1.00) at q1"
+   },
+   "depth_q1_q5_q10_q25": {
+    "both_sides_executable_pct": {
+     "q1": 100.0,
+     "q5": 68.16,
+     "q10": 68.04,
+     "q25": 61.7
+    },
+    "pair_cost_at_depth": {
+     "q1": {
+      "n": 24520,
+      "unit": "$",
+      "min": 1.01,
+      "p10": 1.01,
+      "median": 1.24,
+      "p90": 1.96,
+      "max": 1.97,
+      "mean": 1.2748
+     },
+     "q5": {
+      "n": 16714,
+      "unit": "$",
+      "min": 1.01,
+      "p10": 1.01,
+      "median": 1.27,
+      "p90": 1.67,
+      "max": 1.96,
+      "mean": 1.2681
+     },
+     "q10": {
+      "n": 16683,
+      "unit": "$",
+      "min": 1.01,
+      "p10": 1.01,
+      "median": 1.27,
+      "p90": 1.672,
+      "max": 1.96,
+      "mean": 1.2691
+     },
+     "q25": {
+      "n": 15129,
+      "unit": "$",
+      "min": 1.012,
+      "p10": 1.012,
+      "median": 1.28,
+      "p90": 1.96,
+      "max": 1.96,
+      "mean": 1.2999
+     }
+    },
+    "print_size_distribution": {
+     "n": 15934,
+     "min": 0.01,
+     "median": 65.0,
+     "max": 7117.0,
+     "mean": 128.683872,
+     "p10": 1.08,
+     "p90": 327.095,
+     "unit": "contracts"
+    }
+   },
+   "simultaneous_pair_cost": {
+    "distribution": {
+     "n": 24520,
+     "unit": "$ UP+DOWN",
+     "min": 1.01,
+     "p10": 1.01,
+     "median": 1.24,
+     "p90": 1.96,
+     "max": 1.97,
+     "mean": 1.2748
+    },
+    "pct_below_1_00": {
+     "n": 24520,
+     "pct": 0.0
+    },
+    "note": "NEVER below $1.00 across 24,520 observations (min 1.01). Simultaneous pair-cost compression is structurally impossible here."
+   },
+   "maker_economics": {
+    "status": "UNAVAILABLE",
+    "note": "no Gemini maker rebate / liquidity reward program sourced on disk"
+   },
+   "adverse_selection": {
+    "status": "UNAVAILABLE",
+    "note": "not measurable from the frozen census; no fill-level attribution"
+   },
+   "executable_capacity_usd": {
+    "touch_contracts_median": 500,
+    "basis": "median touch size 500 contracts (from BBO corpus, see GEMINI_BTC15M)",
+    "note": "nominal depth is adequate; the binding constraint is pair cost, not size"
+   },
+   "sequence": {
+    "complement_reach_pct_underdog": "UNAVAILABLE",
+    "complement_reach_pct_favored": "UNAVAILABLE",
+    "note": "carried from the frozen census: ~45.9% underdog / ~50.8% favored complement reach at median 117s into a 300s window"
+   }
+  },
+  "GEMINI_BTC15M": {
+   "env_id": "GEMINI_BTC15M",
+   "venue": "Gemini",
+   "category": "crypto up/down 15-minute",
+   "role": "CANDIDATE (window length matches L5's 900s)",
+   "sample": {
+    "source": "data/transfer_backtest/gemini_bbo_btc15m.jsonl.gz",
+    "n_bbo_rows": 23318,
+    "n_symbols": 136,
+    "date_range_utc": [
+     "2026-08-30T23:18:46Z",
+     "2026-09-02T13:39:34Z"
+    ],
+    "span_hours": 62.35,
+    "AGE_WARNING": "AUGUST 2026 HISTORICAL, not current."
+   },
+   "window_duration_seconds": {
+    "value": 900,
+    "status": "measured",
+    "note": "matches L5's 900s window - the one dimension where Gemini aligns"
+   },
+   "trades_per_minute": {
+    "status": "UNAVAILABLE",
+    "note": "gemini_prints_15m_tail.jsonl.gz holds only 46 symbol records; too thin to state a rate"
+   },
+   "spread": {
+    "distribution": {
+     "n": 23318,
+     "min": 0.01,
+     "median": 0.02,
+     "max": 0.49,
+     "mean": 0.035539,
+     "p10": 0.02,
+     "p90": 0.1,
+     "unit": "USD"
+    },
+    "note": "single-outcome (UP leg) quoted spread, directly measured"
+   },
+   "depth_q1_q5_q10_q25": {
+    "touch_size_distribution": {
+     "n": 46636,
+     "min": 1.92,
+     "median": 500.0,
+     "max": 15000.0,
+     "mean": 489.546183,
+     "p10": 250.0,
+     "p90": 500.0,
+     "unit": "contracts"
+    },
+    "q5_q10_q25": {
+     "status": "UNAVAILABLE",
+     "note": "BBO feed is touch-only; no level-2 ladder on disk"
+    }
+   },
+   "simultaneous_pair_cost": {
+    "status": "UNAVAILABLE",
+    "note": "this file carries the UP leg only; no synchronous DOWN quote to pair"
+   },
+   "maker_economics": {
+    "status": "UNAVAILABLE"
+   },
+   "adverse_selection": {
+    "status": "UNAVAILABLE"
+   },
+   "executable_capacity_usd": {
+    "touch_notional_usd_approx": 250.0,
+    "basis": "median touch contracts x ~$0.50 mid; approximation, not a sweep"
+   }
+  },
+  "KALSHI_15M_MULTI_SERIES": {
+   "env_id": "KALSHI_15M_MULTI_SERIES",
+   "venue": "Kalshi",
+   "category": "15-minute crypto/commodity series (BTC, ETH, SOL, XRP, DOGE, GOLD, SILVER, WTI, COPPER, NATGAS, CRYPTOLEAD)",
+   "role": "CANDIDATE",
+   "sample": {
+    "pair_cost_and_depth_source": "analysis/kalshi/leg_tape.jsonl.gz",
+    "n_leg_tape_rows": 2269,
+    "n_tickers": 72,
+    "leg_tape_date_range_utc": [
+     "2026-09-09T00:16:26Z",
+     "2026-09-09T01:39:07Z"
+    ],
+    "leg_tape_span_minutes": 83,
+    "series_breakdown": [
+     [
+      "KXCRYPTOLEAD15M",
+      935
+     ],
+     [
+      "KXSILVER15M",
+      197
+     ],
+     [
+      "KXWTI15M",
+      196
+     ],
+     [
+      "KXGOLD15M",
+      195
+     ],
+     [
+      "KXETH15M",
+      192
+     ],
+     [
+      "KXBTC15M",
+      191
+     ],
+     [
+      "KXCOPPER15M",
+      185
+     ],
+     [
+      "KXNATGAS15M",
+      178
+     ]
+    ],
+    "print_tape_source": "data/policy_d_port_ext/*.jsonl (17 files)",
+    "n_kalshi_prints_deduped_by_trade_id": 40650,
+    "n_duplicate_trade_ids_dropped": 174,
+    "n_print_markets": 51,
+    "print_date_range_utc": [
+     "2026-08-31T22:03:57Z",
+     "2026-09-01T04:55:32Z"
+    ],
+    "print_span_hours": 6.86,
+    "SAMPLE_NOTE": "leg_tape is 2,269 synchronous two-sided snapshots over ~83 minutes on 2026-09-09 - two orders of magnitude smaller in time than the Gemini census. The print tape is independent, larger (40,965 prints over ~2 days, 2026-08-31 to 2026-09-01), and covers SOL/XRP/DOGE only."
+   },
+   "window_duration_seconds": {
+    "value": 900,
+    "status": "measured",
+    "note": "matches L5's 900s window"
+   },
+   "trades_per_minute": {
+    "per_market_over_nominal_900s_window": {
+     "n": 51,
+     "min": 14.666667,
+     "median": 48.133333,
+     "max": 128.2,
+     "mean": 53.137255,
+     "p10": 22.826667,
+     "p90": 98.213333,
+     "unit": "prints/min"
+    },
+    "rate_basis": "prints per market divided by the nominal 15-minute window",
+    "taker_side_mix": {
+     "no": 20136,
+     "yes": 20514
+    },
+    "print_size_distribution": {
+     "n": 40650,
+     "min": 0.01,
+     "median": 6.0,
+     "max": 4273.26,
+     "mean": 18.755958,
+     "p10": 1.0,
+     "p90": 32.058,
+     "unit": "contracts"
+    }
+   },
+   "side_switch_frequency": {
+    "taker_side_switch_rate_per_adjacent_print": {
+     "n": 51,
+     "min": 0.089224,
+     "median": 0.136683,
+     "max": 0.196481,
+     "mean": 0.136759,
+     "p10": 0.103745,
+     "p90": 0.172404
+    },
+    "note": "venue-level flow two-sidedness proxy; per-ACTOR switching is UNAVAILABLE (Kalshi prints are anonymous)"
+   },
+   "spread": {
+    "pair_cost_minus_1_00": {
+     "n": 2269,
+     "min": 0.001,
+     "median": 0.02,
+     "max": 0.17,
+     "mean": 0.03262,
+     "p10": 0.005,
+     "p90": 0.09,
+     "unit": "USD"
+    },
+    "note": "YES_bid + NO_bid pair cost minus $1.00, the directly comparable spread proxy"
+   },
+   "depth_q1_q5_q10_q25": {
+    "q1": {
+     "n": 4538,
+     "min": 0.0,
+     "median": 1.0,
+     "max": 167539.96,
+     "mean": 1376.059652,
+     "p10": 0.0,
+     "p90": 3272.441,
+     "unit": "contracts (YES and NO pooled)"
+    },
+    "q1_both_sides_executable_pct": 50.02,
+    "q2": {
+     "n": 4538,
+     "min": 0.0,
+     "median": 167.02,
+     "max": 689349.08,
+     "mean": 2691.639429,
+     "p10": 0.0,
+     "p90": 5601.068,
+     "unit": "contracts (YES and NO pooled)"
+    },
+    "q2_both_sides_executable_pct": 71.93,
+    "q5": {
+     "n": 4538,
+     "min": 0.0,
+     "median": 1284.0,
+     "max": 717556.38,
+     "mean": 5821.242063,
+     "p10": 2.0,
+     "p90": 10104.489,
+     "unit": "contracts (YES and NO pooled)"
+    },
+    "q5_both_sides_executable_pct": 91.93,
+    "q10": {
+     "n": 4538,
+     "min": 0.01,
+     "median": 2346.4,
+     "max": 871438.75,
+     "mean": 10761.823806,
+     "p10": 278.687,
+     "p90": 17393.676,
+     "unit": "contracts (YES and NO pooled)"
+    },
+    "q10_both_sides_executable_pct": 100.0,
+    "touch": {
+     "n": 4538,
+     "min": 0.01,
+     "median": 120.01,
+     "max": 90366.04,
+     "mean": 766.426413,
+     "p10": 5.0,
+     "p90": 2560.425,
+     "unit": "contracts (YES and NO pooled)"
+    },
+    "touch_both_sides_executable_pct": 100.0,
+    "full": {
+     "n": 4538,
+     "min": 0.99,
+     "median": 13103.7,
+     "max": 1012087.12,
+     "mean": 73481.886895,
+     "p10": 2969.628,
+     "p90": 248132.613,
+     "unit": "contracts (YES and NO pooled)"
+    },
+    "full_both_sides_executable_pct": 100.0
+   },
+   "simultaneous_pair_cost": {
+    "distribution": {
+     "n": 2269,
+     "min": 1.001,
+     "median": 1.02,
+     "max": 1.17,
+     "mean": 1.03262,
+     "p10": 1.005,
+     "p90": 1.09,
+     "unit": "USD YES+NO"
+    },
+    "pct_below_1_00": {
+     "n": 2269,
+     "pct": 0.0
+    },
+    "pct_at_or_below_0_96": {
+     "n": 2269,
+     "pct": 0.0
+    },
+    "note": "min 1.001 - never below $1.00 in this 2,269-row sample either, but the distribution is far tighter than Gemini (median 1.02 vs 1.24)"
+   },
+   "maker_economics": {
+    "source": "analysis/kalshi/venue_census.json",
+    "observed_utc": "2026-09-09T00:50:26Z",
+    "total_programs_scanned": 183329,
+    "active_now_at_observation": 2790,
+    "programs_matching_this_tape": [
+     {
+      "series": "KXNATGAS15M",
+      "reward_usd": 20.0,
+      "target_size": 300.0,
+      "period_minutes": 15.0,
+      "types": [
+       "liquidity"
+      ],
+      "pool_per_hour_usd": 80.0
+     },
+     {
+      "series": "KXCOPPER15M",
+      "reward_usd": 20.0,
+      "target_size": 300.0,
+      "period_minutes": 15.0,
+      "types": [
+       "liquidity"
+      ],
+      "pool_per_hour_usd": 80.0
+     },
+     {
+      "series": "KXSILVER15M",
+      "reward_usd": 20.0,
+      "target_size": 300.0,
+      "period_minutes": 15.0,
+      "types": [
+       "liquidity"
+      ],
+      "pool_per_hour_usd": 80.0
+     },
+     {
+      "series": "KXWTI15M",
+      "reward_usd": 20.0,
+      "target_size": 300.0,
+      "period_minutes": 15.0,
+      "types": [
+       "liquidity"
+      ],
+      "pool_per_hour_usd": 80.0
+     },
+     {
+      "series": "KXGOLD15M",
+      "reward_usd": 20.0,
+      "target_size": 300.0,
+      "period_minutes": 15.0,
+      "types": [
+       "liquidity"
+      ],
+      "pool_per_hour_usd": 80.0
+     },
+     {
+      "series": "KXCRYPTOLEAD15M",
+      "reward_usd": 20.0,
+      "target_size": 1000.0,
+      "period_minutes": 15.0,
+      "types": [
+       "liquidity"
+      ],
+      "pool_per_hour_usd": 400.0
+     }
+    ],
+    "program_active_fraction_in_tape": 83.12,
+    "status": "MEASURED/SOURCED (liquidity-reward program terms published by venue and captured on disk). NOTE: per CLAUDE.md these are NOT credited economics - no reward may be assumed until actually credited and source-accounted."
+   },
+   "adverse_selection": {
+    "status": "UNAVAILABLE",
+    "note": "prints carry taker_side but no own-fill attribution; post-fill mark drift not computable from these files"
+   },
+   "executable_capacity_usd": {
+    "q5_band_contracts_median": 1284.0,
+    "q10_band_contracts_median": 2346.4,
+    "note": "band depth is in contracts at <=$1 each, so median q5 band ~1,570 contracts ~= low-thousands USD per side per leg; ample for the bounded probe stage"
+   },
+   "sequence": {
+    "status": "UNAVAILABLE",
+    "note": "Kalshi prints are anonymous, so per-actor OPEN/EXTEND/COMPLETE sequences cannot be reconstructed. Complement reach and first-inventory-to-complement lag are NOT measurable for this venue from on-disk data."
+   },
+   "_gemini_bbo_rows_in_same_corpus": 45115
+  },
+  "GEMINI_MULTI_ASSET_SHORT_WINDOW": {
+   "env_id": "GEMINI_MULTI_ASSET_SHORT_WINDOW",
+   "venue": "Gemini",
+   "category": "crypto up/down short-window (BTC/ETH 5m, multi-asset), simultaneous capture with Kalshi",
+   "role": "INCUMBENT BASELINE - independent corpus, same clock as the Kalshi print tape (single-leg only; not rankable)",
+   "sample": {
+    "source": "data/policy_d_port_ext/*.jsonl (kind=bbo, venue=gemini)",
+    "n_bbo_rows": 45115,
+    "date_range_utc": [
+     "2026-08-31T22:03:58Z",
+     "2026-09-01T04:55:32Z"
+    ],
+    "span_hours": 6.86,
+    "n_paired_up_down_ticks": 0,
+    "AGE_WARNING": "2026-08-31 to 2026-09-01 HISTORICAL, not current.",
+    "WHY_THIS_MATTERS": "captured in the SAME collector run as the Kalshi print tape, so the Gemini-vs-Kalshi spread comparison here is not confounded by date. But it carries the UP leg only, so it cannot speak to pair cost."
+   },
+   "window_duration_seconds": {
+    "value": 300,
+    "status": "measured"
+   },
+   "trades_per_minute": {
+    "status": "UNAVAILABLE",
+    "note": "this corpus has no Gemini print records"
+   },
+   "spread": {
+    "distribution": {
+     "n": 24420,
+     "min": 0.01,
+     "median": 0.02,
+     "max": 0.92,
+     "mean": 0.038579,
+     "p10": 0.02,
+     "p90": 0.07,
+     "unit": "USD"
+    },
+    "note": "ask[0]-bid[0] on a single leg, directly measured"
+   },
+   "depth_q1_q5_q10_q25": {
+    "touch_size_distribution": {
+     "n": 48840,
+     "min": 1.0,
+     "median": 500.0,
+     "max": 15000.0,
+     "mean": 500.090181,
+     "p10": 283.0,
+     "p90": 500.0,
+     "unit": "contracts"
+    },
+    "level2_size_distribution": {
+     "n": 4900,
+     "min": 1.0,
+     "median": 50.0,
+     "max": 14999.0,
+     "mean": 380.765782,
+     "p10": 1.0,
+     "p90": 500.0,
+     "unit": "contracts"
+    },
+    "q5_q10_q25": {
+     "status": "UNAVAILABLE",
+     "note": "feed carries ~2 levels per side only"
+    }
+   },
+   "simultaneous_pair_cost": {
+    "distribution": {
+     "n": 0,
+     "status": "UNAVAILABLE"
+    },
+    "pct_below_1_00": {
+     "n": 0,
+     "status": "UNAVAILABLE"
+    },
+    "pct_at_or_below_0_96": {
+     "n": 0,
+     "status": "UNAVAILABLE"
+    },
+    "LEG_COVERAGE_FINDING": "This corpus contains 45,115 BBO rows and ALL of them are the UP leg - zero DOWN-leg rows. Simultaneous pair cost is therefore genuinely UNAVAILABLE here, and this corpus CANNOT be used as independent confirmation of the frozen census pair-cost result. Its value is the directly measured single-leg quoted spread."
+   },
+   "maker_economics": {
+    "status": "UNAVAILABLE"
+   },
+   "adverse_selection": {
+    "status": "UNAVAILABLE"
+   },
+   "executable_capacity_usd": {
+    "touch_contracts_median": 500.0,
+    "basis": "median touch size; not a sweep"
+   }
+  }
+ },
+ "scores": {
+  "POLYMARKET_CRYPTO_UPDOWN_L5": {
+   "dimension_scores": {
+    "pair_cost_compression": 100.0,
+    "inventory_cycling": 100.0,
+    "complement_reach": 100.0,
+    "complement_latency": 100.0,
+    "trade_frequency": 100.0,
+    "window_cadence_match": 100.0,
+    "two_sided_depth": null,
+    "maker_economics_sourced": null,
+    "adverse_selection": null
+   },
+   "dimensions_with_data": 6,
+   "dimensions_total": 9,
+   "structural_similarity_score": 100.0,
+   "evidence_notes": {
+    "pair_cost_basis": "realized sequential VWAP",
+    "pair_cost_median": 0.976974,
+    "fills_per_event_median": 6.0,
+    "complement_reach_pct": 71.47,
+    "complement_lag_s": 52.0,
+    "prints_or_fills_per_min": 12.638,
+    "window_s": [
+     300,
+     900
+    ],
+    "maker_economics": "UNAVAILABLE",
+    "adverse_selection": "UNAVAILABLE"
+   },
+   "rankable": true,
+   "like_for_like_score": 100.0
+  },
+  "POLYMARKET_SPORTS": {
+   "dimension_scores": {
+    "pair_cost_compression": 96.0,
+    "inventory_cycling": 33.3,
+    "complement_reach": 37.9,
+    "complement_latency": 2.6,
+    "trade_frequency": 1.2,
+    "window_cadence_match": null,
+    "two_sided_depth": null,
+    "maker_economics_sourced": 0.0,
+    "adverse_selection": null
+   },
+   "dimensions_with_data": 6,
+   "dimensions_total": 9,
+   "structural_similarity_score": 28.5,
+   "evidence_notes": {
+    "pair_cost_basis": "realized sequential VWAP",
+    "pair_cost_median": 1.01,
+    "fills_per_event_median": 2.0,
+    "complement_reach_pct": 27.08,
+    "complement_lag_s": 2017.0,
+    "prints_or_fills_per_min": 0.155,
+    "maker_economics": "fee bps REPORTED in metadata ([1000]) but effective rate unconfirmed; no rebate/reward sourced",
+    "adverse_selection": "UNAVAILABLE"
+   },
+   "rankable": true,
+   "like_for_like_score": 48.6
+  },
+  "POLYMARKET_SPORTS_PMUS_BBO": {
+   "dimension_scores": {
+    "pair_cost_compression": null,
+    "inventory_cycling": null,
+    "complement_reach": null,
+    "complement_latency": null,
+    "trade_frequency": null,
+    "window_cadence_match": null,
+    "two_sided_depth": null,
+    "maker_economics_sourced": null,
+    "adverse_selection": null
+   },
+   "dimensions_with_data": 0,
+   "dimensions_total": 9,
+   "structural_similarity_score": null,
+   "evidence_notes": {
+    "maker_economics": "UNAVAILABLE",
+    "adverse_selection": "UNAVAILABLE"
+   },
+   "rankable": false,
+   "not_rankable_because": [
+    "no data on the decisive dimension (pair-cost compression)",
+    "only 0/9 dimensions have data (minimum 4)",
+    "no scorable dimension at all"
+   ]
+  },
+  "GEMINI_BTC5M": {
+   "dimension_scores": {
+    "pair_cost_compression": 4.0,
+    "inventory_cycling": null,
+    "complement_reach": null,
+    "complement_latency": null,
+    "trade_frequency": 7.9,
+    "window_cadence_match": 33.3,
+    "two_sided_depth": 68.2,
+    "maker_economics_sourced": null,
+    "adverse_selection": null
+   },
+   "dimensions_with_data": 4,
+   "dimensions_total": 9,
+   "structural_similarity_score": 28.4,
+   "evidence_notes": {
+    "pair_cost_basis": "simultaneous book",
+    "pair_cost_median": 1.24,
+    "prints_or_fills_per_min": 1.0,
+    "window_s": 300,
+    "both_sides_q5_pct": 68.16,
+    "maker_economics": "UNAVAILABLE",
+    "adverse_selection": "UNAVAILABLE"
+   },
+   "rankable": true,
+   "like_for_like_score": 6.0
+  },
+  "GEMINI_BTC15M": {
+   "dimension_scores": {
+    "pair_cost_compression": null,
+    "inventory_cycling": null,
+    "complement_reach": null,
+    "complement_latency": null,
+    "trade_frequency": null,
+    "window_cadence_match": 100.0,
+    "two_sided_depth": null,
+    "maker_economics_sourced": null,
+    "adverse_selection": null
+   },
+   "dimensions_with_data": 1,
+   "dimensions_total": 9,
+   "structural_similarity_score": 100.0,
+   "evidence_notes": {
+    "window_s": 900,
+    "maker_economics": "UNAVAILABLE",
+    "adverse_selection": "UNAVAILABLE"
+   },
+   "rankable": false,
+   "not_rankable_because": [
+    "no data on the decisive dimension (pair-cost compression)",
+    "only 1/9 dimensions have data (minimum 4)"
+   ]
+  },
+  "KALSHI_15M_MULTI_SERIES": {
+   "dimension_scores": {
+    "pair_cost_compression": 92.0,
+    "inventory_cycling": null,
+    "complement_reach": null,
+    "complement_latency": null,
+    "trade_frequency": 100.0,
+    "window_cadence_match": 100.0,
+    "two_sided_depth": 91.9,
+    "maker_economics_sourced": 100.0,
+    "adverse_selection": null
+   },
+   "dimensions_with_data": 5,
+   "dimensions_total": 9,
+   "structural_similarity_score": 96.8,
+   "evidence_notes": {
+    "pair_cost_basis": "simultaneous book",
+    "pair_cost_median": 1.02,
+    "prints_or_fills_per_min": 48.133,
+    "window_s": 900,
+    "both_sides_q5_pct": 91.93,
+    "maker_economics": "SOURCED liquidity-reward programs on disk",
+    "adverse_selection": "UNAVAILABLE"
+   },
+   "rankable": true,
+   "like_for_like_score": 96.0
+  },
+  "GEMINI_MULTI_ASSET_SHORT_WINDOW": {
+   "dimension_scores": {
+    "pair_cost_compression": null,
+    "inventory_cycling": null,
+    "complement_reach": null,
+    "complement_latency": null,
+    "trade_frequency": null,
+    "window_cadence_match": 33.3,
+    "two_sided_depth": null,
+    "maker_economics_sourced": null,
+    "adverse_selection": null
+   },
+   "dimensions_with_data": 1,
+   "dimensions_total": 9,
+   "structural_similarity_score": 33.3,
+   "evidence_notes": {
+    "window_s": 300,
+    "maker_economics": "UNAVAILABLE",
+    "adverse_selection": "UNAVAILABLE"
+   },
+   "rankable": false,
+   "not_rankable_because": [
+    "no data on the decisive dimension (pair-cost compression)",
+    "only 1/9 dimensions have data (minimum 4)"
+   ]
+  }
+ },
+ "ranking": [
+  "POLYMARKET_CRYPTO_UPDOWN_L5",
+  "KALSHI_15M_MULTI_SERIES",
+  "POLYMARKET_SPORTS",
+  "GEMINI_BTC5M"
+ ],
+ "not_rankable": {
+  "POLYMARKET_SPORTS_PMUS_BBO": [
+   "no data on the decisive dimension (pair-cost compression)",
+   "only 0/9 dimensions have data (minimum 4)",
+   "no scorable dimension at all"
+  ],
+  "GEMINI_BTC15M": [
+   "no data on the decisive dimension (pair-cost compression)",
+   "only 1/9 dimensions have data (minimum 4)"
+  ],
+  "GEMINI_MULTI_ASSET_SHORT_WINDOW": [
+   "no data on the decisive dimension (pair-cost compression)",
+   "only 1/9 dimensions have data (minimum 4)"
+  ]
+ },
+ "rankability_gate": "requires data on pair-cost compression AND >=4 of 9 dimensions",
+ "like_for_like": {
+  "common_dimensions": [
+   "pair_cost_compression",
+   "trade_frequency"
+  ],
+  "scores": {
+   "POLYMARKET_CRYPTO_UPDOWN_L5": 100.0,
+   "POLYMARKET_SPORTS": 48.6,
+   "GEMINI_BTC5M": 6.0,
+   "KALSHI_15M_MULTI_SERIES": 96.0
+  },
+  "ranking": [
+   "POLYMARKET_CRYPTO_UPDOWN_L5",
+   "KALSHI_15M_MULTI_SERIES",
+   "POLYMARKET_SPORTS",
+   "GEMINI_BTC5M"
+  ],
+  "why": "headline scores average over different dimension sets per environment and are therefore not directly comparable; this re-scores all rankable environments over only the dimensions every one of them has data for"
+ }
+}
