@@ -21,6 +21,59 @@ permissions:
   actions: read
 
 jobs:
+  baseline:
+    # Separate job on purpose: the fixed-side baseline needs ONLY the state
+    # table, so it must not wait on the 13-minute sub-second derivation.
+    if: ${{ true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Read the request
+        id: p
+        run: |
+          set -euo pipefail
+          rid="$(sed -n -E 's/^EVAL_RUN_ID=([0-9]+)[[:space:]]*$/\1/p' \
+                 .github/path_economics_request | tail -1)"
+          [ -n "$rid" ] || { echo "::error::EVAL_RUN_ID missing"; exit 1; }
+          echo "rid=$rid" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: oos-evaluation-*
+          path: ev
+          run-id: ${{ steps.p.outputs.rid }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Unpack
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          zcat "$(ls ev/*/state_table_oos.jsonl.gz | head -1)" \
+            > work/state_table_oos.jsonl
+          wc -l work/state_table_oos.jsonl
+
+      - name: Fixed-side baselines
+        run: |
+          set -euo pipefail
+          python3 scripts/pmus_fixed_side_baseline.py \
+            --state work/state_table_oos.jsonl --label OOS \
+            | tee FIXED_SIDE_BASELINE.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixed-side-baseline-${{ github.run_id }}
+          path: |
+            FIXED_SIDE_BASELINE.txt
+            analysis/l5/path_economics/fixed_side_baseline_oos.json
+          retention-days: 30
+          if-no-files-found: error
+
   study:
     runs-on: ubuntu-latest
     timeout-minutes: 240
