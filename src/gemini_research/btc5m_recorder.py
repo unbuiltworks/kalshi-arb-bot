@@ -435,18 +435,30 @@ async def index_task(sink: Sink, stop: asyncio.Event,
                                                             m.get("agency")):
                             want.add(cand)
                     add = sorted(want - subscribed)
-                    if add:
-                        await ws.send(json.dumps({"id": "idx",
+                    # ONE FRAME PER CANDIDATE. Measured 2026-10-05: batching
+                    # three spellings into one SUBSCRIBE got
+                    #   status 400, code -1013,
+                    #   "Invalid stream name: LS-LRRR-XBTUSD@indexPrice"
+                    # which names ONLY THE FIRST param. The venue rejects the
+                    # whole frame on the first bad name, so the other two
+                    # spellings were never evaluated -- my own batching
+                    # defeated the probe. Each candidate now gets its own
+                    # frame and its own id, so every spelling earns its own
+                    # verdict and the ack can be attributed to it.
+                    for cand in add:
+                        rid = "idx|%s" % cand
+                        await ws.send(json.dumps({"id": rid,
                                                   "method": "SUBSCRIBE",
-                                                  "params": add}))
-                        subscribed.update(add)
+                                                  "params": [cand]}))
+                        subscribed.add(cand)
                         sink.write({"t_ns": now_ns(),
                                     "kind": "index_subscribe",
-                                    "params": add,
-                                    "note": ("every candidate spelling is "
-                                             "sent; the venue's ack or error "
-                                             "is the evidence of which one "
-                                             "it accepts")})
+                                    "request_id": rid, "candidate": cand,
+                                    "note": ("one frame per candidate so the "
+                                             "venue's answer is attributable; "
+                                             "a batched frame is rejected "
+                                             "whole on its first bad name")})
+                        await asyncio.sleep(0.05)
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     except asyncio.TimeoutError:
@@ -460,7 +472,15 @@ async def index_task(sink: Sink, stop: asyncio.Event,
                         continue
                     if isinstance(m, dict) and ("status" in m or "result" in m
                                                 or "error" in m):
-                        sink.write({"t_ns": t, "kind": "index_ctrl", "raw": m})
+                        rid = str(m.get("id") or "")
+                        cand = rid.split("|", 1)[1] if "|" in rid else None
+                        sink.write({"t_ns": t, "kind": "index_ctrl", "raw": m,
+                                    "candidate": cand,
+                                    "accepted": (m.get("status") == 200
+                                                 if "status" in m else None),
+                                    "note": ("which spelling this verdict "
+                                             "belongs to, recovered from the "
+                                             "request id")})
                         continue
                     # PRESERVE RAW. The parse below is a convenience and the
                     # field names are not confirmed from documentation.

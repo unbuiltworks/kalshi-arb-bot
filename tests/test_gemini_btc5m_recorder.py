@@ -195,3 +195,20 @@ def test_every_subscription_spelling_is_tried_most_specific_first():
     assert R.index_stream_candidates(None, "lukka") == []
     # no agency at all still tries the bare form
     assert R.index_stream_candidates("X-IDX", None) == ["X-IDX@indexPrice"]
+
+
+def test_each_candidate_gets_its_own_subscribe_frame():
+    """MEASURED: a batched SUBSCRIBE is rejected WHOLE on its first bad name.
+
+    The venue answered 400 / -1013 "Invalid stream name:
+    LS-LRRR-XBTUSD@indexPrice" to a three-candidate frame, naming only the
+    first param -- so the other two spellings were never evaluated. The
+    source must therefore send one frame per candidate, with an attributable
+    id.
+    """
+    src = Path("src/gemini_research/btc5m_recorder.py").read_text()
+    assert 'rid = "idx|%s" % cand' in src
+    assert '"params": [cand]' in src
+    assert '"candidate": cand' in src
+    # and the ack must be attributed back
+    assert 'rid.split("|", 1)[1]' in src

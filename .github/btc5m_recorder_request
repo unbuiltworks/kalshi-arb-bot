@@ -1,3 +1,3 @@
 BTC5m research recorder request
-requested: 2026-10-05T13:38:26Z
-retry: 3 -- index subscription fixed (venue sends sourceDetails NULL; agency resolved from the flat source, every spelling tried with its ack recorded)
+requested: 2026-10-05T13:50:22Z
+retry: 4 -- one SUBSCRIBE frame per index-stream candidate (a batched frame is rejected whole on its first bad name; venue answered 400/-1013 naming only the bare form)
