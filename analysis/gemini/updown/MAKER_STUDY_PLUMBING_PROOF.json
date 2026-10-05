@@ -1,0 +1,162 @@
+{
+  "authorizes_nothing": "changes no cohort, recorder, frozen analyzer or authorization, and opens no venue surface",
+  "btc5m_markets_with_early_checkpoints": 6,
+  "coverage_warning": "FILL EVIDENCE IS BOUNDED BY TRADE PRINTS. If the tape carries few prints, a low measured fill rate is a statement about the EVIDENCE available, not a proven property of the venue -- and it is reported as such rather than as a maker fill rate.",
+  "fees": {
+    "form": "rate*q*p*(1-p), cent-rounded UP",
+    "maker_rate": "0.0175",
+    "rebates": "NONE assumed, modelled or credited anywhere in this study",
+    "taker_rate": "0.07"
+  },
+  "label": "GEMINI_BTC5M_INSIDE_SPREAD_MAKER_STUDY_V1",
+  "no_touch_equals_fill": "a resting order fills only on a qualifying later print with enough size behind it; book-evolution-only cases are reported separately and never pooled",
+  "placement_definition": "a fraction through the observed spread from OUR passive side, snapped AWAY from aggression so it is never better than the fraction implies",
+  "placements": [
+    "p25",
+    "p50",
+    "p75"
+  ],
+  "queue_assumption": "we arrive BEHIND every contract displayed at a better-or-equal price on our side, and our own size must also trade",
+  "result": {
+    "by_method": {
+      "MAKER_P25": {
+        "adverse_after_fill": {
+          "best": 0.03,
+          "mean": -0.138,
+          "median": -0.18,
+          "n": 5,
+          "worst": -0.23
+        },
+        "book_evolution_only_not_counted_as_fills": 9,
+        "capacity_capital_deployed_usd": "1.84",
+        "capacity_note": "q=1 per opportunity; capacity is bounded by the queue ahead of us, which is reported per placement rather than averaged away",
+        "ev_per_all_opportunities_usd": "-0.0800",
+        "ev_per_fill_usd": "-0.2629",
+        "fees_usd_separate": "0.07",
+        "fill_rate_pct": 30.43,
+        "fills": 7,
+        "net_pnl_usd": "-1.8400",
+        "no_fill_opportunities": 16,
+        "opportunities": 23,
+        "rebates_usd": "0 -- NONE assumed, modelled or credited",
+        "settlement_win_rate_pct": 0.0,
+        "time_to_fill_s": {
+          "best": 144.072,
+          "mean": 96.9144,
+          "median": 105.514,
+          "n": 7,
+          "worst": 45.454
+        }
+      },
+      "MAKER_P50": {
+        "adverse_after_fill": {
+          "best": -0.05,
+          "mean": -0.19,
+          "median": -0.22,
+          "n": 5,
+          "worst": -0.28
+        },
+        "book_evolution_only_not_counted_as_fills": 9,
+        "capacity_capital_deployed_usd": "2.18",
+        "capacity_note": "q=1 per opportunity; capacity is bounded by the queue ahead of us, which is reported per placement rather than averaged away",
+        "ev_per_all_opportunities_usd": "-0.0948",
+        "ev_per_fill_usd": "-0.3114",
+        "fees_usd_separate": "0.07",
+        "fill_rate_pct": 30.43,
+        "fills": 7,
+        "net_pnl_usd": "-2.1800",
+        "no_fill_opportunities": 16,
+        "opportunities": 23,
+        "rebates_usd": "0 -- NONE assumed, modelled or credited",
+        "settlement_win_rate_pct": 0.0,
+        "time_to_fill_s": {
+          "best": 135.451,
+          "mean": 87.1314,
+          "median": 82.704,
+          "n": 7,
+          "worst": 45.454
+        }
+      },
+      "MAKER_P75": {
+        "adverse_after_fill": {
+          "best": -0.13,
+          "mean": -0.242,
+          "median": -0.26,
+          "n": 5,
+          "worst": -0.33
+        },
+        "book_evolution_only_not_counted_as_fills": 9,
+        "capacity_capital_deployed_usd": "2.52",
+        "capacity_note": "q=1 per opportunity; capacity is bounded by the queue ahead of us, which is reported per placement rather than averaged away",
+        "ev_per_all_opportunities_usd": "-0.1096",
+        "ev_per_fill_usd": "-0.3600",
+        "fees_usd_separate": "0.07",
+        "fill_rate_pct": 30.43,
+        "fills": 7,
+        "net_pnl_usd": "-2.5200",
+        "no_fill_opportunities": 16,
+        "opportunities": 23,
+        "rebates_usd": "0 -- NONE assumed, modelled or credited",
+        "settlement_win_rate_pct": 0.0,
+        "time_to_fill_s": {
+          "best": 135.451,
+          "mean": 87.1314,
+          "median": 82.704,
+          "n": 7,
+          "worst": 45.454
+        }
+      },
+      "TAKER_IMMEDIATE": {
+        "book_evolution_only_not_counted_as_fills": 0,
+        "capacity_capital_deployed_usd": "9.85",
+        "capacity_note": "q=1 per opportunity; capacity is bounded by the queue ahead of us, which is reported per placement rather than averaged away",
+        "ev_per_all_opportunities_usd": "0.0065",
+        "ev_per_fill_usd": "0.0065",
+        "fees_usd_separate": "0.44",
+        "fill_rate_note": "a taker fill is immediate by construction; the rate is 100% and is not a measured quantity",
+        "fill_rate_pct": 100.0,
+        "fills": 23,
+        "net_pnl_usd": "0.1500",
+        "no_fill_opportunities": 0,
+        "opportunities": 23,
+        "rebates_usd": "0 -- NONE assumed, modelled or credited",
+        "settlement_win_rate_pct": 43.48
+      }
+    },
+    "denominator_note": "every rate and per-opportunity EV divides by the SETTLED opportunities; an unsettled window is missing an outcome, not an unfilled order",
+    "headline": {
+      "comparison": {
+        "MAKER_P25": {
+          "ev_per_all_opportunities_usd": "-0.0800",
+          "fill_rate_pct": 30.43,
+          "fills": 7,
+          "minus_taker_usd": "-0.0865"
+        },
+        "MAKER_P50": {
+          "ev_per_all_opportunities_usd": "-0.0948",
+          "fill_rate_pct": 30.43,
+          "fills": 7,
+          "minus_taker_usd": "-0.1013"
+        },
+        "MAKER_P75": {
+          "ev_per_all_opportunities_usd": "-0.1096",
+          "fill_rate_pct": 30.43,
+          "fills": 7,
+          "minus_taker_usd": "-0.1161"
+        }
+      },
+      "question": "given the SAME directional decision, does resting inside the spread beat crossing it?",
+      "taker_ev_per_all_opportunities": "0.0065"
+    },
+    "opportunities": 28,
+    "settled_opportunities_used_as_the_denominator": 23,
+    "side_selection_mode": "underdog",
+    "unsettled_opportunities_excluded": 5
+  },
+  "settlements": 56,
+  "side_selection_is_separate": "`--side` fixes the DIRECTION; only the execution method varies, so the comparison answers the maker-vs-taker question at a constant directional decision",
+  "status": "RESEARCH ONLY / EXPLORATORY. No live maker orders.",
+  "tape_rows": 9649,
+  "tapes_glob": "analysis/gemini/btc5m_rec/btc5m_rec_*.jsonl.gz",
+  "trade_prints_observed": 19
+}
