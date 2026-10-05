@@ -15,13 +15,13 @@ name: pmus-underdog-partial-discovery
 # PARTIAL BY CONSTRUCTION. The archive run is still in flight, so this uses the
 # chunk artifacts that are COMPLETE at dispatch time and records exactly which.
 
+# Started by touching .github/underdog_calibration_request. workflow_dispatch
+# is not usable here: a dispatchable workflow has to exist on the default
+# branch first, and this analysis does not belong on main.
 on:
-  workflow_dispatch:
-    inputs:
-      archive_run_id:
-        description: 'workflow run id holding the raw-tape-archive-* artifacts'
-        required: true
-        default: '37253257157'
+  push:
+    branches: ['claude/pmus-btc15m-preregister-44yivc']
+    paths: ['.github/underdog_calibration_request']
 
 permissions:
   contents: write
@@ -32,6 +32,8 @@ env:
   # was built from; this branch is never written to
   SRC_REF: ae80e9d59450bd13f8cd01f8460dea91033bd66b
   EARLIEST_ELIGIBLE: '20261002'
+  # the in-flight archive run whose COMPLETED chunk artifacts this reads
+  ARCHIVE_RUN_ID: '37253257157'
 
 jobs:
   calibrate:
@@ -70,7 +72,7 @@ jobs:
         with:
           pattern: raw-tape-archive-*
           path: arc
-          run-id: ${{ inputs.archive_run_id }}
+          run-id: ${{ env.ARCHIVE_RUN_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Quarantine everything before Oct. 2, then inventory what is left
@@ -131,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p analysis/pmus/underdog_calibration
-          { echo "archive_run_id: ${{ inputs.archive_run_id }}";
+          { echo "archive_run_id: ${{ env.ARCHIVE_RUN_ID }}";
             echo "analysis_code_ref: $SRC_REF";
             echo "earliest_eligible_part_date: $EARLIEST_ELIGIBLE";
             echo "dispatched_at: $(date -u +%FT%TZ)";

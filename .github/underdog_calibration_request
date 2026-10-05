@@ -1,0 +1,12 @@
+« underdog price x time calibration request »
+
+Touching this file starts .github/workflows/pmus-underdog-partial-discovery.yml,
+which reads the COMPLETED raw-tape-archive-* artifacts of the archive run named
+in that workflow's ARCHIVE_RUN_ID, discards every part dated before 2026-10-02,
+and runs the frozen calibration over what remains.
+
+Partial by construction: the archive run is still in flight, so a later touch of
+this file will see more chunks. The part list actually used is committed with
+each result, so no two runs can be confused for one another.
+
+REQUEST=1
