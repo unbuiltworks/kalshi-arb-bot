@@ -1,0 +1,7633 @@
+{
+ "contract_length": "5m",
+ "horizon_s": 30,
+ "no_strategy_no_optimization": true,
+ "resolution": "native whole seconds; a second with no archived observation carries NO event and nothing is manufactured",
+ "analysis": {
+  "population": "5m",
+  "n_windows": 23,
+  "windows_with_a_fill_in_first_30s": 9,
+  "share_with_a_fill_in_first_30s": 0.3913,
+  "Q1_first_fill_secs_after_open": {
+   "n": 9,
+   "min": 4.0,
+   "p10": 4.0,
+   "p25": 6.0,
+   "p50": 7.0,
+   "p75": 7.0,
+   "p90": 9.0,
+   "max": 9.0,
+   "mean": 6.555556,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "Q1_first_fill_tte_s": {
+   "n": 9,
+   "min": 291.0,
+   "p10": 291.0,
+   "p25": 293.0,
+   "p50": 293.0,
+   "p75": 294.0,
+   "p90": 296.0,
+   "max": 296.0,
+   "mean": 293.444444,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "Q2_where": {
+   "first_side_counts": {
+    "up": 7,
+    "down": 2
+   },
+   "offset_ticks_below_bid": {
+    "n": 9,
+    "min": -14.0,
+    "p10": -14.0,
+    "p25": -4.0,
+    "p50": -1.0,
+    "p75": 1.0,
+    "p90": 1.0,
+    "max": 4.0,
+    "mean": -2.333333,
+    "share_negative": 0.5556,
+    "share_zero": 0.0,
+    "share_positive": 0.4444
+   },
+   "ticks_below_ask": {
+    "n": 9,
+    "min": -13.0,
+    "p10": -13.0,
+    "p25": -2.0,
+    "p50": 0.0,
+    "p75": 2.0,
+    "p90": 3.0,
+    "max": 5.0,
+    "mean": -1.111111,
+    "share_negative": 0.4444,
+    "share_zero": 0.1111,
+    "share_positive": 0.4444
+   },
+   "price": {
+    "n": 9,
+    "min": 0.33,
+    "p10": 0.33,
+    "p25": 0.41,
+    "p50": 0.47,
+    "p75": 0.52,
+    "p90": 0.54,
+    "max": 0.56,
+    "mean": 0.458889,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "spread_at_entry": {
+    "n": 9,
+    "min": 0.01,
+    "p10": 0.01,
+    "p25": 0.01,
+    "p50": 0.01,
+    "p75": 0.01,
+    "p90": 0.02,
+    "max": 0.02,
+    "mean": 0.012222,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "pair_sum_bids_at_entry": {
+    "n": 9,
+    "min": 0.98,
+    "p10": 0.98,
+    "p25": 0.99,
+    "p50": 0.99,
+    "p75": 0.99,
+    "p90": 0.99,
+    "max": 0.99,
+    "mean": 0.987778,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "mechanism_counts": {
+    "MINT_CONSISTENT": 5,
+    "RESTING_BID_CONSISTENT": 4
+   },
+   "move_5s_before_entry": {
+    "n": 9,
+    "min": -0.13,
+    "p10": -0.13,
+    "p25": -0.07,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0,
+    "max": 0.0,
+    "mean": -0.035556,
+    "share_negative": 0.4444,
+    "share_zero": 0.5556,
+    "share_positive": 0.0
+   },
+   "move_10s_before_entry": {
+    "n": 9,
+    "min": -0.11,
+    "p10": -0.11,
+    "p25": -0.05,
+    "p50": -0.02,
+    "p75": 0.0,
+    "p90": 0.0,
+    "max": 0.0,
+    "mean": -0.035556,
+    "share_negative": 0.6667,
+    "share_zero": 0.3333,
+    "share_positive": 0.0
+   }
+  },
+  "Q3_first_quantity": {
+   "quantity": {
+    "n": 9,
+    "min": 3.36,
+    "p10": 3.36,
+    "p25": 5.74,
+    "p50": 16.92,
+    "p75": 68.0,
+    "p90": 80.0,
+    "max": 80.0,
+    "mean": 32.603333,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "distinct_values": 8,
+   "spearman_vs_price": {
+    "n": 9,
+    "rho": null,
+    "note": "too few pairs"
+   },
+   "spearman_vs_offset": {
+    "n": 9,
+    "rho": null,
+    "note": "too few pairs"
+   },
+   "spearman_vs_move5s": {
+    "n": 9,
+    "rho": null,
+    "note": "too few pairs"
+   },
+   "spearman_vs_secs_after_open": {
+    "n": 9,
+    "rho": null,
+    "note": "too few pairs"
+   }
+  },
+  "Q4_two_sided": {
+   "windows_with_an_opposite_fill_in_30s": 9,
+   "share": 1.0,
+   "dt_first_to_opposite_s": {
+    "n": 9,
+    "min": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "share_negative": 0.0,
+    "share_zero": 1.0,
+    "share_positive": 0.0
+   },
+   "same_second_share": 1.0,
+   "opposite_mechanism_counts": {
+    "RESTING_BID_CONSISTENT": 5,
+    "MINT_CONSISTENT": 4
+   },
+   "move_5s_before_opposite": {
+    "n": 9,
+    "min": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.08,
+    "p90": 0.12,
+    "max": 0.13,
+    "mean": 0.037778,
+    "share_negative": 0.0,
+    "share_zero": 0.5556,
+    "share_positive": 0.4444
+   },
+   "pair_sum_at_opposite": {
+    "n": 9,
+    "min": 0.98,
+    "p10": 0.98,
+    "p25": 0.99,
+    "p50": 0.99,
+    "p75": 0.99,
+    "p90": 0.99,
+    "max": 0.99,
+    "mean": 0.987778,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   }
+  },
+  "Q5_liquidity_waiting": {
+   "apparent_resting_s_at_first_fill_price": {
+    "n": 4,
+    "min": 64.0,
+    "p10": 64.0,
+    "p25": 64.0,
+    "p50": 66.0,
+    "p75": 67.0,
+    "p90": 67.0,
+    "max": 69.0,
+    "mean": 66.5,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "share_price_existed_5s_before": 0.5556,
+   "share_price_existed_10s_before": 0.6667,
+   "mechanism_counts_first_fill": {
+    "MINT_CONSISTENT": 5,
+    "RESTING_BID_CONSISTENT": 4
+   },
+   "caveat": "size at a price is not ownership; absence of size is not proof he had no order there. Before T+0 the market did not exist, so 'resting before the market reached it' can only be assessed within the window."
+  },
+  "Q6_after_first_fill": {
+   "windows_with_a_second_fill_in_30s": 9,
+   "dt_first_to_second_s": {
+    "n": 9,
+    "min": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "share_negative": 0.0,
+    "share_zero": 1.0,
+    "share_positive": 0.0
+   },
+   "second_same_side_share": 0.4444,
+   "second_price_vs_first": {
+    "lower": 2,
+    "higher": 3,
+    "same": 4
+   },
+   "inter_fill_gaps_in_horizon": {
+    "n": 30,
+    "min": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0,
+    "max": 12.0,
+    "mean": 0.633333,
+    "share_negative": 0.0,
+    "share_zero": 0.9333,
+    "share_positive": 0.0667
+   },
+   "fills_in_horizon": {
+    "n": 9,
+    "min": 2.0,
+    "p10": 2.0,
+    "p25": 2.0,
+    "p50": 4.0,
+    "p75": 7.0,
+    "p90": 7.0,
+    "max": 8.0,
+    "mean": 4.333333,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   }
+  },
+  "Q7_opening_inventory_effect": {
+   "note": "at the first fill inventory is zero by construction, so this tests the SECOND action against the first",
+   "second_fill_side_given_first": {
+    "same_side": 4,
+    "opposite_side": 5
+   },
+   "spearman_first_qty_vs_second_qty": {
+    "n": 9,
+    "rho": null,
+    "note": "too few pairs"
+   },
+   "second_qty_when_same_side_vs_opposite": {
+    "n_a": 4,
+    "n_b": 5,
+    "delta": null,
+    "note": "too few"
+   }
+  },
+  "sequence_prefix_clusters": {
+   ".|.|OO|.|.|.|.|.": 3,
+   ".|.|.|OO|.|.|.|.": 3,
+   ".|.|.|.|.|.|OO|.": 2,
+   ".|.|.|.|umdr|OO|.|.": 1,
+   ".|.|.|.|.|OO|.|.": 1,
+   ".|.|.|.|.|.|.|OO": 1,
+   ".|.|OO|.|.|.|.|urdmururururdm": 1,
+   "OO|.|.|.|.|.|umumumdr|OO": 1,
+   ".|OO|.|.|OO|.|.|OO": 1,
+   ".|.|.|.|.|.|ururdm|.": 1,
+   "OO|.|.|.|.|.|.|.": 1,
+   ".|OO|OO|.|.|OO|.|dmdmdmur": 1
+  },
+  "clustering_note": "exact-prefix agreement on the normalized sequence, built after the sequences existed; no P&L enters the clustering"
+ },
+ "per_window": [
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "window_start_utc": 1787271900,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "carried_s": 1.0,
+     "bid_levels": 40,
+     "total_bid_depth": 143673.72999999998,
+     "top_bid_size": 140.03
+    },
+    "down": {
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "carried_s": 1.0,
+     "bid_levels": 58,
+     "total_bid_depth": 145961.99,
+     "top_bid_size": 29.04
+    }
+   },
+   "n_observations_in_horizon": 12,
+   "n_l5_fills_in_horizon": 7,
+   "normalized_sequence": ".|.|.|.|umdr|OO|.|.|OO|.|.|.|.|.|OO|.|umumdrumdr|.|.|.|OO|.|.|.|.|.|.|.|.|.|O",
+   "sequence_prefix_8": ".|.|.|.|umdr|OO|.|.",
+   "first_fill": {
+    "secs_after_open": 4,
+    "tte_s": 296,
+    "outcome": "up",
+    "price": 0.54,
+    "quantity": 80.0,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid": 0.4,
+    "own_ask": 0.41,
+    "offset_ticks_below_bid": -14,
+    "ticks_below_ask": -13,
+    "spread": 0.01,
+    "pair_sum_bids": 0.99,
+    "obs_age_s": 5.0,
+    "apparent_resting_s_at_price": null,
+    "price_existed_tminus5": false,
+    "price_existed_tminus10": false,
+    "own_bid_move_5s_before": 0.0,
+    "own_bid_move_10s_before": -0.02
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 4,
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.46,
+    "quantity": 80.0,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid_move_5s_before": 0.0,
+    "pair_sum_bids": 0.99
+   },
+   "inter_fill_gaps_s": [
+    0,
+    12,
+    0,
+    0,
+    0,
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.46,
+    "quantity": 80.0,
+    "same_side_as_first": false,
+    "same_price_as_first": false,
+    "price_vs_first": "lower"
+   },
+   "third_fill": {
+    "dt_from_first_s": 12,
+    "outcome": "up",
+    "price": 0.64,
+    "quantity": 75.0
+   },
+   "inventory_at_horizon": {
+    "inv_up": 175.0,
+    "inv_down": 175.0,
+    "matched": 175.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 4,
+     "outcome": "up",
+     "price": 0.54,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -14,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 4,
+     "outcome": "down",
+     "price": 0.46,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 13,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 16,
+     "outcome": "up",
+     "price": 0.64,
+     "quantity": 75.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -9,
+     "inv_after": {
+      "inv_up": 155.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 75.0,
+      "imbalance_up_minus_down": 75.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 16,
+     "outcome": "up",
+     "price": 0.63,
+     "quantity": 5.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -8,
+     "inv_after": {
+      "inv_up": 160.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 16,
+     "outcome": "down",
+     "price": 0.360625,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 8,
+     "inv_after": {
+      "inv_up": 160.0,
+      "inv_down": 160.0,
+      "matched": 160.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 16,
+     "outcome": "up",
+     "price": 0.64,
+     "quantity": 15.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -9,
+     "inv_after": {
+      "inv_up": 175.0,
+      "inv_down": 160.0,
+      "matched": 160.0,
+      "residual": 15.0,
+      "imbalance_up_minus_down": 15.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 16,
+     "outcome": "down",
+     "price": 0.36,
+     "quantity": 15.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 8,
+     "inv_after": {
+      "inv_up": 175.0,
+      "inv_down": 175.0,
+      "matched": 175.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787271904,
+     "rel": 4,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.54,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.4,
+     "own_ask": 0.41,
+     "offset_ticks_below_bid": -14,
+     "ticks_below_ask": -13,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": null
+     },
+     "log_index": 1658
+    },
+    {
+     "t": 1787271904,
+     "rel": 4,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.46,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.59,
+     "own_ask": 0.6,
+     "offset_ticks_below_bid": 13,
+     "ticks_below_ask": 14,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": 61.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1662
+    },
+    {
+     "t": 1787271905,
+     "rel": 5,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 212.13,
+     "bid_levels": 51,
+     "total_bid_depth": 34134.299999999996
+    },
+    {
+     "t": 1787271905,
+     "rel": 5,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 595.09,
+     "bid_levels": 48,
+     "total_bid_depth": 33624.84999999999
+    },
+    {
+     "t": 1787271908,
+     "rel": 8,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 461.67,
+     "bid_levels": 47,
+     "total_bid_depth": 32257.84999999999
+    },
+    {
+     "t": 1787271908,
+     "rel": 8,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 226.12,
+     "bid_levels": 52,
+     "total_bid_depth": 36911.18
+    },
+    {
+     "t": 1787271914,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 843.52,
+     "bid_levels": 55,
+     "total_bid_depth": 34206.42999999999
+    },
+    {
+     "t": 1787271914,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "top_bid_size": 23.0,
+     "bid_levels": 44,
+     "total_bid_depth": 27207.530000000002
+    },
+    {
+     "t": 1787271916,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.64,
+     "quantity": 75.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.55,
+     "own_ask": 0.56,
+     "offset_ticks_below_bid": -9,
+     "ticks_below_ask": -8,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 155.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 75.0,
+      "imbalance_up_minus_down": 75.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1585
+    },
+    {
+     "t": 1787271916,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.63,
+     "quantity": 5.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.55,
+     "own_ask": 0.56,
+     "offset_ticks_below_bid": -8,
+     "ticks_below_ask": -7,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 160.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1587
+    },
+    {
+     "t": 1787271916,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.360625,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.44,
+     "own_ask": 0.45,
+     "offset_ticks_below_bid": 8,
+     "ticks_below_ask": 9,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 160.0,
+      "inv_down": 160.0,
+      "matched": 160.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1591
+    },
+    {
+     "t": 1787271916,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.64,
+     "quantity": 15.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.55,
+     "own_ask": 0.56,
+     "offset_ticks_below_bid": -9,
+     "ticks_below_ask": -8,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 175.0,
+      "inv_down": 160.0,
+      "matched": 160.0,
+      "residual": 15.0,
+      "imbalance_up_minus_down": 15.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1641
+    },
+    {
+     "t": 1787271916,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.36,
+     "quantity": 15.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.44,
+     "own_ask": 0.45,
+     "offset_ticks_below_bid": 8,
+     "ticks_below_ask": 9,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": 73.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 175.0,
+      "inv_down": 175.0,
+      "matched": 175.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1645
+    },
+    {
+     "t": 1787271920,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 785.96,
+     "bid_levels": 54,
+     "total_bid_depth": 34206.020000000004
+    },
+    {
+     "t": 1787271920,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 108.0,
+     "bid_levels": 45,
+     "total_bid_depth": 35251.33
+    },
+    {
+     "t": 1787271925,
+     "rel": 25,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 566.33,
+     "bid_levels": 54,
+     "total_bid_depth": 33591.23000000001
+    },
+    {
+     "t": 1787271925,
+     "rel": 25,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 133.0,
+     "bid_levels": 45,
+     "total_bid_depth": 31729.300000000003
+    },
+    {
+     "t": 1787271930,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.54,
+     "top_bid_size": 834.19,
+     "bid_levels": 54,
+     "total_bid_depth": 33130.09000000001
+    },
+    {
+     "t": 1787271930,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.46,
+     "top_bid_size": 15.0,
+     "bid_levels": 46,
+     "total_bid_depth": 33108.700000000004
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787272500",
+   "contract_length": "5m",
+   "window_start_utc": 1787272500,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.49,
+     "best_ask": 0.51,
+     "carried_s": 3.0,
+     "bid_levels": 49,
+     "total_bid_depth": 143910.95,
+     "top_bid_size": 30.4
+    },
+    "down": {
+     "best_bid": 0.49,
+     "best_ask": 0.51,
+     "carried_s": 3.0,
+     "bid_levels": 49,
+     "total_bid_depth": 143805.31,
+     "top_bid_size": 122.0
+    }
+   },
+   "n_observations_in_horizon": 8,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|.|.|.|OO|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|.",
+   "sequence_prefix_8": ".|.|.|.|.|OO|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787272505,
+     "rel": 5,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 36.39,
+     "bid_levels": 45,
+     "total_bid_depth": 31083.549999999996
+    },
+    {
+     "t": 1787272505,
+     "rel": 5,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 388.42,
+     "bid_levels": 54,
+     "total_bid_depth": 35083.46
+    },
+    {
+     "t": 1787272514,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.35,
+     "best_ask": 0.36,
+     "top_bid_size": 47.77,
+     "bid_levels": 35,
+     "total_bid_depth": 26127.75
+    },
+    {
+     "t": 1787272514,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.64,
+     "best_ask": 0.65,
+     "top_bid_size": 287.0,
+     "bid_levels": 64,
+     "total_bid_depth": 36613.29
+    },
+    {
+     "t": 1787272520,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 3.33,
+     "bid_levels": 40,
+     "total_bid_depth": 30661.860000000008
+    },
+    {
+     "t": 1787272520,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 400.1,
+     "bid_levels": 59,
+     "total_bid_depth": 36914.97000000001
+    },
+    {
+     "t": 1787272526,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 763.6,
+     "bid_levels": 40,
+     "total_bid_depth": 28295.430000000008
+    },
+    {
+     "t": 1787272526,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 5.0,
+     "bid_levels": 57,
+     "total_bid_depth": 27496.14
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787280000",
+   "contract_length": "5m",
+   "window_start_utc": 1787280000,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "carried_s": 3.0,
+     "bid_levels": 55,
+     "total_bid_depth": 17281.67,
+     "top_bid_size": 9.31
+    },
+    "down": {
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "carried_s": 3.0,
+     "bid_levels": 44,
+     "total_bid_depth": 16460.64,
+     "top_bid_size": 268.34
+    }
+   },
+   "n_observations_in_horizon": 8,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|.|.|.|.|.|OO|.|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|.|.|OO|.|.|.|.",
+   "sequence_prefix_8": ".|.|.|.|.|.|.|OO",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787280007,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 348.73,
+     "bid_levels": 48,
+     "total_bid_depth": 30213.799999999996
+    },
+    {
+     "t": 1787280007,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 320.0,
+     "bid_levels": 51,
+     "total_bid_depth": 31176.849999999995
+    },
+    {
+     "t": 1787280014,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 919.53,
+     "bid_levels": 46,
+     "total_bid_depth": 30137.009999999995
+    },
+    {
+     "t": 1787280014,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 30.0,
+     "bid_levels": 53,
+     "total_bid_depth": 31448.839999999997
+    },
+    {
+     "t": 1787280019,
+     "rel": 19,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 688.99,
+     "bid_levels": 46,
+     "total_bid_depth": 29433.940000000002
+    },
+    {
+     "t": 1787280019,
+     "rel": 19,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 241.7,
+     "bid_levels": 53,
+     "total_bid_depth": 31986.68
+    },
+    {
+     "t": 1787280026,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 546.09,
+     "bid_levels": 49,
+     "total_bid_depth": 28433.4
+    },
+    {
+     "t": 1787280026,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 409.1,
+     "bid_levels": 50,
+     "total_bid_depth": 28711.500000000004
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787281500",
+   "contract_length": "5m",
+   "window_start_utc": 1787281500,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.56,
+     "best_ask": 0.59,
+     "carried_s": 6.0,
+     "bid_levels": 53,
+     "total_bid_depth": 149039.38,
+     "top_bid_size": 697.36
+    },
+    "down": {
+     "best_bid": 0.41,
+     "best_ask": 0.44,
+     "carried_s": 6.0,
+     "bid_levels": 41,
+     "total_bid_depth": 147439.91999999998,
+     "top_bid_size": 32.85
+    }
+   },
+   "n_observations_in_horizon": 8,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|OO|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|.|.|.",
+   "sequence_prefix_8": ".|.|OO|.|.|.|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787281502,
+     "rel": 2,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 186.05,
+     "bid_levels": 53,
+     "total_bid_depth": 30549.339999999997
+    },
+    {
+     "t": 1787281502,
+     "rel": 2,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 489.83,
+     "bid_levels": 46,
+     "total_bid_depth": 28754.489999999998
+    },
+    {
+     "t": 1787281511,
+     "rel": 11,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 1020.91,
+     "bid_levels": 46,
+     "total_bid_depth": 31634.099999999995
+    },
+    {
+     "t": 1787281511,
+     "rel": 11,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 154.96,
+     "bid_levels": 53,
+     "total_bid_depth": 33875.659999999996
+    },
+    {
+     "t": 1787281518,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 179.61,
+     "bid_levels": 51,
+     "total_bid_depth": 34105.76
+    },
+    {
+     "t": 1787281518,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 425.91,
+     "bid_levels": 48,
+     "total_bid_depth": 32119.25
+    },
+    {
+     "t": 1787281525,
+     "rel": 25,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 137.0,
+     "bid_levels": 51,
+     "total_bid_depth": 32480.23
+    },
+    {
+     "t": 1787281525,
+     "rel": 25,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 209.31,
+     "bid_levels": 48,
+     "total_bid_depth": 30435.04
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787283600",
+   "contract_length": "5m",
+   "window_start_utc": 1787283600,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.45,
+     "best_ask": 0.47,
+     "carried_s": 8.0,
+     "bid_levels": 45,
+     "total_bid_depth": 148243.97,
+     "top_bid_size": 5.0
+    },
+    "down": {
+     "best_bid": 0.53,
+     "best_ask": 0.55,
+     "carried_s": 8.0,
+     "bid_levels": 53,
+     "total_bid_depth": 148804.31,
+     "top_bid_size": 39.89
+    }
+   },
+   "n_observations_in_horizon": 6,
+   "n_l5_fills_in_horizon": 7,
+   "normalized_sequence": ".|.|OO|.|.|.|.|urdmururururdm|.|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|.|.|.|O",
+   "sequence_prefix_8": ".|.|OO|.|.|.|.|urdmururururdm",
+   "first_fill": {
+    "secs_after_open": 7,
+    "tte_s": 293,
+    "outcome": "up",
+    "price": 0.33,
+    "quantity": 20.0,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid": 0.34,
+    "own_ask": 0.35,
+    "offset_ticks_below_bid": 1,
+    "ticks_below_ask": 2,
+    "spread": 0.01,
+    "pair_sum_bids": 0.99,
+    "obs_age_s": 5.0,
+    "apparent_resting_s_at_price": 64.0,
+    "price_existed_tminus5": true,
+    "price_existed_tminus10": true,
+    "own_bid_move_5s_before": -0.11,
+    "own_bid_move_10s_before": -0.11
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 7,
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.67,
+    "quantity": 20.0,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid_move_5s_before": 0.12,
+    "pair_sum_bids": 0.99
+   },
+   "inter_fill_gaps_s": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.67,
+    "quantity": 20.0,
+    "same_side_as_first": false,
+    "same_price_as_first": false,
+    "price_vs_first": "higher"
+   },
+   "third_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "up",
+    "price": 0.34,
+    "quantity": 57.31
+   },
+   "inventory_at_horizon": {
+    "inv_up": 100.0,
+    "inv_down": 100.0,
+    "matched": 100.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 7,
+     "outcome": "up",
+     "price": 0.33,
+     "quantity": 20.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 1,
+     "inv_after": {
+      "inv_up": 20.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 20.0,
+      "imbalance_up_minus_down": 20.0,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "down",
+     "price": 0.67,
+     "quantity": 20.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -2,
+     "inv_after": {
+      "inv_up": 20.0,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "up",
+     "price": 0.34,
+     "quantity": 57.31,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 0,
+     "inv_after": {
+      "inv_up": 77.31,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 57.31,
+      "imbalance_up_minus_down": 57.31,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "up",
+     "price": 0.34,
+     "quantity": 5.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 0,
+     "inv_after": {
+      "inv_up": 82.31,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 62.31,
+      "imbalance_up_minus_down": 62.31,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "up",
+     "price": 0.34,
+     "quantity": 5.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 0,
+     "inv_after": {
+      "inv_up": 87.31,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 67.31,
+      "imbalance_up_minus_down": 67.31,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "up",
+     "price": 0.34,
+     "quantity": 12.69,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 0,
+     "inv_after": {
+      "inv_up": 100.0,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "down",
+     "price": 0.66,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -1,
+     "inv_after": {
+      "inv_up": 100.0,
+      "inv_down": 100.0,
+      "matched": 100.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787283602,
+     "rel": 2,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.34,
+     "best_ask": 0.35,
+     "top_bid_size": 225.0,
+     "bid_levels": 34,
+     "total_bid_depth": 25171.700000000004
+    },
+    {
+     "t": 1787283602,
+     "rel": 2,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.65,
+     "best_ask": 0.66,
+     "top_bid_size": 68.06,
+     "bid_levels": 65,
+     "total_bid_depth": 29546.57
+    },
+    {
+     "t": 1787283607,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.33,
+     "quantity": 20.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.34,
+     "own_ask": 0.35,
+     "offset_ticks_below_bid": 1,
+     "ticks_below_ask": 2,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": 64.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 20.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 20.0,
+      "imbalance_up_minus_down": 20.0,
+      "running_pair_cost": null
+     },
+     "log_index": 927
+    },
+    {
+     "t": 1787283607,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.67,
+     "quantity": 20.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.65,
+     "own_ask": 0.66,
+     "offset_ticks_below_bid": -2,
+     "ticks_below_ask": -1,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 20.0,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 931
+    },
+    {
+     "t": 1787283607,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.34,
+     "quantity": 57.31,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.34,
+     "own_ask": 0.35,
+     "offset_ticks_below_bid": 0,
+     "ticks_below_ask": 1,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": 64.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 77.31,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 57.31,
+      "imbalance_up_minus_down": 57.31,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1095
+    },
+    {
+     "t": 1787283607,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.34,
+     "quantity": 5.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.34,
+     "own_ask": 0.35,
+     "offset_ticks_below_bid": 0,
+     "ticks_below_ask": 1,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": 64.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 82.31,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 62.31,
+      "imbalance_up_minus_down": 62.31,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1097
+    },
+    {
+     "t": 1787283607,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.34,
+     "quantity": 5.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.34,
+     "own_ask": 0.35,
+     "offset_ticks_below_bid": 0,
+     "ticks_below_ask": 1,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": 64.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 87.31,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 67.31,
+      "imbalance_up_minus_down": 67.31,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1099
+    },
+    {
+     "t": 1787283607,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.34,
+     "quantity": 12.69,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.34,
+     "own_ask": 0.35,
+     "offset_ticks_below_bid": 0,
+     "ticks_below_ask": 1,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": 64.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 100.0,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1101
+    },
+    {
+     "t": 1787283607,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.66,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.65,
+     "own_ask": 0.66,
+     "offset_ticks_below_bid": -1,
+     "ticks_below_ask": 0,
+     "obs_age_s_own": 5.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 100.0,
+      "inv_down": 100.0,
+      "matched": 100.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1105
+    },
+    {
+     "t": 1787283617,
+     "rel": 17,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.64,
+     "best_ask": 0.65,
+     "top_bid_size": 17.08,
+     "bid_levels": 64,
+     "total_bid_depth": 33978.869999999995
+    },
+    {
+     "t": 1787283617,
+     "rel": 17,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.36,
+     "top_bid_size": 30.6,
+     "bid_levels": 39,
+     "total_bid_depth": 27962.090000000004
+    },
+    {
+     "t": 1787283630,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 53.33,
+     "bid_levels": 61,
+     "total_bid_depth": 31897.480000000003
+    },
+    {
+     "t": 1787283630,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.39,
+     "top_bid_size": 30.6,
+     "bid_levels": 42,
+     "total_bid_depth": 25475.67
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787287200",
+   "contract_length": "5m",
+   "window_start_utc": 1787287200,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.39,
+     "best_ask": 0.41,
+     "carried_s": 0.0,
+     "bid_levels": 39,
+     "total_bid_depth": 18553.25,
+     "top_bid_size": 17.0
+    },
+    "down": {
+     "best_bid": 0.59,
+     "best_ask": 0.61,
+     "carried_s": 0.0,
+     "bid_levels": 58,
+     "total_bid_depth": 18178.47,
+     "top_bid_size": 50.77
+    }
+   },
+   "n_observations_in_horizon": 26,
+   "n_l5_fills_in_horizon": 8,
+   "normalized_sequence": "OO|.|.|.|.|.|umumumdr|OO|.|OO|.|OO|.|OOumumumdr|.|.|OO|.|.|OO|.|OO|.|.|OO|.|O|.|OO|OO|.",
+   "sequence_prefix_8": "OO|.|.|.|.|.|umumumdr|OO",
+   "first_fill": {
+    "secs_after_open": 6,
+    "tte_s": 294,
+    "outcome": "up",
+    "price": 0.43,
+    "quantity": 14.64,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid": 0.39,
+    "own_ask": 0.41,
+    "offset_ticks_below_bid": -4,
+    "ticks_below_ask": -2,
+    "spread": 0.02,
+    "pair_sum_bids": 0.98,
+    "obs_age_s": 6.0,
+    "apparent_resting_s_at_price": null,
+    "price_existed_tminus5": false,
+    "price_existed_tminus10": false,
+    "own_bid_move_5s_before": 0.0,
+    "own_bid_move_10s_before": -0.01
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 6,
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.57,
+    "quantity": 47.76,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid_move_5s_before": 0.0,
+    "pair_sum_bids": 0.98
+   },
+   "inter_fill_gaps_s": [
+    0,
+    0,
+    0,
+    7,
+    0,
+    0,
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "up",
+    "price": 0.43,
+    "quantity": 5.6,
+    "same_side_as_first": true,
+    "same_price_as_first": true,
+    "price_vs_first": "same"
+   },
+   "third_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "up",
+    "price": 0.43,
+    "quantity": 27.52
+   },
+   "inventory_at_horizon": {
+    "inv_up": 100.67,
+    "inv_down": 100.67,
+    "matched": 100.67,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 6,
+     "outcome": "up",
+     "price": 0.43,
+     "quantity": 14.64,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -4,
+     "inv_after": {
+      "inv_up": 14.64,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 14.64,
+      "imbalance_up_minus_down": 14.64,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 6,
+     "outcome": "up",
+     "price": 0.43,
+     "quantity": 5.6,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -4,
+     "inv_after": {
+      "inv_up": 20.24,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 20.24,
+      "imbalance_up_minus_down": 20.24,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 6,
+     "outcome": "up",
+     "price": 0.43,
+     "quantity": 27.52,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -4,
+     "inv_after": {
+      "inv_up": 47.76,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 47.76,
+      "imbalance_up_minus_down": 47.76,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 6,
+     "outcome": "down",
+     "price": 0.57,
+     "quantity": 47.76,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 2,
+     "inv_after": {
+      "inv_up": 47.76,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 13,
+     "outcome": "up",
+     "price": 0.28,
+     "quantity": 1.79,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -6,
+     "inv_after": {
+      "inv_up": 49.55,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 1.79,
+      "imbalance_up_minus_down": 1.79,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 13,
+     "outcome": "up",
+     "price": 0.28,
+     "quantity": 21.12,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -6,
+     "inv_after": {
+      "inv_up": 70.67,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 22.91,
+      "imbalance_up_minus_down": 22.91,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 13,
+     "outcome": "up",
+     "price": 0.28,
+     "quantity": 30.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -6,
+     "inv_after": {
+      "inv_up": 100.67,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 52.91,
+      "imbalance_up_minus_down": 52.91,
+      "running_pair_cost": 1.0
+     }
+    },
+    {
+     "rel": 13,
+     "outcome": "down",
+     "price": 0.72,
+     "quantity": 52.91,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 5,
+     "inv_after": {
+      "inv_up": 100.67,
+      "inv_down": 100.67,
+      "matched": 100.67,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787287200,
+     "rel": 0,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.41,
+     "top_bid_size": 17.0,
+     "bid_levels": 39,
+     "total_bid_depth": 18553.25
+    },
+    {
+     "t": 1787287200,
+     "rel": 0,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.61,
+     "top_bid_size": 50.77,
+     "bid_levels": 58,
+     "total_bid_depth": 18178.47
+    },
+    {
+     "t": 1787287206,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.43,
+     "quantity": 14.64,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.39,
+     "own_ask": 0.41,
+     "offset_ticks_below_bid": -4,
+     "ticks_below_ask": -2,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 14.64,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 14.64,
+      "imbalance_up_minus_down": 14.64,
+      "running_pair_cost": null
+     },
+     "log_index": 1190
+    },
+    {
+     "t": 1787287206,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.43,
+     "quantity": 5.6,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.39,
+     "own_ask": 0.41,
+     "offset_ticks_below_bid": -4,
+     "ticks_below_ask": -2,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 20.24,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 20.24,
+      "imbalance_up_minus_down": 20.24,
+      "running_pair_cost": null
+     },
+     "log_index": 1192
+    },
+    {
+     "t": 1787287206,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.43,
+     "quantity": 27.52,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.39,
+     "own_ask": 0.41,
+     "offset_ticks_below_bid": -4,
+     "ticks_below_ask": -2,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 47.76,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 47.76,
+      "imbalance_up_minus_down": 47.76,
+      "running_pair_cost": null
+     },
+     "log_index": 1194
+    },
+    {
+     "t": 1787287206,
+     "rel": 6,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.57,
+     "quantity": 47.76,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.59,
+     "own_ask": 0.61,
+     "offset_ticks_below_bid": 2,
+     "ticks_below_ask": 4,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 47.76,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1198
+    },
+    {
+     "t": 1787287207,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.42,
+     "best_ask": 0.43,
+     "top_bid_size": 486.63,
+     "bid_levels": 42,
+     "total_bid_depth": 30266.45
+    },
+    {
+     "t": 1787287207,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 72.0,
+     "bid_levels": 57,
+     "total_bid_depth": 31482.119999999995
+    },
+    {
+     "t": 1787287209,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.31,
+     "best_ask": 0.32,
+     "top_bid_size": 508.8,
+     "bid_levels": 31,
+     "total_bid_depth": 27252.530000000002
+    },
+    {
+     "t": 1787287209,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.68,
+     "best_ask": 0.69,
+     "top_bid_size": 35.0,
+     "bid_levels": 68,
+     "total_bid_depth": 32750.48
+    },
+    {
+     "t": 1787287211,
+     "rel": 11,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.22,
+     "best_ask": 0.23,
+     "top_bid_size": 260.26,
+     "bid_levels": 22,
+     "total_bid_depth": 23853.31
+    },
+    {
+     "t": 1787287211,
+     "rel": 11,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.77,
+     "best_ask": 0.78,
+     "top_bid_size": 165.8,
+     "bid_levels": 77,
+     "total_bid_depth": 33360.950000000004
+    },
+    {
+     "t": 1787287213,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.24,
+     "best_ask": 0.25,
+     "top_bid_size": 249.17,
+     "bid_levels": 24,
+     "total_bid_depth": 25938.18
+    },
+    {
+     "t": 1787287213,
+     "rel": 13,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.75,
+     "best_ask": 0.76,
+     "top_bid_size": 90.32,
+     "bid_levels": 75,
+     "total_bid_depth": 32857.49
+    },
+    {
+     "t": 1787287213,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.28,
+     "quantity": 1.79,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.22,
+     "own_ask": 0.23,
+     "offset_ticks_below_bid": -6,
+     "ticks_below_ask": -5,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 49.55,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 1.79,
+      "imbalance_up_minus_down": 1.79,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 911
+    },
+    {
+     "t": 1787287213,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.28,
+     "quantity": 21.12,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.22,
+     "own_ask": 0.23,
+     "offset_ticks_below_bid": -6,
+     "ticks_below_ask": -5,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 70.67,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 22.91,
+      "imbalance_up_minus_down": 22.91,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 913
+    },
+    {
+     "t": 1787287213,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.28,
+     "quantity": 30.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.22,
+     "own_ask": 0.23,
+     "offset_ticks_below_bid": -6,
+     "ticks_below_ask": -5,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 100.67,
+      "inv_down": 47.76,
+      "matched": 47.76,
+      "residual": 52.91,
+      "imbalance_up_minus_down": 52.91,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 915
+    },
+    {
+     "t": 1787287213,
+     "rel": 13,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.72,
+     "quantity": 52.91,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.77,
+     "own_ask": 0.78,
+     "offset_ticks_below_bid": 5,
+     "ticks_below_ask": 6,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": 2.0,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 100.67,
+      "inv_down": 100.67,
+      "matched": 100.67,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 919
+    },
+    {
+     "t": 1787287216,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.23,
+     "best_ask": 0.24,
+     "top_bid_size": 165.0,
+     "bid_levels": 23,
+     "total_bid_depth": 26551.710000000003
+    },
+    {
+     "t": 1787287216,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.76,
+     "best_ask": 0.77,
+     "top_bid_size": 5.0,
+     "bid_levels": 76,
+     "total_bid_depth": 33817.31
+    },
+    {
+     "t": 1787287219,
+     "rel": 19,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.22,
+     "best_ask": 0.23,
+     "top_bid_size": 118.0,
+     "bid_levels": 22,
+     "total_bid_depth": 25447.62
+    },
+    {
+     "t": 1787287219,
+     "rel": 19,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.77,
+     "best_ask": 0.78,
+     "top_bid_size": 126.0,
+     "bid_levels": 77,
+     "total_bid_depth": 34107.61
+    },
+    {
+     "t": 1787287221,
+     "rel": 21,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.21,
+     "best_ask": 0.22,
+     "top_bid_size": 430.28,
+     "bid_levels": 21,
+     "total_bid_depth": 23903.05
+    },
+    {
+     "t": 1787287221,
+     "rel": 21,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.78,
+     "best_ask": 0.79,
+     "top_bid_size": 85.36,
+     "bid_levels": 78,
+     "total_bid_depth": 32821.100000000006
+    },
+    {
+     "t": 1787287223,
+     "rel": 23,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.21,
+     "best_ask": 0.22,
+     "top_bid_size": 213.04,
+     "bid_levels": 21,
+     "total_bid_depth": 23679.149999999998
+    },
+    {
+     "t": 1787287223,
+     "rel": 23,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.78,
+     "best_ask": 0.79,
+     "top_bid_size": 343.07,
+     "bid_levels": 78,
+     "total_bid_depth": 33214.49
+    },
+    {
+     "t": 1787287224,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.2,
+     "best_ask": 0.21,
+     "top_bid_size": 139.57,
+     "bid_levels": 20,
+     "total_bid_depth": 23548.36
+    },
+    {
+     "t": 1787287224,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.79,
+     "best_ask": 0.8,
+     "top_bid_size": 243.19,
+     "bid_levels": 79,
+     "total_bid_depth": 33142.6
+    },
+    {
+     "t": 1787287226,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.21,
+     "best_ask": 0.21,
+     "top_bid_size": 286.1,
+     "bid_levels": 21,
+     "total_bid_depth": 23330.829999999998
+    },
+    {
+     "t": 1787287226,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.79,
+     "best_ask": 0.79,
+     "top_bid_size": 123.19,
+     "bid_levels": 77,
+     "total_bid_depth": 31739.449999999997
+    },
+    {
+     "t": 1787287228,
+     "rel": 28,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.23,
+     "best_ask": 0.24,
+     "top_bid_size": 207.42,
+     "bid_levels": 23,
+     "total_bid_depth": 23904.179999999997
+    },
+    {
+     "t": 1787287228,
+     "rel": 28,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.76,
+     "best_ask": 0.77,
+     "top_bid_size": 239.16,
+     "bid_levels": 76,
+     "total_bid_depth": 32375.15
+    },
+    {
+     "t": 1787287229,
+     "rel": 29,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.21,
+     "best_ask": 0.21,
+     "top_bid_size": 25.0,
+     "bid_levels": 21,
+     "total_bid_depth": 22950.289999999997
+    },
+    {
+     "t": 1787287229,
+     "rel": 29,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.79,
+     "best_ask": 0.79,
+     "top_bid_size": 123.85,
+     "bid_levels": 79,
+     "total_bid_depth": 32822.28
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787287500",
+   "contract_length": "5m",
+   "window_start_utc": 1787287500,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "carried_s": 1.0,
+     "bid_levels": 50,
+     "total_bid_depth": 146923.65,
+     "top_bid_size": 69.25
+    },
+    "down": {
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "carried_s": 1.0,
+     "bid_levels": 49,
+     "total_bid_depth": 146689.22,
+     "top_bid_size": 154.45
+    }
+   },
+   "n_observations_in_horizon": 24,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|OO|.|.|OO|.|.|OO|.|.|.|.|OO|.|.|OO|.|OO|.|.|OO|.|.|.|OO|.|OO|.|OO|.|.",
+   "sequence_prefix_8": ".|OO|.|.|OO|.|.|OO",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787287501,
+     "rel": 1,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 70.09,
+     "bid_levels": 46,
+     "total_bid_depth": 20004.940000000002
+    },
+    {
+     "t": 1787287501,
+     "rel": 1,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 417.0,
+     "bid_levels": 50,
+     "total_bid_depth": 21297.02
+    },
+    {
+     "t": 1787287504,
+     "rel": 4,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 311.41,
+     "bid_levels": 46,
+     "total_bid_depth": 31369.019999999997
+    },
+    {
+     "t": 1787287504,
+     "rel": 4,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 41.52,
+     "bid_levels": 53,
+     "total_bid_depth": 30321.409999999993
+    },
+    {
+     "t": 1787287507,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 244.91,
+     "bid_levels": 52,
+     "total_bid_depth": 33401.579999999994
+    },
+    {
+     "t": 1787287507,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 274.23,
+     "bid_levels": 47,
+     "total_bid_depth": 31543.51
+    },
+    {
+     "t": 1787287509,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 179.47,
+     "bid_levels": 52,
+     "total_bid_depth": 30355.019999999993
+    },
+    {
+     "t": 1787287509,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 248.35,
+     "bid_levels": 47,
+     "total_bid_depth": 29287.229999999996
+    },
+    {
+     "t": 1787287512,
+     "rel": 12,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 316.0,
+     "bid_levels": 40,
+     "total_bid_depth": 28281.530000000002
+    },
+    {
+     "t": 1787287512,
+     "rel": 12,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 288.33,
+     "bid_levels": 59,
+     "total_bid_depth": 32349.399999999994
+    },
+    {
+     "t": 1787287515,
+     "rel": 15,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 161.0,
+     "bid_levels": 38,
+     "total_bid_depth": 28308.87
+    },
+    {
+     "t": 1787287515,
+     "rel": 15,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 233.9,
+     "bid_levels": 61,
+     "total_bid_depth": 33369.689999999995
+    },
+    {
+     "t": 1787287517,
+     "rel": 17,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.42,
+     "best_ask": 0.43,
+     "top_bid_size": 270.03,
+     "bid_levels": 42,
+     "total_bid_depth": 29624.68
+    },
+    {
+     "t": 1787287517,
+     "rel": 17,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 184.53,
+     "bid_levels": 57,
+     "total_bid_depth": 33573.03
+    },
+    {
+     "t": 1787287520,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.36,
+     "best_ask": 0.37,
+     "top_bid_size": 305.5,
+     "bid_levels": 36,
+     "total_bid_depth": 27989.700000000004
+    },
+    {
+     "t": 1787287520,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.64,
+     "top_bid_size": 384.33,
+     "bid_levels": 63,
+     "total_bid_depth": 34034.37
+    },
+    {
+     "t": 1787287522,
+     "rel": 22,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.36,
+     "best_ask": 0.37,
+     "top_bid_size": 180.09,
+     "bid_levels": 36,
+     "total_bid_depth": 27162.72
+    },
+    {
+     "t": 1787287522,
+     "rel": 22,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.64,
+     "top_bid_size": 238.23,
+     "bid_levels": 63,
+     "total_bid_depth": 32642.010000000002
+    },
+    {
+     "t": 1787287524,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 155.71,
+     "bid_levels": 37,
+     "total_bid_depth": 27236.879999999997
+    },
+    {
+     "t": 1787287524,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 426.51,
+     "bid_levels": 62,
+     "total_bid_depth": 32453.5
+    },
+    {
+     "t": 1787287526,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.36,
+     "best_ask": 0.37,
+     "top_bid_size": 455.29,
+     "bid_levels": 36,
+     "total_bid_depth": 26890.9
+    },
+    {
+     "t": 1787287526,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.64,
+     "top_bid_size": 74.43,
+     "bid_levels": 63,
+     "total_bid_depth": 32656.869999999995
+    },
+    {
+     "t": 1787287528,
+     "rel": 28,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 517.17,
+     "bid_levels": 39,
+     "total_bid_depth": 27174.690000000002
+    },
+    {
+     "t": 1787287528,
+     "rel": 28,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 93.45,
+     "bid_levels": 60,
+     "total_bid_depth": 31657.33
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "window_start_utc": 1787292300,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.42,
+     "best_ask": 0.44,
+     "carried_s": 5.0,
+     "bid_levels": 42,
+     "total_bid_depth": 147305.38,
+     "top_bid_size": 35.0
+    },
+    "down": {
+     "best_bid": 0.56,
+     "best_ask": 0.58,
+     "carried_s": 5.0,
+     "bid_levels": 54,
+     "total_bid_depth": 147178.25,
+     "top_bid_size": 98.79
+    }
+   },
+   "n_observations_in_horizon": 4,
+   "n_l5_fills_in_horizon": 3,
+   "normalized_sequence": ".|.|.|.|.|.|ururdm|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|.|.|.|OO|.|.|.|.|.",
+   "sequence_prefix_8": ".|.|.|.|.|.|ururdm|.",
+   "first_fill": {
+    "secs_after_open": 6,
+    "tte_s": 294,
+    "outcome": "up",
+    "price": 0.41,
+    "quantity": 68.0,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid": 0.42,
+    "own_ask": 0.44,
+    "offset_ticks_below_bid": 1,
+    "ticks_below_ask": 3,
+    "spread": 0.02,
+    "pair_sum_bids": 0.98,
+    "obs_age_s": 11.0,
+    "apparent_resting_s_at_price": 66.0,
+    "price_existed_tminus5": true,
+    "price_existed_tminus10": true,
+    "own_bid_move_5s_before": 0.0,
+    "own_bid_move_10s_before": 0.0
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 6,
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.59,
+    "quantity": 80.0,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid_move_5s_before": 0.0,
+    "pair_sum_bids": 0.98
+   },
+   "inter_fill_gaps_s": [
+    0,
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "up",
+    "price": 0.41,
+    "quantity": 12.0,
+    "same_side_as_first": true,
+    "same_price_as_first": true,
+    "price_vs_first": "same"
+   },
+   "third_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.59,
+    "quantity": 80.0
+   },
+   "inventory_at_horizon": {
+    "inv_up": 80.0,
+    "inv_down": 80.0,
+    "matched": 80.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 6,
+     "outcome": "up",
+     "price": 0.41,
+     "quantity": 68.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 1,
+     "inv_after": {
+      "inv_up": 68.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 68.0,
+      "imbalance_up_minus_down": 68.0,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 6,
+     "outcome": "up",
+     "price": 0.41,
+     "quantity": 12.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 1,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 6,
+     "outcome": "down",
+     "price": 0.59,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -3,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787292306,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.41,
+     "quantity": 68.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.42,
+     "own_ask": 0.44,
+     "offset_ticks_below_bid": 1,
+     "ticks_below_ask": 3,
+     "obs_age_s_own": 11.0,
+     "apparent_resting_s_at_price": 66.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 68.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 68.0,
+      "imbalance_up_minus_down": 68.0,
+      "running_pair_cost": null
+     },
+     "log_index": 622
+    },
+    {
+     "t": 1787292306,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.41,
+     "quantity": 12.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.42,
+     "own_ask": 0.44,
+     "offset_ticks_below_bid": 1,
+     "ticks_below_ask": 3,
+     "obs_age_s_own": 11.0,
+     "apparent_resting_s_at_price": 66.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": null
+     },
+     "log_index": 624
+    },
+    {
+     "t": 1787292306,
+     "rel": 6,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.59,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.56,
+     "own_ask": 0.58,
+     "offset_ticks_below_bid": -3,
+     "ticks_below_ask": -1,
+     "obs_age_s_own": 11.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 628
+    },
+    {
+     "t": 1787292312,
+     "rel": 12,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 333.72,
+     "bid_levels": 37,
+     "total_bid_depth": 30339.83
+    },
+    {
+     "t": 1787292312,
+     "rel": 12,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 170.17,
+     "bid_levels": 62,
+     "total_bid_depth": 34046.92999999999
+    },
+    {
+     "t": 1787292325,
+     "rel": 25,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.31,
+     "best_ask": 0.32,
+     "top_bid_size": 600.63,
+     "bid_levels": 31,
+     "total_bid_depth": 28057.129999999997
+    },
+    {
+     "t": 1787292325,
+     "rel": 25,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.68,
+     "best_ask": 0.69,
+     "top_bid_size": 30.0,
+     "bid_levels": 68,
+     "total_bid_depth": 33488.41
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787296800",
+   "contract_length": "5m",
+   "window_start_utc": 1787296800,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.42,
+     "best_ask": 0.44,
+     "carried_s": 5.0,
+     "bid_levels": 42,
+     "total_bid_depth": 155033.35,
+     "top_bid_size": 69.87
+    },
+    "down": {
+     "best_bid": 0.56,
+     "best_ask": 0.58,
+     "carried_s": 5.0,
+     "bid_levels": 56,
+     "total_bid_depth": 155878.39,
+     "top_bid_size": 23.78
+    }
+   },
+   "n_observations_in_horizon": 8,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|.|OO|.|.|.|.|.|.|.|.|.|OO|.|.|.|.|OO|.|.|.|.|.|.|.|OO|.|.|.|.",
+   "sequence_prefix_8": ".|.|.|OO|.|.|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787296803,
+     "rel": 3,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 112.85,
+     "bid_levels": 48,
+     "total_bid_depth": 31463.05
+    },
+    {
+     "t": 1787296803,
+     "rel": 3,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 204.53,
+     "bid_levels": 51,
+     "total_bid_depth": 36068.56999999999
+    },
+    {
+     "t": 1787296813,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 496.28,
+     "bid_levels": 46,
+     "total_bid_depth": 36449.74
+    },
+    {
+     "t": 1787296813,
+     "rel": 13,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 80.87,
+     "bid_levels": 53,
+     "total_bid_depth": 41643.63
+    },
+    {
+     "t": 1787296818,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 57.71,
+     "bid_levels": 45,
+     "total_bid_depth": 35611.98999999999
+    },
+    {
+     "t": 1787296818,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 495.65,
+     "bid_levels": 54,
+     "total_bid_depth": 44240.44
+    },
+    {
+     "t": 1787296826,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 680.66,
+     "bid_levels": 38,
+     "total_bid_depth": 29861.47
+    },
+    {
+     "t": 1787296826,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 27.43,
+     "bid_levels": 61,
+     "total_bid_depth": 35872.75
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787300100",
+   "contract_length": "5m",
+   "window_start_utc": 1787300100,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.37,
+     "best_ask": 0.4,
+     "carried_s": 19.0,
+     "bid_levels": 37,
+     "total_bid_depth": 159501.84,
+     "top_bid_size": 64.82
+    },
+    "down": {
+     "best_bid": 0.6,
+     "best_ask": 0.63,
+     "carried_s": 19.0,
+     "bid_levels": 60,
+     "total_bid_depth": 162217.49,
+     "top_bid_size": 147.0
+    }
+   },
+   "n_observations_in_horizon": 6,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|OO|.|.|.|.|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|.",
+   "sequence_prefix_8": ".|.|OO|.|.|.|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787300102,
+     "rel": 2,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.36,
+     "best_ask": 0.37,
+     "top_bid_size": 100.66,
+     "bid_levels": 36,
+     "total_bid_depth": 31522.910000000003
+    },
+    {
+     "t": 1787300102,
+     "rel": 2,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.64,
+     "top_bid_size": 136.29,
+     "bid_levels": 63,
+     "total_bid_depth": 34987.170000000006
+    },
+    {
+     "t": 1787300115,
+     "rel": 15,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.34,
+     "top_bid_size": 177.14,
+     "bid_levels": 33,
+     "total_bid_depth": 33301.92
+    },
+    {
+     "t": 1787300115,
+     "rel": 15,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.66,
+     "best_ask": 0.67,
+     "top_bid_size": 150.33,
+     "bid_levels": 66,
+     "total_bid_depth": 42889.99999999999
+    },
+    {
+     "t": 1787300124,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.32,
+     "best_ask": 0.33,
+     "top_bid_size": 322.0,
+     "bid_levels": 32,
+     "total_bid_depth": 32554.97
+    },
+    {
+     "t": 1787300124,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.67,
+     "best_ask": 0.68,
+     "top_bid_size": 140.0,
+     "bid_levels": 67,
+     "total_bid_depth": 40697.20999999999
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787310600",
+   "contract_length": "5m",
+   "window_start_utc": 1787310600,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "carried_s": 12.0,
+     "bid_levels": 50,
+     "total_bid_depth": 156923.66,
+     "top_bid_size": 382.81
+    },
+    "down": {
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "carried_s": 12.0,
+     "bid_levels": 49,
+     "total_bid_depth": 159049.02000000002,
+     "top_bid_size": 280.96
+    }
+   },
+   "n_observations_in_horizon": 8,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|.|O|.|.|.|.|.|.|OO",
+   "sequence_prefix_8": ".|.|.|.|.|.|OO|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787310606,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 170.1,
+     "bid_levels": 45,
+     "total_bid_depth": 34754.10999999999
+    },
+    {
+     "t": 1787310606,
+     "rel": 6,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 439.67,
+     "bid_levels": 54,
+     "total_bid_depth": 39753.81
+    },
+    {
+     "t": 1787310616,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 30.15,
+     "bid_levels": 38,
+     "total_bid_depth": 34505.05
+    },
+    {
+     "t": 1787310616,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 773.99,
+     "bid_levels": 61,
+     "total_bid_depth": 45325.51
+    },
+    {
+     "t": 1787310623,
+     "rel": 23,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.37,
+     "top_bid_size": 501.67,
+     "bid_levels": 38,
+     "total_bid_depth": 36930.5
+    },
+    {
+     "t": 1787310623,
+     "rel": 23,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.62,
+     "top_bid_size": 20.0,
+     "bid_levels": 63,
+     "total_bid_depth": 35292.07000000001
+    },
+    {
+     "t": 1787310630,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.41,
+     "best_ask": 0.42,
+     "top_bid_size": 100.0,
+     "bid_levels": 41,
+     "total_bid_depth": 33347.22
+    },
+    {
+     "t": 1787310630,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.59,
+     "top_bid_size": 172.0,
+     "bid_levels": 59,
+     "total_bid_depth": 36252.87
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787310900",
+   "contract_length": "5m",
+   "window_start_utc": 1787310900,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.57,
+     "best_ask": 0.59,
+     "carried_s": 13.0,
+     "bid_levels": 57,
+     "total_bid_depth": 159392.47,
+     "top_bid_size": 61.0
+    },
+    "down": {
+     "best_bid": 0.41,
+     "best_ask": 0.43,
+     "carried_s": 13.0,
+     "bid_levels": 41,
+     "total_bid_depth": 157396.12,
+     "top_bid_size": 167.53
+    }
+   },
+   "n_observations_in_horizon": 6,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|OO|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|OO|.|.",
+   "sequence_prefix_8": ".|.|OO|.|.|.|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787310902,
+     "rel": 2,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.66,
+     "best_ask": 0.67,
+     "top_bid_size": 262.0,
+     "bid_levels": 66,
+     "total_bid_depth": 38014.46
+    },
+    {
+     "t": 1787310902,
+     "rel": 2,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.34,
+     "top_bid_size": 270.51,
+     "bid_levels": 33,
+     "total_bid_depth": 29194.679999999997
+    },
+    {
+     "t": 1787310918,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 310.0,
+     "bid_levels": 43,
+     "total_bid_depth": 37962.969999999994
+    },
+    {
+     "t": 1787310918,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.37,
+     "top_bid_size": 205.6,
+     "bid_levels": 56,
+     "total_bid_depth": 48727.78
+    },
+    {
+     "t": 1787310928,
+     "rel": 28,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 687.86,
+     "bid_levels": 57,
+     "total_bid_depth": 45434.26000000001
+    },
+    {
+     "t": 1787310928,
+     "rel": 28,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.42,
+     "best_ask": 0.37,
+     "top_bid_size": 129.98,
+     "bid_levels": 42,
+     "total_bid_depth": 39833.520000000004
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787312400",
+   "contract_length": "5m",
+   "window_start_utc": 1787312400,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "carried_s": 0.0,
+     "bid_levels": 43,
+     "total_bid_depth": 145007.55,
+     "top_bid_size": 74.13
+    },
+    "down": {
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "carried_s": 0.0,
+     "bid_levels": 56,
+     "total_bid_depth": 147866.08000000002,
+     "top_bid_size": 39.77
+    }
+   },
+   "n_observations_in_horizon": 12,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": "OO|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|OO|.|.|.|OO|.|.|.|.|OO|.|.|.",
+   "sequence_prefix_8": "OO|.|.|.|.|.|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787312400,
+     "rel": 0,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 74.13,
+     "bid_levels": 43,
+     "total_bid_depth": 145007.55
+    },
+    {
+     "t": 1787312400,
+     "rel": 0,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 39.77,
+     "bid_levels": 56,
+     "total_bid_depth": 147866.08000000002
+    },
+    {
+     "t": 1787312408,
+     "rel": 8,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 701.47,
+     "bid_levels": 43,
+     "total_bid_depth": 37863.09
+    },
+    {
+     "t": 1787312408,
+     "rel": 8,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 35.13,
+     "bid_levels": 56,
+     "total_bid_depth": 40687.829999999994
+    },
+    {
+     "t": 1787312413,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 92.91,
+     "bid_levels": 43,
+     "total_bid_depth": 36952.229999999996
+    },
+    {
+     "t": 1787312413,
+     "rel": 13,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 926.89,
+     "bid_levels": 56,
+     "total_bid_depth": 44749.939999999995
+    },
+    {
+     "t": 1787312418,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 949.11,
+     "bid_levels": 47,
+     "total_bid_depth": 42563.2
+    },
+    {
+     "t": 1787312418,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 56.0,
+     "bid_levels": 52,
+     "total_bid_depth": 42745.380000000005
+    },
+    {
+     "t": 1787312422,
+     "rel": 22,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 35.0,
+     "bid_levels": 48,
+     "total_bid_depth": 39737.78999999999
+    },
+    {
+     "t": 1787312422,
+     "rel": 22,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 552.39,
+     "bid_levels": 51,
+     "total_bid_depth": 40707.72000000001
+    },
+    {
+     "t": 1787312427,
+     "rel": 27,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 169.39,
+     "bid_levels": 49,
+     "total_bid_depth": 40265.69
+    },
+    {
+     "t": 1787312427,
+     "rel": 27,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 604.6,
+     "bid_levels": 50,
+     "total_bid_depth": 40018.36000000001
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787314200",
+   "contract_length": "5m",
+   "window_start_utc": 1787314200,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.41,
+     "best_ask": 0.42,
+     "carried_s": 7.0,
+     "bid_levels": 41,
+     "total_bid_depth": 28562.700000000004,
+     "top_bid_size": 53.3
+    },
+    "down": {
+     "best_bid": 0.58,
+     "best_ask": 0.59,
+     "carried_s": 7.0,
+     "bid_levels": 58,
+     "total_bid_depth": 26871.68,
+     "top_bid_size": 35.0
+    }
+   },
+   "n_observations_in_horizon": 6,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|.|.|.|.|OO|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|OO",
+   "sequence_prefix_8": ".|.|.|.|.|.|OO|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787314206,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 11.13,
+     "bid_levels": 45,
+     "total_bid_depth": 36750.479999999996
+    },
+    {
+     "t": 1787314206,
+     "rel": 6,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 412.73,
+     "bid_levels": 54,
+     "total_bid_depth": 38087.97
+    },
+    {
+     "t": 1787314220,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.44,
+     "top_bid_size": 51.11,
+     "bid_levels": 44,
+     "total_bid_depth": 42694.56
+    },
+    {
+     "t": 1787314220,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 687.17,
+     "bid_levels": 54,
+     "total_bid_depth": 43328.47
+    },
+    {
+     "t": 1787314230,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.33,
+     "top_bid_size": 114.98,
+     "bid_levels": 35,
+     "total_bid_depth": 35427.45
+    },
+    {
+     "t": 1787314230,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 364.64,
+     "bid_levels": 62,
+     "total_bid_depth": 44345.02
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787321100",
+   "contract_length": "5m",
+   "window_start_utc": 1787321100,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.4,
+     "best_ask": 0.42,
+     "carried_s": 1.0,
+     "bid_levels": 40,
+     "total_bid_depth": 145014.16999999998,
+     "top_bid_size": 27.13
+    },
+    "down": {
+     "best_bid": 0.58,
+     "best_ask": 0.6,
+     "carried_s": 1.0,
+     "bid_levels": 52,
+     "total_bid_depth": 147418.37,
+     "top_bid_size": 4.11
+    }
+   },
+   "n_observations_in_horizon": 36,
+   "n_l5_fills_in_horizon": 4,
+   "normalized_sequence": ".|OO|OO|.|.|OO|.|dmdmdmur|.|OO|.|OO|OO|.|OO|.|OO|.|.|.|.|OO|OO|.|OO|.|.|.|.|.|.",
+   "sequence_prefix_8": ".|OO|OO|.|.|OO|.|dmdmdmur",
+   "first_fill": {
+    "secs_after_open": 7,
+    "tte_s": 293,
+    "outcome": "down",
+    "price": 0.52,
+    "quantity": 16.92,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid": 0.46,
+    "own_ask": 0.47,
+    "offset_ticks_below_bid": -6,
+    "ticks_below_ask": -5,
+    "spread": 0.01,
+    "pair_sum_bids": 0.99,
+    "obs_age_s": 2.0,
+    "apparent_resting_s_at_price": null,
+    "price_existed_tminus5": false,
+    "price_existed_tminus10": true,
+    "own_bid_move_5s_before": -0.13,
+    "own_bid_move_10s_before": -0.09
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 7,
+    "dt_from_first_s": 0,
+    "outcome": "up",
+    "price": 0.48,
+    "quantity": 80.0,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid_move_5s_before": 0.13,
+    "pair_sum_bids": 0.99
+   },
+   "inter_fill_gaps_s": [
+    0,
+    0,
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.52,
+    "quantity": 25.0,
+    "same_side_as_first": true,
+    "same_price_as_first": true,
+    "price_vs_first": "same"
+   },
+   "third_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.52,
+    "quantity": 38.08
+   },
+   "inventory_at_horizon": {
+    "inv_up": 80.0,
+    "inv_down": 80.0,
+    "matched": 80.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 7,
+     "outcome": "down",
+     "price": 0.52,
+     "quantity": 16.92,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -6,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 16.92,
+      "matched": 0.0,
+      "residual": 16.92,
+      "imbalance_up_minus_down": -16.92,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "down",
+     "price": 0.52,
+     "quantity": 25.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -6,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 41.92,
+      "matched": 0.0,
+      "residual": 41.92,
+      "imbalance_up_minus_down": -41.92,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "down",
+     "price": 0.52,
+     "quantity": 38.08,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -6,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 80.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": -80.0,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "up",
+     "price": 0.48,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 5,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787321101,
+     "rel": 1,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 28.47,
+     "bid_levels": 40,
+     "total_bid_depth": 20728.86
+    },
+    {
+     "t": 1787321101,
+     "rel": 1,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 5.0,
+     "bid_levels": 56,
+     "total_bid_depth": 20354.8
+    },
+    {
+     "t": 1787321102,
+     "rel": 2,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 210.0,
+     "bid_levels": 49,
+     "total_bid_depth": 35665.0
+    },
+    {
+     "t": 1787321102,
+     "rel": 2,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 172.8,
+     "bid_levels": 50,
+     "total_bid_depth": 31696.540000000008
+    },
+    {
+     "t": 1787321105,
+     "rel": 5,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 95.0,
+     "bid_levels": 53,
+     "total_bid_depth": 38655.53
+    },
+    {
+     "t": 1787321105,
+     "rel": 5,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 978.57,
+     "bid_levels": 46,
+     "total_bid_depth": 37091.96
+    },
+    {
+     "t": 1787321107,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 902.68,
+     "bid_levels": 53,
+     "total_bid_depth": 43196.72
+    },
+    {
+     "t": 1787321107,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 19.96,
+     "bid_levels": 46,
+     "total_bid_depth": 34959.85
+    },
+    {
+     "t": 1787321107,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.52,
+     "quantity": 16.92,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.46,
+     "own_ask": 0.47,
+     "offset_ticks_below_bid": -6,
+     "ticks_below_ask": -5,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 16.92,
+      "matched": 0.0,
+      "residual": 16.92,
+      "imbalance_up_minus_down": -16.92,
+      "running_pair_cost": null
+     },
+     "log_index": 1057
+    },
+    {
+     "t": 1787321107,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.52,
+     "quantity": 25.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.46,
+     "own_ask": 0.47,
+     "offset_ticks_below_bid": -6,
+     "ticks_below_ask": -5,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 41.92,
+      "matched": 0.0,
+      "residual": 41.92,
+      "imbalance_up_minus_down": -41.92,
+      "running_pair_cost": null
+     },
+     "log_index": 1059
+    },
+    {
+     "t": 1787321107,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.52,
+     "quantity": 38.08,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.46,
+     "own_ask": 0.47,
+     "offset_ticks_below_bid": -6,
+     "ticks_below_ask": -5,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 80.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": -80.0,
+      "running_pair_cost": null
+     },
+     "log_index": 1061
+    },
+    {
+     "t": 1787321107,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.48,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.53,
+     "own_ask": 0.54,
+     "offset_ticks_below_bid": 5,
+     "ticks_below_ask": 6,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": 5.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1065
+    },
+    {
+     "t": 1787321109,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 67.06,
+     "bid_levels": 56,
+     "total_bid_depth": 45562.4
+    },
+    {
+     "t": 1787321109,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 364.22,
+     "bid_levels": 43,
+     "total_bid_depth": 35221.909999999996
+    },
+    {
+     "t": 1787321111,
+     "rel": 11,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 117.09,
+     "bid_levels": 59,
+     "total_bid_depth": 43524.96
+    },
+    {
+     "t": 1787321111,
+     "rel": 11,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 950.59,
+     "bid_levels": 40,
+     "total_bid_depth": 34011.38
+    },
+    {
+     "t": 1787321112,
+     "rel": 12,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 275.1,
+     "bid_levels": 62,
+     "total_bid_depth": 47845.75000000001
+    },
+    {
+     "t": 1787321112,
+     "rel": 12,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 647.87,
+     "bid_levels": 37,
+     "total_bid_depth": 35715.96
+    },
+    {
+     "t": 1787321114,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 534.04,
+     "bid_levels": 61,
+     "total_bid_depth": 51784.66
+    },
+    {
+     "t": 1787321114,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 218.0,
+     "bid_levels": 38,
+     "total_bid_depth": 36218.729999999996
+    },
+    {
+     "t": 1787321116,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 581.0,
+     "bid_levels": 62,
+     "total_bid_depth": 52749.340000000004
+    },
+    {
+     "t": 1787321116,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 314.62,
+     "bid_levels": 37,
+     "total_bid_depth": 37568.369999999995
+    },
+    {
+     "t": 1787321118,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 528.31,
+     "bid_levels": 62,
+     "total_bid_depth": 52934.060000000005
+    },
+    {
+     "t": 1787321118,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 169.0,
+     "bid_levels": 37,
+     "total_bid_depth": 36695.60999999999
+    },
+    {
+     "t": 1787321119,
+     "rel": 19,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 1173.37,
+     "bid_levels": 62,
+     "total_bid_depth": 52448.71000000001
+    },
+    {
+     "t": 1787321119,
+     "rel": 19,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 79.12,
+     "bid_levels": 37,
+     "total_bid_depth": 36811.71
+    },
+    {
+     "t": 1787321121,
+     "rel": 21,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.64,
+     "top_bid_size": 732.8,
+     "bid_levels": 63,
+     "total_bid_depth": 51263.86000000001
+    },
+    {
+     "t": 1787321121,
+     "rel": 21,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.36,
+     "best_ask": 0.37,
+     "top_bid_size": 60.0,
+     "bid_levels": 36,
+     "total_bid_depth": 35584.03
+    },
+    {
+     "t": 1787321122,
+     "rel": 22,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.67,
+     "best_ask": 0.68,
+     "top_bid_size": 340.69,
+     "bid_levels": 67,
+     "total_bid_depth": 52416.82
+    },
+    {
+     "t": 1787321122,
+     "rel": 22,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.32,
+     "best_ask": 0.33,
+     "top_bid_size": 325.38,
+     "bid_levels": 32,
+     "total_bid_depth": 33846.57000000001
+    },
+    {
+     "t": 1787321124,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.66,
+     "best_ask": 0.67,
+     "top_bid_size": 49.96,
+     "bid_levels": 66,
+     "total_bid_depth": 51746.78
+    },
+    {
+     "t": 1787321124,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.34,
+     "top_bid_size": 876.02,
+     "bid_levels": 33,
+     "total_bid_depth": 35636.670000000006
+    },
+    {
+     "t": 1787321125,
+     "rel": 25,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.66,
+     "best_ask": 0.67,
+     "top_bid_size": 341.51,
+     "bid_levels": 66,
+     "total_bid_depth": 52136.590000000004
+    },
+    {
+     "t": 1787321125,
+     "rel": 25,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.34,
+     "top_bid_size": 462.0,
+     "bid_levels": 33,
+     "total_bid_depth": 35646.05
+    },
+    {
+     "t": 1787321127,
+     "rel": 27,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.66,
+     "best_ask": 0.67,
+     "top_bid_size": 42.05,
+     "bid_levels": 66,
+     "total_bid_depth": 50126.39000000001
+    },
+    {
+     "t": 1787321127,
+     "rel": 27,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.34,
+     "top_bid_size": 660.0,
+     "bid_levels": 33,
+     "total_bid_depth": 35137.57000000001
+    },
+    {
+     "t": 1787321129,
+     "rel": 29,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.66,
+     "best_ask": 0.67,
+     "top_bid_size": 532.52,
+     "bid_levels": 66,
+     "total_bid_depth": 52276.060000000005
+    },
+    {
+     "t": 1787321129,
+     "rel": 29,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.34,
+     "top_bid_size": 245.82,
+     "bid_levels": 33,
+     "total_bid_depth": 34862.29000000001
+    },
+    {
+     "t": 1787321130,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.66,
+     "best_ask": 0.67,
+     "top_bid_size": 548.8,
+     "bid_levels": 66,
+     "total_bid_depth": 52184.01000000001
+    },
+    {
+     "t": 1787321130,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.34,
+     "top_bid_size": 209.7,
+     "bid_levels": 33,
+     "total_bid_depth": 34572.89000000001
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787349900",
+   "contract_length": "5m",
+   "window_start_utc": 1787349900,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.44,
+     "best_ask": 0.46,
+     "carried_s": 3.0,
+     "bid_levels": 44,
+     "total_bid_depth": 27083.379999999997,
+     "top_bid_size": 168.0
+    },
+    "down": {
+     "best_bid": 0.54,
+     "best_ask": 0.56,
+     "carried_s": 3.0,
+     "bid_levels": 53,
+     "total_bid_depth": 26932.89,
+     "top_bid_size": 2.6
+    }
+   },
+   "n_observations_in_horizon": 12,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|.|.|OO|.|.|.|.|OO|.|.|.|.|OO|.|.|.|.|OO|.|.|.|OO|.|.|O|.|.|.|.",
+   "sequence_prefix_8": ".|.|.|.|OO|.|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787349904,
+     "rel": 4,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.41,
+     "best_ask": 0.42,
+     "top_bid_size": 326.03,
+     "bid_levels": 41,
+     "total_bid_depth": 29524.03
+    },
+    {
+     "t": 1787349904,
+     "rel": 4,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.58,
+     "best_ask": 0.59,
+     "top_bid_size": 428.96,
+     "bid_levels": 58,
+     "total_bid_depth": 37368.72999999999
+    },
+    {
+     "t": 1787349909,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 430.0,
+     "bid_levels": 37,
+     "total_bid_depth": 31820.319999999996
+    },
+    {
+     "t": 1787349909,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 257.37,
+     "bid_levels": 62,
+     "total_bid_depth": 39871.59
+    },
+    {
+     "t": 1787349914,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.32,
+     "best_ask": 0.32,
+     "top_bid_size": 57.22,
+     "bid_levels": 32,
+     "total_bid_depth": 31526.32
+    },
+    {
+     "t": 1787349914,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.68,
+     "best_ask": 0.68,
+     "top_bid_size": 313.53,
+     "bid_levels": 68,
+     "total_bid_depth": 45399.75
+    },
+    {
+     "t": 1787349919,
+     "rel": 19,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.31,
+     "best_ask": 0.31,
+     "top_bid_size": 27.49,
+     "bid_levels": 31,
+     "total_bid_depth": 31930.829999999998
+    },
+    {
+     "t": 1787349919,
+     "rel": 19,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.69,
+     "best_ask": 0.69,
+     "top_bid_size": 467.95,
+     "bid_levels": 69,
+     "total_bid_depth": 47122.2
+    },
+    {
+     "t": 1787349923,
+     "rel": 23,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.33,
+     "best_ask": 0.32,
+     "top_bid_size": 321.51,
+     "bid_levels": 33,
+     "total_bid_depth": 30317.81
+    },
+    {
+     "t": 1787349923,
+     "rel": 23,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.68,
+     "best_ask": 0.67,
+     "top_bid_size": 505.76,
+     "bid_levels": 68,
+     "total_bid_depth": 38352.04
+    },
+    {
+     "t": 1787349926,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.34,
+     "best_ask": 0.32,
+     "top_bid_size": 137.0,
+     "bid_levels": 32,
+     "total_bid_depth": 31628.29
+    },
+    {
+     "t": 1787349926,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.68,
+     "best_ask": 0.66,
+     "top_bid_size": 372.73,
+     "bid_levels": 66,
+     "total_bid_depth": 35927.62
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787356500",
+   "contract_length": "5m",
+   "window_start_utc": 1787356500,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "carried_s": 0.0,
+     "bid_levels": 55,
+     "total_bid_depth": 145393.07,
+     "top_bid_size": 305.63
+    },
+    "down": {
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "carried_s": 0.0,
+     "bid_levels": 43,
+     "total_bid_depth": 144953.21000000002,
+     "top_bid_size": 99.0
+    }
+   },
+   "n_observations_in_horizon": 30,
+   "n_l5_fills_in_horizon": 2,
+   "normalized_sequence": "OO|.|.|.|.|OO|.|OOumdr|.|OO|.|OO|.|.|OO|.|OO|.|.|.|OO|.|.|OO|OO|.|OO|.|OO|.|OO",
+   "sequence_prefix_8": "OO|.|.|.|.|OO|.|OOumdr",
+   "first_fill": {
+    "secs_after_open": 7,
+    "tte_s": 293,
+    "outcome": "up",
+    "price": 0.56,
+    "quantity": 80.0,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid": 0.55,
+    "own_ask": 0.56,
+    "offset_ticks_below_bid": -1,
+    "ticks_below_ask": 0,
+    "spread": 0.01,
+    "pair_sum_bids": 0.99,
+    "obs_age_s": 2.0,
+    "apparent_resting_s_at_price": null,
+    "price_existed_tminus5": true,
+    "price_existed_tminus10": false,
+    "own_bid_move_5s_before": -0.01,
+    "own_bid_move_10s_before": 0.0
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 7,
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.44,
+    "quantity": 80.0,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid_move_5s_before": 0.01,
+    "pair_sum_bids": 0.99
+   },
+   "inter_fill_gaps_s": [
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.44,
+    "quantity": 80.0,
+    "same_side_as_first": false,
+    "same_price_as_first": false,
+    "price_vs_first": "lower"
+   },
+   "third_fill": null,
+   "inventory_at_horizon": {
+    "inv_up": 80.0,
+    "inv_down": 80.0,
+    "matched": 80.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 7,
+     "outcome": "up",
+     "price": 0.56,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -1,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 7,
+     "outcome": "down",
+     "price": 0.44,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 0,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787356500,
+     "rel": 0,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 305.63,
+     "bid_levels": 55,
+     "total_bid_depth": 145393.07
+    },
+    {
+     "t": 1787356500,
+     "rel": 0,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 99.0,
+     "bid_levels": 43,
+     "total_bid_depth": 144953.21000000002
+    },
+    {
+     "t": 1787356502,
+     "rel": 2,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 299.26,
+     "bid_levels": 56,
+     "total_bid_depth": 32079.61
+    },
+    {
+     "t": 1787356502,
+     "rel": 2,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 435.25,
+     "bid_levels": 43,
+     "total_bid_depth": 28812.500000000004
+    },
+    {
+     "t": 1787356504,
+     "rel": 4,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 481.03,
+     "bid_levels": 56,
+     "total_bid_depth": 33962.38
+    },
+    {
+     "t": 1787356504,
+     "rel": 4,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 373.79,
+     "bid_levels": 43,
+     "total_bid_depth": 29307.23
+    },
+    {
+     "t": 1787356505,
+     "rel": 5,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 81.0,
+     "bid_levels": 55,
+     "total_bid_depth": 37145.49
+    },
+    {
+     "t": 1787356505,
+     "rel": 5,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "top_bid_size": 409.62,
+     "bid_levels": 44,
+     "total_bid_depth": 34056.36
+    },
+    {
+     "t": 1787356507,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 293.17,
+     "bid_levels": 50,
+     "total_bid_depth": 35842.189999999995
+    },
+    {
+     "t": 1787356507,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 586.9,
+     "bid_levels": 49,
+     "total_bid_depth": 35359.7
+    },
+    {
+     "t": 1787356507,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.56,
+     "quantity": 80.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.55,
+     "own_ask": 0.56,
+     "offset_ticks_below_bid": -1,
+     "ticks_below_ask": 0,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 80.0,
+      "imbalance_up_minus_down": 80.0,
+      "running_pair_cost": null
+     },
+     "log_index": 1456
+    },
+    {
+     "t": 1787356507,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.44,
+     "quantity": 80.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.44,
+     "own_ask": 0.45,
+     "offset_ticks_below_bid": 0,
+     "ticks_below_ask": 1,
+     "obs_age_s_own": 2.0,
+     "apparent_resting_s_at_price": 2.0,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 80.0,
+      "inv_down": 80.0,
+      "matched": 80.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1460
+    },
+    {
+     "t": 1787356509,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 162.11,
+     "bid_levels": 47,
+     "total_bid_depth": 31779.729999999996
+    },
+    {
+     "t": 1787356509,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 327.07,
+     "bid_levels": 52,
+     "total_bid_depth": 35429.36
+    },
+    {
+     "t": 1787356511,
+     "rel": 11,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 127.48,
+     "bid_levels": 45,
+     "total_bid_depth": 34502.78
+    },
+    {
+     "t": 1787356511,
+     "rel": 11,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 155.16,
+     "bid_levels": 54,
+     "total_bid_depth": 38679.73999999999
+    },
+    {
+     "t": 1787356514,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 553.2,
+     "bid_levels": 53,
+     "total_bid_depth": 37786.42
+    },
+    {
+     "t": 1787356514,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 126.61,
+     "bid_levels": 46,
+     "total_bid_depth": 35737.049999999996
+    },
+    {
+     "t": 1787356516,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 506.79,
+     "bid_levels": 54,
+     "total_bid_depth": 38920.13
+    },
+    {
+     "t": 1787356516,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 104.56,
+     "bid_levels": 45,
+     "total_bid_depth": 36018.21000000001
+    },
+    {
+     "t": 1787356520,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 85.92,
+     "bid_levels": 51,
+     "total_bid_depth": 37724.42
+    },
+    {
+     "t": 1787356520,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 424.83,
+     "bid_levels": 48,
+     "total_bid_depth": 36931.380000000005
+    },
+    {
+     "t": 1787356523,
+     "rel": 23,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 582.39,
+     "bid_levels": 53,
+     "total_bid_depth": 32928.76
+    },
+    {
+     "t": 1787356523,
+     "rel": 23,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 8.0,
+     "bid_levels": 46,
+     "total_bid_depth": 28427.48
+    },
+    {
+     "t": 1787356524,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 126.0,
+     "bid_levels": 54,
+     "total_bid_depth": 33225.14
+    },
+    {
+     "t": 1787356524,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 512.94,
+     "bid_levels": 45,
+     "total_bid_depth": 31029.510000000006
+    },
+    {
+     "t": 1787356526,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.54,
+     "top_bid_size": 123.5,
+     "bid_levels": 52,
+     "total_bid_depth": 28607.61
+    },
+    {
+     "t": 1787356526,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.48,
+     "top_bid_size": 271.18,
+     "bid_levels": 46,
+     "total_bid_depth": 30217.63
+    },
+    {
+     "t": 1787356528,
+     "rel": 28,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 571.85,
+     "bid_levels": 47,
+     "total_bid_depth": 28644.86
+    },
+    {
+     "t": 1787356528,
+     "rel": 28,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 24.0,
+     "bid_levels": 52,
+     "total_bid_depth": 32047.750000000004
+    },
+    {
+     "t": 1787356530,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "top_bid_size": 11.91,
+     "bid_levels": 44,
+     "total_bid_depth": 29188.170000000006
+    },
+    {
+     "t": 1787356530,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 795.59,
+     "bid_levels": 55,
+     "total_bid_depth": 33040.32000000001
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787357100",
+   "contract_length": "5m",
+   "window_start_utc": 1787357100,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.57,
+     "best_ask": 0.61,
+     "carried_s": 0.0,
+     "bid_levels": 54,
+     "total_bid_depth": 145305.88,
+     "top_bid_size": 69.0
+    },
+    "down": {
+     "best_bid": 0.39,
+     "best_ask": 0.43,
+     "carried_s": 0.0,
+     "bid_levels": 39,
+     "total_bid_depth": 148995.48,
+     "top_bid_size": 106.0
+    }
+   },
+   "n_observations_in_horizon": 12,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": "OO|.|.|.|.|.|.|OO|.|.|.|.|OO|.|.|.|.|.|OO|.|.|.|OO|.|.|.|.|.|OO|.|.",
+   "sequence_prefix_8": "OO|.|.|.|.|.|.|OO",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787357100,
+     "rel": 0,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.61,
+     "top_bid_size": 69.0,
+     "bid_levels": 54,
+     "total_bid_depth": 145305.88
+    },
+    {
+     "t": 1787357100,
+     "rel": 0,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.43,
+     "top_bid_size": 106.0,
+     "bid_levels": 39,
+     "total_bid_depth": 148995.48
+    },
+    {
+     "t": 1787357107,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 155.0,
+     "bid_levels": 46,
+     "total_bid_depth": 35101.38
+    },
+    {
+     "t": 1787357107,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 433.84,
+     "bid_levels": 53,
+     "total_bid_depth": 37831.7
+    },
+    {
+     "t": 1787357112,
+     "rel": 12,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "top_bid_size": 98.86,
+     "bid_levels": 44,
+     "total_bid_depth": 32459.989999999994
+    },
+    {
+     "t": 1787357112,
+     "rel": 12,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 446.62,
+     "bid_levels": 55,
+     "total_bid_depth": 36879.7
+    },
+    {
+     "t": 1787357118,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 260.0,
+     "bid_levels": 37,
+     "total_bid_depth": 34070.55
+    },
+    {
+     "t": 1787357118,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 317.0,
+     "bid_levels": 62,
+     "total_bid_depth": 43471.920000000006
+    },
+    {
+     "t": 1787357122,
+     "rel": 22,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.41,
+     "top_bid_size": 644.66,
+     "bid_levels": 39,
+     "total_bid_depth": 32581.760000000002
+    },
+    {
+     "t": 1787357122,
+     "rel": 22,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.61,
+     "top_bid_size": 10.31,
+     "bid_levels": 59,
+     "total_bid_depth": 37514.770000000004
+    },
+    {
+     "t": 1787357128,
+     "rel": 28,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 31.66,
+     "bid_levels": 43,
+     "total_bid_depth": 34211.72
+    },
+    {
+     "t": 1787357128,
+     "rel": 28,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 295.02,
+     "bid_levels": 56,
+     "total_bid_depth": 37830.91
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787365200",
+   "contract_length": "5m",
+   "window_start_utc": 1787365200,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.39,
+     "best_ask": 0.41,
+     "carried_s": 1.0,
+     "bid_levels": 39,
+     "total_bid_depth": 153077.74,
+     "top_bid_size": 37.56
+    },
+    "down": {
+     "best_bid": 0.59,
+     "best_ask": 0.61,
+     "carried_s": 1.0,
+     "bid_levels": 59,
+     "total_bid_depth": 152588.23,
+     "top_bid_size": 15.6
+    }
+   },
+   "n_observations_in_horizon": 16,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": ".|.|.|OO|.|.|.|.|OO|.|.|OO|.|.|OO|.|.|OO|.|OO|.|.|OO|.|.|OO|.|.|.|.|.",
+   "sequence_prefix_8": ".|.|.|OO|.|.|.|.",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787365203,
+     "rel": 3,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.42,
+     "best_ask": 0.43,
+     "top_bid_size": 397.1,
+     "bid_levels": 42,
+     "total_bid_depth": 29395.77
+    },
+    {
+     "t": 1787365203,
+     "rel": 3,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 15.0,
+     "bid_levels": 57,
+     "total_bid_depth": 32592.870000000003
+    },
+    {
+     "t": 1787365208,
+     "rel": 8,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 60.39,
+     "bid_levels": 39,
+     "total_bid_depth": 31426.62
+    },
+    {
+     "t": 1787365208,
+     "rel": 8,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 318.98,
+     "bid_levels": 60,
+     "total_bid_depth": 35646.319999999985
+    },
+    {
+     "t": 1787365211,
+     "rel": 11,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 72.01,
+     "bid_levels": 37,
+     "total_bid_depth": 26991.050000000003
+    },
+    {
+     "t": 1787365211,
+     "rel": 11,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 258.65,
+     "bid_levels": 62,
+     "total_bid_depth": 34497.899999999994
+    },
+    {
+     "t": 1787365214,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "top_bid_size": 18.75,
+     "bid_levels": 44,
+     "total_bid_depth": 32992.899999999994
+    },
+    {
+     "t": 1787365214,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 224.21,
+     "bid_levels": 55,
+     "total_bid_depth": 33596.81
+    },
+    {
+     "t": 1787365217,
+     "rel": 17,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 362.17,
+     "bid_levels": 48,
+     "total_bid_depth": 34724.63
+    },
+    {
+     "t": 1787365217,
+     "rel": 17,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 331.59,
+     "bid_levels": 51,
+     "total_bid_depth": 34837.18
+    },
+    {
+     "t": 1787365219,
+     "rel": 19,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 37.0,
+     "bid_levels": 46,
+     "total_bid_depth": 33201.43
+    },
+    {
+     "t": 1787365219,
+     "rel": 19,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 159.85,
+     "bid_levels": 53,
+     "total_bid_depth": 33550.27
+    },
+    {
+     "t": 1787365222,
+     "rel": 22,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 87.03,
+     "bid_levels": 47,
+     "total_bid_depth": 32237.379999999997
+    },
+    {
+     "t": 1787365222,
+     "rel": 22,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 323.66,
+     "bid_levels": 52,
+     "total_bid_depth": 31491.67
+    },
+    {
+     "t": 1787365225,
+     "rel": 25,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 63.07,
+     "bid_levels": 45,
+     "total_bid_depth": 30538.37
+    },
+    {
+     "t": 1787365225,
+     "rel": 25,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 27.68,
+     "bid_levels": 53,
+     "total_bid_depth": 30733.539999999997
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787374800",
+   "contract_length": "5m",
+   "window_start_utc": 1787374800,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "carried_s": 3.0,
+     "bid_levels": 48,
+     "total_bid_depth": 146262.99,
+     "top_bid_size": 47.93
+    },
+    "down": {
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "carried_s": 3.0,
+     "bid_levels": 51,
+     "total_bid_depth": 146741.84000000003,
+     "top_bid_size": 177.99
+    }
+   },
+   "n_observations_in_horizon": 6,
+   "n_l5_fills_in_horizon": 2,
+   "normalized_sequence": ".|.|.|.|.|.|.|.|.|urdm|.|.|OO|.|.|.|.|.|.|.|.|OO|.|.|.|.|.|.|.|OO|.",
+   "sequence_prefix_8": ".|.|.|.|.|.|.|.",
+   "first_fill": {
+    "secs_after_open": 9,
+    "tte_s": 291,
+    "outcome": "up",
+    "price": 0.47,
+    "quantity": 4.77,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid": 0.48,
+    "own_ask": 0.49,
+    "offset_ticks_below_bid": 1,
+    "ticks_below_ask": 2,
+    "spread": 0.01,
+    "pair_sum_bids": 0.99,
+    "obs_age_s": 12.0,
+    "apparent_resting_s_at_price": 69.0,
+    "price_existed_tminus5": true,
+    "price_existed_tminus10": true,
+    "own_bid_move_5s_before": 0.0,
+    "own_bid_move_10s_before": 0.0
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 9,
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.53,
+    "quantity": 19.77,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid_move_5s_before": 0.0,
+    "pair_sum_bids": 0.99
+   },
+   "inter_fill_gaps_s": [
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.53,
+    "quantity": 19.77,
+    "same_side_as_first": false,
+    "same_price_as_first": false,
+    "price_vs_first": "higher"
+   },
+   "third_fill": null,
+   "inventory_at_horizon": {
+    "inv_up": 4.77,
+    "inv_down": 19.77,
+    "matched": 4.77,
+    "residual": 15.0,
+    "imbalance_up_minus_down": -15.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 9,
+     "outcome": "up",
+     "price": 0.47,
+     "quantity": 4.77,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 1,
+     "inv_after": {
+      "inv_up": 4.77,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 4.77,
+      "imbalance_up_minus_down": 4.77,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 9,
+     "outcome": "down",
+     "price": 0.53,
+     "quantity": 19.77,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -2,
+     "inv_after": {
+      "inv_up": 4.77,
+      "inv_down": 19.77,
+      "matched": 4.77,
+      "residual": 15.0,
+      "imbalance_up_minus_down": -15.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787374809,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.47,
+     "quantity": 4.77,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.48,
+     "own_ask": 0.49,
+     "offset_ticks_below_bid": 1,
+     "ticks_below_ask": 2,
+     "obs_age_s_own": 12.0,
+     "apparent_resting_s_at_price": 69.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 4.77,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 4.77,
+      "imbalance_up_minus_down": 4.77,
+      "running_pair_cost": null
+     },
+     "log_index": 808
+    },
+    {
+     "t": 1787374809,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.53,
+     "quantity": 19.77,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.51,
+     "own_ask": 0.52,
+     "offset_ticks_below_bid": -2,
+     "ticks_below_ask": -1,
+     "obs_age_s_own": 12.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 4.77,
+      "inv_down": 19.77,
+      "matched": 4.77,
+      "residual": 15.0,
+      "imbalance_up_minus_down": -15.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 814
+    },
+    {
+     "t": 1787374812,
+     "rel": 12,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 635.75,
+     "bid_levels": 48,
+     "total_bid_depth": 28232.68
+    },
+    {
+     "t": 1787374812,
+     "rel": 12,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 10.11,
+     "bid_levels": 51,
+     "total_bid_depth": 27239.78
+    },
+    {
+     "t": 1787374821,
+     "rel": 21,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 159.74,
+     "bid_levels": 55,
+     "total_bid_depth": 27525.789999999997
+    },
+    {
+     "t": 1787374821,
+     "rel": 21,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "top_bid_size": 60.37,
+     "bid_levels": 44,
+     "total_bid_depth": 24365.870000000003
+    },
+    {
+     "t": 1787374829,
+     "rel": 29,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 189.16,
+     "bid_levels": 59,
+     "total_bid_depth": 28127.649999999998
+    },
+    {
+     "t": 1787374829,
+     "rel": 29,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 118.33,
+     "bid_levels": 40,
+     "total_bid_depth": 22940.239999999998
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787558700",
+   "contract_length": "5m",
+   "window_start_utc": 1787558700,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "carried_s": 0.0,
+     "bid_levels": 50,
+     "total_bid_depth": 19601.969999999998,
+     "top_bid_size": 50.0
+    },
+    "down": {
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "carried_s": 0.0,
+     "bid_levels": 48,
+     "total_bid_depth": 19616.309999999998,
+     "top_bid_size": 20.0
+    }
+   },
+   "n_observations_in_horizon": 62,
+   "n_l5_fills_in_horizon": 0,
+   "normalized_sequence": "OO|OO|.|OO|OO|.|OO|OO|OO|OO|OO|.|.|.|.|OO|.|OO|OO|.|.|.|.|OO|.|OO|.|OO|.|OO|.",
+   "sequence_prefix_8": "OO|OO|.|OO|OO|.|OO|OO",
+   "first_fill": null,
+   "first_opposite_fill": null,
+   "inter_fill_gaps_s": [],
+   "second_fill": null,
+   "third_fill": null,
+   "inventory_at_horizon": null,
+   "fills": [],
+   "event_stream": [
+    {
+     "t": 1787558700,
+     "rel": 0,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 50.0,
+     "bid_levels": 50,
+     "total_bid_depth": 19601.969999999998
+    },
+    {
+     "t": 1787558700,
+     "rel": 0,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 20.0,
+     "bid_levels": 48,
+     "total_bid_depth": 19616.309999999998
+    },
+    {
+     "t": 1787558701,
+     "rel": 1,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 108.33,
+     "bid_levels": 51,
+     "total_bid_depth": 26495.33
+    },
+    {
+     "t": 1787558701,
+     "rel": 1,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 124.82,
+     "bid_levels": 48,
+     "total_bid_depth": 26446.680000000004
+    },
+    {
+     "t": 1787558702,
+     "rel": 2,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 94.53,
+     "bid_levels": 51,
+     "total_bid_depth": 27616.86
+    },
+    {
+     "t": 1787558702,
+     "rel": 2,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 454.1,
+     "bid_levels": 48,
+     "total_bid_depth": 27326.960000000003
+    },
+    {
+     "t": 1787558703,
+     "rel": 3,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 370.84,
+     "bid_levels": 54,
+     "total_bid_depth": 30430.84
+    },
+    {
+     "t": 1787558703,
+     "rel": 3,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.45,
+     "best_ask": 0.46,
+     "top_bid_size": 10.09,
+     "bid_levels": 45,
+     "total_bid_depth": 25380.150000000005
+    },
+    {
+     "t": 1787558704,
+     "rel": 4,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.65,
+     "best_ask": 0.66,
+     "top_bid_size": 325.54,
+     "bid_levels": 65,
+     "total_bid_depth": 35010.51
+    },
+    {
+     "t": 1787558704,
+     "rel": 4,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.34,
+     "best_ask": 0.35,
+     "top_bid_size": 239.0,
+     "bid_levels": 34,
+     "total_bid_depth": 26223.609999999997
+    },
+    {
+     "t": 1787558705,
+     "rel": 5,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.65,
+     "best_ask": 0.66,
+     "top_bid_size": 64.03,
+     "bid_levels": 65,
+     "total_bid_depth": 38239.869999999995
+    },
+    {
+     "t": 1787558705,
+     "rel": 5,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.34,
+     "best_ask": 0.35,
+     "top_bid_size": 484.26,
+     "bid_levels": 34,
+     "total_bid_depth": 27223.25
+    },
+    {
+     "t": 1787558706,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.64,
+     "best_ask": 0.65,
+     "top_bid_size": 25.0,
+     "bid_levels": 64,
+     "total_bid_depth": 35340.869999999995
+    },
+    {
+     "t": 1787558706,
+     "rel": 6,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.35,
+     "best_ask": 0.36,
+     "top_bid_size": 496.37,
+     "bid_levels": 35,
+     "total_bid_depth": 27741.51
+    },
+    {
+     "t": 1787558707,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.58,
+     "best_ask": 0.59,
+     "top_bid_size": 102.59,
+     "bid_levels": 58,
+     "total_bid_depth": 35177.6
+    },
+    {
+     "t": 1787558707,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.41,
+     "best_ask": 0.42,
+     "top_bid_size": 37.0,
+     "bid_levels": 41,
+     "total_bid_depth": 28950.499999999996
+    },
+    {
+     "t": 1787558708,
+     "rel": 8,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 50.02,
+     "bid_levels": 59,
+     "total_bid_depth": 35202.99
+    },
+    {
+     "t": 1787558708,
+     "rel": 8,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 303.85,
+     "bid_levels": 40,
+     "total_bid_depth": 28556.96
+    },
+    {
+     "t": 1787558709,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 375.33,
+     "bid_levels": 60,
+     "total_bid_depth": 34928.35
+    },
+    {
+     "t": 1787558709,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 5.6,
+     "bid_levels": 38,
+     "total_bid_depth": 26741.809999999998
+    },
+    {
+     "t": 1787558710,
+     "rel": 10,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 154.73,
+     "bid_levels": 61,
+     "total_bid_depth": 34897.549999999996
+    },
+    {
+     "t": 1787558710,
+     "rel": 10,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 476.89,
+     "bid_levels": 38,
+     "total_bid_depth": 26989.469999999998
+    },
+    {
+     "t": 1787558711,
+     "rel": 11,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 134.37,
+     "bid_levels": 61,
+     "total_bid_depth": 34872.5
+    },
+    {
+     "t": 1787558711,
+     "rel": 11,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 457.89,
+     "bid_levels": 38,
+     "total_bid_depth": 26664.35
+    },
+    {
+     "t": 1787558712,
+     "rel": 12,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 96.03,
+     "bid_levels": 61,
+     "total_bid_depth": 36036.149999999994
+    },
+    {
+     "t": 1787558712,
+     "rel": 12,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 564.08,
+     "bid_levels": 38,
+     "total_bid_depth": 28276.539999999997
+    },
+    {
+     "t": 1787558713,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 25.0,
+     "bid_levels": 61,
+     "total_bid_depth": 35938.189999999995
+    },
+    {
+     "t": 1787558713,
+     "rel": 13,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 606.35,
+     "bid_levels": 38,
+     "total_bid_depth": 28441.109999999997
+    },
+    {
+     "t": 1787558714,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 20.0,
+     "bid_levels": 61,
+     "total_bid_depth": 35920.27
+    },
+    {
+     "t": 1787558714,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 597.27,
+     "bid_levels": 38,
+     "total_bid_depth": 28142.629999999997
+    },
+    {
+     "t": 1787558715,
+     "rel": 15,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 52.0,
+     "bid_levels": 60,
+     "total_bid_depth": 37019.82
+    },
+    {
+     "t": 1787558715,
+     "rel": 15,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 392.88,
+     "bid_levels": 39,
+     "total_bid_depth": 29392.399999999994
+    },
+    {
+     "t": 1787558716,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 52.0,
+     "bid_levels": 60,
+     "total_bid_depth": 37245.1
+    },
+    {
+     "t": 1787558716,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 640.71,
+     "bid_levels": 39,
+     "total_bid_depth": 29747.829999999998
+    },
+    {
+     "t": 1787558717,
+     "rel": 17,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 394.51,
+     "bid_levels": 59,
+     "total_bid_depth": 37570.42
+    },
+    {
+     "t": 1787558717,
+     "rel": 17,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 27.0,
+     "bid_levels": 40,
+     "total_bid_depth": 29960.52
+    },
+    {
+     "t": 1787558718,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 202.5,
+     "bid_levels": 60,
+     "total_bid_depth": 37058.33
+    },
+    {
+     "t": 1787558718,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 131.96,
+     "bid_levels": 39,
+     "total_bid_depth": 29472.350000000002
+    },
+    {
+     "t": 1787558719,
+     "rel": 19,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 20.0,
+     "bid_levels": 60,
+     "total_bid_depth": 37017.21000000001
+    },
+    {
+     "t": 1787558719,
+     "rel": 19,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 294.05,
+     "bid_levels": 39,
+     "total_bid_depth": 29166.540000000005
+    },
+    {
+     "t": 1787558720,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 15.0,
+     "bid_levels": 60,
+     "total_bid_depth": 35311.08
+    },
+    {
+     "t": 1787558720,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 420.68,
+     "bid_levels": 39,
+     "total_bid_depth": 27695.190000000002
+    },
+    {
+     "t": 1787558721,
+     "rel": 21,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 254.0,
+     "bid_levels": 60,
+     "total_bid_depth": 35339.520000000004
+    },
+    {
+     "t": 1787558721,
+     "rel": 21,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 138.84,
+     "bid_levels": 39,
+     "total_bid_depth": 27462.550000000003
+    },
+    {
+     "t": 1787558722,
+     "rel": 22,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 96.5,
+     "bid_levels": 60,
+     "total_bid_depth": 35402.14000000001
+    },
+    {
+     "t": 1787558722,
+     "rel": 22,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.39,
+     "best_ask": 0.4,
+     "top_bid_size": 58.84,
+     "bid_levels": 39,
+     "total_bid_depth": 27583.15
+    },
+    {
+     "t": 1787558723,
+     "rel": 23,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 309.46,
+     "bid_levels": 61,
+     "total_bid_depth": 35890.08
+    },
+    {
+     "t": 1787558723,
+     "rel": 23,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 28.54,
+     "bid_levels": 38,
+     "total_bid_depth": 26913.260000000002
+    },
+    {
+     "t": 1787558724,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 360.14,
+     "bid_levels": 61,
+     "total_bid_depth": 35905.380000000005
+    },
+    {
+     "t": 1787558724,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 4.38,
+     "bid_levels": 38,
+     "total_bid_depth": 26947.78
+    },
+    {
+     "t": 1787558725,
+     "rel": 25,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 179.0,
+     "bid_levels": 62,
+     "total_bid_depth": 35428.19000000001
+    },
+    {
+     "t": 1787558725,
+     "rel": 25,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 110.11,
+     "bid_levels": 37,
+     "total_bid_depth": 26701.11
+    },
+    {
+     "t": 1787558726,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.62,
+     "best_ask": 0.63,
+     "top_bid_size": 78.86,
+     "bid_levels": 62,
+     "total_bid_depth": 35270.310000000005
+    },
+    {
+     "t": 1787558726,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.37,
+     "best_ask": 0.38,
+     "top_bid_size": 172.05,
+     "bid_levels": 37,
+     "total_bid_depth": 26769.75
+    },
+    {
+     "t": 1787558727,
+     "rel": 27,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 175.6,
+     "bid_levels": 61,
+     "total_bid_depth": 35145.62000000001
+    },
+    {
+     "t": 1787558727,
+     "rel": 27,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 160.14,
+     "bid_levels": 38,
+     "total_bid_depth": 26734.46
+    },
+    {
+     "t": 1787558728,
+     "rel": 28,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.61,
+     "best_ask": 0.62,
+     "top_bid_size": 42.24,
+     "bid_levels": 61,
+     "total_bid_depth": 34943.96000000001
+    },
+    {
+     "t": 1787558728,
+     "rel": 28,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.38,
+     "best_ask": 0.39,
+     "top_bid_size": 244.0,
+     "bid_levels": 38,
+     "total_bid_depth": 26405.52
+    },
+    {
+     "t": 1787558729,
+     "rel": 29,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.68,
+     "best_ask": 0.69,
+     "top_bid_size": 126.73,
+     "bid_levels": 68,
+     "total_bid_depth": 35079.95
+    },
+    {
+     "t": 1787558729,
+     "rel": 29,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.31,
+     "best_ask": 0.32,
+     "top_bid_size": 175.33,
+     "bid_levels": 31,
+     "total_bid_depth": 21550.73
+    },
+    {
+     "t": 1787558730,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.68,
+     "best_ask": 0.69,
+     "top_bid_size": 189.85,
+     "bid_levels": 68,
+     "total_bid_depth": 36713.52999999999
+    },
+    {
+     "t": 1787558730,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.31,
+     "best_ask": 0.32,
+     "top_bid_size": 142.38,
+     "bid_levels": 31,
+     "total_bid_depth": 22673.18
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787565000",
+   "contract_length": "5m",
+   "window_start_utc": 1787565000,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "carried_s": 2.0,
+     "bid_levels": 43,
+     "total_bid_depth": 156500.34,
+     "top_bid_size": 55.72
+    },
+    "down": {
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "carried_s": 2.0,
+     "bid_levels": 55,
+     "total_bid_depth": 157012.53999999998,
+     "top_bid_size": 0.6
+    }
+   },
+   "n_observations_in_horizon": 18,
+   "n_l5_fills_in_horizon": 4,
+   "normalized_sequence": ".|.|.|OO|.|.|.|.|.|OOdrdrdrum|.|.|.|OO|.|.|.|.|.|.|.|.|.|.|OO|.|.|OO|.|.|OO",
+   "sequence_prefix_8": ".|.|.|OO|.|.|.|.",
+   "first_fill": {
+    "secs_after_open": 9,
+    "tte_s": 291,
+    "outcome": "down",
+    "price": 0.48,
+    "quantity": 5.74,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid": 0.52,
+    "own_ask": 0.53,
+    "offset_ticks_below_bid": 4,
+    "ticks_below_ask": 5,
+    "spread": 0.01,
+    "pair_sum_bids": 0.99,
+    "obs_age_s": 6.0,
+    "apparent_resting_s_at_price": 67.0,
+    "price_existed_tminus5": true,
+    "price_existed_tminus10": true,
+    "own_bid_move_5s_before": 0.0,
+    "own_bid_move_10s_before": -0.04
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 9,
+    "dt_from_first_s": 0,
+    "outcome": "up",
+    "price": 0.52,
+    "quantity": 20.0,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid_move_5s_before": 0.0,
+    "pair_sum_bids": 0.99
+   },
+   "inter_fill_gaps_s": [
+    0,
+    0,
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.48,
+    "quantity": 5.0,
+    "same_side_as_first": true,
+    "same_price_as_first": true,
+    "price_vs_first": "same"
+   },
+   "third_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.48,
+    "quantity": 9.26
+   },
+   "inventory_at_horizon": {
+    "inv_up": 20.0,
+    "inv_down": 20.0,
+    "matched": 20.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 9,
+     "outcome": "down",
+     "price": 0.48,
+     "quantity": 5.74,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 4,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 5.74,
+      "matched": 0.0,
+      "residual": 5.74,
+      "imbalance_up_minus_down": -5.74,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 9,
+     "outcome": "down",
+     "price": 0.48,
+     "quantity": 5.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 4,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 10.74,
+      "matched": 0.0,
+      "residual": 10.74,
+      "imbalance_up_minus_down": -10.74,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 9,
+     "outcome": "down",
+     "price": 0.48,
+     "quantity": 9.26,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 4,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 20.0,
+      "matched": 0.0,
+      "residual": 20.0,
+      "imbalance_up_minus_down": -20.0,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 9,
+     "outcome": "up",
+     "price": 0.52,
+     "quantity": 20.0,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -5,
+     "inv_after": {
+      "inv_up": 20.0,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787565003,
+     "rel": 3,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.47,
+     "best_ask": 0.48,
+     "top_bid_size": 216.67,
+     "bid_levels": 47,
+     "total_bid_depth": 26964.22
+    },
+    {
+     "t": 1787565003,
+     "rel": 3,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 55.8,
+     "bid_levels": 52,
+     "total_bid_depth": 29476.15
+    },
+    {
+     "t": 1787565009,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.48,
+     "best_ask": 0.49,
+     "top_bid_size": 338.47,
+     "bid_levels": 48,
+     "total_bid_depth": 30051.0
+    },
+    {
+     "t": 1787565009,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 21.0,
+     "bid_levels": 51,
+     "total_bid_depth": 31478.269999999997
+    },
+    {
+     "t": 1787565009,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.48,
+     "quantity": 5.74,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.52,
+     "own_ask": 0.53,
+     "offset_ticks_below_bid": 4,
+     "ticks_below_ask": 5,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": 67.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 5.74,
+      "matched": 0.0,
+      "residual": 5.74,
+      "imbalance_up_minus_down": -5.74,
+      "running_pair_cost": null
+     },
+     "log_index": 1440
+    },
+    {
+     "t": 1787565009,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.48,
+     "quantity": 5.0,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.52,
+     "own_ask": 0.53,
+     "offset_ticks_below_bid": 4,
+     "ticks_below_ask": 5,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": 67.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 10.74,
+      "matched": 0.0,
+      "residual": 10.74,
+      "imbalance_up_minus_down": -10.74,
+      "running_pair_cost": null
+     },
+     "log_index": 1442
+    },
+    {
+     "t": 1787565009,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.48,
+     "quantity": 9.26,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.52,
+     "own_ask": 0.53,
+     "offset_ticks_below_bid": 4,
+     "ticks_below_ask": 5,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": 67.0,
+     "price_existed_tminus5": true,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 0.0,
+      "inv_down": 20.0,
+      "matched": 0.0,
+      "residual": 20.0,
+      "imbalance_up_minus_down": -20.0,
+      "running_pair_cost": null
+     },
+     "log_index": 1444
+    },
+    {
+     "t": 1787565009,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.52,
+     "quantity": 20.0,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.47,
+     "own_ask": 0.48,
+     "offset_ticks_below_bid": -5,
+     "ticks_below_ask": -4,
+     "obs_age_s_own": 6.0,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 20.0,
+      "inv_down": 20.0,
+      "matched": 20.0,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1448
+    },
+    {
+     "t": 1787565013,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 50.99,
+     "bid_levels": 49,
+     "total_bid_depth": 28801.989999999998
+    },
+    {
+     "t": 1787565013,
+     "rel": 13,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 258.93,
+     "bid_levels": 50,
+     "total_bid_depth": 30926.86
+    },
+    {
+     "t": 1787565015,
+     "rel": 15,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 311.33,
+     "bid_levels": 49,
+     "total_bid_depth": 30239.71
+    },
+    {
+     "t": 1787565015,
+     "rel": 15,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 72.96,
+     "bid_levels": 50,
+     "total_bid_depth": 31349.649999999998
+    },
+    {
+     "t": 1787565018,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 54.67,
+     "bid_levels": 49,
+     "total_bid_depth": 29817.91
+    },
+    {
+     "t": 1787565018,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 388.76,
+     "bid_levels": 50,
+     "total_bid_depth": 32131.47
+    },
+    {
+     "t": 1787565020,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 341.69,
+     "bid_levels": 49,
+     "total_bid_depth": 27998.190000000002
+    },
+    {
+     "t": 1787565020,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 48.6,
+     "bid_levels": 50,
+     "total_bid_depth": 29951.170000000002
+    },
+    {
+     "t": 1787565024,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 53.34,
+     "bid_levels": 43,
+     "total_bid_depth": 24728.130000000005
+    },
+    {
+     "t": 1787565024,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 189.81,
+     "bid_levels": 56,
+     "total_bid_depth": 29913.589999999997
+    },
+    {
+     "t": 1787565027,
+     "rel": 27,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.46,
+     "best_ask": 0.47,
+     "top_bid_size": 457.19,
+     "bid_levels": 46,
+     "total_bid_depth": 27326.829999999994
+    },
+    {
+     "t": 1787565027,
+     "rel": 27,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 140.83,
+     "bid_levels": 53,
+     "total_bid_depth": 30453.67
+    },
+    {
+     "t": 1787565030,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 64.6,
+     "bid_levels": 43,
+     "total_bid_depth": 25783.129999999997
+    },
+    {
+     "t": 1787565030,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 237.91,
+     "bid_levels": 56,
+     "total_bid_depth": 30645.35
+    }
+   ]
+  },
+  {
+   "market_slug": "btc-updown-5m-1787567400",
+   "contract_length": "5m",
+   "window_start_utc": 1787567400,
+   "horizon_s": 30,
+   "opening_book": {
+    "up": {
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "carried_s": 0.0,
+     "bid_levels": 43,
+     "total_bid_depth": 153936.08000000002,
+     "top_bid_size": 45.0
+    },
+    "down": {
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "carried_s": 0.0,
+     "bid_levels": 56,
+     "total_bid_depth": 155778.15,
+     "top_bid_size": 80.0
+    }
+   },
+   "n_observations_in_horizon": 60,
+   "n_l5_fills_in_horizon": 2,
+   "normalized_sequence": "OO|OO|.|OO|umdr|OO|OO|OO|OO|O|O|O|O|O|O|O|.|.|O|O|O|O|.|O|O|.|O|.|O|.|.",
+   "sequence_prefix_8": "OO|OO|.|OO|umdr|OO|OO|OO",
+   "first_fill": {
+    "secs_after_open": 4,
+    "tte_s": 296,
+    "outcome": "up",
+    "price": 0.39,
+    "quantity": 3.36,
+    "mechanism": "MINT_CONSISTENT",
+    "own_bid": 0.36,
+    "own_ask": 0.37,
+    "offset_ticks_below_bid": -3,
+    "ticks_below_ask": -2,
+    "spread": 0.01,
+    "pair_sum_bids": 0.99,
+    "obs_age_s": 1,
+    "apparent_resting_s_at_price": null,
+    "price_existed_tminus5": false,
+    "price_existed_tminus10": true,
+    "own_bid_move_5s_before": -0.07,
+    "own_bid_move_10s_before": -0.05
+   },
+   "first_opposite_fill": {
+    "secs_after_open": 4,
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.61,
+    "quantity": 3.36,
+    "mechanism": "RESTING_BID_CONSISTENT",
+    "own_bid_move_5s_before": 0.08,
+    "pair_sum_bids": 0.99
+   },
+   "inter_fill_gaps_s": [
+    0
+   ],
+   "second_fill": {
+    "dt_from_first_s": 0,
+    "outcome": "down",
+    "price": 0.61,
+    "quantity": 3.36,
+    "same_side_as_first": false,
+    "same_price_as_first": false,
+    "price_vs_first": "higher"
+   },
+   "third_fill": null,
+   "inventory_at_horizon": {
+    "inv_up": 3.36,
+    "inv_down": 3.36,
+    "matched": 3.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "fills": [
+    {
+     "rel": 4,
+     "outcome": "up",
+     "price": 0.39,
+     "quantity": 3.36,
+     "mechanism": "MINT_CONSISTENT",
+     "offset_ticks_below_bid": -3,
+     "inv_after": {
+      "inv_up": 3.36,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 3.36,
+      "imbalance_up_minus_down": 3.36,
+      "running_pair_cost": null
+     }
+    },
+    {
+     "rel": 4,
+     "outcome": "down",
+     "price": 0.61,
+     "quantity": 3.36,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "offset_ticks_below_bid": 2,
+     "inv_after": {
+      "inv_up": 3.36,
+      "inv_down": 3.36,
+      "matched": 3.36,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     }
+    }
+   ],
+   "event_stream": [
+    {
+     "t": 1787567400,
+     "rel": 0,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.43,
+     "best_ask": 0.44,
+     "top_bid_size": 45.0,
+     "bid_levels": 43,
+     "total_bid_depth": 153936.08000000002
+    },
+    {
+     "t": 1787567400,
+     "rel": 0,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 80.0,
+     "bid_levels": 56,
+     "total_bid_depth": 155778.15
+    },
+    {
+     "t": 1787567401,
+     "rel": 1,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.4,
+     "best_ask": 0.41,
+     "top_bid_size": 17.26,
+     "bid_levels": 40,
+     "total_bid_depth": 24200.25
+    },
+    {
+     "t": 1787567401,
+     "rel": 1,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.59,
+     "best_ask": 0.6,
+     "top_bid_size": 389.31,
+     "bid_levels": 59,
+     "total_bid_depth": 29794.879999999997
+    },
+    {
+     "t": 1787567403,
+     "rel": 3,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.36,
+     "best_ask": 0.37,
+     "top_bid_size": 475.24,
+     "bid_levels": 36,
+     "total_bid_depth": 30497.29
+    },
+    {
+     "t": 1787567403,
+     "rel": 3,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.64,
+     "top_bid_size": 75.0,
+     "bid_levels": 63,
+     "total_bid_depth": 36732.80999999999
+    },
+    {
+     "t": 1787567404,
+     "rel": 4,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.36,
+     "best_ask": 0.37,
+     "top_bid_size": 520.07,
+     "bid_levels": 36,
+     "total_bid_depth": 30292.92
+    },
+    {
+     "t": 1787567404,
+     "rel": 4,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.63,
+     "best_ask": 0.64,
+     "top_bid_size": 3.61,
+     "bid_levels": 63,
+     "total_bid_depth": 37410.649999999994
+    },
+    {
+     "t": 1787567404,
+     "rel": 4,
+     "outcome": "up",
+     "kind": "L5_FILL",
+     "price": 0.39,
+     "quantity": 3.36,
+     "mechanism": "MINT_CONSISTENT",
+     "own_bid": 0.36,
+     "own_ask": 0.37,
+     "offset_ticks_below_bid": -3,
+     "ticks_below_ask": -2,
+     "obs_age_s_own": 1,
+     "apparent_resting_s_at_price": null,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": true,
+     "inv_after": {
+      "inv_up": 3.36,
+      "inv_down": 0.0,
+      "matched": 0.0,
+      "residual": 3.36,
+      "imbalance_up_minus_down": 3.36,
+      "running_pair_cost": null
+     },
+     "log_index": 1315
+    },
+    {
+     "t": 1787567404,
+     "rel": 4,
+     "outcome": "down",
+     "kind": "L5_FILL",
+     "price": 0.61,
+     "quantity": 3.36,
+     "mechanism": "RESTING_BID_CONSISTENT",
+     "own_bid": 0.63,
+     "own_ask": 0.64,
+     "offset_ticks_below_bid": 2,
+     "ticks_below_ask": 3,
+     "obs_age_s_own": 1,
+     "apparent_resting_s_at_price": 1.0,
+     "price_existed_tminus5": false,
+     "price_existed_tminus10": false,
+     "inv_after": {
+      "inv_up": 3.36,
+      "inv_down": 3.36,
+      "matched": 3.36,
+      "residual": 0.0,
+      "imbalance_up_minus_down": 0.0,
+      "running_pair_cost": 1.0
+     },
+     "log_index": 1319
+    },
+    {
+     "t": 1787567405,
+     "rel": 5,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.42,
+     "best_ask": 0.43,
+     "top_bid_size": 483.2,
+     "bid_levels": 42,
+     "total_bid_depth": 33443.88999999999
+    },
+    {
+     "t": 1787567405,
+     "rel": 5,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 233.7,
+     "bid_levels": 57,
+     "total_bid_depth": 38126.649999999994
+    },
+    {
+     "t": 1787567406,
+     "rel": 6,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.41,
+     "best_ask": 0.42,
+     "top_bid_size": 391.21,
+     "bid_levels": 41,
+     "total_bid_depth": 33297.579999999994
+    },
+    {
+     "t": 1787567406,
+     "rel": 6,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.58,
+     "best_ask": 0.59,
+     "top_bid_size": 41.4,
+     "bid_levels": 58,
+     "total_bid_depth": 38437.590000000004
+    },
+    {
+     "t": 1787567407,
+     "rel": 7,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.44,
+     "best_ask": 0.45,
+     "top_bid_size": 806.86,
+     "bid_levels": 44,
+     "total_bid_depth": 34665.82
+    },
+    {
+     "t": 1787567407,
+     "rel": 7,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 61.37,
+     "bid_levels": 55,
+     "total_bid_depth": 34758.71
+    },
+    {
+     "t": 1787567408,
+     "rel": 8,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.49,
+     "best_ask": 0.5,
+     "top_bid_size": 610.52,
+     "bid_levels": 49,
+     "total_bid_depth": 37920.33
+    },
+    {
+     "t": 1787567408,
+     "rel": 8,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.51,
+     "top_bid_size": 9.75,
+     "bid_levels": 53,
+     "total_bid_depth": 33665.22
+    },
+    {
+     "t": 1787567409,
+     "rel": 9,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 497.64,
+     "bid_levels": 52,
+     "total_bid_depth": 36420.72000000001
+    },
+    {
+     "t": 1787567409,
+     "rel": 9,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.48,
+     "top_bid_size": 9.75,
+     "bid_levels": 51,
+     "total_bid_depth": 32843.64
+    },
+    {
+     "t": 1787567410,
+     "rel": 10,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 63.0,
+     "bid_levels": 51,
+     "total_bid_depth": 35669.86
+    },
+    {
+     "t": 1787567410,
+     "rel": 10,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.49,
+     "top_bid_size": 9.75,
+     "bid_levels": 52,
+     "total_bid_depth": 34268.24
+    },
+    {
+     "t": 1787567411,
+     "rel": 11,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 383.55,
+     "bid_levels": 52,
+     "total_bid_depth": 36628.78
+    },
+    {
+     "t": 1787567411,
+     "rel": 11,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.48,
+     "top_bid_size": 9.75,
+     "bid_levels": 51,
+     "total_bid_depth": 33000.8
+    },
+    {
+     "t": 1787567412,
+     "rel": 12,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.5,
+     "best_ask": 0.51,
+     "top_bid_size": 410.96,
+     "bid_levels": 50,
+     "total_bid_depth": 36622.840000000004
+    },
+    {
+     "t": 1787567412,
+     "rel": 12,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.5,
+     "top_bid_size": 9.75,
+     "bid_levels": 53,
+     "total_bid_depth": 34625.0
+    },
+    {
+     "t": 1787567413,
+     "rel": 13,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.55,
+     "best_ask": 0.56,
+     "top_bid_size": 716.02,
+     "bid_levels": 55,
+     "total_bid_depth": 41391.51000000001
+    },
+    {
+     "t": 1787567413,
+     "rel": 13,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.45,
+     "top_bid_size": 9.75,
+     "bid_levels": 48,
+     "total_bid_depth": 33399.9
+    },
+    {
+     "t": 1787567414,
+     "rel": 14,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 226.31,
+     "bid_levels": 56,
+     "total_bid_depth": 41039.880000000005
+    },
+    {
+     "t": 1787567414,
+     "rel": 14,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.44,
+     "top_bid_size": 9.75,
+     "bid_levels": 47,
+     "total_bid_depth": 33688.94
+    },
+    {
+     "t": 1787567415,
+     "rel": 15,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 335.0,
+     "bid_levels": 57,
+     "total_bid_depth": 41281.33000000001
+    },
+    {
+     "t": 1787567415,
+     "rel": 15,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.43,
+     "top_bid_size": 9.75,
+     "bid_levels": 46,
+     "total_bid_depth": 33834.420000000006
+    },
+    {
+     "t": 1787567416,
+     "rel": 16,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 84.0,
+     "bid_levels": 57,
+     "total_bid_depth": 39666.55
+    },
+    {
+     "t": 1787567416,
+     "rel": 16,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.43,
+     "top_bid_size": 9.75,
+     "bid_levels": 46,
+     "total_bid_depth": 32763.93
+    },
+    {
+     "t": 1787567417,
+     "rel": 17,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.57,
+     "best_ask": 0.58,
+     "top_bid_size": 194.7,
+     "bid_levels": 57,
+     "total_bid_depth": 41469.84
+    },
+    {
+     "t": 1787567417,
+     "rel": 17,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.43,
+     "top_bid_size": 9.75,
+     "bid_levels": 46,
+     "total_bid_depth": 33741.909999999996
+    },
+    {
+     "t": 1787567418,
+     "rel": 18,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.6,
+     "best_ask": 0.61,
+     "top_bid_size": 139.2,
+     "bid_levels": 60,
+     "total_bid_depth": 42834.41
+    },
+    {
+     "t": 1787567418,
+     "rel": 18,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.4,
+     "top_bid_size": 9.75,
+     "bid_levels": 43,
+     "total_bid_depth": 32918.15
+    },
+    {
+     "t": 1787567419,
+     "rel": 19,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.51,
+     "best_ask": 0.52,
+     "top_bid_size": 44.0,
+     "bid_levels": 51,
+     "total_bid_depth": 35592.14000000001
+    },
+    {
+     "t": 1787567419,
+     "rel": 19,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.49,
+     "top_bid_size": 9.75,
+     "bid_levels": 52,
+     "total_bid_depth": 35935.009999999995
+    },
+    {
+     "t": 1787567420,
+     "rel": 20,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 202.07,
+     "bid_levels": 53,
+     "total_bid_depth": 38314.88999999999
+    },
+    {
+     "t": 1787567420,
+     "rel": 20,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.47,
+     "top_bid_size": 9.75,
+     "bid_levels": 50,
+     "total_bid_depth": 32789.4
+    },
+    {
+     "t": 1787567421,
+     "rel": 21,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 40.6,
+     "bid_levels": 54,
+     "total_bid_depth": 37279.219999999994
+    },
+    {
+     "t": 1787567421,
+     "rel": 21,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.46,
+     "top_bid_size": 9.75,
+     "bid_levels": 49,
+     "total_bid_depth": 32974.74
+    },
+    {
+     "t": 1787567422,
+     "rel": 22,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 37.55,
+     "bid_levels": 54,
+     "total_bid_depth": 38354.939999999995
+    },
+    {
+     "t": 1787567422,
+     "rel": 22,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.46,
+     "top_bid_size": 9.75,
+     "bid_levels": 49,
+     "total_bid_depth": 32840.82
+    },
+    {
+     "t": 1787567423,
+     "rel": 23,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.52,
+     "best_ask": 0.53,
+     "top_bid_size": 109.53,
+     "bid_levels": 52,
+     "total_bid_depth": 37221.729999999996
+    },
+    {
+     "t": 1787567423,
+     "rel": 23,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.48,
+     "top_bid_size": 9.75,
+     "bid_levels": 51,
+     "total_bid_depth": 33250.20999999999
+    },
+    {
+     "t": 1787567424,
+     "rel": 24,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 90.0,
+     "bid_levels": 53,
+     "total_bid_depth": 37151.31999999999
+    },
+    {
+     "t": 1787567424,
+     "rel": 24,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.47,
+     "top_bid_size": 9.75,
+     "bid_levels": 50,
+     "total_bid_depth": 33854.36
+    },
+    {
+     "t": 1787567425,
+     "rel": 25,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.54,
+     "top_bid_size": 105.0,
+     "bid_levels": 53,
+     "total_bid_depth": 38094.80999999999
+    },
+    {
+     "t": 1787567425,
+     "rel": 25,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.47,
+     "top_bid_size": 9.75,
+     "bid_levels": 50,
+     "total_bid_depth": 33186.69
+    },
+    {
+     "t": 1787567426,
+     "rel": 26,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 370.61,
+     "bid_levels": 54,
+     "total_bid_depth": 38341.079999999994
+    },
+    {
+     "t": 1787567426,
+     "rel": 26,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.46,
+     "top_bid_size": 9.75,
+     "bid_levels": 49,
+     "total_bid_depth": 32393.150000000005
+    },
+    {
+     "t": 1787567427,
+     "rel": 27,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.54,
+     "best_ask": 0.55,
+     "top_bid_size": 588.63,
+     "bid_levels": 54,
+     "total_bid_depth": 37408.5
+    },
+    {
+     "t": 1787567427,
+     "rel": 27,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.46,
+     "top_bid_size": 9.75,
+     "bid_levels": 49,
+     "total_bid_depth": 31816.190000000002
+    },
+    {
+     "t": 1787567428,
+     "rel": 28,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 374.75,
+     "bid_levels": 56,
+     "total_bid_depth": 37233.119999999995
+    },
+    {
+     "t": 1787567428,
+     "rel": 28,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.44,
+     "top_bid_size": 9.75,
+     "bid_levels": 47,
+     "total_bid_depth": 31800.840000000004
+    },
+    {
+     "t": 1787567429,
+     "rel": 29,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 185.0,
+     "bid_levels": 56,
+     "total_bid_depth": 37199.96
+    },
+    {
+     "t": 1787567429,
+     "rel": 29,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.44,
+     "top_bid_size": 9.75,
+     "bid_levels": 47,
+     "total_bid_depth": 31688.720000000005
+    },
+    {
+     "t": 1787567430,
+     "rel": 30,
+     "outcome": "up",
+     "kind": "BOOK",
+     "best_bid": 0.56,
+     "best_ask": 0.57,
+     "top_bid_size": 185.0,
+     "bid_levels": 56,
+     "total_bid_depth": 36964.72
+    },
+    {
+     "t": 1787567430,
+     "rel": 30,
+     "outcome": "down",
+     "kind": "BOOK",
+     "best_bid": 0.53,
+     "best_ask": 0.44,
+     "top_bid_size": 9.75,
+     "bid_levels": 47,
+     "total_bid_depth": 31154.38
+    }
+   ]
+  }
+ ]
+}
