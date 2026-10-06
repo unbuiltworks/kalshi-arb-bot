@@ -92,17 +92,109 @@ jobs:
             python3 -m analysis.l5.s3.cohort --tape $TAPES
           fi
 
-      - name: Commit artifacts
+      # FIX 1 of 4 -- PERSISTENCE BEFORE SYNCHRONIZATION.
+      # Run 37469519509 collected 8,071 cycles and 16,160 rows, measured
+      # them, then lost every byte because four `git push` attempts were
+      # rejected non-fast-forward and the commit existed only on the
+      # runner's disk. Evidence persistence must NOT depend on a branch
+      # push succeeding. These uploads happen BEFORE any git operation and
+      # run with `if: always()`, so the tape and the instrument output
+      # survive a failed push, a failed measurement, or a cancelled job.
+      - name: Upload raw tape as a workflow artifact (BEFORE any git op)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-raw-tape-${{ github.run_id }}
+          path: data/s3_cohort/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Upload frozen-instrument output as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-cohort-output-${{ github.run_id }}
+          path: analysis/l5/s3/S3_COHORT.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      # FIX 2 of 4 -- NO SILENT EMPTY RESULT.
+      # "nothing to commit" was previously an `exit 0`. If the measurement
+      # step produced no output at all, that is an evidence failure, not a
+      # clean run. Assert the artifact exists and is parseable before we
+      # claim anything succeeded.
+      - name: Assert the instrument actually produced an artifact
         run: |
+          test -s analysis/l5/s3/S3_COHORT.json || {
+            echo "::error::S3_COHORT.json missing or empty -- the frozen"
+            echo "::error::instrument produced no output. This run yields NO"
+            echo "::error::evidence and must not be recorded as a success."
+            exit 1; }
+          python3 -c "
+          import json,sys
+          d=json.load(open('analysis/l5/s3/S3_COHORT.json'))
+          want='8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df'
+          if d.get('VERDICT')=='NO_TAPE_COLLECTED':
+              print('acquisition failure recorded honestly; cohort NOT advanced')
+              sys.exit(0)
+          assert d.get('spec_fingerprint')==want, 'output is not from the frozen S3 spec'
+          print('artifact OK: COMPLETE=%s completed=%s halt=%s'
+                % (d.get('markets_COMPLETE'), d.get('cohort_completed'),
+                   d.get('gate',{}).get('halt')))"
+
+      # FIX 3 of 4 -- ELIMINATE THE CONCURRENT-WRITER FAILURE MODE.
+      # This branch has other writers (the live-execution work pushes to
+      # it continuously). A plain push therefore loses every race. Rebase
+      # the bot's single data commit onto the fetched remote head before
+      # each attempt. Only generated data paths are touched, so a rebase
+      # cannot conflict with source changes made elsewhere.
+      #
+      # FIX 4 of 4 -- A FAILED PUSH MUST FAIL THE JOB.
+      # The old loop's last statement was `sleep`, which exits 0, so
+      # `bash -e` recorded four rejected pushes as a green step. Green CI
+      # must never mean "the evidence disappeared successfully." The loop
+      # now ends in an explicit `exit 1`, and a post-push verification
+      # confirms the commit is actually reachable on the remote.
+      - name: Commit and push artifacts (failure is NOT success)
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A data/s3_cohort analysis/l5/s3 || true
+          BRANCH=claude/august-l5-forensic-replay-788cml
+          git add -A data/s3_cohort analysis/l5/s3
           if git diff --cached --quiet; then
-            echo "nothing to commit"; exit 0
+            echo "::warning::no tracked change to commit; the workflow"
+            echo "::warning::artifacts above remain the authoritative copy"
+            exit 0
           fi
           printf 'data(s3): prospective cohort tape and frozen-instrument output [skip ci]\n\nZero capital. Read-only public endpoints. No orders, no signing.\n' > /tmp/m.txt
           git commit -F /tmp/m.txt
-          for i in 1 2 3 4; do
-            git push origin claude/august-l5-forensic-replay-788cml && break
+          SHA=$(git rev-parse HEAD)
+          pushed=0
+          for i in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            # --rebase-merges is unnecessary: this is one linear data commit
+            git rebase "origin/$BRANCH" || {
+              echo "::error::rebase conflict on generated data paths"; exit 1; }
+            SHA=$(git rev-parse HEAD)
+            if git push origin "HEAD:$BRANCH"; then pushed=1; break; fi
+            echo "push attempt $i rejected; refetching and retrying"
             sleep $((2**i))
           done
+          if [ "$pushed" -ne 1 ]; then
+            echo "::error::all push attempts failed. The tape and cohort"
+            echo "::error::output ARE preserved as workflow artifacts"
+            echo "::error::s3-raw-tape-${{ github.run_id }} and"
+            echo "::error::s3-cohort-output-${{ github.run_id }}, but the"
+            echo "::error::branch was NOT updated. Failing loudly."
+            exit 1
+          fi
+          # Independent confirmation: the commit is on the remote, not just
+          # on this runner's disk. This is the check whose absence lost
+          # run 37469519509.
+          git fetch origin "$BRANCH"
+          git merge-base --is-ancestor "$SHA" "origin/$BRANCH" || {
+            echo "::error::push reported success but $SHA is not an ancestor"
+            echo "::error::of origin/$BRANCH -- refusing to call this a success"
+            exit 1; }
+          echo "verified on remote: $SHA"

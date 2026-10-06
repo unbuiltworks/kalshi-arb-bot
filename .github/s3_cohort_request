@@ -2,6 +2,14 @@ S3 prospective cohort request
 
 frozen spec : 8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df
 spec commit : 28c619df
-requested   : 2026-10-06T13:16:30Z
+requested   : 2026-10-06T21:50:00Z
 mode        : ZERO CAPITAL. read-only public endpoints. no orders, no signing.
 reservation : 0.96, UNCHANGED, despite expected substantial stand-down.
+
+rerun reason: run 37469519509 collected 8,071 cycles / 16,160 rows / 15.46 MB
+              and measured them, then LOST the artifact: four non-fast-forward
+              pushes, no rebase, and a retry loop ending in `sleep` turned the
+              loss into a green step. Nothing about the strategy changed; this
+              is an infrastructure repair and a rerun of the SAME frozen cohort.
+              The previous run contributed ZERO COMPLETE markets to the >=25
+              requirement, because its evidence does not exist.
