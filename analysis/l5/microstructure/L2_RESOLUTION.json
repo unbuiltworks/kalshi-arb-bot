@@ -95,6 +95,100 @@
     "bid_levels_p95": 110,
     "bid_levels_max": 128
    }
+  },
+  {
+   "label": "BTC5m",
+   "file": "updown_5m.parquet",
+   "coin": "btc",
+   "captured_at_dtype": "timestamp[us, tz=UTC]",
+   "rows_total_file": 167941,
+   "rows_for_coin": 25543,
+   "contract_lengths_present": {
+    "5m": 25543
+   },
+   "distinct_tokens": 124,
+   "PRECISION": {
+    "distinct_microsecond_values": 1,
+    "microsecond_histogram_top5": [
+     [
+      0,
+      25543
+     ]
+    ],
+    "all_microseconds_zero": true,
+    "gcd_of_inter_observation_gaps_s": 1,
+    "verdict": "WHOLE SECONDS: the column is microsecond-capable but every microsecond is zero, so no sub-second state exists to preserve"
+   },
+   "DUPLICATE_TIMESTAMPS": {
+    "same_token_same_second_identical_ladder": 0,
+    "same_token_same_second_DIFFERENT_ladder": 0,
+    "note": "differing rows at the same second are UNORDERABLE from the archive alone; an event-driven replay must declare them rather than pick an order"
+   },
+   "UPDATE_FREQUENCY": {
+    "n_gaps": 25419,
+    "gap_s_p05": 1,
+    "gap_s_p50": 1,
+    "gap_s_p90": 3,
+    "gap_s_p95": 5,
+    "gap_s_p99": 11,
+    "gap_s_max": 223,
+    "gap_1s_share": 0.8072,
+    "gaps_over_60s": 22,
+    "gaps_over_60s_share": 0.000865,
+    "gap_histogram_top10": [
+     [
+      1,
+      20518
+     ],
+     [
+      2,
+      2219
+     ],
+     [
+      3,
+      852
+     ],
+     [
+      4,
+      400
+     ],
+     [
+      5,
+      346
+     ],
+     [
+      6,
+      248
+     ],
+     [
+      7,
+      238
+     ],
+     [
+      8,
+      150
+     ],
+     [
+      9,
+      120
+     ],
+     [
+      10,
+      68
+     ]
+    ]
+   },
+   "SNAPSHOT_OR_EVENT_DRIVEN": {
+    "consecutive_pairs_compared": 25419,
+    "consecutive_with_IDENTICAL_ladders": 18,
+    "identical_share": 0.000708,
+    "verdict": "EVENT-DRIVEN (written on change): consecutive rows almost never repeat a ladder, so a GAP MEANS THE BOOK DID NOT MOVE and the last row is the current state"
+   },
+   "DEPTH": {
+    "bid_levels_p50": 49,
+    "bid_levels_p95": 99,
+    "bid_levels_max": 128
+   }
   }
  ]
 }
