@@ -1,5 +1,5 @@
 {
-  "produced_at_utc": "2026-10-06T05:32:34Z",
+  "produced_at_utc": "2026-10-06T05:51:36Z",
   "produced_by_run_id": "37409797204",
   "produced_by_sha": "d849a0f53e82d16fb856c1cc66d2fe14a5f00dc9",
   "produced_by_run_number": "4",
@@ -11,12 +11,13 @@
     "shadow_20261006T041623Z.jsonl.gz",
     "shadow_20261006T043526Z.jsonl.gz",
     "shadow_20261006T045429Z.jsonl.gz",
-    "shadow_20261006T051332Z.jsonl.gz"
+    "shadow_20261006T051332Z.jsonl.gz",
+    "shadow_20261006T053235Z.jsonl.gz"
   ],
   "candidate_fingerprint": "441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe",
   "cohort_target": 25,
-  "COMPLETE_markets": 21,
-  "valid_measurement_markets": 27,
+  "COMPLETE_markets": 25,
+  "valid_measurement_markets": 32,
   "infrastructure_failures_not_counted": 2,
   "quarantined_tapes": [
     {
@@ -32,10 +33,10 @@
       "markets_excluded": 57
     }
   ],
-  "evidenced_fills_valid_markets_only": 288,
-  "uncertain_fills_valid_markets_only": 954,
+  "evidenced_fills_valid_markets_only": 339,
+  "uncertain_fills_valid_markets_only": 1161,
   "gate_counts_counted_tapes": {
-    "VALID_MEASUREMENT": 27,
+    "VALID_MEASUREMENT": 32,
     "GATE5_ORDERS_NOT_INSTANTIATED_BOTH_SIDES": 2
   },
   "per_tape": [
@@ -1260,6 +1261,195 @@
           "cost": {
             "up": 66.108,
             "down": 33.9984
+          }
+        }
+      ],
+      "discovery_errors": [],
+      "gate_counts": {
+        "VALID_MEASUREMENT": 5
+      }
+    },
+    {
+      "tape": "shadow_20261006T053235Z.jsonl.gz",
+      "tape_stamp_utc": "2026-10-06T05:32:35Z",
+      "run_id": 37409797204,
+      "run_number": 4,
+      "sha": "d849a0f53e82d16fb856c1cc66d2fe14a5f00dc9",
+      "run_validity": "PENDING_MEASUREMENT_VALIDITY",
+      "markets": [
+        {
+          "market": "btc-updown-5m-1791264600",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791264756.1840777,
+            "last_t": 1791264899.7109916,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 110,
+          "successful_book_reads": 110,
+          "snapshots": 110,
+          "observations_with_both_token_books": 110,
+          "observations_with_a_bid_on_both_outcomes": 76,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 17,
+          "uncertain_fills": 20,
+          "inventory": {
+            "up": 188.88,
+            "down": 212.49
+          },
+          "matched": 188.88,
+          "residual": 23.610000000000014,
+          "cost": {
+            "up": 13.6938,
+            "down": 152.0484
+          }
+        },
+        {
+          "market": "btc-updown-5m-1791264900",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791264901.2914786,
+            "last_t": 1791265199.3990502,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 229,
+          "successful_book_reads": 229,
+          "snapshots": 229,
+          "observations_with_both_token_books": 229,
+          "observations_with_a_bid_on_both_outcomes": 193,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 6,
+          "uncertain_fills": 3,
+          "inventory": {
+            "up": 23.61,
+            "down": 118.05
+          },
+          "matched": 23.61,
+          "residual": 94.44,
+          "cost": {
+            "up": 9.2079,
+            "down": 52.414199999999994
+          }
+        },
+        {
+          "market": "eth-updown-15m-1791264600",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791265200.9539523,
+            "last_t": 1791265499.8673646,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 229,
+          "successful_book_reads": 229,
+          "snapshots": 229,
+          "observations_with_both_token_books": 229,
+          "observations_with_a_bid_on_both_outcomes": 188,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 10,
+          "uncertain_fills": 169,
+          "inventory": {
+            "up": 165.26999999999998,
+            "down": 70.83
+          },
+          "matched": 70.83,
+          "residual": 94.43999999999998,
+          "cost": {
+            "up": 76.9686,
+            "down": 33.054
+          }
+        },
+        {
+          "market": "btc-updown-5m-1791265500",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791265501.5071237,
+            "last_t": 1791265799.2953815,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 225,
+          "successful_book_reads": 225,
+          "snapshots": 225,
+          "observations_with_both_token_books": 225,
+          "observations_with_a_bid_on_both_outcomes": 171,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 4,
+          "uncertain_fills": 6,
+          "inventory": {
+            "up": 94.44,
+            "down": 0.0
+          },
+          "matched": 0.0,
+          "residual": 94.44,
+          "cost": {
+            "up": 42.9702,
+            "down": 0.0
+          }
+        },
+        {
+          "market": "eth-updown-5m-1791265800",
+          "reported_status": "INCOMPLETE",
+          "window": {
+            "first_t": 1791265800.8264754,
+            "last_t": 1791265894.9266593,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 73,
+          "successful_book_reads": 73,
+          "snapshots": 73,
+          "observations_with_both_token_books": 73,
+          "observations_with_a_bid_on_both_outcomes": 73,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 14,
+          "uncertain_fills": 9,
+          "inventory": {
+            "up": 212.49,
+            "down": 118.05
+          },
+          "matched": 118.05,
+          "residual": 94.44000000000001,
+          "cost": {
+            "up": 63.98309999999999,
+            "down": 55.9557
           }
         }
       ],
